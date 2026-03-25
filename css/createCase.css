@@ -1,0 +1,533 @@
+/* 背景遮罩 */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.3);
+  justify-content: center;
+  align-items: center;
+}
+
+/* 弹出时显示 */
+.modal.show {
+  display: flex;
+}
+
+/* 主框体内容 */
+.modal-content {
+  background: #fff;
+  width: 600px;
+  max-width: 90%;
+  border-radius: 8px;
+  padding: 30px;
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.15);
+  position: relative;
+  font-family: "Segoe UI", sans-serif;
+}
+
+/* 关闭按钮 */
+.close-btn {
+  position: absolute;
+  top: 18px;
+  right: 24px;
+  font-size: 24px;
+  color: #888;
+  cursor: pointer;
+}
+
+/* 标题样式 */
+.modal-title {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+/* 表单输入区 */
+.input-label {
+  display: block;
+  font-weight: 600;
+  margin-top: 20px;
+  margin-bottom: 8px;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.input-with-icon {
+  position: relative;
+}
+
+.calendar-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: white;
+  pointer-events: none;
+}
+
+/* 上传模型列表样式 */
+.uploaded-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+/* ➕ 加号上传按钮 */
+.upload-placeholder {
+  width: 60px;
+  height: 60px;
+  background-color: #f2f2f2;
+  border-radius: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.upload-placeholder:hover {
+  background-color: #e0e0e0;
+}
+
+.plus-icon {
+  font-size: 30px;
+  color: #333;
+}
+
+上传按钮区域
+.upload-buttons {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 24px;
+  gap: 12px;
+}
+
+/* .upload-btn {
+  flex: 1;
+  padding: 12px;
+  font-weight: 600;
+  font-size: 14px;
+  color: white;
+  background: #88abda;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+} */
+
+/* .upload-btn.upload-ref {
+  background: #88abda;
+}
+
+.upload-btn.upload-jaw {
+  background: #88abda;
+} */
+
+.modal-footer {
+  display: flex;
+  justify-content: space-between;  /* 按照图1分布：左中右 */
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* 每个按钮根据内容自适应宽度，保留你原有颜色样式 */
+.cancel-btn,
+.invite-btn,
+.start-btn {
+  padding: 12px 20px;
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* 各自颜色（保留你的蓝色主题） */
+.cancel-btn {
+  background: rgb(245, 245, 245);
+  color: black;
+}
+
+
+.cancel-btn:hover {
+  background: #cccccc !important;
+}
+
+.invite-btn {
+  background: #88abda;
+  color: white;
+}
+
+.start-btn {
+  background: #88abda;
+  color: white;
+}
+
+
+
+.modal.hidden {
+  display: none;
+}
+
+.modal.show {
+  display: flex; /* 配合 modal 居中显示 */
+}
+
+
+/* .upload-buttons,
+.modal-footer {
+  width: 100%;
+  box-sizing: border-box; 
+}
+
+
+.upload-buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 24px;
+  align-self: stretch; 
+}
+
+.upload-btn.upload-ref,
+.upload-btn.upload-jaw {
+  flex: 1;
+  min-width: 0;
+} */
+
+.uploaded-model img {
+  width: 100px;
+  height: auto;
+  display: block;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+}
+
+
+.remove-model {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 18px;
+  font-weight: bold;
+  color: #888;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+
+.uploaded-model {
+  position: relative;  /* 仅加这句：提供定位上下文 */
+}
+
+.upload-sections-row {
+  display: flex;
+  flex-direction: row;
+  gap: 32px;         /* 间距可以调大或调小 */
+  margin-top: 10px;
+}
+
+.upload-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.upload-sections-row {
+  display: flex;
+  justify-content: space-between;  /* 让左右两边贴紧拉开 */
+  gap: 32px;
+  margin-top: 10px;
+}
+
+.upload-section {
+  flex: 1;                         /* 平分宽度 */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;         /* 保证文字 + 加号对齐左边 */
+}
+
+/* ✅ 用于右侧上传图片的缩略图展示（无限上传） */
+#uploadedReferenceImages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: 100%;
+}
+
+#uploadedReferenceImages .uploaded-model {
+  position: relative;
+  width: 100px;
+  height: 100px;
+}
+
+#uploadedReferenceImages img {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+#uploadedReferenceImages .remove-model {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 16px;
+  color: #888;
+  cursor: pointer;
+  background: white;
+  border-radius: 50%;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+#uploadedReferenceImages {
+  max-height: 300px;         /* 你可以按需调整高度 */
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.upload-placeholder {
+  width: 100px;
+  height: 100px;
+  background-color: #f2f2f2;
+  border-radius: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.2s;
+  border: 1px solid #ccc; /* 可选：保持与图片缩略图一致的边框 */
+}
+
+.upload-placeholder:hover {
+  background-color: #e0e0e0;
+}
+
+.plus-icon {
+  font-size: 32px; /* 略大一点居中更好看 */
+  color: #333;
+}
+
+
+.upload-placeholder {
+  position: relative;
+  overflow: hidden;
+  background-color: #f8f8f8;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  width: 100px;
+  height: 100px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.jaw-bg {
+  position: absolute;
+  width: 60%;
+  height: 60%;
+  opacity: 0.3; /* 淡淡的背景图 */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.plus-icon {
+  position: relative;
+  z-index: 1; /* 保证在 SVG 背景图上方 */
+  font-size: 24px;
+  color: #333;
+}
+
+/* 通用模态背景（共用） */
+#userAccessModal.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.3);
+  justify-content: center;
+  align-items: center;
+}
+
+#userAccessModal.modal.show {
+  display: flex;
+}
+
+/* 主弹窗体 */
+#userAccessModal .modal-content {
+  background: #fff;
+  width: 700px;
+  max-width: 90%;
+  border-radius: 8px;
+  padding: 30px;
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.15);
+  position: relative;
+  font-family: "Segoe UI", sans-serif;
+}
+
+/* 标题 */
+#userAccessModal h3 {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+/* Case 名称行 */
+#userAccessModal p {
+  margin: 12px 0;
+  font-size: 15px;
+}
+
+#caseNameDisplay {
+  font-weight: 600;
+  color: #333;
+}
+
+/* 搜索输入和按钮组合 */
+.input-with-button {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+
+#userSearchInput {
+  flex: 1;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+#addUserBtn {
+  padding: 10px 16px;
+  background-color: #88abda;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+
+/* Shared User 列表 */
+#sharedUserList {
+  list-style: none;
+  padding: 0;
+  margin-top: 8px;
+}
+
+#sharedUserList li {
+  padding: 8px 12px;
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#sharedUserList li .remove-user-btn {
+  background: transparent;
+  color: #888;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+/* 关闭按钮 */
+#userAccessModal .close-btn {
+  position: absolute;
+  top: 18px;
+  right: 24px;
+  font-size: 24px;
+  color: #888;
+  cursor: pointer;
+}
+
+/* 底部按钮 */
+#userAccessModal .modal-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 30px;
+}
+
+#cancelInviteBtn,
+#saveInviteBtn {
+  padding: 12px 20px;
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#cancelInviteBtn {
+  background: rgb(245, 245, 245);
+  color: black;
+}
+
+#cancelInviteBtn:hover {
+  background: #cccccc !important;
+}
+
+#saveInviteBtn {
+  background: #88abda;
+  color: white;
+}
+
+
+.shared-user-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.shared-user-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+}
+
+.user-name {
+  font-weight: 500;
+}
+
+.user-role {
+  font-style: italic;
+  color: #555;
+}
+/*  */

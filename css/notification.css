@@ -1,0 +1,88 @@
+.notification-popup {
+  position: absolute;
+  top: 50px;
+  left: 15px;
+  width: 360px;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 999;
+  display: block;
+}
+
+.notification-popup.hidden {
+  display: none;
+}
+
+.notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #eee;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.notification-header button {
+  background: none;
+  border: none;
+  color: #409eff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.notification-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.notification-item {
+  padding: 10px 16px;
+  border-bottom: 1px solid #f5f5f5;
+  font-size: 14px;
+}
+
+.notification-item .blue-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background-color: #00aaff;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.notification-time {
+  color: #999;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+#markAllBtn{
+  background-color: rgb(136,171,218) !important; /* 常态 136 171 218 */
+  color:#fff !important;                         /* 字体白色，照旧可删 */
+  border:none !important;
+}
+
+#markAllBtn:hover,
+#markAllBtn:focus{
+  background-color: rgb(161,210,250) !important; /* 悬停 161 210 250 */
+}
+
+/* 让红点能定位到按钮的右上角 */
+.notifications { position: relative; }
+
+/* 红点默认隐藏，show 时显示 */
+.notif-dot{
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e02424; /* 红色 */
+  display: none;
+}
+.notif-dot.show { display: inline-block; }

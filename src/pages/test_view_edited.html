@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Edited Views – Robust Parser</title>
+<style>
+ body{font-family:sans-serif;padding:20px}
+ button{margin-bottom:16px}
+ .img-grid{display:flex;flex-wrap:wrap;gap:12px}
+ .img-grid img{max-width:300px;border:1px solid #ccc;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,.1)}
+</style>
+</head>
+<body>
+<h2>🖼 Edited Views (Test)</h2>
+<button id="loadBtn">Fetch Edited Images</button>
+<div id="result">No request yet.</div>
+<div class="img-grid" id="imageContainer"></div>
+
+<script>
+const payload = [
+  { machine_id:"3a0df9c37b50873c63cebecd7bed73152a5ef616",
+    uuid:"+Bk0G6EsbBaHdHCSDyCfCo9AZ8hd",
+    caseIntID:719 },
+  { case_id:719 }
+];
+
+document.getElementById("loadBtn").addEventListener("click", async ()=>{
+  const resDiv = document.getElementById("result");
+  const grid   = document.getElementById("imageContainer");
+  resDiv.textContent="⏳ Loading…"; grid.innerHTML="";
+
+  try{
+    const r   = await fetch("https://live.api.smartrpdai.com/api/smartrpd/noticeboard/editedview/get",{
+                 method:"POST",
+                 headers:{ "Content-Type":"application/json" },
+                 body:JSON.stringify(payload)
+               });
+    const raw = await r.json();
+    console.log("RAW ▶",raw);
+
+    const rows = Array.isArray(raw)? raw : [raw];   // 统一转数组
+    let total  = 0;
+
+    rows.forEach((row, idxRow) => {
+      let namesArr, dataArr;
+      try{
+        namesArr = JSON.parse(row.filenames);
+        dataArr  = JSON.parse(row.data);
+        if(!Array.isArray(namesArr)||!Array.isArray(dataArr)) throw new Error();
+      }catch{
+        namesArr = [row.filenames];
+        dataArr  = [row.data];
+      }
+
+      dataArr.forEach((b64, idxImg) => {
+        const img = new Image();
+        img.src = b64;
+        img.alt = namesArr[idxImg] || `img-${idxRow}-${idxImg}`;
+        grid.appendChild(img);
+      });
+      total += dataArr.length;
+    });
+
+    resDiv.textContent = total
+      ? `✅ Found ${total} edited image(s).`
+      : "❌ No edited images found.";
+  }catch(e){
+    console.error(e);
+    resDiv.textContent=`❌ Error: ${e.message}`;
+  }
+});
+</script>
+</body>
+</html>

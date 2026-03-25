@@ -1,0 +1,297 @@
+@keyframes loading {
+  0% {
+      left: -100%;
+  }
+  50% {
+      left: 100%;
+  }
+  100% {
+      left: 100%;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: "Montserrat", sans-serif;
+  background-color: #A7C7E7;
+}
+
+header {
+  margin-top: 3em;
+  text-align: center;
+  color: white;
+}
+/*  */
+header h1 {
+  font-size: 2em;
+  font-weight: 900;
+}
+
+#container3D canvas {
+  width: 100vw !important;
+  height: 100vh !important;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* Default styles for the loading bar */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999; /* Ensure the loading bar stays on top */
+}
+.loading-bar {
+  width: 200px;
+  height: 20px;
+  background-color: #e0e0e0; /* Light grey background */
+  overflow: hidden; /* Hide anything that overflows */
+  position: relative;
+  margin: 0 auto;
+  /* Center the loading bar vertically */
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+/* Default styles for the loading progress */
+.loading-progress {
+  width: 100%; /* Width of the loading bar segment */
+  height: 100%;
+  background-color: #76c7c0; /* Color of the loading bar segment */
+  position: absolute;
+  animation: loading 2s linear infinite; /* Animation name, duration, timing function, and repeat */
+}
+/* Keyframes for the loading animation */
+@keyframes loading {
+  0% {
+    left: -100%; /* Start off-screen to the left */
+  }
+  50% {
+    left: 100%; /* Move off-screen to the right */
+  }
+  100% {
+    left: 100%; /* Ensure it stays off-screen */
+  }
+}
+
+/* Styles for landscape mode prompt */
+#rotateNotice {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 20px;
+  border-radius: 10px;
+  text-align: center;
+  z-index: 1000;
+}
+      /* Make the page unscrollable */
+      html, body {
+  overflow: hidden;
+  height: 100%;
+  margin: 0; /* Ensure no default margin */
+}
+
+#chat-widget {
+  position: fixed;
+  bottom: 250px;
+  right: 20px;
+  width: 250px; /* 可根据需要调整 */
+  height: 250px; /* 可根据需要调整 */
+  background-color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  padding: 10px;
+  z-index: 9999;
+  font-family: Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+#chat-box {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 消息气泡样式 */
+#chat-box .message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+#chat-box .message p {
+  background-color: #A7C7E7;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 16px;
+  max-width: 80%;
+  word-wrap: break-word;
+  margin: 0;
+  align-self: flex-end;
+}
+
+#chat-box .message img {
+  max-width: 100%;
+  max-height: 150px;
+  border-radius: 8px;
+  margin-top: 4px;
+}
+
+#chat-input-area {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+#uploadBtn {
+  flex: 0 0 36px;
+  background-color: #eee;
+  border: none;
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+#textInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+
+#sendBtn {
+  flex: 0 0 60px;
+  background-color: blue;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* 修改你的实际消息容器 chat-message */
+.chat-message {
+  background-color: #DCF8C6; /* WhatsApp气泡绿色 */
+  border-radius: 16px;
+  padding: 8px 12px;
+  max-width: 80%;
+  align-self: flex-end;
+  word-wrap: break-word;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  color: #333;
+}
+
+/* 父容器内所有消息靠右排列 */
+#chat-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+/* 时间戳样式 */
+.chat-message .timestamp {
+  font-size: 10px;
+  color: #888;
+  margin-top: 4px;
+  text-align: right;
+}
+
+/* 作者样式 */
+.chat-message .author {
+  font-size: 11px;
+  color: #999;
+  text-align: right;
+}
+
+.chat-message img {
+  max-width: 120px;
+  max-height: 120px;
+  border-radius: 8px;
+  cursor: pointer; /* 鼠标悬浮变手势 */
+  transition: transform 0.2s ease;
+}
+
+/* 放大图层容器 */
+.image-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.8);
+  justify-content: center;
+  align-items: center;
+  z-index: 99999;
+}
+
+/* 放大的图片样式 */
+.image-modal img {
+  max-width: 90%;
+  max-height: 90%;
+  border-radius: 12px;
+  box-shadow: 0 0 20px rgba(255,255,255,0.3);
+  transition: transform 0.3s ease;
+  transform: scale(1);
+  cursor: zoom-out;
+}
+
+
+/* 聊天图标样式（只移动端显示） */
+#chat-icon {
+  position: fixed;
+  bottom: 240px;
+  right: 20px;
+  width: 60px;
+  height: 60px;
+  z-index: 9999;
+  cursor: pointer;
+  display: none; /* 默认隐藏，由 JS 决定显示 */
+}
+
+/* 移动端展开聊天框样式 */
+#chat-widget.active {
+  display: flex !important;
+  flex-direction: column;
+  position: fixed;
+  bottom: 650px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 800px;
+  height: 40%;
+  max-height: 50%;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.2);
+  z-index: 9999;
+}
+
+

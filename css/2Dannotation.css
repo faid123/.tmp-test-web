@@ -1,0 +1,218 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden; /* 防止横向滚动条 */
+  font-family: Arial, sans-serif;
+  background-color: #f8f9fa;
+  height: 100vh;
+
+  /* ✅ 添加这些让主容器水平居中 */
+  display: flex;
+  justify-content: center;
+  align-items: flex-start; /* 或 center 看你要不要垂直居中 */
+}
+
+
+#main-container {
+  /* display: flex; */
+  flex-direction: row;
+  align-items: flex-start;
+  padding: 70px;
+  height: calc(100vh - 10px); /* 给出 padding 的高度空间 */
+  box-sizing: border-box;
+}
+
+#image-preview-area {
+  height: 100%;                  /* 高度占满容器 */
+  margin-right: 40px;
+  border: 2px solid #ccc;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
+  padding: 0;
+  background-color: white;
+  box-sizing: border-box;
+  overflow: hidden;
+
+  width: auto;                  /* 不固定宽度，自动适应图像 */
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+#image-preview-area img {
+  height: 100%;                 /* 高度占满容器 */
+  width: auto;                  /* 宽度自适应比例 */
+  display: block;
+  object-fit: contain;          /* 保证图像不被裁切 */
+}
+
+
+
+/* h2 {
+  font-size: 24px;
+  margin-bottom: 20px;
+}
+
+.info {
+  font-size: 18px;
+  margin-bottom: 10px;
+} */
+
+/* 标注栏 */
+
+#annotation-panel {
+  width: 320px;
+  height: 100%; /* 👈 让它与 image 区域等高 */
+  margin-left: 40px;
+  padding: 20px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  font-family: "Segoe UI", sans-serif;
+  color: #222;
+
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+}
+
+/* 所有按钮统一风格 */
+#annotation-panel button {
+  padding: 10px 12px;
+  margin: 6px 0;
+  font-size: 15px;
+  font-weight: 500;
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+#annotation-panel button:hover {
+  background-color: #e4e4e4;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+#annotation-panel button:active {
+  background-color: #dcdcdc;
+}
+
+/* 特别按钮强调色 */
+#cancelBtn {
+  background-color: #ffebeb;
+  color: #d10000;
+  border: 1px solid #ffa1a1;
+}
+#cancelBtn:hover {
+  background-color: #ffdada;
+}
+
+#saveBtn {
+  background-color: #e3ffe9;
+  color: #007f2f;
+  border: 1px solid #9decb2;
+}
+#saveBtn:hover {
+  background-color: #c8ffd7;
+}
+
+/* 标题样式 */
+.section-title {
+  margin: 20px 0 10px;
+  font-size: 16px;
+  font-weight: 600;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 4px;
+}
+
+/* 滑动条美化 */
+#sizeSlider {
+  width: 100%;
+  margin: 10px 0;
+}
+
+/* 颜色选择器行 */
+.color-label {
+  margin-top: 10px;
+  font-size: 14px;
+  display: inline-block;
+}
+
+#colorPicker {
+  width: 100%;
+  height: 36px;
+  border: none;
+  margin-top: 6px;
+  cursor: pointer;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.1);
+}
+
+#eraser-cursor {
+  position: absolute;
+  border: 2px solid rgba(255, 0, 0, 0.5);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  display: none;
+}
+
+/* 1️⃣ 侧边标注面板——限制在视口内，高度超出时自己滚动 */
+#annotation-panel{
+  /* 如果原本就是 fixed/absolute，可以保留；否则下面两行可省略 */
+  position: fixed;          /* 让它跟随视口而非随页面滚动 */
+  top: 16px;                /* 你原来的定位值 */
+  right: 16px;
+
+  max-height: calc(100vh - 32px);  /* 始终不高于可视区 */
+  overflow-y: auto;        /* 垂直滚动只发生在面板内部 */
+  overflow-x: hidden;      /* 横向不滚动 */
+
+  padding: 16px;
+  box-sizing: border-box;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 0 6px rgba(0,0,0,.15);
+}
+
+/* 2️⃣ 按钮统一块级显示，行高在小屏压缩一点 */
+#annotation-panel button{
+  display: block;
+  width: 100%;
+  margin: 4px 0;
+  padding: 8px 12px;       /* 默认行高 */
+  font-size: 16px;
+}
+
+/* 小屏（≤750 px 高）再缩小按钮行高 */
+@media (max-height: 750px){
+  #annotation-panel button{
+    padding: 4px 8px;
+    font-size: 14px;
+  }
+}
+
+/* 3️⃣ 控件滚动条瘦身（可选美化） */
+#annotation-panel::-webkit-scrollbar{
+  width: 6px;
+}
+#annotation-panel::-webkit-scrollbar-thumb{
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+/* 4️⃣ 更窄屏时可折叠“尺寸/取色”这两个大块（可选）  */
+@media (max-height: 650px){
+  #sizeSlider,
+  #colorPicker,
+  .color-label{
+    display: none;
+  }
+}

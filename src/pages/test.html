@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Thumbnail Viewer</title>
+  <style>
+    #image-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .thumb-wrapper {
+      text-align: center;
+    }
+    .thumb-wrapper img {
+      max-width: 300px;
+      display: block;
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Thumbnail from API:</h2>
+  <div id="image-container">Loading...</div>
+
+  <script>
+    const requestData = [
+      {
+        machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+        uuid: "+Bk0G6EsbBaHdHCSDyCfCo9AZ8hd",
+        caseIntID: 708
+      },
+      {
+        case_id: 708
+      }
+    ];
+
+    console.log("Request body:", JSON.stringify(requestData));
+
+    fetch("https://live.api.smartrpdai.com/api/smartrpd/thumbnails/get", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(requestData)
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error("Server error: " + response.status);
+      }
+      return response.json();
+    })
+    .then(data => {
+      const container = document.getElementById("image-container");
+      container.innerHTML = ""; 
+
+      if (Array.isArray(data) && data.length > 0) {
+        data.forEach((item, index) => {
+          if (item.data) {
+            const wrapper = document.createElement("div");
+            wrapper.className = "thumb-wrapper";
+
+            const img = document.createElement("img");
+            img.src = "data:image/png;base64," + item.data;
+
+            img.onload = function () {
+              console.log(`Image ${index + 1} dimensions: ${img.naturalWidth} x ${img.naturalHeight}`);
+              const sizeInfo = document.createElement("p");
+              sizeInfo.textContent = `Size: ${img.naturalWidth} x ${img.naturalHeight}`;
+              wrapper.appendChild(sizeInfo);
+            };
+
+            wrapper.appendChild(img);
+            container.appendChild(wrapper);
+          }
+        });
+      } else {
+        container.innerText = "No image data returned.";
+      }
+    })
+    .catch(err => {
+      document.getElementById("image-container").innerText = "Fetch error: " + err.message;
+      console.error(err);
+    });
+  </script>  
+</body>
+</html>

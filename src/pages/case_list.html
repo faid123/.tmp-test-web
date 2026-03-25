@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1024" />
+    <title>Case List</title>
+    <link rel="stylesheet" href="../../css/case_list.css" />
+    <link rel="stylesheet" href="../../css/createCase.css" />
+    <link rel="stylesheet" href="../../css/notification.css" />
+    <link rel="stylesheet" href="../../css/versionHistory.css" />
+    <link rel="icon" href="/assets/favicon.ico" type="image/x-icon">
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <!-- 左侧主列表 -->
+      <div class="case-list">
+        <div class="case-header">
+          <button id="notificationBtn" class="notifications">
+            🔔 NOTIFICATIONS
+            <span id="notificationDot" class="notif-dot" aria-hidden="true"></span>
+          </button>
+          <!-- 通知弹出框 -->
+          <div id="notificationPopup" class="notification-popup hidden">
+            <div class="notification-header">
+              <span>NOTIFICATIONS</span>
+              <button id="markAllBtn">MARK ALL AS READ</button>
+            </div>
+            <div id="notificationList" class="notification-list">
+              <!-- 通知列表将由 JS 动态插入 -->
+            </div>
+          </div>
+          <div class="filter">
+            <label for="filter-status">FILTER BY STATUS</label>
+            <select id="filter-status" class="status-dropdown">
+              <option value="all">ALL</option>
+              <option value="na">N/A</option>
+              <option value="draft">Draft</option>
+              <option value="2d_design_pending">2D design pending</option>
+              <option value="2d_design_drafted">2D design drafted</option>
+              <option value="2d_design_approved">2D design approved</option>
+              <option value="3d_design_pending">3D design pending</option>
+              <option value="3d_design_drafted">3D design drafted</option>
+              <option value="3d_design_approved">3D design approved</option>
+              <option value="in_production">In production</option>
+              <option value="out_for_delivery">Out for delivery</option>
+              <option value="delivered">Delivered</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+          <button class="create-case">CREATE NEW CASE</button>
+          <button class="refresh">⟳ REFRESH</button>
+          <button class="logout">LOGOUT</button>
+        </div>
+
+        <!-- <div class="case-tabs">
+                <button class="active">FOR CLINICIAN</button>
+                <button>FOR LAB</button>
+            </div> -->
+
+        <!-- 表头独立 -->
+        <table class="case-table">
+          <thead>
+            <tr>
+              <th class="sortable" data-sort="case_id" style="width: 17%">
+                CASE NAME
+              </th>
+              <th class="sortable" data-sort="creation_date" style="width: 17%">
+                DATE REQUESTED
+              </th>
+              <th class="sortable" data-sort="expected_date" style="width: 17%">
+                DUE DATE
+              </th>
+              <th class="sortable" data-sort="new_status" style="width: 17%">
+                STATUS
+              </th>
+              <!-- ✅ 修正字段 -->
+              <th class="sortable" data-sort="assigned_to" style="width: 18%">
+                ASSIGNED TO
+              </th>
+              <th style="width: 12%">ACTIONS</th>
+              <!-- ✅ 修正字段 -->
+            </tr>
+          </thead>
+        </table>
+
+        <!-- 滚动区域只包含 tbody -->
+        <div class="table-body-wrapper">
+          <table class="case-table">
+            <tbody>
+              <!-- JS 动态填充 -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 右侧详情区域 -->
+      <div class="case-details">
+        <!-- <div class="case-actions">
+                <button class="mark-important">⭐ MARK AS IMPORTANT</button>
+                <button class="mark-unread">🟢 UNREAD</button>
+            </div> -->
+        <div class="case-actions">
+          <div class="case-name" id="caseNameDisplay"></div>
+          <div class="dropdown-menu-wrapper">
+            <button class="dropdown-toggle">⋯</button>
+            <div class="dropdown-menu hidden" id="caseDropdown">
+              <div class="dropdown-item" id="renameBtn">Rename</div>
+              <div class="dropdown-item" id="upload3dBtn">Upload 3D File</div>
+              <div class="dropdown-item" id="editUserAccessBtn">
+                Edit User Access
+              </div>
+              <div class="dropdown-item" id="viewVersionBtn">
+                View Version History
+              </div>
+              <div class="dropdown-item" id="duplicateBtn">Duplicate</div>
+              <div class="dropdown-item" id="deleteBtn">Delete</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="case-thumbnail">
+          <img id="caseImage" />
+        </div>
+        <div class="image-navigation">
+          <button id="prevBtn">◀</button>
+          <span id="imageCounter">IMAGE 0 OF 0</span>
+          <button id="nextBtn">▶</button>
+        </div>
+
+        <!-- <button class="case-dashboard">CASE DASHBOARD</button> -->
+
+        <div class="case-info">
+          <label for="status">STATUS:</label>
+          <select id="status">
+            <option value="na">N/A</option>
+            <option value="draft">Draft</option>
+            <option value="2d_design_pending">2D design pending</option>
+            <option value="2d_design_drafted">2D design drafted</option>
+            <option value="2d_design_approved">2D design approved</option>
+            <option value="3d_design_pending">3D design pending</option>
+            <option value="3d_design_drafted">3D design drafted</option>
+            <option value="3d_design_approved">3D design approved</option>
+            <option value="in_production">In production</option>
+            <option value="out_for_delivery">Out for delivery</option>
+            <option value="delivered">Delivered</option>
+            <option value="completed">Completed</option>
+          </select>
+
+          <p>CASE NAME: <span id="selected-case"></span></p>
+          <p>CREATED BY: <span id="created-by"></span></p>
+          <p>DATE CREATED: <span id="date-created"></span></p>
+          <p>LAST EDITED: <span id="last-edited"></span></p>
+        </div>
+
+        <div class="case-comments">
+          <label for="caseComments">Comments:</label>
+          <textarea
+            id="caseComments"
+            placeholder="Add case comments if any here"
+          ></textarea>
+        </div>
+        
+        <div class="start-case-container">
+          <button class="start-case-button">START CASE</button>
+          <!-- <div class="divider"></div> -->
+          <!-- 这是新增的直线元素 -->
+          <!-- <button class="start-case-toggle">☰</button> -->
+        </div>
+      </div>
+    </div>
+
+    <div id="caseModal" class="modal hidden">
+      <div class="modal-content">
+        <!-- 关闭按钮 -->
+        <span id="closeCaseModal" class="close-btn">&times;</span>
+
+        <!-- 标题 -->
+        <h2 class="modal-title">Create a New Case</h2>
+
+        <!-- 表单 -->
+        <form id="newCaseForm" class="modal-form">
+          <!-- Case Name -->
+          <label for="caseName" class="input-label"
+            >Case Name <span style="color: red">*</span></label
+          >
+          <input
+            type="text"
+            id="caseName"
+            class="modal-input"
+            placeholder="New Case Name"
+            required
+          />
+
+          <!-- Request Date -->
+          <label for="requestDate" class="input-label">Request Date</label>
+          <div class="input-with-icon">
+            <input type="date" id="requestDate" class="modal-input" />
+            <span class="calendar-icon">📅</span>
+          </div>
+
+          <!-- Uploaded Jaw Models -->
+          <!-- 包裹两个上传区的外层容器 -->
+          <div class="upload-sections-row">
+            <!-- 左侧 Jaw -->
+            <div class="upload-section">
+              <label class="input-label">Uploaded Jaw Models</label>
+              <div id="uploadedJawModels" class="uploaded-models">
+                <div class="upload-placeholder" data-jaw="upper">
+                  <img
+                    src="../../assets/upper.svg"
+                    class="jaw-bg"
+                    alt="Upper Jaw"
+                  />
+                  <span class="plus-icon">＋</span>
+                </div>
+
+                <div class="upload-placeholder" data-jaw="lower">
+                  <img
+                    src="../../assets/lower.svg"
+                    class="jaw-bg"
+                    alt="Upper Jaw"
+                  />
+                  <span class="plus-icon">＋</span>
+                </div>
+              </div>
+              <input
+                type="file"
+                id="jawUploadInput"
+                accept=".stl"
+                style="display: none"
+              />
+            </div>
+
+            <!-- 右侧 Reference -->
+            <div class="upload-section">
+              <label class="input-label">Upload Reference Images</label>
+              <div id="uploadedReferenceImages" class="uploaded-models">
+                <div class="upload-placeholder" id="addRefImageBtn">
+                  <span class="plus-icon">＋</span>
+                </div>
+              </div>
+              <input
+                type="file"
+                id="refImageInput"
+                accept="image/png,image/jpeg"
+                style="display: none"
+              />
+            </div>
+          </div>
+
+          <!-- Upload buttons -->
+          <!-- <div class="upload-buttons">
+                <button type="button" class="upload-btn upload-ref">⬆ UPLOAD REFERENCE IMAGES</button>
+                <button type="button" class="upload-btn upload-jaw">⬆ UPLOAD JAW MODELS</button>
+            </div> -->
+
+          <!-- Footer buttons -->
+          <div class="modal-footer">
+            <button type="button" class="cancel-btn">CANCEL</button>
+            <button type="button" class="invite-btn">
+              CREATE AND INVITE USERS
+            </button>
+            <button type="button" class="start-btn">START</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="userAccessModal" class="modal hidden">
+      <div class="modal-content">
+        <span id="closeUserAccessModal" class="close-btn">&times;</span>
+        <h3>User Access</h3>
+
+        <p>
+          <strong>Case Name:</strong>
+          <span class="case-name-display">—</span>
+        </p>
+
+        <div class="input-with-button">
+          <input
+            id="userSearchInput"
+            type="text"
+            placeholder="Search user to add to case"
+          />
+          <button id="addUserBtn">ADD</button>
+        </div>
+
+        <p><strong>Shared with:</strong></p>
+        <ul id="sharedUserList" class="shared-user-list"></ul>
+
+        <div class="modal-actions">
+          <button id="cancelInviteBtn" class="cancel-btn">CANCEL</button>
+          <button id="saveInviteBtn" class="save-btn">SAVE AND RETURN</button>
+        </div>
+      </div>
+    </div>
+
+        <!-- 版本历史模态框 -->
+    <div id="versionHistoryModal" class="modal hidden">
+      <div class="modal-content version-modal">
+        <!-- 关闭按钮 -->
+        <span class="close-btn" id="closeVersionModal">&times;</span>
+
+        <!-- 标题 -->
+        <div class="vh-header">
+          <h3 class="modal-title">Version History</h3>
+        </div>
+
+        <!-- 列表 -->
+        <div class="vh-body">
+          <ul id="versionList" class="vh-list">
+            <!-- 示例一项（JS 会动态生成更多） -->
+            <li class="vh-item is-green"
+                data-id="rec_006"
+                data-op="printing"
+                data-user-id="labA"
+                data-ts="2025-04-10T18:10:00+08:00">
+              
+              <div class="vh-row">
+                <!-- 时间轴小图标 -->
+                <div class="vh-op" aria-hidden="true">●</div>
+
+                <!-- 内容列 -->
+                <div class="vh-col">
+                  <!-- 第一行：操作名 + 更多按钮 -->
+                  <!-- <div class="vh-line1">
+                    <span class="vh-op-label">Printing in Progress</span>
+                    <button class="vh-more" title="More actions" aria-label="More actions">⋯</button>
+                  </div> -->
+
+                  <!-- 第二行：用户 + 时间戳 -->
+                  <div class="vh-line2">
+                    <span class="vh-user">
+                      <span class="vh-avatar" style="background:#2ecc71" title="Lab A">LA</span>
+                      <span class="vh-user-name">Lab A</span>
+                    </span>
+                    <time class="vh-timestamp" datetime="2025-04-10T18:10:00+08:00">
+                      10/04/2025 6:10pm
+                    </time>
+                  </div>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+
+    <script type="module" src="../js/caseManagement.js"></script>
+    <script type="module" src="../js/createCase.js"></script>
+    <script type="module" src="../js/notifications.js"></script>
+    <script type="module" src="../js/versionHistory.js"></script>
+    <script src="../../dist/bundle.js"></script>
+
+    <script>
+      document.querySelector(".logout").addEventListener("click", () => {
+        localStorage.removeItem("loggedInUser"); // 清除登录信息
+        window.location.href = "../../index.html";
+      });
+    </script>
+  </body>
+</html>

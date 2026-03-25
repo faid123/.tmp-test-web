@@ -1,0 +1,157 @@
+/* ===== Version History (clean, neutral) ===== */
+:root{
+  --vh-line: #e9e9e9;       /* 时间线竖线/圆圈 */
+  --vh-icon: #9a9a9a;       /* 图标灰 */
+  --vh-title: #222;         /* 标题色 */
+  --vh-sub: #777;           /* 次级文案色 */
+  --vh-border: #d4d4d4;     /* 头像边框 */
+}
+
+.version-modal{
+  width: 420px;
+  max-width: 92vw;
+  padding: 20px 20px 8px;
+  border-radius: 8px;
+}
+
+.vh-header{ margin-bottom: 6px; }
+
+.vh-body{
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* Timeline rail */
+.vh-list{
+  list-style: none;
+  margin: 0;
+  padding-left: 28px;              /* 给左侧 rail 和圆圈留空间 */
+  position: relative;
+}
+.vh-list::before{
+  content: "";
+  position: absolute;
+  left: 12px; top: 0; bottom: 0;
+  width: 2px;
+  background: var(--vh-line);
+}
+
+/* Item */
+.vh-item{
+  position: relative;
+  margin: 14px 0;
+}
+
+/* Row */
+.vh-row{
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* Left icon cell */
+.vh-op{
+  position: relative;
+  width: 24px;
+  flex: 0 0 24px;
+  height: 24px;
+  margin-left: -28px;              /* 把图标圆圈叠到 rail 上 */
+  display: grid;
+  place-items: center;
+  color: var(--vh-icon);
+}
+
+/* 圆圈外框（浅灰、无填充），统一风格 */
+.vh-op::after{
+  content: "";
+  position: absolute;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--vh-line);
+  background: #fff;
+}
+
+/* 适配 <svg> / <i> 两种图标实现 */
+.vh-op svg{
+  width: 14px; height: 14px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  z-index: 1;
+}
+.vh-op i{
+  font-size: 14px;
+  line-height: 1;
+  z-index: 1;
+}
+
+/* Right column */
+.vh-col{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vh-line1{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.vh-op-label{
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--vh-title);
+}
+
+.vh-more{
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  color: #9a9a9a;
+  padding: 0 4px;
+}
+
+.vh-line2{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--vh-sub);
+}
+
+.vh-user{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 小头像：无底色、细边框，和原风格接近 */
+.vh-avatar{
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #555;
+  background: transparent;
+  border: 1px solid var(--vh-border);
+}
+.vh-user-name{ font-weight: 500; color: #444; }
+
+.vh-timestamp{ white-space: nowrap; }
+.vh-timestamp::before{
+  content: "•";
+  margin-right: 6px;
+  color: #c7c7c7;
+}
+
+/* 小屏优化 */
+@media (max-width: 420px){
+  .version-modal{ width: 94vw; }
+  .vh-timestamp{ font-size: 11px; }
+}

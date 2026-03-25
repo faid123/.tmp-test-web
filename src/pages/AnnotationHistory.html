@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Annotation History</title>
+    <link rel="icon" href="/assets/favicon.ico" type="image/x-icon">
+  </head>
+  <body>
+    <div class="container">
+      <div class="left-panel">
+        <div class="noticeboard-header">
+          <h2 class="title">NOTICEBOARD</h2>
+          <button class="generate-btn">GENERATE REPORT</button>
+        </div>
+
+        <div class="tab-header">
+          <!-- <span class="tab-icon">🖱️</span> -->
+          <span class="tab-label">2D Setup &amp; Design</span>
+        </div>
+
+        <div class="instruction-section">
+          <div class="add-instruction">
+            <!-- <img src="placeholder.png" alt="Add New Instruction" /> -->
+            <p>+ ADD NEW INSTRUCTION</p>
+          </div>
+
+          <div id="annotation-grid" class="image-grid">
+            <!-- Filled dynamically via JS -->
+          </div>
+        </div>
+      </div>
+
+      <div class="right-panel">
+        <div class="tab-header">
+          <span class="tab-label">3D DESIGN</span>
+        </div>
+        <div class="placeholder-3d">
+          <!-- Placeholder: Future 3D Design area -->
+        </div>
+      </div>
+    </div>
+
+    <script>
+        const hostname = window.location.hostname;
+        const isGitHubPages = hostname.includes("github.io");
+        const basePath = isGitHubPages ? "/smartrpd_viewer" : "";
+
+        document.write(`
+            <link rel="stylesheet" href="${basePath}/css/AnnotationHistory.css" />
+            <script type="module" src="${basePath}/src/js/AnnotationHistory.js"></` + `script>
+        `);
+    </script>
+    
+  </body>
+</html>

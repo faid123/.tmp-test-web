@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login</title>
+    <link rel="stylesheet" href="./css/login.css" />
+    <link rel="icon" href="/assets/favicon.ico" type="image/x-icon" />
+  </head>
+  <body>
+    <div class="login_face">
+      <div class="login_box">
+        <div class="img_box"></div>
+        <!-- Profile image box -->
+
+        <div class="login_msg">
+          <input type="text" id="username" placeholder="Enter your username" />
+          <input
+            type="password"
+            id="password"
+            placeholder="Enter your password"
+          />
+
+          <div class="otp-wrapper">
+                    <input type="text" id="otp" placeholder="Enter verification code" maxlength="6" />
+                    <button type="button" id="send-otp-btn" onclick="sendOTP()">Send Code</button>
+                </div>
+
+                <button id="login-btn" onclick="verifyAndLogin()">Log In</button>
+
+          <!-- Comment out the otp-wrapper and login-btn above, and restore 
+            <button id="btn" onclick="login()">Log In</button> 
+            to disable the OTP feature -->
+
+          <!-- <button id="btn" onclick="login()">Log In</button> -->
+
+          <p id="error-message"></p>
+        </div>
+      </div>
+    </div>
+    <script src="./src/js/login.js"></script>
+  </body>
+</html>

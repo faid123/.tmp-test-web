@@ -1,0 +1,179 @@
+body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    background-color: #f4f4f4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+}
+
+.login_face {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+}
+
+.login_box {
+    width: 550px;
+    height: 450px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.65);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+}
+
+.img_box {
+    width: 130px;
+    height: 130px;
+    background-image: url('../assets/profile.png');
+    background-size: cover;
+    background-position: center;
+    border-radius: 50%;
+    border: white solid 6px;
+    margin-top: -95px;
+}
+
+.login_msg {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    width: 400px;
+    height: 300px;
+    margin-top: 35px;
+}
+
+input {
+    width: 100%;
+    padding: 12px;
+    margin: 10px 0;
+    border: 1px solid #ccc;
+    border-radius: 25px;
+    font-size: 16px;
+    background: rgba(255, 255, 255, 0.65);
+}
+
+
+
+input::placeholder {
+    color: #ccc; 
+}
+
+
+button {
+    width: 220px;
+    padding: 12px;
+    background-color: #ba0a26;
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 40px;
+    font-size: 16px;
+    transition: background-color 0.3s ease;
+    margin-top: 20px;
+}
+
+button:hover {
+    background-color: #8a081e;
+}
+
+#error-message {
+    color: red;
+    font-size: 14px;
+    /*  */
+}
+
+/* ✅ 最小适配，只处理移动端基础问题 */
+@media (max-width: 768px) {
+    .login_msg {
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto;           /* ✅ 让 .login_msg 居中 */
+      padding: 0 10px;
+      box-sizing: border-box;
+    }
+  
+    input,
+    button {
+      width: 100%;
+      box-sizing: border-box;
+    }
+  }
+  
+/* ==== OTP hard fix: make it same height as other inputs ==== */
+:root{ --brand:#ba0a26; --brand-dark:#8a081e; }
+
+/* 父容器先定高，子元素百分比才有参照 */
+.login_msg .otp-wrapper{
+  display:flex !important;
+  align-items:center !important;
+  width:100% !important;
+  height:48px !important;          /* 与你其他输入框一致 */
+  min-height:40px !important;
+  margin-top:12px !important;
+  border-radius:24px !important;
+  background:#fff !important;
+  border:1px solid rgba(0,0,0,.08) !important;
+  box-shadow:0 4px 12px rgba(0,0,0,.08) !important;
+  overflow:visible !important;
+  gap:0 !important;
+}
+
+/* 统一清掉全局 input 的宽度/外边距等干扰 */
+#otp{
+  display:block !important;
+  flex:1 1 auto !important;
+  height:48px !important;          /* 直接给定值，避免百分比=0 */
+  width:auto !important;
+  margin:0 !important;
+  padding:0 16px 0 18px !important;
+  border-radius:24px !important;
+  border:none !important;
+  border-right:1px solid rgba(0,0,0,.08) !important;
+  background:transparent !important;
+  font-size:16px !important;
+  line-height:48px !important;     /* 防止文字被压扁 */
+  color:#333 !important;
+  box-sizing:border-box !important;
+  outline:none !important;
+}
+#otp::placeholder{ color:#9aa0a6 !important; }
+
+/* 清掉全局 button 的宽度/外边距，固定视觉高度 */
+#send-otp-btn{
+  display:block !important;
+  height:40px !important;
+  min-width:128px !important;
+  width:auto !important;
+  margin:0 !important;
+  padding:0 18px !important;
+  border:none !important;
+  border-radius:0 !important;      /* 由外层裁成胶囊 */
+  background:var(--brand) !important;
+  color:#fff !important;
+  border-radius:24px !important;
+  font-size:15px !important;
+  font-weight:400 !important;
+  letter-spacing:.2px !important;
+  white-space:nowrap !important;
+  cursor:pointer !important;
+  transition:background-color .2s ease, transform .06s ease, opacity .2s ease !important;
+}
+#send-otp-btn:hover{ background:var(--brand-dark) !important; }
+#send-otp-btn:active{ transform:translateY(1px) !important; }
+#send-otp-btn:disabled{ opacity:.65 !important; background:#c8c9cc !important; cursor:not-allowed !important; }
+
+/* 小屏微调 */
+@media (max-width:420px){
+  .login_msg .otp-wrapper{ height:46px !important; min-height:46px !important; }
+  #send-otp-btn{ min-width:112px !important; font-size:14px !important; padding:0 14px !important; }
+}

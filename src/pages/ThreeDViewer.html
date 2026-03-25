@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>SmartRPD Web Lite</title>
+    <link rel="icon" href="/assets/favicon.ico" type="image/x-icon">
+  </head>
+  <body>
+    <header>
+      <h1>SmartRPD Web Lite</h1>
+    </header>
+    <main>
+      <div id="container3D"></div>
+    </main>
+    <div id="loading-container"></div>
+   <!--<div id="rotateNotice"><h1>Please rotate your device to landscape mode and refresh the page.</h1></div>
+    <script>
+      function checkOrientation() {
+        if (window.innerHeight > window.innerWidth) {
+          document.getElementById('rotateNotice').style.display = 'block';
+        } else {
+          document.getElementById('rotateNotice').style.display = 'none';
+        }
+      }
+
+      window.addEventListener('load', checkOrientation);
+      window.addEventListener('resize', checkOrientation);
+      window.addEventListener('orientationchange', checkOrientation);
+    </script>-->
+    <!--<script src="./script.js"></script>-->
+    <div id="chat-widget">
+      <div id="chat-box">
+        <!-- Messages will appear here -->
+      </div>
+      <div id="chat-input-area">
+        <input type="file" id="imageInput" accept="image/*" hidden />
+        <button id="uploadBtn">+</button>
+        <input type="text" id="textInput" placeholder="Type a comment..." />
+        <button id="sendBtn">Send</button>
+      </div>
+    </div>
+    <div class="image-modal" id="imageModal">
+      <img id="modalImage" src="" alt="Zoomed" />
+    </div>
+    <!-- <img id="chat-icon" src="${basePath}/assets/chat-icon.png" alt="chat" /> -->
+    <script>
+      const hostname = window.location.hostname;
+      const isGitHubPages = hostname.includes("github.io");
+      const isAWS = /^[0-9.]+$/.test(hostname);
+      const basePath = isGitHubPages ? "/smartrpd_viewer" : "";
+
+      const bundlePath = isGitHubPages
+      ? `${basePath}/dist/bundle.js`
+      : isAWS
+      ? "/dist/bundle.js"
+      : "/dist/bundle.js"; // ✅ 本地修复：不要使用相对路径 ./dist
+    // ✅ 修正本地路径 // AWS 用绝对路径，本地用相对路径
+    
+      document.write(`
+        <link rel="stylesheet" href="${basePath}/css/style.css" />
+        <script type="module" src="${basePath}/src/index.js"></` + `script>
+        <script type="module" src="${bundlePath}"></` + `script>
+        <script type="module" src="${basePath}/src/js/ThreeDMobile.js"></` + `script>
+        <script type="module" src="${basePath}/src/js/chat.js"></` + `script>
+        <img id="chat-icon" src="${basePath}/assets/chat-icon.png" alt="chat" style="display: none;" />
+      `);
+    </script>
+  </body>
+</html>

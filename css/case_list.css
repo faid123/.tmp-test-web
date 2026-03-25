@@ -1,0 +1,507 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+}
+
+html, body {
+    width: 100vw;
+    height: 100vh;
+    background: #e3f2fd;  
+    overflow: hidden;
+}
+
+.container {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    background: white;
+    overflow: hidden;
+}
+
+/* ✅ Left main list */
+.case-list {
+    flex: 1;
+    padding: 15px;
+    background: #e3f2fd; 
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.case-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 10px;
+    gap: 5px; 
+}
+
+.case-header button {
+    flex: 1; 
+    margin: 0; 
+    text-align: center;
+    max-width: 200px; 
+}
+
+button {
+    padding: 8px 15px;
+    border: none;
+    border-radius: 5px;
+    background: #88abda; 
+    color: white;
+    cursor: pointer;
+}
+
+button.refresh {
+    background: #88abda;
+}
+
+button.create-case {
+    background:  #88ABDA; 
+}
+
+button:hover {
+    opacity: 0.8;
+    background: #90caf9 !important;
+}
+
+.case-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.case-table th, .case-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.case-table thead th {
+    border-right: 2.5px solid #555; /* 深灰色线条 */
+  }
+  
+.case-table th:last-child,
+.case-table td:last-child {
+    border-right: none;
+}
+
+.case-table thead {
+    background: rgba(211, 211, 211, 1);
+    color: black;
+}
+
+/* ✅ 滚动区域 */
+.table-body-wrapper {
+    border: 4px solid #88abda;
+    max-height: 100vh;
+    overflow-y: auto;
+}
+
+.case-table tbody {
+    background-color: rgb(245, 245, 245); /* ✅ 你想换的背景色，比如浅蓝 */
+}
+
+/* ✅ Hover 效果 */
+.case-table tbody tr:hover {
+    background: rgba(21, 101, 192, 0.2);
+    cursor: pointer;
+}
+
+.case-table tbody tr.active {
+    background: rgba(21, 101, 192, 0.2);
+}
+
+
+
+/* Add a pointer cursor and hover effect to enhance user experience */
+/* Add a pointer cursor and hover effect to enhance user experience */
+.sortable {
+    cursor: pointer; /* Change mouse cursor to pointer, indicating it's clickable */
+    position: relative; /* Ensure pseudo-element positions correctly */
+}
+
+.sortable:hover {
+    background-color: #b0bec5; /* Change background color on hover */
+}
+
+/* 默认不显示箭头 */
+.sortable::after {
+    content: ''; /* No icon by default */
+    font-size: 12px;
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* 升序箭头 ▲ */
+.sortable.active-asc::after {
+    content: '\25B2'; /* BLACK UP-POINTING TRIANGLE */
+}
+
+/* 降序箭头 ▼ */
+.sortable.active-desc::after {
+    content: '\25BC'; /* BLACK DOWN-POINTING TRIANGLE */
+}
+
+/* ✅ Right-side details */
+.case-details {
+    width: 30%;
+    max-width: 400px;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    border-left: 2px solid #ddd;
+}
+
+/* .case-actions {
+    display: flex;
+    width: 100%; 
+    gap: 5px; 
+}
+
+.case-actions button:first-child {
+    flex: 2; 
+    min-width: 180px; 
+}
+
+.case-actions button:last-child {
+    flex: 1; 
+    min-width: 100px; 
+    max-width: 150px; 
+} */
+
+.thumbnail-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%; /* 限制外层不要超 */
+  }
+  
+  .case-thumbnail {
+    width: 100%;
+    max-width: 360px;          
+    aspect-ratio: 1 / 1.1;     
+    background-color: #ccc;   
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 10px auto 0;
+    overflow: hidden;
+    border-radius: 0px;
+}
+
+#caseImage {
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    object-fit: contain;
+    background-color: white;  
+}
+
+#caseImage:empty::after {
+    content: "NO IMAGES AVAILABLE";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    text-align: center;
+    pointer-events: none;
+  }
+
+  
+/* .case-thumbnail {
+    width: 100%;
+    max-width: 360px;
+    aspect-ratio: 1 / 1.04;     
+    background-color: #ccc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 10px auto 0;
+    overflow: hidden;
+    border-radius: 8px;
+}
+
+#caseImage {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background-color: white;
+} */
+
+
+
+.image-navigation {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.image-navigation button {
+    width: auto; 
+    height: auto;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 5px; 
+    background: #88ABDA; 
+    color: white;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); 
+}
+
+.case-details > * {
+    margin-bottom: 10px;
+}
+
+.start-case-container {
+    display: flex;
+    background: #88abda;
+    border-radius: 5px; 
+    overflow: hidden; 
+    width: 100%; 
+}
+
+/* Start case button */
+.start-case-button {
+    flex-grow: 1; /* Take up most of the space */
+    background: transparent; /* Transparent background, show container color */
+    color: white; /* White text color */
+    border: none; /* No border */
+    padding: 8px 15px; /* Padding */
+    cursor: pointer; /* Pointer cursor */
+}
+
+.start-case-toggle {
+    padding: 8px 10px; /* Adjust padding */
+    background: transparent; /* Transparent background, show container color */
+    color: white; /* White text color */
+    cursor: pointer; /* Pointer cursor */
+}
+
+.divider {
+    width: 2px; /* Width of the line */
+    background-color: #004a99; /* Color of the line */
+    height: 100%; /* Line height matches container height */
+}
+
+.start-case-container .start-case-button:hover,
+.start-case-container .start-case-toggle:hover {
+    background-color: #90caf9 !important;  
+    opacity: 1;  
+}
+
+.case-info {
+    margin-top: 10px;
+}
+
+.case-info p {
+    margin: 5px 0;
+}
+
+/* Make dropdown menu fit all statuses and include a scrollbar */
+.status-dropdown {
+    width: 180px; /* Maintain reasonable width */
+    max-height: 200px; /* Limit height */
+    overflow-y: auto; /* Allow scrolling */
+    background: white;
+    border: 1px solid #ccc;
+    padding: 5px;
+    font-size: 14px;
+}
+
+.status-dropdown option {
+    padding: 10px;
+}
+
+.case-tabs {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    position: relative;
+}
+
+#status {
+    border: 1px solid #ccc;
+    background: white;
+    font-size: 16px;
+    padding: 5px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#status:focus {
+    outline: none;
+    border-color: #88abda;
+}
+
+
+.case-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0; /* ✅ 保证上下间距一致 */
+  margin-bottom: 0px;  /* ✅ 新增这一行，控制和图片之间的距离 */
+}
+
+.case-name {
+  font-weight: bold;
+  font-size: 16px;
+  padding-left: 4px; /* ✅ 微调文字靠左 */
+}
+
+.dropdown-toggle {
+  background-color: transparent;   /* ✅ 无背景 */
+  color: black;                    /* ✅ 黑色 ⋯ */
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-size: 22px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.dropdown-toggle:hover {
+  background-color: transparent!important;
+}
+
+
+.dropdown-menu-wrapper {
+  position: relative;
+}
+
+
+.dropdown-menu {
+  position: absolute;
+  top: 110%;
+  right: 0;
+  background-color: white;
+  border: 1px solid #ccc;
+  width: 180px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  z-index: 100;
+}
+
+.dropdown-item {
+  padding: 10px;
+  cursor: pointer;
+}
+
+.dropdown-item:hover {
+  background-color: #f7f7f7;
+}
+
+.hidden {
+  display: none;
+} 
+
+/* 图标容器：水平排布图标 */
+.action-icons {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0px; /* 控制图标之间的间距，6px 比较紧凑 */
+}
+
+/* 图标按钮本身 */
+.icon-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 16px;
+  color: #808080;
+}
+
+.icon-button:hover {
+  background: none !important;   /* ✅ 强制移除悬浮背景 */
+  color: #000 !important;        /* ✅ 仅颜色变深 */
+}
+
+td {
+  padding: 0px 8px;
+  height: 30px; /* ✅ 控制行高度 */
+  line-height: 1;
+  vertical-align: middle;
+}
+/* 限制所有行的高度 */
+.case-table td,
+.case-table th {
+  padding: 0px 8px;
+  height: 30px;         /* ✅ 控制最大行高 */
+  line-height: 1.2;     /* ✅ 避免撑开 */
+  vertical-align: middle;
+  font-size: 16px;      /* ✅ 可选：适当压缩字体也有助于紧凑 */
+}
+
+/* .shared-user-item button:hover {
+  color: red !important;
+} */
+
+.delete-user-btn {
+  position: absolute;
+  top: 0px;
+  right: 2px;
+  border: none;
+  background: transparent !important;
+  font-size: 16px;
+  color: #888;
+  cursor: pointer;
+  padding: 0;
+}
+
+.delete-user-btn:hover {
+  color: red;
+  background: transparent !important;
+}
+
+.shared-user-item {
+  position: relative; /* 确保 delete 按钮能定位到右上角 */
+}
+
+.case-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: -5px 0 8px;
+}
+
+.case-comments label {
+  font-weight: bold;
+  font-size: 16px;
+  padding-left: 0px;
+}
+
+#caseComments {
+  width: 100%;
+  min-height: 80px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: inherit;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  resize: vertical;
+  background: #fafafa;
+  color: #333;   /* 与上面靠近 */
+  margin-bottom: 5px;  /* 与下面拉开 */
+}
+
+#caseComments:focus {
+  outline: none;
+  border-color: #88abda;
+  background: #fff;
+}

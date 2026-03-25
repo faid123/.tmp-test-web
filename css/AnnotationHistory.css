@@ -1,0 +1,235 @@
+:root {
+  --main-blue:rgb(120, 190, 240);
+  --hover-blue:  rgb(161, 210, 250);
+  --text-blue: #004f9e;
+  --bg-light: #f7fafd;
+  --card-radius: 10px;
+  --border-color: #ccc;
+  --font-main: "Segoe UI", sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: var(--font-main);
+}
+
+body, html {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--bg-light);
+}
+
+.container {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  padding: 20px;
+  gap: 20px;
+}
+
+/* Left & Right Panels */
+.left-panel, .right-panel {
+  flex: 1;
+  background-color: white;
+  border-radius: var(--card-radius);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+/* Header */
+.noticeboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.title {
+  font-size: 18px;
+  color: var(--text-blue);
+  font-weight: bold;
+}
+
+.generate-btn {
+  background-color: var(--main-blue);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+
+.generate-btn:hover {
+  background-color: var(--hover-blue);
+}
+
+/* Tabs */
+.tab-header {
+  display: flex;
+  align-items: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-blue);
+  margin-bottom: 10px;
+  gap: 6px;
+}
+
+.tab-icon {
+  font-size: 18px;
+}
+
+/* Add Instruction Card */
+.add-instruction {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 2px dashed var(--main-blue);
+  height: 180px;
+  color: var(--main-blue);
+  font-weight: bold;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: border-color 0.3s ease;
+}
+
+.add-instruction:hover {
+  border-color: var(--hover-blue);
+}
+
+/* Image Grid */
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.image-card {
+  width: 100%;
+  height: 180px;
+  border: 1.5px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border 0.3s ease;
+}
+
+.image-card:hover {
+  border-color: var(--main-blue);
+}
+
+.image-card img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* Add Card Special Style */
+.image-card.add-card {
+  border: 2px dashed var(--main-blue);
+  color: var(--main-blue);
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+/* Right Panel Placeholder */
+.placeholder-3d {
+  flex: 1;
+  border: 2px dashed var(--border-color);
+  border-radius: 6px;
+  background-color: #f4f6f8;
+}
+
+/* ① 让 “ADD NEW INSTRUCTION” 依旧占整行 */
+.add-instruction {
+  width: 100%;
+  height: 180px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 2px dashed var(--main-blue);
+  color: var(--main-blue);
+  font-weight: bold;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: border-color 0.3s ease;
+}
+.add-instruction:hover { border-color: var(--hover-blue); }
+
+/* ② 缩略图容器仍是网格，但每个 “格子” 直接放 <img> */
+#annotation-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+}
+
+/* ③ 图片本身充当按钮，无额外包裹 div */
+#annotation-grid img {
+  width: 100%;
+  height: 180px;
+  object-fit: contain;
+  border: 1.5px solid transparent;      /* 默认无边框 */
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.3s ease;
+}
+#annotation-grid img:hover {
+  border-color: var(--main-blue);       /* Hover 高亮 */
+}
+
+/* ADD NEW INSTRUCTION 占整行 */
+.add-instruction {
+  width: 100%;
+  height: 180px;
+  margin-bottom: 16px;             /* 与缩略图间距 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 2px dashed var(--main-blue);
+  color: var(--main-blue);
+  font-weight: bold;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: border-color 0.3s ease;
+}
+.add-instruction:hover { border-color: var(--hover-blue); }
+
+/* 缩略图网格 */
+#annotation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+}
+
+/* 缩略图本身就是按钮，无包裹 div */
+#annotation-grid img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;               /* 去掉左右白边 */
+  border-radius: 6px;
+  display: block;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: border-color .25s ease;
+}
+#annotation-grid img:hover { border-color: var(--main-blue); }

@@ -1,0 +1,7 @@
+node_modules
+.git
+.github
+*.pem
+*.log
+*.zip
+*.DS_Store
