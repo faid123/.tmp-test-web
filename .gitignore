@@ -2,6 +2,5 @@
 node_modules/
 
 # Webpack build output
-dist/
 
 .idea/
