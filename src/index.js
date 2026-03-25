@@ -384,7 +384,7 @@ btnContainer.appendChild(edit2DStatic); */
                   window.location.hostname.includes("github.io");
                 const isLocal = window.location.hostname === "localhost";
                 const queryConnector = isLocal ? "/?" : "?";
-                const basePath = isGitHubPages ? "/smartrpd_viewer" : "";
+                const basePath = isGitHubPages ? "/.tmp-test-web" : "";
 
                 const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}`;
                 console.log("🔁 正在跳转到 Annotate 页:", targetURL);
@@ -422,7 +422,7 @@ btnContainer.appendChild(edit2DStatic); */
                 window.location.hostname.includes("github.io");
               const isLocal = window.location.hostname === "localhost";
               const queryConnector = isLocal ? "/?" : "?";
-              const basePath = isGitHubPages ? "/smartrpd_viewer" : "";
+              const basePath = isGitHubPages ? "/.tmp-test-web" : "";
 
               const targetURL = `${window.location.origin}${basePath}/src/pages/AnnotationHistory.html${queryConnector}id=${encryptedId}`;
               console.log("🔁 正在跳转到 History 页:", targetURL);
