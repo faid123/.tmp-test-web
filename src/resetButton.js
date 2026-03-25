@@ -83,7 +83,7 @@ export function addResetButton(camera, clone, controls) {
 
     // Create the icon
     const resetIcon = document.createElement('img');
-    const basePath = window.location.hostname.includes("github.io") ? "/smartrpd_viewer" : "";
+    const basePath = window.location.hostname.includes("github.io") ? "/.tmp-test-web" : "";
     resetIcon.src = `${basePath}/assets/reset.png`; // Replace with the path to your icon
     // resetIcon.src = '/reset.png'; // Replace with the path to your icon
     resetIcon.alt = 'Reset';

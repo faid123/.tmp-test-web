@@ -47,7 +47,7 @@
       const hostname = window.location.hostname;
       const isGitHubPages = hostname.includes("github.io");
       const isAWS = /^[0-9.]+$/.test(hostname);
-      const basePath = isGitHubPages ? "/smartrpd_viewer" : "";
+      const basePath = isGitHubPages ? "/.tmp-test-web" : "";
 
       const bundlePath = isGitHubPages
       ? `${basePath}/dist/bundle.js`
@@ -55,10 +55,11 @@
       ? "/dist/bundle.js"
       : "/dist/bundle.js"; // ✅ 本地修复：不要使用相对路径 ./dist
     // ✅ 修正本地路径 // AWS 用绝对路径，本地用相对路径
+	//<script type="module" src="${basePath}/src/index.js"></` + `script>
     
       document.write(`
         <link rel="stylesheet" href="${basePath}/css/style.css" />
-        <script type="module" src="${basePath}/src/index.js"></` + `script>
+        
         <script type="module" src="${bundlePath}"></` + `script>
         <script type="module" src="${basePath}/src/js/ThreeDMobile.js"></` + `script>
         <script type="module" src="${basePath}/src/js/chat.js"></` + `script>

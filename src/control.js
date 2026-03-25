@@ -100,7 +100,7 @@ function addVisibilityAndTransparencyControls(parentObject, name, material_array
 
             // Replace folder title with icon
             let iconPath;
-            const basePath = window.location.hostname.includes("github.io") ? "/smartrpd_viewer" : "";
+            const basePath = window.location.hostname.includes("github.io") ? "/.tmp-test-web" : "";
 
             if (child.name.includes('surface')) {
                 if (child.name.includes('lower')) {
