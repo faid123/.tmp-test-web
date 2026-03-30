@@ -29,6 +29,9 @@ function xorDecrypt(encryptedBase64, key) {
 // Main interface: auto encrypt or decrypt based on input type
 function lol(things) {
     const key = "PgrJrkwpeG9pd"; // Shared key used for XOR
+	if (things === null || things === undefined || things === "") {
+        return null;
+    }
 
     if (!isNaN(things)) {
         // Encrypting numeric case ID

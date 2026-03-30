@@ -36,7 +36,14 @@ const close = url.searchParams.get("close");
 
 //decrypts the paramvalue
 //if doing testing with test cases jus comment it out
-paramValue = lol(paramValue);
+//paramValue = lol(paramValue);
+
+if (!paramValue) {
+  console.error("Missing case id in URL");
+  // either stop here or handle fallback
+} else {
+  paramValue = lol(paramValue);
+}
 
 // Create a Three.JS Scene
 const scene = new THREE.Scene();
