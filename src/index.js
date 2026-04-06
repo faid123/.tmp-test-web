@@ -90,6 +90,483 @@ const materialsurface_non_metal = new THREE.MeshStandardMaterial({
 const apiClient = new ApiClient("https://live.api.smartrpdai.com/api/smartrpd");
 const parentObject = new THREE.Object3D();
 scene.add(parentObject);
+ const polylineOverlayGroup = new THREE.Group();
+polylineOverlayGroup.name = "polyline-overlay-group";
+scene.add(polylineOverlayGroup);
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+const hoverHighlightColor = new THREE.Color(0x2dcdb2);
+const selectedHighlightColor = new THREE.Color(0x1e88e5);
+const POLYLINE_ENDPOINT = "/polylines/getall";
+const USE_MOCK_POLYLINE_DATA = true;
+let currentViewPreset = "Reset";
+let hoveredMesh = null;
+let selectedMesh = null;
+let selectionOverlay = null;
+
+function disposeObject3D(object) {
+  if (!object) return;
+  object.traverse((child) => {
+    if (child.geometry) child.geometry.dispose();
+    if (Array.isArray(child.material)) {
+      child.material.forEach((materialEntry) => materialEntry?.dispose?.());
+    } else if (child.material) {
+      child.material.dispose();
+    }
+  });
+}
+
+function clearPolylineOverlay() {
+  while (polylineOverlayGroup.children.length > 0) {
+    const child = polylineOverlayGroup.children[0];
+    polylineOverlayGroup.remove(child);
+    disposeObject3D(child);
+  }
+}
+
+function getJawMeshByType(jawType) {
+  return parentObject.children.find(
+    (child) =>
+      child.isMesh &&
+      typeof child.userData?.jaw_type === "string" &&
+      child.userData.jaw_type.toLowerCase().includes(jawType)
+  );
+}
+
+function normalizeJawKey(value) {
+  const text = String(value || "").toLowerCase();
+  if (text.includes("upper_jaw") || text.includes("upper") || text === "2") {
+    return "upper";
+  }
+  if (text.includes("lower_jaw") || text.includes("lower") || text === "1") {
+    return "lower";
+  }
+  return null;
+}
+
+function isValidPoint(point) {
+  return (
+    point &&
+    Number.isFinite(point.x) &&
+    Number.isFinite(point.y) &&
+    Number.isFinite(point.z)
+  );
+}
+
+function toPointObject(value) {
+  if (Array.isArray(value) && value.length >= 3) {
+    const [x, y, z] = value.map(Number);
+    return { x, y, z };
+  }
+
+  if (value && typeof value === "object") {
+    const x = Number(value.x ?? value.X ?? value.pos_x ?? value.point_x);
+    const y = Number(value.y ?? value.Y ?? value.pos_y ?? value.point_y);
+    const z = Number(value.z ?? value.Z ?? value.pos_z ?? value.point_z);
+
+    if ([x, y, z].every(Number.isFinite)) {
+      return { x, y, z };
+    }
+  }
+
+  return null;
+}
+
+function extractPointArray(candidate) {
+  if (!candidate) return [];
+
+  if (Array.isArray(candidate)) {
+    return candidate.map(toPointObject).filter(isValidPoint);
+  }
+
+  const nestedArrayKeys = ["points", "polyline", "vertices", "coordinates", "data"];
+  for (const key of nestedArrayKeys) {
+    if (Array.isArray(candidate[key])) {
+      return candidate[key].map(toPointObject).filter(isValidPoint);
+    }
+  }
+
+  return [];
+}
+
+function normalizePolylineResponse(rawResponse) {
+  const normalized = {
+    upper: [],
+    lower: [],
+  };
+
+  const assignPoints = (jawKey, points) => {
+    if (!jawKey || !points.length) return;
+    normalized[jawKey] = points;
+  };
+
+  if (!rawResponse) {
+    return normalized;
+  }
+
+  if (Array.isArray(rawResponse)) {
+    rawResponse.forEach((entry) => {
+      const jawKey = normalizeJawKey(
+        entry?.jaw_type ??
+          entry?.jawType ??
+          entry?.arch ??
+          entry?.type ??
+          entry?.jaws
+      );
+      const points = extractPointArray(entry);
+      if (jawKey && points.length) {
+        assignPoints(jawKey, points);
+      }
+    });
+
+    if (!normalized.upper.length && rawResponse[0]) {
+      assignPoints("upper", extractPointArray(rawResponse[0]));
+    }
+    if (!normalized.lower.length && rawResponse[1]) {
+      assignPoints("lower", extractPointArray(rawResponse[1]));
+    }
+    return normalized;
+  }
+
+  if (typeof rawResponse === "object") {
+    assignPoints("upper", extractPointArray(rawResponse.upper));
+    assignPoints("lower", extractPointArray(rawResponse.lower));
+
+    if (!normalized.upper.length) {
+      assignPoints(
+        normalizeJawKey(
+          rawResponse.jaw_type ??
+            rawResponse.jawType ??
+            rawResponse.arch ??
+            rawResponse.type ??
+            rawResponse.jaws
+        ),
+        extractPointArray(rawResponse)
+      );
+    }
+  }
+
+  return normalized;
+}
+
+function createPolylineObjects(jawType, points) {
+  const color = jawType === "upper" ? 0x18b7a0 : 0xf08a24;
+  const vectors = points.map((point) => new THREE.Vector3(point.x, point.y, point.z));
+  const group = new THREE.Group();
+  group.name = `${jawType}-polyline-group`;
+  group.userData = {
+    overlayType: "polyline",
+    arch: jawType,
+  };
+
+  if (vectors.length >= 2) {
+    const lineGeometry = new THREE.BufferGeometry().setFromPoints(vectors);
+    const lineMaterial = new THREE.LineBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    });
+    const line = new THREE.Line(lineGeometry, lineMaterial);
+    line.name = `${jawType}-polyline`;
+    line.userData = {
+      overlayType: "polyline-line",
+      arch: jawType,
+    };
+    group.add(line);
+  }
+
+  if (vectors.length >= 1) {
+    const pointGeometry = new THREE.BufferGeometry().setFromPoints(vectors);
+    const pointMaterial = new THREE.PointsMaterial({
+      color,
+      size: 2.8,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 1,
+      depthWrite: false,
+    });
+    const pointCloud = new THREE.Points(pointGeometry, pointMaterial);
+    pointCloud.name = `${jawType}-polyline-points`;
+    pointCloud.userData = {
+      overlayType: "polyline-points",
+      arch: jawType,
+    };
+    group.add(pointCloud);
+  }
+
+  return group;
+}
+
+function createMockPolylineForJaw(mesh, jawType) {
+  if (!mesh?.geometry) return [];
+
+  mesh.geometry.computeBoundingBox();
+  const bbox = mesh.geometry.boundingBox;
+  if (!bbox) return [];
+
+  const localPoints = [];
+  const segments = 8;
+  const width = bbox.max.x - bbox.min.x;
+  const depth = bbox.max.z - bbox.min.z;
+  const yOffset = jawType === "upper" ? 1.5 : -1.5;
+
+  for (let index = 0; index <= segments; index += 1) {
+    const ratio = index / segments;
+    const x = bbox.min.x + width * ratio;
+    const zCenter = bbox.min.z + depth * 0.5;
+    const arcOffset = Math.sin(ratio * Math.PI) * depth * 0.12;
+    const z = zCenter + arcOffset;
+    const y = jawType === "upper" ? bbox.max.y + yOffset : bbox.min.y + yOffset;
+    localPoints.push(new THREE.Vector3(x, y, z));
+  }
+
+  return localPoints.map((point) => {
+    const worldPoint = point.clone();
+    mesh.localToWorld(worldPoint);
+    return {
+      x: worldPoint.x,
+      y: worldPoint.y,
+      z: worldPoint.z,
+    };
+  });
+}
+
+function buildMockPolylineResponse() {
+  const upperMesh = getJawMeshByType("upper");
+  const lowerMesh = getJawMeshByType("lower");
+
+  return {
+    upper: upperMesh ? createMockPolylineForJaw(upperMesh, "upper") : [],
+    lower: lowerMesh ? createMockPolylineForJaw(lowerMesh, "lower") : [],
+  };
+}
+
+function renderPolylineData(polylineByJaw) {
+  clearPolylineOverlay();
+
+  ["upper", "lower"].forEach((jawType) => {
+    const points = polylineByJaw[jawType] || [];
+    const jawMesh = getJawMeshByType(jawType);
+
+    if (!jawMesh || !points.length) {
+      if (points.length && !jawMesh) {
+        console.log(`[polyline] Skipping ${jawType}: jaw mesh not loaded.`);
+      }
+      return;
+    }
+
+    const polylineGroup = createPolylineObjects(jawType, points);
+    polylineOverlayGroup.add(polylineGroup);
+  });
+}
+
+async function fetchAndRenderPolylines(caseIntID) {
+  clearPolylineOverlay();
+
+  if (USE_MOCK_POLYLINE_DATA) {
+    const mockData = buildMockPolylineResponse();
+    const hasMockPoints = mockData.upper.length || mockData.lower.length;
+    if (!hasMockPoints) {
+      console.log("[polyline] Mock mode enabled, but no jaw mesh is available yet.");
+      return;
+    }
+    console.log("[polyline] Rendering mock polyline data.");
+    renderPolylineData(mockData);
+    return;
+  }
+
+  const polylinePayload = [
+    {
+      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
+      caseIntID,
+    },
+    {
+      case_id: caseIntID,
+    },
+  ];
+
+  try {
+    const response = await apiClient.post(
+      POLYLINE_ENDPOINT,
+      polylinePayload,
+      false,
+      "Polyline"
+    );
+    const normalized = normalizePolylineResponse(response);
+    const hasAnyPoints = normalized.upper.length || normalized.lower.length;
+
+    if (!hasAnyPoints) {
+      console.log("[polyline] No polyline data returned.");
+      return;
+    }
+
+    renderPolylineData(normalized);
+  } catch (error) {
+    console.warn("[polyline] Unable to fetch polyline data.", error);
+  }
+}
+
+function getArchLabel(mesh) {
+  const sourceText = [
+    mesh?.userData?.archLabel,
+    mesh?.userData?.jaw_type,
+    mesh?.name,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (sourceText.includes("upper")) return "Upper Arch";
+  if (sourceText.includes("lower")) return "Lower Arch";
+  if (sourceText.includes("surface")) return "Surface Mesh";
+  return "Jaw Model";
+}
+
+function createSelectionOverlay(container) {
+  if (selectionOverlay) return selectionOverlay;
+
+  const overlay = document.createElement("div");
+  overlay.id = "selection-overlay";
+  overlay.style.position = "absolute";
+  overlay.style.top = "16px";
+  overlay.style.right = "150px";
+  overlay.style.zIndex = "1000";
+  overlay.style.minWidth = "220px";
+  overlay.style.maxWidth = "280px";
+  overlay.style.padding = "12px 14px";
+  overlay.style.borderRadius = "10px";
+  overlay.style.background = "rgba(255, 255, 255, 0.94)";
+  overlay.style.border = "1px solid rgba(30, 56, 77, 0.14)";
+  overlay.style.boxShadow = "0 12px 24px rgba(12, 30, 44, 0.14)";
+  overlay.style.fontFamily = "Arial, sans-serif";
+  overlay.style.color = "#22394c";
+  overlay.style.pointerEvents = "none";
+  container.appendChild(overlay);
+  selectionOverlay = overlay;
+  updateSelectionOverlay();
+  return overlay;
+}
+
+function updateSelectionOverlay() {
+  if (!selectionOverlay) return;
+
+  const activeMesh = selectedMesh || hoveredMesh;
+  const stateLabel = selectedMesh
+    ? "Selected"
+    : hoveredMesh
+      ? "Hovering"
+      : "No selection";
+
+  if (!activeMesh) {
+    selectionOverlay.innerHTML = `
+      <div style="font-size:12px; font-weight:bold; letter-spacing:0.08em; text-transform:uppercase; color:#4f7b79;">Viewer Focus</div>
+      <div style="margin-top:6px; font-size:18px; font-weight:bold;">No arch selected</div>
+      <div style="margin-top:8px; font-size:13px; line-height:1.45; color:#5e7283;">
+        Hover a mesh to inspect it. Click to pin the current selection.
+      </div>
+      <div style="margin-top:10px; font-size:12px; color:#6a7b88;">View preset: ${currentViewPreset}</div>
+    `;
+    return;
+  }
+
+  const archLabel = getArchLabel(activeMesh);
+  const meshName = activeMesh.name || "Unnamed mesh";
+  const visibilityLabel = activeMesh.visible ? "Visible" : "Hidden";
+
+  selectionOverlay.innerHTML = `
+    <div style="font-size:12px; font-weight:bold; letter-spacing:0.08em; text-transform:uppercase; color:#4f7b79;">Viewer Focus</div>
+    <div style="margin-top:6px; display:flex; justify-content:space-between; gap:12px;">
+      <div style="font-size:18px; font-weight:bold;">${archLabel}</div>
+      <div style="font-size:12px; font-weight:bold; color:${selectedMesh ? "#1e88e5" : "#2b8f7d"};">${stateLabel}</div>
+    </div>
+    <div style="margin-top:8px; font-size:13px; line-height:1.45; color:#5e7283;">${meshName}</div>
+    <div style="margin-top:10px; font-size:12px; color:#6a7b88;">View preset: ${currentViewPreset}</div>
+    <div style="margin-top:4px; font-size:12px; color:#6a7b88;">Visibility: ${visibilityLabel}</div>
+  `;
+}
+
+function setMeshHighlight(mesh, mode = "none") {
+  if (!mesh?.material || Array.isArray(mesh.material)) return;
+  if (!("emissive" in mesh.material)) return;
+
+  if (!mesh.userData.originalEmissive) {
+    mesh.userData.originalEmissive = mesh.material.emissive.clone();
+    mesh.userData.originalEmissiveIntensity = mesh.material.emissiveIntensity ?? 1;
+  }
+
+  if (mode === "selected") {
+    mesh.material.emissive.copy(selectedHighlightColor);
+    mesh.material.emissiveIntensity = 0.45;
+  } else if (mode === "hover") {
+    mesh.material.emissive.copy(hoverHighlightColor);
+    mesh.material.emissiveIntensity = 0.25;
+  } else {
+    mesh.material.emissive.copy(mesh.userData.originalEmissive);
+    mesh.material.emissiveIntensity = mesh.userData.originalEmissiveIntensity ?? 1;
+  }
+}
+
+function refreshSelectionHighlights() {
+  parentObject.children.forEach((child) => {
+    if (!child.isMesh) return;
+
+    if (child === selectedMesh) {
+      setMeshHighlight(child, "selected");
+    } else if (child === hoveredMesh) {
+      setMeshHighlight(child, "hover");
+    } else {
+      setMeshHighlight(child, "none");
+    }
+  });
+}
+
+function getSelectableMeshes() {
+  return parentObject.children.filter(
+    (child) => child.isMesh && child.visible && child.userData?.jaw_type
+  );
+}
+
+function updatePointerPosition(event, domElement) {
+  const bounds = domElement.getBoundingClientRect();
+  pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+  pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+}
+
+function pickMesh(event, domElement) {
+  updatePointerPosition(event, domElement);
+  raycaster.setFromCamera(pointer, camera);
+  const intersections = raycaster.intersectObjects(getSelectableMeshes(), false);
+  return intersections[0]?.object || null;
+}
+
+function attachSelectionHandlers(domElement) {
+  domElement.addEventListener("mousemove", (event) => {
+    const nextHovered = pickMesh(event, domElement);
+    if (nextHovered === hoveredMesh) return;
+    hoveredMesh = nextHovered;
+    refreshSelectionHighlights();
+    updateSelectionOverlay();
+  });
+
+  domElement.addEventListener("mouseleave", () => {
+    hoveredMesh = null;
+    refreshSelectionHighlights();
+    updateSelectionOverlay();
+  });
+
+  domElement.addEventListener("click", (event) => {
+    selectedMesh = pickMesh(event, domElement);
+    refreshSelectionHighlights();
+    updateSelectionOverlay();
+  });
+}
+
+window.addEventListener("viewer:viewchange", (event) => {
+  currentViewPreset = event.detail?.label || "Reset";
+  updateSelectionOverlay();
+});
 
 //The async prevents processing of data before the stuff is loaded in
 (async () => {
@@ -1141,6 +1618,10 @@ btnContainer.appendChild(edit2DStatic); */
       if (child.geometry) child.geometry.dispose();
       if (child.material) child.material.dispose();
     }
+    clearPolylineOverlay();
+    hoveredMesh = null;
+    selectedMesh = null;
+    updateSelectionOverlay();
 
     // Remove previous GUI controls if any
     const oldGui = document.querySelector(".dg.ac");
@@ -1232,6 +1713,12 @@ btnContainer.appendChild(edit2DStatic); */
         mesh.name = result.filename || `Slot ${slot}`;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        mesh.userData = {
+          jaw_type: mesh.name.toLowerCase().includes("lower") ? "lower" : "upper",
+          archLabel: mesh.name.toLowerCase().includes("lower")
+            ? "Lower Arch"
+            : "Upper Arch",
+        };
 
         // 👇 Match logic like close.off for centering and rotation
         /*  mesh.geometry.computeBoundingBox();
@@ -1262,6 +1749,7 @@ btnContainer.appendChild(edit2DStatic); */
       alert("❌ No STL files found in slots 1 to 4.");
     } else {
       alert("✅ STL loading completed.");
+      await fetchAndRenderPolylines(paramValue);
       removeVisibilityAndTransparencyControls();
       // 🧩 Re-enable visibility/transparency controls after loading
       addVisibilityAndTransparencyControls(
@@ -1316,6 +1804,7 @@ btnContainer.appendChild(edit2DStatic); */
 
     mesh.userData = {
       jaw_type: offFile.type,
+      archLabel: offFile.type.includes("upper") ? "Upper Arch" : "Lower Arch",
     };
     if (all_mesh_mat != null) {
       all_mesh_mat[offFile.filename] = mesh_geo[1].slice();
@@ -1352,6 +1841,7 @@ btnContainer.appendChild(edit2DStatic); */
         */
     parentObject.add(mesh);
   }
+  await fetchAndRenderPolylines(paramValue);
   //console.log(all_mesh_mat);
 
   function changeMeshRotation(mesh, x, y, z) {
@@ -1435,6 +1925,8 @@ btnContainer.appendChild(edit2DStatic); */
   container.style.position = "relative"; // <- Add this line
   if (container) {
     container.appendChild(renderer.domElement);
+    createSelectionOverlay(container);
+    attachSelectionHandlers(renderer.domElement);
 
     // After container3D and renderer are set up
     const caseTitle = document.createElement("div");
@@ -1503,6 +1995,19 @@ btnContainer.appendChild(edit2DStatic); */
   function animate() {
     requestAnimationFrame(animate);
     // Here we could add some code to update the scene, adding some automatic movement
+    let selectionChanged = false;
+    if (selectedMesh && !parentObject.children.includes(selectedMesh)) {
+      selectedMesh = null;
+      selectionChanged = true;
+    }
+    if (hoveredMesh && !parentObject.children.includes(hoveredMesh)) {
+      hoveredMesh = null;
+      selectionChanged = true;
+    }
+    if (selectionChanged) {
+      refreshSelectionHighlights();
+      updateSelectionOverlay();
+    }
     controls.update();
     // Make the eye move
 
