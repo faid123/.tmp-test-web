@@ -1,18 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>2D Annotate</title>
-  <link rel="icon" href="/assets/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="../../css/2DAnnotation_01.css" />
+  <link rel="icon" href="/assets/favicon.ico" type="image/x-icon" />
 </head>
 <body>
-  <div id="main-container" style="display: flex; align-items: flex-start;">
+   <!-- <div id="main-container" style="display: flex; align-items: flex-start;">
     <div id="image-preview-area" style="position: relative;">
     <!-- <canvas id="fabric-canvas" width="800" height="1000"
     style="position: absolute; top: 0; left: 0; z-index: 10;"></canvas> -->
       <!-- 合成图像将插入在此处 --> 
        
-    </div>
+  <!-- </div>
     <div id="annotation-panel">
       <button id="cancelBtn">❌ CANCEL</button>
       <button id="saveBtn">✅ SAVE AND CLOSE</button>
@@ -59,6 +61,71 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <!-- <script src="https://cdn.jsdelivr.net/npm/fabric@6.0.0-beta.7/dist/fabric.js"></script> -->
+  <main class="annotation-shell">
+    <aside class="panel preview-panel">
+      <header class="panel-header">
+        <h1>Dental Arch</h1>
+        <p id="caseLabel">Case: Unknown</p>
+      </header>
+      <div class="preview-frame" id="imagePreviewArea">
+        <img id="previewImage" alt="Composed dental preview" />
+        <p id="previewFallback" class="preview-fallback">
+          No preview image found.Open from the 3D page after generating the composed image.
+        </p>
+      </div>
+    </aside>
 
+    <section class="panel arch-panel">
+      <article class="jaw-card">
+        <div class="jaw-head">
+          <div class="jaw-title-wrap">
+            <img src="../../assets/upper.svg" alt="Upper jaw" />
+            <h2>Upper Arch (18 to 28)</h2>
+          </div>
+          <div class="jaw-controls">
+            <button id="upperLockBtn" class="lock-btn" data-jaw="upper">
+              <img class="lock-icon" src="../../assets/unlock.png" alt="">
+            </button>
+          </div>
+        </div>
+        <svg id="upperArchSvg" class="arch-svg" viewBox="0 0 620 380"></svg>
+      </article>
+      <article class="jaw-card">
+        <div class="jaw-head">
+          <div class="jaw-title-wrap">
+            <img src="../../assets/lower.svg" alt="Lower jaw" />
+            <h2>Lower Arch (38 to 48)</h2>
+          </div>
+          <div class="jaw-controls">
+            <button id="lowerLockBtn" class="lock-btn" data-jaw="lower">
+              <img class="lock-icon" src="../../assets/unlock.png" alt="">
+            </button>
+          </div>
+        </div>
+        <svg id="lowerArchSvg" class="arch-svg" viewBox="0 0 620 380"></svg>
+      </article>
+    </section>
+
+    <aside class="panel tools-panel">
+      <h2>Select Teeth</h2>
+      <div class="status-picker">
+        <button class="status-btn is-active" data-status="presence">Presence</button>
+        <button class="status-btn" data-status="abutment">Abutment</button>
+        <button class="status-btn" data-status="compromised">Compromised</button>
+      </div>
+
+      <h3>Actions</h3>
+      <div class="action-list">
+        <button id="clearTopBtn" class="action-btn">Clear Top</button>
+        <button id="clearBottomBtn" class="action-btn">Clear Bottom</button>
+        <button id="drawFromScratchBtn" class="action-btn">Draw from Scratch</button>
+        <button id="saveAnnotationBtn" class="action-btn primary">Save Annotation JSON</button>
+      </div>
+
+      <p id="saveMessage" class="save-message" role="status"></p>
+    </aside>
+  </main>
+
+  <script type="module" src="../js/2DAnnotation_01.js"></script>
 </body>
 </html>

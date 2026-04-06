@@ -378,10 +378,10 @@ if (filterSel) filterSel.addEventListener("change", () => populateTable(currentC
 
       const encryptedId = lol(caseId);
       const isGitHubPages = window.location.hostname.includes("github.io");
-      const isLocal = window.location.hostname === "localhost";
+      // const isLocal = window.location.hostname === "localhost";
 
       // 本地要用 .html/?id=xxx，GitHub 要用 .html?id=xxx
-      const queryConnector = isLocal ? "/?" : "?";
+      const queryConnector = "?";
       const basePath = isGitHubPages ? "/.tmp-test-web" : "";
 
       const targetURL = `${window.location.origin}${basePath}/src/pages/ThreeDViewer.html${queryConnector}id=${encryptedId}`;
