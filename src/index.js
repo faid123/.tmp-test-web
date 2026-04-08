@@ -98,7 +98,6 @@ const pointer = new THREE.Vector2();
 const hoverHighlightColor = new THREE.Color(0x2dcdb2);
 const selectedHighlightColor = new THREE.Color(0x1e88e5);
 const POLYLINE_ENDPOINT = "/polylines/getall";
-const USE_MOCK_POLYLINE_DATA = true;
 let currentViewPreset = "Reset";
 let hoveredMesh = null;
 let selectedMesh = null;
@@ -125,11 +124,20 @@ function clearPolylineOverlay() {
 }
 
 function getJawMeshByType(jawType) {
-  return parentObject.children.find(
-    (child) =>
-      child.isMesh &&
-      typeof child.userData?.jaw_type === "string" &&
-      child.userData.jaw_type.toLowerCase().includes(jawType)
+  const jawMeshes = parentObject.children.filter((child) => {
+    if (!child.isMesh) return false;
+    if (typeof child.userData?.jaw_type !== "string") return false;
+    return child.userData.jaw_type.toLowerCase().includes(jawType);
+  });
+
+  if (!jawMeshes.length) {
+    return null;
+  }
+
+  return (
+    jawMeshes.find((child) =>
+      String(child.name || "").toLowerCase().includes("surface")
+    ) || jawMeshes[0]
   );
 }
 
@@ -259,23 +267,6 @@ function createPolylineObjects(jawType, points) {
     arch: jawType,
   };
 
-  if (vectors.length >= 2) {
-    const lineGeometry = new THREE.BufferGeometry().setFromPoints(vectors);
-    const lineMaterial = new THREE.LineBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 0.95,
-      depthWrite: false,
-    });
-    const line = new THREE.Line(lineGeometry, lineMaterial);
-    line.name = `${jawType}-polyline`;
-    line.userData = {
-      overlayType: "polyline-line",
-      arch: jawType,
-    };
-    group.add(line);
-  }
-
   if (vectors.length >= 1) {
     const pointGeometry = new THREE.BufferGeometry().setFromPoints(vectors);
     const pointMaterial = new THREE.PointsMaterial({
@@ -296,50 +287,6 @@ function createPolylineObjects(jawType, points) {
   }
 
   return group;
-}
-
-function createMockPolylineForJaw(mesh, jawType) {
-  if (!mesh?.geometry) return [];
-
-  mesh.geometry.computeBoundingBox();
-  const bbox = mesh.geometry.boundingBox;
-  if (!bbox) return [];
-
-  const localPoints = [];
-  const segments = 8;
-  const width = bbox.max.x - bbox.min.x;
-  const depth = bbox.max.z - bbox.min.z;
-  const yOffset = jawType === "upper" ? 1.5 : -1.5;
-
-  for (let index = 0; index <= segments; index += 1) {
-    const ratio = index / segments;
-    const x = bbox.min.x + width * ratio;
-    const zCenter = bbox.min.z + depth * 0.5;
-    const arcOffset = Math.sin(ratio * Math.PI) * depth * 0.12;
-    const z = zCenter + arcOffset;
-    const y = jawType === "upper" ? bbox.max.y + yOffset : bbox.min.y + yOffset;
-    localPoints.push(new THREE.Vector3(x, y, z));
-  }
-
-  return localPoints.map((point) => {
-    const worldPoint = point.clone();
-    mesh.localToWorld(worldPoint);
-    return {
-      x: worldPoint.x,
-      y: worldPoint.y,
-      z: worldPoint.z,
-    };
-  });
-}
-
-function buildMockPolylineResponse() {
-  const upperMesh = getJawMeshByType("upper");
-  const lowerMesh = getJawMeshByType("lower");
-
-  return {
-    upper: upperMesh ? createMockPolylineForJaw(upperMesh, "upper") : [],
-    lower: lowerMesh ? createMockPolylineForJaw(lowerMesh, "lower") : [],
-  };
 }
 
 function renderPolylineData(polylineByJaw) {
@@ -363,18 +310,6 @@ function renderPolylineData(polylineByJaw) {
 
 async function fetchAndRenderPolylines(caseIntID) {
   clearPolylineOverlay();
-
-  if (USE_MOCK_POLYLINE_DATA) {
-    const mockData = buildMockPolylineResponse();
-    const hasMockPoints = mockData.upper.length || mockData.lower.length;
-    if (!hasMockPoints) {
-      console.log("[polyline] Mock mode enabled, but no jaw mesh is available yet.");
-      return;
-    }
-    console.log("[polyline] Rendering mock polyline data.");
-    renderPolylineData(mockData);
-    return;
-  }
 
   const polylinePayload = [
     {
