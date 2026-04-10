@@ -384,8 +384,8 @@ if (filterSel) filterSel.addEventListener("change", () => populateTable(currentC
       const queryConnector = "?";
       const basePath = isGitHubPages ? "/.tmp-test-web" : "";
 
-      const targetURL = `${window.location.origin}${basePath}/src/pages/ThreeDViewer.html${queryConnector}id=${encryptedId}`;
-      window.open(targetURL, "_blank");
+      const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}`;
+      window.location.href = targetURL;
     });
   }
 
@@ -914,4 +914,3 @@ function valueToApiStatus(val) {
   if (!val || val === "na") return "";    // N/A → 空字符串（等同 null）
   return val.replace(/_/g, " ");
 }
-

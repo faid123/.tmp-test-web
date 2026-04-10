@@ -8,124 +8,88 @@
   <link rel="icon" href="/assets/favicon.ico" type="image/x-icon" />
 </head>
 <body>
-   <!-- <div id="main-container" style="display: flex; align-items: flex-start;">
-    <div id="image-preview-area" style="position: relative;">
-    <!-- <canvas id="fabric-canvas" width="800" height="1000"
-    style="position: absolute; top: 0; left: 0; z-index: 10;"></canvas> -->
-      <!-- 合成图像将插入在此处 --> 
-       
-  <!-- </div>
-    <div id="annotation-panel">
-      <button id="cancelBtn">❌ CANCEL</button>
-      <button id="saveBtn">✅ SAVE AND CLOSE</button>
-
-      <div class="section-title">Currently Drawing</div>
-
-      <button id="arrowBtn">🔗 Connector</button>
-      <button id="textBtn">💬 Text Box</button>
-      <button id="clearBtn">🗑 Clear</button>
-      <button id="undoBtn">⤺ Undo</button>
-      <button id="redoBtn">⤻ Redo</button>
-      <button id="brushBtn">🖌 Brush</button>
-      <button id="penBtn">✏ Pen</button>
-      <button id="eraserBtn">🧼 Eraser</button>
-
-      <label for="sizeSlider">🪄 Size</label>
-      <input type="range" id="sizeSlider" min="1" max="50" value="10">
-
-      <label for="colorPicker" class="color-label">
-      <span class="palette-emoji">🎨</span>
-      </label>
-      <input type="color" id="colorPicker" value="#ba0a26">
-
-    </div>
-  </div>
-  <div id="eraser-cursor"></div>
-
-  <script>
-  const hostname = window.location.hostname;
-  const isGitHubPages = hostname.includes("github.io");
-  const basePath = isGitHubPages ? "/.tmp-test-web" : "";
-
-  document.write(`
-    <link rel="stylesheet" href="${basePath}/css/2Dannotation.css" />
-    <script type="module" src="${basePath}/src/js/2Dannotation.js"></` + `script>
-  `);
-</script>
-<script>
-  document.querySelector('.palette-emoji').addEventListener('click', () => {
-    document.getElementById('colorPicker').click();
-  });
-</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-
-<!-- <script src="https://cdn.jsdelivr.net/npm/fabric@6.0.0-beta.7/dist/fabric.js"></script> -->
   <main class="annotation-shell">
     <aside class="panel preview-panel">
       <header class="panel-header">
-        <h1>Dental Arch</h1>
-        <p id="caseLabel">Case: Unknown</p>
+        <h1>3D</h1>
       </header>
       <div class="preview-frame" id="imagePreviewArea">
         <img id="previewImage" alt="Composed dental preview" />
         <p id="previewFallback" class="preview-fallback">
-          No preview image found.Open from the 3D page after generating the composed image.
+          No preview image found. Open from the 3D page after generating the composed image.
         </p>
       </div>
     </aside>
 
-    <section class="panel arch-panel">
-      <article class="jaw-card">
-        <div class="jaw-head">
-          <div class="jaw-title-wrap">
-            <img src="../../assets/upper.svg" alt="Upper jaw" />
-            <h2>Upper Arch (18 to 28)</h2>
+    <section class="workspace-panel">
+      <section class="panel arch-panel">
+        <div class="arch-topbar">
+          <div id="caseLabel" class="case-label">Case: Unknown</div>
+        </div>
+
+        <div class="arch-controls">
+          <div class="jaw-row">
+            <img class="jaw-img" src="../../assets/Icon_UpperJaw_Occlusal.png" alt="Upper jaw icon" />
+            <span class="jaw-row-name">Upper Arch (18 to 28)</span>
+            <button id="upperLockBtn" class="lock-btn" data-jaw="upper" aria-label="Lock upper arch">
+              <img class="lock-icon" src="../../assets/unlock.png" alt="" />
+            </button>
           </div>
-          <div class="jaw-controls">
-            <button id="upperLockBtn" class="lock-btn" data-jaw="upper">
-              <img class="lock-icon" src="../../assets/unlock.png" alt="">
+          <div class="jaw-row">
+            <img class="jaw-img" src="../../assets/Icon_LowerJaw_Occlusal.png" alt="Lower jaw icon" />
+            <span class="jaw-row-name">Lower Arch (38 to 48)</span>
+            <button id="lowerLockBtn" class="lock-btn" data-jaw="lower" aria-label="Lock lower arch">
+              <img class="lock-icon" src="../../assets/unlock.png" alt="" />
             </button>
           </div>
         </div>
-        <svg id="upperArchSvg" class="arch-svg" viewBox="0 0 620 380"></svg>
-      </article>
-      <article class="jaw-card">
-        <div class="jaw-head">
-          <div class="jaw-title-wrap">
-            <img src="../../assets/lower.svg" alt="Lower jaw" />
-            <h2>Lower Arch (38 to 48)</h2>
-          </div>
-          <div class="jaw-controls">
-            <button id="lowerLockBtn" class="lock-btn" data-jaw="lower">
-              <img class="lock-icon" src="../../assets/unlock.png" alt="">
+
+        <div class="jaw-combined-canvas">
+          <svg id="upperArchSvg" class="arch-svg" viewBox="0 0 620 380"></svg>
+          <svg id="lowerArchSvg" class="arch-svg" viewBox="0 0 620 380"></svg>
+        </div>
+
+        <div class="action-list center-actions">
+          <button id="clearTopBtn" class="action-btn">Clear Top</button>
+          <button id="clearBottomBtn" class="action-btn">Clear Bottom</button>
+          <button id="drawFromScratchBtn" class="action-btn">Draw from Scratch</button>
+          <button id="saveAnnotationBtn" class="action-btn primary">Save</button>
+        </div>
+
+        <p id="saveMessage" class="save-message" role="status"></p>
+      </section>
+
+      <aside class="panel tools-panel">
+        <section id="selectTeethPanel" class="select-teeth-panel">
+          <div class="panel-mini-title">Select Teeth</div>
+          <div class="status-picker">
+            <button class="status-btn is-active" data-status="presence">
+              <img class="status-icon" src="../../assets/PresenceToothIconGreen.png" alt="Presence" />
+            </button>
+            <button class="status-btn" data-status="abutment">
+              <img class="status-icon" src="../../assets/AbutmentToothIconBlue.png" alt="Abutment" />
+            </button>
+            <button class="status-btn" data-status="compromised">
+              <img class="status-icon" src="../../assets/CompromisedToothIconYellow.png" alt="Compromised" />
             </button>
           </div>
-        </div>
-        <svg id="lowerArchSvg" class="arch-svg" viewBox="0 0 620 380"></svg>
-      </article>
+        </section>
+
+        <section id="editModePanel" class="edit-mode-panel is-hidden">
+          <h3 class="edit-mode-title">Components</h3>
+          <div class="design-hint" id="designHint">Lock both arches to enter design mode.</div>
+          <div class="catalog-wrap">
+            <div id="componentTabs" class="component-tabs"></div>
+            <div class="component-canvas">
+              <div id="componentItems" class="component-items"></div>
+            </div>
+          </div>
+          <div class="selected-components" id="selectedComponents"></div>
+        </section>
+      </aside>
     </section>
-
-    <aside class="panel tools-panel">
-      <h2>Select Teeth</h2>
-      <div class="status-picker">
-        <button class="status-btn is-active" data-status="presence">Presence</button>
-        <button class="status-btn" data-status="abutment">Abutment</button>
-        <button class="status-btn" data-status="compromised">Compromised</button>
-      </div>
-
-      <h3>Actions</h3>
-      <div class="action-list">
-        <button id="clearTopBtn" class="action-btn">Clear Top</button>
-        <button id="clearBottomBtn" class="action-btn">Clear Bottom</button>
-        <button id="drawFromScratchBtn" class="action-btn">Draw from Scratch</button>
-        <button id="saveAnnotationBtn" class="action-btn primary">Save Annotation JSON</button>
-      </div>
-
-      <p id="saveMessage" class="save-message" role="status"></p>
-    </aside>
   </main>
 
-  <script type="module" src="../js/2DAnnotation_01.js"></script>
+  <script type="module" src="../js/2D/2DAnnotation.js"></script>
 </body>
 </html>
