@@ -1,0 +1,177 @@
+diff --git a/src/js/2D/2DAnnotation.js b/src/js/2D/2DAnnotation.js
+index 34ed69a..6e5fc3f 100644
+--- a/src/js/2D/2DAnnotation.js
++++ b/src/js/2D/2DAnnotation.js
+@@ -11,6 +11,7 @@ import {
+   getRestSuggestionSurfaces,
+   getRestSuggestionPointsForTooth,
+   getRestSuggestionRadius,
++  isMeshComponent,
+   isRestComponent
+ } from "./components.js";
+ import { assessPlacementCriteria } from "./criteria.js";
+@@ -198,6 +199,52 @@ function resetToothRecord(toothId, status) {
+   tooth.isPresent = true;
+ }
+ 
++/** Apply the currently selected mesh type to every missing tooth in one action. */
++function applySelectedMeshToAllMissingTeeth() {
++  if (!state.designMode) {
++    setMessage("Lock both arches to use the component catalog.", true);
++    return;
++  }
++
++  const selected = COMPONENT_BY_ID.get(state.selectedComponentId || "");
++  if (!selected || !isMeshComponent(selected)) {
++    setMessage("Select a mesh type in the catalog first (e.g. Tori, Hole).", true);
++    return;
++  }
++
++  let applied = 0;
++  for (const jaw of Object.keys(TOOTH_ORDER)) {
++    for (const toothId of TOOTH_ORDER[jaw]) {
++      const tooth = state.teeth[toothId];
++      if (!tooth || tooth.isPresent) continue;
++
++      ensureToothPlacementState(tooth);
++      const meshComponentIds = [
++        ...new Set(
++          (tooth.componentPlacements || [])
++            .map((entry) => entry.componentId)
++            .filter((id) => isMeshComponent(id))
++        ),
++      ];
++      if (meshComponentIds.length) {
++        removePlacementsByComponentIds(tooth, meshComponentIds);
++      }
++      addPlacement(tooth, selected.id, null);
++      applied += 1;
++    }
++  }
++
++  renderJaws();
++  if (applied === 0) {
++    setMessage("No missing teeth to apply mesh to.", true);
++  } else {
++    setMessage(
++      `${selected.label} applied to ${applied} missing tooth${applied === 1 ? "" : "teeth"}.`,
++      false
++    );
++  }
++}
++
+ // Choose active labeling mode: presence / abutment / compromised.
+ function bindStatusPicker() {
+   const buttons = document.querySelectorAll(".status-btn");
+@@ -351,14 +398,28 @@ function renderComponentCatalog() {
+     });
+     itemsEl.appendChild(columns);
+     renderSelectedComponents();
++    applyDesignModeHint();
+     return;
+   }
+ 
++  if (state.selectedTab === "mesh" && state.designMode) {
++    const applyRow = document.createElement("div");
++    applyRow.className = "mesh-apply-all-row";
++    const applyAllBtn = document.createElement("button");
++    applyAllBtn.type = "button";
++    applyAllBtn.className = "action-btn mesh-apply-all-btn";
++    applyAllBtn.textContent = "Apply to all missing teeth";
++    applyAllBtn.addEventListener("click", applySelectedMeshToAllMissingTeeth);
++    applyRow.appendChild(applyAllBtn);
++    itemsEl.appendChild(applyRow);
++  }
++
+   for (const item of tabItems) {
+     itemsEl.appendChild(createComponentItemButton(item));
+   }
+ 
+   renderSelectedComponents();
++  applyDesignModeHint();
+ }
+ 
+ // Create one column block for grouped component sections.
+@@ -420,6 +481,7 @@ function handleDesignComponentSelect(componentId) {
+ 
+   state.selectedComponentId = componentId;
+   renderJaws();
++  applyDesignModeHint();
+ 
+   if (state.components.includes(componentId)) {
+     state.components = state.components.filter((id) => id !== componentId);
+@@ -443,6 +505,25 @@ function handleDesignComponentSelect(componentId) {
+   setMessage(`${selected.label} added to design list.`, false);
+ }
+ 
++// Context line under the component catalog (mesh vs other tools).
++function applyDesignModeHint() {
++  const hint = document.getElementById("designHint");
++  if (!hint) return;
++  if (!state.designMode) {
++    hint.textContent = "Lock both arches to enter design mode.";
++    return;
++  }
++  const def = state.selectedComponentId
++    ? COMPONENT_BY_ID.get(state.selectedComponentId)
++    : null;
++  if (def && isMeshComponent(def)) {
++    hint.textContent =
++      "Mesh: click a missing tooth, or use Apply to all missing teeth for the selected style. To switch style on one tooth, pick another mesh and click that tooth again.";
++    return;
++  }
++  hint.textContent = "Design mode is active. Choose components from the catalog.";
++}
++
+ // Render the selected component chips in the summary panel.
+ function renderSelectedComponents() {
+   const selectedEl = document.getElementById("selectedComponents");
+@@ -470,12 +551,7 @@ function updateEditModeUI() {
+     selectPanel.classList.toggle("is-hidden", active);
+   }
+ 
+-  const hint = document.getElementById("designHint");
+-  if (hint) {
+-    hint.textContent = active
+-      ? "Design mode is active. Choose components from the catalog."
+-      : "Lock both arches to enter design mode.";
+-  }
++  applyDesignModeHint();
+ }
+ 
+ // Recompute design mode based on jaw locks and update related UI state.
+@@ -925,6 +1001,21 @@ function placeSelectedComponentOnTooth(toothId, placementContext = null) {
+     return;
+   }
+ 
++  let replacedMeshStyle = false;
++  if (isMeshComponent(selectedComponent)) {
++    const otherMeshComponentIds = [
++      ...new Set(
++        (tooth.componentPlacements || [])
++          .map((entry) => entry.componentId)
++          .filter((id) => id !== selectedComponent.id && isMeshComponent(id))
++      ),
++    ];
++    if (otherMeshComponentIds.length) {
++      replacedMeshStyle = true;
++      removePlacementsByComponentIds(tooth, otherMeshComponentIds);
++    }
++  }
++
+   if (hasPlacement(tooth, selectedComponent.id, targetSurface)) {
+     removePlacement(tooth, selectedComponent.id, targetSurface);
+     setMessage(
+@@ -937,8 +1028,11 @@ function placeSelectedComponentOnTooth(toothId, placementContext = null) {
+   const criteriaResult = assessPlacementCriteria(tooth, selectedComponent, COMPONENT_BY_ID);
+   if (criteriaResult.pass) {
+     addPlacement(tooth, selectedComponent.id, targetSurface);
++    const placeMsg = replacedMeshStyle
++      ? `Mesh on tooth ${toothId} is now ${selectedComponent.label}.`
++      : `Placed ${selectedComponent.label}${targetSurface ? ` (${targetSurface})` : ""} on tooth ${toothId}.`;
+     setMessage(
+-      `Placed ${selectedComponent.label}${targetSurface ? ` (${targetSurface})` : ""} on tooth ${toothId}.`,
++      placeMsg,
+       false
+     );
+     return;

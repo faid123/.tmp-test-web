@@ -463,21 +463,21 @@ body {
 }
 
 .rest-suggestion-point {
-  fill: #ff9bbf;
+  fill: #e85a8e;
   stroke: #ffffff;
   stroke-width: 1.1;
-  opacity: 0.55;
+  opacity: 1;
   cursor: pointer;
   pointer-events: all;
 }
 
 .rest-suggestion-point:hover {
-  fill: #ff5f98;
+  fill: #d43d6f;
   opacity: 1;
 }
 
 .rest-suggestion-point.is-selected {
-  fill: #ff2f7a;
+  fill: #b01258;
   opacity: 1;
 }
 
@@ -487,12 +487,13 @@ body {
 
 .rest-suggestion-image {
   pointer-events: all;
-  opacity: 0.35;
-  filter: brightness(0) saturate(100%) invert(52%) sepia(72%) saturate(2321%) hue-rotate(305deg) brightness(103%) contrast(96%);
+  opacity: 0.3;
+  /* Dark rose pink (less violet than hue ~300deg) */
+  filter: brightness(0) saturate(100%) invert(46%) sepia(72%) saturate(2000%) hue-rotate(336deg) brightness(95%) contrast(97%);
 }
 
 .rest-suggestion-image:hover {
-  opacity: 0.55;
+  opacity: 1;
 }
 
 .rest-placement-marker {
@@ -506,7 +507,19 @@ body {
   pointer-events: all;
   cursor: pointer;
   opacity: 0.95;
-  filter: brightness(0) saturate(100%) invert(52%) sepia(72%) saturate(2321%) hue-rotate(305deg) brightness(103%) contrast(96%);
+  filter: brightness(0) saturate(100%) invert(46%) sepia(72%) saturate(2000%) hue-rotate(336deg) brightness(95%) contrast(97%);
+}
+
+/* Placed Rest seat only: dark rose pink, not violet. */
+.rest-placement-image.is-placed-rest-seat {
+  opacity: 1;
+  filter: brightness(0) saturate(100%) invert(22%) sepia(85%) saturate(2800%) hue-rotate(332deg) brightness(86%) contrast(118%);
+}
+
+.rest-placement-marker.is-placed-rest-seat {
+  fill: #a31552;
+  stroke: #1a0a10;
+  stroke-width: 2;
 }
 
 .rest-placement-lingual {
@@ -540,6 +553,88 @@ body {
 }
 
 .is-hidden { display: none !important; }
+
+.anterior-rest-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  pointer-events: none;
+}
+
+.anterior-rest-dialog:not(.is-hidden) {
+  pointer-events: auto;
+}
+
+.anterior-rest-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: default;
+}
+
+.anterior-rest-dialog-panel {
+  position: fixed;
+  z-index: 1;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(268px, calc(100vw - 16px));
+  background: #e8eaed;
+  border: 1px solid #c5cdd6;
+  border-radius: 14px;
+  padding: 8px 10px 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
+  pointer-events: auto;
+}
+
+.anterior-rest-dialog-panel:focus {
+  outline: none;
+}
+
+.anterior-rest-dialog-title {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #4a5568;
+  text-align: center;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.anterior-rest-dialog-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: 6px;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.anterior-rest-surface-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 6px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #374151;
+  background: #f3f4f6;
+  border: 2px solid #0d9488;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.15;
+}
+
+.anterior-rest-surface-btn:hover:not(:disabled) {
+  background: #ccfbf1;
+}
+
+.anterior-rest-surface-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
 
 @media (max-width: 1200px) {
   .annotation-shell {

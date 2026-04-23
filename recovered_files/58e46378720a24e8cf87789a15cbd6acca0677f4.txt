@@ -1,0 +1,988 @@
+import { lol } from "../../crypt.js";
+import {
+  ACTION_UPON_FAILURE,
+  COMPONENT_TABS,
+  COMPONENT_CATALOG,
+  COMPONENT_BY_ID,
+  PREDEFINED_COMPONENTS,
+  STATUS_VALUES,
+  SVG_NS,
+  TOOTH_ORDER
+} from "./constants.js";
+
+// Runtime annotation state.
+const state = {
+  encryptedCaseId: "",
+  caseIntID: null,
+  activeStatus: "presence",
+  locks: { upper: false, lower: false },
+  teeth: {},
+  components: []
+};
+
+const TOOTH_ASSET_BASE = "../../../assets/teeth";
+const TOOTH_IMAGE_WIDTH = 1100;
+const TOOTH_IMAGE_HEIGHT = 180;
+const TOOTH_IMAGE_HALF_WIDTH = TOOTH_IMAGE_WIDTH / 2;
+const TOOTH_IMAGE_HALF_HEIGHT = TOOTH_IMAGE_HEIGHT / 2;
+const PRESENCE_TOOTH_ASSET = `${TOOTH_ASSET_BASE}/11.svg`;
+
+const JAW_BACKGROUND_IMAGES = {
+  upper: {
+    svgId: "upperArchSvg",
+    viewBox: "0 0 620 380",
+    template: "Upper_Jaw.svg",
+    details: null
+  },
+  lower: {
+    svgId: "lowerArchSvg",
+    viewBox: "0 0 620 380",
+    template: "Lower_Jaw.svg",
+    details: null
+  }
+};
+
+const COMPONENT_GROUPS = {
+  major: [
+    { key: "upper", title: "Upper" },
+    { key: "lower", title: "Lower" }
+  ],
+  assembly: [
+    { key: "circum", title: "Circum" },
+    { key: "bars", title: "Bars" }
+  ]
+};
+
+const TOOTH_SCALE_BY_UNIT = {
+  1: 0.84,
+  2: 0.88,
+  3: 0.9,
+  4: 0.96,
+  5: 1.01,
+  6: 1.07,
+  7: 1.1,
+  8: 0.92
+};
+
+const EMPTY_JAW_CALIBRATION = { x: 0, y: 0, rotation: 0 };
+
+const TOOTH_POSITION_MAP = {
+  upper: {
+    "18": { x: 137, y: 362, rotation: 1 },
+    "17": { x: 145, y: 303, rotation: 1 },
+    "16": { x: 160, y: 240, rotation: 1 },
+    "15": { x: 173, y: 183, rotation: 1 },
+    "14": { x: 190, y: 137, rotation: 6 },
+    "13": { x: 213, y: 95, rotation: 1 },
+    "12": { x: 245, y: 68, rotation: -1 },
+    "11": { x: 291, y: 56, rotation: -1 },
+    "21": { x: 346, y: 56, rotation: 2 },
+    "22": { x: 390, y: 68, rotation: 1 },
+    "23": { x: 425, y: 95, rotation: 1},
+    "24": { x: 446, y: 137, rotation: 6},
+    "25": { x: 465, y: 183, rotation: 1  },
+    "26": { x: 478, y: 240, rotation: 1 },
+    "27": { x: 490, y: 303, rotation: 1 },
+    "28": { x: 499, y: 362, rotation: 1 }
+  },
+  lower: {
+    "38": { x: 129, y: 37, rotation: 1 },
+    "37": { x: 144, y: 102, rotation: 1 },
+    "36": { x: 160, y: 179, rotation: 2 },
+    "35": { x: 178, y: 248, rotation: 3 },
+    "34": { x: 198, y: 298, rotation: 5 },
+    "33": { x: 230, y: 329, rotation: -1 },
+    "32": { x: 263, y: 344, rotation: 1 },
+    "31": { x: 295, y: 352, rotation: 2 },
+    "41": { x: 325, y: 352, rotation: -2 },
+    "42": { x: 357, y: 344, rotation: 1 },
+    "43": { x: 390, y: 329, rotation: -1 },
+    "44": { x: 423, y: 298, rotation: 5 },
+    "45": { x: 445, y: 248, rotation: 3 },
+    "46": { x: 460, y: 179, rotation: 2 },
+    "47": { x: 475, y: 102, rotation: 1 },
+    "48": { x: 490, y: 37, rotation: 1 }
+  }
+};
+
+const JAW_IMAGE_FLIP_X = {
+  upper: 1,
+  lower: -1
+};
+
+const TOOTH_SCALE_OVERRIDE = {
+  "18": 2.0,
+  "17": 1.7,
+  "16": 1.7,
+  "15": 1.9,
+  "14": 1.8,
+  "13": 2.0,
+  "12": 2.0,
+  "11": 1.8,
+  "21": 1.8,
+  "22": 2.0,
+  "23": 2.0,
+  "24": 1.8,
+  "25": 1.9,
+  "26": 1.7,
+  "27": 1.7,
+  "28": 2.0,
+  
+  "38": 2.2,
+  "37": 1.9,
+  "36": 1.95,  
+  "35": 2.05,
+  "34": 2.15,
+  "33": 2.15,
+  "32": 2.5,
+  "31": 2.5,
+  "41": 2.5,
+  "42": 2.5,
+  "43": 2.15, 
+  "44": 2.15,
+  "45": 2.05,
+  "46": 1.95,
+  "47": 1.9,
+  "48": 2.2,
+
+};
+
+const JAW_CALIBRATION = {
+  upper: { x: -8, y: -14, rotation: 0 },
+  lower: { x: 0, y: 0, rotation: 0 }
+};
+
+let hasInitialized = false;
+
+function start() {
+  if (hasInitialized) return;
+  hasInitialized = true;
+  init();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", start);
+} else {
+  start();
+}
+
+// Entry point: wire events, restore state, and render.
+function init() {
+  initializeCaseIds();
+  initializeTeethState();
+  renderJaws();
+
+  try {
+    bindStatusPicker();
+    bindJawControls();
+    bindActionButtons();
+    initComponentCatalog();
+    loadPreviewImage();
+    hydrateFromLocalStorage();
+    syncDesignModeWithLocks(false);
+    renderJaws();
+    updateEditModeUI();
+  } catch (err) {
+    console.error("2D annotation init failed", err);
+    setMessage("Loaded jaw view with limited tools. Check console for init error.", true);
+  }
+}
+
+// Read encrypted case id from URL and display a human-readable label.
+function initializeCaseIds() {
+  const params = new URLSearchParams(window.location.search);
+  state.encryptedCaseId = params.get("id") || "";
+  let parsedCaseId = null;
+
+  if (state.encryptedCaseId) {
+    try {
+      const decrypted = Number(lol(state.encryptedCaseId));
+      if (Number.isFinite(decrypted)) {
+        parsedCaseId = decrypted;
+      }
+    } catch {
+      parsedCaseId = null;
+    }
+  }
+
+  state.caseIntID = parsedCaseId;
+  const label = document.getElementById("caseLabel");
+  if (label) {
+    label.textContent = `Case: ${state.caseIntID ?? "Unknown"}`;
+  }
+}
+
+// Initialize all tooth records before any rendering.
+function initializeTeethState() {
+  for (const jaw of Object.keys(TOOTH_ORDER)) {
+    for (const toothId of TOOTH_ORDER[jaw]) {
+      state.teeth[toothId] = {
+        tooth_id: toothId,
+        jaw,
+        status: "presence",
+        isPresent: true,
+        components: [],
+        center: [0, 0]
+      };
+    }
+  }
+}
+
+function resetToothRecord(toothId, status) {
+  const tooth = state.teeth[toothId];
+  if (!tooth) return;
+  tooth.status = status;
+  tooth.components = [];
+  tooth.isPresent = true;
+}
+
+// Choose active labeling mode: presence / abutment / compromised.
+function bindStatusPicker() {
+  const buttons = document.querySelectorAll(".status-btn");
+  buttons.forEach((button) => {
+    button.addEventListener("click", () => {
+      if(state.designMode){
+        setMessage("Unlock either arch to edit tooth status.",true);
+        return;
+      }
+      state.activeStatus = button.dataset.status;
+      buttons.forEach((btn) => btn.classList.toggle("is-active", btn === button));
+      setMessage(`Active status: ${titleCase(state.activeStatus)}.`, false);
+    });
+  });
+}
+
+// Bind jaw lock toggles.
+function bindJawControls() {
+  const upper = document.getElementById("upperLockBtn");
+  const lower = document.getElementById("lowerLockBtn");
+  if (upper) upper.addEventListener("click", () => toggleJawLock("upper"));
+  if (lower) lower.addEventListener("click", () => toggleJawLock("lower"));
+  refreshLockButtons();
+}
+
+// Bind global actions (clear, reset, save).
+function bindActionButtons() {
+  const clearTop = document.getElementById("clearTopBtn");
+  const clearBottom = document.getElementById("clearBottomBtn");
+  const reset = document.getElementById("drawFromScratchBtn");
+  const save = document.getElementById("saveAnnotationBtn");
+  if (clearTop) clearTop.addEventListener("click", () => clearJaw("upper"));
+  if (clearBottom) clearBottom.addEventListener("click", () => clearJaw("lower"));
+  if (reset) reset.addEventListener("click", drawFromScratch);
+  if (save) save.addEventListener("click", saveAnnotation);
+}
+
+// Toggle lock state for a specific arch.
+function toggleJawLock(jaw) {
+  state.locks[jaw] = !state.locks[jaw];
+  refreshLockButtons();
+  syncDesignModeWithLocks(true);
+  renderJaw(jaw);
+  if(!state.designMode){
+  setMessage(`${titleCase(jaw)} arch is now ${state.locks[jaw] ? "locked" : "unlocked"}.`, false);
+  }
+}
+
+// Keep lock button labels in sync with state.
+function refreshLockButtons() {
+  const upperBtn = document.getElementById("upperLockBtn");
+  const lowerBtn = document.getElementById("lowerLockBtn");
+  const updateLockButton = (button, isLocked, jaw) => {
+    if (!button) return;
+
+    const icon = button.querySelector(".lock-icon");
+    const text = button.querySelector(".lock-text");
+
+    if (icon) {
+      icon.src = isLocked ? "../../assets/lock.png" : "../../assets/unlock.png";
+    }
+
+    if (text) {
+      text.textContent = isLocked ? "Locked" : "Unlocked";
+    }
+
+    button.classList.toggle("is-locked", isLocked);
+    button.setAttribute("aria-label", `${isLocked ? "Unlock" : "Lock"} ${jaw} arch`);
+  };
+
+  updateLockButton(upperBtn, state.locks.upper, "upper");
+  updateLockButton(lowerBtn, state.locks.lower, "lower");
+}
+
+// Clear one arch only when that arch is unlocked.
+function clearJaw(jaw) {
+  if (state.locks[jaw]) {
+    setMessage(`Cannot clear ${jaw}. The arch is locked.`, true);
+    return;
+  }
+  for (const toothId of TOOTH_ORDER[jaw]) {
+    resetToothRecord(toothId, "presence");
+  }
+  renderJaw(jaw);
+}
+
+// Reset whole annotation state back to empty.
+function drawFromScratch() {
+  for (const jaw of Object.keys(TOOTH_ORDER)) {
+    state.locks[jaw] = false;
+    for (const toothId of TOOTH_ORDER[jaw]) {
+      resetToothRecord(toothId, null);
+    }
+  }
+  state.components = [];
+  state.selectedComponentId = PREDEFINED_COMPONENTS[0] || null;
+  refreshLockButtons();
+  syncDesignModeWithLocks(false);
+  renderComponentCatalog();
+  updateEditModeUI();
+  renderJaws();
+  setMessage("All teeth reset. Both arches unlocked.", false);
+}
+
+function initComponentCatalog(){
+  if (!state.selectedTab) {
+    state.selectedTab = COMPONENT_TABS[0]?.id || null;
+  }
+  if(!state.selectedComponentId){
+    state.selectedComponentId = PREDEFINED_COMPONENTS[0] || null;
+  }
+  const tabsEl = document.getElementById("componentTabs");
+  if(tabsEl){
+    tabsEl.innerHTML="";
+    for(const tab of COMPONENT_TABS){
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `component-tab ${state.selectedTab === tab.id ? "is-active" : ""}`
+      button.textContent=tab.label;
+      button.addEventListener("click", () => {
+        state.selectedTab = tab.id;
+        renderComponentCatalog();
+      });
+      tabsEl.appendChild(button);
+    }
+  }
+  renderComponentCatalog();
+}
+function renderComponentCatalog() {
+  const tabs = document.querySelectorAll(".component-tab");
+  tabs.forEach((tabBtn, index) => {
+    tabBtn.classList.toggle("is-active", COMPONENT_TABS[index]?.id === state.selectedTab);
+  });
+
+  const itemsEl = document.getElementById("componentItems");
+  if (!itemsEl) return;
+  itemsEl.innerHTML = "";
+
+  const tabItems = COMPONENT_CATALOG.filter((entry) => entry.tab === state.selectedTab);
+  const groups = COMPONENT_GROUPS[state.selectedTab];
+  if (groups) {
+    const columns = document.createElement("div");
+    columns.className = "major-columns";
+    groups.forEach((groupMeta) => {
+      const groupItems = tabItems.filter((entry) => entry.section === groupMeta.key);
+      columns.appendChild(createMajorColumn(groupMeta.title, groupItems));
+    });
+    itemsEl.appendChild(columns);
+    renderSelectedComponents();
+    return;
+  }
+
+  for (const item of tabItems) {
+    itemsEl.appendChild(createComponentItemButton(item));
+  }
+
+  renderSelectedComponents();
+}
+
+function createMajorColumn(title, items) {
+  const column = document.createElement("section");
+  column.className = "major-column";
+
+  const heading = document.createElement("h4");
+  heading.className = "major-column-title";
+  heading.textContent = title;
+  column.appendChild(heading);
+
+  const list = document.createElement("div");
+  list.className = "major-column-items";
+  for (const item of items) {
+    list.appendChild(createComponentItemButton(item));
+  }
+  column.appendChild(list);
+  return column;
+}
+
+function createComponentItemButton(item) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `component-item ${state.selectedComponentId === item.id ? "is-active" : ""}`;
+
+  const icon = document.createElement("span");
+  icon.className = "component-icon";
+  if (item.icon) {
+    const iconImg = document.createElement("img");
+    iconImg.className = "component-icon-img";
+    iconImg.src = item.icon;
+    iconImg.alt = item.label;
+    icon.appendChild(iconImg);
+  } else {
+    icon.textContent = item.shortLabel;
+  }
+
+  const label = document.createElement("span");
+  label.className = "component-label";
+  label.textContent = item.label;
+
+  button.appendChild(icon);
+  button.appendChild(label);
+  button.addEventListener("click", () => handleDesignComponentSelect(item.id));
+  return button;
+}
+
+function handleDesignComponentSelect(componentId) {
+  if (!state.designMode) {
+    setMessage("Lock both arches to use the component catalog.", true);
+    return;
+  }
+
+  const selected = COMPONENT_BY_ID.get(componentId);
+  if (!selected) return;
+
+  state.selectedComponentId = componentId;
+
+  if (state.components.includes(componentId)) {
+    state.components = state.components.filter((id) => id !== componentId);
+    renderComponentCatalog();
+    setMessage(`${selected.label} removed from design list.`, false);
+    return;
+  }
+
+  const conflicts = state.components.filter((id) => selected.conflictsWith.includes(id));
+  if (conflicts.length > 0 && selected.actionUponFailure === ACTION_UPON_FAILURE.PREVENT_PLACEMENT) {
+    setMessage(`Cannot add ${selected.label}. Conflicts with ${conflicts.join(", ")}.`, true);
+    return;
+  }
+
+  if (conflicts.length > 0 && selected.actionUponFailure === ACTION_UPON_FAILURE.REMOVE_THEN_PLACE) {
+    state.components = state.components.filter((id) => !conflicts.includes(id));
+  }
+
+  state.components.push(componentId);
+  renderComponentCatalog();
+  setMessage(`${selected.label} added to design list.`, false);
+}
+
+function renderSelectedComponents() {
+  const selectedEl = document.getElementById("selectedComponents");
+  if (!selectedEl) return;
+
+  selectedEl.innerHTML = "";
+  for (const componentId of state.components) {
+    const chip = document.createElement("span");
+    chip.className = "selected-chip";
+    chip.textContent = COMPONENT_BY_ID.get(componentId)?.label || componentId;
+    selectedEl.appendChild(chip);
+  }
+}
+
+function updateEditModeUI() {
+  const panel = document.getElementById("editModePanel");
+  const active = state.designMode;
+  if (panel) {
+    panel.classList.toggle("is-hidden", !active);
+  }
+
+  const selectPanel = document.getElementById("selectTeethPanel");
+  if (selectPanel) {
+    selectPanel.classList.toggle("is-hidden", active);
+  }
+
+  const hint = document.getElementById("designHint");
+  if (hint) {
+    hint.textContent = active
+      ? "Design mode is active. Choose components from the catalog."
+      : "Lock both arches to enter design mode.";
+  }
+}
+
+function syncDesignModeWithLocks(notify) {
+  const next = state.locks.upper && state.locks.lower;
+  const prev = state.designMode;
+  state.designMode = next;
+
+  updateEditModeUI();
+  renderComponentCatalog();
+
+  if (state.designMode && state.activeStatus !== "presence") {
+    state.activeStatus = "presence";
+    document.querySelectorAll(".status-btn").forEach((btn) => {
+      btn.classList.toggle("is-active", btn.dataset.status === "presence");
+    });
+  }
+
+  if (notify && prev !== next) {
+    if (next) {
+      setMessage("Both arches are locked. Entered design mode; tooth selection is disabled.", false);
+    } else {
+      setMessage("Exited design mode. Unlock state allows tooth editing again.", false);
+    }
+  }
+}
+
+function applyToothStatusClass(group, tooth) {
+  if (!tooth.isPresent) {
+    group.classList.add("is-missing");
+    return;
+  }
+
+  const status = normalizeStatus(tooth.status);
+  if (status === "abutment" || status === "compromised") {
+    group.classList.add(`status-${status}`);
+    return;
+  }
+  group.classList.add("status-presence");
+}
+
+function appendToothComponentNote(group, components) {
+  if (components.length === 0) return;
+  const compText = components
+    .map((id) => COMPONENT_BY_ID.get(id)?.shortLabel || id)
+    .join(" ");
+  const note = svgEl("text", {
+    x: "0",
+    y: "30",
+    class: "component-note"
+  });
+  note.textContent = compText;
+  group.appendChild(note);
+}
+
+// Render both arches.
+function renderJaws() {
+  renderJaw("upper");
+  renderJaw("lower");
+}
+
+// Render one arch with PNG jaw + positioned PNG teeth.
+function renderJaw(jaw) {
+  const config = JAW_BACKGROUND_IMAGES[jaw];
+  if (!config) return;
+  const svg = document.getElementById(config.svgId);
+  if (!svg) return;
+  svg.innerHTML = "";
+  svg.setAttribute("viewBox", config.viewBox);
+
+  renderArchBackground(svg, jaw);
+
+  const ids = TOOTH_ORDER[jaw];
+  ids.forEach((toothId) => {
+    const placement = getToothPlacement(jaw, toothId);
+    if (!placement) return;
+    const calibration = JAW_CALIBRATION[jaw] || EMPTY_JAW_CALIBRATION;
+    const point = {
+      x: placement.x + calibration.x,
+      y: placement.y + calibration.y
+    };
+    const rotation = placement.rotation + calibration.rotation;
+    state.teeth[toothId].center = [Math.round(point.x), Math.round(point.y)];
+
+    const group = svgEl("g", { class: "tooth", "data-tooth-id": toothId, "data-jaw": jaw });
+    if (state.locks[jaw]) group.classList.add("is-locked");
+    const tooth = state.teeth[toothId];
+    applyToothStatusClass(group, tooth);
+
+    group.setAttribute(
+      "transform",
+      `translate(${point.x.toFixed(2)} ${point.y.toFixed(2)}) rotate(${rotation.toFixed(2)})`
+    );
+
+    group.appendChild(
+      svgEl("circle", {
+        cx: "0",
+        cy: "0",
+        r: "24",
+        class: "tooth-hit-target"
+      })
+    );
+
+    group.appendChild(createToothVisual(toothId, jaw));
+
+    appendToothComponentNote(group, tooth.components);
+
+    group.addEventListener("click", () => onToothClick(jaw, toothId));
+    svg.appendChild(group);
+  });
+}
+
+function toggleToothPresence(tooth, toothId) {
+  tooth.isPresent = !tooth.isPresent;
+  tooth.status = "presence";
+  if (!tooth.isPresent) {
+    tooth.components = [];
+  }
+  return `Tooth ${toothId} is now ${tooth.isPresent ? "present" : "missing"}.`;
+}
+
+function toggleToothStatus(tooth, toothId, status) {
+  if (!tooth.isPresent) {
+    tooth.isPresent = true;
+  }
+  tooth.status = tooth.status === status ? "presence" : status;
+  return `Tooth ${toothId} set to ${tooth.status}.`;
+}
+
+// Click behavior: apply/toggle selected status on a tooth.
+function onToothClick(jaw, toothId) {
+  if (state.designMode) {
+    placeSelectedComponentOnTooth(toothId);
+    renderJaw(jaw);
+    return;
+  }
+
+  if (state.locks[jaw]) {
+    setMessage(`Cannot edit ${jaw}. Unlock it first.`, true);
+    return;
+  }
+
+  const tooth = state.teeth[toothId];
+  if (!tooth) return;
+
+  if (state.activeStatus === "presence") {
+    setMessage(toggleToothPresence(tooth, toothId), false);
+    renderJaw(jaw);
+    return;
+  }
+
+  if (state.activeStatus === "abutment" || state.activeStatus === "compromised") {
+    setMessage(toggleToothStatus(tooth, toothId, state.activeStatus), false);
+    renderJaw(jaw);
+    return;
+  }
+
+  tooth.status = "presence";
+  renderJaw(jaw);
+}
+
+function placeSelectedComponentOnTooth(toothId) {
+  const tooth = state.teeth[toothId];
+  const selectedComponent = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+
+  if (!selectedComponent) {
+    setMessage("Select a component from the catalog first.", true);
+    return;
+  }
+
+  if (tooth.components.includes(selectedComponent.id)) {
+    tooth.components = tooth.components.filter((id) => id !== selectedComponent.id);
+    setMessage(`Removed ${selectedComponent.label} from tooth ${toothId}.`, false);
+    return;
+  }
+
+  const criteriaResult = assessPlacementCriteria(tooth, selectedComponent);
+  if (criteriaResult.pass) {
+    tooth.components.push(selectedComponent.id);
+    setMessage(`Placed ${selectedComponent.label} on tooth ${toothId}.`, false);
+    return;
+  }
+
+  const { failureData } = criteriaResult;
+  if (failureData.actionUponFailure === ACTION_UPON_FAILURE.PREVENT_PLACEMENT) {
+    setMessage(failureData.reason, true);
+    return;
+  }
+
+  if (failureData.actionUponFailure === ACTION_UPON_FAILURE.REMOVE_THEN_PLACE) {
+    tooth.components = tooth.components.filter((id) => !failureData.conflictingComponents.includes(id));
+    tooth.components.push(selectedComponent.id);
+    setMessage(`Replaced conflict and placed ${selectedComponent.label} on tooth ${toothId}.`, false);
+  }
+}
+
+function assessPlacementCriteria(tooth, selectedComponent) {
+  if (selectedComponent.requiresPresence && !tooth.isPresent) {
+    return {
+      pass: false,
+      failureData: {
+        reason: `Tooth ${tooth.tooth_id} is missing.`,
+        actionUponFailure: ACTION_UPON_FAILURE.PREVENT_PLACEMENT,
+        conflictingComponents: [],
+      },
+    };
+  }
+
+  if (selectedComponent.requiresMissing && tooth.isPresent) {
+    return {
+      pass: false,
+      failureData: {
+        reason: `Tooth ${tooth.tooth_id} is present.`,
+        actionUponFailure: ACTION_UPON_FAILURE.PREVENT_PLACEMENT,
+        conflictingComponents: [],
+      },
+    };
+  }
+
+  const conflicts = tooth.components.filter((id) => selectedComponent.conflictsWith.includes(id));
+  if (conflicts.length > 0) {
+    return {
+      pass: false,
+      failureData: {
+        reason: `Conflicting components on tooth ${tooth.tooth_id}: ${conflicts.join(", ")}`,
+        actionUponFailure: selectedComponent.actionUponFailure,
+        conflictingComponents: conflicts,
+      },
+    };
+  }
+
+  return { pass: true, failureData: null };
+}
+
+// Save annotation in localStorage and export JSON file.
+function saveAnnotation() {
+  const payload = buildPayload();
+  const storageKey = getStorageKey();
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(payload));
+    downloadJson(`case_${state.caseIntID ?? "unknown"}_2d_annotation.json`, payload);
+    setMessage(`Saved to localStorage key "${storageKey}" and downloaded JSON file.`, false);
+  } catch {
+    setMessage("Failed to save annotation JSON.", true);
+  }
+}
+
+// Build JSON payload consumed by downstream workflows.
+function buildPayload() {
+  const teeth = [...TOOTH_ORDER.upper, ...TOOTH_ORDER.lower].map((toothId) => {
+    const record = state.teeth[toothId];
+    return {
+      tooth_id: record.tooth_id,
+      jaw: record.jaw,
+      status: normalizeStatus(record.status) || "presence",
+      isPresent: record.isPresent,
+      components: [...record.components],
+      center: record.center,
+    };
+  });
+
+  return {
+    schema: "smartrpd.2d-arch.v1",
+    caseIntID: state.caseIntID,
+    encryptedCaseId: state.encryptedCaseId || null,
+    updatedAt: new Date().toISOString(),
+    locks: { upper: state.locks.upper, lower: state.locks.lower },
+    editMode: state.designMode,
+    components: state.components,
+    selectedComponentId: state.selectedComponentId,
+    activeStatus: state.activeStatus,
+    teeth,
+    arches: {
+      upper: TOOTH_ORDER.upper.map((id) => state.teeth[id].center),
+      lower: TOOTH_ORDER.lower.map((id) => state.teeth[id].center),
+    },
+  };
+}
+
+// Restore saved annotation for this case id.
+function hydrateFromLocalStorage() {
+  const raw = localStorage.getItem(getStorageKey());
+  if (!raw) return;
+
+  try {
+    const data = JSON.parse(raw);
+    if (data.locks) {
+      state.locks.upper = Boolean(data.locks.upper);
+      state.locks.lower = Boolean(data.locks.lower);
+      refreshLockButtons();
+    }
+
+    if (Array.isArray(data.components)) {
+      state.components = data.components.filter((id) => COMPONENT_BY_ID.has(id));
+      state.selectedComponentId = state.components[0] || PREDEFINED_COMPONENTS[0] || null;
+    }
+
+    if (typeof data.selectedComponentId === "string" && COMPONENT_BY_ID.has(data.selectedComponentId)) {
+      state.selectedComponentId = data.selectedComponentId;
+      const selectedComp = COMPONENT_BY_ID.get(data.selectedComponentId);
+      if (selectedComp?.tab) {
+        state.selectedTab = selectedComp.tab;
+      }
+    }
+
+    updateEditModeUI();
+
+    if (Array.isArray(data.teeth)) {
+      for (const item of data.teeth) {
+        if (item && state.teeth[item.tooth_id]) {
+          state.teeth[item.tooth_id].status = normalizeStatus(item.status) || "presence";
+          state.teeth[item.tooth_id].isPresent = item.isPresent !== false;
+          state.teeth[item.tooth_id].components = [];
+        }
+      }
+    }
+    syncDesignModeWithLocks(false);
+    renderComponentCatalog();
+    setMessage("Loaded existing annotation from localStorage.", false);
+  } catch {
+    setMessage("Found saved data, but it is invalid JSON.", true);
+  }
+}
+
+// Show preview image produced from the 3D viewer (if available).
+function loadPreviewImage() {
+  const img = document.getElementById("previewImage");
+  const fallback = document.getElementById("previewFallback");
+  if (!img || !fallback) return;
+
+  if (!state.encryptedCaseId) {
+    fallback.style.display = "block";
+    img.style.display = "none";
+    return;
+  }
+
+  const localImage = localStorage.getItem(`annotateBackground_${state.encryptedCaseId}`);
+  if (localImage) {
+    img.src = localImage;
+    img.style.display = "block";
+    fallback.style.display = "none";
+    return;
+  }
+
+  fallback.style.display = "block";
+  img.style.display = "none";
+}
+
+function getStorageKey() {
+  return `dentalAnnotation_${state.encryptedCaseId || "draft"}`;
+}
+
+// Draw PNG jaw templates as the full background.
+function renderArchBackground(svg, jaw) {
+  const background = JAW_BACKGROUND_IMAGES[jaw];
+  if (!background) return;
+
+  svg.appendChild(
+    svgEl("image", {
+      href: `${TOOTH_ASSET_BASE}/${background.template}`,
+      x: "0",
+      y: "0",
+      width: "620",
+      height: "380",
+      preserveAspectRatio: "xMidYMid meet",
+      class: "jaw-template"
+    })
+  );
+
+  if (background.details) {
+    svg.appendChild(
+      svgEl("image", {
+        href: `${TOOTH_ASSET_BASE}/${background.details}`,
+        x: "0",
+        y: "0",
+        width: "620",
+        height: "380",
+        preserveAspectRatio: "xMidYMid meet",
+        class: "jaw-details"
+      })
+    );
+  }
+}
+
+function getToothPlacement(jaw, toothId) {
+  return TOOTH_POSITION_MAP[jaw]?.[toothId] || null;
+}
+
+function normalizeStatus(value) {
+  return STATUS_VALUES.includes(value) ? value : null;
+}
+
+// Per-tooth scaling for realistic size progression.
+function getToothScale(toothId, jaw) {
+  const unit = Number(toothId.slice(1));
+  let scale = TOOTH_SCALE_BY_UNIT[unit] || 1;
+  if (jaw === "lower" && unit <= 2) scale *= 0.92;
+  if (jaw === "lower" && unit >= 6) scale *= 0.96;
+  return scale;
+}
+
+function getToothAssetSpec(toothId) {
+  const numeric = Number(toothId);
+  if (!Number.isFinite(numeric)) {
+    return { sourceToothId: "11", mirrored: false };
+  }
+
+  const unit = numeric % 10;
+  const quadrant = Math.floor(numeric / 10);
+  if (quadrant === 2) {
+    return { sourceToothId: `1${unit}`, mirrored: true };
+  }
+  if (quadrant === 3) {
+    return { sourceToothId: `4${unit}`, mirrored: true };
+  }
+  return { sourceToothId: toothId, mirrored: false };
+}
+
+// Compose one tooth image with jaw-specific scaling and mirroring.
+function createToothVisual(toothId, jaw) {
+  const placement = getToothPlacement(jaw, toothId) || {};
+  const jawFlipX = JAW_IMAGE_FLIP_X[jaw] ?? 1;
+  const flipX = (placement.scaleX ?? 1) * jawFlipX;
+  const flipY = placement.scaleY ?? 1;
+
+  const { mirrored, sourceToothId } = getToothAssetSpec(toothId);
+  const scaleBoost = TOOTH_SCALE_OVERRIDE[toothId] || 1;
+  const base = getToothScale(toothId, jaw) * 0.24 * scaleBoost;
+
+  const scaleX = (mirrored ? -base : base) * flipX;
+  const scaleY = base * flipY;
+
+  const visual = svgEl("g", {
+    class: "tooth-visual",
+    transform: `scale(${scaleX.toFixed(3)} ${scaleY.toFixed(3)})`
+  });
+
+  visual.appendChild(
+    svgEl("image", {
+      href: sourceToothId ? `${TOOTH_ASSET_BASE}/${sourceToothId}.svg` : PRESENCE_TOOTH_ASSET,
+      x: String(-TOOTH_IMAGE_HALF_WIDTH),
+      y: String(-TOOTH_IMAGE_HALF_HEIGHT),
+      width: String(TOOTH_IMAGE_WIDTH),
+      height: String(TOOTH_IMAGE_HEIGHT),
+      preserveAspectRatio: "xMidYMid meet",
+      class: "tooth-image"
+    })
+  );
+
+  return visual;
+}
+
+function titleCase(value) {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : "";
+}
+
+function setMessage(message, isError) {
+  const el = document.getElementById("saveMessage");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.toggle("error", Boolean(isError));
+}
+
+// Trigger local JSON file download.
+function downloadJson(fileName, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function svgEl(tagName, attrs = {}) {
+  const el = document.createElementNS(SVG_NS, tagName);
+  for (const [key, value] of Object.entries(attrs)) {
+    el.setAttribute(key, String(value));
+  }
+  return el;
+}

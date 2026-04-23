@@ -1,0 +1,2023 @@
+diff --git a/css/2DAnnotation_01.css b/css/2DAnnotation_01.css
+index ee60726..3b8e431 100644
+--- a/css/2DAnnotation_01.css
++++ b/css/2DAnnotation_01.css
+@@ -120,6 +120,8 @@ body {
+ }
+ 
+ .jaw-row-name {
++  flex: 1;
++  min-width: 0;
+   background: var(--rose-050);
+   border: 1px solid var(--line);
+   border-radius: 5px;
+@@ -129,14 +131,44 @@ body {
+   padding: 7px 6px;
+ }
+ 
+-.lock-btn {
+-  grid-column: 1 / 2;
++.mode-toggle-row {
++  margin-top: 2px;
++}
++
++.mode-toggle-btn {
++  width: 100%;
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  gap: 0;
+   border: 1px solid var(--line);
+-  border-radius: 999px;
++  border-radius: 6px;
++  background: #fff;
++  color: var(--rose-700);
++  padding: 8px 10px;
++  cursor: pointer;
++  font-size: 0.72rem;
++  font-weight: 600;
++  appearance: none;
++  box-shadow: none;
++}
++
++.mode-toggle-btn:hover {
++  border-color: var(--rose-500);
++  background: rgba(196, 79, 112, 0.06);
++}
++
++.mode-toggle-btn.is-design-mode {
++  background: rgba(196, 79, 112, 0.12);
++  border-color: var(--rose-500);
++}
++
++.lock-btn {
++  border: 1px transparent var(--line);
+   background: transparent;
+   color: var(--rose-700);
+-  width: 24px;
+-  height: 24px;
++  width: 40px;
++  height: 30px;
+   padding: 0;
+   cursor: pointer;
+   appearance: none;
+@@ -152,8 +184,8 @@ body {
+ }
+ 
+ .lock-btn .lock-icon {
+-  width: 12px;
+-  height: 12px;
++  width: 20px;
++  height: 20px;
+ }
+ 
+ .lock-btn .lock-text {
+@@ -174,8 +206,9 @@ body {
+   display: grid;
+   grid-template-rows: 1fr 1fr;
+   align-items: center;
+-  gap:5px;
+-  margin:5px;
++  gap: 5px;
++  margin: 0;
++  padding: 10px;
+ }
+ 
+ .arch-svg {
+@@ -185,6 +218,7 @@ body {
+   display: block;
+ }
+ 
++
+ .center-actions {
+   display: grid;
+   grid-template-columns: repeat(4, minmax(0, 1fr));
+@@ -216,6 +250,71 @@ body {
+ 
+ .save-message.error { color: #b02222; }
+ 
++.rest-choice-backdrop {
++  position: fixed;
++  inset: 0;
++  background: rgba(0, 0, 0, 0.12);
++  display: grid;
++  place-items: center;
++  z-index: 1000;
++}
++
++.rest-choice-dialog {
++  background: #dedede;
++  border-radius: 10px;
++  border: 1px solid #d1d1d1;
++  width: min(320px, calc(100vw - 24px));
++  padding: 6px 8px 8px;
++  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
++}
++
++.rest-choice-title {
++  text-align: center;
++  color: #3d5d67;
++  font-size: clamp(13px, 2.2vw, 18px);
++  line-height: 1;
++  margin: 0 0 6px;
++  font-weight: 600;
++  font-family: "Arial", "Segoe UI", sans-serif;
++}
++
++.rest-choice-actions {
++  display: grid;
++  grid-template-columns: repeat(3, minmax(0, 1fr));
++  gap: 5px;
++}
++
++.rest-choice-btn {
++  border: 2px solid #10b39f;
++  border-radius: 8px;
++  background: #d9f3f0;
++  color: #173f4a;
++  font-size: clamp(11px, 1.9vw, 14px);
++  font-weight: 700;
++  letter-spacing: 0.4px;
++  padding: 6px 4px;
++  cursor: pointer;
++  line-height: 1;
++}
++
++.rest-choice-btn:hover,
++.rest-choice-btn.is-default {
++  background: #c4ece7;
++}
++
++@media (max-width: 820px) {
++  .rest-choice-title {
++    font-size: 14px;
++  }
++
++  .rest-choice-btn {
++    font-size: 12px;
++    border-width: 2px;
++    border-radius: 7px;
++    padding: 6px 4px;
++  }
++}
++
+ .tools-panel {
+   gap: 16px;
+   max-height: calc(100vh - 32px);
+@@ -331,6 +430,17 @@ body {
+   min-width: 0;
+ }
+ 
++.mesh-apply-all-row {
++  min-width: 0;
++}
++
++.mesh-apply-all-btn {
++  width: 100%;
++  font-size: 0.7rem;
++  padding: 8px 10px;
++  line-height: 1.2;
++}
++
+ .major-columns {
+   display: grid;
+   grid-template-columns: repeat(2, minmax(0, 1fr));
+@@ -379,6 +489,37 @@ body {
+   box-shadow: none;
+ }
+ 
++.component-item.has-inline-label {
++  justify-content: flex-start;
++  gap: 10px;
++  padding: 8px 10px;
++}
++
++.component-item.has-inline-label .component-icon {
++  flex: 0 0 50px;
++}
++
++.component-item.has-inline-label .component-label {
++  position: static;
++  left: auto;
++  bottom: auto;
++  transform: none;
++  opacity: 1;
++  visibility: visible;
++  pointer-events: none;
++  width: auto;
++  max-width: none;
++  text-align: left;
++  white-space: normal;
++  background: transparent;
++  border: none;
++  border-radius: 0;
++  padding: 0;
++  box-shadow: none;
++  color: var(--muted);
++  transition: none;
++}
++
+ .component-icon {
+   width: 50px;
+   height: 50px;
+@@ -430,6 +571,12 @@ body {
+   transform: translateX(-50%) translateY(0);
+   transition-delay: 0s;
+ }
++
++/* Inline-label buttons shouldn't switch to tooltip behavior on hover/focus. */
++.component-item.has-inline-label:hover .component-label,
++.component-item.has-inline-label:focus-visible .component-label {
++  transform: none;
++}
+ .selected-components { display: none; }
+ 
+ .tooth {
+@@ -466,7 +613,7 @@ body {
+   fill: #ff9bbf;
+   stroke: #ffffff;
+   stroke-width: 1.1;
+-  opacity: 0.55;
++  opacity: 0.15;
+   cursor: pointer;
+   pointer-events: all;
+ }
+@@ -487,12 +634,12 @@ body {
+ 
+ .rest-suggestion-image {
+   pointer-events: all;
+-  opacity: 0.35;
++  opacity: 0.25;
+   filter: brightness(0) saturate(100%) invert(52%) sepia(72%) saturate(2321%) hue-rotate(305deg) brightness(103%) contrast(96%);
+ }
+ 
+ .rest-suggestion-image:hover {
+-  opacity: 0.55;
++  opacity: 0.9;
+ }
+ 
+ .rest-placement-marker {
+@@ -505,7 +652,7 @@ body {
+ .rest-placement-image {
+   pointer-events: all;
+   cursor: pointer;
+-  opacity: 0.95;
++  opacity: 1;
+   filter: brightness(0) saturate(100%) invert(52%) sepia(72%) saturate(2321%) hue-rotate(305deg) brightness(103%) contrast(96%);
+ }
+ 
+@@ -513,6 +660,75 @@ body {
+   fill: #00a896;
+ }
+ 
++.clasp-suggestion-point {
++  fill: #59d98e;
++  stroke: #ffffff;
++  stroke-width: 1.1;
++  opacity: 0.3;
++  cursor: pointer;
++  pointer-events: all;
++}
++
++.clasp-suggestion-point:hover {
++  fill: #24b35f;
++  opacity: 1;
++}
++
++.clasp-suggestion-group {
++  cursor: pointer;
++}
++
++.clasp-suggestion-image {
++  pointer-events: all;
++  opacity: 0.1;
++  filter: brightness(0) saturate(100%) invert(49%) sepia(78%) saturate(516%) hue-rotate(92deg) brightness(96%) contrast(90%);
++}
++
++.clasp-suggestion-image:hover {
++  opacity: 0.95;
++}
++
++.clasp-placement-image {
++  pointer-events: all;
++  cursor: pointer;
++  opacity: 1;
++  filter: brightness(0) saturate(100%) invert(49%) sepia(78%) saturate(516%) hue-rotate(92deg) brightness(96%) contrast(90%);
++}
++
++.clasp-placement-marker {
++  fill: #24b35f;
++  stroke: #ffffff;
++  stroke-width: 1.2;
++  pointer-events: none;
++}
++
++.bar-suggestion-point {
++  fill: #35d9da;
++  stroke: #ffffff;
++  stroke-width: 1.2;
++  opacity: 0.78;
++  cursor: pointer;
++  pointer-events: all;
++}
++
++.bar-suggestion-point:hover {
++  opacity: 1;
++  fill: #17b8c2;
++}
++
++.bar-placement-image {
++  pointer-events: all;
++  cursor: pointer;
++  opacity: 1;
++  filter: brightness(0) saturate(100%) invert(48%) sepia(88%) saturate(1121%) hue-rotate(186deg) brightness(103%) contrast(98%);
++}
++
++.bar-placement-marker {
++  fill: #17b8c2;
++  stroke: #ffffff;
++  stroke-width: 1.2;
++}
++
+ 
+ .tooth.status-abutment .tooth-image {
+   filter: brightness(0) saturate(100%) invert(29%) sepia(94%) saturate(1959%) hue-rotate(210deg) brightness(93%) contrast(90%);
+diff --git a/src/js/2D/2DAnnotation.js b/src/js/2D/2DAnnotation.js
+index 34ed69a..47a62c4 100644
+--- a/src/js/2D/2DAnnotation.js
++++ b/src/js/2D/2DAnnotation.js
+@@ -1,16 +1,39 @@
+ import { lol } from "../../crypt.js";
+ import {
+   ACTION_UPON_FAILURE,
++  BAR_DEFAULT_COMPONENT_ID,
++  BAR_DEFAULT_SURFACE,
++  BAR_DEFAULT_TAB_ID,
+   COMPONENT_TABS,
+   COMPONENT_CATALOG,
+   COMPONENT_BY_ID,
++  getBarMirrorScaleX,
++  getBarPlacementAssetReference,
++  getBarPlacementImageSize,
++  getBarPlacementOffset,
++  getBarPlacementRenderScale,
++  getClaspPlacementOffset,
++  getClaspPlacementAssetReference,
++  getClaspPlacementImageSize,
++  getClaspPlacementRenderScale,
++  getClaspPlacementTokenFromSurface,
++  getClaspSuggestionPointsForTooth,
++  getClaspSuggestionRadius,
+   getComponentAssetReference,
++  getMeshPlacementImageSize,
++  getMeshPlacementOffset,
++  getMeshPlacementRenderScale,
+   getRestPlacementAssetReference,
+   getRestPlacementImageSize,
++  getRestPlacementOffset,
+   getRestPlacementRenderScale,
+   getRestSuggestionSurfaces,
+   getRestSuggestionPointsForTooth,
+   getRestSuggestionRadius,
++  isBarComponent,
++  isClaspComponent,
++  isMeshComponent,
++  isRetentionClaspEnabledTooth,
+   isRestComponent
+ } from "./components.js";
+ import { assessPlacementCriteria } from "./criteria.js";
+@@ -28,10 +51,9 @@ import {
+ } from "./constants.js";
+ 
+ const DEFAULT_COMPONENT_ID = COMPONENT_CATALOG[0]?.id || null;
+-const REST_CALIBRATION_TAB_ID = "rests";
+-const REST_CALIBRATION_COMPONENT_ID = "rest-seat";
+-const FORCE_REST_CALIBRATION_BOOT = true;
+-const FORCE_NON_DESIGN_BOOT = false;
++const MAX_RETENTION_CLASPS_PER_TOOTH = 2;
++const DEFAULT_AUTO_MESH_COMPONENT_ID = "mesh-hole";
++const MAIN_PAGE_SHOW_ALL_MESIAL_LONG_BARS = true;
+ 
+ // Runtime annotation state.
+ const state = {
+@@ -40,18 +62,18 @@ const state = {
+   activeStatus: "presence",
+   locks: { upper: false, lower: false },
+   teeth: {},
+-  components: []
++  components: [],
++  anteriorRestPromptOpen: false,
+ };
+ 
+-const TOOTH_ASSET_BASE = "../../../assets/teeth";
++// Resolved relative to the HTML document URL (src/pages/…): two segments up → repo root.
++const TOOTH_ASSET_BASE = "../../assets/teeth";
+ const TOOTH_IMAGE_WIDTH = 1100;
+ const TOOTH_IMAGE_HEIGHT = 180;
+ const TOOTH_IMAGE_HALF_WIDTH = TOOTH_IMAGE_WIDTH / 2;
+ const TOOTH_IMAGE_HALF_HEIGHT = TOOTH_IMAGE_HEIGHT / 2;
+ const COMPONENT_IMAGE_WIDTH = 154;
+ const COMPONENT_IMAGE_HEIGHT = 246;
+-const COMPONENT_IMAGE_HALF_WIDTH = COMPONENT_IMAGE_WIDTH / 2;
+-const COMPONENT_IMAGE_HALF_HEIGHT = COMPONENT_IMAGE_HEIGHT/2;
+ const COMPONENT_SCALE_BY_JAW = {
+   upper: 1.3,
+   lower: 0.7
+@@ -61,7 +83,7 @@ const JAW_BACKGROUND_SCALE_BY_JAW = {
+   lower: 0.9,
+ };
+ const JAW_BACKGROUND_OFFSET_BY_JAW = {
+-  upper: { x: 0, y: 0 },
++  upper: { x: 0, y: 22 },
+   lower: { x: 0, y: 0 },
+ };
+ const COMPONENT_SCALE_BY_TOOTH = {
+@@ -107,7 +129,6 @@ if (document.readyState === "loading") {
+ function init() {
+   initializeCaseIds();
+   initializeTeethState();
+-  renderJaws();
+ 
+   try {
+     bindStatusPicker();
+@@ -115,36 +136,55 @@ function init() {
+     bindActionButtons();
+     initComponentCatalog();
+     loadPreviewImage();
+-    hydrateFromLocalStorage();
+-    if (FORCE_REST_CALIBRATION_BOOT) {
+-      forceRestSeatCalibrationMode();
+-    } else if (FORCE_NON_DESIGN_BOOT) {
+-      forceNonDesignBootMode();
++
++    // if (MAIN_PAGE_SHOW_ALL_MESIAL_LONG_BARS) {
++    //   activateMainPageMesialLongBars();
++    //   return;
++    // }
++
++    const hydrated = hydrateFromLocalStorage();
++    if (!hydrated) {
++      syncDesignModeWithLocks(false);
+     }
+-    syncDesignModeWithLocks(false);
+-    renderJaws();
+-    updateEditModeUI();
+   } catch (err) {
+     console.error("2D annotation init failed", err);
+     setMessage("Loaded jaw view with limited tools. Check console for init error.", true);
+   }
+ }
+ 
+-function forceRestSeatCalibrationMode() {
++function activateMainPageMesialLongBars() {
+   state.locks.upper = true;
+   state.locks.lower = true;
+   state.activeStatus = "presence";
+-  state.selectedTab = REST_CALIBRATION_TAB_ID;
++  state.selectedTab = BAR_DEFAULT_TAB_ID;
++  state.selectedComponentId = BAR_DEFAULT_COMPONENT_ID;
++  state.components = [...new Set([...(state.components || []), BAR_DEFAULT_COMPONENT_ID])];
++
++  for (const jaw of Object.keys(TOOTH_ORDER)) {
++    for (const toothId of TOOTH_ORDER[jaw]) {
++      const tooth = state.teeth[toothId];
++      if (!tooth) continue;
++
++      ensureToothPlacementState(tooth);
++      tooth.isPresent = false;
++      tooth.status = "missing";
++      tooth.components = [];
++      tooth.componentPlacements = [];
++      autoPlaceMeshOnMissingTooth(tooth);
++
++      tooth.componentPlacements.push({
++        componentId: BAR_DEFAULT_COMPONENT_ID,
++        surface: "distal",
++        restToken: "long",
++      });
+ 
+-  if (COMPONENT_BY_ID.has(REST_CALIBRATION_COMPONENT_ID)) {
+-    state.selectedComponentId = REST_CALIBRATION_COMPONENT_ID;
++      syncToothComponentsFromPlacements(tooth);
++    }
+   }
+-}
+ 
+-function forceNonDesignBootMode() {
+-  state.locks.upper = false;
+-  state.locks.lower = false;
+-  state.activeStatus = "presence";
++  refreshArchModeButton();
++  syncDesignModeWithLocks(false);
++  renderJaws();
+ }
+ 
+ // Read encrypted case id from URL and display a human-readable label.
+@@ -198,13 +238,294 @@ function resetToothRecord(toothId, status) {
+   tooth.isPresent = true;
+ }
+ 
++function getDefaultAutoMeshComponentId() {
++  if (COMPONENT_BY_ID.has(DEFAULT_AUTO_MESH_COMPONENT_ID)) {
++    return DEFAULT_AUTO_MESH_COMPONENT_ID;
++  }
++
++  const fallback = COMPONENT_CATALOG.find((entry) => isMeshComponent(entry.id));
++  return fallback?.id || null;
++}
++
++/** Apply the currently selected mesh type to every missing tooth in one action. */
++function applySelectedMeshToAllMissingTeeth() {
++  if (!state.designMode) {
++    setMessage("Switch to design mode to use the component catalog.", true);
++    return;
++  }
++
++  const selected = COMPONENT_BY_ID.get(state.selectedComponentId || "");
++  if (!selected || !isMeshComponent(selected)) {
++    setMessage("Select a mesh type in the catalog first (e.g. Tori, Hole).", true);
++    return;
++  }
++
++  let applied = 0;
++  for (const jaw of Object.keys(TOOTH_ORDER)) {
++    for (const toothId of TOOTH_ORDER[jaw]) {
++      const tooth = state.teeth[toothId];
++      if (!tooth || tooth.isPresent) continue;
++
++      ensureToothPlacementState(tooth);
++      const meshComponentIds = [
++        ...new Set(
++          (tooth.componentPlacements || [])
++            .map((entry) => entry.componentId)
++            .filter((id) => isMeshComponent(id))
++        ),
++      ];
++      if (meshComponentIds.length) {
++        removePlacementsByComponentIds(tooth, meshComponentIds);
++      }
++      addPlacement(tooth, selected.id, null, null);
++      applied += 1;
++    }
++  }
++
++  renderJaws();
++  if (applied === 0) {
++    setMessage("No missing teeth to apply mesh to.", true);
++  } else {
++    setMessage(
++      `${selected.label} applied to ${applied} missing tooth${applied === 1 ? "" : "teeth"}.`,
++      false
++    );
++  }
++}
++
++function autoPlaceMeshOnMissingTooth(tooth) {
++  if (!tooth || tooth.isPresent) return;
++
++  ensureToothPlacementState(tooth);
++  const meshId = getDefaultAutoMeshComponentId();
++  if (!meshId) {
++    syncToothComponentsFromPlacements(tooth);
++    return;
++  }
++
++  const existingMeshPlacement = tooth.componentPlacements.find((entry) =>
++    isMeshComponent(entry.componentId)
++  );
++  if (existingMeshPlacement) {
++    syncToothComponentsFromPlacements(tooth);
++    return;
++  }
++
++  tooth.componentPlacements.push({
++    componentId: meshId,
++    surface: null,
++    restToken: null,
++  });
++  syncToothComponentsFromPlacements(tooth);
++}
++
++function shouldShowBarSuggestions() {
++  if (!state.designMode) return false;
++  return isBarComponent(state.selectedComponentId);
++}
++
++function getBarSurfaceTowardJawDirection(toothId, direction) {
++  const neighborToothId = getNeighborByJawDirection(toothId, direction, 1);
++  const surface = getSurfaceTowardNeighbor(toothId, neighborToothId);
++  return surface || BAR_DEFAULT_SURFACE;
++}
++
++function getBarSuggestionPlanMap(jaw) {
++  const order = TOOTH_ORDER[jaw] || [];
++  const suggestionPlanMap = new Map();
++  const missingIndices = [];
++
++  for (let index = 0; index < order.length; index += 1) {
++    const toothId = order[index];
++    if (!state.teeth[toothId]?.isPresent) {
++      missingIndices.push(index);
++    }
++  }
++
++  for (const missingIndex of missingIndices) {
++    for (const step of [1, 2]) {
++      const leftIndex = missingIndex - step;
++      const rightIndex = missingIndex + step;
++      if (leftIndex >= 0) {
++        const leftToothId = order[leftIndex];
++        if (state.teeth[leftToothId]?.isPresent) {
++          const key = String(leftToothId);
++          const nextPlan = {
++            distance: step,
++            surface: getBarSurfaceTowardJawDirection(key, "right"),
++          };
++          const currentPlan = suggestionPlanMap.get(key);
++          if (!currentPlan || nextPlan.distance < currentPlan.distance) {
++            suggestionPlanMap.set(key, nextPlan);
++          }
++        }
++      }
++      if (rightIndex < order.length) {
++        const rightToothId = order[rightIndex];
++        if (state.teeth[rightToothId]?.isPresent) {
++          const key = String(rightToothId);
++          const nextPlan = {
++            distance: step,
++            surface: getBarSurfaceTowardJawDirection(key, "left"),
++          };
++          const currentPlan = suggestionPlanMap.get(key);
++          if (!currentPlan || nextPlan.distance < currentPlan.distance) {
++            suggestionPlanMap.set(key, nextPlan);
++          }
++        }
++      }
++    }
++  }
++
++  return suggestionPlanMap;
++}
++
++function getAdjacentToothId(toothId, direction) {
++  const value = String(toothId || "");
++  if (!/^\d{2}$/.test(value)) return null;
++
++  const quadrant = Number(value[0]);
++  const unit = Number(value[1]);
++  if (!Number.isFinite(quadrant) || !Number.isFinite(unit)) return null;
++
++  if (direction === "mesial") {
++    if (unit === 1) {
++      if (quadrant === 1) return "21";
++      if (quadrant === 2) return "11";
++      if (quadrant === 3) return "41";
++      if (quadrant === 4) return "31";
++      return null;
++    }
++    return `${quadrant}${unit - 1}`;
++  }
++
++  if (direction === "distal") {
++    if (unit === 8) return null;
++    return `${quadrant}${unit + 1}`;
++  }
++
++  return null;
++}
++
++function getSurfaceTowardNeighbor(toothId, neighborToothId) {
++  if (!neighborToothId) return null;
++  if (getAdjacentToothId(toothId, "mesial") === String(neighborToothId)) {
++    return "mesial";
++  }
++  if (getAdjacentToothId(toothId, "distal") === String(neighborToothId)) {
++    return "distal";
++  }
++  return null;
++}
++
++function getNeighborByJawDirection(toothId, direction, steps) {
++  const tooth = state.teeth[toothId];
++  const jaw = tooth?.jaw;
++  const order = TOOTH_ORDER[jaw] || [];
++  const index = order.indexOf(String(toothId));
++  if (index < 0) return null;
++
++  const delta = direction === "left" ? -steps : steps;
++  const targetIndex = index + delta;
++  if (targetIndex < 0 || targetIndex >= order.length) return null;
++  return order[targetIndex];
++}
++
++function appendBarSuggestionPoints(group, tooth, toothId, jaw) {
++  if (!shouldShowBarSuggestions()) return;
++  if (!tooth.isPresent) return;
++
++  const suggestionPlan = getBarSuggestionPlanMap(jaw).get(String(toothId));
++  if (!suggestionPlan) return;
++
++  const point = svgEl("circle", {
++    cx: "0",
++    cy: "0",
++    r: "15",
++    class: "bar-suggestion-point",
++  });
++
++  point.addEventListener("click", (event) => {
++    event.stopPropagation();
++    onToothClick(jaw, toothId, {
++      surface: suggestionPlan.surface,
++      barDistance: suggestionPlan.distance,
++    });
++  });
++  group.appendChild(point);
++}
++
++function appendPlacedBarMarkers(group, tooth, toothId, jaw) {
++  ensureToothPlacementState(tooth);
++  if (!tooth.componentPlacements.length) return;
++
++  const mirrorScaleX = getBarMirrorScaleX(toothId, JAW_IMAGE_FLIP_X[jaw] ?? 1);
++  for (const placement of tooth.componentPlacements) {
++    if (!isBarComponent(placement.componentId)) continue;
++    const surface = String(placement.surface || BAR_DEFAULT_SURFACE).toLowerCase();
++
++    const assetHref = getBarPlacementAssetReference(
++      placement.componentId,
++      toothId,
++      surface,
++      placement.restToken
++    );
++    if (assetHref) {
++      const imageSize = getBarPlacementImageSize(placement.componentId, toothId, surface, placement.restToken);
++      const renderScale = getBarPlacementRenderScale(placement.componentId, toothId, surface, jaw, placement.restToken);
++      const renderOffset = getBarPlacementOffset(placement.componentId, toothId, surface, jaw, placement.restToken);
++      const renderRotation =
++        (Number.isFinite(renderOffset.rotation) ? renderOffset.rotation : 0) +
++        (Number.isFinite(placement.rotation) ? placement.rotation : 0);
++      const width = imageSize.width * renderScale;
++      const height = imageSize.height * renderScale;
++      const imageGroup = svgEl("g", {
++        transform: `translate(${renderOffset.x} ${renderOffset.y}) rotate(${renderRotation}) scale(${mirrorScaleX} 1)`
++      });
++      imageGroup.appendChild(
++        svgEl("image", {
++          href: assetHref,
++          x: String(-width / 2),
++          y: String(-height / 2),
++          width: String(width),
++          height: String(height),
++          preserveAspectRatio: "xMidYMid meet",
++          class: "bar-placement-image",
++        })
++      );
++
++      imageGroup.addEventListener("click", (event) => {
++        event.stopPropagation();
++        removePlacement(tooth, placement.componentId, placement.surface || BAR_DEFAULT_SURFACE, placement.restToken);
++        renderJaw(jaw);
++      });
++
++      group.appendChild(imageGroup);
++      continue;
++    }
++
++    const marker = svgEl("circle", {
++      cx: "0",
++      cy: "0",
++      r: "10",
++      class: "bar-placement-marker",
++    });
++    marker.addEventListener("click", (event) => {
++      event.stopPropagation();
++      removePlacement(tooth, placement.componentId, placement.surface || BAR_DEFAULT_SURFACE, placement.restToken);
++      renderJaw(jaw);
++    });
++    group.appendChild(marker);
++  }
++}
++
+ // Choose active labeling mode: presence / abutment / compromised.
+ function bindStatusPicker() {
+   const buttons = document.querySelectorAll(".status-btn");
+   buttons.forEach((button) => {
+     button.addEventListener("click", () => {
+-      if(state.designMode){
+-        setMessage("Unlock either arch to edit tooth status.",true);
++      if (state.designMode) {
++        setMessage("Switch to teeth selection mode to edit tooth status.", true);
+         return;
+       }
+       state.activeStatus = button.dataset.status;
+@@ -214,13 +535,11 @@ function bindStatusPicker() {
+   });
+ }
+ 
+-// Bind jaw lock toggles.
++// Single control: teeth selection vs design mode (both arches stay in sync).
+ function bindJawControls() {
+-  const upper = document.getElementById("upperLockBtn");
+-  const lower = document.getElementById("lowerLockBtn");
+-  if (upper) upper.addEventListener("click", () => toggleJawLock("upper"));
+-  if (lower) lower.addEventListener("click", () => toggleJawLock("lower"));
+-  refreshLockButtons();
++  const btn = document.getElementById("archModeToggle");
++  if (btn) btn.addEventListener("click", toggleArchMode);
++  refreshArchModeButton();
+ }
+ 
+ // Bind global actions (clear, reset, save).
+@@ -235,47 +554,37 @@ function bindActionButtons() {
+   if (save) save.addEventListener("click", saveAnnotation);
+ }
+ 
+-// Toggle lock state for a specific arch.
+-function toggleJawLock(jaw) {
+-  state.locks[jaw] = !state.locks[jaw];
+-  refreshLockButtons();
++function toggleArchMode() {
++  const nextDesign = !(state.locks.upper && state.locks.lower);
++  state.locks.upper = nextDesign;
++  state.locks.lower = nextDesign;
++  refreshArchModeButton();
+   syncDesignModeWithLocks(true);
+-  renderJaw(jaw);
+-  if(!state.designMode){
+-  setMessage(`${titleCase(jaw)} arch is now ${state.locks[jaw] ? "locked" : "unlocked"}.`, false);
+-  }
++  renderJaws();
+ }
+ 
+-// Keep lock button labels in sync with state.
+-function refreshLockButtons() {
+-  const upperBtn = document.getElementById("upperLockBtn");
+-  const lowerBtn = document.getElementById("lowerLockBtn");
+-  const updateLockButton = (button, isLocked, jaw) => {
+-    if (!button) return;
+-
+-    const icon = button.querySelector(".lock-icon");
+-    const text = button.querySelector(".lock-text");
+-
+-    if (icon) {
+-      icon.src = isLocked ? "../../assets/lock.png" : "../../assets/unlock.png";
+-    }
+-
+-    if (text) {
+-      text.textContent = isLocked ? "Locked" : "Unlocked";
+-    }
++function refreshArchModeButton() {
++  const btn = document.getElementById("archModeToggle");
++  if (!btn) return;
+ 
+-    button.classList.toggle("is-locked", isLocked);
+-    button.setAttribute("aria-label", `${isLocked ? "Unlock" : "Lock"} ${jaw} arch`);
+-  };
++  const design = state.locks.upper && state.locks.lower;
++  const label = btn.querySelector(".mode-toggle-label");
++  if (label) {
++    label.textContent = design ? "Design mode" : "Teeth selection";
++  }
+ 
+-  updateLockButton(upperBtn, state.locks.upper, "upper");
+-  updateLockButton(lowerBtn, state.locks.lower, "lower");
++  btn.classList.toggle("is-design-mode", design);
++  btn.setAttribute("aria-pressed", design ? "true" : "false");
++  btn.setAttribute(
++    "aria-label",
++    design ? "Switch to teeth selection mode" : "Switch to design mode"
++  );
+ }
+ 
+-// Clear one arch only when that arch is unlocked.
++// Clear one arch only in teeth selection mode.
+ function clearJaw(jaw) {
+-  if (state.locks[jaw]) {
+-    setMessage(`Cannot clear ${jaw}. The arch is locked.`, true);
++  if (state.designMode) {
++    setMessage(`Cannot clear ${jaw} while in design mode. Switch to teeth selection first.`, true);
+     return;
+   }
+   for (const toothId of TOOTH_ORDER[jaw]) {
+@@ -292,18 +601,19 @@ function drawFromScratch() {
+       resetToothRecord(toothId, null);
+     }
+   }
++
+   state.components = [];
+   state.selectedComponentId = DEFAULT_COMPONENT_ID;
+-  refreshLockButtons();
++  refreshArchModeButton();
+   syncDesignModeWithLocks(false);
+   renderComponentCatalog();
+   updateEditModeUI();
+   renderJaws();
+-  setMessage("All teeth reset. Both arches unlocked.", false);
++  setMessage("All teeth reset. Teeth selection mode is active.", false);
+ }
+ 
+ // Build component tabs and initialize the first visible catalog view.
+-function initComponentCatalog(){
++function initComponentCatalog() {
+   if (!state.selectedTab) {
+     state.selectedTab = COMPONENT_TABS[0]?.id || null;
+   }
+@@ -351,14 +661,28 @@ function renderComponentCatalog() {
+     });
+     itemsEl.appendChild(columns);
+     renderSelectedComponents();
++    applyDesignModeHint();
+     return;
+   }
+ 
++  if (state.selectedTab === "mesh" && state.designMode) {
++    const applyRow = document.createElement("div");
++    applyRow.className = "mesh-apply-all-row";
++    const applyAllBtn = document.createElement("button");
++    applyAllBtn.type = "button";
++    applyAllBtn.className = "action-btn mesh-apply-all-btn";
++    applyAllBtn.textContent = "Apply to all";
++    applyAllBtn.addEventListener("click", applySelectedMeshToAllMissingTeeth);
++    applyRow.appendChild(applyAllBtn);
++    itemsEl.appendChild(applyRow);
++  }
++
+   for (const item of tabItems) {
+     itemsEl.appendChild(createComponentItemButton(item));
+   }
+ 
+   renderSelectedComponents();
++  applyDesignModeHint();
+ }
+ 
+ // Create one column block for grouped component sections.
+@@ -411,7 +735,7 @@ function createComponentItemButton(item) {
+ // Toggle one component in the active design list with conflict handling.
+ function handleDesignComponentSelect(componentId) {
+   if (!state.designMode) {
+-    setMessage("Lock both arches to use the component catalog.", true);
++    setMessage("Switch to design mode to use the component catalog.", true);
+     return;
+   }
+ 
+@@ -420,6 +744,7 @@ function handleDesignComponentSelect(componentId) {
+ 
+   state.selectedComponentId = componentId;
+   renderJaws();
++  applyDesignModeHint();
+ 
+   if (state.components.includes(componentId)) {
+     state.components = state.components.filter((id) => id !== componentId);
+@@ -457,6 +782,25 @@ function renderSelectedComponents() {
+   }
+ }
+ 
++// Context line under the component catalog (mesh vs other tools).
++function applyDesignModeHint() {
++  const hint = document.getElementById("designHint");
++  if (!hint) return;
++  if (!state.designMode) {
++    hint.textContent = "Switch to design mode to place components from the catalog.";
++    return;
++  }
++  const def = state.selectedComponentId
++    ? COMPONENT_BY_ID.get(state.selectedComponentId)
++    : null;
++  if (def && isMeshComponent(def)) {
++    hint.textContent =
++      "Mesh: click a missing tooth, or use “Apply to all missing teeth” for the selected style. To switch style on one tooth, pick another mesh and click that tooth again.";
++    return;
++  }
++  hint.textContent = "Design mode is active. Choose components from the catalog.";
++}
++
+ // Toggle visibility and helper text for design mode panels.
+ function updateEditModeUI() {
+   const panel = document.getElementById("editModePanel");
+@@ -470,12 +814,7 @@ function updateEditModeUI() {
+     selectPanel.classList.toggle("is-hidden", active);
+   }
+ 
+-  const hint = document.getElementById("designHint");
+-  if (hint) {
+-    hint.textContent = active
+-      ? "Design mode is active. Choose components from the catalog."
+-      : "Lock both arches to enter design mode.";
+-  }
++  applyDesignModeHint();
+ }
+ 
+ // Recompute design mode based on jaw locks and update related UI state.
+@@ -484,6 +823,14 @@ function syncDesignModeWithLocks(notify) {
+   const prev = state.designMode;
+   state.designMode = next;
+ 
++  if (next && !prev) {
++    for (const jaw of Object.keys(TOOTH_ORDER)) {
++      for (const toothId of TOOTH_ORDER[jaw]) {
++        autoPlaceMeshOnMissingTooth(state.teeth[toothId]);
++      }
++    }
++  }
++
+   updateEditModeUI();
+   renderComponentCatalog();
+   renderJaws();
+@@ -497,11 +844,12 @@ function syncDesignModeWithLocks(notify) {
+ 
+   if (notify && prev !== next) {
+     if (next) {
+-      setMessage("Both arches are locked. Entered design mode; tooth selection is disabled.", false);
++      setMessage("Design mode is on; use the catalog and click teeth to place components.", false);
+     } else {
+-      setMessage("Exited design mode. Unlock state allows tooth editing again.", false);
++      setMessage("Teeth selection mode is on; you can edit tooth presence and status again.", false);
+     }
+   }
++
+ }
+ 
+ // Apply status classes to a tooth group based on presence and status value.
+@@ -521,7 +869,11 @@ function applyToothStatusClass(group, tooth) {
+ 
+ // Draw placed component overlays on missing teeth where mesh assets are available.
+ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
+-  if (tooth.isPresent || tooth.components.length === 0) {
++  if (tooth.isPresent) {
++    return;
++  }
++
++  if (tooth.components.length === 0) {
+     return;
+   }
+ 
+@@ -535,7 +887,7 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
+ }
+ 
+ function getRestSurfacePointMap(toothId, jaw, componentId = null) {
+-  const { mirrored } = getToothAssetSpec(toothId);
++  const mirrored = getRestMirroredFlag(toothId, jaw);
+   const points = getRestSuggestionPointsForTooth(
+     toothId,
+     jaw,
+@@ -547,6 +899,17 @@ function getRestSurfacePointMap(toothId, jaw, componentId = null) {
+   return new Map(points.map((point) => [normalizeSurface(point.surface), point]));
+ }
+ 
++function getRestMirroredFlag(toothId, jaw) {
++  const { mirrored } = getToothAssetSpec(toothId, jaw);
++  return mirrored;
++}
++
++function getRestMirrorScaleX(toothId, jaw) {
++  const mirrored = getRestMirroredFlag(toothId, jaw);
++  const jawFlipX = JAW_IMAGE_FLIP_X[jaw] ?? 1;
++  return (mirrored ? -1 : 1) * jawFlipX;
++}
++
+ function appendPlacedRestMarkers(group, tooth, toothId, jaw) {
+   if (!tooth.isPresent) return;
+ 
+@@ -555,27 +918,31 @@ function appendPlacedRestMarkers(group, tooth, toothId, jaw) {
+ 
+   const pointMap = getRestSurfacePointMap(toothId, jaw);
+   const radius = getRestSuggestionRadius() + 0.6;
+-  const { mirrored } = getToothAssetSpec(toothId);
+-
+   for (const placement of tooth.componentPlacements) {
+     if (!isRestComponent(placement.componentId)) continue;
+ 
+     const surface = normalizeSurface(placement.surface);
+     if (!surface) continue;
++    const restMirrorScaleX = getRestMirrorScaleX(toothId, jaw);
+ 
+     const point = pointMap.get(surface);
+     if (!point) continue;
+ 
+-    const assetHref = getRestPlacementAssetReference(placement.componentId, toothId, surface);
+-    const imageSize = getRestPlacementImageSize(placement.componentId, toothId, surface);
+-    const restScale = getRestPlacementRenderScale(placement.componentId, toothId, surface);
++    const restToken = normalizeRestToken(placement.restToken);
++    const restOffset = getRestPlacementOffset(placement.componentId, toothId, surface, restToken);
++    const pointX = point.x + restOffset.x;
++    const pointY = point.y + restOffset.y;
++
++    const assetHref = getRestPlacementAssetReference(placement.componentId, toothId, surface, restToken);
++    const imageSize = getRestPlacementImageSize(placement.componentId, toothId, surface, restToken);
++    const restScale = getRestPlacementRenderScale(placement.componentId, toothId, surface, jaw, restToken);
+ 
+     if (assetHref && imageSize) {
+       const width = imageSize.width * restScale;
+       const height = imageSize.height * restScale;
+ 
+       const imageGroup = svgEl("g", {
+-        transform: `translate(${point.x} ${point.y}) scale(${mirrored ? -1 : 1} 1)`
++        transform: `translate(${pointX} ${pointY}) scale(${restMirrorScaleX} 1)`
+       });
+ 
+       imageGroup.appendChild(
+@@ -589,12 +956,13 @@ function appendPlacedRestMarkers(group, tooth, toothId, jaw) {
+           class: `rest-placement-image rest-placement-${surface}`,
+           "data-surface": surface,
+           "data-component-id": placement.componentId,
++          "data-rest-token": restToken || "",
+         })
+       );
+ 
+       imageGroup.addEventListener("click", (event) => {
+         event.stopPropagation();
+-        removePlacement(tooth, placement.componentId, surface);
++        removePlacement(tooth, placement.componentId, surface, restToken);
+         const label = COMPONENT_BY_ID.get(placement.componentId)?.label || placement.componentId;
+         setMessage(`Removed ${label} (${surface}) from tooth ${toothId}.`, false);
+         renderJaw(jaw);
+@@ -605,8 +973,8 @@ function appendPlacedRestMarkers(group, tooth, toothId, jaw) {
+     }
+ 
+     const marker = svgEl("circle", {
+-        cx: String(point.x),
+-        cy: String(point.y),
++        cx: String(pointX),
++        cy: String(pointY),
+         r: String(radius),
+         class: `rest-placement-marker rest-placement-${surface}`,
+         "data-surface": surface,
+@@ -615,7 +983,7 @@ function appendPlacedRestMarkers(group, tooth, toothId, jaw) {
+ 
+     marker.addEventListener("click", (event) => {
+       event.stopPropagation();
+-      removePlacement(tooth, placement.componentId, surface);
++      removePlacement(tooth, placement.componentId, surface, restToken);
+       const label = COMPONENT_BY_ID.get(placement.componentId)?.label || placement.componentId;
+       setMessage(`Removed ${label} (${surface}) from tooth ${toothId}.`, false);
+       renderJaw(jaw);
+@@ -625,11 +993,146 @@ function appendPlacedRestMarkers(group, tooth, toothId, jaw) {
+   }
+ }
+ 
++function getClaspSurfacePointMap(toothId, jaw) {
++  const { mirrored } = getToothAssetSpec(toothId, jaw);
++  const points = getClaspSuggestionPointsForTooth(
++    toothId,
++    jaw,
++    mirrored,
++    JAW_IMAGE_FLIP_X[jaw] ?? 1
++  );
++
++  return new Map(points.map((point) => [String(point.surface || "").toLowerCase(), point]));
++}
++
++function getClaspMirrorScaleX(toothId, jaw) {
++  const { mirrored } = getToothAssetSpec(toothId, jaw);
++  const jawFlipX = JAW_IMAGE_FLIP_X[jaw] ?? 1;
++  return (mirrored ? -1 : 1) * jawFlipX;
++}
++
++function shouldShowClaspSuggestions() {
++  if (!state.designMode) return false;
++  return state.selectedComponentId === "clasp-circ";
++}
++
++function appendPlacedClaspMarkers(group, tooth, toothId, jaw) {
++  if (!tooth.isPresent) return;
++  ensureToothPlacementState(tooth);
++  if (!tooth.componentPlacements.length) return;
++
++  const pointMap = getClaspSurfacePointMap(toothId, jaw);
++  const claspMirrorScaleX = getClaspMirrorScaleX(toothId, jaw);
++  const radius = getClaspSuggestionRadius(toothId) + 0.6;
++
++  for (const placement of tooth.componentPlacements) {
++    if (!isClaspComponent(placement.componentId)) continue;
++    const surface = String(placement.surface || "").toLowerCase();
++    if (!surface) continue;
++
++    const point = pointMap.get(surface);
++    if (!point) continue;
++
++    const token = normalizeRestToken(placement.restToken) || getClaspPlacementTokenFromSurface(surface);
++    const assetHref = getClaspPlacementAssetReference(placement.componentId, toothId, surface, token);
++    const imageSize = getClaspPlacementImageSize(placement.componentId, toothId, surface, token);
++    const claspScale = getClaspPlacementRenderScale(placement.componentId, toothId, surface, jaw, token);
++    const claspOffset = getClaspPlacementOffset(placement.componentId, toothId, surface, jaw, token);
++
++    if (assetHref && imageSize) {
++      const width = imageSize.width * claspScale;
++      const height = imageSize.height * claspScale;
++      const imageGroup = svgEl("g", {
++        transform: `translate(${point.x + claspOffset.x} ${point.y + claspOffset.y}) scale(${claspMirrorScaleX} 1)`
++      });
++
++      imageGroup.appendChild(
++        svgEl("image", {
++          href: assetHref,
++          x: String(-width / 2),
++          y: String(-height / 2),
++          width: String(width),
++          height: String(height),
++          preserveAspectRatio: "xMidYMid meet",
++          class: "clasp-placement-image",
++          "data-surface": surface,
++          "data-component-id": placement.componentId,
++        })
++      );
++
++      imageGroup.addEventListener("click", (event) => {
++        event.stopPropagation();
++        removePlacement(tooth, placement.componentId, surface, token);
++        renderJaw(jaw);
++      });
++
++      group.appendChild(imageGroup);
++      continue;
++    }
++
++    const marker = svgEl("circle", {
++      cx: String(point.x + claspOffset.x),
++      cy: String(point.y + claspOffset.y),
++      r: String(radius),
++      class: "clasp-placement-marker",
++      "data-surface": surface,
++    });
++    marker.addEventListener("click", (event) => {
++      event.stopPropagation();
++      removePlacement(tooth, placement.componentId, surface, token);
++      renderJaw(jaw);
++    });
++    group.appendChild(marker);
++  }
++}
++
++function appendClaspSuggestionPoints(group, tooth, toothId, jaw) {
++  if (!shouldShowClaspSuggestions()) return;
++  if (!tooth.isPresent) return;
++
++  if (!isRetentionClaspEnabledTooth(toothId)) return;
++
++  const selectedComponent = COMPONENT_BY_ID.get(state.selectedComponentId || "");
++  if (!selectedComponent || selectedComponent.id !== "clasp-circ") return;
++
++  ensureToothPlacementState(tooth);
++  const existingRetentionCount = tooth.componentPlacements.filter(
++    (entry) => entry.componentId === "clasp-circ"
++  ).length;
++  if (existingRetentionCount >= MAX_RETENTION_CLASPS_PER_TOOTH) {
++    return;
++  }
++
++  const pointMap = getClaspSurfacePointMap(toothId, jaw);
++  const points = [...pointMap.values()];
++  const radius = getClaspSuggestionRadius(toothId);
++
++  for (const pointData of points) {
++    const surface = String(pointData.surface || "").toLowerCase();
++    const token = getClaspPlacementTokenFromSurface(surface);
++    if (hasPlacement(tooth, selectedComponent.id, surface, token)) {
++      continue;
++    }
++
++    const point = svgEl("circle", {
++      cx: String(pointData.x),
++      cy: String(pointData.y),
++      r: String(radius),
++      class: "clasp-suggestion-point",
++      "data-surface": surface,
++    });
++    point.addEventListener("click", (event) => {
++      event.stopPropagation();
++      onToothClick(jaw, toothId, { surface });
++    });
++    group.appendChild(point);
++  }
++}
++
+ // Return true when rest guidance points should be shown in design mode.
+ function shouldShowRestSuggestions() {
+   if (!state.designMode) return false;
+-  if (isRestComponent(state.selectedComponentId)) return true;
+-  return state.components.some((componentId) => isRestComponent(componentId));
++  return state.selectedComponentId==='rest-seat';
+ }
+ 
+ // Draw clickable rest guidance points when a rest component is selected.
+@@ -638,7 +1141,7 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
+   if (!tooth.isPresent) return;
+ 
+   const selectedComponent = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+-  if (!selectedComponent || !isRestComponent(selectedComponent)) return;
++  if (!selectedComponent || selectedComponent.id !== "rest-seat") return;
+ 
+   ensureToothPlacementState(tooth);
+ 
+@@ -646,8 +1149,6 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
+   const points = [...getRestSurfacePointMap(toothId, jaw, selectedComponent.id).values()]
+     .filter((point) => allowedSurfaces.has(normalizeSurface(point.surface)));
+   const radius = getRestSuggestionRadius();
+-  const { mirrored } = getToothAssetSpec(toothId);
+-
+   for (const pointData of points) {
+     const selected = hasRestPlacementAtSurface(tooth, pointData.surface);
+     if (selected) {
+@@ -655,15 +1156,16 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
+     }
+ 
+     const surface = normalizeSurface(pointData.surface);
++    const restMirrorScaleX = getRestMirrorScaleX(toothId, jaw);
+     const assetHref = getRestPlacementAssetReference(selectedComponent.id, toothId, surface);
+     const imageSize = getRestPlacementImageSize(selectedComponent.id, toothId, surface);
+-    const restScale = getRestPlacementRenderScale(selectedComponent.id, toothId, surface);
++    const restScale = getRestPlacementRenderScale(selectedComponent.id, toothId, surface, jaw);
+ 
+     if (assetHref && imageSize) {
+       const width = imageSize.width * restScale;
+       const height = imageSize.height * restScale;
+       const imageGroup = svgEl("g", {
+-        transform: `translate(${pointData.x} ${pointData.y}) scale(${mirrored ? -1 : 1} 1)`,
++        transform: `translate(${pointData.x} ${pointData.y}) scale(${restMirrorScaleX} 1)`,
+         class: `rest-suggestion-group rest-suggestion-${surface}`,
+       });
+ 
+@@ -729,7 +1231,7 @@ function renderJaws() {
+   renderJaw("lower");
+ }
+ 
+-// Render one arch with PNG jaw + positioned PNG teeth.
++// Render one arch with SVG jaw + positioned SVG teeth.
+ function renderJaw(jaw) {
+   const config = JAW_BACKGROUND_IMAGES[jaw];
+   if (!config) return;
+@@ -753,7 +1255,7 @@ function renderJaw(jaw) {
+     state.teeth[toothId].center = [Math.round(point.x), Math.round(point.y)];
+ 
+     const group = svgEl("g", { class: "tooth", "data-tooth-id": toothId, "data-jaw": jaw });
+-    if (state.locks[jaw]) group.classList.add("is-locked");
++    if (state.designMode) group.classList.add("is-locked");
+     const tooth = state.teeth[toothId];
+     applyToothStatusClass(group, tooth);
+ 
+@@ -773,8 +1275,12 @@ function renderJaw(jaw) {
+ 
+     group.appendChild(createToothVisual(toothId, jaw));
+     appendToothComponentVisuals(group, tooth, toothId, jaw);
++    appendPlacedBarMarkers(group, tooth, toothId, jaw);
+     appendPlacedRestMarkers(group, tooth, toothId, jaw);
++    appendPlacedClaspMarkers(group, tooth, toothId, jaw);
++    appendBarSuggestionPoints(group, tooth, toothId, jaw);
+     appendRestSuggestionPoints(group, tooth, toothId, jaw);
++    appendClaspSuggestionPoints(group, tooth, toothId, jaw);
+ 
+     group.addEventListener("click", () => onToothClick(jaw, toothId));
+     svg.appendChild(group);
+@@ -784,7 +1290,7 @@ function renderJaw(jaw) {
+ // Toggle a tooth between present and missing in presence mode.
+ function toggleToothPresence(tooth, toothId) {
+   tooth.isPresent = !tooth.isPresent;
+-  tooth.status = "presence";
++  tooth.status = tooth.isPresent ? "presence" : "missing";
+   if (!tooth.isPresent) {
+     tooth.components = [];
+     tooth.componentPlacements = [];
+@@ -802,18 +1308,13 @@ function toggleToothStatus(tooth, toothId, status) {
+ }
+ 
+ // Click behavior: apply/toggle selected status on a tooth.
+-function onToothClick(jaw, toothId, placementContext = null) {
++async function onToothClick(jaw, toothId, placementContext = null) {
+   if (state.designMode) {
+-    placeSelectedComponentOnTooth(toothId, placementContext);
++    await placeSelectedComponentOnTooth(toothId, placementContext);
+     renderJaw(jaw);
+     return;
+   }
+ 
+-  if (state.locks[jaw]) {
+-    setMessage(`Cannot edit ${jaw}. Unlock it first.`, true);
+-    return;
+-  }
+-
+   const tooth = state.teeth[toothId];
+   if (!tooth) return;
+ 
+@@ -833,7 +1334,7 @@ function onToothClick(jaw, toothId, placementContext = null) {
+   renderJaw(jaw);
+ }
+ 
+-function normalizeSurface(surface){
++function normalizeSurface(surface) {
+   if (typeof surface !== "string") {
+     return null;
+   }
+@@ -842,17 +1343,126 @@ function normalizeSurface(surface){
+   return normalized === "occlusal" ? "lingual" : normalized;
+ }
+ 
+-function ensureToothPlacementState(tooth){
++function isAnteriorRestTooth(toothId) {
++  const numeric = Number(toothId);
++  if (!Number.isFinite(numeric)) {
++    return false;
++  }
++
++  const unit = numeric % 10;
++  const quadrant = Math.floor(numeric / 10);
++  if (quadrant < 1 || quadrant > 4) {
++    return false;
++  }
++  return unit >= 1 && unit <= 3;
++}
++
++function askAnteriorRestToken(toothId, preferredToken = "ac_full") {
++  const defaultChoice = typeof preferredToken === "string" && preferredToken ? preferredToken : "ac_full";
++
++  if (typeof document === "undefined" || state.anteriorRestPromptOpen) {
++    return Promise.resolve(defaultChoice);
++  }
++
++  state.anteriorRestPromptOpen = true;
++
++  return new Promise((resolve) => {
++    const backdrop = document.createElement("div");
++    backdrop.className = "rest-choice-backdrop";
++
++    const dialog = document.createElement("div");
++    dialog.className = "rest-choice-dialog";
++    dialog.setAttribute("role", "dialog");
++    dialog.setAttribute("aria-modal", "true");
++
++    const title = document.createElement("div");
++    title.className = "rest-choice-title";
++    title.textContent = "Set Cingulum Rest";
++    dialog.appendChild(title);
++
++    const actions = document.createElement("div");
++    actions.className = "rest-choice-actions";
++
++    const OPTIONS = [
++      { label: "MESIAL", value: "ac_mesial" },
++      { label: "DISTAL", value: "ac_distal" },
++      { label: "FULL", value: "ac_full" },
++    ];
++
++    const cleanup = () => {
++      window.removeEventListener("keydown", onEscape);
++      backdrop.remove();
++      state.anteriorRestPromptOpen = false;
++    };
++
++    const done = (value) => {
++      cleanup();
++      resolve(value);
++      setMessage(`Tooth ${toothId}: ${value.replace("_", " ")} selected.`, false);
++    };
++
++    const cancel = () => {
++      cleanup();
++      resolve(null);
++    };
++
++    const onEscape = (event) => {
++      if (event.key === "Escape") {
++        cancel();
++      }
++    };
++
++    for (const option of OPTIONS) {
++      const button = document.createElement("button");
++      button.type = "button";
++      button.className = `rest-choice-btn ${defaultChoice === option.value ? "is-default" : ""}`;
++      button.textContent = option.label;
++      button.addEventListener("click", () => done(option.value));
++      actions.appendChild(button);
++    }
++
++    dialog.appendChild(actions);
++    backdrop.appendChild(dialog);
++
++    backdrop.addEventListener("click", (event) => {
++      if (event.target === backdrop) {
++        cancel();
++      }
++    });
++
++    window.addEventListener("keydown", onEscape);
++    document.body.appendChild(backdrop);
++  });
++}
++
++function normalizeRestToken(token) {
++  if (typeof token !== "string") {
++    return null;
++  }
++  const normalized = token.trim().toLowerCase();
++  return normalized || null;
++}
++
++function getSurfaceFromRestToken(restToken, fallbackSurface = null) {
++  const token = normalizeRestToken(restToken);
++  if (token?.endsWith("_mesial")) return "mesial";
++  if (token?.endsWith("_distal")) return "distal";
++  if (token === "ac_full") return "lingual";
++  return normalizeSurface(fallbackSurface);
++}
++
++function ensureToothPlacementState(tooth) {
+   if (Array.isArray(tooth.componentPlacements)) return;
+ 
+   const fallback = Array.isArray(tooth.components) ? tooth.components : [];
+   tooth.componentPlacements = fallback.map((componentId) => ({
+     componentId,
+-    surface: null
++    surface: null,
++    restToken: null,
+   }));
+ }
+ 
+-function syncToothComponentsFromPlacements(tooth){
++function syncToothComponentsFromPlacements(tooth) {
+   const placements = Array.isArray(tooth.componentPlacements)
+     ? tooth.componentPlacements
+     : [];
+@@ -864,35 +1474,49 @@ function syncToothComponentsFromPlacements(tooth){
+   ];
+ }
+ 
+-function hasPlacement(tooth, componentId, surface){
++function hasPlacement(tooth, componentId, surface, restToken = null) {
+   const targetSurface = normalizeSurface(surface);
++  const targetToken = normalizeRestToken(restToken);
+   return tooth.componentPlacements.some(
+-    (entry) =>
+-      entry.componentId === componentId &&
+-      normalizeSurface(entry.surface) === targetSurface
++    (entry) => {
++      const sameComponent = entry.componentId === componentId;
++      const sameSurface = normalizeSurface(entry.surface) === targetSurface;
++      if (!sameComponent || !sameSurface) return false;
++      if (!targetToken) return true;
++      return normalizeRestToken(entry.restToken) === targetToken;
++    }
+   );
+ }
+ 
+-function addPlacement(tooth,componentId,surface){
++function addPlacement(tooth, componentId, surface, restToken = null) {
+   tooth.componentPlacements.push({
+     componentId,
+-    surface: normalizeSurface(surface)
++    surface: normalizeSurface(surface),
++    restToken: normalizeRestToken(restToken),
+   });
+   syncToothComponentsFromPlacements(tooth);
+ }
+ 
+-function removePlacement(tooth,componentId,surface){
++function removePlacement(tooth, componentId, surface, restToken = null) {
+   const targetSurface = normalizeSurface(surface);
++  const targetToken = normalizeRestToken(restToken);
+   tooth.componentPlacements = tooth.componentPlacements.filter(
+-    (entry) => !(
+-      entry.componentId === componentId && 
+-      normalizeSurface(entry.surface) === targetSurface
+-    )
++    (entry) => {
++      const sameComponent = entry.componentId === componentId;
++      const sameSurface = normalizeSurface(entry.surface) === targetSurface;
++      if (!sameComponent || !sameSurface) {
++        return true;
++      }
++      if (!targetToken) {
++        return false;
++      }
++      return normalizeRestToken(entry.restToken) !== targetToken;
++    }
+   );
+   syncToothComponentsFromPlacements(tooth);
+ }
+ 
+-function removePlacementsByComponentIds(tooth,componentIds){
++function removePlacementsByComponentIds(tooth, componentIds) {
+   const removeSet = new Set(componentIds || []);
+   tooth.componentPlacements = tooth.componentPlacements.filter(
+     (entry) => !removeSet.has(entry.componentId)
+@@ -901,7 +1525,7 @@ function removePlacementsByComponentIds(tooth,componentIds){
+ }
+ 
+ // Place or remove the active component on a specific tooth.
+-function placeSelectedComponentOnTooth(toothId, placementContext = null) {
++async function placeSelectedComponentOnTooth(toothId, placementContext = null) {
+   const tooth = state.teeth[toothId];
+   const selectedComponent = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+ 
+@@ -913,9 +1537,41 @@ function placeSelectedComponentOnTooth(toothId, placementContext = null) {
+   ensureToothPlacementState(tooth);
+   syncToothComponentsFromPlacements(tooth);
+ 
+-  const requiresSurface = isRestComponent(selectedComponent);
++  const requiresSurface = selectedComponent.id === "rest-seat";
++  const isRetentionClasp = selectedComponent.id === "clasp-circ";
++  const isBarComponentSelected = isBarComponent(selectedComponent.id);
++  const requiresClaspSurface = isRetentionClasp && isRetentionClaspEnabledTooth(toothId);
+   const surface = normalizeSurface(placementContext?.surface);
+-  const targetSurface = requiresSurface ? surface : null;
++  const claspSurface = String(placementContext?.surface || "").toLowerCase() || null;
++  let targetSurface = requiresSurface ? surface : (requiresClaspSurface ? claspSurface : null);
++  let selectedRestToken = null;
++
++  if (isRetentionClasp && !isRetentionClaspEnabledTooth(toothId)) {
++    setMessage("Retention clasp is currently enabled for teeth 11-18, 21-28, and 41-48.", true);
++    return;
++  }
++
++  if (requiresSurface && isAnteriorRestTooth(toothId)) {
++    const clickedSurface = surface;
++    const shouldAskChoice = clickedSurface === "lingual";
++
++    if (shouldAskChoice) {
++      const promptedToken = await askAnteriorRestToken(toothId, "ac_full");
++      if (!promptedToken) {
++        setMessage("Choose mesial, distal, or full for anterior rest seats.", true);
++        return;
++      }
++      selectedRestToken = normalizeRestToken(promptedToken);
++    } else if (clickedSurface === "mesial") {
++      selectedRestToken = "ai_mesial";
++    } else if (clickedSurface === "distal") {
++      selectedRestToken = "ai_distal";
++    }
++
++    if (selectedRestToken) {
++      targetSurface = getSurfaceFromRestToken(selectedRestToken, targetSurface);
++    }
++  }
+ 
+   if (requiresSurface && !targetSurface) {
+     setMessage(
+@@ -925,8 +1581,80 @@ function placeSelectedComponentOnTooth(toothId, placementContext = null) {
+     return;
+   }
+ 
+-  if (hasPlacement(tooth, selectedComponent.id, targetSurface)) {
+-    removePlacement(tooth, selectedComponent.id, targetSurface);
++  if (requiresClaspSurface) {
++    const claspToken = getClaspPlacementTokenFromSurface(targetSurface);
++    if (!claspToken) {
++      setMessage("For retention clasp, click one of the four clasp suggestion points.", true);
++      return;
++    }
++
++    const existingRetentionCount = tooth.componentPlacements.filter(
++      (entry) => entry.componentId === "clasp-circ"
++    ).length;
++    if (existingRetentionCount >= MAX_RETENTION_CLASPS_PER_TOOTH) {
++      setMessage("Retention clasp allows at most two selected surfaces on this tooth.", true);
++      return;
++    }
++
++    selectedRestToken = claspToken;
++  }
++
++  if (isBarComponentSelected) {
++    const suggestionPlanMap = getBarSuggestionPlanMap(tooth.jaw);
++    const suggestedPlan = suggestionPlanMap.get(String(toothId));
++    if (!suggestedPlan) {
++      setMessage("Bar can be placed only on teeth adjacent to missing teeth (up to 2 teeth away).", true);
++      return;
++    }
++
++    const clickedSurface = normalizeSurface(placementContext?.surface);
++    const clickedDistance = Number(placementContext?.barDistance);
++    const resolvedDistance =
++      (Number.isFinite(clickedDistance) && clickedDistance > 0 && clickedDistance <= 2)
++        ? clickedDistance
++        : suggestedPlan.distance;
++
++    targetSurface = clickedSurface || suggestedPlan.surface;
++    selectedRestToken = resolvedDistance === 2 ? "long" : null;
++    const existingBarPlacement = tooth.componentPlacements.find((entry) => isBarComponent(entry.componentId));
++    if (existingBarPlacement && existingBarPlacement.componentId === selectedComponent.id) {
++      removePlacement(
++        tooth,
++        existingBarPlacement.componentId,
++        existingBarPlacement.surface || BAR_DEFAULT_SURFACE,
++        existingBarPlacement.restToken
++      );
++      setMessage(`Removed ${selectedComponent.label} from tooth ${toothId}.`, false);
++      return;
++    }
++
++    if (existingBarPlacement) {
++      removePlacement(
++        tooth,
++        existingBarPlacement.componentId,
++        existingBarPlacement.surface || BAR_DEFAULT_SURFACE,
++        existingBarPlacement.restToken
++      );
++    }
++  }
++
++  let replacedMeshStyle = false;
++  if (isMeshComponent(selectedComponent)) {
++    const otherMeshComponentIds = [
++      ...new Set(
++        (tooth.componentPlacements || [])
++          .map((entry) => entry.componentId)
++          .filter((id) => id !== selectedComponent.id && isMeshComponent(id))
++      ),
++    ];
++    if (otherMeshComponentIds.length) {
++      replacedMeshStyle = true;
++      removePlacementsByComponentIds(tooth, otherMeshComponentIds);
++    }
++  }
++
++  if (hasPlacement(tooth, selectedComponent.id, targetSurface, selectedRestToken)) {
++    removePlacement(tooth, selectedComponent.id, targetSurface, selectedRestToken);
+     setMessage(
+       `Removed ${selectedComponent.label}${targetSurface ? ` (${targetSurface})` : ""} from tooth ${toothId}.`,
+       false
+@@ -936,11 +1664,11 @@ function placeSelectedComponentOnTooth(toothId, placementContext = null) {
+ 
+   const criteriaResult = assessPlacementCriteria(tooth, selectedComponent, COMPONENT_BY_ID);
+   if (criteriaResult.pass) {
+-    addPlacement(tooth, selectedComponent.id, targetSurface);
+-    setMessage(
+-      `Placed ${selectedComponent.label}${targetSurface ? ` (${targetSurface})` : ""} on tooth ${toothId}.`,
+-      false
+-    );
++    addPlacement(tooth, selectedComponent.id, targetSurface, selectedRestToken);
++    const placeMsg = replacedMeshStyle
++      ? `Mesh on tooth ${toothId} is now ${selectedComponent.label}.`
++      : `Placed ${selectedComponent.label}${targetSurface ? ` (${targetSurface})` : ""} on tooth ${toothId}.`;
++    setMessage(placeMsg, false);
+     return;
+   }
+ 
+@@ -952,7 +1680,7 @@ function placeSelectedComponentOnTooth(toothId, placementContext = null) {
+ 
+   if (failureData.actionUponFailure === ACTION_UPON_FAILURE.REMOVE_THEN_PLACE) {
+     removePlacementsByComponentIds(tooth, failureData.conflictingComponents || []);
+-    addPlacement(tooth, selectedComponent.id, targetSurface);
++    addPlacement(tooth, selectedComponent.id, targetSurface, selectedRestToken);
+     setMessage(
+       `Replaced conflict and placed ${selectedComponent.label}${targetSurface ? ` (${targetSurface})` : ""} on tooth ${toothId}.`,
+       false
+@@ -983,11 +1711,14 @@ function buildPayload() {
+     return {
+       tooth_id: record.tooth_id,
+       jaw: record.jaw,
+-      status: normalizeStatus(record.status) || "presence",
++      status: record.isPresent
++        ? (normalizeStatus(record.status) || "presence")
++        : "missing",
+       isPresent: record.isPresent,
+       componentPlacements: (record.componentPlacements || []).map((entry) => ({
+         componentId: entry.componentId,
+         surface: normalizeSurface(entry.surface),
++        restToken: normalizeRestToken(entry.restToken),
+       })),
+       components: [...record.components],
+       center: record.center,
+@@ -1015,72 +1746,40 @@ function buildPayload() {
+ // Restore saved annotation for this case id.
+ function hydrateFromLocalStorage() {
+   const raw = localStorage.getItem(getStorageKey());
+-  if (!raw) return;
++  if (!raw) return false;
+ 
+   try {
+     const data = JSON.parse(raw);
+-    if (data.locks) {
+-      state.locks.upper = Boolean(data.locks.upper);
+-      state.locks.lower = Boolean(data.locks.lower);
+-      refreshLockButtons();
+-    }
+-
+-    if (Array.isArray(data.components)) {
+-      state.components = data.components.filter((id) => COMPONENT_BY_ID.has(id));
+-      state.selectedComponentId = state.components[0] || DEFAULT_COMPONENT_ID;
+-    }
+-
+-    if (typeof data.selectedComponentId === "string" && COMPONENT_BY_ID.has(data.selectedComponentId)) {
+-      state.selectedComponentId = data.selectedComponentId;
+-      const selectedComp = COMPONENT_BY_ID.get(data.selectedComponentId);
+-      if (selectedComp?.tab) {
+-        state.selectedTab = selectedComp.tab;
+-      }
+-    }
+-
+-    updateEditModeUI();
++    // Always start in normal tooth-selection workflow on refresh.
++    state.locks.upper = false;
++    state.locks.lower = false;
++    state.activeStatus = "presence";
++    state.components = [];
++    state.selectedTab = COMPONENT_TABS[0]?.id || null;
++    state.selectedComponentId = DEFAULT_COMPONENT_ID;
++    refreshArchModeButton();
+ 
+     if (Array.isArray(data.teeth)) {
+       for (const item of data.teeth) {
+-        if (item && state.teeth[item.tooth_id]) {
+-          const tooth = state.teeth[item.tooth_id];
+-          tooth.status = normalizeStatus(item.status) || "presence";
+-          tooth.isPresent = item.isPresent !== false;
+-          tooth.componentPlacements = [];
+-
+-          if (Array.isArray(item.componentPlacements)) {
+-            for (const placement of item.componentPlacements) {
+-              if (!placement || !COMPONENT_BY_ID.has(placement.componentId)) {
+-                continue;
+-              }
+-
+-              tooth.componentPlacements.push({
+-                componentId: placement.componentId,
+-                surface: normalizeSurface(placement.surface),
+-              });
+-            }
+-          } else if (Array.isArray(item.components)) {
+-            for (const componentId of item.components) {
+-              if (!COMPONENT_BY_ID.has(componentId)) {
+-                continue;
+-              }
+-
+-              tooth.componentPlacements.push({
+-                componentId,
+-                surface: null,
+-              });
+-            }
+-          }
+-
+-          syncToothComponentsFromPlacements(tooth);
+-        }
++        if (!item || !state.teeth[item.tooth_id]) continue;
++        const tooth = state.teeth[item.tooth_id];
++        const normalizedStatus = normalizeStatus(item.status) || "presence";
++        const isMissingByStatus = normalizedStatus === "missing";
++        tooth.isPresent = item.isPresent !== false && !isMissingByStatus;
++        tooth.status = tooth.isPresent ? normalizedStatus : "missing";
++        tooth.componentPlacements = [];
++
++        // Do not hydrate component placements on refresh.
++        syncToothComponentsFromPlacements(tooth);
+       }
+     }
+     syncDesignModeWithLocks(false);
+     renderComponentCatalog();
+-    setMessage("Loaded existing annotation from localStorage.", false);
++    setMessage("Loaded saved tooth status only. Component placements reset for clean workflow.", false);
++    return true;
+   } catch {
+     setMessage("Found saved data, but it is invalid JSON.", true);
++    return false;
+   }
+ }
+ 
+@@ -1174,7 +1873,7 @@ function getToothScale(toothId, jaw) {
+ }
+ 
+ // Map mirrored quadrants to shared source tooth SVG assets.
+-function getToothAssetSpec(toothId) {
++function getToothAssetSpec(toothId, jaw = null) {
+   const numeric = Number(toothId);
+   if (!Number.isFinite(numeric)) {
+     return { sourceToothId: "11", mirrored: false };
+@@ -1182,6 +1881,7 @@ function getToothAssetSpec(toothId) {
+ 
+   const unit = numeric % 10;
+   const quadrant = Math.floor(numeric / 10);
++
+   if (quadrant === 2) {
+     return { sourceToothId: `1${unit}`, mirrored: true };
+   }
+@@ -1198,7 +1898,7 @@ function createToothVisual(toothId, jaw) {
+   const flipX = (placement.scaleX ?? 1) * jawFlipX;
+   const flipY = placement.scaleY ?? 1;
+ 
+-  const { mirrored, sourceToothId } = getToothAssetSpec(toothId);
++  const { mirrored, sourceToothId } = getToothAssetSpec(toothId, jaw);
+   const scaleBoost = TOOTH_SCALE_OVERRIDE[toothId] || 1;
+   const base = getToothScale(toothId, jaw) * 0.24 * scaleBoost;
+ 
+@@ -1237,32 +1937,49 @@ function createComponentVisual(componentId, toothId, jaw) {
+   const flipX = (placement.scaleX ?? 1) * jawFlipX;
+   const flipY = placement.scaleY ?? 1;
+ 
+-  const { mirrored } = getToothAssetSpec(toothId);
++  const { mirrored } = getToothAssetSpec(toothId, jaw);
+   const scaleBoost = TOOTH_SCALE_OVERRIDE[toothId] || 1;
+-  const jawScale = COMPONENT_SCALE_BY_JAW[jaw] ?? 1;
+-  const toothScale = COMPONENT_SCALE_BY_TOOTH[toothId] ?? 1;
+-  const base = getToothScale(toothId, jaw) * 0.24 * scaleBoost * jawScale * toothScale;
++  const isMesh = isMeshComponent(componentId);
++  const toothScale = isMesh ? 1 : (COMPONENT_SCALE_BY_TOOTH[toothId] ?? 1);
++  const componentRenderScale = isMesh
++    ? getMeshPlacementRenderScale(componentId, toothId, jaw)
++    : (COMPONENT_SCALE_BY_JAW[jaw] ?? 1);
++  const meshImageSize = isMesh ? getMeshPlacementImageSize(componentId, toothId) : null;
++  const imageWidth = meshImageSize?.width ?? COMPONENT_IMAGE_WIDTH;
++  const imageHeight = meshImageSize?.height ?? COMPONENT_IMAGE_HEIGHT;
++  const base = getToothScale(toothId, jaw) * 0.24 * scaleBoost * componentRenderScale * toothScale;
++  const meshOffset = isMesh ? getMeshPlacementOffset(componentId, toothId) : { x: 0, y: 0 };
+ 
+   const scaleX = (mirrored ? -base : base) * flipX;
+   const scaleY = base * flipY;
+ 
+   const visual = svgEl("g", {
+-    class: `component-visual component-${componentId}`,
++    class: `component-visual component-${componentId}`
++  });
++
++  const scaledGroup = svgEl("g", {
+     transform: `scale(${scaleX.toFixed(3)} ${scaleY.toFixed(3)})`
+   });
+ 
+-  visual.appendChild(
++  const placementGroup = svgEl("g", {
++    transform: `translate(${meshOffset.x} ${meshOffset.y})`
++  });
++
++  placementGroup.appendChild(
+     svgEl("image", {
+       href: assetHref,
+-      x: String(-COMPONENT_IMAGE_HALF_WIDTH),
+-      y: String(-COMPONENT_IMAGE_HALF_HEIGHT),
+-      width: String(COMPONENT_IMAGE_WIDTH),
+-      height: String(COMPONENT_IMAGE_HEIGHT),
++      x: String(-imageWidth / 2),
++      y: String(-imageHeight / 2),
++      width: String(imageWidth),
++      height: String(imageHeight),
+       preserveAspectRatio: "xMidYMid meet",
+       class: "component-image mesh-image"
+     })
+   );
+ 
++  scaledGroup.appendChild(placementGroup);
++  visual.appendChild(scaledGroup);
++
+   return visual;
+ }
+ 
+diff --git a/src/js/2D/components.js b/src/js/2D/components.js
+index 3657db1..0ec9563 100644
+--- a/src/js/2D/components.js
++++ b/src/js/2D/components.js
+@@ -434,7 +434,7 @@ export const COMPONENT_CATALOG = [
+ 
+ export const COMPONENT_BY_ID = new Map(COMPONENT_CATALOG.map((entry)=>[entry.id, entry]));
+ 
+-export const COMPONENT_ASSET_BASE = "../../../assets/RPD_Component";
++export const COMPONENT_ASSET_BASE = "../../assets/RPD_Component";
+ 
+ export const COMPONENT_IMAGE_SUFFIX_BY_ID = {
+   "mesh-tori": "tori_mesh.png",
+@@ -531,7 +531,7 @@ export const REST_SUGGESTION_POINT_OVERRIDES = {
+   "48": { mesial: { x: -7, y: 21 }, distal: { x: 3, y: -22 }, lingual: { x: -20, y: -5 } },
+ };
+ 
+-const REST_PLACEMENT_ASSET_BASE = "../../../assets/RPD_Component";
++const REST_PLACEMENT_ASSET_BASE = "../../assets/RPD_Component";
+ 
+ 
+ const REST_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
+diff --git a/src/pages/2DAnnotation.html b/src/pages/2DAnnotation.html
+index a8dfd21..a74392e 100644
+--- a/src/pages/2DAnnotation.html
++++ b/src/pages/2DAnnotation.html
+@@ -31,15 +31,14 @@
+           <div class="jaw-row">
+             <img class="jaw-img" src="../../assets/Icon_UpperJaw_Occlusal.png" alt="Upper jaw icon" />
+             <span class="jaw-row-name">Upper Arch (18 to 28)</span>
+-            <button id="upperLockBtn" class="lock-btn" data-jaw="upper" aria-label="Lock upper arch">
+-              <img class="lock-icon" src="../../assets/unlock.png" alt="" />
+-            </button>
+           </div>
+           <div class="jaw-row">
+             <img class="jaw-img" src="../../assets/Icon_LowerJaw_Occlusal.png" alt="Lower jaw icon" />
+             <span class="jaw-row-name">Lower Arch (38 to 48)</span>
+-            <button id="lowerLockBtn" class="lock-btn" data-jaw="lower" aria-label="Lock lower arch">
+-              <img class="lock-icon" src="../../assets/unlock.png" alt="" />
++          </div>
++          <div class="mode-toggle-row">
++            <button type="button" id="archModeToggle" class="mode-toggle-btn" aria-pressed="false">
++              <span class="mode-toggle-label">Teeth selection</span>
+             </button>
+           </div>
+         </div>
+@@ -77,7 +76,7 @@
+ 
+         <section id="editModePanel" class="edit-mode-panel is-hidden">
+           <h3 class="edit-mode-title">Components</h3>
+-          <div class="design-hint" id="designHint">Lock both arches to enter design mode.</div>
++          <div class="design-hint" id="designHint">Use the mode control to enter design mode.</div>
+           <div class="catalog-wrap">
+             <div id="componentTabs" class="component-tabs"></div>
+             <div class="component-canvas">
+@@ -86,6 +85,7 @@
+           </div>
+           <div class="selected-components" id="selectedComponents"></div>
+         </section>
++
+       </aside>
+     </section>
+   </main>

@@ -1,4 +1,4 @@
-import { ACTION_UPON_FAILURE } from "./components.js";
+import { ACTION_UPON_FAILURE, isMeshComponent } from "./components.js";
 
 function getToothId(tooth) {
   return tooth?.tooth_id ?? tooth?.fdiId ?? "unknown";
@@ -14,14 +14,6 @@ function isToothPresent(tooth) {
   }
 
   return true;
-}
-
-function isMeshComponent(componentDef) {
-  if (!componentDef) {
-    return false;
-  }
-
-  return componentDef.tab === "mesh" || String(componentDef.id || "").startsWith("mesh-");
 }
 
 function isMeshComponentId(componentId, componentById) {
@@ -87,8 +79,8 @@ export function assessPlacementCriteria(tooth, selectedComponent, componentById)
 
     if (overlappingMeshes.length > 0) {
       return failure(
-        `Tooth ${toothId} already has a mesh. Remove it before placing another mesh.`,
-        ACTION_UPON_FAILURE.PREVENT_PLACEMENT,
+        `Tooth ${toothId} already has a mesh; replacing with ${selectedComponent.id}.`,
+        ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
         overlappingMeshes
       );
     }
@@ -99,5 +91,3 @@ export function assessPlacementCriteria(tooth, selectedComponent, componentById)
     failureData: null,
   };
 }
-
-export const assessPlacement = assessPlacementCriteria;

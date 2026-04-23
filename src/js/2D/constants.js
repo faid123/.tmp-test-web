@@ -6,6 +6,66 @@ export const TOOTH_ORDER = {
   lower: ["38", "37", "36", "35", "34", "33", "32", "31", "41", "42", "43", "44", "45", "46", "47", "48"]
 };
 
+/** Base path for tooth SVG assets in the 2D arch view. */
+export const TOOTH_ASSET_BASE = "../../assets/teeth";
+
+export const TOOTH_IMAGE_WIDTH = 1100;
+export const TOOTH_IMAGE_HEIGHT = 180;
+export const TOOTH_IMAGE_HALF_WIDTH = TOOTH_IMAGE_WIDTH / 2;
+export const TOOTH_IMAGE_HALF_HEIGHT = TOOTH_IMAGE_HEIGHT / 2;
+
+export const COMPONENT_IMAGE_WIDTH = 154;
+export const COMPONENT_IMAGE_HEIGHT = 246;
+export const COMPONENT_IMAGE_HALF_WIDTH = COMPONENT_IMAGE_WIDTH / 2;
+export const COMPONENT_IMAGE_HALF_HEIGHT = COMPONENT_IMAGE_HEIGHT / 2;
+
+export const COMPONENT_SCALE_BY_JAW = Object.freeze({
+  upper: 1.3,
+  lower: 0.7,
+});
+
+export const JAW_BACKGROUND_SCALE_BY_JAW = Object.freeze({
+  upper: 1,
+  lower: 0.9,
+});
+
+export const JAW_BACKGROUND_OFFSET_BY_JAW = Object.freeze({
+  upper: { x: 0, y: 0 },
+  lower: { x: 0, y: 0 },
+});
+
+export const COMPONENT_SCALE_BY_TOOTH = Object.freeze({
+  "41": 0.5,
+  "42": 0.7,
+  "11": 0.8,
+  "12": 0.8,
+  "21": 0.8,
+  "22": 0.8,
+  "31": 0.5,
+  "32": 0.7,
+});
+
+export const PRESENCE_TOOTH_ASSET = `${TOOTH_ASSET_BASE}/11.svg`;
+
+export const COMPONENT_GROUPS = Object.freeze({
+  major: [
+    { key: "upper", title: "Upper" },
+    { key: "lower", title: "Lower" },
+  ],
+  assembly: [
+    { key: "circum", title: "Circum" },
+    { key: "bars", title: "Bars" },
+  ],
+});
+
+export function forEachTooth(callback) {
+  for (const jaw of Object.keys(TOOTH_ORDER)) {
+    for (const toothId of TOOTH_ORDER[jaw]) {
+      callback(toothId, jaw);
+    }
+  }
+}
+
 export const JAW_BACKGROUND_IMAGES = {
   upper: {
     svgId: "upperArchSvg",
@@ -56,28 +116,28 @@ export const TOOTH_POSITION_MAP = {
     "28": { x: 499, y: 361, rotation: 0 }
   },
   lower: {
-    "38": { x: 135, y: 57, rotation: 0 },
-    "37": { x: 150, y: 115, rotation: 0 },
-    "36": { x: 165, y: 182, rotation: 0 },
-    "35": { x: 181, y: 243, rotation: 0 },
-    "34": { x: 201, y: 286, rotation: 0 },
-    "33": { x: 233, y: 315, rotation: 0 },
-    "32": { x: 265, y: 327, rotation: 0 },
-    "31": { x: 295, y: 335, rotation: 0 },
-    "41": { x: 325, y: 335, rotation: 0 },
-    "42": { x: 355, y: 327, rotation: 0 },
-    "43": { x: 387, y: 315, rotation: 0 },
-    "44": { x: 419, y: 286, rotation: 0 },
-    "45": { x: 438, y: 243, rotation: 0 },
-    "46": { x: 455, y: 182, rotation: 0 },
-    "47": { x: 469, y: 115, rotation: 0 },
-    "48": { x: 484, y: 57, rotation: 0 }
+    "48": { x: 135, y: 57, rotation: 0 },
+    "47": { x: 150, y: 115, rotation: 0 },
+    "46": { x: 165, y: 182, rotation: 0 },
+    "45": { x: 181, y: 243, rotation: 0 },
+    "44": { x: 201, y: 286, rotation: 0 },
+    "43": { x: 233, y: 315, rotation: 0 },
+    "42": { x: 265, y: 327, rotation: 0 },
+    "41": { x: 295, y: 335, rotation: 0 },
+    "31": { x: 325, y: 335, rotation: 0 },
+    "32": { x: 355, y: 327, rotation: 0 },
+    "33": { x: 387, y: 315, rotation: 0 },
+    "34": { x: 419, y: 286, rotation: 0 },
+    "35": { x: 438, y: 243, rotation: 0 },
+    "36": { x: 455, y: 182, rotation: 0 },
+    "37": { x: 469, y: 115, rotation: 0 },
+    "38": { x: 484, y: 57, rotation: 0 }
   }
 };
 
 export const JAW_IMAGE_FLIP_X = {
   upper: 1,
-  lower: -1
+  lower: 1
 };
 
 export const TOOTH_SCALE_OVERRIDE = {
@@ -134,6 +194,12 @@ export const UPPER_FDI = TOOTH_ORDER.upper.map(Number);
 export const LOWER_FDI = TOOTH_ORDER.lower.map(Number);
 
 export const ALL_FDI = [...UPPER_FDI, ...LOWER_FDI];
+
+// Upper anteriors 13→23 and lower anteriors 43→33 (FDI order); rest-seat picker uses a surface dialog.
+export const ANTERIOR_REST_SURFACE_DIALOG_TEETH = new Set([
+  "13", "12", "11", "21", "22", "23",
+  "43", "42", "41", "31", "32", "33",
+]);
 
 export const CRITERIA = {
   TOOTH_PRESENT: "ToothPresent",

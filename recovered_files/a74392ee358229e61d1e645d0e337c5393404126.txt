@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2D Annotate</title>
+  <link rel="stylesheet" href="../../css/2DAnnotation_01.css" />
+  <link rel="icon" href="/assets/favicon.ico" type="image/x-icon" />
+</head>
+<body>
+  <main class="annotation-shell">
+    <aside class="panel preview-panel">
+      <header class="panel-header">
+        <h1>3D</h1>
+      </header>
+      <div class="preview-frame" id="imagePreviewArea">
+        <img id="previewImage" alt="Composed dental preview" />
+        <p id="previewFallback" class="preview-fallback">
+          No preview image found. Open from the 3D page after generating the composed image.
+        </p>
+      </div>
+    </aside>
+
+    <section class="workspace-panel">
+      <section class="panel arch-panel">
+        <div class="arch-topbar">
+          <div id="caseLabel" class="case-label">Case: Unknown</div>
+        </div>
+
+        <div class="arch-controls">
+          <div class="jaw-row">
+            <img class="jaw-img" src="../../assets/Icon_UpperJaw_Occlusal.png" alt="Upper jaw icon" />
+            <span class="jaw-row-name">Upper Arch (18 to 28)</span>
+          </div>
+          <div class="jaw-row">
+            <img class="jaw-img" src="../../assets/Icon_LowerJaw_Occlusal.png" alt="Lower jaw icon" />
+            <span class="jaw-row-name">Lower Arch (38 to 48)</span>
+          </div>
+          <div class="mode-toggle-row">
+            <button type="button" id="archModeToggle" class="mode-toggle-btn" aria-pressed="false">
+              <span class="mode-toggle-label">Teeth selection</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="jaw-combined-canvas">
+          <svg id="upperArchSvg" class="arch-svg" viewBox="0 0 620 380"></svg>
+          <svg id="lowerArchSvg" class="arch-svg" viewBox="0 0 620 380"></svg>
+        </div>
+
+        <div class="action-list center-actions">
+          <button id="clearTopBtn" class="action-btn">Clear Top</button>
+          <button id="clearBottomBtn" class="action-btn">Clear Bottom</button>
+          <button id="drawFromScratchBtn" class="action-btn">Draw from Scratch</button>
+          <button id="saveAnnotationBtn" class="action-btn primary">Save</button>
+        </div>
+
+        <p id="saveMessage" class="save-message" role="status"></p>
+      </section>
+
+      <aside class="panel tools-panel">
+        <section id="selectTeethPanel" class="select-teeth-panel">
+          <div class="panel-mini-title">Select Teeth</div>
+          <div class="status-picker">
+            <button class="status-btn is-active" data-status="presence">
+              <img class="status-icon" src="../../assets/PresenceToothIconGreen.png" alt="Presence" />
+            </button>
+            <button class="status-btn" data-status="abutment">
+              <img class="status-icon" src="../../assets/AbutmentToothIconBlue.png" alt="Abutment" />
+            </button>
+            <button class="status-btn" data-status="compromised">
+              <img class="status-icon" src="../../assets/CompromisedToothIconYellow.png" alt="Compromised" />
+            </button>
+          </div>
+        </section>
+
+        <section id="editModePanel" class="edit-mode-panel is-hidden">
+          <h3 class="edit-mode-title">Components</h3>
+          <div class="design-hint" id="designHint">Use the mode control to enter design mode.</div>
+          <div class="catalog-wrap">
+            <div id="componentTabs" class="component-tabs"></div>
+            <div class="component-canvas">
+              <div id="componentItems" class="component-items"></div>
+            </div>
+          </div>
+          <div class="selected-components" id="selectedComponents"></div>
+        </section>
+
+      </aside>
+    </section>
+  </main>
+
+  <script type="module" src="../js/2D/2DAnnotation.js"></script>
+</body>
+</html>
