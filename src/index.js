@@ -22,380 +22,752 @@ import {
   removeVisibilityAndTransparencyControls,
 } from "./newControls.js";
 
-//initialise everything
+const isThreeDViewerPage =
+  window.location.pathname.toLowerCase().includes("threedviewer.html") &&
+  Boolean(document.getElementById("container3D"));
 
-let all_mesh_mat = {};
-window.finished = false;
-
-// Get the current URL
-const url = new URL(window.location.href);
-
-// Get the value of a specific query parameter, e.g., "param"
-let paramValue = url.searchParams.get("id");
-const close = url.searchParams.get("close");
-
-//decrypts the paramvalue
-//if doing testing with test cases jus comment it out
-//paramValue = lol(paramValue);
-
-if (!paramValue) {
-  console.error("Missing case id in URL");
-  // either stop here or handle fallback
+if (!isThreeDViewerPage) {
+  console.debug("[viewer] Skipping 3D viewer bootstrap on non-viewer page.");
 } else {
-  paramValue = lol(paramValue);
-}
+  //initialise everything
 
-// Create a Three.JS Scene
-const scene = new THREE.Scene();
-// Create a new camera with positions and angles
-let camera;
-const aspect = window.innerWidth / window.innerHeight;
-camera = new THREE.OrthographicCamera(
-  window.innerWidth / -2,
-  window.innerWidth / 2,
-  window.innerHeight / 2,
-  window.innerHeight / -2,
-  -500,
-  1000
-);
+  let all_mesh_mat = {};
+  window.finished = false;
 
-// Keep track of the mouse position, so we can make the eye move
-let mouseX = window.innerWidth / 2;
-let mouseY = window.innerHeight / 2;
-let undercut_type = {};
-// Keep the 3D object on a global variable so we can access it later
+  // Get the current URL
+  const url = new URL(window.location.href);
 
-// OrbitControls allow the camera to move around the scene
-let controls;
-let orb_controls;
+  // Get the value of a specific query parameter, e.g., "param"
+  let paramValue = url.searchParams.get("id");
+  const close = url.searchParams.get("close");
 
-// Set which object to render
-let objToRender = "dino";
-let mesh_geo;
+  //decrypts the paramvalue
+  //if doing testing with test cases jus comment it out
+  //paramValue = lol(paramValue);
 
-// Create a material
-const material = new THREE.MeshPhongMaterial({ vertexColors: true });
-const materialsurface = new THREE.MeshStandardMaterial({
-  color: 0xa0a0a0, // Base color
-  metalness: 0.75, // Fully metallic
-  roughness: 0.2, // Smooth surface
-});
-const materialsurface_non_metal = new THREE.MeshStandardMaterial({
-  color: 0xa0a0a0, // Base color
-  metalness: 0, // Fully metallic
-  roughness: 0.2, // Smooth surface
-});
-
-// Create an instance of the ApiClient with the base URL
-const apiClient = new ApiClient("https://live.api.smartrpdai.com/api/smartrpd");
-const parentObject = new THREE.Object3D();
-scene.add(parentObject);
- const polylineOverlayGroup = new THREE.Group();
-polylineOverlayGroup.name = "polyline-overlay-group";
-scene.add(polylineOverlayGroup);
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
-const hoverHighlightColor = new THREE.Color(0x2dcdb2);
-const selectedHighlightColor = new THREE.Color(0x1e88e5);
-const POLYLINE_ENDPOINT = "/polylines/getall";
-let currentViewPreset = "Reset";
-let hoveredMesh = null;
-let selectedMesh = null;
-let selectionOverlay = null;
-
-function disposeObject3D(object) {
-  if (!object) return;
-  object.traverse((child) => {
-    if (child.geometry) child.geometry.dispose();
-    if (Array.isArray(child.material)) {
-      child.material.forEach((materialEntry) => materialEntry?.dispose?.());
-    } else if (child.material) {
-      child.material.dispose();
-    }
-  });
-}
-
-function clearPolylineOverlay() {
-  while (polylineOverlayGroup.children.length > 0) {
-    const child = polylineOverlayGroup.children[0];
-    polylineOverlayGroup.remove(child);
-    disposeObject3D(child);
+  if (!paramValue) {
+    console.error("Missing case id in URL");
+    // either stop here or handle fallback
+  } else {
+    paramValue = lol(paramValue);
   }
-}
 
-function getJawMeshByType(jawType) {
-  const jawMeshes = parentObject.children.filter((child) => {
-    if (!child.isMesh) return false;
-    if (typeof child.userData?.jaw_type !== "string") return false;
-    return child.userData.jaw_type.toLowerCase().includes(jawType);
+  // Create a Three.JS Scene
+  const scene = new THREE.Scene();
+  // Create a new camera with positions and angles
+  let camera;
+  const aspect = window.innerWidth / window.innerHeight;
+  camera = new THREE.OrthographicCamera(
+    window.innerWidth / -2,
+    window.innerWidth / 2,
+    window.innerHeight / 2,
+    window.innerHeight / -2,
+    -500,
+    1000
+  );
+
+  // Keep track of the mouse position, so we can make the eye move
+  let mouseX = window.innerWidth / 2;
+  let mouseY = window.innerHeight / 2;
+  let undercut_type = {};
+  // Keep the 3D object on a global variable so we can access it later
+
+  // OrbitControls allow the camera to move around the scene
+  let controls;
+  let orb_controls;
+
+  // Set which object to render
+  let objToRender = "dino";
+  let mesh_geo;
+
+  // Create a material
+  const material = new THREE.MeshPhongMaterial({ vertexColors: true });
+  const materialsurface = new THREE.MeshStandardMaterial({
+    color: 0xa0a0a0, // Base color
+    metalness: 0.75, // Fully metallic
+    roughness: 0.2, // Smooth surface
+  });
+  const materialsurface_non_metal = new THREE.MeshStandardMaterial({
+    color: 0xa0a0a0, // Base color
+    metalness: 0, // Fully metallic
+    roughness: 0.2, // Smooth surface
   });
 
-  if (!jawMeshes.length) {
+  // Create an instance of the ApiClient with the base URL
+  const apiClient = new ApiClient("https://live.api.smartrpdai.com/api/smartrpd");
+  const parentObject = new THREE.Object3D();
+  scene.add(parentObject);
+
+  // Start of polyline, 3d render view and selection overlay related code
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  const hoverHighlightColor = new THREE.Color(0x2dcdb2);
+  const selectedHighlightColor = new THREE.Color(0x1e88e5);
+  const POLYLINE_ENDPOINT = "/polylines/getall";
+  const START_WITH_POLYLINE_EDITING = false;
+  const SHOW_POLYLINE_EDIT_BUTTON = true;
+  const POLYLINE_EDIT_MAX_DISTANCE_RATIO = 0.25;
+  const POLYLINE_EDIT_MIN_DISTANCE = 0.5;
+  const POLYLINE_EDIT_MAX_DISTANCE = 3;
+  const POLYLINE_VIEW_OPACITY = 0.28;
+  const POLYLINE_EDIT_OPACITY = 0.72;
+  let currentViewPreset = "Reset";
+  let hoveredMesh = null;
+  let selectedMesh = null;
+  let selectionOverlay = null;
+  let selectionOverlayAnchor = null;
+  let isPolylineEditMode = START_WITH_POLYLINE_EDITING;
+  let activePolylineHandle = null;
+  let polylineDragPlane = new THREE.Plane();
+  let polylineDragOffset = new THREE.Vector3();
+  let polylineDragPoint = new THREE.Vector3();
+  let suppressMeshSelectionClick = false;
+
+  function disposeObject3D(object) {
+    if (!object) return;
+    object.traverse((child) => {
+      if (child.geometry) child.geometry.dispose();
+      if (Array.isArray(child.material)) {
+        child.material.forEach((materialEntry) => materialEntry?.dispose?.());
+      } else if (child.material) {
+        child.material.dispose();
+      }
+    });
+  }
+
+  function clearPolylineOverlay() {
+    parentObject.children.forEach((mesh) => {
+      if (!mesh?.isMesh || !mesh.children?.length) return;
+
+      const polylineChildren = mesh.children.filter(
+        (child) => child.userData?.overlayType === "polyline"
+      );
+
+      polylineChildren.forEach((child) => {
+        mesh.remove(child);
+        disposeObject3D(child);
+      });
+    });
+
+    updateEditedPolylineSnapshot();
+  }
+
+  function getJawMeshByType(jawType) {
+    const jawMeshes = parentObject.children.filter((child) => {
+      if (!child.isMesh) return false;
+      if (typeof child.userData?.jaw_type !== "string") return false;
+      return child.userData.jaw_type.toLowerCase().includes(jawType);
+    });
+
+    if (!jawMeshes.length) {
+      return null;
+    }
+
+    return (
+      jawMeshes.find((child) =>
+        String(child.name || "").toLowerCase().includes("surface")
+      ) || jawMeshes[0]
+    );
+  }
+
+  function normalizeJawKey(value) {
+    const text = String(value || "").toLowerCase();
+    if (text.includes("upper_jaw") || text.includes("upper") || text === "2") {
+      return "upper";
+    }
+    if (text.includes("lower_jaw") || text.includes("lower") || text === "1") {
+      return "lower";
+    }
     return null;
   }
 
-  return (
-    jawMeshes.find((child) =>
-      String(child.name || "").toLowerCase().includes("surface")
-    ) || jawMeshes[0]
-  );
-}
-
-function normalizeJawKey(value) {
-  const text = String(value || "").toLowerCase();
-  if (text.includes("upper_jaw") || text.includes("upper") || text === "2") {
-    return "upper";
-  }
-  if (text.includes("lower_jaw") || text.includes("lower") || text === "1") {
-    return "lower";
-  }
-  return null;
-}
-
-function isValidPoint(point) {
-  return (
-    point &&
-    Number.isFinite(point.x) &&
-    Number.isFinite(point.y) &&
-    Number.isFinite(point.z)
-  );
-}
-
-function toPointObject(value) {
-  if (Array.isArray(value) && value.length >= 3) {
-    const [x, y, z] = value.map(Number);
-    return { x, y, z };
+  function isValidPoint(point) {
+    return (
+      point &&
+      Number.isFinite(point.x) &&
+      Number.isFinite(point.y) &&
+      Number.isFinite(point.z)
+    );
   }
 
-  if (value && typeof value === "object") {
-    const x = Number(value.x ?? value.X ?? value.pos_x ?? value.point_x);
-    const y = Number(value.y ?? value.Y ?? value.pos_y ?? value.point_y);
-    const z = Number(value.z ?? value.Z ?? value.pos_z ?? value.point_z);
+  function isRenderablePoint(point) {
+    return (
+      isValidPoint(point) &&
+      Math.abs(point.x) < 1e6 &&
+      Math.abs(point.y) < 1e6 &&
+      Math.abs(point.z) < 1e6
+    );
+  }
 
-    if ([x, y, z].every(Number.isFinite)) {
+  function toPointObject(value) {
+    if (Array.isArray(value) && value.length >= 3) {
+      const [x, y, z] = value.map(Number);
       return { x, y, z };
     }
-  }
 
-  return null;
-}
+    if (value && typeof value === "object") {
+      const x = Number(value.x ?? value.X ?? value.pos_x ?? value.point_x);
+      const y = Number(value.y ?? value.Y ?? value.pos_y ?? value.point_y);
+      const z = Number(value.z ?? value.Z ?? value.pos_z ?? value.point_z);
 
-function extractPointArray(candidate) {
-  if (!candidate) return [];
-
-  if (Array.isArray(candidate)) {
-    return candidate.map(toPointObject).filter(isValidPoint);
-  }
-
-  const nestedArrayKeys = ["points", "polyline", "vertices", "coordinates", "data"];
-  for (const key of nestedArrayKeys) {
-    if (Array.isArray(candidate[key])) {
-      return candidate[key].map(toPointObject).filter(isValidPoint);
+      if ([x, y, z].every(Number.isFinite)) {
+        return { x, y, z };
+      }
     }
+
+    return null;
   }
 
-  return [];
-}
+  function decodePolylineTextPayload(value) {
+    if (typeof value !== "string" || !value.trim()) return null;
 
-function normalizePolylineResponse(rawResponse) {
-  const normalized = {
-    upper: [],
-    lower: [],
-  };
+    try {
+      const decoded = atob(value);
+      if (
+        decoded.includes("\n") ||
+        decoded.includes("\r") ||
+        decoded.includes("retentionPins") ||
+        decoded.includes("GingivalPoints") ||
+        decoded.includes("majorConnector")
+      ) {
+        return decoded;
+      }
+    } catch (error) {
+      // Not base64 text; fall through and treat as plain text.
+    }
 
-  const assignPoints = (jawKey, points) => {
-    if (!jawKey || !points.length) return;
-    normalized[jawKey] = points;
-  };
-
-  if (!rawResponse) {
-    return normalized;
+    return value;
   }
 
-  if (Array.isArray(rawResponse)) {
-    rawResponse.forEach((entry) => {
-      const jawKey = normalizeJawKey(
-        entry?.jaw_type ??
+  function extractPointsFromPolylineText(value) {
+    const decoded = decodePolylineTextPayload(value);
+    if (typeof decoded !== "string" || !decoded.trim()) return [];
+
+    const coordinateLinePattern =
+      /^\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s+([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s+([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)\s*$/i;
+
+    return decoded
+      .split(/\r?\n/)
+      .map((line) => line.match(coordinateLinePattern))
+      .filter(Boolean)
+      .map((match) => ({
+        x: Number(match[1]),
+        y: Number(match[2]),
+        z: Number(match[3]),
+      }))
+      .filter(isRenderablePoint);
+  }
+
+  function extractPointArray(candidate) {
+    if (!candidate) return [];
+
+    if (typeof candidate === "string") {
+      return extractPointsFromPolylineText(candidate);
+    }
+
+    if (Array.isArray(candidate)) {
+      return candidate.map(toPointObject).filter(isRenderablePoint);
+    }
+
+    const nestedArrayKeys = ["points", "polyline", "vertices", "coordinates", "data"];
+    for (const key of nestedArrayKeys) {
+      if (Array.isArray(candidate[key])) {
+        return candidate[key].map(toPointObject).filter(isRenderablePoint);
+      }
+
+      if (typeof candidate[key] === "string") {
+        const parsed = extractPointsFromPolylineText(candidate[key]);
+        if (parsed.length) {
+          return parsed;
+        }
+      }
+    }
+
+    return [];
+  }
+
+  function normalizePolylineResponse(rawResponse) {
+    const normalized = {
+      upper: [],
+      lower: [],
+    };
+
+    const assignPoints = (jawKey, points) => {
+      if (!jawKey || !points.length) return;
+      normalized[jawKey] = points;
+    };
+
+    if (!rawResponse) {
+      return normalized;
+    }
+
+    if (Array.isArray(rawResponse)) {
+      rawResponse.forEach((entry) => {
+        const jawKey = normalizeJawKey(
+          entry?.jaw_type ??
           entry?.jawType ??
           entry?.arch ??
           entry?.type ??
           entry?.jaws
-      );
-      const points = extractPointArray(entry);
-      if (jawKey && points.length) {
-        assignPoints(jawKey, points);
+        );
+        const points = extractPointArray(entry);
+        if (jawKey && points.length) {
+          assignPoints(jawKey, points);
+        }
+      });
+
+      if (!normalized.upper.length && rawResponse[0]) {
+        assignPoints("upper", extractPointArray(rawResponse[0]));
       }
-    });
-
-    if (!normalized.upper.length && rawResponse[0]) {
-      assignPoints("upper", extractPointArray(rawResponse[0]));
+      if (!normalized.lower.length && rawResponse[1]) {
+        assignPoints("lower", extractPointArray(rawResponse[1]));
+      }
+      return normalized;
     }
-    if (!normalized.lower.length && rawResponse[1]) {
-      assignPoints("lower", extractPointArray(rawResponse[1]));
-    }
-    return normalized;
-  }
 
-  if (typeof rawResponse === "object") {
-    assignPoints("upper", extractPointArray(rawResponse.upper));
-    assignPoints("lower", extractPointArray(rawResponse.lower));
+    if (typeof rawResponse === "object") {
+      assignPoints("upper", extractPointArray(rawResponse.upper));
+      assignPoints("lower", extractPointArray(rawResponse.lower));
 
-    if (!normalized.upper.length) {
-      assignPoints(
-        normalizeJawKey(
-          rawResponse.jaw_type ??
+      if (!normalized.upper.length) {
+        assignPoints(
+          normalizeJawKey(
+            rawResponse.jaw_type ??
             rawResponse.jawType ??
             rawResponse.arch ??
             rawResponse.type ??
             rawResponse.jaws
-        ),
-        extractPointArray(rawResponse)
-      );
+          ),
+          extractPointArray(rawResponse)
+        );
+      }
     }
+
+    return normalized;
   }
 
-  return normalized;
-}
+  function getPolylineRenderSettings(jawType, vectors) {
+    const isUpperJaw = jawType === "upper";
+    const polylineBounds = new THREE.Box3().setFromPoints(vectors);
+    const polylineSize = polylineBounds.getSize(new THREE.Vector3());
+    const maxSpan = Math.max(polylineSize.x, polylineSize.y, polylineSize.z, 1);
+    const radiusMultiplier = isUpperJaw ? 0.0175 : 0.014;
+    const tubeRadius = THREE.MathUtils.clamp(
+      maxSpan * radiusMultiplier,
+      isUpperJaw ? 0.5 : 0.35,
+      isUpperJaw ? 1.85 : 1.35
+    );
 
-function createPolylineObjects(jawType, points) {
-  const color = jawType === "upper" ? 0x18b7a0 : 0xf08a24;
-  const vectors = points.map((point) => new THREE.Vector3(point.x, point.y, point.z));
-  const group = new THREE.Group();
-  group.name = `${jawType}-polyline-group`;
-  group.userData = {
-    overlayType: "polyline",
-    arch: jawType,
-  };
+    return {
+      color: 0x9b6dff,
+      emissive: isUpperJaw ? 0x43206b : 0x351454,
+      handleColor: isUpperJaw ? 0xffd166 : 0xff9f1c,
+      handleEmissive: 0x4a2a00,
+      handleRadius: THREE.MathUtils.clamp(tubeRadius * 1.6, 0.8, 2.8),
+      segmentCount: Math.max(
+        (vectors.length - 1) * (isUpperJaw ? 14 : 10),
+        isUpperJaw ? 96 : 64
+      ),
+      radialSegments: isUpperJaw ? 20 : 14,
+      tubeRadius: isPolylineEditMode ? tubeRadius : tubeRadius * 0.6,
+    };
+  }
 
-  if (vectors.length >= 1) {
-    const pointGeometry = new THREE.BufferGeometry().setFromPoints(vectors);
-    const pointMaterial = new THREE.PointsMaterial({
-      color,
-      size: 2.8,
-      sizeAttenuation: true,
-      transparent: true,
-      opacity: 1,
+  function createPolylineStrokeMesh(jawType, vectors) {
+    if (vectors.length >= 2) {
+      const settings = getPolylineRenderSettings(jawType, vectors);
+      const polylineCurve = new THREE.CatmullRomCurve3(
+        vectors,
+        false,
+        "centripetal"
+      );
+      const tubeGeometry = new THREE.TubeGeometry(
+        polylineCurve,
+        settings.segmentCount,
+        settings.tubeRadius,
+        settings.radialSegments,
+        false
+      );
+      const tubeMaterial = new THREE.MeshStandardMaterial({
+        color: settings.color,
+        emissive: settings.emissive,
+        emissiveIntensity: jawType === "upper" ? 0.22 : 0.18,
+        roughness: jawType === "upper" ? 0.28 : 0.38,
+        metalness: 0.05,
+        transparent: true,
+        opacity: isPolylineEditMode
+          ? POLYLINE_EDIT_OPACITY
+          : POLYLINE_VIEW_OPACITY,
+        depthTest: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1,
+      });
+      const polyline = new THREE.Mesh(tubeGeometry, tubeMaterial);
+      polyline.name = `${jawType}-polyline-tube`;
+      polyline.renderOrder = 10;
+      polyline.userData = {
+        overlayType: "polyline-line",
+        arch: jawType,
+      };
+      return polyline;
+    }
+
+    if (vectors.length === 1) {
+      const settings = getPolylineRenderSettings(jawType, vectors);
+      const pointGeometry = new THREE.SphereGeometry(0.8, 16, 16);
+      const pointMaterial = new THREE.MeshStandardMaterial({
+        color: settings.color,
+        emissive: settings.emissive,
+        emissiveIntensity: jawType === "upper" ? 0.22 : 0.18,
+        roughness: jawType === "upper" ? 0.28 : 0.38,
+        metalness: 0.05,
+        transparent: true,
+        opacity: isPolylineEditMode
+          ? POLYLINE_EDIT_OPACITY
+          : POLYLINE_VIEW_OPACITY,
+        depthTest: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1,
+      });
+      const pointMesh = new THREE.Mesh(pointGeometry, pointMaterial);
+      pointMesh.position.copy(vectors[0]);
+      pointMesh.name = `${jawType}-polyline-point`;
+      pointMesh.renderOrder = 10;
+      pointMesh.userData = {
+        overlayType: "polyline-points",
+        arch: jawType,
+      };
+      return pointMesh;
+    }
+
+    return null;
+  }
+
+  function createPolylineHandle(jawType, position, index, vectors) {
+    const settings = getPolylineRenderSettings(jawType, vectors);
+    const handleGeometry = new THREE.SphereGeometry(settings.handleRadius, 18, 18);
+    const handleMaterial = new THREE.MeshStandardMaterial({
+      color: settings.handleColor,
+      emissive: settings.handleEmissive,
+      emissiveIntensity: 0.35,
+      roughness: 0.25,
+      metalness: 0.05,
+      depthTest: false,
       depthWrite: false,
     });
-    const pointCloud = new THREE.Points(pointGeometry, pointMaterial);
-    pointCloud.name = `${jawType}-polyline-points`;
-    pointCloud.userData = {
-      overlayType: "polyline-points",
+    const handle = new THREE.Mesh(handleGeometry, handleMaterial);
+    handle.position.copy(position);
+    handle.name = `${jawType}-polyline-handle-${index}`;
+    handle.renderOrder = 20;
+    handle.userData = {
+      overlayType: "polyline-handle",
       arch: jawType,
+      pointIndex: index,
+      originalPosition: position.clone(),
+      maxEditDistance: getPolylinePointEditLimit(vectors, index),
     };
-    group.add(pointCloud);
+    return handle;
   }
 
-  return group;
-}
+  function getPolylinePointEditLimit(vectors, index) {
+    const point = vectors[index];
+    if (!point) return POLYLINE_EDIT_MIN_DISTANCE;
 
-function renderPolylineData(polylineByJaw) {
-  clearPolylineOverlay();
-
-  ["upper", "lower"].forEach((jawType) => {
-    const points = polylineByJaw[jawType] || [];
-    const jawMesh = getJawMeshByType(jawType);
-
-    if (!jawMesh || !points.length) {
-      if (points.length && !jawMesh) {
-        console.log(`[polyline] Skipping ${jawType}: jaw mesh not loaded.`);
-      }
-      return;
+    const neighborDistances = [];
+    if (vectors[index - 1]) {
+      neighborDistances.push(point.distanceTo(vectors[index - 1]));
+    }
+    if (vectors[index + 1]) {
+      neighborDistances.push(point.distanceTo(vectors[index + 1]));
     }
 
-    const polylineGroup = createPolylineObjects(jawType, points);
-    polylineOverlayGroup.add(polylineGroup);
-  });
-}
+    const localSpacing = neighborDistances.length
+      ? Math.min(...neighborDistances)
+      : POLYLINE_EDIT_MAX_DISTANCE;
 
-async function fetchAndRenderPolylines(caseIntID) {
-  clearPolylineOverlay();
-
-  const polylinePayload = [
-    {
-      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
-      uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
-      caseIntID,
-    },
-    {
-      case_id: caseIntID,
-    },
-  ];
-
-  try {
-    const response = await apiClient.post(
-      POLYLINE_ENDPOINT,
-      polylinePayload,
-      false,
-      "Polyline"
+    return THREE.MathUtils.clamp(
+      localSpacing * POLYLINE_EDIT_MAX_DISTANCE_RATIO,
+      POLYLINE_EDIT_MIN_DISTANCE,
+      POLYLINE_EDIT_MAX_DISTANCE
     );
-    const normalized = normalizePolylineResponse(response);
-    const hasAnyPoints = normalized.upper.length || normalized.lower.length;
+  }
 
-    if (!hasAnyPoints) {
-      console.log("[polyline] No polyline data returned.");
-      return;
+  function clampPolylineEditPosition(handle, candidatePosition) {
+    const origin = handle.userData.originalPosition;
+    const maxDistance = handle.userData.maxEditDistance;
+    if (!origin || !Number.isFinite(maxDistance)) return candidatePosition;
+
+    const offset = candidatePosition.clone().sub(origin);
+    if (offset.length() <= maxDistance) {
+      return candidatePosition;
     }
 
-    renderPolylineData(normalized);
-  } catch (error) {
-    console.warn("[polyline] Unable to fetch polyline data.", error);
+    return origin.clone().add(offset.setLength(maxDistance));
   }
-}
 
-function getArchLabel(mesh) {
-  const sourceText = [
-    mesh?.userData?.archLabel,
-    mesh?.userData?.jaw_type,
-    mesh?.name,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+  function getPolylineHandles() {
+    const handles = [];
+    parentObject.traverse((child) => {
+      if (child.isMesh && child.userData?.overlayType === "polyline-handle") {
+        handles.push(child);
+      }
+    });
+    return handles;
+  }
 
-  if (sourceText.includes("upper")) return "Upper Arch";
-  if (sourceText.includes("lower")) return "Lower Arch";
-  if (sourceText.includes("surface")) return "Surface Mesh";
-  return "Jaw Model";
-}
+  function updateEditedPolylineSnapshot() {
+    const edited = {};
+    parentObject.traverse((child) => {
+      if (child.userData?.overlayType !== "polyline") return;
+      const arch = child.userData.arch;
+      const points = child.userData.points || [];
+      edited[arch] = points.map((point) => ({
+        x: point.x,
+        y: point.y,
+        z: point.z,
+      }));
+    });
+    window.editedPolylines = edited;
+  }
 
-function createSelectionOverlay(container) {
-  if (selectionOverlay) return selectionOverlay;
+  function rebuildPolylineGroup(group) {
+    if (!group?.userData?.points) return;
+    const jawType = group.userData.arch;
+    const vectors = group.userData.points;
 
-  const overlay = document.createElement("div");
-  overlay.id = "selection-overlay";
-  overlay.style.position = "absolute";
-  overlay.style.top = "16px";
-  overlay.style.right = "150px";
-  overlay.style.zIndex = "1000";
-  overlay.style.minWidth = "220px";
-  overlay.style.maxWidth = "280px";
-  overlay.style.padding = "12px 14px";
-  overlay.style.borderRadius = "10px";
-  overlay.style.background = "rgba(255, 255, 255, 0.94)";
-  overlay.style.border = "1px solid rgba(30, 56, 77, 0.14)";
-  overlay.style.boxShadow = "0 12px 24px rgba(12, 30, 44, 0.14)";
-  overlay.style.fontFamily = "Arial, sans-serif";
-  overlay.style.color = "#22394c";
-  overlay.style.pointerEvents = "none";
-  container.appendChild(overlay);
-  selectionOverlay = overlay;
-  updateSelectionOverlay();
-  return overlay;
-}
+    group.children
+      .filter((child) =>
+        ["polyline-line", "polyline-points"].includes(child.userData?.overlayType)
+      )
+      .forEach((child) => {
+        group.remove(child);
+        disposeObject3D(child);
+      });
 
-function updateSelectionOverlay() {
-  if (!selectionOverlay) return;
+    const stroke = createPolylineStrokeMesh(jawType, vectors);
+    if (stroke) {
+      group.add(stroke);
+      stroke.renderOrder = 10;
+    }
 
-  const activeMesh = selectedMesh || hoveredMesh;
-  const stateLabel = selectedMesh
-    ? "Selected"
-    : hoveredMesh
-      ? "Hovering"
-      : "No selection";
+    group.children.forEach((child) => {
+      if (child.userData?.overlayType === "polyline-handle") {
+        const point = vectors[child.userData.pointIndex];
+        if (point) child.position.copy(point);
+      }
+    });
+  }
 
-  if (!activeMesh) {
-    selectionOverlay.innerHTML = `
+  function setPolylineEditMode(enabled) {
+    if (isPolylineEditMode === enabled) return;
+    isPolylineEditMode = enabled;
+    endPolylineDrag(null, document.body);
+
+    const currentPolylines = {};
+    parentObject.traverse((child) => {
+      if (child.userData?.overlayType === "polyline") {
+        currentPolylines[child.userData.arch] = child.userData.points.map(
+          (point) => ({
+            x: point.x,
+            y: point.y,
+            z: point.z,
+          })
+        );
+      }
+    });
+
+    renderPolylineData(currentPolylines);
+  }
+
+  function createPolylineEditToggle(container) {
+    if (!SHOW_POLYLINE_EDIT_BUTTON) return;
+    if (!container || document.getElementById("polyline-edit-toggle")) return;
+
+    const button = document.createElement("button");
+    button.id = "polyline-edit-toggle";
+    button.type = "button";
+    button.textContent = isPolylineEditMode ? "Done Editing" : "Edit Polyline";
+    button.style.position = "fixed";
+    button.style.left = "32px";
+    button.style.bottom = "96px";
+    button.style.zIndex = "1001";
+    button.style.padding = "8px 12px";
+    button.style.border = "none";
+    button.style.borderRadius = "6px";
+    button.style.background = isPolylineEditMode ? "#1e88e5" : "#ffffff";
+    button.style.color = isPolylineEditMode ? "#ffffff" : "#234";
+    button.style.boxShadow = "0 6px 16px rgba(20, 40, 60, 0.16)";
+    button.style.cursor = "pointer";
+    button.style.fontWeight = "700";
+    button.style.fontSize = "13px";
+
+    const syncButtonState = () => {
+      button.textContent = isPolylineEditMode ? "Done Editing" : "Edit Polyline";
+      button.style.background = isPolylineEditMode ? "#1e88e5" : "#ffffff";
+      button.style.color = isPolylineEditMode ? "#ffffff" : "#234";
+    };
+
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setPolylineEditMode(!isPolylineEditMode);
+      syncButtonState();
+    });
+
+    container.appendChild(button);
+  }
+
+  function createPolylineObjects(jawType, points) {
+    const vectors = points.map((point) => new THREE.Vector3(point.x, point.y, point.z));
+    const group = new THREE.Group();
+    group.name = `${jawType}-polyline-group`;
+    group.userData = {
+      overlayType: "polyline",
+      arch: jawType,
+      points: vectors,
+    };
+
+    const stroke = createPolylineStrokeMesh(jawType, vectors);
+    if (stroke) {
+      group.add(stroke);
+    }
+
+    if (isPolylineEditMode) {
+      vectors.forEach((point, index) => {
+        group.add(createPolylineHandle(jawType, point, index, vectors));
+      });
+    }
+
+    return group;
+  }
+
+  function renderPolylineData(polylineByJaw) {
+    clearPolylineOverlay();
+
+    ["upper", "lower"].forEach((jawType) => {
+      const points = polylineByJaw[jawType] || [];
+      const jawMesh = getJawMeshByType(jawType);
+
+      if (!jawMesh || !points.length) {
+        if (points.length && !jawMesh) {
+          console.log(`[polyline] Skipping ${jawType}: jaw mesh not loaded.`);
+        }
+        return;
+      }
+
+      const polylineGroup = createPolylineObjects(jawType, points);
+      jawMesh.add(polylineGroup);
+      console.log(
+        `[polyline] Attached ${jawType} polyline to mesh:`,
+        jawMesh.name || "(unnamed mesh)"
+      );
+    });
+
+    updateEditedPolylineSnapshot();
+  }
+
+  async function fetchAndRenderPolylines(caseIntID) {
+    clearPolylineOverlay();
+
+    const polylinePayload = [
+      {
+        machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+        uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
+        caseIntID,
+      },
+      {
+        case_id: caseIntID,
+      },
+    ];
+
+    try {
+      console.log("[polyline] Request payload:", polylinePayload);
+      const response = await apiClient.post(
+        POLYLINE_ENDPOINT,
+        polylinePayload,
+        false,
+        "Polyline"
+      );
+      if (apiClient.lastResponseMeta) {
+        console.log(
+          `[polyline] HTTP ${apiClient.lastResponseMeta.status} ${apiClient.lastResponseMeta.statusText} from ${POLYLINE_ENDPOINT}`,
+          apiClient.lastResponseMeta
+        );
+      }
+      if (response === "stl") {
+        console.warn(
+          `[polyline] Endpoint unavailable or returned 404/500: ${POLYLINE_ENDPOINT}`,
+          apiClient.lastError || null
+        );
+        return;
+      }
+
+      if (!response || typeof response !== "object") {
+        console.warn("[polyline] Unexpected response payload:", response);
+        return;
+      }
+
+      console.log("[polyline] Raw response payload:", response);
+
+      const normalized = normalizePolylineResponse(response);
+      const hasAnyPoints = normalized.upper.length || normalized.lower.length;
+
+      console.log("[polyline] Normalized point counts:", {
+        upper: normalized.upper.length,
+        lower: normalized.lower.length,
+      });
+
+      if (!hasAnyPoints) {
+        console.log("[polyline] No polyline data returned.");
+        return;
+      }
+
+      renderPolylineData(normalized);
+    } catch (error) {
+      console.warn("[polyline] Unable to fetch polyline data.", error);
+    }
+  }
+
+  // Function to determine a user-friendly label for a mesh based on its name and userData properties, used for display in the selection overlay
+  function getArchLabel(mesh) {
+    const sourceText = [
+      mesh?.userData?.archLabel,
+      mesh?.userData?.jaw_type,
+      mesh?.name,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    if (sourceText.includes("upper")) return "Upper Arch";
+    if (sourceText.includes("lower")) return "Lower Arch";
+    if (sourceText.includes("surface")) return "Surface Mesh";
+    return "Jaw Model";
+  }
+
+  function createSelectionOverlay(container) {
+    return null;
+  }
+
+  function positionSelectionOverlay() {
+    return;
+  }
+
+  function updateSelectionOverlay() {
+    if (!selectionOverlay) return;
+
+    const activeMesh = selectedMesh || hoveredMesh;
+    const stateLabel = selectedMesh
+      ? "Selected"
+      : hoveredMesh
+        ? "Hovering"
+        : "No selection";
+
+    if (!activeMesh) {
+      selectionOverlay.innerHTML = `
       <div style="font-size:12px; font-weight:bold; letter-spacing:0.08em; text-transform:uppercase; color:#4f7b79;">Viewer Focus</div>
       <div style="margin-top:6px; font-size:18px; font-weight:bold;">No arch selected</div>
       <div style="margin-top:8px; font-size:13px; line-height:1.45; color:#5e7283;">
@@ -403,14 +775,15 @@ function updateSelectionOverlay() {
       </div>
       <div style="margin-top:10px; font-size:12px; color:#6a7b88;">View preset: ${currentViewPreset}</div>
     `;
-    return;
-  }
+      positionSelectionOverlay();
+      return;
+    }
 
-  const archLabel = getArchLabel(activeMesh);
-  const meshName = activeMesh.name || "Unnamed mesh";
-  const visibilityLabel = activeMesh.visible ? "Visible" : "Hidden";
+    const archLabel = getArchLabel(activeMesh);
+    const meshName = activeMesh.name || "Unnamed mesh";
+    const visibilityLabel = activeMesh.visible ? "Visible" : "Hidden";
 
-  selectionOverlay.innerHTML = `
+    selectionOverlay.innerHTML = `
     <div style="font-size:12px; font-weight:bold; letter-spacing:0.08em; text-transform:uppercase; color:#4f7b79;">Viewer Focus</div>
     <div style="margin-top:6px; display:flex; justify-content:space-between; gap:12px;">
       <div style="font-size:18px; font-weight:bold;">${archLabel}</div>
@@ -420,840 +793,984 @@ function updateSelectionOverlay() {
     <div style="margin-top:10px; font-size:12px; color:#6a7b88;">View preset: ${currentViewPreset}</div>
     <div style="margin-top:4px; font-size:12px; color:#6a7b88;">Visibility: ${visibilityLabel}</div>
   `;
-}
-
-function setMeshHighlight(mesh, mode = "none") {
-  if (!mesh?.material || Array.isArray(mesh.material)) return;
-  if (!("emissive" in mesh.material)) return;
-
-  if (!mesh.userData.originalEmissive) {
-    mesh.userData.originalEmissive = mesh.material.emissive.clone();
-    mesh.userData.originalEmissiveIntensity = mesh.material.emissiveIntensity ?? 1;
+    positionSelectionOverlay();
   }
 
-  if (mode === "selected") {
-    mesh.material.emissive.copy(selectedHighlightColor);
-    mesh.material.emissiveIntensity = 0.45;
-  } else if (mode === "hover") {
-    mesh.material.emissive.copy(hoverHighlightColor);
-    mesh.material.emissiveIntensity = 0.25;
-  } else {
-    mesh.material.emissive.copy(mesh.userData.originalEmissive);
-    mesh.material.emissiveIntensity = mesh.userData.originalEmissiveIntensity ?? 1;
-  }
-}
+  window.addEventListener("resize", positionSelectionOverlay);
 
-function refreshSelectionHighlights() {
-  parentObject.children.forEach((child) => {
-    if (!child.isMesh) return;
+  function setMeshHighlight(mesh, mode = "none") {
+    if (!mesh?.material || Array.isArray(mesh.material)) return;
+    if (!("emissive" in mesh.material)) return;
 
-    if (child === selectedMesh) {
-      setMeshHighlight(child, "selected");
-    } else if (child === hoveredMesh) {
-      setMeshHighlight(child, "hover");
+    if (!mesh.userData.originalEmissive) {
+      mesh.userData.originalEmissive = mesh.material.emissive.clone();
+      mesh.userData.originalEmissiveIntensity = mesh.material.emissiveIntensity ?? 1;
+    }
+
+    if (mode === "selected") {
+      mesh.material.emissive.copy(selectedHighlightColor);
+      mesh.material.emissiveIntensity = 0.45;
+    } else if (mode === "hover") {
+      mesh.material.emissive.copy(hoverHighlightColor);
+      mesh.material.emissiveIntensity = 0.25;
     } else {
-      setMeshHighlight(child, "none");
+      mesh.material.emissive.copy(mesh.userData.originalEmissive);
+      mesh.material.emissiveIntensity = mesh.userData.originalEmissiveIntensity ?? 1;
     }
-  });
-}
-
-function getSelectableMeshes() {
-  return parentObject.children.filter(
-    (child) => child.isMesh && child.visible && child.userData?.jaw_type
-  );
-}
-
-function updatePointerPosition(event, domElement) {
-  const bounds = domElement.getBoundingClientRect();
-  pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
-  pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
-}
-
-function pickMesh(event, domElement) {
-  updatePointerPosition(event, domElement);
-  raycaster.setFromCamera(pointer, camera);
-  const intersections = raycaster.intersectObjects(getSelectableMeshes(), false);
-  return intersections[0]?.object || null;
-}
-
-function attachSelectionHandlers(domElement) {
-  domElement.addEventListener("mousemove", (event) => {
-    const nextHovered = pickMesh(event, domElement);
-    if (nextHovered === hoveredMesh) return;
-    hoveredMesh = nextHovered;
-    refreshSelectionHighlights();
-    updateSelectionOverlay();
-  });
-
-  domElement.addEventListener("mouseleave", () => {
-    hoveredMesh = null;
-    refreshSelectionHighlights();
-    updateSelectionOverlay();
-  });
-
-  domElement.addEventListener("click", (event) => {
-    selectedMesh = pickMesh(event, domElement);
-    refreshSelectionHighlights();
-    updateSelectionOverlay();
-  });
-}
-
-window.addEventListener("viewer:viewchange", (event) => {
-  currentViewPreset = event.detail?.label || "Reset";
-  updateSelectionOverlay();
-});
-
-//The async prevents processing of data before the stuff is loaded in
-(async () => {
-  //datas :)
-  // this for the undercut upper and the main json data use to retrieve stuff
-  const data = {
-    machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
-    uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
-    //uuid: 'eOqJe2FpjqdECy25l0KuJkH2cPQm', // dev server acc uuid
-    case_int_id: paramValue,
-    jaw_type: 2,
-    caseIntID: paramValue,
-  };
-  // this for the undercut lower
-  const data2 = {
-    machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
-    uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
-    //uuid: 'eOqJe2FpjqdECy25l0KuJkH2cPQm', // dev server acc uuid
-    case_int_id: paramValue,
-    jaw_type: 1,
-    caseIntID: paramValue,
-  };
-  let positionDatas = [];
-  let positionData;
-
-  //This section is for the processing of creation date, case id and last updated
-  const urldatas = ["/case/get/" + paramValue];
-  try {
-    // Call the post method and wait for the response
-    for (const urldata of urldatas) {
-      positionData = await apiClient.post(urldata, [data], false, "Case Info");
-      //console.log('Success:', positionData)
-      positionDatas = positionDatas.concat(positionData);
-      window.caseID = positionData.case_id;
-      window.lastEdited = unixToHumanReadable(positionData.last_updated);
-      window.username = positionData.username;
-    }
-  } catch (error) {
-    console.error("Error:", error);
   }
-  //for all the text info
-  const time = unixToHumanReadable(positionData.creation_date);
-  const update_time = unixToHumanReadable(positionData.last_updated);
-  createTextbox("Creation Date: " + time, "bottom-left");
-  //createTextbox("Case Name: " + positionData.case_id, 'bottom-right');
-  createTextbox(
-    "Last Updated: " +
+
+  function refreshSelectionHighlights() {
+    parentObject.children.forEach((child) => {
+      if (!child.isMesh) return;
+
+      if (child === selectedMesh) {
+        setMeshHighlight(child, "selected");
+      } else if (child === hoveredMesh) {
+        setMeshHighlight(child, "hover");
+      } else {
+        setMeshHighlight(child, "none");
+      }
+    });
+  }
+
+  function getSelectableMeshes() {
+    return parentObject.children.filter(
+      (child) => child.isMesh && child.visible && child.userData?.jaw_type
+    );
+  }
+
+  function updatePointerPosition(event, domElement) {
+    const bounds = domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+    pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+  }
+
+  function pickMesh(event, domElement) {
+    updatePointerPosition(event, domElement);
+    raycaster.setFromCamera(pointer, camera);
+    const intersections = raycaster.intersectObjects(getSelectableMeshes(), false);
+    return intersections[0]?.object || null;
+  }
+
+  function pickPolylineHandle(event, domElement) {
+    if (!isPolylineEditMode) return null;
+    updatePointerPosition(event, domElement);
+    raycaster.setFromCamera(pointer, camera);
+    const intersections = raycaster.intersectObjects(getPolylineHandles(), false);
+    return intersections[0]?.object || null;
+  }
+
+  function getPointerPlaneHit(event, domElement) {
+    updatePointerPosition(event, domElement);
+    raycaster.setFromCamera(pointer, camera);
+    return raycaster.ray.intersectPlane(polylineDragPlane, polylineDragPoint);
+  }
+
+  function setViewerControlsEnabled(enabled) {
+    if (controls) controls.enabled = enabled;
+    if (orb_controls) orb_controls.enabled = enabled;
+  }
+
+  function beginPolylineDrag(event, domElement) {
+    if (event.button !== undefined && event.button !== 0) return false;
+
+    const handle = pickPolylineHandle(event, domElement);
+    if (!handle) return false;
+
+    const worldPosition = handle.getWorldPosition(new THREE.Vector3());
+    const cameraDirection = camera.getWorldDirection(new THREE.Vector3());
+    polylineDragPlane.setFromNormalAndCoplanarPoint(cameraDirection, worldPosition);
+
+    const hit = getPointerPlaneHit(event, domElement);
+    if (!hit) return false;
+
+    activePolylineHandle = handle;
+    polylineDragOffset.copy(worldPosition).sub(hit);
+    suppressMeshSelectionClick = true;
+    setViewerControlsEnabled(false);
+    handle.scale.setScalar(1.35);
+    domElement.style.cursor = "grabbing";
+
+    if (event.pointerId !== undefined && domElement.setPointerCapture) {
+      domElement.setPointerCapture(event.pointerId);
+    }
+
+    event.preventDefault();
+    return true;
+  }
+
+  function dragPolylineHandle(event, domElement) {
+    if (!activePolylineHandle) return false;
+
+    const hit = getPointerPlaneHit(event, domElement);
+    if (!hit) return true;
+
+    const group = activePolylineHandle.parent;
+    const pointIndex = activePolylineHandle.userData.pointIndex;
+    const worldPosition = hit.clone().add(polylineDragOffset);
+    const localPosition = group.worldToLocal(worldPosition.clone());
+    const clampedPosition = clampPolylineEditPosition(
+      activePolylineHandle,
+      localPosition
+    );
+
+    group.userData.points[pointIndex].copy(clampedPosition);
+    activePolylineHandle.position.copy(clampedPosition);
+    rebuildPolylineGroup(group);
+    updateEditedPolylineSnapshot();
+
+    event.preventDefault();
+    return true;
+  }
+
+  function endPolylineDrag(event, domElement) {
+    if (!activePolylineHandle) return false;
+
+    activePolylineHandle.scale.setScalar(1);
+    activePolylineHandle = null;
+    setViewerControlsEnabled(true);
+    domElement.style.cursor = "";
+
+    if (event?.pointerId !== undefined && domElement.releasePointerCapture) {
+      try {
+        domElement.releasePointerCapture(event.pointerId);
+      } catch (error) {
+        // Pointer capture may already be released if the pointer left the canvas.
+      }
+    }
+
+    updateEditedPolylineSnapshot();
+    return true;
+  }
+
+  function attachPolylineEditHandlers(domElement) {
+    domElement.addEventListener("pointerdown", (event) => {
+      beginPolylineDrag(event, domElement);
+    });
+
+    domElement.addEventListener("pointermove", (event) => {
+      dragPolylineHandle(event, domElement);
+    });
+
+    domElement.addEventListener("pointerup", (event) => {
+      endPolylineDrag(event, domElement);
+    });
+
+    domElement.addEventListener("pointercancel", (event) => {
+      endPolylineDrag(event, domElement);
+    });
+  }
+
+  function attachSelectionHandlers(domElement) {
+    domElement.addEventListener("mousemove", (event) => {
+      if (activePolylineHandle) return;
+      const nextHovered = pickMesh(event, domElement);
+      if (nextHovered === hoveredMesh) return;
+      hoveredMesh = nextHovered;
+      refreshSelectionHighlights();
+      updateSelectionOverlay();
+    });
+
+    domElement.addEventListener("mouseleave", () => {
+      hoveredMesh = null;
+      refreshSelectionHighlights();
+      updateSelectionOverlay();
+    });
+
+    domElement.addEventListener("click", (event) => {
+      if (suppressMeshSelectionClick || pickPolylineHandle(event, domElement)) {
+        suppressMeshSelectionClick = false;
+        return;
+      }
+
+      selectedMesh = pickMesh(event, domElement);
+      refreshSelectionHighlights();
+      updateSelectionOverlay();
+    });
+  }
+
+  window.addEventListener("viewer:viewchange", (event) => {
+    currentViewPreset = event.detail?.label || "Reset";
+    updateSelectionOverlay();
+  });
+  // End of polyline, 3d render view and selection overlay related code
+
+  //The async prevents processing of data before the stuff is loaded in
+  (async () => {
+    //datas :)
+    // this for the undercut upper and the main json data use to retrieve stuff
+    const data = {
+      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
+      //uuid: 'eOqJe2FpjqdECy25l0KuJkH2cPQm', // dev server acc uuid
+      case_int_id: paramValue,
+      jaw_type: 2,
+      caseIntID: paramValue,
+    };
+    // this for the undercut lower
+    const data2 = {
+      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
+      //uuid: 'eOqJe2FpjqdECy25l0KuJkH2cPQm', // dev server acc uuid
+      case_int_id: paramValue,
+      jaw_type: 1,
+      caseIntID: paramValue,
+    };
+    let positionDatas = [];
+    let positionData;
+
+    //This section is for the processing of creation date, case id and last updated
+    const urldatas = ["/case/get/" + paramValue];
+    try {
+      // Call the post method and wait for the response
+      for (const urldata of urldatas) {
+        positionData = await apiClient.post(urldata, [data], false, "Case Info");
+        //console.log('Success:', positionData)
+        positionDatas = positionDatas.concat(positionData);
+        window.caseID = positionData.case_id;
+        window.lastEdited = unixToHumanReadable(positionData.last_updated);
+        window.username = positionData.username;
+      }
+    } catch (error) {
+      console.error("Error:", error);
+    }
+    //for all the text info
+    const time = unixToHumanReadable(positionData.creation_date);
+    const update_time = unixToHumanReadable(positionData.last_updated);
+    createTextbox("Creation Date: " + time, "bottom-left");
+    //createTextbox("Case Name: " + positionData.case_id, 'bottom-right');
+    createTextbox(
+      "Last Updated: " +
       update_time +
       " Last Edited by: " +
       positionData.username,
-    "bottom-left2"
-  );
+      "bottom-left2"
+    );
 
-  const thumbnail_url = ["/thumbnails/get"];
-  try {
-    // Call the post method and wait for the response
-    for (const urldata of thumbnail_url) {
-      const thumbnailData = await apiClient.post(
-        urldata,
-        [data],
-        false,
-        "2D image"
-      );
-      //console.log('Success thumb:', thumbnailData)
-      for (const thumb in thumbnailData) {
-        if (thumbnailData[thumb].slot == 0) {
-          const test = thumbnailData[thumb].data;
-          window.thumbnailBase64 = test;
-          // Container for thumbnail + 2D buttons
-          const thumbWrapper = document.createElement("div");
-          thumbWrapper.style.position = "absolute"; // allows layout inside container3D
-          thumbWrapper.style.left = "20px"; // left side of screen
-          thumbWrapper.style.top = "20px"; // top offset
-          thumbWrapper.style.zIndex = "1000";
-          thumbWrapper.style.display = "flex";
-          thumbWrapper.style.flexDirection = "column";
-          thumbWrapper.style.alignItems = "flex-start";
-          thumbWrapper.style.gap = "6px"; // spacing between image and buttons
+    async function loadThumbnailPreview() {
+      const thumbnail_url = ["/thumbnails/get"];
+      try {
+        for (const urldata of thumbnail_url) {
+          const thumbnailData = await apiClient.post(
+            urldata,
+            [data],
+            false,
+            "2D image"
+          );
+          //console.log('Success thumb:', thumbnailData)
+          for (const thumb in thumbnailData) {
+            if (thumbnailData[thumb].slot == 0) {
+              const test = thumbnailData[thumb].data;
+              window.thumbnailBase64 = test;
+              // Container for thumbnail + 2D buttons
+              const thumbWrapper = document.createElement("div");
+              thumbWrapper.id = "thumbnail-preview-wrapper";
+              const thumbnailPosition = getThumbnailPreviewPosition();
+              thumbWrapper.style.position = "absolute"; // allows layout inside container3D
+              thumbWrapper.style.left = thumbnailPosition.left;
+              thumbWrapper.style.top = thumbnailPosition.top;
+              thumbWrapper.style.zIndex = "1000";
+              thumbWrapper.style.display = "flex";
+              thumbWrapper.style.flexDirection = "column";
+              thumbWrapper.style.alignItems = "flex-start";
+              thumbWrapper.style.gap = "6px"; // spacing between image and buttons
+              thumbWrapper.style.padding = "8px";
+              thumbWrapper.style.width = thumbnailPosition.width;
+              thumbWrapper.style.background = "rgba(255, 255, 255, 0.98)";
+              thumbWrapper.style.borderRadius = "12px";
+              thumbWrapper.style.boxShadow = "0 10px 22px rgba(22, 44, 67, 0.14)";
 
-          // Create thumbnail button
-          const button = document.createElement("button");
-          button.style.padding = "0";
-          button.style.border = "none";
-          button.style.background = "none";
-          button.style.cursor = "pointer";
-          button.style.width = "30px";
-          button.style.height = "30px";
+              // Create thumbnail button
+              const button = document.createElement("button");
+              button.setAttribute("data-thumbnail-preview", "true");
+              button.style.padding = "0";
+              button.style.border = "none";
+              button.style.background = "transparent";
+              button.style.cursor = "pointer";
+              button.style.width = "100%";
+              button.style.height = "auto";
+              button.style.display = "block";
+              button.style.overflow = "hidden";
+              button.style.borderRadius = "10px";
 
-          // Create thumbnail image
-          const img = new Image();
-          img.src = "data:image/png;base64," + test;
-          img.style.transform = `scale(0.3)`;
-          button.appendChild(img);
+              // Create thumbnail image
+              const img = new Image();
+              img.src = "data:image/png;base64," + test;
+              img.style.width = "100%";
+              img.style.height = "auto";
+              img.style.display = "block";
+              img.style.transform = "none";
+              button.appendChild(img);
 
-          // Create "Click me" watermark overlay
-          const watermark = document.createElement("div");
-          watermark.textContent = "Click me";
-          watermark.style.position = "absolute";
-          watermark.style.top = "50%";
-          watermark.style.left = "50%";
-          watermark.style.transform = "translate(-50%, -50%)";
-          watermark.style.color = "white";
-          watermark.style.fontWeight = "bold";
-          const isMobile =
-            /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-              navigator.userAgent
-            );
-          watermark.style.fontSize = isMobile ? "34px" : "16px";
-          watermark.style.textShadow = "1px 1px 4px rgba(0, 0, 0, 1.0)";
-          watermark.style.pointerEvents = "none"; // so clicks go through to the button
-          button.style.position = "relative"; // Make sure parent is positioned
-          button.appendChild(watermark);
-
-          // Append to wrapper
-          thumbWrapper.appendChild(button);
-
-          // Static 2D buttons below the image
-          const btnContainer = document.createElement("div");
-          btnContainer.style.display = "flex";
-          btnContainer.style.flexDirection = "column"; // <- make them vertical
-          btnContainer.style.gap = "6px";
-          btnContainer.style.position = "absolute"; // ensure absolute for precise positioning
-
-          img.onload = () => {
-            const isMobile =
-              /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-                navigator.userAgent
-              );
-            const imgRect = img.getBoundingClientRect();
-            const offset = isMobile ? -350 : 25; // Slightly more offset on mobile
-            // btnContainer.style.top = `380px`;
-            // btnContainer.style.left = `0px`;
-            btnContainer.style.top = isMobile ? "820px" : "380px";
-            btnContainer.style.left = isMobile ? "10px" : "0px";
-          };
-
-          /* const approve2DStatic = document.createElement('button');
-approve2DStatic.className = 'smart-btn approve';
-approve2DStatic.textContent = 'Approve 2D';
-approve2DStatic.onclick = () => sendEmail("Your 2D Design has been APPROVED.");
-btnContainer.appendChild(approve2DStatic);
-
-const edit2DStatic = document.createElement('button');
-edit2DStatic.className = 'smart-btn edit';
-edit2DStatic.textContent = 'Edit 2D';
-edit2DStatic.onclick = () => sendEmail("Please do some modifications on 2D Design. See Notebox.");
-btnContainer.appendChild(edit2DStatic); */
-
-          // Append buttons to wrapper
-          thumbWrapper.appendChild(btnContainer);
-
-          // Finally, append everything to container3D so it's layout-aware
-          const container3D = document.getElementById("container3D");
-          container3D.appendChild(thumbWrapper);
-
-          button.addEventListener("click", function () {
-            // Fullscreen overlay
-            const overlay = document.createElement("div");
-            overlay.className = "twod-overlay";
-
-            // Group container (card)
-            const twodGroup = document.createElement("div");
-            twodGroup.className = "twod-group";
-            twodGroup.style.position = "relative"; // Required to position watermark relative to image
-
-            // Enlarged image
-            const enlargedImg = new Image();
-            enlargedImg.src = img.src;
-            enlargedImg.className = "twod-fullscreen-image";
-            twodGroup.appendChild(enlargedImg);
-
-            // Watermark centered on image
-            const watermark = document.createElement("div");
-            watermark.textContent = `🦷 Case: ${window.caseID || "N/A"}`;
-            watermark.className = "case-title-watermark";
-            watermark.style.position = "absolute";
-            watermark.style.top = "50%";
-            watermark.style.left = "50%";
-            watermark.style.transform = "translate(-50%, -50%)"; // true center
-            watermark.style.color = "white";
-            watermark.style.fontSize = "32px";
-            watermark.style.fontWeight = "bold";
-            watermark.style.textShadow = "0px 0px 10px rgba(0, 0, 0, 0.8)";
-            watermark.style.pointerEvents = "none";
-            watermark.style.zIndex = "1";
-
-            twodGroup.appendChild(watermark);
-
-            // // 1️⃣ 创建 canvas
-            // const canvas = document.createElement('canvas');
-            // canvas.width = enlargedImg.naturalWidth;
-            // canvas.height = enlargedImg.naturalHeight;
-
-            // const ctx = canvas.getContext('2d');
-
-            // // 2️⃣ 绘制底图
-            // const baseImage = new Image();
-            // baseImage.onload = () => {
-            //   ctx.drawImage(baseImage, 0, 0);
-
-            //   // 3️⃣ 画水印文字
-            //   const caseID = window.caseID || "N/A";
-            //   const text = `🦷 Case: ${caseID}`;
-            //   ctx.font = 'bold 32px sans-serif';
-            //   ctx.fillStyle = 'white';
-            //   ctx.textAlign = 'center';
-            //   ctx.textBaseline = 'middle';
-            //   ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-            //   ctx.shadowBlur = 10;
-            //   ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
-            //   // 4️⃣ 转为 base64 并存入 localStorage，Key 包含加密 ID
-            //   const composedDataURL = canvas.toDataURL();
-            //   localStorage.setItem(`annotateBackground_${caseID}`, composedDataURL);
-            //   console.log(`✅ 保存图像到 localStorage: annotateBackground_${caseID}`);
-            // };
-
-            // baseImage.src = enlargedImg.src;
-
-            // Buttons container
-            const btnContainer2D = document.createElement("div");
-            btnContainer2D.className = "smart-btn-container-2d";
-
-            const approve2D = document.createElement("button");
-            approve2D.className = "smart-btn approve";
-            approve2D.textContent = "Approve 2D";
-            approve2D.onclick = () =>
-              sendEmail("Your 2D Design has been APPROVED.");
-            btnContainer2D.appendChild(approve2D);
-
-            const edit2D = document.createElement("button");
-            edit2D.className = "smart-btn edit";
-            edit2D.textContent = "Edit 2D";
-            edit2D.onclick = () =>
-              sendEmail(
-                "Please do some modifications on 2D Design. See Notebox."
-              );
-            btnContainer2D.appendChild(edit2D);
-
-            // 🟣 创建 Annotate 按钮（跳转到 2DAnnotate.html）
-            const annotateBtn = document.createElement("button");
-            annotateBtn.className = "smart-btn annotate";
-            annotateBtn.textContent = "Annotate";
-
-            annotateBtn.addEventListener("click", (e) => {
-              e.stopPropagation();
-
-              const params = new URLSearchParams(window.location.search);
-              const encryptedId = params.get("id");
-              const caseID = window.caseID || encryptedId;
-
-              if (!encryptedId) {
-                alert("❌ 缺少参数，无法跳转 Annotate 页面");
-                return;
-              }
-
-              // ✅ 重新生成图像并保存
-              const enlargedImg = document.querySelector(
-                ".twod-fullscreen-image"
-              );
-              if (!enlargedImg) {
-                alert("❌ 未找到图像，无法生成截图");
-                return;
-              }
-
-              const canvas = document.createElement("canvas");
-              canvas.width = enlargedImg.naturalWidth;
-              canvas.height = enlargedImg.naturalHeight;
-              const ctx = canvas.getContext("2d");
-
-              const baseImage = new Image();
-              baseImage.onload = () => {
-                ctx.drawImage(baseImage, 0, 0);
-
-                const text = `🦷 Case: ${caseID}`;
-                const fontSize = canvas.width * 0.034; // 相当于 3% 宽度
-                ctx.font = `bold ${fontSize}px sans-serif`;
-                ctx.fillStyle = "white";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
-                ctx.shadowBlur = 10;
-                ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
-                const composedDataURL = canvas.toDataURL();
-                localStorage.setItem(
-                  `annotateBackground_${encryptedID}`,
-                  composedDataURL
+              // Create "Click me" watermark overlay
+              const watermark = document.createElement("div");
+              watermark.textContent = "Click me";
+              watermark.style.position = "absolute";
+              watermark.style.top = "50%";
+              watermark.style.left = "50%";
+              watermark.style.transform = "translate(-50%, -50%)";
+              watermark.style.color = "white";
+              watermark.style.fontWeight = "bold";
+              const isMobile =
+                /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+                  navigator.userAgent
                 );
-                console.log(`✅ 已保存 annotateBackground_${encryptedID}`);
+              watermark.style.fontSize = isMobile ? "34px" : "16px";
+              watermark.style.textShadow = "1px 1px 4px rgba(0, 0, 0, 1.0)";
+              watermark.style.pointerEvents = "none"; // so clicks go through to the button
+              button.style.position = "relative"; // Make sure parent is positioned
+              button.appendChild(watermark);
 
-                // 🟢 跳转
-                // 🟢 跳转（确保使用 URL 中的加密 ID）
-                const encryptedId = new URLSearchParams(
-                  window.location.search
-                ).get("id"); // ✅ 确保使用真实的加密 ID
+              // Append to wrapper
+              thumbWrapper.appendChild(button);
 
-                const isGitHubPages =
-                  window.location.hostname.includes("github.io");
-                const isLocal = window.location.hostname === "localhost";
-                const queryConnector = isLocal ? "/?" : "?";
-                const basePath = isGitHubPages ? "/.tmp-test-web" : "";
+              // Static 2D buttons below the image
+              const btnContainer = document.createElement("div");
+              btnContainer.style.display = "flex";
+              btnContainer.style.flexDirection = "column"; // <- make them vertical
+              btnContainer.style.gap = "6px";
+              btnContainer.style.position = "absolute"; // ensure absolute for precise positioning
 
-                const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}`;
-                console.log("🔁 正在跳转到 Annotate 页:", targetURL);
-                window.open(targetURL, "_blank");
+              const syncThumbnailLayout = () => {
+                const isMobile =
+                  /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+                    navigator.userAgent
+                  );
+                positionThumbnailBesideLegend(thumbWrapper);
+                btnContainer.style.top = isMobile ? "820px" : "380px";
+                btnContainer.style.left = isMobile ? "10px" : "0px";
+                selectionOverlayAnchor = thumbWrapper;
+                positionSelectionOverlay();
               };
 
-              baseImage.src = enlargedImg.src;
+              img.onload = syncThumbnailLayout;
+
+              /* const approve2DStatic = document.createElement('button');
+  approve2DStatic.className = 'smart-btn approve';
+  approve2DStatic.textContent = 'Approve 2D';
+  approve2DStatic.onclick = () => sendEmail("Your 2D Design has been APPROVED.");
+  btnContainer.appendChild(approve2DStatic);
+  
+  const edit2DStatic = document.createElement('button');
+  edit2DStatic.className = 'smart-btn edit';
+  edit2DStatic.textContent = 'Edit 2D';
+  edit2DStatic.onclick = () => sendEmail("Please do some modifications on 2D Design. See Notebox.");
+  btnContainer.appendChild(edit2DStatic); */
+
+              // Append buttons to wrapper
+              thumbWrapper.appendChild(btnContainer);
+
+              // Finally, append everything to container3D so it's layout-aware
+              const container3D = document.getElementById("container3D");
+              container3D.appendChild(thumbWrapper);
+              if (img.complete) syncThumbnailLayout();
+              window.addEventListener("resize", syncThumbnailLayout);
+              requestAnimationFrame(syncThumbnailLayout);
+              setTimeout(syncThumbnailLayout, 250);
+              setTimeout(syncThumbnailLayout, 1000);
+
+              button.addEventListener("click", function () {
+                // Fullscreen overlay
+                const overlay = document.createElement("div");
+                overlay.className = "twod-overlay";
+
+                // Group container (card)
+                const twodGroup = document.createElement("div");
+                twodGroup.className = "twod-group";
+                twodGroup.style.position = "relative"; // Required to position watermark relative to image
+
+                // Enlarged image
+                const enlargedImg = new Image();
+                enlargedImg.src = img.src;
+                enlargedImg.className = "twod-fullscreen-image";
+                twodGroup.appendChild(enlargedImg);
+
+                // Watermark centered on image
+                const watermark = document.createElement("div");
+                watermark.textContent = `🦷 Case: ${window.caseID || "N/A"}`;
+                watermark.className = "case-title-watermark";
+                watermark.style.position = "absolute";
+                watermark.style.top = "50%";
+                watermark.style.left = "50%";
+                watermark.style.transform = "translate(-50%, -50%)"; // true center
+                watermark.style.color = "white";
+                watermark.style.fontSize = "32px";
+                watermark.style.fontWeight = "bold";
+                watermark.style.textShadow = "0px 0px 10px rgba(0, 0, 0, 0.8)";
+                watermark.style.pointerEvents = "none";
+                watermark.style.zIndex = "1";
+
+                twodGroup.appendChild(watermark);
+
+                // // 1️⃣ 创建 canvas
+                // const canvas = document.createElement('canvas');
+                // canvas.width = enlargedImg.naturalWidth;
+                // canvas.height = enlargedImg.naturalHeight;
+
+                // const ctx = canvas.getContext('2d');
+
+                // // 2️⃣ 绘制底图
+                // const baseImage = new Image();
+                // baseImage.onload = () => {
+                //   ctx.drawImage(baseImage, 0, 0);
+
+                //   // 3️⃣ 画水印文字
+                //   const caseID = window.caseID || "N/A";
+                //   const text = `🦷 Case: ${caseID}`;
+                //   ctx.font = 'bold 32px sans-serif';
+                //   ctx.fillStyle = 'white';
+                //   ctx.textAlign = 'center';
+                //   ctx.textBaseline = 'middle';
+                //   ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+                //   ctx.shadowBlur = 10;
+                //   ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+                //   // 4️⃣ 转为 base64 并存入 localStorage，Key 包含加密 ID
+                //   const composedDataURL = canvas.toDataURL();
+                //   localStorage.setItem(`annotateBackground_${caseID}`, composedDataURL);
+                //   console.log(`✅ 保存图像到 localStorage: annotateBackground_${caseID}`);
+                // };
+
+                // baseImage.src = enlargedImg.src;
+
+                // Buttons container
+                const btnContainer2D = document.createElement("div");
+                btnContainer2D.className = "smart-btn-container-2d";
+
+                const approve2D = document.createElement("button");
+                approve2D.className = "smart-btn approve";
+                approve2D.textContent = "Approve 2D";
+                approve2D.onclick = () =>
+                  sendEmail("Your 2D Design has been APPROVED.");
+                btnContainer2D.appendChild(approve2D);
+
+                const edit2D = document.createElement("button");
+                edit2D.className = "smart-btn edit";
+                edit2D.textContent = "Edit 2D";
+                edit2D.onclick = () =>
+                  sendEmail(
+                    "Please do some modifications on 2D Design. See Notebox."
+                  );
+                btnContainer2D.appendChild(edit2D);
+
+                // 🟣 创建 Annotate 按钮（跳转到 2DAnnotate.html）
+                const annotateBtn = document.createElement("button");
+                annotateBtn.className = "smart-btn annotate";
+                annotateBtn.textContent = "Annotate";
+
+                annotateBtn.addEventListener("click", (e) => {
+                  e.stopPropagation();
+
+                  const params = new URLSearchParams(window.location.search);
+                  const encryptedId = params.get("id");
+                  const caseID = window.caseID || encryptedId;
+
+                  if (!encryptedId) {
+                    alert("❌ 缺少参数，无法跳转 Annotate 页面");
+                    return;
+                  }
+
+                  // ✅ 重新生成图像并保存
+                  const enlargedImg = document.querySelector(
+                    ".twod-fullscreen-image"
+                  );
+                  if (!enlargedImg) {
+                    alert("❌ 未找到图像，无法生成截图");
+                    return;
+                  }
+
+                  const canvas = document.createElement("canvas");
+                  canvas.width = enlargedImg.naturalWidth;
+                  canvas.height = enlargedImg.naturalHeight;
+                  const ctx = canvas.getContext("2d");
+
+                  const baseImage = new Image();
+                  baseImage.onload = () => {
+                    ctx.drawImage(baseImage, 0, 0);
+
+                    const text = `🦷 Case: ${caseID}`;
+                    const fontSize = canvas.width * 0.034; // 相当于 3% 宽度
+                    ctx.font = `bold ${fontSize}px sans-serif`;
+                    ctx.fillStyle = "white";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+                    ctx.shadowBlur = 10;
+                    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+                    const composedDataURL = canvas.toDataURL();
+                    localStorage.setItem(
+                      `annotateBackground_${encryptedID}`,
+                      composedDataURL
+                    );
+                    console.log(`✅ 已保存 annotateBackground_${encryptedID}`);
+
+                    // 🟢 跳转
+                    // 🟢 跳转（确保使用 URL 中的加密 ID）
+                    const encryptedId = new URLSearchParams(
+                      window.location.search
+                    ).get("id"); // ✅ 确保使用真实的加密 ID
+                    // 🟢 构建 URL 时考虑 GitHub Pages 和本地环境 (can turn off to test without session mgmt?)
+                    const isGitHubPages =
+                      window.location.hostname.includes("github.io");
+                    const isLocal = window.location.hostname === "localhost";
+                    const queryConnector = "?";
+                    const basePath = isGitHubPages ? "/.tmp-test-web" : "";
+
+                    const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}`;
+                    console.log("🔁 正在跳转到 Annotate 页:", targetURL);
+                    window.open(targetURL, "_blank");
+                  };
+
+                  baseImage.src = enlargedImg.src;
+                });
+
+                // 插入按钮
+                btnContainer2D.appendChild(annotateBtn);
+
+                // const historyBtn = document.createElement('button');
+                // historyBtn.className = 'smart-btn history';
+                // historyBtn.textContent = 'History';
+                // historyBtn.addEventListener('click', (e) => e.stopPropagation()); // 防止冒泡
+                // // 逻辑在别的文件里绑定
+                // btnContainer2D.appendChild(historyBtn);
+                const historyBtn = document.createElement("button");
+                historyBtn.className = "smart-btn history";
+                historyBtn.textContent = "History";
+
+                historyBtn.addEventListener("click", (e) => {
+                  e.stopPropagation();
+
+                  const params = new URLSearchParams(window.location.search);
+                  const encryptedId = params.get("id");
+
+                  if (!encryptedId) {
+                    alert("❌ 缺少参数，无法跳转 History 页面");
+                    return;
+                  }
+                  // 🟢 跳转（确保使用 URL 中的加密 ID）(can off for testing)
+                  const isGitHubPages =
+                    window.location.hostname.includes("github.io");
+                  const isLocal = window.location.hostname === "localhost";
+                  const queryConnector = "?";
+                  const basePath = isGitHubPages ? "/.tmp-test-web" : "";
+
+                  const targetURL = `${window.location.origin}${basePath}/src/pages/AnnotationHistory.html${queryConnector}id=${encryptedId}`;
+                  console.log("🔁 正在跳转到 History 页:", targetURL);
+                  window.open(targetURL, "_blank");
+                });
+
+                btnContainer2D.appendChild(historyBtn);
+
+                twodGroup.appendChild(btnContainer2D);
+                overlay.appendChild(twodGroup);
+                document.body.appendChild(overlay);
+
+                // Close on overlay click
+                overlay.addEventListener("click", () => overlay.remove());
+              });
+
+              /* 			button.addEventListener('click', function () {
+        	
+          // Fullscreen overlay
+          const overlay = document.createElement('div');
+          overlay.className = 'twod-overlay';
+  
+          // Group container (card)
+          const twodGroup = document.createElement('div');
+          twodGroup.className = 'twod-group';
+  
+          // Enlarged image
+          const enlargedImg = new Image();
+          enlargedImg.src = img.src;
+          enlargedImg.className = 'twod-fullscreen-image';
+          twodGroup.appendChild(enlargedImg);
+  
+          // Buttons container
+          const btnContainer2D = document.createElement('div');
+          btnContainer2D.className = 'smart-btn-container-2d';
+  
+          const approve2D = document.createElement('button');
+          approve2D.className = 'smart-btn approve';
+          approve2D.textContent = 'Approve 2D';
+          approve2D.onclick = () => sendEmail("Your 2D Design has been APPROVED.");
+          btnContainer2D.appendChild(approve2D);
+  
+          const edit2D = document.createElement('button');
+          edit2D.className = 'smart-btn edit';
+          edit2D.textContent = 'Edit 2D';
+          edit2D.onclick = () => sendEmail("Please do some modifications on 2D Design. See Notebox.");
+          btnContainer2D.appendChild(edit2D);
+  
+          twodGroup.appendChild(btnContainer2D);
+          overlay.appendChild(twodGroup);
+          document.body.appendChild(overlay);
+  
+          // Close on overlay click
+          overlay.addEventListener('click', () => overlay.remove());
+        }); */
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Thumbnail preview failed to load:", error);
+      }
+    }
+
+    // Load the 2D thumbnail in the background so it does not block the 3D viewer.
+    loadThumbnailPreview();
+
+    // to get the undercut and occlusion values
+    let undercut_values = [];
+
+    const heatmap_urldatas = ["/undercutheatmap/get"];
+    try {
+      // Call the post method and wait for the response
+
+      const undercut_value = await apiClient.post(
+        heatmap_urldatas,
+        data,
+        false,
+        "Heatmap upper"
+      );
+      undercut_values = undercut_values.concat(undercut_value);
+      //console.log('Success:', undercut_value)
+
+      undercut_type[undercut_value.jaw_type] = [
+        Boolean(undercut_value.surveying_values),
+        Boolean(undercut_value.occlusion_values),
+      ];
+
+      const undercut_value1 = await apiClient.post(
+        heatmap_urldatas,
+        data2,
+        false,
+        "Heatmap lower"
+      );
+      undercut_values = undercut_values.concat(undercut_value1);
+
+      undercut_type[undercut_value1.jaw_type] = [
+        Boolean(undercut_value1.surveying_values),
+        Boolean(undercut_value1.occlusion_values),
+      ];
+    } catch (error) {
+      console.error("Error:", error);
+    }
+
+    //Processing mesh
+
+    // stl will be true is fail to process parameterisation
+    let stl = false;
+    const urls = ["/parameterisation/mesh/getall", "/surface/getall"];
+    let responseDatas = [];
+    let responseData;
+    let loop = 0;
+    try {
+      // Call the post method and wait for the response
+      for (const url of urls) {
+        loop += 1;
+        //console.log('raw: ' + close);
+
+        // this is for the generation of button to change to closed mesh if it exist
+        let name_of_mesh;
+        if (!close) {
+          if (url == "/parameterisation/mesh/getall") {
+            name_of_mesh = "Jaw mesh";
+          } else if (url == "/surface/getall") {
+            name_of_mesh = "Denture mesh";
+          }
+          responseData = await apiClient.post(url, [data], false, name_of_mesh);
+          //console.log(responseData);
+          if (isObject(responseData)) {
+            responseDatas = responseDatas.concat(responseData);
+          }
+          //loop to prevent repeated check
+          if (loop == 1) {
+            //check for closed.off
+            const test = await apiClient.post(
+              "/stl/get",
+              [data],
+              "test",
+              "Jaw mesh"
+            );
+
+            if (test != "stl") {
+              /* // Create a button element
+            const button = document.createElement('button');
+            button.textContent = 'Parameterized Jaw'; // Set the text content of the button. initially was called Close.off check for bool close
+  
+            // Style the button
+            button.style.position = 'fixed';
+            button.style.bottom = '10px';  // Adjust the bottom position as needed
+            button.style.right = '20px';   // Adjust the right position as needed
+            button.style.padding = '10px';
+            button.style.backgroundColor = 'blue';
+            button.style.color = 'white';
+            button.style.border = 'none';
+            button.style.cursor = 'pointer';
+            button.style.borderRadius = '5px';
+            button.style.zIndex = '1000';  // Ensure it's above other elements
+  
+            // Function to handle button click
+            function redirectToUrl() {
+              // Change this URL to the desired destination
+  
+              window.location.href = window.location.href + '&close=true';  // Redirect to the specified URL
+            }
+  
+            // Add click event listener to button
+            button.addEventListener('click', redirectToUrl);
+  
+            // Append the button to the body or another container
+            document.body.appendChild(button); */
+            }
+
+            // Create a container for the buttons
+            const btnContainer = document.createElement("div");
+            btnContainer.className = "smart-btn-container";
+
+            /* 		// === NEW: Container for 2D Buttons on the Left ===
+      const btnContainer2D = document.createElement('div');
+      btnContainer2D.className = 'smart-btn-container-2d';
+      */
+
+            // === NEW: Container for 3D Buttons under Chat ===
+            const btnContainer3D = document.createElement("div");
+            btnContainer3D.className = "smart-btn-container-3d";
+
+            // Create "Nudge" button
+            /* 		const nudgeButton = document.createElement('button');
+      nudgeButton.textContent = 'Nudge';
+      nudgeButton.className = 'smart-btn nudge';
+      nudgeButton.addEventListener('click', function () {
+        sendEmail("You have received a NUDGE. Please check your case.");
+      });
+      btnContainer.appendChild(nudgeButton); */
+
+            /* 		// Create "Approve" button
+      const approveButton = document.createElement('button');
+      approveButton.textContent = 'Approve 2D';
+      approveButton.className = 'smart-btn approve';
+      approveButton.addEventListener('click', function () {
+        sendEmail("Your 2D Design has been APPROVED.");
+      });
+      btnContainer2D.appendChild(approveButton);
+  
+      // Create "Edit" button
+      const editButton = document.createElement('button');
+      editButton.textContent = 'Edit 2D';
+      editButton.className = 'smart-btn edit';
+      editButton.addEventListener('click', function () {
+        sendEmail("Please do some modifications on 2D Design. See Notebox.");
+      });
+      btnContainer2D.appendChild(editButton); */
+
+            // Create "Approve 3D" button
+            const approveButton3D = document.createElement("button");
+            approveButton3D.textContent = "Approve 3D";
+            approveButton3D.className = "smart-btn approve";
+            approveButton3D.addEventListener("click", function () {
+              sendEmail("Your 3D Design has been APPROVED.");
             });
+            btnContainer3D.appendChild(approveButton3D);
 
-            // 插入按钮
-            btnContainer2D.appendChild(annotateBtn);
+            // Create "Edit 3D" button
+            const editButton3D = document.createElement("button");
+            editButton3D.textContent = "Edit 3D";
+            editButton3D.className = "smart-btn edit";
+            editButton3D.addEventListener("click", function () {
+              sendEmail(
+                "Please do some modifications on 3D Design. See Notebox."
+              );
+            });
+            btnContainer3D.appendChild(editButton3D);
 
-            // const historyBtn = document.createElement('button');
-            // historyBtn.className = 'smart-btn history';
-            // historyBtn.textContent = 'History';
-            // historyBtn.addEventListener('click', (e) => e.stopPropagation()); // 防止冒泡
-            // // 逻辑在别的文件里绑定
-            // btnContainer2D.appendChild(historyBtn);
-            const historyBtn = document.createElement("button");
-            historyBtn.className = "smart-btn history";
-            historyBtn.textContent = "History";
+            // Create a new wrapper ONLY for the email input and button
+            const emailWrapperContainer = document.createElement("div");
+            emailWrapperContainer.style.marginTop = "12px"; // spacing from other buttons
+            emailWrapperContainer.style.display = "block"; // block-level to avoid affecting other buttons
+            emailWrapperContainer.style.position = "fixed";
+            emailWrapperContainer.style.bottom = "40px"; // adjust as needed
+            emailWrapperContainer.style.right = "20px";
+            emailWrapperContainer.style.zIndex = "1000";
 
-            historyBtn.addEventListener("click", (e) => {
-              e.stopPropagation();
+            // Create inner wrapper to align input + button side by side
+            const emailInputWrapper = document.createElement("div");
+            emailInputWrapper.style.display = "flex";
+            emailInputWrapper.style.gap = "8px";
 
-              const params = new URLSearchParams(window.location.search);
-              const encryptedId = params.get("id");
+            // Create the Email Input Field
+            const emailInput = document.createElement("input");
+            emailInput.type = "email";
+            emailInput.placeholder = "Enter email address";
+            emailInput.style.padding = "8px";
+            emailInput.style.border = "1px solid #ccc";
+            emailInput.style.borderRadius = "4px";
+            emailInput.style.width = "200px";
 
-              if (!encryptedId) {
-                alert("❌ 缺少参数，无法跳转 History 页面");
+            // Create the Submit Button
+            const addEmailBtn = document.createElement("button");
+            addEmailBtn.textContent = "Add to Mail";
+            addEmailBtn.className = "smart-btn";
+            addEmailBtn.style.backgroundColor = "#6c757d"; // grey
+            addEmailBtn.addEventListener("click", async () => {
+              const email = emailInput.value.trim();
+              if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+                alert("Please enter a valid email address.");
                 return;
               }
 
-              const isGitHubPages =
-                window.location.hostname.includes("github.io");
-              const isLocal = window.location.hostname === "localhost";
-              const queryConnector = isLocal ? "/?" : "?";
-              const basePath = isGitHubPages ? "/.tmp-test-web" : "";
+              try {
+                const payload = {
+                  case_int_id: paramValue, // assuming you have paramValue as the current caseIntID
+                  email: email,
+                };
 
-              const targetURL = `${window.location.origin}${basePath}/src/pages/AnnotationHistory.html${queryConnector}id=${encryptedId}`;
-              console.log("🔁 正在跳转到 History 页:", targetURL);
-              window.open(targetURL, "_blank");
+                const response = await fetch(
+                  "https://live.api.smartrpdai.com/api/smartrpd/mailinglist/add",
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(payload),
+                  }
+                );
+
+                const result = await response.json();
+                if (response.ok) {
+                  alert("✅ Email added to mailing list.");
+                  emailInput.value = "";
+                } else {
+                  console.error(result);
+                  alert(
+                    "❌ Failed to add email: " +
+                    (result.message || "Unknown error")
+                  );
+                }
+              } catch (err) {
+                console.error(err);
+                alert("❌ Server error while adding email.");
+              }
             });
 
-            btnContainer2D.appendChild(historyBtn);
+            // Append input + button to inner wrapper
+            emailInputWrapper.appendChild(emailInput);
+            emailInputWrapper.appendChild(addEmailBtn);
 
-            twodGroup.appendChild(btnContainer2D);
-            overlay.appendChild(twodGroup);
-            document.body.appendChild(overlay);
+            // Add inner wrapper into outer container
+            emailWrapperContainer.appendChild(emailInputWrapper);
 
-            // Close on overlay click
-            overlay.addEventListener("click", () => overlay.remove());
-          });
+            // Finally, append the email wrapper
+            document.body.appendChild(emailWrapperContainer);
 
-          /* 			button.addEventListener('click', function () {
-				
-			  // Fullscreen overlay
-			  const overlay = document.createElement('div');
-			  overlay.className = 'twod-overlay';
+            const isThreeDViewerPage = window.location.pathname
+              .toLowerCase()
+              .includes("threedviewer.html");
 
-			  // Group container (card)
-			  const twodGroup = document.createElement('div');
-			  twodGroup.className = 'twod-group';
+            if (isThreeDViewerPage) {
+              const loadOtherStlButton = document.createElement("button");
+              loadOtherStlButton.id = "center-load-button";
+              loadOtherStlButton.textContent = "Show me 3D RPD design";
+              loadOtherStlButton.className = "smart-btn other-stl";
+              loadOtherStlButton.addEventListener("click", () => {
+                loadAllSTLSlots();
 
-			  // Enlarged image
-			  const enlargedImg = new Image();
-			  enlargedImg.src = img.src;
-			  enlargedImg.className = 'twod-fullscreen-image';
-			  twodGroup.appendChild(enlargedImg);
+                loadOtherStlButton.textContent = "🔙 Back to Original Jaw";
+                loadOtherStlButton.onclick = () => {
+                  window.location.reload();
+                };
+              });
+              btnContainer.appendChild(loadOtherStlButton);
+            }
 
-			  // Buttons container
-			  const btnContainer2D = document.createElement('div');
-			  btnContainer2D.className = 'smart-btn-container-2d';
-
-			  const approve2D = document.createElement('button');
-			  approve2D.className = 'smart-btn approve';
-			  approve2D.textContent = 'Approve 2D';
-			  approve2D.onclick = () => sendEmail("Your 2D Design has been APPROVED.");
-			  btnContainer2D.appendChild(approve2D);
-
-			  const edit2D = document.createElement('button');
-			  edit2D.className = 'smart-btn edit';
-			  edit2D.textContent = 'Edit 2D';
-			  edit2D.onclick = () => sendEmail("Please do some modifications on 2D Design. See Notebox.");
-			  btnContainer2D.appendChild(edit2D);
-
-			  twodGroup.appendChild(btnContainer2D);
-			  overlay.appendChild(twodGroup);
-			  document.body.appendChild(overlay);
-
-			  // Close on overlay click
-			  overlay.addEventListener('click', () => overlay.remove());
-			}); */
+            // Append the container to the body
+            document.body.appendChild(btnContainer);
+            //document.body.appendChild(btnContainer2D);
+            document.body.appendChild(btnContainer3D);
+          }
         }
-      }
-    }
-  } catch (error) {
-    console.error("Error:", error);
-  }
 
-  // to get the undercut and occulsion values
-  let undercut_values = [];
-
-  const heatmap_urldatas = ["/undercutheatmap/get"];
-  try {
-    // Call the post method and wait for the response
-
-    const undercut_value = await apiClient.post(
-      heatmap_urldatas,
-      data,
-      false,
-      "Heatmap upper"
-    );
-    undercut_values = undercut_values.concat(undercut_value);
-    //console.log('Success:', undercut_value)
-
-    undercut_type[undercut_value.jaw_type] = [
-      Boolean(undercut_value.surveying_values),
-      Boolean(undercut_value.occlusion_values),
-    ];
-
-    const undercut_value1 = await apiClient.post(
-      heatmap_urldatas,
-      data2,
-      false,
-      "Heatmap lower"
-    );
-    undercut_values = undercut_values.concat(undercut_value1);
-
-    undercut_type[undercut_value1.jaw_type] = [
-      Boolean(undercut_value1.surveying_values),
-      Boolean(undercut_value1.occlusion_values),
-    ];
-  } catch (error) {
-    console.error("Error:", error);
-  }
-
-  //Processing mesh
-
-  // stl will be true is fail to process parameterisation
-  let stl = false;
-  const urls = ["/parameterisation/mesh/getall", "/surface/getall"];
-  let responseDatas = [];
-  let responseData;
-  let loop = 0;
-  try {
-    // Call the post method and wait for the response
-    for (const url of urls) {
-      loop += 1;
-      //console.log('raw: ' + close);
-
-      // this is for the generation of button to change to closed mesh if it exist
-      let name_of_mesh;
-      if (!close) {
-        if (url == "/parameterisation/mesh/getall") {
-          name_of_mesh = "Jaw mesh";
-        } else if (url == "/surface/getall") {
-          name_of_mesh = "Denture mesh";
-        }
-        responseData = await apiClient.post(url, [data], false, name_of_mesh);
-        //console.log(responseData);
-        if (isObject(responseData)) {
-          responseDatas = responseDatas.concat(responseData);
-        }
-        //loop to prevent repeated check
-        if (loop == 1) {
-          //check for closed.off
-          const test = await apiClient.post(
-            "/stl/get",
+        if (
+          responseData == "stl" &&
+          url == "/parameterisation/mesh/getall" &&
+          !close
+        ) {
+          responseData = "stl";
+          responseData = await apiClient.post(
+            "/stl/raw/get",
             [data],
-            "test",
+            false,
             "Jaw mesh"
           );
-
-          if (test != "stl") {
-            /* // Create a button element
-          const button = document.createElement('button');
-          button.textContent = 'Parameterized Jaw'; // Set the text content of the button. initially was called Close.off check for bool close
+          stl = true;
+        } else if (close && url == "/parameterisation/mesh/getall") {
+          responseData = "stl";
+          responseData = await apiClient.post(
+            "/stl/get",
+            [data],
+            false,
+            "Jaw mesh"
+          );
+          //console.log(responseData);
+          stl = false;
+          const button = document.createElement("button");
+          button.textContent = "Back to original"; // Set the text content of the button
 
           // Style the button
-          button.style.position = 'fixed';
-          button.style.bottom = '10px';  // Adjust the bottom position as needed
-          button.style.right = '20px';   // Adjust the right position as needed
-          button.style.padding = '10px';
-          button.style.backgroundColor = 'blue';
-          button.style.color = 'white';
-          button.style.border = 'none';
-          button.style.cursor = 'pointer';
-          button.style.borderRadius = '5px';
-          button.style.zIndex = '1000';  // Ensure it's above other elements
+          button.style.position = "fixed";
+          button.style.bottom = "45px"; // Adjust the bottom position as needed
+          button.style.right = "10px"; // Adjust the right position as needed
+          button.style.padding = "10px";
+          button.style.backgroundColor = "blue";
+          button.style.color = "white";
+          button.style.border = "none";
+          button.style.cursor = "pointer";
+          button.style.borderRadius = "5px";
+          button.style.zIndex = "1000"; // Ensure it's above other elements
 
           // Function to handle button click
           function redirectToUrl() {
             // Change this URL to the desired destination
 
-            window.location.href = window.location.href + '&close=true';  // Redirect to the specified URL
+            window.location.href = window.location.href.slice(0, -11); // Redirect to the specified URL
           }
 
           // Add click event listener to button
-          button.addEventListener('click', redirectToUrl);
+          button.addEventListener("click", redirectToUrl);
 
           // Append the button to the body or another container
-          document.body.appendChild(button); */
-          }
+          document.body.appendChild(button);
+        } else {
+          responseData = "stl";
+        }
+        //console.log('e')
 
-          // Create a container for the buttons
-          const btnContainer = document.createElement("div");
-          btnContainer.className = "smart-btn-container";
-
-          /* 		// === NEW: Container for 2D Buttons on the Left ===
-		const btnContainer2D = document.createElement('div');
-		btnContainer2D.className = 'smart-btn-container-2d';
-		*/
-
-          // === NEW: Container for 3D Buttons under Chat ===
-          const btnContainer3D = document.createElement("div");
-          btnContainer3D.className = "smart-btn-container-3d";
-
-          // Create "Nudge" button
-          /* 		const nudgeButton = document.createElement('button');
-		nudgeButton.textContent = 'Nudge';
-		nudgeButton.className = 'smart-btn nudge';
-		nudgeButton.addEventListener('click', function () {
-			sendEmail("You have received a NUDGE. Please check your case.");
-		});
-		btnContainer.appendChild(nudgeButton); */
-
-          /* 		// Create "Approve" button
-		const approveButton = document.createElement('button');
-		approveButton.textContent = 'Approve 2D';
-		approveButton.className = 'smart-btn approve';
-		approveButton.addEventListener('click', function () {
-			sendEmail("Your 2D Design has been APPROVED.");
-		});
-		btnContainer2D.appendChild(approveButton);
-
-		// Create "Edit" button
-		const editButton = document.createElement('button');
-		editButton.textContent = 'Edit 2D';
-		editButton.className = 'smart-btn edit';
-		editButton.addEventListener('click', function () {
-			sendEmail("Please do some modifications on 2D Design. See Notebox.");
-		});
-		btnContainer2D.appendChild(editButton); */
-
-          // Create "Approve 3D" button
-          const approveButton3D = document.createElement("button");
-          approveButton3D.textContent = "Approve 3D";
-          approveButton3D.className = "smart-btn approve";
-          approveButton3D.addEventListener("click", function () {
-            sendEmail("Your 3D Design has been APPROVED.");
-          });
-          btnContainer3D.appendChild(approveButton3D);
-
-          // Create "Edit 3D" button
-          const editButton3D = document.createElement("button");
-          editButton3D.textContent = "Edit 3D";
-          editButton3D.className = "smart-btn edit";
-          editButton3D.addEventListener("click", function () {
-            sendEmail(
-              "Please do some modifications on 3D Design. See Notebox."
-            );
-          });
-          btnContainer3D.appendChild(editButton3D);
-
-          // Create a new wrapper ONLY for the email input and button
-          const emailWrapperContainer = document.createElement("div");
-          emailWrapperContainer.style.marginTop = "12px"; // spacing from other buttons
-          emailWrapperContainer.style.display = "block"; // block-level to avoid affecting other buttons
-          emailWrapperContainer.style.position = "fixed";
-          emailWrapperContainer.style.bottom = "40px"; // adjust as needed
-          emailWrapperContainer.style.right = "20px";
-          emailWrapperContainer.style.zIndex = "1000";
-
-          // Create inner wrapper to align input + button side by side
-          const emailInputWrapper = document.createElement("div");
-          emailInputWrapper.style.display = "flex";
-          emailInputWrapper.style.gap = "8px";
-
-          // Create the Email Input Field
-          const emailInput = document.createElement("input");
-          emailInput.type = "email";
-          emailInput.placeholder = "Enter email address";
-          emailInput.style.padding = "8px";
-          emailInput.style.border = "1px solid #ccc";
-          emailInput.style.borderRadius = "4px";
-          emailInput.style.width = "200px";
-
-          // Create the Submit Button
-          const addEmailBtn = document.createElement("button");
-          addEmailBtn.textContent = "Add to Mail";
-          addEmailBtn.className = "smart-btn";
-          addEmailBtn.style.backgroundColor = "#6c757d"; // grey
-          addEmailBtn.addEventListener("click", async () => {
-            const email = emailInput.value.trim();
-            if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
-              alert("Please enter a valid email address.");
-              return;
-            }
-
-            try {
-              const payload = {
-                case_int_id: paramValue, // assuming you have paramValue as the current caseIntID
-                email: email,
-              };
-
-              const response = await fetch(
-                "https://live.api.smartrpdai.com/api/smartrpd/mailinglist/add",
-                {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify(payload),
-                }
-              );
-
-              const result = await response.json();
-              if (response.ok) {
-                alert("✅ Email added to mailing list.");
-                emailInput.value = "";
-              } else {
-                console.error(result);
-                alert(
-                  "❌ Failed to add email: " +
-                    (result.message || "Unknown error")
-                );
-              }
-            } catch (err) {
-              console.error(err);
-              alert("❌ Server error while adding email.");
-            }
-          });
-
-          // Append input + button to inner wrapper
-          emailInputWrapper.appendChild(emailInput);
-          emailInputWrapper.appendChild(addEmailBtn);
-
-          // Add inner wrapper into outer container
-          emailWrapperContainer.appendChild(emailInputWrapper);
-
-          // Finally, append the email wrapper
-          document.body.appendChild(emailWrapperContainer);
-
-          // Create "Load Other STLs" button
-          const loadOtherStlButton = document.createElement("button");
-          loadOtherStlButton.id = "center-load-button";
-          loadOtherStlButton.textContent = "Show me 3D RPD design";
-          loadOtherStlButton.className = "smart-btn other-stl";
-          loadOtherStlButton.addEventListener("click", () => {
-            loadAllSTLSlots(); // You can change slot number accordingly
-
-            // After loading, change the button to become a "Back" button
-            loadOtherStlButton.textContent = "🔙 Back to Original Jaw";
-            loadOtherStlButton.onclick = () => {
-              // Remove ?slots=true from URL and reload
-              //const cleanURL = window.location.origin + window.location.pathname;
-              //window.location.href = cleanURL;
-              window.location.reload();
-            };
-          });
-          btnContainer.appendChild(loadOtherStlButton);
-
-          // Append the container to the body
-          document.body.appendChild(btnContainer);
-          //document.body.appendChild(btnContainer2D);
-          document.body.appendChild(btnContainer3D);
+        //console.log('Success:', responseData);
+        if (isObject(responseData)) {
+          responseDatas = responseDatas.concat(responseData);
         }
       }
-
-      if (
-        responseData == "stl" &&
-        url == "/parameterisation/mesh/getall" &&
-        !close
-      ) {
-        responseData = "stl";
-        responseData = await apiClient.post(
-          "/stl/raw/get",
-          [data],
-          false,
-          "Jaw mesh"
-        );
-        stl = true;
-      } else if (close && url == "/parameterisation/mesh/getall") {
-        responseData = "stl";
-        responseData = await apiClient.post(
-          "/stl/get",
-          [data],
-          false,
-          "Jaw mesh"
-        );
-        //console.log(responseData);
-        stl = false;
-        const button = document.createElement("button");
-        button.textContent = "Back to original"; // Set the text content of the button
-
-        // Style the button
-        button.style.position = "fixed";
-        button.style.bottom = "45px"; // Adjust the bottom position as needed
-        button.style.right = "10px"; // Adjust the right position as needed
-        button.style.padding = "10px";
-        button.style.backgroundColor = "blue";
-        button.style.color = "white";
-        button.style.border = "none";
-        button.style.cursor = "pointer";
-        button.style.borderRadius = "5px";
-        button.style.zIndex = "1000"; // Ensure it's above other elements
-
-        // Function to handle button click
-        function redirectToUrl() {
-          // Change this URL to the desired destination
-
-          window.location.href = window.location.href.slice(0, -11); // Redirect to the specified URL
-        }
-
-        // Add click event listener to button
-        button.addEventListener("click", redirectToUrl);
-
-        // Append the button to the body or another container
-        document.body.appendChild(button);
-      } else {
-        responseData = "stl";
-      }
-      //console.log('e')
-
-      //console.log('Success:', responseData);
-      if (isObject(responseData)) {
-        responseDatas = responseDatas.concat(responseData);
-      }
+    } catch (error) {
+      console.error("Error:", error);
     }
-  } catch (error) {
-    console.error("Error:", error);
-  }
 
-  // Function to style buttons
-  function styleButton(button, color) {
-    button.style.position = "fixed";
-    button.style.bottom = "80px"; // Adjust based on order
-    button.style.right = "20px";
-    button.style.padding = "10px";
-    button.style.backgroundColor = color;
-    button.style.color = "white";
-    button.style.border = "none";
-    button.style.cursor = "pointer";
-    button.style.borderRadius = "5px";
-    button.style.zIndex = "1000";
-  }
+    // Function to style buttons
+    function styleButton(button, color) {
+      button.style.position = "fixed";
+      button.style.bottom = "80px"; // Adjust based on order
+      button.style.right = "20px";
+      button.style.padding = "10px";
+      button.style.backgroundColor = color;
+      button.style.color = "white";
+      button.style.border = "none";
+      button.style.cursor = "pointer";
+      button.style.borderRadius = "5px";
+      button.style.zIndex = "1000";
+    }
 
-  const style = document.createElement("style");
-  style.textContent = `
+    const style = document.createElement("style");
+    style.textContent = `
   .smart-btn-container {
       position: fixed;
       bottom: 100px;
@@ -1412,812 +1929,952 @@ btnContainer.appendChild(edit2DStatic); */
       }
   }
 `;
-  document.head.appendChild(style);
+    document.head.appendChild(style);
 
-  // Extract encrypted case ID from address bar
-  const urlParams = new URLSearchParams(window.location.search);
-  const encryptedID = urlParams.get("id");
+    // Extract encrypted case ID from address bar
+    const urlParams = new URLSearchParams(window.location.search);
+    const encryptedID = urlParams.get("id");
 
-  // Use the full viewer URL in the email
-  const viewerURL = `https://faid123.github.io/webrpdviewer/?id=${encodeURIComponent(
-    encryptedID
-  )}`;
+    // Use the full viewer URL in the email
+    const viewerURL = `https://faid123.github.io/webrpdviewer/?id=${encodeURIComponent(
+      encryptedID
+    )}`;
 
-  // Function to send email for Approve or Edit action
-  function sendEmail(actionType) {
-    const apiUrl = "https://live.api.smartrpdai.com/api/smartrpd/sendEmail";
+    // Function to send email for Approve or Edit action
+    function sendEmail(actionType) {
+      const apiUrl = "https://live.api.smartrpdai.com/api/smartrpd/sendEmail";
 
-    const emailData = {
-      //userEmail: "faid_akatsuki@live.com",  // replace as needed
-      action: actionType,
-      case_id: window.caseID,
-      case_int_id: paramValue, // for database queries (e.g., 1199)
-      last_edited: window.lastEdited,
-      username: window.username,
-      viewer_url: viewerURL, // include this as a new field
-      thumbnail: window.thumbnailBase64
-        ? `data:image/png;base64,${window.thumbnailBase64}`
-        : null,
-    };
+      const emailData = {
+        //userEmail: "faid_akatsuki@live.com",  // replace as needed
+        action: actionType,
+        case_id: window.caseID,
+        case_int_id: paramValue, // for database queries (e.g., 1199)
+        last_edited: window.lastEdited,
+        username: window.username,
+        viewer_url: viewerURL, // include this as a new field
+        thumbnail: window.thumbnailBase64
+          ? `data:image/png;base64,${window.thumbnailBase64}`
+          : null,
+      };
 
-    fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(emailData),
-    })
-      .then(async (response) => {
-        const contentType = response.headers.get("content-type");
-        const isJson =
-          contentType && contentType.indexOf("application/json") !== -1;
-
-        const data = isJson ? await response.json() : await response.text();
-
-        if (!response.ok) {
-          throw new Error(data.message || data || "Unknown error");
-        }
-
-        console.log("Email sent successfully:", data);
-        alert("✅ Email sent successfully to associated users.");
+      fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(emailData),
       })
-      .catch((error) => {
-        console.error("Error sending email:", error);
-        alert("❌ Failed to send email. Please try again.");
-      });
-  }
+        .then(async (response) => {
+          const contentType = response.headers.get("content-type");
+          const isJson =
+            contentType && contentType.indexOf("application/json") !== -1;
 
-  // Function to send email to a custom email address
-  function sendCustomEmail(email) {
-    if (!email) {
-      alert("Please enter a valid email address.");
-      return;
+          const data = isJson ? await response.json() : await response.text();
+
+          if (!response.ok) {
+            throw new Error(data.message || data || "Unknown error");
+          }
+
+          console.log("Email sent successfully:", data);
+          alert("✅ Email sent successfully to associated users.");
+        })
+        .catch((error) => {
+          console.error("Error sending email:", error);
+          alert("❌ Failed to send email. Please try again.");
+        });
     }
 
-    let apiUrl = "https://live.api.smartrpdai.com/api/smartrpd/sendCustomEmail";
+    // Function to send email to a custom email address
+    function sendCustomEmail(email) {
+      if (!email) {
+        alert("Please enter a valid email address.");
+        return;
+      }
 
-    let emailData = {
-      customEmail: email,
-      subject: "SmartRPD Custom Notification",
-      message: "This is a custom email message for your SmartRPD case.",
-    };
+      let apiUrl = "https://live.api.smartrpdai.com/api/smartrpd/sendCustomEmail";
 
-    fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(emailData),
-    })
-      .then((response) => response.json())
-      .then((data) => console.log("Custom email sent successfully:", data))
-      .catch((error) => console.error("Error sending custom email:", error));
-  }
+      let emailData = {
+        customEmail: email,
+        subject: "SmartRPD Custom Notification",
+        message: "This is a custom email message for your SmartRPD case.",
+      };
 
-  /* async function loadAllSTLSlots() {
-    const apiUrl = "/stl/slot/get"; // only the endpoint, since apiClient handles base URL
+      fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(emailData),
+      })
+        .then((response) => response.json())
+        .then((data) => console.log("Custom email sent successfully:", data))
+        .catch((error) => console.error("Error sending custom email:", error));
+    }
 
-    const authPayload = {
-        machine_id: '3a0df9c37b50873c63cebecd7bed73152a5ef616',
-        uuid: 'AC4gRQXZJoNz9EhhW36Q8jMJXBsf',
-        caseIntID: paramValue // This is your numeric case ID from decrypted param
-    };
+    /* async function loadAllSTLSlots() {
+      const apiUrl = "/stl/slot/get"; // only the endpoint, since apiClient handles base URL
+  
+      const authPayload = {
+          machine_id: '3a0df9c37b50873c63cebecd7bed73152a5ef616',
+          uuid: 'AC4gRQXZJoNz9EhhW36Q8jMJXBsf',
+          caseIntID: paramValue // This is your numeric case ID from decrypted param
+      };
+  
+      let anyLoaded = false;
+  
+      for (let slot = 1; slot <= 4; slot++) {
+          const payload = [authPayload, { slotNumber: slot }];
+  
+          try {
+              const result = await apiClient.post(apiUrl, payload, false, `Slot ${slot}`);
+  
+              if (!result || !result.data) {
+                  console.log(`❌ Slot ${slot}: No STL data found.`);
+                  continue;
+              }
+  
+              const binarySTL = atob(result.data);
+              const stlLoader = new STLMeshLoader(material);
+              const [mesh] = stlLoader.load(binarySTL, null);
+  
+              mesh.name = result.filename || `Slot ${slot}`;
+              parentObject.add(mesh);
+  
+              console.log(`✅ Loaded STL from slot ${slot}`);
+              anyLoaded = true;
+          } catch (error) {
+              console.warn(`⚠️ Slot ${slot} failed:`, error.message || error);
+          }
+      }
+  
+      if (!anyLoaded) {
+          alert("❌ No STL files found in slots 1 to 4.");
+      } else {
+          alert("✅ STL loading completed.");
+      }
+  } */
 
-    let anyLoaded = false;
+    async function loadAllSTLSlots() {
+      const apiUrl = "/stl/slot/get";
 
-    for (let slot = 1; slot <= 4; slot++) {
+      const authPayload = {
+        machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+        uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
+        caseIntID: paramValue,
+      };
+
+      // 🧹 Clear previous meshes
+      while (parentObject.children.length > 0) {
+        const child = parentObject.children[0];
+        parentObject.remove(child);
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) child.material.dispose();
+      }
+      clearPolylineOverlay();
+      hoveredMesh = null;
+      selectedMesh = null;
+      updateSelectionOverlay();
+
+      // Remove previous GUI controls if any
+      const oldGui = document.querySelector(".dg.ac");
+      if (oldGui) oldGui.remove();
+
+      const oldGuiContainer = document.querySelector(".guiContainer");
+      if (oldGuiContainer) oldGuiContainer.remove();
+
+      const oldToggleBtn = [...document.querySelectorAll("button")].find((btn) =>
+        btn.innerText.includes("controls")
+      );
+      if (oldToggleBtn) oldToggleBtn.remove();
+
+      const guiBlackBox = [...document.querySelectorAll("div")].find(
+        (div) =>
+          div.style.backgroundColor === "black" && div.style.zIndex === "999"
+      );
+      if (guiBlackBox) guiBlackBox.remove();
+
+      let anyLoaded = false;
+
+      for (let slot = 1; slot <= 4; slot++) {
+        //for (let slot = 4; slot>0; slot--){
         const payload = [authPayload, { slotNumber: slot }];
 
         try {
-            const result = await apiClient.post(apiUrl, payload, false, `Slot ${slot}`);
+          const result = await apiClient.post(
+            apiUrl,
+            payload,
+            false,
+            `Slot ${slot}`
+          );
 
-            if (!result || !result.data) {
-                console.log(`❌ Slot ${slot}: No STL data found.`);
-                continue;
-            }
+          if (!result || !result.data) {
+            console.log(`❌ Slot ${slot}: No STL data found.`);
+            continue;
+          }
 
-            const binarySTL = atob(result.data);
-            const stlLoader = new STLMeshLoader(material);
-            const [mesh] = stlLoader.load(binarySTL, null);
+          const binarySTL = atob(result.data);
+          // Assign a unique color per slot
+          const slotColors = {
+            1: {
+              color: new THREE.Color(197 / 255, 173 / 255, 137 / 255),
+              opacity: 255 / 255,
+            },
+            2: {
+              color: new THREE.Color(71 / 255, 86 / 255, 105 / 255),
+              opacity: 255 / 255,
+            },
+            3: {
+              color: new THREE.Color(197 / 255, 173 / 255, 137 / 255),
+              opacity: 255 / 255,
+            },
+            4: {
+              color: new THREE.Color(71 / 255, 86 / 255, 105 / 255),
+              opacity: 255 / 255,
+            },
+          };
 
-            mesh.name = result.filename || `Slot ${slot}`;
-            parentObject.add(mesh);
+          const slotColorInfo = slotColors[slot] || {
+            color: new THREE.Color(1, 1, 1),
+            opacity: 1,
+          };
 
-            console.log(`✅ Loaded STL from slot ${slot}`);
-            anyLoaded = true;
+          const slotMaterial = new THREE.MeshStandardMaterial({
+            color: slotColorInfo.color,
+            opacity: slotColorInfo.opacity,
+            transparent: slotColorInfo.opacity,
+            metalness: 0.0,
+            roughness: 0.7,
+          });
+
+          /* const slotColors = {
+          1: 0xffb3ba, // soft pink
+          2: 0xbaffc9, // mint green
+          3: 0xbae1ff, // baby blue
+          4: 0xffffba  // pale yellow
+        }; */
+
+          /* 			const slotMaterial = new THREE.MeshStandardMaterial({
+          color: slotColors[slot] || 0xaaaaaa,
+          metalness: 0.0,
+          roughness: 0.7
+        }); */
+
+          const stlLoader = new STLMeshLoader(slotMaterial);
+          const [mesh] = stlLoader.load(binarySTL, null);
+
+          mesh.name = result.filename || `Slot ${slot}`;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          mesh.userData = {
+            jaw_type: mesh.name.toLowerCase().includes("lower") ? "lower" : "upper",
+            archLabel: mesh.name.toLowerCase().includes("lower")
+              ? "Lower Arch"
+              : "Upper Arch",
+          };
+
+          // 👇 Match logic like close.off for centering and rotation
+          /*  mesh.geometry.computeBoundingBox();
+              const center = new THREE.Vector3();
+              mesh.geometry.boundingBox.getCenter(center);
+              mesh.geometry.translate(-center.x, -center.y, -center.z); */
+
+          // 🟢 Default origin and slight shift like upper jaw logic
+          //mesh.position.set(0, 5, 0);
+          //mesh.rotation.set(THREE.MathUtils.degToRad(1), THREE.MathUtils.degToRad(1), THREE.MathUtils.degToRad(180));
+          /* 			mesh.position.set(0, 0, 0);      // Reset position
+        mesh.rotation.set(0, 0, 0);      // Reset rotation
+        mesh.scale.set(1, 1, 1);         // Reset scale */
+
+          parentObject.add(mesh);
+
+          controls.update();
+          //render();
+
+          console.log(`✅ Loaded STL from slot ${slot}`);
+          anyLoaded = true;
         } catch (error) {
-            console.warn(`⚠️ Slot ${slot} failed:`, error.message || error);
+          console.warn(`⚠️ Slot ${slot} failed:`, error.message || error);
         }
-    }
+      }
 
-    if (!anyLoaded) {
+      if (!anyLoaded) {
         alert("❌ No STL files found in slots 1 to 4.");
-    } else {
+      } else {
         alert("✅ STL loading completed.");
+        await fetchAndRenderPolylines(paramValue);
+        removeVisibilityAndTransparencyControls();
+        // 🧩 Re-enable visibility/transparency controls after loading
+        addVisibilityAndTransparencyControls(
+          parentObject,
+          name,
+          all_mesh_mat,
+          undercut_type
+        );
+      }
     }
-} */
 
-  async function loadAllSTLSlots() {
-    const apiUrl = "/stl/slot/get";
+    //console.log(responseDatas);
+    for (const offFile of responseDatas) {
+      let loader;
+      //console.log(offFile)
+      if (offFile.filename.includes("surface")) {
+        loader = new OFFLoader(
+          materialsurface.clone(),
+          materialsurface_non_metal.clone()
+        );
+      } else {
+        loader = new OFFLoader(material.clone());
+      }
 
-    const authPayload = {
-      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
-      uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
-      caseIntID: paramValue,
+      // Fetch the OFF file data
+      //const offData = await apiClient.get(offFile); // Assuming the ApiClient has a get method for fetching data
+      const offdata = atob(offFile.data);
+      let x;
+      if (
+        offFile.filename.includes("ParameterisationMesh") ||
+        offFile.filename.includes("closed")
+      ) {
+        x = true;
+      }
+      // Load the OFF file
+      //console.log('check stl:' + stl)
+      if (stl) {
+        const stlMeshLoader = new STLMeshLoader(material);
+        if (offFile.type.includes("upper")) {
+          mesh_geo = stlMeshLoader.load(offdata, undercut_values[1]);
+        } else if (offFile.type.includes("lower")) {
+          mesh_geo = stlMeshLoader.load(offdata, undercut_values[0]);
+        }
+      } else if (offFile.type.includes("upper")) {
+        mesh_geo = loader.parse(offdata, undercut_values[1], x);
+      } else if (offFile.type.includes("lower")) {
+        mesh_geo = loader.parse(offdata, undercut_values[0], x);
+      }
+
+      const mesh = mesh_geo[0];
+      mesh.name = offFile.filename;
+
+      mesh.userData = {
+        jaw_type: offFile.type,
+        archLabel: offFile.type.includes("upper") ? "Upper Arch" : "Lower Arch",
+      };
+      if (all_mesh_mat != null) {
+        all_mesh_mat[offFile.filename] = mesh_geo[1].slice();
+      }
+
+      //addVisibilityControl(mesh, 'BoxMesh');
+      //addTransparencyControl(material, 'BoxMesh');
+      /*
+      if(offFile.filename.includes('surface')[])
+        {
+          if(offFile.filename.includes('upper'))
+            {
+              changeMeshRotation(mesh,pos['upper'][0],pos['upper'][1],pos['upper'][2]);
+            }
+            else{
+              changeMeshRotation(mesh,pos['lower'][0],pos['lower'][1],pos['lower'][2]);
+            }
+        }
+            */
+      // Add the mesh to the parent object
+
+      if (offFile.type.includes("upper") && !stl && !close) {
+        //console.log('check');
+        changeMeshRotation(mesh, 1, 1, 180);
+        mesh.position.y += 5;
+      }
+
+      //console.log(mesh)
+      /*
+      if(stl)
+        {
+          changeMeshRotation(mesh,0,105,0);
+        }
+          */
+      parentObject.add(mesh);
+    }
+    await fetchAndRenderPolylines(paramValue);
+    //console.log(all_mesh_mat);
+
+    function changeMeshRotation(mesh, x, y, z) {
+      mesh.rotation.set(
+        THREE.MathUtils.degToRad(x),
+        THREE.MathUtils.degToRad(y),
+        THREE.MathUtils.degToRad(z)
+      );
+    }
+
+    // Example usage
+
+    function createTextbox(text, position) {
+      const textbox = document.createElement("div");
+      textbox.textContent = text;
+      textbox.style.position = "fixed";
+      textbox.style.backgroundColor = "rgba(255, 255, 255, 0.8)";
+      textbox.style.padding = "5px";
+      textbox.style.border = "1px solid #ccc";
+      textbox.style.borderRadius = "5px";
+      textbox.style.fontFamily = "Arial, sans-serif";
+      textbox.style.fontSize = "15px";
+      textbox.style.color = "#333";
+      textbox.style.boxShadow = "0 2px 10px rgba(0, 0, 0, 0.1)";
+
+      textbox.style.height = "15px";
+
+      // Optionally, add a media query to adjust size for very small screens
+
+      if (position === "bottom-left") {
+        textbox.style.bottom = "55px";
+        textbox.style.left = "10px";
+        textbox.style.height = "30px";
+        textbox.style.minWidth = "220px";
+        textbox.style.width = "20%";
+        textbox.style.maxWidth = "250px";
+      } else if (position === "bottom-right") {
+        textbox.width = "150px";
+        textbox.style.bottom = "10px";
+        textbox.style.right = "10px";
+      } else if (position === "bottom-left2") {
+        textbox.style.bottom = "10px";
+        textbox.style.padding = "5px";
+        textbox.style.left = "10px";
+        textbox.style.height = "30px";
+        textbox.style.minWidth = "220px";
+        textbox.style.width = "20%";
+        textbox.style.maxWidth = "250px";
+      } else if (position === "name") {
+        textbox.style.bottom = "10px";
+        textbox.style.right = "10px";
+        textbox.style.height = "30px";
+        textbox.style.padding = "5px";
+      }
+
+      document.body.appendChild(textbox);
+    }
+
+    function unixToHumanReadable(unixTimestamp) {
+      const date = new Date(unixTimestamp * 1000); // Multiply by 1000 to convert seconds to milliseconds
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, "0"); // Months are zero-indexed
+      const day = date.getDate().toString().padStart(2, "0");
+      const hours = date.getHours().toString().padStart(2, "0");
+      const minutes = date.getMinutes().toString().padStart(2, "0");
+      const seconds = date.getSeconds().toString().padStart(2, "0");
+
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    }
+
+    // Instantiate the OFFLoader
+    // Load the OFF file
+
+    finished = true;
+    // Instantiate a new renderer and set its size
+    const renderer = new THREE.WebGLRenderer({ alpha: true }); // Alpha: true allows for the transparent background
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    // Add the renderer to the DOM
+    const container = document.getElementById("container3D");
+    container.style.position = "relative"; // <- Add this line
+    if (container) {
+      container.appendChild(renderer.domElement);
+      createSelectionOverlay(container);
+      attachSelectionHandlers(renderer.domElement);
+      attachPolylineEditHandlers(renderer.domElement);
+      createPolylineEditToggle(container);
+
+      // Add polyline to webpage
+      const polylineCanvas = document.createElement("canvas");
+      polylineCanvas.id = "polylineCanvas";
+
+      // After container3D and renderer are set up
+      const caseTitle = document.createElement("div");
+      caseTitle.textContent = `🦷 Case: ${window.caseID}`; // Display the case name
+      caseTitle.className = "case-title"; // CSS class for styling
+
+      const isMobile =
+        /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+          navigator.userAgent
+        );
+      caseTitle.style.transform = isMobile
+        ? "translate(-50%, 2500%)"
+        : "translate(-50%, 1000%)";
+
+      // Insert it into container3D
+      container.appendChild(caseTitle);
+    } else {
+      console.error("No container element found");
+    }
+
+    // Set how far the camera will be from the 3D model
+
+    camera.position.z = objToRender === "dino" ? 100 : 500;
+
+    // Add lights to the scene, so we can actually see the 3D model
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1); // Soft white light
+    scene.add(ambientLight);
+
+    // Add directional lights from different directions for even lighting
+    const lights = [
+      new THREE.DirectionalLight(0xffffff, 1), // Front light
+      new THREE.DirectionalLight(0xffffff, 1), // Back light
+      new THREE.DirectionalLight(0xffffff, 1), // Left light
+      new THREE.DirectionalLight(0xffffff, 1), // Right light
+    ];
+
+    lights[0].position.set(0, 0, 1);
+    lights[1].position.set(0, 0, -1);
+    lights[2].position.set(-1, 0, 0);
+    lights[3].position.set(1, 0, 0);
+
+    lights.forEach((light) => {
+      scene.add(light);
+    });
+
+    // This adds controls to the camera, so we can rotate / zoom it with the mouse
+    if (objToRender === "dino") {
+      controls = new TrackballControls(camera, renderer.domElement);
+      orb_controls = new OrbitControls(camera, renderer.domElement);
+
+      controls.rotateSpeed = 4.0;
+      orb_controls.zoomSpeed = 2;
+      orb_controls.enableRotate = false;
+      orb_controls.enabelePan = true; // is there a spelling error here? should it be "enablePan"?
+
+      controls.panSpeed = 30;
+      controls.noZoom = true;
+      controls.noPan = false;
+      controls.staticMoving = true;
+      controls.dynamicDampingFactor = 0.3;
+
+      //console.log('changed2');
+    }
+
+    // Render the scene
+    function animate() {
+      requestAnimationFrame(animate);
+      // Here we could add some code to update the scene, adding some automatic movement to make it more dynamic. For example, we could make the eye of the dinosaur follow the mouse cursor:
+      let selectionChanged = false;
+      if (selectedMesh && !parentObject.children.includes(selectedMesh)) {
+        selectedMesh = null;
+        selectionChanged = true;
+      }
+      if (hoveredMesh && !parentObject.children.includes(hoveredMesh)) {
+        hoveredMesh = null;
+        selectionChanged = true;
+      }
+      if (selectionChanged) {
+        refreshSelectionHighlights();
+        updateSelectionOverlay();
+      }
+      controls.update();
+      // Make the eye move to follow the mouse cursor
+
+      renderer.render(scene, camera);
+    }
+
+    // Add a listener to the window, so we can resize the window and the camera
+    window.addEventListener("resize", function () {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Add mouse position listener, so we can make the eye move
+    document.onmousemove = (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
     };
 
-    // 🧹 Clear previous meshes
-    while (parentObject.children.length > 0) {
-      const child = parentObject.children[0];
-      parentObject.remove(child);
-      if (child.geometry) child.geometry.dispose();
-      if (child.material) child.material.dispose();
+    camera.zoom = 7;
+    camera.updateProjectionMatrix();
+    const clonedCamera = camera.clone();
+    addResetButton(camera, clonedCamera, controls);
+    const syncThumbnailToLegend = () => {
+      const thumbnailWrapper = document.getElementById(
+        "thumbnail-preview-wrapper"
+      );
+      if (thumbnailWrapper) {
+        positionThumbnailBesideLegend(thumbnailWrapper);
+      }
+    };
+    requestAnimationFrame(syncThumbnailToLegend);
+    setTimeout(syncThumbnailToLegend, 150);
+    const thumbnailLegendInterval = setInterval(() => {
+      const thumbnailWrapper = document.getElementById(
+        "thumbnail-preview-wrapper"
+      );
+      const legend = document.getElementById("viewer-legend");
+      if (thumbnailWrapper && legend) {
+        positionThumbnailBesideLegend(thumbnailWrapper);
+        clearInterval(thumbnailLegendInterval);
+      }
+    }, 250);
+    setTimeout(() => clearInterval(thumbnailLegendInterval), 4000);
+    //console.log(camera)
+
+    // Start the 3D rendering
+    animate();
+    //console.log(parentObject);
+    //console.log(undercut_type);
+    removeVisibilityAndTransparencyControls();
+    addVisibilityAndTransparencyControls(
+      parentObject,
+      name,
+      all_mesh_mat,
+      undercut_type
+    );
+
+    const urlLogout = ["/user/logout"];
+    try {
+      // Call the post method and wait for the response
+      for (const urldata of urlLogout) {
+        const check = await apiClient.post(urldata, [data]);
+        //console.log('Success logout:', check)
+      }
+    } catch (error) {
+      console.error("Error:", error);
     }
-    clearPolylineOverlay();
-    hoveredMesh = null;
-    selectedMesh = null;
-    updateSelectionOverlay();
+  })();
 
-    // Remove previous GUI controls if any
-    const oldGui = document.querySelector(".dg.ac");
-    if (oldGui) oldGui.remove();
-
-    const oldGuiContainer = document.querySelector(".guiContainer");
-    if (oldGuiContainer) oldGuiContainer.remove();
-
-    const oldToggleBtn = [...document.querySelectorAll("button")].find((btn) =>
-      btn.innerText.includes("controls")
+  function isMobileDevice() {
+    return /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
     );
-    if (oldToggleBtn) oldToggleBtn.remove();
+  }
 
-    const guiBlackBox = [...document.querySelectorAll("div")].find(
-      (div) =>
-        div.style.backgroundColor === "black" && div.style.zIndex === "999"
+  function getThumbnailPreviewPosition() {
+    const isMobile = isMobileDevice();
+    return {
+      top: isMobile ? "200px" : "150px",
+      left: isMobile ? "24px" : "32px",
+      width: isMobile ? "200px" : "140px",
+    };
+  }
+
+  function positionThumbnailBesideLegend(thumbWrapper) {
+    if (!thumbWrapper) return;
+
+    const fallbackPosition = getThumbnailPreviewPosition();
+    const legend =
+      document.getElementById("viewer-legend") ||
+      document.querySelector(".legend-container");
+
+    thumbWrapper.style.position = "fixed";
+
+    if (!legend || isMobileDevice()) {
+      thumbWrapper.style.left = fallbackPosition.left;
+      thumbWrapper.style.top = fallbackPosition.top;
+      return;
+    }
+
+    const legendRect = legend.getBoundingClientRect();
+    const gap = 18;
+    const minMargin = 16;
+    const fallbackWidth = parseInt(fallbackPosition.width, 10) || 140;
+    const wrapperWidth = thumbWrapper.offsetWidth || fallbackWidth;
+    const wrapperHeight = thumbWrapper.offsetHeight || 180;
+    const desiredLeft = legendRect.right + gap;
+    const desiredTop = legendRect.top;
+    const maxLeft = Math.max(
+      minMargin,
+      window.innerWidth - wrapperWidth - minMargin
     );
-    if (guiBlackBox) guiBlackBox.remove();
+    const maxTop = Math.max(
+      minMargin,
+      window.innerHeight - wrapperHeight - minMargin
+    );
 
-    let anyLoaded = false;
+    thumbWrapper.style.left = `${Math.min(
+      Math.max(desiredLeft, minMargin),
+      maxLeft
+    )}px`;
+    thumbWrapper.style.top = `${Math.min(
+      Math.max(desiredTop, minMargin),
+      maxTop
+    )}px`;
+    thumbWrapper.style.right = "auto";
+    thumbWrapper.style.bottom = "auto";
+  }
 
-    for (let slot = 1; slot <= 4; slot++) {
-      //for (let slot = 4; slot>0; slot--){
-      const payload = [authPayload, { slotNumber: slot }];
+  function applyThumbnailPreviewOffset(button, img) {
+    if (!button || !img) return false;
 
-      try {
-        const result = await apiClient.post(
-          apiUrl,
-          payload,
-          false,
-          `Slot ${slot}`
-        );
+    const thumbnailPosition = getThumbnailPreviewPosition();
+    button.style.position = "fixed";
+    button.style.top = thumbnailPosition.top;
+    button.style.left = thumbnailPosition.left;
+    button.style.width = thumbnailPosition.width;
+    button.style.height = "auto";
+    button.style.padding = "0";
+    button.style.border = "none";
+    button.style.background = "rgba(255, 255, 255, 0.98)";
+    button.style.borderRadius = "10px";
+    button.style.boxShadow = "0 8px 18px rgba(22, 44, 67, 0.12)";
+    button.style.cursor = "pointer";
+    button.style.zIndex = "1000";
 
-        if (!result || !result.data) {
-          console.log(`❌ Slot ${slot}: No STL data found.`);
+    img.style.width = "100%";
+    img.style.height = "auto";
+    img.style.transform = "none";
+    img.style.display = "block";
+    return true;
+  }
+
+  function displayFullScreenImage(img) {
+    // Create a fullscreen container
+    const fullscreenContainer = document.createElement("div");
+    fullscreenContainer.style.position = "fixed";
+    fullscreenContainer.style.top = "0";
+    fullscreenContainer.style.left = "0";
+    fullscreenContainer.style.width = "100%";
+    fullscreenContainer.style.height = "100%";
+    fullscreenContainer.style.backgroundColor = "rgba(0, 0, 0, 0.9)"; // Semi-transparent black background
+    fullscreenContainer.style.zIndex = "1000"; // Ensure it's above other content
+    fullscreenContainer.style.display = "flex";
+    fullscreenContainer.style.justifyContent = "center";
+    fullscreenContainer.style.alignItems = "center";
+    fullscreenContainer.style.flexDirection = "column"; // stack vertically
+
+    // 🦷 Create and append the case title watermark
+    const watermark = document.createElement("div");
+    watermark.textContent = `🦷 Case: ${window.caseID || "N/A"}`;
+    watermark.style.position = "absolute";
+    watermark.style.left = "50%";
+    watermark.style.transform = "translateX(-50%)"; // only X-axis initially
+    watermark.style.color = "white";
+    watermark.style.fontSize = "32px";
+    watermark.style.fontWeight = "bold";
+    watermark.style.textShadow = "0px 0px 10px rgba(0, 0, 0, 0.8)";
+    watermark.style.pointerEvents = "none";
+    watermark.classList.add("case-title-watermark");
+
+    fullscreenContainer.appendChild(watermark);
+
+    // Dynamically position vertically based on image
+    const centerWatermark = () => {
+      const img = fullscreenContainer.querySelector("img");
+      if (!img) return;
+
+      const imgRect = img.getBoundingClientRect();
+      const containerRect = fullscreenContainer.getBoundingClientRect();
+      const verticalCenter = imgRect.top + imgRect.height / 2 - containerRect.top;
+
+      watermark.style.top = `${verticalCenter}px`;
+    };
+
+    // Run after image is loaded and on resize
+    const imgElement = fullscreenContainer.querySelector("img");
+    if (imgElement && !imgElement.complete) {
+      imgElement.onload = centerWatermark;
+    } else {
+      centerWatermark();
+    }
+
+    window.addEventListener("resize", centerWatermark);
+
+    // Calculate maximum dimensions for the fullscreen image
+    const screenWidth = window.innerWidth;
+    const screenHeight = window.innerHeight;
+    let maxImageWidth;
+    let maxImageHeight;
+    //if is mobile then expand image
+    if (isMobileDevice()) {
+      maxImageWidth = screenWidth * 0.9; // Adjust as needed, e.g., 90% of screen width
+      maxImageHeight = screenHeight * 0.9; // Adjust as needed, e.g., 90% of screen height
+    } else {
+      maxImageWidth = img.width;
+      maxImageHeight = img.height;
+    }
+
+    // Create an image element inside the fullscreen container
+    const fullscreenImg = new Image();
+    fullscreenImg.src = img.src; // Set the source of the fullscreen image
+
+    // Calculate image dimensions to maintain aspect ratio
+    const aspectRatio = img.width / img.height;
+    let displayWidth = maxImageWidth;
+    let displayHeight = maxImageWidth / aspectRatio;
+
+    // Adjust based on height if necessary
+    if (displayHeight > maxImageHeight) {
+      displayHeight = maxImageHeight;
+      displayWidth = maxImageHeight * aspectRatio;
+    }
+
+    // Apply calculated dimensions and styles to the image
+    fullscreenImg.style.width = `${displayWidth}px`;
+    fullscreenImg.style.height = `${displayHeight}px`;
+    fullscreenImg.style.objectFit = "contain"; // Maintain aspect ratio
+    const touchMoveHandler = function (event) {
+      if (event.scale !== 1) {
+        event.preventDefault();
+      }
+    };
+
+    const wheelHandler = function (event) {
+      if (event.ctrlKey) {
+        event.preventDefault();
+      }
+    };
+    document.addEventListener("touchmove", touchMoveHandler, { passive: false });
+    document.addEventListener("wheel", wheelHandler, { passive: false });
+    // Append the fullscreen image to the container
+    fullscreenContainer.appendChild(fullscreenImg);
+    // Close fullscreen on click outside the image
+    fullscreenContainer.addEventListener("click", function () {
+      document.removeEventListener("touchmove", touchMoveHandler, {
+        passive: false,
+      });
+      document.removeEventListener("wheel", wheelHandler, { passive: false });
+      document.body.removeChild(fullscreenContainer); // Remove fullscreen container
+    });
+    // Append the fullscreen container to the body
+    document.body.appendChild(fullscreenContainer);
+  }
+
+  function isObject(variable) {
+    return variable !== null && typeof variable === "object";
+  }
+
+  window.addEventListener("load", () => {
+    const fixToothMapPosition = () => {
+      const allButtons = document.getElementsByTagName("button");
+      for (let btn of allButtons) {
+        if (btn.hasAttribute("data-thumbnail-preview")) {
+          continue;
+        }
+        const img = btn.querySelector("img");
+
+        if (img && img.src.startsWith("data:image/png;base64")) {
+          // ✅ 分别控制按钮位置 & 图片宽度
+          const topValue = isMobileDevice() ? "200px" : "150px";
+          const imgWidth = isMobileDevice() ? "200px" : "140px";
+
+          btn.style.position = "fixed";
+          btn.style.top = topValue;
+          btn.style.left = "15px";
+          btn.style.width = imgWidth; // ← 设置按钮宽度
+          btn.style.height = "auto";
+          btn.style.padding = "0";
+          btn.style.border = "none";
+          btn.style.background = "none";
+          btn.style.cursor = "pointer";
+          btn.style.zIndex = "1000";
+
+          img.style.width = "100%"; // ← 图片宽度始终相对于按钮宽度
+          img.style.height = "auto";
+          img.style.transform = "none";
+          img.style.display = "block";
+
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const interval = setInterval(() => {
+      if (fixToothMapPosition()) {
+        clearInterval(interval);
+      }
+    }, 200);
+  });
+
+  window.addEventListener("load", () => {
+    const interval = setInterval(() => {
+      const allButtons = document.getElementsByTagName("button");
+
+      for (let btn of allButtons) {
+        if (btn.hasAttribute("data-thumbnail-preview")) {
           continue;
         }
 
-        const binarySTL = atob(result.data);
-        // Assign a unique color per slot
-        const slotColors = {
-          1: {
-            color: new THREE.Color(197 / 255, 173 / 255, 137 / 255),
-            opacity: 255 / 255,
-          },
-          2: {
-            color: new THREE.Color(71 / 255, 86 / 255, 105 / 255),
-            opacity: 255 / 255,
-          },
-          3: {
-            color: new THREE.Color(197 / 255, 173 / 255, 137 / 255),
-            opacity: 255 / 255,
-          },
-          4: {
-            color: new THREE.Color(71 / 255, 86 / 255, 105 / 255),
-            opacity: 255 / 255,
-          },
-        };
-
-        const slotColorInfo = slotColors[slot] || {
-          color: new THREE.Color(1, 1, 1),
-          opacity: 1,
-        };
-
-        const slotMaterial = new THREE.MeshStandardMaterial({
-          color: slotColorInfo.color,
-          opacity: slotColorInfo.opacity,
-          transparent: slotColorInfo.opacity,
-          metalness: 0.0,
-          roughness: 0.7,
-        });
-
-        /* const slotColors = {
-				1: 0xffb3ba, // soft pink
-				2: 0xbaffc9, // mint green
-				3: 0xbae1ff, // baby blue
-				4: 0xffffba  // pale yellow
-			}; */
-
-        /* 			const slotMaterial = new THREE.MeshStandardMaterial({
-				color: slotColors[slot] || 0xaaaaaa,
-				metalness: 0.0,
-				roughness: 0.7
-			}); */
-
-        const stlLoader = new STLMeshLoader(slotMaterial);
-        const [mesh] = stlLoader.load(binarySTL, null);
-
-        mesh.name = result.filename || `Slot ${slot}`;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        mesh.userData = {
-          jaw_type: mesh.name.toLowerCase().includes("lower") ? "lower" : "upper",
-          archLabel: mesh.name.toLowerCase().includes("lower")
-            ? "Lower Arch"
-            : "Upper Arch",
-        };
-
-        // 👇 Match logic like close.off for centering and rotation
-        /*  mesh.geometry.computeBoundingBox();
-            const center = new THREE.Vector3();
-            mesh.geometry.boundingBox.getCenter(center);
-            mesh.geometry.translate(-center.x, -center.y, -center.z); */
-
-        // 🟢 Default origin and slight shift like upper jaw logic
-        //mesh.position.set(0, 5, 0);
-        //mesh.rotation.set(THREE.MathUtils.degToRad(1), THREE.MathUtils.degToRad(1), THREE.MathUtils.degToRad(180));
-        /* 			mesh.position.set(0, 0, 0);      // Reset position
-			mesh.rotation.set(0, 0, 0);      // Reset rotation
-			mesh.scale.set(1, 1, 1);         // Reset scale */
-
-        parentObject.add(mesh);
-
-        controls.update();
-        //render();
-
-        console.log(`✅ Loaded STL from slot ${slot}`);
-        anyLoaded = true;
-      } catch (error) {
-        console.warn(`⚠️ Slot ${slot} failed:`, error.message || error);
-      }
-    }
-
-    if (!anyLoaded) {
-      alert("❌ No STL files found in slots 1 to 4.");
-    } else {
-      alert("✅ STL loading completed.");
-      await fetchAndRenderPolylines(paramValue);
-      removeVisibilityAndTransparencyControls();
-      // 🧩 Re-enable visibility/transparency controls after loading
-      addVisibilityAndTransparencyControls(
-        parentObject,
-        name,
-        all_mesh_mat,
-        undercut_type
-      );
-    }
-  }
-
-  //console.log(responseDatas);
-  for (const offFile of responseDatas) {
-    let loader;
-    //console.log(offFile)
-    if (offFile.filename.includes("surface")) {
-      loader = new OFFLoader(
-        materialsurface.clone(),
-        materialsurface_non_metal.clone()
-      );
-    } else {
-      loader = new OFFLoader(material.clone());
-    }
-
-    // Fetch the OFF file data
-    //const offData = await apiClient.get(offFile); // Assuming the ApiClient has a get method for fetching data
-    const offdata = atob(offFile.data);
-    let x;
-    if (
-      offFile.filename.includes("ParameterisationMesh") ||
-      offFile.filename.includes("closed")
-    ) {
-      x = true;
-    }
-    // Load the OFF file
-    //console.log('check stl:' + stl)
-    if (stl) {
-      const stlMeshLoader = new STLMeshLoader(material);
-      if (offFile.type.includes("upper")) {
-        mesh_geo = stlMeshLoader.load(offdata, undercut_values[1]);
-      } else if (offFile.type.includes("lower")) {
-        mesh_geo = stlMeshLoader.load(offdata, undercut_values[0]);
-      }
-    } else if (offFile.type.includes("upper")) {
-      mesh_geo = loader.parse(offdata, undercut_values[1], x);
-    } else if (offFile.type.includes("lower")) {
-      mesh_geo = loader.parse(offdata, undercut_values[0], x);
-    }
-
-    const mesh = mesh_geo[0];
-    mesh.name = offFile.filename;
-
-    mesh.userData = {
-      jaw_type: offFile.type,
-      archLabel: offFile.type.includes("upper") ? "Upper Arch" : "Lower Arch",
-    };
-    if (all_mesh_mat != null) {
-      all_mesh_mat[offFile.filename] = mesh_geo[1].slice();
-    }
-
-    //addVisibilityControl(mesh, 'BoxMesh');
-    //addTransparencyControl(material, 'BoxMesh');
-    /*
-    if(offFile.filename.includes('surface')[])
-      {
-        if(offFile.filename.includes('upper'))
-          {
-            changeMeshRotation(mesh,pos['upper'][0],pos['upper'][1],pos['upper'][2]);
-          }
-          else{
-            changeMeshRotation(mesh,pos['lower'][0],pos['lower'][1],pos['lower'][2]);
-          }
-      }
-          */
-    // Add the mesh to the parent object
-
-    if (offFile.type.includes("upper") && !stl && !close) {
-      //console.log('check');
-      changeMeshRotation(mesh, 1, 1, 180);
-      mesh.position.y += 5;
-    }
-
-    //console.log(mesh)
-    /*
-    if(stl)
-      {
-        changeMeshRotation(mesh,0,105,0);
-      }
-        */
-    parentObject.add(mesh);
-  }
-  await fetchAndRenderPolylines(paramValue);
-  //console.log(all_mesh_mat);
-
-  function changeMeshRotation(mesh, x, y, z) {
-    mesh.rotation.set(
-      THREE.MathUtils.degToRad(x),
-      THREE.MathUtils.degToRad(y),
-      THREE.MathUtils.degToRad(z)
-    );
-  }
-
-  // Example usage
-
-  function createTextbox(text, position) {
-    const textbox = document.createElement("div");
-    textbox.textContent = text;
-    textbox.style.position = "fixed";
-    textbox.style.backgroundColor = "rgba(255, 255, 255, 0.8)";
-    textbox.style.padding = "5px";
-    textbox.style.border = "1px solid #ccc";
-    textbox.style.borderRadius = "5px";
-    textbox.style.fontFamily = "Arial, sans-serif";
-    textbox.style.fontSize = "15px";
-    textbox.style.color = "#333";
-    textbox.style.boxShadow = "0 2px 10px rgba(0, 0, 0, 0.1)";
-
-    textbox.style.height = "15px";
-
-    // Optionally, add a media query to adjust size for very small screens
-
-    if (position === "bottom-left") {
-      textbox.style.bottom = "55px";
-      textbox.style.left = "10px";
-      textbox.style.height = "30px";
-      textbox.style.minWidth = "220px";
-      textbox.style.width = "20%";
-      textbox.style.maxWidth = "250px";
-    } else if (position === "bottom-right") {
-      textbox.width = "150px";
-      textbox.style.bottom = "10px";
-      textbox.style.right = "10px";
-    } else if (position === "bottom-left2") {
-      textbox.style.bottom = "10px";
-      textbox.style.padding = "5px";
-      textbox.style.left = "10px";
-      textbox.style.height = "30px";
-      textbox.style.minWidth = "220px";
-      textbox.style.width = "20%";
-      textbox.style.maxWidth = "250px";
-    } else if (position === "name") {
-      textbox.style.bottom = "10px";
-      textbox.style.right = "10px";
-      textbox.style.height = "30px";
-      textbox.style.padding = "5px";
-    }
-
-    document.body.appendChild(textbox);
-  }
-
-  function unixToHumanReadable(unixTimestamp) {
-    const date = new Date(unixTimestamp * 1000); // Multiply by 1000 to convert seconds to milliseconds
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, "0"); // Months are zero-indexed
-    const day = date.getDate().toString().padStart(2, "0");
-    const hours = date.getHours().toString().padStart(2, "0");
-    const minutes = date.getMinutes().toString().padStart(2, "0");
-    const seconds = date.getSeconds().toString().padStart(2, "0");
-
-    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-  }
-
-  // Instantiate the OFFLoader
-  // Load the OFF file
-
-  finished = true;
-  // Instantiate a new renderer and set its size
-  const renderer = new THREE.WebGLRenderer({ alpha: true }); // Alpha: true allows for the transparent background
-  renderer.setSize(window.innerWidth, window.innerHeight);
-
-  // Add the renderer to the DOM
-  const container = document.getElementById("container3D");
-  container.style.position = "relative"; // <- Add this line
-  if (container) {
-    container.appendChild(renderer.domElement);
-    createSelectionOverlay(container);
-    attachSelectionHandlers(renderer.domElement);
-
-    // After container3D and renderer are set up
-    const caseTitle = document.createElement("div");
-    caseTitle.textContent = `🦷 Case: ${window.caseID}`; // Display the case name
-    caseTitle.className = "case-title"; // CSS class for styling
-
-    const isMobile =
-      /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-        navigator.userAgent
-      );
-    caseTitle.style.transform = isMobile
-      ? "translate(-50%, 2500%)"
-      : "translate(-50%, 1000%)";
-
-    // Insert it into container3D
-    container.appendChild(caseTitle);
-  } else {
-    console.error("No container element found");
-  }
-
-  // Set how far the camera will be from the 3D model
-
-  camera.position.z = objToRender === "dino" ? 100 : 500;
-
-  // Add lights to the scene, so we can actually see the 3D model
-  const ambientLight = new THREE.AmbientLight(0xffffff, 1); // Soft white light
-  scene.add(ambientLight);
-
-  // Add directional lights from different directions for even lighting
-  const lights = [
-    new THREE.DirectionalLight(0xffffff, 1), // Front light
-    new THREE.DirectionalLight(0xffffff, 1), // Back light
-    new THREE.DirectionalLight(0xffffff, 1), // Left light
-    new THREE.DirectionalLight(0xffffff, 1), // Right light
-  ];
-
-  lights[0].position.set(0, 0, 1);
-  lights[1].position.set(0, 0, -1);
-  lights[2].position.set(-1, 0, 0);
-  lights[3].position.set(1, 0, 0);
-
-  lights.forEach((light) => {
-    scene.add(light);
-  });
-
-  // This adds controls to the camera, so we can rotate / zoom it with the mouse
-  if (objToRender === "dino") {
-    controls = new TrackballControls(camera, renderer.domElement);
-    orb_controls = new OrbitControls(camera, renderer.domElement);
-
-    controls.rotateSpeed = 4.0;
-    orb_controls.zoomSpeed = 2;
-    orb_controls.enableRotate = false;
-    orb_controls.enabelePan = true;
-
-    controls.panSpeed = 30;
-    controls.noZoom = true;
-    controls.noPan = false;
-    controls.staticMoving = true;
-    controls.dynamicDampingFactor = 0.3;
-
-    //console.log('changed2');
-  }
-
-  // Render the scene
-  function animate() {
-    requestAnimationFrame(animate);
-    // Here we could add some code to update the scene, adding some automatic movement
-    let selectionChanged = false;
-    if (selectedMesh && !parentObject.children.includes(selectedMesh)) {
-      selectedMesh = null;
-      selectionChanged = true;
-    }
-    if (hoveredMesh && !parentObject.children.includes(hoveredMesh)) {
-      hoveredMesh = null;
-      selectionChanged = true;
-    }
-    if (selectionChanged) {
-      refreshSelectionHighlights();
-      updateSelectionOverlay();
-    }
-    controls.update();
-    // Make the eye move
-
-    renderer.render(scene, camera);
-  }
-
-  // Add a listener to the window, so we can resize the window and the camera
-  window.addEventListener("resize", function () {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-
-  // Add mouse position listener, so we can make the eye move
-  document.onmousemove = (e) => {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-  };
-
-  camera.zoom = 7;
-  camera.updateProjectionMatrix();
-  const clonedCamera = camera.clone();
-  addResetButton(camera, clonedCamera, controls);
-  //console.log(camera)
-
-  // Start the 3D rendering
-  animate();
-  //console.log(parentObject);
-  //console.log(undercut_type);
-  removeVisibilityAndTransparencyControls();
-  addVisibilityAndTransparencyControls(
-    parentObject,
-    name,
-    all_mesh_mat,
-    undercut_type
-  );
-
-  const urlLogout = ["/user/logout"];
-  try {
-    // Call the post method and wait for the response
-    for (const urldata of urlLogout) {
-      const check = await apiClient.post(urldata, [data]);
-      //console.log('Success logout:', check)
-    }
-  } catch (error) {
-    console.error("Error:", error);
-  }
-})();
-
-function isMobileDevice() {
-  return /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-    navigator.userAgent
-  );
-}
-
-function displayFullScreenImage(img) {
-  // Create a fullscreen container
-  const fullscreenContainer = document.createElement("div");
-  fullscreenContainer.style.position = "fixed";
-  fullscreenContainer.style.top = "0";
-  fullscreenContainer.style.left = "0";
-  fullscreenContainer.style.width = "100%";
-  fullscreenContainer.style.height = "100%";
-  fullscreenContainer.style.backgroundColor = "rgba(0, 0, 0, 0.9)"; // Semi-transparent black background
-  fullscreenContainer.style.zIndex = "1000"; // Ensure it's above other content
-  fullscreenContainer.style.display = "flex";
-  fullscreenContainer.style.justifyContent = "center";
-  fullscreenContainer.style.alignItems = "center";
-  fullscreenContainer.style.flexDirection = "column"; // stack vertically
-
-  // 🦷 Create and append the case title watermark
-  const watermark = document.createElement("div");
-  watermark.textContent = `🦷 Case: ${window.caseID || "N/A"}`;
-  watermark.style.position = "absolute";
-  watermark.style.left = "50%";
-  watermark.style.transform = "translateX(-50%)"; // only X-axis initially
-  watermark.style.color = "white";
-  watermark.style.fontSize = "32px";
-  watermark.style.fontWeight = "bold";
-  watermark.style.textShadow = "0px 0px 10px rgba(0, 0, 0, 0.8)";
-  watermark.style.pointerEvents = "none";
-  watermark.classList.add("case-title-watermark");
-
-  fullscreenContainer.appendChild(watermark);
-
-  // Dynamically position vertically based on image
-  const centerWatermark = () => {
-    const img = fullscreenContainer.querySelector("img");
-    if (!img) return;
-
-    const imgRect = img.getBoundingClientRect();
-    const containerRect = fullscreenContainer.getBoundingClientRect();
-    const verticalCenter = imgRect.top + imgRect.height / 2 - containerRect.top;
-
-    watermark.style.top = `${verticalCenter}px`;
-  };
-
-  // Run after image is loaded and on resize
-  const imgElement = fullscreenContainer.querySelector("img");
-  if (imgElement && !imgElement.complete) {
-    imgElement.onload = centerWatermark;
-  } else {
-    centerWatermark();
-  }
-
-  window.addEventListener("resize", centerWatermark);
-
-  // Calculate maximum dimensions for the fullscreen image
-  const screenWidth = window.innerWidth;
-  const screenHeight = window.innerHeight;
-  let maxImageWidth;
-  let maxImageHeight;
-  //if is mobile then expand image
-  if (isMobileDevice()) {
-    maxImageWidth = screenWidth * 0.9; // Adjust as needed, e.g., 90% of screen width
-    maxImageHeight = screenHeight * 0.9; // Adjust as needed, e.g., 90% of screen height
-  } else {
-    maxImageWidth = img.width;
-    maxImageHeight = img.height;
-  }
-
-  // Create an image element inside the fullscreen container
-  const fullscreenImg = new Image();
-  fullscreenImg.src = img.src; // Set the source of the fullscreen image
-
-  // Calculate image dimensions to maintain aspect ratio
-  const aspectRatio = img.width / img.height;
-  let displayWidth = maxImageWidth;
-  let displayHeight = maxImageWidth / aspectRatio;
-
-  // Adjust based on height if necessary
-  if (displayHeight > maxImageHeight) {
-    displayHeight = maxImageHeight;
-    displayWidth = maxImageHeight * aspectRatio;
-  }
-
-  // Apply calculated dimensions and styles to the image
-  fullscreenImg.style.width = `${displayWidth}px`;
-  fullscreenImg.style.height = `${displayHeight}px`;
-  fullscreenImg.style.objectFit = "contain"; // Maintain aspect ratio
-  const touchMoveHandler = function (event) {
-    if (event.scale !== 1) {
-      event.preventDefault();
-    }
-  };
-
-  const wheelHandler = function (event) {
-    if (event.ctrlKey) {
-      event.preventDefault();
-    }
-  };
-  document.addEventListener("touchmove", touchMoveHandler, { passive: false });
-  document.addEventListener("wheel", wheelHandler, { passive: false });
-  // Append the fullscreen image to the container
-  fullscreenContainer.appendChild(fullscreenImg);
-  // Close fullscreen on click outside the image
-  fullscreenContainer.addEventListener("click", function () {
-    document.removeEventListener("touchmove", touchMoveHandler, {
-      passive: false,
-    });
-    document.removeEventListener("wheel", wheelHandler, { passive: false });
-    document.body.removeChild(fullscreenContainer); // Remove fullscreen container
-  });
-  // Append the fullscreen container to the body
-  document.body.appendChild(fullscreenContainer);
-}
-
-function isObject(variable) {
-  return variable !== null && typeof variable === "object";
-}
-
-window.addEventListener("load", () => {
-  const fixToothMapPosition = () => {
-    const allButtons = document.getElementsByTagName("button");
-    for (let btn of allButtons) {
-      const img = btn.querySelector("img");
-
-      if (img && img.src.startsWith("data:image/png;base64")) {
-        // ✅ 分别控制按钮位置 & 图片宽度
-        const topValue = isMobileDevice() ? "200px" : "150px";
-        const imgWidth = isMobileDevice() ? "200px" : "140px";
-
-        btn.style.position = "fixed";
-        btn.style.top = topValue;
-        btn.style.left = "15px";
-        btn.style.width = imgWidth; // ← 设置按钮宽度
-        btn.style.height = "auto";
-        btn.style.padding = "0";
-        btn.style.border = "none";
-        btn.style.background = "none";
-        btn.style.cursor = "pointer";
-        btn.style.zIndex = "1000";
-
-        img.style.width = "100%"; // ← 图片宽度始终相对于按钮宽度
-        img.style.height = "auto";
-        img.style.transform = "none";
-        img.style.display = "block";
-
-        return true;
-      }
-    }
-    return false;
-  };
-
-  const interval = setInterval(() => {
-    if (fixToothMapPosition()) {
-      clearInterval(interval);
-    }
-  }, 200);
-});
-
-window.addEventListener("load", () => {
-  const interval = setInterval(() => {
-    const allButtons = document.getElementsByTagName("button");
-
-    for (let btn of allButtons) {
-      const img = btn.querySelector("img");
-
-      if (img && img.src.startsWith("data:image/png")) {
-        if (!btn.hasAttribute("data-zoom-bound")) {
-          btn.setAttribute("data-zoom-bound", "true");
-
-          btn.addEventListener("click", () => {
-            const overlayDivs = document.querySelectorAll(
-              "div[style*='position: fixed']"
-            );
-            for (let div of overlayDivs) {
-              const popupImg = div.querySelector("img");
-              if (popupImg && popupImg.src.startsWith("data:image/png")) {
-                // ✅ 放大样式
-                popupImg.style.maxWidth = "80vw";
-                popupImg.style.maxHeight = "80vh";
-                popupImg.style.width = "auto";
-                popupImg.style.height = "auto";
-
-                // ✅ 隐藏 chatbox 和 icon
-                const chatWidget = document.getElementById("chat-widget");
-                const chatIcon = document.getElementById("chat-icon");
-                if (chatWidget) chatWidget.style.display = "none";
-                if (chatIcon) chatIcon.style.display = "none";
-
-                // ✅ 点击浮层退出，并根据设备恢复
-                div.addEventListener(
-                  "click",
-                  () => {
-                    div.remove();
-
-                    const isMobile =
-                      /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-                        navigator.userAgent
-                      );
-
-                    if (chatWidget && chatIcon) {
-                      if (isMobile) {
-                        chatWidget.classList.remove("active");
-                        chatWidget.style.display = "none";
-                        chatIcon.style.display = "block";
-                      } else {
-                        chatWidget.style.display = "flex";
-                        chatIcon.style.display = "none";
+        const img = btn.querySelector("img");
+
+        if (img && img.src.startsWith("data:image/png")) {
+          if (!btn.hasAttribute("data-zoom-bound")) {
+            btn.setAttribute("data-zoom-bound", "true");
+
+            btn.addEventListener("click", () => {
+              const overlayDivs = document.querySelectorAll(
+                "div[style*='position: fixed']"
+              );
+              for (let div of overlayDivs) {
+                const popupImg = div.querySelector("img");
+                if (popupImg && popupImg.src.startsWith("data:image/png")) {
+                  // ✅ 放大样式
+                  popupImg.style.maxWidth = "80vw";
+                  popupImg.style.maxHeight = "80vh";
+                  popupImg.style.width = "auto";
+                  popupImg.style.height = "auto";
+
+                  // ✅ 隐藏 chatbox 和 icon
+                  const chatWidget = document.getElementById("chat-widget");
+                  const chatIcon = document.getElementById("chat-icon");
+                  if (chatWidget) chatWidget.style.display = "none";
+                  if (chatIcon) chatIcon.style.display = "none";
+
+                  // ✅ 点击浮层退出，并根据设备恢复
+                  div.addEventListener(
+                    "click",
+                    () => {
+                      div.remove();
+
+                      const isMobile =
+                        /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+                          navigator.userAgent
+                        );
+
+                      if (chatWidget && chatIcon) {
+                        if (isMobile) {
+                          chatWidget.classList.remove("active");
+                          chatWidget.style.display = "none";
+                          chatIcon.style.display = "block";
+                        } else {
+                          chatWidget.style.display = "flex";
+                          chatIcon.style.display = "none";
+                        }
                       }
-                    }
-                  },
-                  { once: true }
-                );
+                    },
+                    { once: true }
+                  );
 
-                break;
+                  break;
+                }
               }
-            }
-          });
-        }
+            });
+          }
 
-        clearInterval(interval);
-        break;
+          clearInterval(interval);
+          break;
+        }
       }
-    }
-  }, 300);
-});
+    }, 300);
+  });
+}
+
+/*
+if (isThreeDViewerPage) {
+  window.addEventListener("load", () => {
+    const repositionThumbnailPreview = () => {
+      const allButtons = document.getElementsByTagName("button");
+
+      for (let btn of allButtons) {
+        const img = btn.querySelector("img");
+        if (img && img.src.startsWith("data:image/png")) {
+          return applyThumbnailPreviewOffset(btn, img);
+        }
+      }
+
+      return false;
+    };
+
+    const interval = setInterval(() => {
+      if (repositionThumbnailPreview()) {
+        clearInterval(interval);
+      }
+    }, 250);
+
+    window.addEventListener("resize", repositionThumbnailPreview);
+  });
+}
+*/
