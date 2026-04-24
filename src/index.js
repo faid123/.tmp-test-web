@@ -98,6 +98,8 @@ const pointer = new THREE.Vector2();
 const hoverHighlightColor = new THREE.Color(0x2dcdb2);
 const selectedHighlightColor = new THREE.Color(0x1e88e5);
 const POLYLINE_ENDPOINT = "/polylines/getall";
+const START_WITH_POLYLINE_EDITING = false;
+let isPolylineEditMode = START_WITH_POLYLINE_EDITING;
 let currentViewPreset = "Reset";
 let hoveredMesh = null;
 let selectedMesh = null;
@@ -121,6 +123,14 @@ function clearPolylineOverlay() {
     polylineOverlayGroup.remove(child);
     disposeObject3D(child);
   }
+}
+
+function syncPolylineEditPointVisibility() {
+  polylineOverlayGroup.traverse((child) => {
+    if (child.userData?.overlayType === "polyline-edit-points") {
+      child.visible = isPolylineEditMode;
+    }
+  });
 }
 
 function getJawMeshByType(jawType) {
@@ -258,7 +268,6 @@ function normalizePolylineResponse(rawResponse) {
 }
 
 function createPolylineObjects(jawType, points) {
-  const color = jawType === "upper" ? 0x18b7a0 : 0xf08a24;
   const vectors = points.map((point) => new THREE.Vector3(point.x, point.y, point.z));
   const group = new THREE.Group();
   group.name = `${jawType}-polyline-group`;
@@ -267,20 +276,42 @@ function createPolylineObjects(jawType, points) {
     arch: jawType,
   };
 
+  if (vectors.length >= 2) {
+    const lineGeometry = new THREE.BufferGeometry().setFromPoints(vectors);
+    const lineMaterial = new THREE.LineBasicMaterial({
+      color: 0x7b2ff2,
+      transparent: true,
+      opacity: 1,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const line = new THREE.Line(lineGeometry, lineMaterial);
+    line.name = `${jawType}-polyline-line`;
+    line.renderOrder = 20;
+    line.userData = {
+      overlayType: "polyline-line",
+      arch: jawType,
+    };
+    group.add(line);
+  }
+
   if (vectors.length >= 1) {
     const pointGeometry = new THREE.BufferGeometry().setFromPoints(vectors);
     const pointMaterial = new THREE.PointsMaterial({
-      color,
+      color: 0xf08a24,
       size: 2.8,
       sizeAttenuation: true,
       transparent: true,
       opacity: 1,
+      depthTest: false,
       depthWrite: false,
     });
     const pointCloud = new THREE.Points(pointGeometry, pointMaterial);
-    pointCloud.name = `${jawType}-polyline-points`;
+    pointCloud.name = `${jawType}-polyline-edit-points`;
+    pointCloud.visible = isPolylineEditMode;
+    pointCloud.renderOrder = 21;
     pointCloud.userData = {
-      overlayType: "polyline-points",
+      overlayType: "polyline-edit-points",
       arch: jawType,
     };
     group.add(pointCloud);
@@ -306,7 +337,37 @@ function renderPolylineData(polylineByJaw) {
     const polylineGroup = createPolylineObjects(jawType, points);
     polylineOverlayGroup.add(polylineGroup);
   });
+
+  syncPolylineEditPointVisibility();
 }
+
+function createPolylineEditButton() {
+  if (document.getElementById("polyline-edit-toggle")) return;
+
+  const button = document.createElement("button");
+  button.id = "polyline-edit-toggle";
+  button.textContent = isPolylineEditMode ? "Done Editing" : "Edit Polyline";
+  button.style.position = "fixed";
+  button.style.left = "32px";
+  button.style.bottom = "96px";
+  button.style.padding = "10px 14px";
+  button.style.backgroundColor = "#fd7e14";
+  button.style.color = "white";
+  button.style.border = "none";
+  button.style.cursor = "pointer";
+  button.style.borderRadius = "5px";
+  button.style.fontWeight = "bold";
+  button.style.zIndex = "1000";
+  button.addEventListener("click", () => {
+    isPolylineEditMode = !isPolylineEditMode;
+    button.textContent = isPolylineEditMode ? "Done Editing" : "Edit Polyline";
+    syncPolylineEditPointVisibility();
+  });
+
+  document.body.appendChild(button);
+}
+
+window.addEventListener("load", createPolylineEditButton);
 
 async function fetchAndRenderPolylines(caseIntID) {
   clearPolylineOverlay();
