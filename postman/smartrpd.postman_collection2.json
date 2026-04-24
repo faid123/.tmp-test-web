@@ -1340,6 +1340,47 @@
 				}
 			},
 			"response": []
+		},
+		{
+			"name": "Get All Polylines",
+			"protocolProfileBehavior": {
+				"disabledSystemHeaders": {
+					"connection": true,
+					"accept-encoding": true,
+					"accept": true,
+					"user-agent": true
+				}
+			},
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "[\r\n  {\r\n    \"machine_id\": \"{{machine_id}}\",\r\n    \"uuid\": \"{{uuid}}\",\r\n    \"caseIntID\": {{caseIntID}}\r\n  },\r\n  {\r\n    \"case_id\": {{caseIntID}}\r\n  }\r\n]\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "https://live.api.smartrpdai.com/api/smartrpd/polylines/getall",
+					"protocol": "https",
+					"host": [
+						"live",
+						"api",
+						"smartrpdai",
+						"com"
+					],
+					"path": [
+						"api",
+						"smartrpd",
+						"polylines",
+						"getall"
+					]
+				}
+			},
+			"response": []
 		}
 	]
 }

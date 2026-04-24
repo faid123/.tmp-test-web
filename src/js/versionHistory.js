@@ -25,11 +25,11 @@
 
   function actionToKey(s = "") {
     s = s.toLowerCase();
-    if (s.includes("create"))  return "created";
-    if (s.includes("edit"))    return "edited";
-    if (s.includes("share"))   return "shared";
+    if (s.includes("create")) return "created";
+    if (s.includes("edit")) return "edited";
+    if (s.includes("share")) return "shared";
     if (s.includes("approve")) return "approved";
-    if (s.includes("print"))   return "printing";
+    if (s.includes("print")) return "printing";
     return "other";
   }
 
@@ -39,17 +39,17 @@
     return new Date(t).toLocaleString();
   }
 
-// 统一灰色线条风格的 SVG 图标
-const ICON_STYLE = 'width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+  // 统一灰色线条风格的 SVG 图标
+  const ICON_STYLE = 'width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 
-const TYPE_ICON = {
-  created:  `<svg ${ICON_STYLE}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
-  edited:   `<svg ${ICON_STYLE}><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>`,
-  shared:   `<svg ${ICON_STYLE}><polyline points="16 6 20 10 16 14"/><path d="M4 12v-2a4 4 0 0 1 4-4h8"/><path d="M20 10v2a4 4 0 0 1-4 4H8"/></svg>`,
-  approved: `<svg ${ICON_STYLE}><polyline points="20 6 9 17 4 12"/></svg>`,
-  printing: `<svg ${ICON_STYLE}><polyline points="6 9 6 2 18 2 18 9"/><rect x="6" y="14" width="12" height="8"/><path d="M20 9h-16a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h2"/></svg>`,
-  other:    `<svg ${ICON_STYLE}><circle cx="12" cy="12" r="3"/></svg>`
-};
+  const TYPE_ICON = {
+    created: `<svg ${ICON_STYLE}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+    edited: `<svg ${ICON_STYLE}><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>`,
+    shared: `<svg ${ICON_STYLE}><polyline points="16 6 20 10 16 14"/><path d="M4 12v-2a4 4 0 0 1 4-4h8"/><path d="M20 10v2a4 4 0 0 1-4 4H8"/></svg>`,
+    approved: `<svg ${ICON_STYLE}><polyline points="20 6 9 17 4 12"/></svg>`,
+    printing: `<svg ${ICON_STYLE}><polyline points="6 9 6 2 18 2 18 9"/><rect x="6" y="14" width="12" height="8"/><path d="M20 9h-16a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h2"/></svg>`,
+    other: `<svg ${ICON_STYLE}><circle cx="12" cy="12" r="3"/></svg>`
+  };
 
 
   // ---------- Fetch helpers ----------
@@ -142,10 +142,10 @@ const TYPE_ICON = {
     }
 
     listEl.innerHTML = items.map(it => {
-      const key   = actionToKey(it.action || "");
-      const icon  = TYPE_ICON[key] || TYPE_ICON.other;
+      const key = actionToKey(it.action || "");
+      const icon = TYPE_ICON[key] || TYPE_ICON.other;
       const actor = resolveActor(userIndex, it.user_id);
-      const timeTx= formatMs(it.datetime);
+      const timeTx = formatMs(it.datetime);
 
       return `
         <li class="vh-item" data-id="${it.id}" data-op="${key}"
@@ -181,10 +181,10 @@ const TYPE_ICON = {
 
   // ---------- Bind ----------
   document.addEventListener("DOMContentLoaded", () => {
-    const btn     = document.getElementById("viewVersionBtn");
-    const modal   = document.getElementById("versionHistoryModal");
-    const closeBtn= document.getElementById("closeVersionModal");
-    const listEl  = document.getElementById("versionList");
+    const btn = document.getElementById("viewVersionBtn");
+    const modal = document.getElementById("versionHistoryModal");
+    const closeBtn = document.getElementById("closeVersionModal");
+    const listEl = document.getElementById("versionList");
 
     if (!btn || !modal || !listEl) return;
 
@@ -193,7 +193,7 @@ const TYPE_ICON = {
       document.getElementById("caseDropdown")?.classList.add("hidden");
 
       const caseId = getActiveCaseId();
-      const user   = getLoggedInUser();
+      const user = getLoggedInUser();
 
       if (!caseId || !user?.uuid) {
         alert("⚠️ Please select a case first.");

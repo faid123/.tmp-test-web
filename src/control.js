@@ -1,3 +1,12 @@
+// control.js - A module for adding visibility and transparency controls to 3D objects using dat.GUI.
+// This module defines a function addVisibilityAndTransparencyControls that takes a parent object, a name, an array of materials, and a jaw type. It creates a dat.GUI interface that allows users to toggle the visibility and adjust the transparency of each mesh child of the parent object. The controls are organized in folders based on the names of the meshes, and custom icons are used for better visual representation. Additionally, a global toggle button is provided to show or hide all meshes at once. The GUI is styled with custom CSS for a more polished look, and it includes responsive design considerations for mobile devices.
+// Example usage:
+// import { addVisibilityAndTransparencyControls } from './control.js';
+// const parentObject = ...; // Your 3D object with mesh children
+// const materialArray = ...; // Array of materials for different states
+// const jawType = ...; // Object defining jaw types
+// addVisibilityAndTransparencyControls(parentObject, 'Control Panel', materialArray, jawType);
+// Note: This module relies on the dat.GUI library, which should be included in your project for it to work properly.
 import { GUI } from '../node_modules/dat.gui';
 
 function addVisibilityAndTransparencyControls(parentObject, name, material_array, jaw_type) {
@@ -212,7 +221,7 @@ function addVisibilityAndTransparencyControls(parentObject, name, material_array
     if (guiContainer.offsetHeight) {
         guiContainer.style.overflowY = 'auto';
         guiContainer.style.overflowX = 'hidden';
-    
+
         blackBar = document.createElement('div');
         blackBar.style.position = 'fixed';
         blackBar.style.zIndex = '999'; // Ensure the black bar is behind the guiContainer
@@ -222,7 +231,7 @@ function addVisibilityAndTransparencyControls(parentObject, name, material_array
             temp_width = temp_width * 2;
         }
         blackBar.style.width = temp_width + 'px'; // Full width of the viewport
-        
+
         let temp_height_of_bar = 25;
         let temp_height = guiContainer.offsetTop + guiContainer.offsetHeight;
         if (isMobileDevice()) {
@@ -309,7 +318,7 @@ function addVisibilityAndTransparencyControls(parentObject, name, material_array
 
     if (isMobileDevice()) {
         const scale = 2;
-        
+
         guiContainer.style.transformOrigin = 'top left';
         guiContainer.style.transform = `scale(${scale})`;
         parentObject.position.y -= 5;

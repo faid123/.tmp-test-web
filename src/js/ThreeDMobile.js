@@ -13,9 +13,9 @@ window.addEventListener("DOMContentLoaded", () => {
   chatIcon.style.display = "none";
 
   if (isMobileDevice()) {
-      // ✅ 插入移动端专属样式：放大字体 & 图片
-      const style = document.createElement('style');
-      style.innerHTML = `
+    // ✅ 插入移动端专属样式：放大字体 & 图片
+    const style = document.createElement('style');
+    style.innerHTML = `
       #chat-box .chat-message {
         font-size: 28px !important; /* 原 14px */
       }
@@ -33,27 +33,27 @@ window.addEventListener("DOMContentLoaded", () => {
         max-height: 240px !important;
       }
     `;
-      document.head.appendChild(style);
+    document.head.appendChild(style);
 
-      // ✅ 移动端隐藏聊天框，显示图标
-      chatWidget.style.display = "none";
-      chatIcon.style.display = "block";
+    // ✅ 移动端隐藏聊天框，显示图标
+    chatWidget.style.display = "none";
+    chatIcon.style.display = "block";
 
-      chatIcon.addEventListener("click", () => {
-          const isActive = chatWidget.classList.toggle("active");
-          chatWidget.style.display = isActive ? "flex" : "none";
-      });
+    chatIcon.addEventListener("click", () => {
+      const isActive = chatWidget.classList.toggle("active");
+      chatWidget.style.display = isActive ? "flex" : "none";
+    });
 
-      document.addEventListener("click", (e) => {
-          const isInsideChat = chatWidget.contains(e.target) || chatIcon.contains(e.target);
-          const isInImageModal = e.target.closest("#imageModal") !== null; // ✅ 用 ID 精准匹配
-          const isCancelPreviewBtn = e.target.closest(".cancel-preview") !== null; // ✅ 更稳写法
+    document.addEventListener("click", (e) => {
+      const isInsideChat = chatWidget.contains(e.target) || chatIcon.contains(e.target);
+      const isInImageModal = e.target.closest("#imageModal") !== null; // ✅ 用 ID 精准匹配
+      const isCancelPreviewBtn = e.target.closest(".cancel-preview") !== null; // ✅ 更稳写法
 
-          if (!isInsideChat && !isInImageModal && !isCancelPreviewBtn && chatWidget.classList.contains("active")) {
-              chatWidget.classList.remove("active");
-              chatWidget.style.display = "none";
-          }
-      });
+      if (!isInsideChat && !isInImageModal && !isCancelPreviewBtn && chatWidget.classList.contains("active")) {
+        chatWidget.classList.remove("active");
+        chatWidget.style.display = "none";
+      }
+    });
 
   }
 });

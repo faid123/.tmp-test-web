@@ -1,7 +1,9 @@
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
-  overflow-x: hidden; /* 防止横向滚动条 */
+  overflow-x: hidden;
+  /* 防止横向滚动条 */
   font-family: Arial, sans-serif;
   background-color: #f8f9fa;
   height: 100vh;
@@ -9,7 +11,8 @@ html, body {
   /* ✅ 添加这些让主容器水平居中 */
   display: flex;
   justify-content: center;
-  align-items: flex-start; /* 或 center 看你要不要垂直居中 */
+  align-items: flex-start;
+  /* 或 center 看你要不要垂直居中 */
 }
 
 
@@ -18,12 +21,14 @@ html, body {
   flex-direction: row;
   align-items: flex-start;
   padding: 70px;
-  height: calc(100vh - 10px); /* 给出 padding 的高度空间 */
+  height: calc(100vh - 10px);
+  /* 给出 padding 的高度空间 */
   box-sizing: border-box;
 }
 
 #image-preview-area {
-  height: 100%;                  /* 高度占满容器 */
+  height: 100%;
+  /* 高度占满容器 */
   margin-right: 40px;
   border: 2px solid #ccc;
   box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
@@ -32,17 +37,21 @@ html, body {
   box-sizing: border-box;
   overflow: hidden;
 
-  width: auto;                  /* 不固定宽度，自动适应图像 */
+  width: auto;
+  /* 不固定宽度，自动适应图像 */
   display: flex;
   align-items: center;
   justify-content: flex-start;
 }
 
 #image-preview-area img {
-  height: 100%;                 /* 高度占满容器 */
-  width: auto;                  /* 宽度自适应比例 */
+  height: 100%;
+  /* 高度占满容器 */
+  width: auto;
+  /* 宽度自适应比例 */
   display: block;
-  object-fit: contain;          /* 保证图像不被裁切 */
+  object-fit: contain;
+  /* 保证图像不被裁切 */
 }
 
 
@@ -61,7 +70,8 @@ html, body {
 
 #annotation-panel {
   width: 320px;
-  height: 100%; /* 👈 让它与 image 区域等高 */
+  height: 100%;
+  /* 👈 让它与 image 区域等高 */
   margin-left: 40px;
   padding: 20px;
   background: #fff;
@@ -109,6 +119,7 @@ html, body {
   color: #d10000;
   border: 1px solid #ffa1a1;
 }
+
 #cancelBtn:hover {
   background-color: #ffdada;
 }
@@ -118,6 +129,7 @@ html, body {
   color: #007f2f;
   border: 1px solid #9decb2;
 }
+
 #saveBtn:hover {
   background-color: #c8ffd7;
 }
@@ -165,54 +177,62 @@ html, body {
 }
 
 /* 1️⃣ 侧边标注面板——限制在视口内，高度超出时自己滚动 */
-#annotation-panel{
+#annotation-panel {
   /* 如果原本就是 fixed/absolute，可以保留；否则下面两行可省略 */
-  position: fixed;          /* 让它跟随视口而非随页面滚动 */
-  top: 16px;                /* 你原来的定位值 */
+  position: fixed;
+  /* 让它跟随视口而非随页面滚动 */
+  top: 16px;
+  /* 你原来的定位值 */
   right: 16px;
 
-  max-height: calc(100vh - 32px);  /* 始终不高于可视区 */
-  overflow-y: auto;        /* 垂直滚动只发生在面板内部 */
-  overflow-x: hidden;      /* 横向不滚动 */
+  max-height: calc(100vh - 32px);
+  /* 始终不高于可视区 */
+  overflow-y: auto;
+  /* 垂直滚动只发生在面板内部 */
+  overflow-x: hidden;
+  /* 横向不滚动 */
 
   padding: 16px;
   box-sizing: border-box;
   background: #fff;
   border-radius: 8px;
-  box-shadow: 0 0 6px rgba(0,0,0,.15);
+  box-shadow: 0 0 6px rgba(0, 0, 0, .15);
 }
 
 /* 2️⃣ 按钮统一块级显示，行高在小屏压缩一点 */
-#annotation-panel button{
+#annotation-panel button {
   display: block;
   width: 100%;
   margin: 4px 0;
-  padding: 8px 12px;       /* 默认行高 */
+  padding: 8px 12px;
+  /* 默认行高 */
   font-size: 16px;
 }
 
 /* 小屏（≤750 px 高）再缩小按钮行高 */
-@media (max-height: 750px){
-  #annotation-panel button{
+@media (max-height: 750px) {
+  #annotation-panel button {
     padding: 4px 8px;
     font-size: 14px;
   }
 }
 
 /* 3️⃣ 控件滚动条瘦身（可选美化） */
-#annotation-panel::-webkit-scrollbar{
+#annotation-panel::-webkit-scrollbar {
   width: 6px;
 }
-#annotation-panel::-webkit-scrollbar-thumb{
+
+#annotation-panel::-webkit-scrollbar-thumb {
   background: #c1c1c1;
   border-radius: 3px;
 }
 
 /* 4️⃣ 更窄屏时可折叠“尺寸/取色”这两个大块（可选）  */
-@media (max-height: 650px){
+@media (max-height: 650px) {
+
   #sizeSlider,
   #colorPicker,
-  .color-label{
+  .color-label {
     display: none;
   }
 }

@@ -1,9 +1,9 @@
 (function () {
   const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
-  const notifBtn   = document.getElementById("notificationBtn");
+  const notifBtn = document.getElementById("notificationBtn");
   const notifPopup = document.getElementById("notificationPopup");
-  const notifList  = document.getElementById("notificationList");
+  const notifList = document.getElementById("notificationList");
   const markAllBtn = document.getElementById("markAllBtn");
 
   const user = JSON.parse(localStorage.getItem("loggedInUser"));
@@ -24,9 +24,9 @@
       const caseRes2 = await fetch(
         "https://live.api.smartrpdai.com/api/smartrpd/case/user/findall/get",
         {
-          method : "POST",
+          method: "POST",
           headers: { "Content-Type": "application/json" },
-          body   : JSON.stringify([
+          body: JSON.stringify([
             { machine_id: MACHINE_ID, uuid: user.uuid },
             { uuid: user.uuid }
           ])
@@ -42,9 +42,9 @@
         const aRes2 = await fetch(
           "https://live.api.smartrpdai.com/api/smartrpd/alerts/getallbytouser",
           {
-            method : "POST",
+            method: "POST",
             headers: { "Content-Type": "application/json" },
-            body   : JSON.stringify([
+            body: JSON.stringify([
               { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: cid },
               { to_user: USERNAME }
             ])
@@ -67,7 +67,7 @@
     }
   }
 
-    /* ====== 🔴 红点自动轮询（独立模块） ====== */
+  /* ====== 🔴 红点自动轮询（独立模块） ====== */
   let notifDotTimer = null;
   let notifDotInFlight = false;
 
@@ -108,7 +108,7 @@
 
   // 页面加载完成就先统计一次红点（无需点开弹窗）
   refreshNotifDotFromAPI();
-    // 启动红点轮询：每 5 秒检查一次
+  // 启动红点轮询：每 5 秒检查一次
   startNotificationDotPolling(5000);
 
 
@@ -119,9 +119,9 @@
       const caseRes = await fetch(
         "https://live.api.smartrpdai.com/api/smartrpd/case/user/findall/get",
         {
-          method : "POST",
+          method: "POST",
           headers: { "Content-Type": "application/json" },
-          body   : JSON.stringify([
+          body: JSON.stringify([
             { machine_id: MACHINE_ID, uuid: user.uuid },
             { uuid: user.uuid }
           ])
@@ -144,9 +144,9 @@
         const aRes = await fetch(
           "https://live.api.smartrpdai.com/api/smartrpd/alerts/getallbytouser",
           {
-            method : "POST",
+            method: "POST",
             headers: { "Content-Type": "application/json" },
-            body   : JSON.stringify([
+            body: JSON.stringify([
               { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: cid },
               { to_user: USERNAME }
             ])
@@ -171,16 +171,16 @@
       // D. 对缺名字的 case 再兜底查一次（保留你的逻辑）
       const missingIds = [...new Set(
         uniqueAlerts.filter(a => !caseNameMap[String(a.case_int_id)])
-                    .map(a => a.case_int_id)
+          .map(a => a.case_int_id)
       )];
       await Promise.all(missingIds.map(async cid => {
         try {
           const r = await fetch(
             `https://live.api.smartrpdai.com/api/smartrpd/case/get/${cid}`,
             {
-              method : "POST",
+              method: "POST",
               headers: { "Content-Type": "application/json" },
-              body   : JSON.stringify([
+              body: JSON.stringify([
                 { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: cid }
               ])
             }
@@ -189,7 +189,7 @@
             const d = await r.json();
             if (d && d.case_id) caseNameMap[String(cid)] = d.case_id;
           }
-        } catch (_) {}
+        } catch (_) { }
       }));
 
       // E. 渲染
@@ -212,9 +212,9 @@
     list.sort((a, b) => b.id - a.id);
 
     list.forEach(a => {
-      const hasStatus  = a.new_status !== undefined && a.new_status !== null && a.new_status !== "";
-      const caseName   = nameMap[String(a.case_int_id)] || `Case ${a.case_int_id}`;
-      const msgPart    = a.alert_message ? `, with message “${a.alert_message}”` : "";
+      const hasStatus = a.new_status !== undefined && a.new_status !== null && a.new_status !== "";
+      const caseName = nameMap[String(a.case_int_id)] || `Case ${a.case_int_id}`;
+      const msgPart = a.alert_message ? `, with message “${a.alert_message}”` : "";
       let line;
 
       if (hasStatus) {
@@ -233,7 +233,7 @@
         <div class="notification-time">${pretty(a.create_date)}</div>
       `;
       // ★ 绑定到 DOM（用补齐后的 case_int_id / _cid）
-      div.dataset.alertId   = a.id;
+      div.dataset.alertId = a.id;
       div.dataset.caseIntId = a.case_int_id || a._cid;
 
       notifList.appendChild(div);
@@ -243,10 +243,10 @@
   const pretty = t => {
     if (!t) return "";
     const diffMin = Math.floor((Date.now() - new Date(t)) / 60000);
-    if (diffMin < 1)  return "just now";
+    if (diffMin < 1) return "just now";
     if (diffMin < 60) return `${diffMin} min ago`;
     const diffH = diffMin / 60 | 0;
-    if (diffH < 24)  return `${diffH} h ago`;
+    if (diffH < 24) return `${diffH} h ago`;
     return new Date(t).toLocaleDateString();
   };
 
@@ -258,12 +258,12 @@
       { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: Number(caseIntID) },
       { id: Number(alertId), read_status: Number(read) }
     ];
-    const res  = await fetch(
+    const res = await fetch(
       "https://live.api.smartrpdai.com/api/smartrpd/alerts/setreadstatus",
       {
-        method : "POST",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body   : JSON.stringify(payload)
+        body: JSON.stringify(payload)
       }
     );
     const text = await res.text(); // 可能是 mysql info
@@ -279,7 +279,7 @@
     if (!item.classList.contains("unread")) return; // 已读不处理
     if (item.dataset.busy === "1") return;
 
-    const alertId   = item.dataset.alertId;
+    const alertId = item.dataset.alertId;
     const caseIntID = item.dataset.caseIntId;
     if (!alertId || !caseIntID) {
       console.warn("missing alertId/caseIntID", item.dataset);
@@ -316,7 +316,7 @@
       for (let i = 0; i < items.length; i += chunk) {
         await Promise.all(
           items.slice(i, i + chunk).map(async el => {
-            const id  = el.dataset.alertId;
+            const id = el.dataset.alertId;
             const cid = el.dataset.caseIntId;
             if (!id || !cid) return;
             try {

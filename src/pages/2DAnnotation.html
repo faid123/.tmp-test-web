@@ -1,17 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>2D Annotate</title>
   <link rel="icon" href="/assets/favicon.ico" type="image/x-icon">
 </head>
+
 <body>
   <div id="main-container" style="display: flex; align-items: flex-start;">
     <div id="image-preview-area" style="position: relative;">
-    <!-- <canvas id="fabric-canvas" width="800" height="1000"
+      <!-- <canvas id="fabric-canvas" width="800" height="1000"
     style="position: absolute; top: 0; left: 0; z-index: 10;"></canvas> -->
-      <!-- 合成图像将插入在此处 --> 
-       
+      <!-- 合成图像将插入在此处 -->
+
     </div>
     <div id="annotation-panel">
       <button id="cancelBtn">❌ CANCEL</button>
@@ -32,7 +34,7 @@
       <input type="range" id="sizeSlider" min="1" max="50" value="10">
 
       <label for="colorPicker" class="color-label">
-      <span class="palette-emoji">🎨</span>
+        <span class="palette-emoji">🎨</span>
       </label>
       <input type="color" id="colorPicker" value="#ba0a26">
 
@@ -41,24 +43,25 @@
   <div id="eraser-cursor"></div>
 
   <script>
-  const hostname = window.location.hostname;
-  const isGitHubPages = hostname.includes("github.io");
-  const basePath = isGitHubPages ? "/.tmp-test-web" : "";
+    const hostname = window.location.hostname;
+    const isGitHubPages = hostname.includes("github.io");
+    const basePath = isGitHubPages ? "/.tmp-test-web" : "";
 
-  document.write(`
+    document.write(`
     <link rel="stylesheet" href="${basePath}/css/2Dannotation.css" />
     <script type="module" src="${basePath}/src/js/2Dannotation.js"></` + `script>
   `);
-</script>
-<script>
-  document.querySelector('.palette-emoji').addEventListener('click', () => {
-    document.getElementById('colorPicker').click();
-  });
-</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  </script>
+  <script>
+    document.querySelector('.palette-emoji').addEventListener('click', () => {
+      document.getElementById('colorPicker').click();
+    });
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
-<!-- <script src="https://cdn.jsdelivr.net/npm/fabric@6.0.0-beta.7/dist/fabric.js"></script> -->
+  <!-- <script src="https://cdn.jsdelivr.net/npm/fabric@6.0.0-beta.7/dist/fabric.js"></script> -->
 
 </body>
+
 </html>

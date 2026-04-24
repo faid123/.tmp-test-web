@@ -1,0 +1,898 @@
+asset [1m[33mbundle.js[39m[22m [1m[33m665 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.62 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.51 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (665 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (665 KiB)
+      bundle.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 10209 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m665 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.4b42ad12fe0b83cca51b.hot-update.js[39m[22m [1m[33m608 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.4b42ad12fe0b83cca51b.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.24 MiB = [1m[32mbundle.js[39m[22m 665 KiB [1m[32m792.4b42ad12fe0b83cca51b.hot-update.js[39m[22m 608 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.62 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.51 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (665 KiB)
+  792.4b42ad12fe0b83cca51b.hot-update.js (608 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.24 MiB)
+      bundle.js
+      792.4b42ad12fe0b83cca51b.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 9357 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m665 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.bcbd6ef2377f3f438590.hot-update.js[39m[22m [1m[33m608 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.bcbd6ef2377f3f438590.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.24 MiB = [1m[32mbundle.js[39m[22m 665 KiB [1m[32m792.bcbd6ef2377f3f438590.hot-update.js[39m[22m 608 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.62 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.51 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (665 KiB)
+  792.bcbd6ef2377f3f438590.hot-update.js (608 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.24 MiB)
+      bundle.js
+      792.bcbd6ef2377f3f438590.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 8302 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m665 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.205213cfada99ba932c9.hot-update.js[39m[22m [1m[33m608 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.205213cfada99ba932c9.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.24 MiB = [1m[32mbundle.js[39m[22m 665 KiB [1m[32m792.205213cfada99ba932c9.hot-update.js[39m[22m 608 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.62 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.51 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (665 KiB)
+  792.205213cfada99ba932c9.hot-update.js (608 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.24 MiB)
+      bundle.js
+      792.205213cfada99ba932c9.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 15758 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m666 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.9ecfe7cfb7cbceaba5ca.hot-update.js[39m[22m [1m[33m609 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.9ecfe7cfb7cbceaba5ca.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.24 MiB = [1m[32mbundle.js[39m[22m 666 KiB [1m[32m792.9ecfe7cfb7cbceaba5ca.hot-update.js[39m[22m 609 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.62 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.52 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (666 KiB)
+  792.9ecfe7cfb7cbceaba5ca.hot-update.js (609 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.24 MiB)
+      bundle.js
+      792.9ecfe7cfb7cbceaba5ca.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 16499 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m666 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.417a8ec1de57c44d69e4.hot-update.js[39m[22m [1m[33m609 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.417a8ec1de57c44d69e4.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.24 MiB = [1m[32mbundle.js[39m[22m 666 KiB [1m[32m792.417a8ec1de57c44d69e4.hot-update.js[39m[22m 609 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.62 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.52 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (666 KiB)
+  792.417a8ec1de57c44d69e4.hot-update.js (609 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.24 MiB)
+      bundle.js
+      792.417a8ec1de57c44d69e4.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 12764 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m666 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.0f8332ba1b5a5caf6010.hot-update.js[39m[22m [1m[33m610 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.0f8332ba1b5a5caf6010.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.25 MiB = [1m[32mbundle.js[39m[22m 666 KiB [1m[32m792.0f8332ba1b5a5caf6010.hot-update.js[39m[22m 610 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.63 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.52 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (666 KiB)
+  792.0f8332ba1b5a5caf6010.hot-update.js (610 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.25 MiB)
+      bundle.js
+      792.0f8332ba1b5a5caf6010.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 13544 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m668 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.d501059217ef57e3dc1f.hot-update.js[39m[22m [1m[33m612 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.d501059217ef57e3dc1f.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.25 MiB = [1m[32mbundle.js[39m[22m 668 KiB [1m[32m792.d501059217ef57e3dc1f.hot-update.js[39m[22m 612 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.63 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.52 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (668 KiB)
+  792.d501059217ef57e3dc1f.hot-update.js (612 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.25 MiB)
+      bundle.js
+      792.d501059217ef57e3dc1f.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 14732 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m668 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.cc3849117b10bec75120.hot-update.js[39m[22m [1m[33m612 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.cc3849117b10bec75120.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.25 MiB = [1m[32mbundle.js[39m[22m 668 KiB [1m[32m792.cc3849117b10bec75120.hot-update.js[39m[22m 612 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.63 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.52 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (668 KiB)
+  792.cc3849117b10bec75120.hot-update.js (612 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.25 MiB)
+      bundle.js
+      792.cc3849117b10bec75120.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 13246 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m668 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.c1c2dfe38cad5f10cd5b.hot-update.js[39m[22m [1m[33m612 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.c1c2dfe38cad5f10cd5b.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.25 MiB = [1m[32mbundle.js[39m[22m 668 KiB [1m[32m792.c1c2dfe38cad5f10cd5b.hot-update.js[39m[22m 612 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.63 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.52 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (668 KiB)
+  792.c1c2dfe38cad5f10cd5b.hot-update.js (612 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.25 MiB)
+      bundle.js
+      792.c1c2dfe38cad5f10cd5b.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 17134 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m668 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.9bfbc9cf3e836139c021.hot-update.js[39m[22m [1m[33m612 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.9bfbc9cf3e836139c021.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.25 MiB = [1m[32mbundle.js[39m[22m 668 KiB [1m[32m792.9bfbc9cf3e836139c021.hot-update.js[39m[22m 612 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.63 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.52 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (668 KiB)
+  792.9bfbc9cf3e836139c021.hot-update.js (612 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.25 MiB)
+      bundle.js
+      792.9bfbc9cf3e836139c021.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 16212 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m668 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.55f24e8871a0c8798857.hot-update.js[39m[22m [1m[33m612 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.55f24e8871a0c8798857.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.25 MiB = [1m[32mbundle.js[39m[22m 668 KiB [1m[32m792.55f24e8871a0c8798857.hot-update.js[39m[22m 612 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.63 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.52 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (668 KiB)
+  792.55f24e8871a0c8798857.hot-update.js (612 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.25 MiB)
+      bundle.js
+      792.55f24e8871a0c8798857.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 22498 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m668 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.56006d994f32275ea36b.hot-update.js[39m[22m [1m[33m612 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.56006d994f32275ea36b.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.25 MiB = [1m[32mbundle.js[39m[22m 668 KiB [1m[32m792.56006d994f32275ea36b.hot-update.js[39m[22m 612 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.63 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.52 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (668 KiB)
+  792.56006d994f32275ea36b.hot-update.js (612 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.25 MiB)
+      bundle.js
+      792.56006d994f32275ea36b.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 17844 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m668 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.d53789498e5a792c9a95.hot-update.js[39m[22m [1m[33m612 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.d53789498e5a792c9a95.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.25 MiB = [1m[32mbundle.js[39m[22m 668 KiB [1m[32m792.d53789498e5a792c9a95.hot-update.js[39m[22m 612 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.63 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.52 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (668 KiB)
+  792.d53789498e5a792c9a95.hot-update.js (612 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.25 MiB)
+      bundle.js
+      792.d53789498e5a792c9a95.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 17306 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m668 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.02d6a9f06a078a62e3d2.hot-update.js[39m[22m [1m[33m612 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.02d6a9f06a078a62e3d2.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.25 MiB = [1m[32mbundle.js[39m[22m 668 KiB [1m[32m792.02d6a9f06a078a62e3d2.hot-update.js[39m[22m 612 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.63 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.52 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (668 KiB)
+  792.02d6a9f06a078a62e3d2.hot-update.js (612 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.25 MiB)
+      bundle.js
+      792.02d6a9f06a078a62e3d2.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 13426 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m668 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.3b348daa71c60587cc78.hot-update.js[39m[22m [1m[33m612 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.3b348daa71c60587cc78.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.25 MiB = [1m[32mbundle.js[39m[22m 668 KiB [1m[32m792.3b348daa71c60587cc78.hot-update.js[39m[22m 612 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.63 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.53 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (668 KiB)
+  792.3b348daa71c60587cc78.hot-update.js (612 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.25 MiB)
+      bundle.js
+      792.3b348daa71c60587cc78.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 13544 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m668 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.8e34aca7fee9682a7437.hot-update.js[39m[22m [1m[33m612 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.8e34aca7fee9682a7437.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.25 MiB = [1m[32mbundle.js[39m[22m 668 KiB [1m[32m792.8e34aca7fee9682a7437.hot-update.js[39m[22m 612 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.63 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.53 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (668 KiB)
+  792.8e34aca7fee9682a7437.hot-update.js (612 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.25 MiB)
+      bundle.js
+      792.8e34aca7fee9682a7437.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 11418 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m666 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.558db5e7c743b8798808.hot-update.js[39m[22m [1m[33m610 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.558db5e7c743b8798808.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.25 MiB = [1m[32mbundle.js[39m[22m 666 KiB [1m[32m792.558db5e7c743b8798808.hot-update.js[39m[22m 610 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.63 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.53 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (666 KiB)
+  792.558db5e7c743b8798808.hot-update.js (610 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.25 MiB)
+      bundle.js
+      792.558db5e7c743b8798808.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 10882 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m669 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.34f9f8087b1c022c9f22.hot-update.js[39m[22m [1m[33m613 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.34f9f8087b1c022c9f22.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.25 MiB = [1m[32mbundle.js[39m[22m 669 KiB [1m[32m792.34f9f8087b1c022c9f22.hot-update.js[39m[22m 613 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.63 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.53 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (669 KiB)
+  792.34f9f8087b1c022c9f22.hot-update.js (613 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.25 MiB)
+      bundle.js
+      792.34f9f8087b1c022c9f22.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 11423 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m669 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.e1694cec3924dedb454c.hot-update.js[39m[22m [1m[33m613 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.e1694cec3924dedb454c.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.25 MiB = [1m[32mbundle.js[39m[22m 669 KiB [1m[32m792.e1694cec3924dedb454c.hot-update.js[39m[22m 613 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.63 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.53 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (669 KiB)
+  792.e1694cec3924dedb454c.hot-update.js (613 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.25 MiB)
+      bundle.js
+      792.e1694cec3924dedb454c.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 11555 ms
+asset [1m[33mbundle.js[39m[22m [1m[33m669 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[33m792.83d696b1cd6b31c616ea.hot-update.js[39m[22m [1m[33m613 KiB[39m[22m [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m [1m[32m[minimized][39m[22m [1m[33m[big][39m[22m (name: main) 1 related asset
+asset [1m[32mmain.83d696b1cd6b31c616ea.hot-update.json[39m[22m 25 bytes [1m[32m[emitted][39m[22m [1m[32m[immutable][39m[22m [1m[32m[hmr][39m[22m
+Entrypoint [1mmain[39m[22m [1m[33m[big][39m[22m 1.25 MiB = [1m[32mbundle.js[39m[22m 669 KiB [1m[32m792.83d696b1cd6b31c616ea.hot-update.js[39m[22m 613 KiB
+orphan modules 1.43 MiB [1m[33m[orphan][39m[22m 16 modules
+runtime modules 28 KiB 12 modules
+cacheable modules 1.63 MiB
+  modules by path [1m./node_modules/webpack-dev-server/client/[39m[22m 84.8 KiB
+    [1m./node_modules/webpack-dev-server/client/index.js?protocol=ws%3A&hostname=127.0....(truncated)[39m[22m 53.7 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack-dev-server/client/utils/log.js[39m[22m 545 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    + 2 modules
+  modules by path [1m./node_modules/webpack/hot/*.js[39m[22m 5.56 KiB
+    [1m./node_modules/webpack/hot/dev-server.js[39m[22m 2.33 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log.js[39m[22m 1.73 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/emitter.js[39m[22m 75 bytes [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+    [1m./node_modules/webpack/hot/log-apply-result.js[39m[22m 1.43 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./src/index.js + 11 modules[39m[22m 1.53 MiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/events/events.js[39m[22m 14.5 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+  [1m./node_modules/ansi-html-community/index.js[39m[22m 4.16 KiB [1m[33m[built][39m[22m [1m[33m[code generated][39m[22m
+
+[1m[33mWARNING[39m[22m in [1mconfiguration
+The [1m[31m'mode' option has not been set[39m[22m[1m, webpack will fallback to 'production' for this value.
+[1m[32mSet 'mode' option to 'development' or 'production'[39m[22m[1m to enable defaults for each environment.
+You can also set it to 'none' to disable any default behavior. Learn more: https://webpack.js.org/configuration/mode/[39m[22m
+
+[1m[33mWARNING[39m[22m in [1masset size limit: The following asset(s) exceed the recommended size limit (244 KiB).
+This can impact web performance.
+Assets: 
+  bundle.js (669 KiB)
+  792.83d696b1cd6b31c616ea.hot-update.js (613 KiB)[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mentrypoint size limit: The following entrypoint(s) combined asset size exceeds the recommended limit (244 KiB). This can impact web performance.
+Entrypoints:
+  main (1.25 MiB)
+      bundle.js
+      792.83d696b1cd6b31c616ea.hot-update.js
+[39m[22m
+
+[1m[33mWARNING[39m[22m in [1mwebpack performance recommendations: 
+You can limit the size of your bundles by using import() or require.ensure to lazy load some parts of your application.
+For more info visit https://webpack.js.org/guides/code-splitting/[39m[22m
+
+webpack 5.105.4 compiled with [1m[33m4 warnings[39m[22m in 12980 ms

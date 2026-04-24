@@ -106,8 +106,7 @@
   color: #333;
 }
 
-上传按钮区域
-.upload-buttons {
+上传按钮区域 .upload-buttons {
   display: flex;
   justify-content: space-between;
   margin-top: 24px;
@@ -136,7 +135,8 @@
 
 .modal-footer {
   display: flex;
-  justify-content: space-between;  /* 按照图1分布：左中右 */
+  justify-content: space-between;
+  /* 按照图1分布：左中右 */
   align-items: center;
   gap: 12px;
   margin-top: 24px;
@@ -183,7 +183,8 @@
 }
 
 .modal.show {
-  display: flex; /* 配合 modal 居中显示 */
+  display: flex;
+  /* 配合 modal 居中显示 */
 }
 
 
@@ -233,13 +234,15 @@
 
 
 .uploaded-model {
-  position: relative;  /* 仅加这句：提供定位上下文 */
+  position: relative;
+  /* 仅加这句：提供定位上下文 */
 }
 
 .upload-sections-row {
   display: flex;
   flex-direction: row;
-  gap: 32px;         /* 间距可以调大或调小 */
+  gap: 32px;
+  /* 间距可以调大或调小 */
   margin-top: 10px;
 }
 
@@ -250,16 +253,19 @@
 
 .upload-sections-row {
   display: flex;
-  justify-content: space-between;  /* 让左右两边贴紧拉开 */
+  justify-content: space-between;
+  /* 让左右两边贴紧拉开 */
   gap: 32px;
   margin-top: 10px;
 }
 
 .upload-section {
-  flex: 1;                         /* 平分宽度 */
+  flex: 1;
+  /* 平分宽度 */
   display: flex;
   flex-direction: column;
-  align-items: flex-start;         /* 保证文字 + 加号对齐左边 */
+  align-items: flex-start;
+  /* 保证文字 + 加号对齐左边 */
 }
 
 /* ✅ 用于右侧上传图片的缩略图展示（无限上传） */
@@ -298,7 +304,8 @@
 }
 
 #uploadedReferenceImages {
-  max-height: 300px;         /* 你可以按需调整高度 */
+  max-height: 300px;
+  /* 你可以按需调整高度 */
   overflow-y: auto;
   display: flex;
   flex-wrap: wrap;
@@ -315,7 +322,8 @@
   align-items: center;
   cursor: pointer;
   transition: background 0.2s;
-  border: 1px solid #ccc; /* 可选：保持与图片缩略图一致的边框 */
+  border: 1px solid #ccc;
+  /* 可选：保持与图片缩略图一致的边框 */
 }
 
 .upload-placeholder:hover {
@@ -323,7 +331,8 @@
 }
 
 .plus-icon {
-  font-size: 32px; /* 略大一点居中更好看 */
+  font-size: 32px;
+  /* 略大一点居中更好看 */
   color: #333;
 }
 
@@ -346,7 +355,8 @@
   position: absolute;
   width: 60%;
   height: 60%;
-  opacity: 0.3; /* 淡淡的背景图 */
+  opacity: 0.3;
+  /* 淡淡的背景图 */
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -356,7 +366,8 @@
 
 .plus-icon {
   position: relative;
-  z-index: 1; /* 保证在 SVG 背景图上方 */
+  z-index: 1;
+  /* 保证在 SVG 背景图上方 */
   font-size: 24px;
   color: #333;
 }
@@ -530,4 +541,5 @@
   font-style: italic;
   color: #555;
 }
+
 /*  */

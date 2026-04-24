@@ -343,8 +343,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
           const case_id = caseName;
           const caseIntID = data.id;
-            const user_id = getLoggedInUser()?.username || "";
-  await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
+          const user_id = getLoggedInUser()?.username || "";
+          await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
 
           // 📤 上传 Upper STL（如有）
           if (hasUpper) {
@@ -471,7 +471,7 @@ document.addEventListener("DOMContentLoaded", () => {
         caseIntID = data.id;
         console.log("✅ Case created:", caseIntID);
         const user_id = getLoggedInUser()?.username || "";
-await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
+        await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
       } catch (err) {
         console.error("❌ Failed to create case", err);
         alert("Failed to create case.");
@@ -641,30 +641,30 @@ await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
 
         if (!roleRes.ok) throw new Error("Add role failed");
         // 2.5️⃣ 发送通知（忽略 new_status）
-try {
-  const from_user = getLoggedInUser()?.username || "";
-  const alertPayload = [
-    { machine_id, uuid: ownerUUID, caseIntID },
-    {
-      case_int_id: caseIntID,
-      to_user: username,                // 被邀请的人
-      from_user,                        // 当前登录的人
-      alert_message: `You have been added to case "${ctx.caseName}" by ${from_user}.`,
-      read_status: 0,
-      deleted: 0
-    }
-  ];
+        try {
+          const from_user = getLoggedInUser()?.username || "";
+          const alertPayload = [
+            { machine_id, uuid: ownerUUID, caseIntID },
+            {
+              case_int_id: caseIntID,
+              to_user: username,                // 被邀请的人
+              from_user,                        // 当前登录的人
+              alert_message: `You have been added to case "${ctx.caseName}" by ${from_user}.`,
+              read_status: 0,
+              deleted: 0
+            }
+          ];
 
-  await fetch("https://live.api.smartrpdai.com/api/smartrpd/alerts", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(alertPayload)
-  });
+          await fetch("https://live.api.smartrpdai.com/api/smartrpd/alerts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(alertPayload)
+          });
 
-  console.log("✅ Alert sent to", username);
-} catch (e) {
-  console.warn("⚠️ Failed to send alert:", e);
-}
+          console.log("✅ Alert sent to", username);
+        } catch (e) {
+          console.warn("⚠️ Failed to send alert:", e);
+        }
 
         // 3️⃣ 刷新共享用户
         const refreshed = await fetch(
@@ -1051,7 +1051,7 @@ async function createCaseHistory({ machine_id, uuid, caseIntID, user_id, action 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
-  try { body = await res.text(); } catch {}
+  try { body = await res.text(); } catch { }
 
   console.log("[casehistory][POST]", res.status, body);
   // 不阻塞主流程：失败只打日志

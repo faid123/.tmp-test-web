@@ -153,9 +153,9 @@ export function addResetButton(camera, clone, controls) {
         // Click the button for the first time
         button.click();
         // Click the button for the second time
-        
+
     }
-    
+
     // Call the function to auto click the button twice
     autoClickTwice(lockRotationButton);
 
@@ -165,7 +165,7 @@ export function addResetButton(camera, clone, controls) {
 
         const lockedImageUrl = `${basePath}/assets/lock.png`;    // Replace with your locked image path
         const unlockedImageUrl = `${basePath}/assets/unlock.png`;
- // Replace with your unlocked image path
+        // Replace with your unlocked image path
         const imageUrl = rotationLocked ? lockedImageUrl : unlockedImageUrl;
 
         // Clear existing content
@@ -188,6 +188,7 @@ export function addResetButton(camera, clone, controls) {
     }
 
     const legendContainer = document.createElement('div');
+    legendContainer.id = 'viewer-legend';
     legendContainer.style.position = 'fixed';
     legendContainer.style.bottom = '100px';
     legendContainer.style.left = '5px';
@@ -206,8 +207,8 @@ export function addResetButton(camera, clone, controls) {
 
     // sets the stuff for legends
     const legendSections = [
-        { title: 'Undercut(mm)', colors: {'#D7C60C': '0.25', '#D7A60B': '0.5', '#D8790E': '0.75', '#B20F1D': '> 0.75'} },
-        { title: 'Occlusion(mm)', colors: {'#8A01D3': '0.1', '#08009B': '0.25', '#48D6FA': '0.3 - 0.4', '#00E930': '0.5'} }
+        { title: 'Undercut(mm)', colors: { '#D7C60C': '0.25', '#D7A60B': '0.5', '#D8790E': '0.75', '#B20F1D': '> 0.75' } },
+        { title: 'Occlusion(mm)', colors: { '#8A01D3': '0.1', '#08009B': '0.25', '#48D6FA': '0.3 - 0.4', '#00E930': '0.5' } }
     ];
 
     // Create legend sections

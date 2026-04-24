@@ -6,7 +6,7 @@
   background: white;
   border: 1px solid #ccc;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   z-index: 999;
   display: block;
 }
@@ -60,29 +60,38 @@
   margin-top: 4px;
 }
 
-#markAllBtn{
-  background-color: rgb(136,171,218) !important; /* 常态 136 171 218 */
-  color:#fff !important;                         /* 字体白色，照旧可删 */
-  border:none !important;
+#markAllBtn {
+  background-color: rgb(136, 171, 218) !important;
+  /* 常态 136 171 218 */
+  color: #fff !important;
+  /* 字体白色，照旧可删 */
+  border: none !important;
 }
 
 #markAllBtn:hover,
-#markAllBtn:focus{
-  background-color: rgb(161,210,250) !important; /* 悬停 161 210 250 */
+#markAllBtn:focus {
+  background-color: rgb(161, 210, 250) !important;
+  /* 悬停 161 210 250 */
 }
 
 /* 让红点能定位到按钮的右上角 */
-.notifications { position: relative; }
+.notifications {
+  position: relative;
+}
 
 /* 红点默认隐藏，show 时显示 */
-.notif-dot{
+.notif-dot {
   position: absolute;
   top: -3px;
   right: -3px;
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #e02424; /* 红色 */
+  background: #e02424;
+  /* 红色 */
   display: none;
 }
-.notif-dot.show { display: inline-block; }
+
+.notif-dot.show {
+  display: inline-block;
+}

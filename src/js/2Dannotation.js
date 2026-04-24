@@ -291,74 +291,74 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       document.getElementById("saveBtn")?.addEventListener("click", async () => {
-  try {
-    /* ---------- 0. 校验登录 ---------- */
-    const user = JSON.parse(localStorage.getItem("loggedInUser"));
-    if (!user?.uuid) return alert("Login info not found, please log in again.");
+        try {
+          /* ---------- 0. 校验登录 ---------- */
+          const user = JSON.parse(localStorage.getItem("loggedInUser"));
+          if (!user?.uuid) return alert("Login info not found, please log in again.");
 
-    /* ---------- 1. 基本变量 ---------- */
-    const caseIntID  = decryptedId;           // 你的逻辑里已有
-    const case_id    = caseIntID;
-    const uuid       = user.uuid;
-    const machine_id = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
+          /* ---------- 1. 基本变量 ---------- */
+          const caseIntID = decryptedId;           // 你的逻辑里已有
+          const case_id = caseIntID;
+          const uuid = user.uuid;
+          const machine_id = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
-    /* ---------- 2. 截图 ---------- */
-    const previewArea = document.getElementById("image-preview-area");
-    if (!previewArea) return alert("❌ Preview area not found.");
+          /* ---------- 2. 截图 ---------- */
+          const previewArea = document.getElementById("image-preview-area");
+          if (!previewArea) return alert("❌ Preview area not found.");
 
-    const canvas   = await html2canvas(previewArea,{ backgroundColor:null, useCORS:true });
-    const dataURL  = canvas.toDataURL("image/png");
-    const fileName = `${Date.now()}.png`;
+          const canvas = await html2canvas(previewArea, { backgroundColor: null, useCORS: true });
+          const dataURL = canvas.toDataURL("image/png");
+          const fileName = `${Date.now()}.png`;
 
-    /* ---------- 3. 先取旧记录 ---------- */
-    const getRes   = await fetch("https://live.api.smartrpdai.com/api/smartrpd/noticeboard/editedview/get",{
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify([
-        { machine_id, uuid, caseIntID },
-        { case_id }
-      ])
-    });
+          /* ---------- 3. 先取旧记录 ---------- */
+          const getRes = await fetch("https://live.api.smartrpdai.com/api/smartrpd/noticeboard/editedview/get", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify([
+              { machine_id, uuid, caseIntID },
+              { case_id }
+            ])
+          });
 
-    let namesArr = [], dataArr = [];
-    if (getRes.ok) {
-      const old = await getRes.json();   // 可能返回对象，也可能数组
-      const row = Array.isArray(old) ? old[0] : old;   // 取第一行
-      try { if (row?.filenames) namesArr = JSON.parse(row.filenames); } catch {}
-      try { if (row?.data)      dataArr  = JSON.parse(row.data);      } catch {}
-    }
-    /* ---------- 4. 追加新截图 ---------- */
-    namesArr.push(fileName);
-    dataArr .push(dataURL);
+          let namesArr = [], dataArr = [];
+          if (getRes.ok) {
+            const old = await getRes.json();   // 可能返回对象，也可能数组
+            const row = Array.isArray(old) ? old[0] : old;   // 取第一行
+            try { if (row?.filenames) namesArr = JSON.parse(row.filenames); } catch { }
+            try { if (row?.data) dataArr = JSON.parse(row.data); } catch { }
+          }
+          /* ---------- 4. 追加新截图 ---------- */
+          namesArr.push(fileName);
+          dataArr.push(dataURL);
 
-    /* ---------- 5. 重新上传完整数组 ---------- */
-    const payload = [
-      { machine_id, uuid, caseIntID },
-      {
-        case_id,
-        filenames: JSON.stringify(namesArr),
-        data:      JSON.stringify(dataArr)
-      }
-    ];
+          /* ---------- 5. 重新上传完整数组 ---------- */
+          const payload = [
+            { machine_id, uuid, caseIntID },
+            {
+              case_id,
+              filenames: JSON.stringify(namesArr),
+              data: JSON.stringify(dataArr)
+            }
+          ];
 
-    const saveRes = await fetch("https://live.api.smartrpdai.com/api/smartrpd/noticeboard/editedview",{
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify(payload)
-    });
+          const saveRes = await fetch("https://live.api.smartrpdai.com/api/smartrpd/noticeboard/editedview", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
 
-    if (saveRes.ok) {
-      alert("✅ Annotation saved successfully.");
-    } else {
-      console.error("Server returned:", await saveRes.text());
-      alert("❌ Upload failed. Please check your network or server.");
-    }
+          if (saveRes.ok) {
+            alert("✅ Annotation saved successfully.");
+          } else {
+            console.error("Server returned:", await saveRes.text());
+            alert("❌ Upload failed. Please check your network or server.");
+          }
 
-  } catch (err) {
-    console.error("❌ Request error:", err);
-    alert("❌ An error occurred during upload.");
-  }
-});
+        } catch (err) {
+          console.error("❌ Request error:", err);
+          alert("❌ An error occurred during upload.");
+        }
+      });
 
     };
   } else {
