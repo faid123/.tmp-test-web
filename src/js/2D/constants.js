@@ -30,7 +30,7 @@ export const JAW_BACKGROUND_SCALE_BY_JAW = Object.freeze({
 });
 
 export const JAW_BACKGROUND_OFFSET_BY_JAW = Object.freeze({
-  upper: { x: 0, y: 0 },
+  upper: { x: 0, y: 12 },
   lower: { x: 0, y: 0 },
 });
 
@@ -69,19 +69,19 @@ export function forEachTooth(callback) {
 export const JAW_BACKGROUND_IMAGES = {
   upper: {
     svgId: "upperArchSvg",
-    viewBox: "0 0 620 380",
+    viewBox: "0 0 630 400",
     template: "Upper_Jaw.svg",
     details: null
   },
   lower: {
     svgId: "lowerArchSvg",
-    viewBox: "0 0 620 380",
+    viewBox: "0 0 630 400",
     template: "Lower_Jaw.svg",
     details: null
   }
 };
 
-export const STATUS_VALUES = ["presence", "abutment", "compromised"];
+export const STATUS_VALUES = ["presence", "abutment", "compromised", "missing"];
 
 export const TOOTH_SCALE_BY_UNIT = {
   1: 0.84,
@@ -176,7 +176,7 @@ export const TOOTH_SCALE_OVERRIDE = {
 };
 
 export const JAW_CALIBRATION = {
-  upper: { x: -8, y: -14, rotation: 0 },
+  upper: { x: -8, y: -2, rotation: 0 },
   lower: { x: 0, y: 1, rotation: 0 }
 };
 

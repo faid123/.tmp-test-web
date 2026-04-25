@@ -296,19 +296,19 @@ export const COMPONENT_CATALOG = [
     tab: "plate",
     requiresPresence: true,
     requiresMissing: false,
-    conflictsWith: [],
-    actionUponFailure: ACTION_UPON_FAILURE.PREVENT_PLACEMENT,
+    conflictsWith: ["plate-crossmesh"],
+    actionUponFailure: ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
   },
   {
     id: "plate-crossmesh",
-    label: "Crossmesh Plate",
-    shortLabel: "CP",
+    label: "Mesh Plate",
+    shortLabel: "MP",
     icon: "/assets/menu-icon/Plates/Recip_Crossmesh.png",
     tab: "plate",
     requiresPresence: true,
     requiresMissing: false,
-    conflictsWith: [],
-    actionUponFailure: ACTION_UPON_FAILURE.PREVENT_PLACEMENT,
+    conflictsWith: ["plate-prox"],
+    actionUponFailure: ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
   },
   {
     id: "major-upper-palatal-strap",
@@ -470,3 +470,28 @@ export {
   getRestSuggestionRadius,
   isRestComponent,
 } from "./components.rest.js";
+
+export {
+  ensurePlatePlacementsOnPresentTeeth,
+  getDefaultPlateIdForDesignMode,
+  getPlateAssetReference,
+  getPlatePlacementImageSize,
+  getPlatePlacementOffset,
+  getPlatePlacementRenderScale,
+  isPlateComponent,
+  isPlateComponentId,
+  PLATE_IMAGE_SUFFIX_BY_ID,
+} from "./components.plate.js";
+
+export {
+  CLASP_CIRC_POINT_OVERRIDES,
+  CLASP_CIRC_SURFACE,
+  getClaspCircAssetReference,
+  getClaspCircPlacementImageSize,
+  getClaspCircPlacementOffset,
+  getClaspCircPlacementRenderScale,
+  getClaspCircSuggestionPointsForTooth,
+  getClaspCircSuggestionRadius,
+  getClaspCircSuggestionSurfaces,
+  isClaspCircComponent,
+} from "./components.clasp.js";

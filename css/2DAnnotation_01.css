@@ -331,6 +331,31 @@ body {
   min-width: 0;
 }
 
+.plate-tab-actions {
+  grid-column: 1 / -1;
+}
+
+.plate-clear-all-btn {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #f3f3f3;
+  color: var(--rose-700);
+  cursor: pointer;
+}
+
+.plate-clear-all-btn:hover:not(:disabled) {
+  background: #e8e8e8;
+}
+
+.plate-clear-all-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .major-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -462,6 +487,11 @@ body {
   filter: brightness(0) saturate(100%) invert(27%) sepia(95%) saturate(1702%) hue-rotate(259deg) brightness(88%) contrast(97%);
 }
 
+/* RPD plate overlays: neutral gray (tune brightness/contrast to match arch) */
+.plate-image {
+  filter: grayscale(1) brightness(0.72) contrast(0.95);
+}
+
 .rest-suggestion-point {
   fill: #e85a8e;
   stroke: #ffffff;
@@ -494,6 +524,37 @@ body {
 
 .rest-suggestion-image:hover {
   opacity: 1;
+}
+
+/* Circumferential clasp: light green (distinct from rest rose / mesh teal) */
+.clasp-suggestion-point {
+  fill: #90ee90;
+  stroke: #ffffff;
+  stroke-width: 1.1;
+  opacity: 0.45;
+  cursor: pointer;
+  pointer-events: all;
+}
+
+.clasp-suggestion-point:hover {
+  fill: #7dce7d;
+  opacity: 1;
+}
+
+.clasp-placement-marker {
+  fill: #81c784;
+  stroke: #ffffff;
+  stroke-width: 1.2;
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.clasp-placement-image {
+  pointer-events: all;
+  cursor: pointer;
+  opacity: 1;
+  filter: brightness(0) saturate(100%) invert(34%) sepia(95%) saturate(900%) hue-rotate(72deg)
+    brightness(98%) contrast(96%);
 }
 
 .rest-placement-marker {

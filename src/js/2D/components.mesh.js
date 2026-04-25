@@ -1,3 +1,4 @@
+import { getPlateAssetReference } from "./components.plate.js";
 import { TOOTH_ORDER } from "./constants.js";
 
 export const COMPONENT_ASSET_BASE = "../../../assets/RPD_Component";
@@ -52,10 +53,10 @@ export function getComponentAssetReference(componentId, toothId) {
   const templateToothId = getComponentTemplateToothId(toothId);
   const suffix = COMPONENT_IMAGE_SUFFIX_BY_ID[componentId];
   const fileName = suffix ? `${templateToothId}-${suffix}` : null;
-  if (!fileName) {
-    return null;
+  if (fileName) {
+    return `${COMPONENT_ASSET_BASE}/${templateToothId}/mesh/${fileName}`;
   }
-  return `${COMPONENT_ASSET_BASE}/${templateToothId}/mesh/${fileName}`;
+  return getPlateAssetReference(componentId, toothId);
 }
 
 /**
