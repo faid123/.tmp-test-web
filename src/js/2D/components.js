@@ -432,15 +432,13 @@ export const COMPONENT_CATALOG = [
   },
 ];
 
-export const COMPONENT_BY_ID = new Map(COMPONENT_CATALOG.map((entry)=>[entry.id, entry]));
+export const COMPONENT_BY_ID = new Map(COMPONENT_CATALOG.map((entry) => [entry.id, entry]));
+
 export {
   cancelMeshInteractionDefer,
-  COMPONENT_ASSET_BASE,
-  COMPONENT_IMAGE_SUFFIX_BY_ID,
   deferMeshInteraction,
   ensureMeshPlacementsOnMissingTeeth,
   getComponentAssetReference,
-  getComponentTemplateToothId,
   getDefaultMeshIdForDesignMode,
   getMeshPlacementImageSize,
   getMeshPlacementOffset,
@@ -450,48 +448,47 @@ export {
   isMeshComponent,
   meshHoleUniformScaleToothId,
   meshSelectionContextFromState,
-  migrateAllMeshPlacementsToMeshId,
-  MESH_CLICK_DEFER_MS,
-  MESH_HOLE_UNIFORM_SCALE_REFERENCE_BY_JAW,
-  MESH_PLACEMENT_FALLBACK_ID,
-  replaceMeshPlacementsOnToothWithMeshId,
 } from "./components.mesh.js";
 
 export {
-  REST_SURFACE,
-  REST_CINGULUM_AC_POINT_BY_TOOTH,
-  REST_SUGGESTION_POINT_OVERRIDES,
   getCingulumAcSuggestionPointsForTooth,
   getRestPlacementAssetReference,
   getRestPlacementImageSize,
   getRestPlacementRenderScale,
-  getRestSuggestionSurfaces,
   getRestSuggestionPointsForTooth,
   getRestSuggestionRadius,
+  getRestSuggestionSurfaces,
   isRestComponent,
 } from "./components.rest.js";
 
 export {
   ensurePlatePlacementsOnPresentTeeth,
   getDefaultPlateIdForDesignMode,
-  getPlateAssetReference,
   getPlatePlacementImageSize,
   getPlatePlacementOffset,
   getPlatePlacementRenderScale,
-  isPlateComponent,
   isPlateComponentId,
-  PLATE_IMAGE_SUFFIX_BY_ID,
 } from "./components.plate.js";
 
 export {
-  CLASP_CIRC_POINT_OVERRIDES,
-  CLASP_CIRC_SURFACE,
   getClaspCircAssetReference,
   getClaspCircPlacementImageSize,
   getClaspCircPlacementOffset,
   getClaspCircPlacementRenderScale,
   getClaspCircSuggestionPointsForTooth,
   getClaspCircSuggestionRadius,
-  getClaspCircSuggestionSurfaces,
   isClaspCircComponent,
 } from "./components.clasp.js";
+
+export {
+  BAR_PLACEMENT_ANCHOR_SURFACE,
+  getBarPlacementAssetReference,
+  getBarPlacementImageSize,
+  getBarPlacementOffset,
+  getBarPlacementRenderScale,
+  getBarPlacementSurfaceForTooth,
+  getBarSuggestibleToothIdSet,
+  getBarUserOffset,
+  isBarComponent,
+  isBarPlacementSurface,
+} from "./components.bar.js";

@@ -30,7 +30,7 @@ export const JAW_BACKGROUND_SCALE_BY_JAW = Object.freeze({
 });
 
 export const JAW_BACKGROUND_OFFSET_BY_JAW = Object.freeze({
-  upper: { x: 0, y: 12 },
+  upper: { x: 0, y: 22 },
   lower: { x: 0, y: 0 },
 });
 
@@ -69,13 +69,13 @@ export function forEachTooth(callback) {
 export const JAW_BACKGROUND_IMAGES = {
   upper: {
     svgId: "upperArchSvg",
-    viewBox: "0 0 630 400",
+    viewBox: "0 0 820 460",
     template: "Upper_Jaw.svg",
     details: null
   },
   lower: {
     svgId: "lowerArchSvg",
-    viewBox: "0 0 630 400",
+    viewBox: "0 0 820 400",
     template: "Lower_Jaw.svg",
     details: null
   }
@@ -176,33 +176,12 @@ export const TOOTH_SCALE_OVERRIDE = {
 };
 
 export const JAW_CALIBRATION = {
-  upper: { x: -8, y: -2, rotation: 0 },
+  upper: { x: -8, y: 8, rotation: 0 },
   lower: { x: 0, y: 1, rotation: 0 }
 };
-
-export const MODE = {
-  DESIGN: "design",
-  PRESENCE: "presence",
-};
-
-export const JAW = {
-  UPPER: "upper",
-  LOWER: "lower",
-};
-
-export const UPPER_FDI = TOOTH_ORDER.upper.map(Number);
-export const LOWER_FDI = TOOTH_ORDER.lower.map(Number);
-
-export const ALL_FDI = [...UPPER_FDI, ...LOWER_FDI];
 
 // Upper anteriors 13→23 and lower anteriors 43→33 (FDI order); rest-seat picker uses a surface dialog.
 export const ANTERIOR_REST_SURFACE_DIALOG_TEETH = new Set([
   "13", "12", "11", "21", "22", "23",
   "43", "42", "41", "31", "32", "33",
 ]);
-
-export const CRITERIA = {
-  TOOTH_PRESENT: "ToothPresent",
-  TOOTH_MISSING: "ToothMissing",
-  NO_CONFLICTING_COMPONENTS: "NoConflictingComponents",
-};

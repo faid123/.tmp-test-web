@@ -134,8 +134,6 @@ const REST_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
   "48": { p_mesial: { width: 45, height: 41 }, p_distal: { width: 49, height: 44 }, p_lingual: { width: 38, height: 59 }, p_full: { width: 137, height: 147 } },
 });
 
-const REST_PLACEMENT_IMAGE_SIZE = Object.freeze({});
-
 const REST_PLACEMENT_SCALE_BY_TOKEN = Object.freeze({
   ac_mesial: 0.72, ac_distal: 0.72, ac_full: 0.66, ai_mesial: 0.65, ai_distal: 0.65, ac_both: 0.66,
   p_mesial: 0.52, p_distal: 0.52, p_lingual: 0.52, p_full: 0.5,
@@ -170,13 +168,12 @@ function normalizeRestSurface(surface) {
   return normalized === "occlusal" ? "lingual" : normalized;
 }
 
-function getRestPlacementToken(componentId, toothId, surface) {
+function getRestPlacementToken(_componentId, toothId, surface) {
   const variant = getRestVariantForTooth(toothId);
   const normalizedSurface = normalizeRestSurface(surface);
   if (!normalizedSurface) return null;
 
   if (variant === "anterior") {
-    void componentId;
     if (normalizedSurface === "mesial") return "ai_mesial";
     if (normalizedSurface === "distal") return "ai_distal";
     if (normalizedSurface === "lingual_mesial") return "ac_mesial";
@@ -205,9 +202,7 @@ export function getRestPlacementImageSize(componentId, toothId, surface) {
   const templateToothId = getComponentTemplateToothId(toothId);
   const token = getRestPlacementToken(componentId, toothId, surface);
   if (!token) return null;
-  const byTooth = REST_PLACEMENT_IMAGE_SIZE_BY_TOOTH[templateToothId]?.[token];
-  if (byTooth) return byTooth;
-  return REST_PLACEMENT_IMAGE_SIZE[token] || null;
+  return REST_PLACEMENT_IMAGE_SIZE_BY_TOOTH[templateToothId]?.[token] ?? null;
 }
 
 export function getRestPlacementRenderScale(componentId, toothId, surface) {
@@ -219,8 +214,7 @@ export function getRestPlacementRenderScale(componentId, toothId, surface) {
   return REST_PLACEMENT_SCALE_BY_TOKEN[token] || 0.55;
 }
 
-export function getRestSuggestionSurfaces(componentId, toothId) {
-  void toothId;
+export function getRestSuggestionSurfaces(componentId, _toothId) {
   if (componentId === "rest-onlay") {
     return [];
   }
@@ -263,12 +257,11 @@ export function isRestComponent(componentOrId) {
 
 export function getRestSuggestionPointsForTooth(
   toothId,
-  jaw,
+  _jaw,
   mirrored,
   jawFlipX = 1,
   componentId = null
 ) {
-  void jaw;
   const direction = (mirrored ? -1 : 1) * jawFlipX;
   const override = REST_SUGGESTION_POINT_OVERRIDES[toothId] || {};
   const allowedSurfaces = new Set(getRestSuggestionSurfaces(componentId, toothId));

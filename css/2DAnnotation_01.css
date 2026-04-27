@@ -531,7 +531,7 @@ body {
   fill: #90ee90;
   stroke: #ffffff;
   stroke-width: 1.1;
-  opacity: 0.45;
+  opacity: 1;
   cursor: pointer;
   pointer-events: all;
 }
@@ -695,6 +695,26 @@ body {
 .anterior-rest-surface-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
+}
+/* Bar suggestions: deep navy over the full tooth bitmap (invert/sepia fills the silhouette). */
+.tooth.tooth-bar-suggestible .tooth-image {
+  filter: brightness(0) saturate(100%) invert(34%) sepia(88%) saturate(1820%)
+    hue-rotate(204deg) brightness(95%) contrast(98%);
+  opacity: 0.62;
+}
+
+.tooth.tooth-bar-suggestible:hover .tooth-image {
+  filter: brightness(0) saturate(100%) invert(31%) sepia(91%) saturate(2200%)
+    hue-rotate(206deg) brightness(95%) contrast(104%);
+  opacity: 0.78;
+}
+
+.bar-placement-image {
+  pointer-events: all;
+  cursor: pointer;
+  opacity: 0.76;
+  filter: brightness(0) saturate(100%) invert(31%) sepia(91%) saturate(2200%)
+    hue-rotate(206deg) brightness(95%) contrast(104%);
 }
 
 @media (max-width: 1200px) {

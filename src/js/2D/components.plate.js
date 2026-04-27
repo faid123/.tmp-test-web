@@ -58,25 +58,31 @@ const PLATE_RENDER_SCALE_BY_JAW = Object.freeze({
  */
 const PLATE_POSITION_OFFSET_SEED_BY_TOOTH = Object.freeze({
   "11": { x: -4, y: 10 },
-  "12": { x: 1.5, y: 7.5 }, "22": { x: 0.5, y: 7.5 },
-  "13": { x: 4.3, y: 2.5 }, "23": { x: -5, y: 2.5 },
-  "14": { x: 6, y: 2.2 },  "24": { x: -5, y: 2 },
+  "12": { x: 1.5, y: 7.5 },
+  "22": { x: 0.5, y: 7.5 },
+  "13": { x: 4.3, y: 2.5 },
+  "23": { x: -5, y: 2.5 },
+  "14": { x: 6, y: 2.2 },
+  "24": { x: -5, y: 2 },
   "15": { x: 3.5, y: 0.8 },
-  "16": { x: 2, y: 2 }, "26": { x: 0, y: 0 },
-  "17": { x: 4, y: -1 },"27": { x: -2, y: -3 },
-  "18": { x: 5, y: -2 }, "28": { x: -4, y: -3 },
+  "16": { x: 2, y: 2 },
+  "26": { x: 0, y: 0 },
+  "17": { x: 4, y: -1 },
+  "27": { x: -2, y: -3 },
+  "18": { x: 5, y: -2 },
+  "28": { x: -4, y: -3 },
   "41": { x: 0.5, y: -23 },
   "42": { x: 5.6, y: -18.5 },
   "43": { x: 10.2, y: -16 },
   "44": { x: 20.5, y: -10.5 },
   "45": { x: 21, y: -6.7 },
-  "46": { x: 23, y: -6.5 },"36": { x: -24, y: -6.5 },
+  "46": { x: 23, y: -6.5 },
+  "36": { x: -24, y: -6.5 },
   "47": { x: 22.5, y: -7 },
   "48": { x: 29.5, y: -2.8 },
 });
 
-export function getPlatePlacementRenderScale(componentId, toothId, jaw) {
-  void toothId;
+export function getPlatePlacementRenderScale(componentId, _toothId, jaw) {
   if (!isPlateComponentId(componentId)) {
     return 1;
   }

@@ -30,6 +30,16 @@ import {
   getClaspCircPlacementRenderScale,
   getClaspCircSuggestionPointsForTooth,
   getClaspCircSuggestionRadius,
+  BAR_PLACEMENT_ANCHOR_SURFACE,
+  getBarPlacementAssetReference,
+  getBarPlacementImageSize,
+  getBarPlacementOffset,
+  getBarPlacementRenderScale,
+  getBarPlacementSurfaceForTooth,
+  getBarSuggestibleToothIdSet,
+  getBarUserOffset,
+  isBarComponent,
+  isBarPlacementSurface,
   handleMeshCatalogDoubleClickApplyAll,
   handleMeshToolDoubleClick,
   isClaspCircComponent,
@@ -38,7 +48,6 @@ import {
   meshHoleUniformScaleToothId,
   meshSelectionContextFromState,
   isPlateComponentId,
-
 } from "./components.js";
 import { assessPlacementCriteria } from "./criteria.js";
 import {
@@ -69,23 +78,22 @@ import {
   TOOTH_SCALE_OVERRIDE,
 } from "./constants.js";
 
-const DEFAULT_COMPONENT_ID = COMPONENT_CATALOG[0]?.id || null;
+const DEFAULT_COMPONENT_ID =
+  COMPONENT_BY_ID.has("mesh-hole") ? "mesh-hole" : COMPONENT_CATALOG[0]?.id || null;
+const ENABLE_TEMP_ALL_MISSING_MESH_BAR = true;
 const REST_CALIBRATION_COMPONENT_ID = "rest-seat";
-const FORCE_NON_DESIGN_BOOT = false;
-/** Pre-place circumferential clasps on mesial buccal + mesial lingual on every present tooth at load; set false to skip. */
-const INITIAL_CLASP_DEMO_ALL_TEETH = true;
 
 // Runtime annotation state.
 const state = {
   encryptedCaseId: "",
   caseIntID: null,
-  activeStatus: "missing",
-  locks: { upper: true, lower: true },
+  activeStatus: "presence",
+  locks: { upper: false, lower: false },
   teeth: {},
-  components: ["clasp-circ"],
-  selectedComponentId: "clasp-circ",
+  components: [],
+  selectedComponentId: DEFAULT_COMPONENT_ID,
   /** When true (rest-seat calibration boot), anterior rest hints are only cingulum ac_mesial / ac_distal. */
-  restSeatCalibrationAcOnly: false
+  restSeatCalibrationAcOnly: false,
 };
 
 let hasInitialized = false;
@@ -107,7 +115,6 @@ if (document.readyState === "loading") {
 function init() {
   initializeCaseIds();
   initializeTeethState();
-  renderJaws()
 
   try {
     bindStatusPicker();
@@ -115,9 +122,8 @@ function init() {
     bindActionButtons();
     initComponentCatalog();
     loadPreviewImage();
-    // hydrateFromLocalStorage();
-    if (FORCE_NON_DESIGN_BOOT) {
-      forceNonDesignBootMode();
+    if (ENABLE_TEMP_ALL_MISSING_MESH_BAR) {
+      tempPopulateAllMissingMeshAndMesialBar();
     }
     syncDesignModeWithLocks(false);
     renderJaws();
@@ -128,10 +134,34 @@ function init() {
   }
 }
 
-function forceNonDesignBootMode() {
-  state.locks.upper = false;
-  state.locks.lower = false;
-  state.activeStatus = "presence";
+/**
+ * Temporary bootstrap dataset for visual tuning:
+ * - every tooth is missing
+ * - every tooth gets one mesh placement
+ * - every tooth gets one mesial bar placement
+ */
+function tempPopulateAllMissingMeshAndMesialBar() {
+  const meshId = getDefaultMeshIdForDesignMode(meshSelectionContextFromState(state), COMPONENT_BY_ID);
+  const barId = COMPONENT_BY_ID.has("bar-i") ? "bar-i" : null;
+
+  state.components = [meshId, barId].filter((id, idx, arr) => id && COMPONENT_BY_ID.has(id) && arr.indexOf(id) === idx);
+  state.selectedComponentId = barId || meshId || DEFAULT_COMPONENT_ID;
+
+  forEachTooth((toothId) => {
+    const tooth = state.teeth[toothId];
+    if (!tooth) return;
+
+    tooth.isPresent = false;
+    tooth.status = "missing";
+    ensureToothPlacementState(tooth);
+    tooth.componentPlacements = [{ componentId: meshId, surface: null }];
+    if (barId) {
+      tooth.componentPlacements.push({ componentId: barId, surface: "bar_d1_distal" });
+    }
+    syncToothComponentsFromPlacements(tooth);
+  });
+
+  setMessage("Temp mode: all teeth missing with mesh + mesial bar placements.", false);
 }
 
 // Read encrypted case id from URL and display a human-readable label.
@@ -171,18 +201,6 @@ function initializeTeethState() {
       center: [0, 0]
     };
   });
-
-  if (INITIAL_CLASP_DEMO_ALL_TEETH && COMPONENT_BY_ID.has("clasp-circ")) {
-    forEachTooth((toothId) => {
-      const tooth = state.teeth[toothId];
-      if (!tooth) return;
-      tooth.componentPlacements = [
-        { componentId: "clasp-circ", surface: "mesial_buccal" },
-        { componentId: "clasp-circ", surface: "mesial_lingual" },
-      ];
-      syncToothComponentsFromPlacements(tooth);
-    });
-  }
 }
 
 // Reset one tooth to baseline state while preserving identity and jaw.
@@ -301,7 +319,7 @@ function drawFromScratch() {
 // Build component tabs and initialize the first visible catalog view.
 function initComponentCatalog() {
   if (!state.selectedTab) {
-    state.selectedTab = COMPONENT_TABS[0]?.id || null;
+    state.selectedTab = "bars";
   }
   if (!state.selectedComponentId) {
     state.selectedComponentId = DEFAULT_COMPONENT_ID;
@@ -559,6 +577,13 @@ function handleDesignComponentSelect(componentId) {
 
   state.components.push(componentId);
   renderComponentCatalog();
+  if (isBarComponent(selected)) {
+    setMessage(
+      `${selected.label} selected. Click a highlighted present tooth within two positions of a missing tooth to place.`,
+      false
+    );
+    return;
+  }
   setMessage(`${selected.label} added to design list.`, false);
 }
 
@@ -592,7 +617,7 @@ function updateEditModeUI() {
   const hint = document.getElementById("designHint");
   if (hint) {
     hint.textContent = active
-      ? "Design mode: missing teeth get a default mesh; present teeth get a default plate if they had none. Meshes: single-click icon to select; double-click icon applies that mesh arch-wide. On a tooth: single-click places/removes mesh; double-click swaps mesh type. Plates: click the same plate again to remove all plates; use Clear all plates below; single-click a tooth to toggle the selected plate on that tooth. Clasps: use suggestion points to place; click a placed clasp to remove."
+      ? "Design mode: missing teeth get a default mesh; present teeth get a default plate if they had none. Meshes: single-click icon to select; double-click icon applies that mesh arch-wide. On a tooth: single-click places/removes mesh; double-click swaps mesh type. Plates: click the same plate again to remove all plates; use Clear all plates below; single-click a tooth to toggle the selected plate on that tooth. Clasps: use suggestion points to place; click a placed clasp to remove. Bars: select a bar, then click a highlighted tooth within two positions of a missing tooth; click a placed bar to remove it."
       : "Lock both arches to enter design mode.";
   }
 }
@@ -728,10 +753,14 @@ function restMarkerAnchorSurface(placementSurface, toothId) {
 }
 
 function appendPlacedRestMarkers(group, tooth, toothId, jaw) {
-  if (!tooth.isPresent) return;
-
   ensureToothPlacementState(tooth);
   if (!tooth.componentPlacements.length) return;
+  if (!tooth.isPresent) {
+    const hasBarPlacement = tooth.componentPlacements.some((placement) =>
+      isBarComponent(placement.componentId) && isBarPlacementSurface(normalizeSurface(placement.surface))
+    );
+    if (!hasBarPlacement) return;
+  }
 
   const radius = getRestSuggestionRadius() + 0.6;
   const { mirrored } = getToothAssetSpec(toothId);
@@ -864,6 +893,67 @@ function appendPlacedRestMarkers(group, tooth, toothId, jaw) {
       event.stopPropagation();
       removePlacement(tooth, placement.componentId, surface);
       setMessage(`Removed clasp (${surface}) from tooth ${toothId}.`, false);
+      renderJaw(jaw);
+    });
+
+    group.appendChild(outerG);
+  }
+
+  for (const placement of tooth.componentPlacements) {
+    if (!isBarComponent(placement.componentId)) continue;
+    const barSurface = normalizeSurface(placement.surface);
+    if (!barSurface || !isBarPlacementSurface(barSurface)) continue;
+
+    const claspPointMap = getClaspSurfacePointMap(toothId, jaw);
+    const anchor = normalizeSurface(BAR_PLACEMENT_ANCHOR_SURFACE);
+    const point = anchor ? claspPointMap.get(anchor) : null;
+    if (!point) continue;
+
+    const off = getBarPlacementOffset(placement.componentId, toothId, barSurface);
+    const href = getBarPlacementAssetReference(placement.componentId, toothId, barSurface);
+    const imageSize = getBarPlacementImageSize(placement.componentId, toothId, barSurface);
+    const scale = getBarPlacementRenderScale(placement.componentId, toothId, barSurface);
+    const baseW = imageSize.width * scale;
+    const baseH = imageSize.height * scale;
+    if (
+      placement.barOffsetX == null &&
+      placement.barOffsetY == null &&
+      (Number.isFinite(Number(placement.barX)) || Number.isFinite(Number(placement.barY)))
+    ) {
+      placement.barOffsetX = Number.isFinite(Number(placement.barX)) ? Number(placement.barX) : 0;
+      placement.barOffsetY = Number.isFinite(Number(placement.barY)) ? Number(placement.barY) : 0;
+      delete placement.barX;
+      delete placement.barY;
+    }
+    const uoff = getBarUserOffset(placement);
+    const mirroredOffsetX = mirrored ? -off.x : off.x;
+    const mirroredUserOffsetX = mirrored ? -uoff.x : uoff.x;
+    const width = baseW;
+    const height = baseH;
+
+    const outerG = svgEl("g", {
+      transform: `translate(${point.x + mirroredOffsetX + mirroredUserOffsetX} ${point.y + off.y + uoff.y}) rotate(${off.rotation}) scale(${mirrored ? -1 : 1} 1)`,
+      class: `bar-placement-root bar-placement-${barSurface}`,
+    });
+
+    outerG.appendChild(
+      svgEl("image", {
+        href,
+        x: String(-width / 2),
+        y: String(-height / 2),
+        width: String(width),
+        height: String(height),
+        preserveAspectRatio: "xMidYMid meet",
+        class: `bar-placement-image bar-placement-${barSurface}`,
+        "data-surface": barSurface,
+        "data-component-id": placement.componentId,
+      })
+    );
+
+    outerG.addEventListener("click", (event) => {
+      event.stopPropagation();
+      removePlacement(tooth, placement.componentId, barSurface);
+      setMessage(`Removed bar from tooth ${toothId}.`, false);
       renderJaw(jaw);
     });
 
@@ -1155,19 +1245,6 @@ function appendClaspCircSuggestionPoints(group, tooth, toothId, jaw) {
   }
 }
 
-// Return whether any rest component exists on the requested tooth surface.
-function hasRestPlacementAtSurface(tooth, surface) {
-  ensureToothPlacementState(tooth);
-  const targetSurface = normalizeSurface(surface);
-  if (!targetSurface) return false;
-
-  return tooth.componentPlacements.some((entry) => {
-    const sameSurface = normalizeSurface(entry.surface) === targetSurface;
-    if (!sameSurface) return false;
-    return isRestComponent(entry.componentId);
-  });
-}
-
 function hasClaspCircPlacementAtSurface(tooth, surface) {
   ensureToothPlacementState(tooth);
   const targetSurface = normalizeSurface(surface);
@@ -1178,6 +1255,19 @@ function hasClaspCircPlacementAtSurface(tooth, surface) {
     if (!sameSurface) return false;
     return isClaspCircComponent(entry.componentId);
   });
+}
+
+function showBarSuggestions(){
+  if (!state.designMode) return false;
+  const sel = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+  return Boolean (sel && isBarComponent(sel));
+}
+
+function hasBarPlacementAtSurface(tooth, componentId) {
+  ensureToothPlacementState(tooth);
+  return tooth.componentPlacements.some(
+    (entry) => entry.componentId === componentId && isBarPlacementSurface(entry.surface)
+  );
 }
 
 // Render both arches.
@@ -1214,6 +1304,18 @@ function renderJaw(jaw) {
     const tooth = state.teeth[toothId];
     applyToothStatusClass(group, tooth);
 
+    const barSel = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+    if(
+      showBarSuggestions()&& 
+      tooth.isPresent && 
+      barSel && 
+      isBarComponent(barSel) && 
+      getBarSuggestibleToothIdSet(state.teeth,jaw).has(toothId) && !
+      hasBarPlacementAtSurface(tooth, barSel.id)
+    ){
+      group.classList.add("tooth-bar-suggestible");
+      group.classList.add(`tooth-bar-suggestible--${jaw}`);
+    }
     group.setAttribute(
       "transform",
       `translate(${point.x.toFixed(2)} ${point.y.toFixed(2)}) rotate(${rotation.toFixed(2)})`
@@ -1241,6 +1343,21 @@ function renderJaw(jaw) {
         return;
       }
       const catalogPick = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+      if (catalogPick && isBarComponent(catalogPick)) {
+        const set = getBarSuggestibleToothIdSet(state.teeth, jaw);
+        if (!set.has(toothId)) {
+          setMessage("Choose a highlighted tooth within two positions of a missing tooth on the arch.", true);
+          return;
+        }
+        const barSurface = getBarPlacementSurfaceForTooth(toothId, jaw, state.teeth);
+        if (!barSurface) {
+          setMessage("Could not resolve bar type for this tooth.", true);
+          return;
+        }
+        placeSelectedComponentOnTooth(toothId, { surface: barSurface });
+        renderJaw(jaw);
+        return;
+      }
       if (catalogPick && isMeshComponent(catalogPick)) {
         deferMeshInteraction(toothClickKey, () => {
           placeSelectedComponentOnTooth(toothId, null);
@@ -1292,6 +1409,15 @@ function toggleToothStatus(tooth, toothId, status) {
 // Click behavior: apply/toggle selected status on a tooth (design mode handles clicks on the tooth group in renderJaw).
 function onToothClick(jaw, toothId) {
   if (state.designMode) {
+    return;
+  }
+
+  const catalogPick = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+  if (catalogPick && isBarComponent(catalogPick)) {
+    setMessage(
+      "Bars: lock both arches to enter design mode, then click a highlighted tooth to place. Click a placed bar to remove it. Unlock arches to mark teeth missing.",
+      true
+    );
     return;
   }
 
@@ -1400,7 +1526,7 @@ function placeSelectedComponentOnTooth(toothId, placementContext = null) {
   syncToothComponentsFromPlacements(tooth);
 
   const requiresSurface =
-    isRestComponent(selectedComponent) || isClaspCircComponent(selectedComponent);
+    isRestComponent(selectedComponent) || isClaspCircComponent(selectedComponent) || isBarComponent(selectedComponent);
   const surface = normalizeSurface(placementContext?.surface);
   const targetSurface = requiresSurface ? surface : null;
 
@@ -1414,6 +1540,10 @@ function placeSelectedComponentOnTooth(toothId, placementContext = null) {
         `For ${selectedComponent.label}, click a clasp suggestion point (mesial or distal, buccal or lingual).`,
         true
       );
+      return;
+    }
+    if (isBarComponent(selectedComponent)) {
+      setMessage(`For ${selectedComponent.label}, click a highlighted tooth next to a missing tooth.`, true);
       return;
     }
     setMessage(
@@ -1484,10 +1614,20 @@ function buildPayload() {
       status: statusJsonForToothRecord(record),
       isPresent: record.isPresent,
       componentPlacements: (record.componentPlacements || []).map((entry) => {
-        return {
+        const row = {
           componentId: entry.componentId,
           surface: normalizeSurface(entry.surface),
         };
+        if (
+          isBarComponent(entry.componentId) &&
+          isBarPlacementSurface(normalizeSurface(entry.surface))
+        ) {
+          const bx = Number(entry.barOffsetX);
+          const by = Number(entry.barOffsetY);
+          row.barOffsetX = Number.isFinite(bx) ? bx : 0;
+          row.barOffsetY = Number.isFinite(by) ? by : 0;
+        }
+        return row;
       }),
       components: [...record.components],
       center: record.center,
@@ -1511,78 +1651,6 @@ function buildPayload() {
     },
   };
 }
-
-// Restore saved annotation for this case id.
-// function hydrateFromLocalStorage() {
-//   const raw = localStorage.getItem(getStorageKey());
-//   if (!raw) return;
-
-//   try {
-//     const data = JSON.parse(raw);
-//     if (data.locks) {
-//       state.locks.upper = Boolean(data.locks.upper);
-//       state.locks.lower = Boolean(data.locks.lower);
-//       refreshLockButtons();
-//     }
-
-//     if (Array.isArray(data.components)) {
-//       state.components = data.components.filter((id) => COMPONENT_BY_ID.has(id));
-//       state.selectedComponentId = state.components[0] || DEFAULT_COMPONENT_ID;
-//     }
-
-//     if (typeof data.selectedComponentId === "string" && COMPONENT_BY_ID.has(data.selectedComponentId)) {
-//       state.selectedComponentId = data.selectedComponentId;
-//       const selectedComp = COMPONENT_BY_ID.get(data.selectedComponentId);
-//       if (selectedComp?.tab) {
-//         state.selectedTab = selectedComp.tab;
-//       }
-//     }
-
-//     updateEditModeUI();
-
-//     if (Array.isArray(data.teeth)) {
-//       for (const item of data.teeth) {
-//         if (item && state.teeth[item.tooth_id]) {
-//           const tooth = state.teeth[item.tooth_id];
-//           tooth.status = normalizeStatus(item.status) || "presence";
-//           tooth.isPresent = item.isPresent !== false;
-//           tooth.componentPlacements = [];
-
-//           if (Array.isArray(item.componentPlacements)) {
-//             for (const placement of item.componentPlacements) {
-//               if (!placement || !COMPONENT_BY_ID.has(placement.componentId)) {
-//                 continue;
-//               }
-
-//               tooth.componentPlacements.push({
-//                 componentId: placement.componentId,
-//                 surface: normalizeSurface(placement.surface),
-//               });
-//             }
-//           } else if (Array.isArray(item.components)) {
-//             for (const componentId of item.components) {
-//               if (!COMPONENT_BY_ID.has(componentId)) {
-//                 continue;
-//               }
-
-//               tooth.componentPlacements.push({
-//                 componentId,
-//                 surface: null,
-//               });
-//             }
-//           }
-
-//           syncToothComponentsFromPlacements(tooth);
-//         }
-//       }
-//     }
-//     syncDesignModeWithLocks(false);
-//     renderComponentCatalog();
-//     setMessage("Loaded existing annotation from localStorage.", false);
-//   } catch {
-//     setMessage("Found saved data, but it is invalid JSON.", true);
-//   }
-// }
 
 // Show preview image produced from the 3D viewer (if available).
 function loadPreviewImage() {

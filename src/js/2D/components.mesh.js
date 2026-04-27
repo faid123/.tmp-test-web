@@ -216,8 +216,7 @@ function getMeshOverrideValue(overrideMap, toothId, componentId) {
   return overrideMap?.[templateToothId]?.[componentId];
 }
 
-export function getMeshPlacementRenderScale(componentId, toothId, jaw) {
-  void toothId;
+export function getMeshPlacementRenderScale(componentId, _toothId, jaw) {
   const componentScale = MESH_RENDER_SCALE_BY_COMPONENT[componentId] || 1;
   const jawScale = MESH_RENDER_SCALE_BY_JAW[jaw] || 1;
   return componentScale * jawScale;
@@ -249,8 +248,6 @@ export function getMeshPlacementImageSize(componentId, toothId) {
   }
   return null;
 }
-
-// --- Mesh placement state (2D annotation): sync with `componentById` from the live catalog Map ---
 
 function ensureToothComponentPlacementsForMesh(tooth) {
   if (Array.isArray(tooth.componentPlacements)) {
@@ -348,8 +345,6 @@ export function ensureMeshPlacementsOnMissingTeeth(teeth, meshId, componentById)
     }
   }
 }
-
-// --- 2D annotation UI: deferred clicks + catalog/tooth double-click (keeps 2DAnnotation thin) ---
 
 /**
  * Defer mesh single-click briefly so double-click (catalog “apply all” or tooth mesh swap) can cancel.
