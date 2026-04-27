@@ -26,6 +26,7 @@ import {
 
 let all_mesh_mat = {};
 window.finished = false;
+const viewerContainer = document.getElementById("container3D");
 
 // Get the current URL
 const url = new URL(window.location.href);
@@ -94,16 +95,22 @@ scene.add(parentObject);
 polylineOverlayGroup.name = "polyline-overlay-group";
 scene.add(polylineOverlayGroup);
 const raycaster = new THREE.Raycaster();
+raycaster.params.Points.threshold = 5;
 const pointer = new THREE.Vector2();
-const hoverHighlightColor = new THREE.Color(0x2dcdb2);
-const selectedHighlightColor = new THREE.Color(0x1e88e5);
 const POLYLINE_ENDPOINT = "/polylines/getall";
-const START_WITH_POLYLINE_EDITING = false;
-let isPolylineEditMode = START_WITH_POLYLINE_EDITING;
-let currentViewPreset = "Reset";
-let hoveredMesh = null;
-let selectedMesh = null;
-let selectionOverlay = null;
+const polylineDragPlane = new THREE.Plane();
+const polylineDragPoint = new THREE.Vector3();
+const polylineCameraDirection = new THREE.Vector3();
+const polylineHandleGeometry = new THREE.SphereGeometry(1.05, 24, 16);
+const polylineHandleMaterial = new THREE.MeshStandardMaterial({
+  color: 0xff8a00,
+  roughness: 0.3,
+  metalness: 0,
+  depthTest: false,
+  depthWrite: false,
+});
+let activePolylineDrag = null;
+let isPolylineOverlayVisible = true;
 
 function disposeObject3D(object) {
   if (!object) return;
@@ -123,32 +130,6 @@ function clearPolylineOverlay() {
     polylineOverlayGroup.remove(child);
     disposeObject3D(child);
   }
-}
-
-function syncPolylineEditPointVisibility() {
-  polylineOverlayGroup.traverse((child) => {
-    if (child.userData?.overlayType === "polyline-edit-points") {
-      child.visible = isPolylineEditMode;
-    }
-  });
-}
-
-function getJawMeshByType(jawType) {
-  const jawMeshes = parentObject.children.filter((child) => {
-    if (!child.isMesh) return false;
-    if (typeof child.userData?.jaw_type !== "string") return false;
-    return child.userData.jaw_type.toLowerCase().includes(jawType);
-  });
-
-  if (!jawMeshes.length) {
-    return null;
-  }
-
-  return (
-    jawMeshes.find((child) =>
-      String(child.name || "").toLowerCase().includes("surface")
-    ) || jawMeshes[0]
-  );
 }
 
 function normalizeJawKey(value) {
@@ -172,15 +153,47 @@ function isValidPoint(point) {
 }
 
 function toPointObject(value) {
+  if (typeof value === "string") {
+    try {
+      return toPointObject(JSON.parse(value));
+    } catch {
+      return null;
+    }
+  }
+
   if (Array.isArray(value) && value.length >= 3) {
     const [x, y, z] = value.map(Number);
     return { x, y, z };
   }
 
   if (value && typeof value === "object") {
-    const x = Number(value.x ?? value.X ?? value.pos_x ?? value.point_x);
-    const y = Number(value.y ?? value.Y ?? value.pos_y ?? value.point_y);
-    const z = Number(value.z ?? value.Z ?? value.pos_z ?? value.point_z);
+    const x = Number(
+      value.x ??
+        value.X ??
+        value.pos_x ??
+        value.point_x ??
+        value.position_x ??
+        value.coord_x ??
+        value[0]
+    );
+    const y = Number(
+      value.y ??
+        value.Y ??
+        value.pos_y ??
+        value.point_y ??
+        value.position_y ??
+        value.coord_y ??
+        value[1]
+    );
+    const z = Number(
+      value.z ??
+        value.Z ??
+        value.pos_z ??
+        value.point_z ??
+        value.position_z ??
+        value.coord_z ??
+        value[2]
+    );
 
     if ([x, y, z].every(Number.isFinite)) {
       return { x, y, z };
@@ -193,15 +206,155 @@ function toPointObject(value) {
 function extractPointArray(candidate) {
   if (!candidate) return [];
 
+  if (typeof candidate === "string") {
+    try {
+      return extractPointArray(JSON.parse(candidate));
+    } catch {
+      return [];
+    }
+  }
+
   if (Array.isArray(candidate)) {
     return candidate.map(toPointObject).filter(isValidPoint);
   }
 
-  const nestedArrayKeys = ["points", "polyline", "vertices", "coordinates", "data"];
+  const nestedArrayKeys = [
+    "points",
+    "polyline",
+    "polylines",
+    "vertices",
+    "coordinates",
+    "coords",
+    "data",
+    "json",
+  ];
   for (const key of nestedArrayKeys) {
-    if (Array.isArray(candidate[key])) {
-      return candidate[key].map(toPointObject).filter(isValidPoint);
+    if (candidate[key]) {
+      const points = extractPointArray(candidate[key]);
+      if (points.length) return points;
     }
+  }
+
+  return [];
+}
+
+function decodePolylineText(value) {
+  if (typeof value !== "string" || !value.trim()) return "";
+
+  try {
+    const decoded = atob(value.trim());
+    if (
+      /nodeCount|retentionPins|mesh|reversalLine|GingivalPoints/i.test(decoded)
+    ) {
+      return decoded;
+    }
+  } catch {
+    // Keep going: the value may already be plain text.
+  }
+
+  return /nodeCount|retentionPins|mesh|reversalLine|GingivalPoints/i.test(value)
+    ? value
+    : "";
+}
+
+function parsePolylineTextSegments(value) {
+  const text = decodePolylineText(value);
+  if (!text) return [];
+
+  const lines = text.split(/\r?\n/);
+  const segments = [];
+  const numberPattern = /[-+]?\d*\.?\d+(?:e[-+]?\d+)?/gi;
+  const ignoredPointValue = -9e91;
+
+  const parseCoordinateLine = (line) => {
+    if (!/^[\s+\-.0-9eE]+$/.test(line)) return null;
+
+    const numbers = line.match(numberPattern)?.map(Number) || [];
+    if (numbers.length < 3) return null;
+
+    const coords = numbers.slice(-3);
+    if (
+      coords.some(
+        (coord) =>
+          !Number.isFinite(coord) || Math.abs(coord - ignoredPointValue) < 1e80
+      )
+    ) {
+      return null;
+    }
+
+    return { x: coords[0], y: coords[1], z: coords[2] };
+  };
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim();
+    const nodeMatch = line.match(/nodeCount\s*=\s*(\d+)/i);
+    const gingivalMatch = line.match(/^GingivalPoints\s+(\d+)/i);
+    const nodeCount = Number(nodeMatch?.[1] ?? gingivalMatch?.[1] ?? 0);
+
+    if (!nodeCount) continue;
+
+    const points = [];
+    for (let j = i + 1; j < lines.length && points.length < nodeCount; j += 1) {
+      const point = parseCoordinateLine(lines[j]);
+      if (point) points.push(point);
+    }
+
+    if (points.length >= 2) {
+      segments.push(points);
+    }
+  }
+
+  return segments;
+}
+
+function extractPolylineSegments(candidate) {
+  if (!candidate) return [];
+
+  if (typeof candidate === "string") {
+    const textSegments = parsePolylineTextSegments(candidate);
+    if (textSegments.length) return textSegments;
+
+    try {
+      return extractPolylineSegments(JSON.parse(candidate));
+    } catch {
+      return [];
+    }
+  }
+
+  if (Array.isArray(candidate)) {
+    const points = candidate.map(toPointObject).filter(isValidPoint);
+    if (points.length === candidate.length && points.length) return [points];
+
+    return candidate.flatMap((entry) => extractPolylineSegments(entry));
+  }
+
+  if (typeof candidate === "object") {
+    const dataSegments = parsePolylineTextSegments(candidate.data);
+    if (dataSegments.length) return dataSegments;
+
+    const directPoints = extractPointArray(candidate);
+    if (directPoints.length) return [directPoints];
+
+    const nestedKeys = [
+      "points",
+      "polyline",
+      "polylines",
+      "vertices",
+      "coordinates",
+      "coords",
+      "data",
+      "json",
+      "upper",
+      "lower",
+      "upper_jaw",
+      "lower_jaw",
+      "upperJaw",
+      "lowerJaw",
+      "maxillary",
+      "mandibular",
+    ];
+
+    return nestedKeys.flatMap((key) => extractPolylineSegments(candidate[key]));
   }
 
   return [];
@@ -213,9 +366,10 @@ function normalizePolylineResponse(rawResponse) {
     lower: [],
   };
 
-  const assignPoints = (jawKey, points) => {
-    if (!jawKey || !points.length) return;
-    normalized[jawKey] = points;
+  const assignSegments = (jawKey, candidate) => {
+    const segments = extractPolylineSegments(candidate);
+    if (!jawKey || !segments.length) return;
+    normalized[jawKey].push(...segments);
   };
 
   if (!rawResponse) {
@@ -231,55 +385,69 @@ function normalizePolylineResponse(rawResponse) {
           entry?.type ??
           entry?.jaws
       );
-      const points = extractPointArray(entry);
-      if (jawKey && points.length) {
-        assignPoints(jawKey, points);
-      }
+      assignSegments(jawKey, entry);
     });
 
     if (!normalized.upper.length && rawResponse[0]) {
-      assignPoints("upper", extractPointArray(rawResponse[0]));
+      assignSegments("upper", rawResponse[0]);
     }
     if (!normalized.lower.length && rawResponse[1]) {
-      assignPoints("lower", extractPointArray(rawResponse[1]));
+      assignSegments("lower", rawResponse[1]);
     }
     return normalized;
   }
 
   if (typeof rawResponse === "object") {
-    assignPoints("upper", extractPointArray(rawResponse.upper));
-    assignPoints("lower", extractPointArray(rawResponse.lower));
+    assignSegments(
+      "upper",
+      rawResponse.upper ??
+        rawResponse.upper_jaw ??
+        rawResponse.upperJaw ??
+        rawResponse.maxillary
+    );
+    assignSegments(
+      "lower",
+      rawResponse.lower ??
+        rawResponse.lower_jaw ??
+        rawResponse.lowerJaw ??
+        rawResponse.mandibular
+    );
 
-    if (!normalized.upper.length) {
-      assignPoints(
-        normalizeJawKey(
-          rawResponse.jaw_type ??
-            rawResponse.jawType ??
-            rawResponse.arch ??
-            rawResponse.type ??
-            rawResponse.jaws
-        ),
-        extractPointArray(rawResponse)
-      );
-    }
+    const fallbackJawKey = normalizeJawKey(
+      rawResponse.jaw_type ??
+        rawResponse.jawType ??
+        rawResponse.arch ??
+        rawResponse.type ??
+        rawResponse.jaws
+    );
+
+    assignSegments(fallbackJawKey, rawResponse);
   }
 
   return normalized;
 }
 
 function createPolylineObjects(jawType, points) {
-  const vectors = points.map((point) => new THREE.Vector3(point.x, point.y, point.z));
+  const positionArray = new Float32Array(points.length * 3);
+  points.forEach((point, index) => {
+    positionArray[index * 3] = point.x;
+    positionArray[index * 3 + 1] = point.y;
+    positionArray[index * 3 + 2] = point.z;
+  });
+  const positionAttribute = new THREE.BufferAttribute(positionArray, 3);
   const group = new THREE.Group();
   group.name = `${jawType}-polyline-group`;
   group.userData = {
     overlayType: "polyline",
     arch: jawType,
+    positionAttribute,
   };
 
-  if (vectors.length >= 2) {
-    const lineGeometry = new THREE.BufferGeometry().setFromPoints(vectors);
+  if (points.length >= 2) {
+    const lineGeometry = new THREE.BufferGeometry();
+    lineGeometry.setAttribute("position", positionAttribute);
     const lineMaterial = new THREE.LineBasicMaterial({
-      color: 0x7b2ff2,
+      color: 0x6f35ff,
       transparent: true,
       opacity: 1,
       depthTest: false,
@@ -295,26 +463,36 @@ function createPolylineObjects(jawType, points) {
     group.add(line);
   }
 
-  if (vectors.length >= 1) {
-    const pointGeometry = new THREE.BufferGeometry().setFromPoints(vectors);
-    const pointMaterial = new THREE.PointsMaterial({
-      color: 0xf08a24,
-      size: 2.8,
-      sizeAttenuation: true,
-      transparent: true,
-      opacity: 1,
-      depthTest: false,
-      depthWrite: false,
-    });
-    const pointCloud = new THREE.Points(pointGeometry, pointMaterial);
-    pointCloud.name = `${jawType}-polyline-edit-points`;
-    pointCloud.visible = isPolylineEditMode;
-    pointCloud.renderOrder = 21;
-    pointCloud.userData = {
+  if (points.length >= 1) {
+    const handles = new THREE.Group();
+    handles.name = `${jawType}-polyline-edit-points`;
+    handles.visible = true;
+    handles.renderOrder = 21;
+    handles.userData = {
       overlayType: "polyline-edit-points",
       arch: jawType,
+      positionAttribute,
     };
-    group.add(pointCloud);
+
+    points.forEach((point, index) => {
+      const handle = new THREE.Mesh(
+        polylineHandleGeometry,
+        polylineHandleMaterial.clone()
+      );
+      handle.name = `${jawType}-polyline-point-${index}`;
+      handle.position.set(point.x, point.y, point.z);
+      handle.renderOrder = 21;
+      handle.userData = {
+        overlayType: "polyline-edit-point",
+        arch: jawType,
+        index,
+        handleGroup: handles,
+        positionAttribute,
+      };
+      handles.add(handle);
+    });
+
+    group.add(handles);
   }
 
   return group;
@@ -324,50 +502,50 @@ function renderPolylineData(polylineByJaw) {
   clearPolylineOverlay();
 
   ["upper", "lower"].forEach((jawType) => {
-    const points = polylineByJaw[jawType] || [];
-    const jawMesh = getJawMeshByType(jawType);
-
-    if (!jawMesh || !points.length) {
-      if (points.length && !jawMesh) {
-        console.log(`[polyline] Skipping ${jawType}: jaw mesh not loaded.`);
-      }
-      return;
-    }
-
-    const polylineGroup = createPolylineObjects(jawType, points);
-    polylineOverlayGroup.add(polylineGroup);
+    const segments = polylineByJaw[jawType] || [];
+    segments.forEach((points) => {
+      if (points.length < 2) return;
+      const polylineGroup = createPolylineObjects(jawType, points);
+      polylineOverlayGroup.add(polylineGroup);
+    });
   });
-
-  syncPolylineEditPointVisibility();
 }
 
-function createPolylineEditButton() {
-  if (document.getElementById("polyline-edit-toggle")) return;
+function countPolylinePoints(segments) {
+  return segments.reduce((total, points) => total + points.length, 0);
+}
+
+function syncPolylineOverlayVisibility() {
+  polylineOverlayGroup.visible = isPolylineOverlayVisible;
+}
+
+function createPolylineVisibilityToggle(container) {
+  if (document.getElementById("polyline-visibility-toggle")) return;
 
   const button = document.createElement("button");
-  button.id = "polyline-edit-toggle";
-  button.textContent = isPolylineEditMode ? "Done Editing" : "Edit Polyline";
+  button.id = "polyline-visibility-toggle";
+  button.type = "button";
+  button.textContent = isPolylineOverlayVisible ? "Hide Polyline" : "Show Polyline";
   button.style.position = "fixed";
-  button.style.left = "32px";
-  button.style.bottom = "96px";
-  button.style.padding = "10px 14px";
-  button.style.backgroundColor = "#fd7e14";
-  button.style.color = "white";
-  button.style.border = "none";
-  button.style.cursor = "pointer";
-  button.style.borderRadius = "5px";
-  button.style.fontWeight = "bold";
+  button.style.right = "20px";
+  button.style.bottom = "82px";
   button.style.zIndex = "1000";
+  button.style.padding = "10px 14px";
+  button.style.border = "none";
+  button.style.borderRadius = "5px";
+  button.style.background = "#6f35ff";
+  button.style.color = "white";
+  button.style.fontWeight = "bold";
+  button.style.cursor = "pointer";
   button.addEventListener("click", () => {
-    isPolylineEditMode = !isPolylineEditMode;
-    button.textContent = isPolylineEditMode ? "Done Editing" : "Edit Polyline";
-    syncPolylineEditPointVisibility();
+    isPolylineOverlayVisible = !isPolylineOverlayVisible;
+    syncPolylineOverlayVisibility();
+    button.textContent = isPolylineOverlayVisible ? "Hide Polyline" : "Show Polyline";
   });
 
-  document.body.appendChild(button);
+  container.appendChild(button);
+  syncPolylineOverlayVisibility();
 }
-
-window.addEventListener("load", createPolylineEditButton);
 
 async function fetchAndRenderPolylines(caseIntID) {
   clearPolylineOverlay();
@@ -391,7 +569,13 @@ async function fetchAndRenderPolylines(caseIntID) {
       "Polyline"
     );
     const normalized = normalizePolylineResponse(response);
-    const hasAnyPoints = normalized.upper.length || normalized.lower.length;
+    const upperPointCount = countPolylinePoints(normalized.upper);
+    const lowerPointCount = countPolylinePoints(normalized.lower);
+    const hasAnyPoints = upperPointCount || lowerPointCount;
+    console.log("[polyline] points", {
+      upper: upperPointCount,
+      lower: lowerPointCount,
+    });
 
     if (!hasAnyPoints) {
       console.log("[polyline] No polyline data returned.");
@@ -404,168 +588,117 @@ async function fetchAndRenderPolylines(caseIntID) {
   }
 }
 
-function getArchLabel(mesh) {
-  const sourceText = [
-    mesh?.userData?.archLabel,
-    mesh?.userData?.jaw_type,
-    mesh?.name,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  if (sourceText.includes("upper")) return "Upper Arch";
-  if (sourceText.includes("lower")) return "Lower Arch";
-  if (sourceText.includes("surface")) return "Surface Mesh";
-  return "Jaw Model";
-}
-
-function createSelectionOverlay(container) {
-  if (selectionOverlay) return selectionOverlay;
-
-  const overlay = document.createElement("div");
-  overlay.id = "selection-overlay";
-  overlay.style.position = "absolute";
-  overlay.style.top = "16px";
-  overlay.style.right = "150px";
-  overlay.style.zIndex = "1000";
-  overlay.style.minWidth = "220px";
-  overlay.style.maxWidth = "280px";
-  overlay.style.padding = "12px 14px";
-  overlay.style.borderRadius = "10px";
-  overlay.style.background = "rgba(255, 255, 255, 0.94)";
-  overlay.style.border = "1px solid rgba(30, 56, 77, 0.14)";
-  overlay.style.boxShadow = "0 12px 24px rgba(12, 30, 44, 0.14)";
-  overlay.style.fontFamily = "Arial, sans-serif";
-  overlay.style.color = "#22394c";
-  overlay.style.pointerEvents = "none";
-  container.appendChild(overlay);
-  selectionOverlay = overlay;
-  updateSelectionOverlay();
-  return overlay;
-}
-
-function updateSelectionOverlay() {
-  if (!selectionOverlay) return;
-
-  const activeMesh = selectedMesh || hoveredMesh;
-  const stateLabel = selectedMesh
-    ? "Selected"
-    : hoveredMesh
-      ? "Hovering"
-      : "No selection";
-
-  if (!activeMesh) {
-    selectionOverlay.innerHTML = `
-      <div style="font-size:12px; font-weight:bold; letter-spacing:0.08em; text-transform:uppercase; color:#4f7b79;">Viewer Focus</div>
-      <div style="margin-top:6px; font-size:18px; font-weight:bold;">No arch selected</div>
-      <div style="margin-top:8px; font-size:13px; line-height:1.45; color:#5e7283;">
-        Hover a mesh to inspect it. Click to pin the current selection.
-      </div>
-      <div style="margin-top:10px; font-size:12px; color:#6a7b88;">View preset: ${currentViewPreset}</div>
-    `;
-    return;
-  }
-
-  const archLabel = getArchLabel(activeMesh);
-  const meshName = activeMesh.name || "Unnamed mesh";
-  const visibilityLabel = activeMesh.visible ? "Visible" : "Hidden";
-
-  selectionOverlay.innerHTML = `
-    <div style="font-size:12px; font-weight:bold; letter-spacing:0.08em; text-transform:uppercase; color:#4f7b79;">Viewer Focus</div>
-    <div style="margin-top:6px; display:flex; justify-content:space-between; gap:12px;">
-      <div style="font-size:18px; font-weight:bold;">${archLabel}</div>
-      <div style="font-size:12px; font-weight:bold; color:${selectedMesh ? "#1e88e5" : "#2b8f7d"};">${stateLabel}</div>
-    </div>
-    <div style="margin-top:8px; font-size:13px; line-height:1.45; color:#5e7283;">${meshName}</div>
-    <div style="margin-top:10px; font-size:12px; color:#6a7b88;">View preset: ${currentViewPreset}</div>
-    <div style="margin-top:4px; font-size:12px; color:#6a7b88;">Visibility: ${visibilityLabel}</div>
-  `;
-}
-
-function setMeshHighlight(mesh, mode = "none") {
-  if (!mesh?.material || Array.isArray(mesh.material)) return;
-  if (!("emissive" in mesh.material)) return;
-
-  if (!mesh.userData.originalEmissive) {
-    mesh.userData.originalEmissive = mesh.material.emissive.clone();
-    mesh.userData.originalEmissiveIntensity = mesh.material.emissiveIntensity ?? 1;
-  }
-
-  if (mode === "selected") {
-    mesh.material.emissive.copy(selectedHighlightColor);
-    mesh.material.emissiveIntensity = 0.45;
-  } else if (mode === "hover") {
-    mesh.material.emissive.copy(hoverHighlightColor);
-    mesh.material.emissiveIntensity = 0.25;
-  } else {
-    mesh.material.emissive.copy(mesh.userData.originalEmissive);
-    mesh.material.emissiveIntensity = mesh.userData.originalEmissiveIntensity ?? 1;
-  }
-}
-
-function refreshSelectionHighlights() {
-  parentObject.children.forEach((child) => {
-    if (!child.isMesh) return;
-
-    if (child === selectedMesh) {
-      setMeshHighlight(child, "selected");
-    } else if (child === hoveredMesh) {
-      setMeshHighlight(child, "hover");
-    } else {
-      setMeshHighlight(child, "none");
-    }
-  });
-}
-
-function getSelectableMeshes() {
-  return parentObject.children.filter(
-    (child) => child.isMesh && child.visible && child.userData?.jaw_type
-  );
-}
-
 function updatePointerPosition(event, domElement) {
   const bounds = domElement.getBoundingClientRect();
   pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
   pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
 }
 
-function pickMesh(event, domElement) {
+function getPolylinePointClouds() {
+  const handles = [];
+  polylineOverlayGroup.traverse((child) => {
+    if (child.userData?.overlayType === "polyline-edit-point") {
+      handles.push(child);
+    }
+  });
+  return handles;
+}
+
+function pickPolylinePoint(event, domElement) {
   updatePointerPosition(event, domElement);
   raycaster.setFromCamera(pointer, camera);
-  const intersections = raycaster.intersectObjects(getSelectableMeshes(), false);
-  return intersections[0]?.object || null;
+  const intersections = raycaster.intersectObjects(getPolylinePointClouds(), false);
+  const hit = intersections.find((item) =>
+    Number.isInteger(item.object?.userData?.index)
+  );
+  if (!hit) return null;
+  return {
+    handle: hit.object,
+    index: hit.object.userData.index,
+    point: hit.point,
+  };
 }
 
-function attachSelectionHandlers(domElement) {
-  domElement.addEventListener("mousemove", (event) => {
-    const nextHovered = pickMesh(event, domElement);
-    if (nextHovered === hoveredMesh) return;
-    hoveredMesh = nextHovered;
-    refreshSelectionHighlights();
-    updateSelectionOverlay();
-  });
+function updatePolylinePoint(handle, index, worldPoint) {
+  const handleGroup = handle.userData.handleGroup;
+  const localPoint = handleGroup.worldToLocal(worldPoint.clone());
+  const positionAttribute = handle.userData.positionAttribute;
+  if (!positionAttribute) return;
 
-  domElement.addEventListener("mouseleave", () => {
-    hoveredMesh = null;
-    refreshSelectionHighlights();
-    updateSelectionOverlay();
-  });
+  positionAttribute.setXYZ(index, localPoint.x, localPoint.y, localPoint.z);
+  positionAttribute.needsUpdate = true;
+  handle.position.copy(localPoint);
 
-  domElement.addEventListener("click", (event) => {
-    selectedMesh = pickMesh(event, domElement);
-    refreshSelectionHighlights();
-    updateSelectionOverlay();
-  });
+  const polylineGroup = handleGroup.parent;
+  polylineGroup?.children.forEach((child) => child.geometry?.computeBoundingSphere?.());
 }
 
-window.addEventListener("viewer:viewchange", (event) => {
-  currentViewPreset = event.detail?.label || "Reset";
-  updateSelectionOverlay();
-});
+function setPolylineDragging(enabled) {
+  if (controls) controls.enabled = !enabled;
+  if (orb_controls) orb_controls.enabled = !enabled;
+}
+
+function attachPolylineDragHandlers(domElement) {
+  domElement.addEventListener("pointerdown", (event) => {
+    const hit = pickPolylinePoint(event, domElement);
+    if (!hit) return;
+
+    event.preventDefault();
+    domElement.setPointerCapture?.(event.pointerId);
+    camera.getWorldDirection(polylineCameraDirection);
+    polylineDragPlane.setFromNormalAndCoplanarPoint(
+      polylineCameraDirection,
+      hit.point
+    );
+    activePolylineDrag = {
+      handle: hit.handle,
+      index: hit.index,
+      pointerId: event.pointerId,
+    };
+    setPolylineDragging(true);
+  });
+
+  domElement.addEventListener("pointermove", (event) => {
+    if (!activePolylineDrag) {
+      domElement.style.cursor = pickPolylinePoint(event, domElement)
+        ? "grab"
+        : "";
+      return;
+    }
+
+    updatePointerPosition(event, domElement);
+    raycaster.setFromCamera(pointer, camera);
+    if (raycaster.ray.intersectPlane(polylineDragPlane, polylineDragPoint)) {
+      updatePolylinePoint(
+        activePolylineDrag.handle,
+        activePolylineDrag.index,
+        polylineDragPoint
+      );
+    }
+    domElement.style.cursor = "grabbing";
+  });
+
+  const stopDragging = (event) => {
+    if (!activePolylineDrag) return;
+    domElement.releasePointerCapture?.(activePolylineDrag.pointerId);
+    activePolylineDrag = null;
+    setPolylineDragging(false);
+    domElement.style.cursor = pickPolylinePoint(event, domElement) ? "grab" : "";
+  };
+
+  domElement.addEventListener("pointerup", stopDragging);
+  domElement.addEventListener("pointercancel", stopDragging);
+  domElement.addEventListener("pointerleave", (event) => {
+    if (activePolylineDrag) stopDragging(event);
+  });
+}
 
 //The async prevents processing of data before the stuff is loaded in
 (async () => {
+  if (!viewerContainer) {
+    return;
+  }
+
   //datas :)
   // this for the undercut upper and the main json data use to retrieve stuff
   const data = {
@@ -862,8 +995,8 @@ btnContainer.appendChild(edit2DStatic); */
 
                 const isGitHubPages =
                   window.location.hostname.includes("github.io");
-                const isLocal = window.location.hostname === "localhost";
-                const queryConnector = isLocal ? "/?" : "?";
+                //const isLocal = window.location.hostname === "localhost";
+                const queryConnector = "?";
                 const basePath = isGitHubPages ? "/.tmp-test-web" : "";
 
                 const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}`;
@@ -900,8 +1033,8 @@ btnContainer.appendChild(edit2DStatic); */
 
               const isGitHubPages =
                 window.location.hostname.includes("github.io");
-              const isLocal = window.location.hostname === "localhost";
-              const queryConnector = isLocal ? "/?" : "?";
+              // const isLocal = window.location.hostname === "localhost";
+              const queryConnector = "?";
               const basePath = isGitHubPages ? "/.tmp-test-web" : "";
 
               const targetURL = `${window.location.origin}${basePath}/src/pages/AnnotationHistory.html${queryConnector}id=${encryptedId}`;
@@ -1615,9 +1748,6 @@ btnContainer.appendChild(edit2DStatic); */
       if (child.material) child.material.dispose();
     }
     clearPolylineOverlay();
-    hoveredMesh = null;
-    selectedMesh = null;
-    updateSelectionOverlay();
 
     // Remove previous GUI controls if any
     const oldGui = document.querySelector(".dg.ac");
@@ -1921,8 +2051,8 @@ btnContainer.appendChild(edit2DStatic); */
   container.style.position = "relative"; // <- Add this line
   if (container) {
     container.appendChild(renderer.domElement);
-    createSelectionOverlay(container);
-    attachSelectionHandlers(renderer.domElement);
+    attachPolylineDragHandlers(renderer.domElement);
+    createPolylineVisibilityToggle(container);
 
     // After container3D and renderer are set up
     const caseTitle = document.createElement("div");
@@ -1990,20 +2120,6 @@ btnContainer.appendChild(edit2DStatic); */
   // Render the scene
   function animate() {
     requestAnimationFrame(animate);
-    // Here we could add some code to update the scene, adding some automatic movement
-    let selectionChanged = false;
-    if (selectedMesh && !parentObject.children.includes(selectedMesh)) {
-      selectedMesh = null;
-      selectionChanged = true;
-    }
-    if (hoveredMesh && !parentObject.children.includes(hoveredMesh)) {
-      hoveredMesh = null;
-      selectionChanged = true;
-    }
-    if (selectionChanged) {
-      refreshSelectionHighlights();
-      updateSelectionOverlay();
-    }
     controls.update();
     // Make the eye move
 
