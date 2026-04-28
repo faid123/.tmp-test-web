@@ -31,27 +31,32 @@
           <div class="jaw-row">
             <img class="jaw-img" src="../../assets/Icon_UpperJaw_Occlusal.png" alt="Upper jaw icon" />
             <span class="jaw-row-name">Upper Arch (18 to 28)</span>
-            <button id="upperLockBtn" class="lock-btn" data-jaw="upper" aria-label="Lock upper arch">
-              <img class="lock-icon" src="../../assets/unlock.png" alt="" />
-            </button>
           </div>
           <div class="jaw-row">
             <img class="jaw-img" src="../../assets/Icon_LowerJaw_Occlusal.png" alt="Lower jaw icon" />
             <span class="jaw-row-name">Lower Arch (38 to 48)</span>
-            <button id="lowerLockBtn" class="lock-btn" data-jaw="lower" aria-label="Lock lower arch">
-              <img class="lock-icon" src="../../assets/unlock.png" alt="" />
-            </button>
           </div>
         </div>
 
         <div class="jaw-combined-canvas">
-          <svg id="upperArchSvg" class="arch-svg" viewBox="0 0 650 400"></svg>
-          <svg id="lowerArchSvg" class="arch-svg" viewBox="0 0 650 400"></svg>
+          <svg id="upperArchSvg" class="arch-svg"></svg>
+          <div class="jaw-lock-strip">
+            <button
+              type="button"
+              id="jawLockToggleBtn"
+              class="lock-btn jaw-lock-between-btn"
+              aria-label="Switch to design mode"
+            >
+              <img class="lock-icon" src="../../assets/unlock.png" alt="" />
+              <span class="lock-text jaw-lock-between-text">Selected mode</span>
+            </button>
+          </div>
+          <svg id="lowerArchSvg" class="arch-svg"></svg>
         </div>
 
         <div class="action-list center-actions">
-          <button id="clearTopBtn" class="action-btn">Clear Top</button>
-          <button id="clearBottomBtn" class="action-btn">Clear Bottom</button>
+          <button id="clearTopBtn" type="button" class="action-btn">Clear upper teeth</button>
+          <button id="clearBottomBtn" type="button" class="action-btn">Clear lower teeth</button>
           <button id="drawFromScratchBtn" class="action-btn">Draw from Scratch</button>
           <button id="saveAnnotationBtn" class="action-btn primary">Save</button>
         </div>

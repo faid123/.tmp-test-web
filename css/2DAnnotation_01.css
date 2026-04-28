@@ -171,15 +171,50 @@ body {
 .jaw-combined-canvas {
   border: 0;
   background: transparent;
-  display: grid;
-  grid-template-rows: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  margin: 0px;
+  flex: 1;
+  min-height: 0;
+}
+
+.jaw-lock-strip {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
   align-items: center;
-  gap:5px;
-  margin:5px;
+  padding: 4px 0 8px;
+}
+
+.jaw-lock-between-btn {
+  width: auto;
+  height: auto;
+  min-height: 28px;
+  padding: 4px 12px;
+  gap: 6px;
+}
+
+.jaw-lock-between-btn .lock-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.jaw-lock-between-btn .lock-text {
+  display: inline;
+  font-size: 0.68rem;
+  font-weight: 600;
+  max-width: 140px;
+  line-height: 1.15;
+  text-align: center;
 }
 
 .arch-svg {
   width: 100%;
+  flex: 1 1 0;
+  min-height: 120px;
   border: 0;
   background: transparent;
   display: block;
@@ -220,7 +255,8 @@ body {
   gap: 16px;
   max-height: calc(100vh - 32px);
   overflow-y: auto;
-  overflow-x: hidden;
+  /* allow component name popovers to extend past the gutter */
+  overflow-x: visible;
   padding-right: 2px;
 }
 
@@ -279,7 +315,7 @@ body {
   border: none;
   border-radius: 5px;
   padding: 2px;
-  margin-top: 50%;
+  margin-top: 8px;
 }
 
 .edit-mode-panel.is-hidden { display: none; }
@@ -387,16 +423,20 @@ body {
 .component-item {
   position: relative;
   display: flex;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  gap: 10px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
-  padding: 8px 6px;
+  padding: 8px 10px;
   cursor: pointer;
   min-width: 0;
   min-height: 42px;
+  width: 100%;
+  max-width: 100%;
 }
 
 .component-item.is-active {
@@ -407,6 +447,7 @@ body {
 .component-icon {
   width: 50px;
   height: 50px;
+  flex: 0 0 50px;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: #e6e6e6;
@@ -424,36 +465,14 @@ body {
 }
 
 .component-label {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 6px);
-  transform: translateX(-50%) translateY(4px);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  font-size: 0.72rem;
-  line-height: 1.2;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.68rem;
+  line-height: 1.25;
+  text-align: left;
   color: var(--rose-700);
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 4px 8px;
-  max-width: 160px;
-  width: max-content;
-  text-align: center;
   white-space: normal;
   overflow-wrap: anywhere;
-  box-shadow: 0 8px 14px rgba(77, 34, 48, 0.12);
-  z-index: 2;
-  transition: opacity 120ms ease, transform 120ms ease, visibility 0s linear 120ms;
-}
-
-.component-item:hover .component-label,
-.component-item:focus-visible .component-label {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) translateY(0);
-  transition-delay: 0s;
 }
 .selected-components { display: none; }
 
@@ -730,5 +749,60 @@ body {
 
   .center-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Avoid a tall empty flex row between jaws and footer when layout stacks */
+  .arch-panel {
+    grid-template-rows: auto auto auto auto auto;
+  }
+}
+
+/* Keep jaw diagrams usable on phones: minimum drawing size + scroll if viewport is narrower */
+@media (max-width: 768px) {
+  .preview-frame {
+    min-height: min(280px, 42vh);
+  }
+
+  .tools-panel {
+    gap: 10px;
+    max-height: none;
+    padding-top: 4px;
+  }
+
+  .panel-mini-title {
+    margin-top: 0;
+    margin-bottom: 4px;
+  }
+
+  .edit-mode-panel {
+    margin-top: 0;
+    padding-top: 0;
+  }
+
+  .design-hint {
+    margin-bottom: 8px;
+  }
+
+  .jaw-combined-canvas {
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    min-height: clamp(340px, 52vh, 620px);
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  .jaw-combined-canvas .arch-svg {
+    flex: 0 0 auto;
+    box-sizing: content-box;
+    width: max(var(--arch-jaw-min-width, 340px), 100%);
+    min-width: var(--arch-jaw-min-width, 340px);
+    max-width: none;
+    min-height: clamp(155px, 22vh, 240px);
+  }
+
+  .jaw-lock-strip {
+    min-width: var(--arch-jaw-min-width, 340px);
   }
 }

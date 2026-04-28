@@ -1,4 +1,4 @@
-import { TOOTH_ORDER } from "./constants.js";
+import { isAutoMeshPlatePlacementExcludedToothId, TOOTH_ORDER } from "./constants.js";
 import { COMPONENT_ASSET_BASE, getComponentTemplateToothId } from "./components.mesh.js";
 
 /** Default plate when entering design mode (both arches locked) if no plate is selected in the catalog. */
@@ -22,22 +22,22 @@ export function isPlateComponent(componentOrId) {
 }
 
 const PLATE_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
-  "11": { width: 255, height: 350 },
-  "12": { width: 245, height: 300 },
-  "13": { width: 205, height: 290 },
-  "14": { width: 212, height: 290 },
-  "15": { width: 212, height: 290 },
-  "16": { width: 225, height: 290 },
-  "17": { width: 225, height: 290 },
-  "18": { width: 215, height: 290 },
-  "41": { width: 135, height: 350 },
-  "42": { width: 135, height: 350 },
-  "43": { width: 135, height: 350 },
-  "44": { width: 145, height: 350 },
-  "45": { width: 125, height: 350 },
-  "46": { width: 125, height: 350 },
-  "47": { width: 110, height: 350 },
-  "48": { width: 95, height: 350 },
+  "11": { width: 300, height: 365 },
+  "12": { width: 345, height: 330 },
+  "13": { width: 245, height: 330 },
+  "14": { width: 270, height: 290 },
+  "15": { width: 252, height: 290 },
+  "16": { width: 265, height: 330 },
+  "17": { width: 265, height: 320 },
+  "18": { width: 285, height: 310 },
+  "41": { width: 205, height: 350 },
+  "42": { width: 195, height: 350 },
+  "43": { width: 155, height: 350 },
+  "44": { width: 185, height: 350 },
+  "45": { width: 185, height: 350 },
+  "46": { width: 193, height: 350 },
+  "47": { width: 180, height: 350 },
+  "48": { width: 135, height: 350 },
 });
 
 /** Per–catalog-id scale factor (multiplied with jaw scale below). Tune for overall plate size. */
@@ -57,29 +57,29 @@ const PLATE_RENDER_SCALE_BY_JAW = Object.freeze({
  * Quadrants 2 / 3 mirror X when only the template row exists.
  */
 const PLATE_POSITION_OFFSET_SEED_BY_TOOTH = Object.freeze({
-  "11": { x: -4, y: 10 },
-  "12": { x: 1.5, y: 7.5 },
-  "22": { x: 0.5, y: 7.5 },
-  "13": { x: 4.3, y: 2.5 },
-  "23": { x: -5, y: 2.5 },
-  "14": { x: 6, y: 2.2 },
-  "24": { x: -5, y: 2 },
-  "15": { x: 3.5, y: 0.8 },
-  "16": { x: 2, y: 2 },
-  "26": { x: 0, y: 0 },
-  "17": { x: 4, y: -1 },
-  "27": { x: -2, y: -3 },
-  "18": { x: 5, y: -2 },
-  "28": { x: -4, y: -3 },
-  "41": { x: 0.5, y: -23 },
-  "42": { x: 5.6, y: -18.5 },
-  "43": { x: 10.2, y: -16 },
-  "44": { x: 20.5, y: -10.5 },
-  "45": { x: 21, y: -6.7 },
-  "46": { x: 23, y: -6.5 },
-  "36": { x: -24, y: -6.5 },
-  "47": { x: 22.5, y: -7 },
-  "48": { x: 29.5, y: -2.8 },
+  "11": { x: -5, y: 10 },
+  "21": { x: 4, y: 10 },
+  "12": { x: 6.5, y: 11.5 },
+  "22": { x: -6.5, y: 11.5 },
+  "13": { x: 8.3, y: 7 },
+  "23": { x: -10.3, y: 7 },
+  "14": { x: 7, y: 8.2 },
+  "24": { x: -7, y: 8.2 },
+  "15": { x: 4.5, y: 5.8 },
+  "16": { x: 4, y: 8 },
+  "26": { x: -4, y: 8 },
+  "17": { x: 6, y: 8 },
+  "27": { x: -6, y: 8 },
+  "18": { x: 7, y: 2 },
+  "28": { x: -7, y: 2 },
+  "41": { x: 3.4, y: -26 },
+  "42": { x: 7.4, y: -22 },
+  "43": { x: 15.2, y: -20 },
+  "44": { x: 28.5, y: -12.5 },
+  "45": { x: 28, y: -4 },
+  "46": { x: 25, y: -9.5 },
+  "47": { x: 25.5, y: -10 },
+  "48": { x: 34.5, y: 2.2 },
 });
 
 export function getPlatePlacementRenderScale(componentId, _toothId, jaw) {
@@ -160,6 +160,9 @@ export function ensurePlatePlacementsOnPresentTeeth(teeth, plateComponentId, com
   }
   for (const jaw of Object.keys(TOOTH_ORDER)) {
     for (const toothId of TOOTH_ORDER[jaw]) {
+      if (isAutoMeshPlatePlacementExcludedToothId(toothId)) {
+        continue;
+      }
       const tooth = teeth[toothId];
       if (!tooth || !tooth.isPresent) {
         continue;

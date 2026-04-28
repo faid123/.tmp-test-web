@@ -59,6 +59,7 @@ import {
   COMPONENT_SCALE_BY_TOOTH,
   EMPTY_JAW_CALIBRATION,
   forEachTooth,
+  isAutoMeshPlatePlacementExcludedToothId,
   JAW_BACKGROUND_IMAGES,
   JAW_BACKGROUND_OFFSET_BY_JAW,
   JAW_BACKGROUND_SCALE_BY_JAW,
@@ -80,7 +81,6 @@ import {
 
 const DEFAULT_COMPONENT_ID =
   COMPONENT_BY_ID.has("mesh-hole") ? "mesh-hole" : COMPONENT_CATALOG[0]?.id || null;
-const ENABLE_TEMP_ALL_MISSING_MESH_BAR = true;
 const REST_CALIBRATION_COMPONENT_ID = "rest-seat";
 
 // Runtime annotation state.
@@ -122,9 +122,7 @@ function init() {
     bindActionButtons();
     initComponentCatalog();
     loadPreviewImage();
-    if (ENABLE_TEMP_ALL_MISSING_MESH_BAR) {
-      tempPopulateAllMissingMeshAndMesialBar();
-    }
+    bootstrapDefaultPlateOnAllPresentTeeth();
     syncDesignModeWithLocks(false);
     renderJaws();
     updateEditModeUI();
@@ -135,33 +133,36 @@ function init() {
 }
 
 /**
- * Temporary bootstrap dataset for visual tuning:
- * - every tooth is missing
- * - every tooth gets one mesh placement
- * - every tooth gets one mesial bar placement
+ * On load: place the default plate component on every present tooth so plates are visible immediately.
  */
-function tempPopulateAllMissingMeshAndMesialBar() {
-  const meshId = getDefaultMeshIdForDesignMode(meshSelectionContextFromState(state), COMPONENT_BY_ID);
-  const barId = COMPONENT_BY_ID.has("bar-i") ? "bar-i" : null;
+function bootstrapDefaultPlateOnAllPresentTeeth() {
+  const plateId = getDefaultPlateIdForDesignMode(COMPONENT_BY_ID);
+  if (!plateId || !COMPONENT_BY_ID.has(plateId)) {
+    setMessage("Default plate not found in catalog.", true);
+    return;
+  }
 
-  state.components = [meshId, barId].filter((id, idx, arr) => id && COMPONENT_BY_ID.has(id) && arr.indexOf(id) === idx);
-  state.selectedComponentId = barId || meshId || DEFAULT_COMPONENT_ID;
+  state.components = [plateId];
+  state.selectedComponentId = plateId;
+  state.selectedTab = "plate";
 
   forEachTooth((toothId) => {
     const tooth = state.teeth[toothId];
     if (!tooth) return;
 
-    tooth.isPresent = false;
-    tooth.status = "missing";
+    tooth.isPresent = true;
+    tooth.status = "presence";
     ensureToothPlacementState(tooth);
-    tooth.componentPlacements = [{ componentId: meshId, surface: null }];
-    if (barId) {
-      tooth.componentPlacements.push({ componentId: barId, surface: "bar_d1_distal" });
+    if (isAutoMeshPlatePlacementExcludedToothId(toothId)) {
+      tooth.componentPlacements = [];
+    } else {
+      tooth.componentPlacements = [{ componentId: plateId, surface: null }];
     }
     syncToothComponentsFromPlacements(tooth);
   });
 
-  setMessage("Temp mode: all teeth missing with mesh + mesial bar placements.", false);
+  renderComponentCatalog();
+  setMessage("Default plate shown on all teeth.", false);
 }
 
 // Read encrypted case id from URL and display a human-readable label.
@@ -229,12 +230,10 @@ function bindStatusPicker() {
   });
 }
 
-// Bind jaw lock toggles.
+// Bind combined jaw lock (both arches lock/unlock together).
 function bindJawControls() {
-  const upper = document.getElementById("upperLockBtn");
-  const lower = document.getElementById("lowerLockBtn");
-  if (upper) upper.addEventListener("click", () => toggleJawLock("upper"));
-  if (lower) lower.addEventListener("click", () => toggleJawLock("lower"));
+  const toggle = document.getElementById("jawLockToggleBtn");
+  if (toggle) toggle.addEventListener("click", toggleBothJawsLock);
   refreshLockButtons();
 }
 
@@ -244,59 +243,128 @@ function bindActionButtons() {
   const clearBottom = document.getElementById("clearBottomBtn");
   const reset = document.getElementById("drawFromScratchBtn");
   const save = document.getElementById("saveAnnotationBtn");
-  if (clearTop) clearTop.addEventListener("click", () => clearJaw("upper"));
-  if (clearBottom) clearBottom.addEventListener("click", () => clearJaw("lower"));
+  if (clearTop) clearTop.addEventListener("click", () => clearArchButtonClicked("upper"));
+  if (clearBottom) clearBottom.addEventListener("click", () => clearArchButtonClicked("lower"));
   if (reset) reset.addEventListener("click", drawFromScratch);
   if (save) save.addEventListener("click", saveAnnotation);
 }
 
-// Toggle lock state for a specific arch.
-function toggleJawLock(jaw) {
-  state.locks[jaw] = !state.locks[jaw];
+// Toggle both arches locked/unlocked together (design mode when both locked).
+function toggleBothJawsLock() {
+  const bothLocked = state.locks.upper && state.locks.lower;
+  state.locks.upper = !bothLocked;
+  state.locks.lower = !bothLocked;
   refreshLockButtons();
   syncDesignModeWithLocks(true);
-  renderJaw(jaw);
-  if (!state.designMode) {
-    setMessage(`${titleCase(jaw)} arch is now ${state.locks[jaw] ? "locked" : "unlocked"}.`, false);
-  }
 }
 
-// Keep lock button labels in sync with state.
+// Keep the combined lock control in sync with state.
 function refreshLockButtons() {
-  const upperBtn = document.getElementById("upperLockBtn");
-  const lowerBtn = document.getElementById("lowerLockBtn");
-  const updateLockButton = (button, isLocked, jaw) => {
-    if (!button) return;
+  const btn = document.getElementById("jawLockToggleBtn");
+  if (!btn) return;
 
-    const icon = button.querySelector(".lock-icon");
-    const text = button.querySelector(".lock-text");
+  const bothLocked = state.locks.upper && state.locks.lower;
+  const icon = btn.querySelector(".lock-icon");
+  const text = btn.querySelector(".lock-text");
 
-    if (icon) {
-      icon.src = isLocked ? "../../assets/lock.png" : "../../assets/unlock.png";
-    }
+  if (icon) {
+    icon.src = bothLocked ? "../../assets/lock.png" : "../../assets/unlock.png";
+  }
 
-    if (text) {
-      text.textContent = isLocked ? "Locked" : "Unlocked";
-    }
+  if (text) {
+    text.textContent = bothLocked ? "Select mode" : "Design mode";
+  }
 
-    button.classList.toggle("is-locked", isLocked);
-    button.setAttribute("aria-label", `${isLocked ? "Unlock" : "Lock"} ${jaw} arch`);
-  };
-
-  updateLockButton(upperBtn, state.locks.upper, "upper");
-  updateLockButton(lowerBtn, state.locks.lower, "lower");
+  btn.classList.toggle("is-locked", bothLocked);
+  btn.setAttribute(
+    "aria-label",
+    bothLocked ? "Design mode — click to switch to selected mode" : "Selected mode — click to switch to design mode"
+  );
 }
 
-// Clear one arch only when that arch is unlocked.
-function clearJaw(jaw) {
-  if (state.locks[jaw]) {
-    setMessage(`Cannot clear ${jaw}. The arch is locked.`, true);
-    return;
+function updateClearArchButtonLabels() {
+  const clearTop = document.getElementById("clearTopBtn");
+  const clearBottom = document.getElementById("clearBottomBtn");
+  if (!clearTop || !clearBottom) return;
+
+  if (state.designMode) {
+    clearTop.textContent = "Clear Top";
+    clearBottom.textContent = "Clear Bottom";
+  } else {
+    clearTop.textContent = "Clear upper teeth";
+    clearBottom.textContent = "Clear lower teeth";
   }
+}
+
+function clearArchButtonClicked(jaw) {
+  if (state.designMode) {
+    clearDesignModeArch(jaw);
+  } else {
+    clearJawTeethBaseline(jaw);
+  }
+}
+
+/** Mark every tooth in one arch missing; clear placements (selected mode only). */
+function clearJawTeethBaseline(jaw) {
   for (const toothId of TOOTH_ORDER[jaw]) {
-    resetToothRecord(toothId, "presence");
+    const tooth = state.teeth[toothId];
+    if (!tooth) continue;
+    tooth.isPresent = false;
+    tooth.status = "missing";
+    tooth.components = [];
+    tooth.componentPlacements = [];
+    syncToothComponentsFromPlacements(tooth);
   }
   renderJaw(jaw);
+  setMessage(`${titleCase(jaw)} arch: all teeth marked missing.`, false);
+}
+
+/** In design mode, strip one arch’s components and re-apply default mesh / plate where applicable. */
+function clearDesignModeArch(jaw) {
+  if (!state.designMode) return;
+
+  const meshId = getDefaultMeshIdForDesignMode(meshSelectionContextFromState(state), COMPONENT_BY_ID);
+  const plateId =
+    state.selectedComponentId &&
+    isPlateComponentId(state.selectedComponentId) &&
+    COMPONENT_BY_ID.has(state.selectedComponentId)
+      ? state.selectedComponentId
+      : getDefaultPlateIdForDesignMode(COMPONENT_BY_ID);
+
+  for (const toothId of TOOTH_ORDER[jaw]) {
+    const tooth = state.teeth[toothId];
+    if (!tooth) continue;
+    tooth.componentPlacements = [];
+    syncToothComponentsFromPlacements(tooth);
+  }
+
+  for (const toothId of TOOTH_ORDER[jaw]) {
+    const tooth = state.teeth[toothId];
+    if (!tooth) continue;
+    if (isAutoMeshPlatePlacementExcludedToothId(toothId)) {
+      continue;
+    }
+
+    if (!tooth.isPresent) {
+      if (meshId && COMPONENT_BY_ID.has(meshId)) {
+        const def = COMPONENT_BY_ID.get(meshId);
+        if (def && isMeshComponent(def)) {
+          tooth.componentPlacements.push({ componentId: meshId, surface: null });
+          syncToothComponentsFromPlacements(tooth);
+        }
+      }
+    } else if (plateId && COMPONENT_BY_ID.has(plateId) && isPlateComponentId(plateId)) {
+      tooth.componentPlacements.push({ componentId: plateId, surface: null });
+      syncToothComponentsFromPlacements(tooth);
+    }
+  }
+
+  renderComponentCatalog();
+  renderJaws();
+  setMessage(
+    `${titleCase(jaw)} arch cleared in design mode; default mesh/plate restored where needed.`,
+    false
+  );
 }
 
 // Reset whole annotation state back to empty.
@@ -437,6 +505,7 @@ function createComponentItemButton(item) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = `component-item ${state.selectedComponentId === item.id ? "is-active" : ""}`;
+  button.title = item.label;
 
   const icon = document.createElement("span");
   icon.className = "component-icon";
@@ -664,6 +733,8 @@ function syncDesignModeWithLocks(notify) {
       setMessage("Exited design mode. Unlock state allows tooth editing again.", false);
     }
   }
+
+  updateClearArchButtonLabels();
 }
 
 // Apply status classes to a tooth group based on presence and status value.

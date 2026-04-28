@@ -6,6 +6,13 @@ export const TOOTH_ORDER = {
   lower: ["38", "37", "36", "35", "34", "33", "32", "31", "41", "42", "43", "44", "45", "46", "47", "48"]
 };
 
+/** Distal-most teeth per quadrant — skip automatic mesh / plate placement here. */
+export const AUTO_MESH_PLATE_EXCLUDED_TOOTH_IDS = Object.freeze(new Set(["18", "28", "38", "48"]));
+
+export function isAutoMeshPlatePlacementExcludedToothId(toothId) {
+  return AUTO_MESH_PLATE_EXCLUDED_TOOTH_IDS.has(String(toothId));
+}
+
 /** Base path for tooth SVG assets in the 2D arch view. */
 export const TOOTH_ASSET_BASE = "../../assets/teeth";
 
@@ -30,7 +37,7 @@ export const JAW_BACKGROUND_SCALE_BY_JAW = Object.freeze({
 });
 
 export const JAW_BACKGROUND_OFFSET_BY_JAW = Object.freeze({
-  upper: { x: 0, y: 22 },
+  upper: { x: 8, y: 22 },
   lower: { x: 0, y: 0 },
 });
 
@@ -69,13 +76,13 @@ export function forEachTooth(callback) {
 export const JAW_BACKGROUND_IMAGES = {
   upper: {
     svgId: "upperArchSvg",
-    viewBox: "0 0 820 460",
+    viewBox: "0 0 600 400",
     template: "Upper_Jaw.svg",
     details: null
   },
   lower: {
     svgId: "lowerArchSvg",
-    viewBox: "0 0 820 400",
+    viewBox: "0 0 580 400",
     template: "Lower_Jaw.svg",
     details: null
   }
@@ -176,7 +183,7 @@ export const TOOTH_SCALE_OVERRIDE = {
 };
 
 export const JAW_CALIBRATION = {
-  upper: { x: -8, y: 8, rotation: 0 },
+  upper: { x: 0, y: 8, rotation: 0 },
   lower: { x: 0, y: 1, rotation: 0 }
 };
 

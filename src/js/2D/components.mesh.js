@@ -1,5 +1,5 @@
 import { getPlateAssetReference } from "./components.plate.js";
-import { TOOTH_ORDER } from "./constants.js";
+import { isAutoMeshPlatePlacementExcludedToothId, TOOTH_ORDER } from "./constants.js";
 
 export const COMPONENT_ASSET_BASE = "../../../assets/RPD_Component";
 
@@ -331,6 +331,9 @@ export function ensureMeshPlacementsOnMissingTeeth(teeth, meshId, componentById)
   }
   for (const jaw of Object.keys(TOOTH_ORDER)) {
     for (const toothId of TOOTH_ORDER[jaw]) {
+      if (isAutoMeshPlatePlacementExcludedToothId(toothId)) {
+        continue;
+      }
       const tooth = teeth[toothId];
       if (!tooth || tooth.isPresent) {
         continue;
