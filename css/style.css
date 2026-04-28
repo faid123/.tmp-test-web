@@ -104,8 +104,8 @@ header h1 {
 
 #chat-widget {
   position: fixed;
-  bottom: 250px;
-  right: 20px;
+  top: 84px;
+  right: 150px;
   width: 250px; /* 可根据需要调整 */
   height: 250px; /* 可根据需要调整 */
   background-color: #fff;
@@ -114,7 +114,7 @@ header h1 {
   padding: 10px;
   z-index: 9999;
   font-family: Arial, sans-serif;
-  display: flex;
+  display: none;
   flex-direction: column;
 }
 
@@ -267,8 +267,8 @@ header h1 {
 /* 聊天图标样式（只移动端显示） */
 #chat-icon {
   position: fixed;
-  bottom: 240px;
-  right: 20px;
+  top: 14px;
+  right: 150px;
   width: 60px;
   height: 60px;
   z-index: 9999;

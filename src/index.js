@@ -91,7 +91,7 @@ const materialsurface_non_metal = new THREE.MeshStandardMaterial({
 const apiClient = new ApiClient("https://live.api.smartrpdai.com/api/smartrpd");
 const parentObject = new THREE.Object3D();
 scene.add(parentObject);
- const polylineOverlayGroup = new THREE.Group();
+const polylineOverlayGroup = new THREE.Group();
 polylineOverlayGroup.name = "polyline-overlay-group";
 scene.add(polylineOverlayGroup);
 const raycaster = new THREE.Raycaster();
@@ -109,8 +109,19 @@ const polylineHandleMaterial = new THREE.MeshStandardMaterial({
   depthTest: false,
   depthWrite: false,
 });
-let activePolylineDrag = null;
 let isPolylineOverlayVisible = true;
+let activePolylineDrag = null;
+let polylineMenuButton = null;
+let polylineMenuList = null;
+const polylineComponentVisibility = new Map();
+const POLYLINE_COMPONENT_COLORS = [
+  0x6f35ff,
+  0x00a6ff,
+  0xff8a00,
+  0x1fc16b,
+  0xff4f81,
+  0xffd400,
+];
 
 function disposeObject3D(object) {
   if (!object) return;
@@ -130,6 +141,7 @@ function clearPolylineOverlay() {
     polylineOverlayGroup.remove(child);
     disposeObject3D(child);
   }
+  updatePolylineComponentMenu();
 }
 
 function normalizeJawKey(value) {
@@ -150,6 +162,49 @@ function isValidPoint(point) {
     Number.isFinite(point.y) &&
     Number.isFinite(point.z)
   );
+}
+
+function getPolylineComponentName(candidate, fallback = "polyline") {
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    return fallback;
+  }
+
+  return String(
+    candidate.component ??
+      candidate.component_name ??
+      candidate.componentName ??
+      candidate.name ??
+      candidate.label ??
+      candidate.type ??
+      candidate.line_type ??
+      candidate.polyline_type ??
+      fallback
+  );
+}
+
+function createPolylineSegment(points, component = "polyline") {
+  return {
+    component: String(component || "polyline"),
+    points,
+  };
+}
+
+function getSegmentPoints(segment) {
+  return Array.isArray(segment) ? segment : segment?.points || [];
+}
+
+function getSegmentComponent(segment) {
+  return Array.isArray(segment) ? "polyline" : segment?.component || "polyline";
+}
+
+function getPolylineComponentKey(arch, component) {
+  return `${arch}:${component}`;
+}
+
+function formatPolylineComponentLabel(key) {
+  const [arch, ...componentParts] = key.split(":");
+  const component = componentParts.join(":") || "polyline";
+  return `${arch.charAt(0).toUpperCase()}${arch.slice(1)} - ${component}`;
 }
 
 function toPointObject(value) {
@@ -265,6 +320,7 @@ function parsePolylineTextSegments(value) {
   const segments = [];
   const numberPattern = /[-+]?\d*\.?\d+(?:e[-+]?\d+)?/gi;
   const ignoredPointValue = -9e91;
+  let currentComponent = "polyline";
 
   const parseCoordinateLine = (line) => {
     if (!/^[\s+\-.0-9eE]+$/.test(line)) return null;
@@ -287,6 +343,13 @@ function parsePolylineTextSegments(value) {
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i].trim();
+    const componentMatch = line.match(
+      /^(retentionPins|mesh|reversalLine|GingivalPoints|[A-Za-z][\w -]*(?:component|segment|line)[\w -]*)/i
+    );
+    if (componentMatch) {
+      currentComponent = componentMatch[1].trim();
+    }
+
     const nodeMatch = line.match(/nodeCount\s*=\s*(\d+)/i);
     const gingivalMatch = line.match(/^GingivalPoints\s+(\d+)/i);
     const nodeCount = Number(nodeMatch?.[1] ?? gingivalMatch?.[1] ?? 0);
@@ -300,7 +363,7 @@ function parsePolylineTextSegments(value) {
     }
 
     if (points.length >= 2) {
-      segments.push(points);
+      segments.push(createPolylineSegment(points, currentComponent));
     }
   }
 
@@ -323,7 +386,9 @@ function extractPolylineSegments(candidate) {
 
   if (Array.isArray(candidate)) {
     const points = candidate.map(toPointObject).filter(isValidPoint);
-    if (points.length === candidate.length && points.length) return [points];
+    if (points.length === candidate.length && points.length) {
+      return [createPolylineSegment(points)];
+    }
 
     return candidate.flatMap((entry) => extractPolylineSegments(entry));
   }
@@ -333,7 +398,14 @@ function extractPolylineSegments(candidate) {
     if (dataSegments.length) return dataSegments;
 
     const directPoints = extractPointArray(candidate);
-    if (directPoints.length) return [directPoints];
+    if (directPoints.length) {
+      return [
+        createPolylineSegment(
+          directPoints,
+          getPolylineComponentName(candidate)
+        ),
+      ];
+    }
 
     const nestedKeys = [
       "points",
@@ -427,7 +499,19 @@ function normalizePolylineResponse(rawResponse) {
   return normalized;
 }
 
-function createPolylineObjects(jawType, points) {
+function getPolylineSegmentColor(component, segmentIndex) {
+  const text = String(component || "");
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  }
+  return POLYLINE_COMPONENT_COLORS[hash % POLYLINE_COMPONENT_COLORS.length];
+}
+
+function createPolylineObjects(jawType, segment, segmentIndex) {
+  const points = getSegmentPoints(segment);
+  const component = getSegmentComponent(segment);
+  const componentKey = getPolylineComponentKey(jawType, component);
   const positionArray = new Float32Array(points.length * 3);
   points.forEach((point, index) => {
     positionArray[index * 3] = point.x;
@@ -436,10 +520,15 @@ function createPolylineObjects(jawType, points) {
   });
   const positionAttribute = new THREE.BufferAttribute(positionArray, 3);
   const group = new THREE.Group();
-  group.name = `${jawType}-polyline-group`;
+  group.name = `${jawType}-${component}-polyline-segment-${segmentIndex}`;
+  group.visible = isPolylineOverlayVisible &&
+    (polylineComponentVisibility.get(componentKey) ?? true);
   group.userData = {
     overlayType: "polyline",
     arch: jawType,
+    component,
+    componentKey,
+    segmentIndex,
     positionAttribute,
   };
 
@@ -447,30 +536,35 @@ function createPolylineObjects(jawType, points) {
     const lineGeometry = new THREE.BufferGeometry();
     lineGeometry.setAttribute("position", positionAttribute);
     const lineMaterial = new THREE.LineBasicMaterial({
-      color: 0x6f35ff,
+      color: getPolylineSegmentColor(component, segmentIndex),
       transparent: true,
       opacity: 1,
       depthTest: false,
       depthWrite: false,
     });
     const line = new THREE.Line(lineGeometry, lineMaterial);
-    line.name = `${jawType}-polyline-line`;
+    line.name = `${jawType}-${component}-polyline-segment-${segmentIndex}-line`;
     line.renderOrder = 20;
     line.userData = {
       overlayType: "polyline-line",
       arch: jawType,
+      component,
+      componentKey,
+      segmentIndex,
     };
     group.add(line);
   }
 
   if (points.length >= 1) {
     const handles = new THREE.Group();
-    handles.name = `${jawType}-polyline-edit-points`;
-    handles.visible = true;
+    handles.name = `${jawType}-${component}-polyline-segment-${segmentIndex}-handles`;
     handles.renderOrder = 21;
     handles.userData = {
       overlayType: "polyline-edit-points",
       arch: jawType,
+      component,
+      componentKey,
+      segmentIndex,
       positionAttribute,
     };
 
@@ -479,12 +573,15 @@ function createPolylineObjects(jawType, points) {
         polylineHandleGeometry,
         polylineHandleMaterial.clone()
       );
-      handle.name = `${jawType}-polyline-point-${index}`;
+      handle.name = `${jawType}-${component}-polyline-segment-${segmentIndex}-point-${index}`;
       handle.position.set(point.x, point.y, point.z);
       handle.renderOrder = 21;
       handle.userData = {
         overlayType: "polyline-edit-point",
         arch: jawType,
+        component,
+        componentKey,
+        segmentIndex,
         index,
         handleGroup: handles,
         positionAttribute,
@@ -503,33 +600,143 @@ function renderPolylineData(polylineByJaw) {
 
   ["upper", "lower"].forEach((jawType) => {
     const segments = polylineByJaw[jawType] || [];
-    segments.forEach((points) => {
+    segments.forEach((segment, segmentIndex) => {
+      const points = getSegmentPoints(segment);
       if (points.length < 2) return;
-      const polylineGroup = createPolylineObjects(jawType, points);
+      const polylineGroup = createPolylineObjects(jawType, segment, segmentIndex);
       polylineOverlayGroup.add(polylineGroup);
     });
   });
+  updatePolylineComponentMenu();
 }
 
 function countPolylinePoints(segments) {
-  return segments.reduce((total, points) => total + points.length, 0);
+  return segments.reduce(
+    (total, segment) => total + getSegmentPoints(segment).length,
+    0
+  );
 }
 
 function syncPolylineOverlayVisibility() {
-  polylineOverlayGroup.visible = isPolylineOverlayVisible;
+  polylineOverlayGroup.visible = true;
+  polylineOverlayGroup.children.forEach((group) => {
+    const key = group.userData?.componentKey;
+    group.visible =
+      isPolylineOverlayVisible && (polylineComponentVisibility.get(key) ?? true);
+  });
+
+  if (polylineMenuButton) {
+    const componentCount = getPolylineComponentSummary().length;
+    polylineMenuButton.textContent = isPolylineOverlayVisible
+      ? `Polylines (${componentCount})`
+      : `Polylines hidden (${componentCount})`;
+  }
 }
 
-function createPolylineVisibilityToggle(container) {
-  if (document.getElementById("polyline-visibility-toggle")) return;
+function getPolylineComponentSummary() {
+  const summary = new Map();
+  polylineOverlayGroup.children.forEach((group) => {
+    const key = group.userData?.componentKey;
+    if (!key) return;
+
+    const current = summary.get(key) || {
+      key,
+      color: getPolylineSegmentColor(group.userData.component, 0),
+      segments: 0,
+      points: 0,
+    };
+    current.segments += 1;
+    current.points += group.userData.positionAttribute?.count || 0;
+    summary.set(key, current);
+  });
+
+  return Array.from(summary.values()).sort((a, b) =>
+    formatPolylineComponentLabel(a.key).localeCompare(
+      formatPolylineComponentLabel(b.key)
+    )
+  );
+}
+
+function updatePolylineComponentMenu() {
+  const summary = getPolylineComponentSummary();
+  summary.forEach(({ key }) => {
+    if (!polylineComponentVisibility.has(key)) {
+      polylineComponentVisibility.set(key, true);
+    }
+  });
+
+  if (!polylineMenuList || !polylineMenuButton) return;
+
+  polylineMenuList.replaceChildren();
+  if (!summary.length) {
+    const empty = document.createElement("div");
+    empty.textContent = "No polyline components";
+    empty.style.padding = "8px 0";
+    empty.style.color = "#6b7280";
+    polylineMenuList.appendChild(empty);
+    syncPolylineOverlayVisibility();
+    return;
+  }
+
+  summary.forEach(({ key, color, segments, points }) => {
+    const row = document.createElement("label");
+    row.style.display = "grid";
+    row.style.gridTemplateColumns = "18px 12px 1fr";
+    row.style.alignItems = "center";
+    row.style.gap = "8px";
+    row.style.padding = "6px 0";
+    row.style.cursor = "pointer";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = polylineComponentVisibility.get(key) ?? true;
+    checkbox.addEventListener("change", () => {
+      polylineComponentVisibility.set(key, checkbox.checked);
+      isPolylineOverlayVisible = Array.from(
+        polylineComponentVisibility.values()
+      ).some(Boolean);
+      syncPolylineOverlayVisibility();
+    });
+
+    const swatch = document.createElement("span");
+    swatch.style.width = "10px";
+    swatch.style.height = "10px";
+    swatch.style.borderRadius = "50%";
+    swatch.style.background = `#${color.toString(16).padStart(6, "0")}`;
+    swatch.style.display = "inline-block";
+
+    const text = document.createElement("span");
+    text.textContent = `${formatPolylineComponentLabel(key)} (${segments} seg, ${points} pts)`;
+    text.style.fontSize = "12px";
+    text.style.lineHeight = "1.25";
+
+    row.appendChild(checkbox);
+    row.appendChild(swatch);
+    row.appendChild(text);
+    polylineMenuList.appendChild(row);
+  });
+
+  syncPolylineOverlayVisibility();
+}
+
+function createPolylineVisibilityToggle(container, domElement) {
+  if (document.getElementById("polyline-visibility-menu")) return;
+
+  const wrapper = document.createElement("div");
+  wrapper.id = "polyline-visibility-menu";
+  wrapper.style.position = "fixed";
+  wrapper.style.right = "20px";
+  wrapper.style.bottom = "230px";
+  wrapper.style.zIndex = "1000";
+  wrapper.style.display = "flex";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.alignItems = "flex-end";
+  wrapper.style.gap = "8px";
 
   const button = document.createElement("button");
   button.id = "polyline-visibility-toggle";
   button.type = "button";
-  button.textContent = isPolylineOverlayVisible ? "Hide Polyline" : "Show Polyline";
-  button.style.position = "fixed";
-  button.style.right = "20px";
-  button.style.bottom = "82px";
-  button.style.zIndex = "1000";
+  button.textContent = "Polylines (0)";
   button.style.padding = "10px 14px";
   button.style.border = "none";
   button.style.borderRadius = "5px";
@@ -537,14 +744,75 @@ function createPolylineVisibilityToggle(container) {
   button.style.color = "white";
   button.style.fontWeight = "bold";
   button.style.cursor = "pointer";
+  button.style.minWidth = "150px";
+
+  const panel = document.createElement("div");
+  panel.style.display = "none";
+  panel.style.width = "290px";
+  panel.style.maxHeight = "45vh";
+  panel.style.overflow = "auto";
+  panel.style.background = "rgba(255, 255, 255, 0.96)";
+  panel.style.color = "#111827";
+  panel.style.border = "1px solid rgba(17, 24, 39, 0.14)";
+  panel.style.borderRadius = "8px";
+  panel.style.boxShadow = "0 8px 24px rgba(0, 0, 0, 0.18)";
+  panel.style.padding = "10px";
+
+  const actions = document.createElement("div");
+  actions.style.display = "flex";
+  actions.style.gap = "6px";
+  actions.style.marginBottom = "8px";
+
+  const makeActionButton = (label, onClick) => {
+    const actionButton = document.createElement("button");
+    actionButton.type = "button";
+    actionButton.textContent = label;
+    actionButton.style.flex = "1";
+    actionButton.style.padding = "6px 8px";
+    actionButton.style.border = "1px solid rgba(17, 24, 39, 0.16)";
+    actionButton.style.borderRadius = "5px";
+    actionButton.style.background = "#f9fafb";
+    actionButton.style.cursor = "pointer";
+    actionButton.style.fontSize = "12px";
+    actionButton.addEventListener("click", onClick);
+    return actionButton;
+  };
+
+  actions.appendChild(
+    makeActionButton("All", () => {
+      isPolylineOverlayVisible = true;
+      getPolylineComponentSummary().forEach(({ key }) =>
+        polylineComponentVisibility.set(key, true)
+      );
+      updatePolylineComponentMenu();
+    })
+  );
+  actions.appendChild(
+    makeActionButton("None", () => {
+      isPolylineOverlayVisible = false;
+      getPolylineComponentSummary().forEach(({ key }) =>
+        polylineComponentVisibility.set(key, false)
+      );
+      updatePolylineComponentMenu();
+    })
+  );
+
+  const list = document.createElement("div");
+  panel.appendChild(actions);
+  panel.appendChild(list);
+
   button.addEventListener("click", () => {
-    isPolylineOverlayVisible = !isPolylineOverlayVisible;
-    syncPolylineOverlayVisibility();
-    button.textContent = isPolylineOverlayVisible ? "Hide Polyline" : "Show Polyline";
+    panel.style.display = panel.style.display === "none" ? "block" : "none";
   });
 
-  container.appendChild(button);
-  syncPolylineOverlayVisibility();
+  wrapper.appendChild(panel);
+  wrapper.appendChild(button);
+  container.appendChild(wrapper);
+
+  polylineMenuButton = button;
+  polylineMenuList = list;
+  updatePolylineComponentMenu();
+  attachPolylineDragHandlers(domElement);
 }
 
 async function fetchAndRenderPolylines(caseIntID) {
@@ -594,10 +862,14 @@ function updatePointerPosition(event, domElement) {
   pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
 }
 
-function getPolylinePointClouds() {
+function getPolylinePointHandles() {
   const handles = [];
   polylineOverlayGroup.traverse((child) => {
-    if (child.userData?.overlayType === "polyline-edit-point") {
+    if (
+      child.userData?.overlayType === "polyline-edit-point" &&
+      child.visible &&
+      child.parent?.parent?.visible !== false
+    ) {
       handles.push(child);
     }
   });
@@ -607,7 +879,7 @@ function getPolylinePointClouds() {
 function pickPolylinePoint(event, domElement) {
   updatePointerPosition(event, domElement);
   raycaster.setFromCamera(pointer, camera);
-  const intersections = raycaster.intersectObjects(getPolylinePointClouds(), false);
+  const intersections = raycaster.intersectObjects(getPolylinePointHandles(), false);
   const hit = intersections.find((item) =>
     Number.isInteger(item.object?.userData?.index)
   );
@@ -630,7 +902,9 @@ function updatePolylinePoint(handle, index, worldPoint) {
   handle.position.copy(localPoint);
 
   const polylineGroup = handleGroup.parent;
-  polylineGroup?.children.forEach((child) => child.geometry?.computeBoundingSphere?.());
+  polylineGroup?.children.forEach((child) =>
+    child.geometry?.computeBoundingSphere?.()
+  );
 }
 
 function setPolylineDragging(enabled) {
@@ -639,6 +913,9 @@ function setPolylineDragging(enabled) {
 }
 
 function attachPolylineDragHandlers(domElement) {
+  if (!domElement || domElement.dataset.polylineDragBound === "true") return;
+  domElement.dataset.polylineDragBound = "true";
+
   domElement.addEventListener("pointerdown", (event) => {
     const hit = pickPolylinePoint(event, domElement);
     if (!hit) return;
@@ -690,6 +967,43 @@ function attachPolylineDragHandlers(domElement) {
   domElement.addEventListener("pointercancel", stopDragging);
   domElement.addEventListener("pointerleave", (event) => {
     if (activePolylineDrag) stopDragging(event);
+  });
+}
+
+function setupChatToggle() {
+  const chatWidget = document.getElementById("chat-widget");
+  const chatIcon = document.getElementById("chat-icon");
+  if (!chatWidget || !chatIcon || chatIcon.dataset.viewerChatBound === "true") {
+    return;
+  }
+
+  chatIcon.dataset.viewerChatBound = "true";
+  chatIcon.style.display = "block";
+  chatIcon.style.position = "fixed";
+  chatIcon.style.top = "14px";
+  chatIcon.style.right = "150px";
+  chatIcon.style.bottom = "auto";
+  chatIcon.style.width = "56px";
+  chatIcon.style.height = "56px";
+  chatIcon.style.zIndex = "1001";
+
+  chatWidget.classList.remove("active");
+  chatWidget.style.display = "none";
+  chatWidget.style.position = "fixed";
+  chatWidget.style.top = "84px";
+  chatWidget.style.right = "150px";
+  chatWidget.style.bottom = "auto";
+  chatWidget.style.left = "auto";
+  chatWidget.style.transform = "none";
+  chatWidget.style.width = "280px";
+  chatWidget.style.height = "280px";
+  chatWidget.style.zIndex = "1001";
+
+  chatIcon.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const isOpen = chatWidget.style.display === "flex";
+    chatWidget.classList.toggle("active", !isOpen);
+    chatWidget.style.display = isOpen ? "none" : "flex";
   });
 }
 
@@ -2051,8 +2365,7 @@ btnContainer.appendChild(edit2DStatic); */
   container.style.position = "relative"; // <- Add this line
   if (container) {
     container.appendChild(renderer.domElement);
-    attachPolylineDragHandlers(renderer.domElement);
-    createPolylineVisibilityToggle(container);
+    createPolylineVisibilityToggle(container, renderer.domElement);
 
     // After container3D and renderer are set up
     const caseTitle = document.createElement("div");
@@ -2143,6 +2456,7 @@ btnContainer.appendChild(edit2DStatic); */
   camera.updateProjectionMatrix();
   const clonedCamera = camera.clone();
   addResetButton(camera, clonedCamera, controls);
+  setupChatToggle();
   //console.log(camera)
 
   // Start the 3D rendering
