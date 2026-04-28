@@ -130,6 +130,7 @@ const polylineHandleMaterial = new THREE.MeshStandardMaterial({
 });
 const POLYLINE_TUBE_RADIUS = 0.75;
 const POLYLINE_TUBE_RADIAL_SEGMENTS = 8;
+const POLYLINE_GINGIVAL_MAX_HANDLES = 64;
 let isPolylineOverlayVisible = true;
 let activePolylineDrag = null;
 let polylineMenuButton = null;
@@ -325,9 +326,14 @@ function getPolylineComponentName(candidate, fallback = "polyline") {
   );
 }
 
+function normalizePolylineComponentName(component) {
+  const text = String(component || "polyline");
+  return /reversal/i.test(text) ? "reversalLine - Major Connector" : text;
+}
+
 function createPolylineSegment(points, component = "polyline") {
   return {
-    component: String(component || "polyline"),
+    component: normalizePolylineComponentName(component),
     points,
   };
 }
@@ -337,7 +343,9 @@ function getSegmentPoints(segment) {
 }
 
 function getSegmentComponent(segment) {
-  return Array.isArray(segment) ? "polyline" : segment?.component || "polyline";
+  return normalizePolylineComponentName(
+    Array.isArray(segment) ? "polyline" : segment?.component || "polyline"
+  );
 }
 
 function getPolylineComponentKey(arch, component) {
@@ -575,15 +583,53 @@ function extractPolylineSegments(candidate) {
   return [];
 }
 
+function getLoadedPolylineJawKeys() {
+  const keys = new Set();
+  parentObject.children.forEach((child) => {
+    const jawKey = normalizeJawKey(child.userData?.jaw_type ?? child.name);
+    if (jawKey) keys.add(jawKey);
+  });
+  return Array.from(keys);
+}
+
+function isPolylineJawLoaded(jawKey, loadedJawKeys) {
+  return !loadedJawKeys.length || loadedJawKeys.includes(jawKey);
+}
+
+function inferPolylineArrayJawKey(entry, index, total, loadedJawKeys) {
+  const explicitJawKey = normalizeJawKey(
+    entry?.jaw_type ??
+      entry?.jawType ??
+      entry?.arch ??
+      entry?.type ??
+      entry?.jaws
+  );
+  if (explicitJawKey) return explicitJawKey;
+
+  if (loadedJawKeys.length === 1) return loadedJawKeys[0];
+
+  if (total >= 2) {
+    const positionalJawKey = index === 0 ? "upper" : index === 1 ? "lower" : null;
+    if (positionalJawKey && isPolylineJawLoaded(positionalJawKey, loadedJawKeys)) {
+      return positionalJawKey;
+    }
+  }
+
+  return null;
+}
+
 function normalizePolylineResponse(rawResponse) {
   const normalized = {
     upper: [],
     lower: [],
   };
+  const loadedJawKeys = getLoadedPolylineJawKeys();
 
   const assignSegments = (jawKey, candidate) => {
     const segments = extractPolylineSegments(candidate);
-    if (!jawKey || !segments.length) return;
+    if (!jawKey || !segments.length || !isPolylineJawLoaded(jawKey, loadedJawKeys)) {
+      return;
+    }
     normalized[jawKey].push(...segments);
   };
 
@@ -592,23 +638,15 @@ function normalizePolylineResponse(rawResponse) {
   }
 
   if (Array.isArray(rawResponse)) {
-    rawResponse.forEach((entry) => {
-      const jawKey = normalizeJawKey(
-        entry?.jaw_type ??
-          entry?.jawType ??
-          entry?.arch ??
-          entry?.type ??
-          entry?.jaws
+    rawResponse.forEach((entry, index) => {
+      const jawKey = inferPolylineArrayJawKey(
+        entry,
+        index,
+        rawResponse.length,
+        loadedJawKeys
       );
       assignSegments(jawKey, entry);
     });
-
-    if (!normalized.upper.length && rawResponse[0]) {
-      assignSegments("upper", rawResponse[0]);
-    }
-    if (!normalized.lower.length && rawResponse[1]) {
-      assignSegments("lower", rawResponse[1]);
-    }
     return normalized;
   }
 
@@ -782,6 +820,55 @@ function syncPolylineTubeGeometries(tubeGroup) {
   });
 }
 
+function getPolylineHandleIndices(points, component) {
+  if (
+    !/gingival/i.test(component || "") ||
+    points.length <= POLYLINE_GINGIVAL_MAX_HANDLES
+  ) {
+    return points.map((_, index) => index);
+  }
+
+  const handleIndices = new Set([0, points.length - 1]);
+  const sampleStep = Math.max(
+    1,
+    Math.ceil(points.length / (POLYLINE_GINGIVAL_MAX_HANDLES * 0.7))
+  );
+
+  for (let index = sampleStep; index < points.length - 1; index += sampleStep) {
+    handleIndices.add(index);
+  }
+
+  const curvatureCandidates = [];
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const turnCosine = getPolylineTurnCosine(
+      points[index - 1],
+      points[index],
+      points[index + 1]
+    );
+    curvatureCandidates.push({
+      index,
+      score: 1 - turnCosine,
+    });
+  }
+
+  curvatureCandidates
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.floor(POLYLINE_GINGIVAL_MAX_HANDLES * 0.35))
+    .forEach(({ index }) => handleIndices.add(index));
+
+  return Array.from(handleIndices)
+    .sort((a, b) => a - b)
+    .filter((_, index, values) => {
+      if (values.length <= POLYLINE_GINGIVAL_MAX_HANDLES) return true;
+      return (
+        index === 0 ||
+        index === values.length - 1 ||
+        index % Math.ceil(values.length / POLYLINE_GINGIVAL_MAX_HANDLES) === 0
+      );
+    })
+    .slice(0, POLYLINE_GINGIVAL_MAX_HANDLES);
+}
+
 function createPolylineObjects(jawType, segment, segmentIndex) {
   const points = getSegmentPoints(segment);
   const component = getSegmentComponent(segment);
@@ -863,7 +950,13 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
       positionAttribute,
     };
 
-    points.forEach((point, index) => {
+    const handleIndices = getPolylineHandleIndices(points, component);
+    group.userData.handleCount = handleIndices.length;
+    handles.userData.handleCount = handleIndices.length;
+    handles.userData.pointCount = points.length;
+
+    handleIndices.forEach((index) => {
+      const point = points[index];
       const handle = new THREE.Mesh(
         polylineHandleGeometry,
         polylineHandleMaterial.clone()
@@ -977,9 +1070,12 @@ function getPolylineComponentSummary() {
       color: getPolylineSegmentColor(group.userData.component, 0),
       segments: 0,
       points: 0,
+      handles: 0,
     };
     current.segments += 1;
     current.points += group.userData.positionAttribute?.count || 0;
+    current.handles +=
+      group.userData.handleCount || group.userData.positionAttribute?.count || 0;
     summary.set(key, current);
   });
 
@@ -1011,7 +1107,7 @@ function updatePolylineComponentMenu() {
     return;
   }
 
-  summary.forEach(({ key, color, segments, points }) => {
+  summary.forEach(({ key, color, segments, points, handles }) => {
     const row = document.createElement("label");
     row.style.display = "grid";
     row.style.gridTemplateColumns = "18px 12px 1fr";
@@ -1039,7 +1135,8 @@ function updatePolylineComponentMenu() {
     swatch.style.display = "inline-block";
 
     const text = document.createElement("span");
-    text.textContent = `${formatPolylineComponentLabel(key)} (${segments} seg, ${points} pts)`;
+    const handleText = handles < points ? `, ${handles} handles` : "";
+    text.textContent = `${formatPolylineComponentLabel(key)} (${segments} seg, ${points} pts${handleText})`;
     text.style.fontSize = "12px";
     text.style.lineHeight = "1.25";
 
