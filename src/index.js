@@ -75,16 +75,33 @@ let objToRender = "dino";
 let mesh_geo;
 
 // Create a material
-const material = new THREE.MeshPhongMaterial({ vertexColors: true });
+const material = new THREE.MeshPhongMaterial({
+  vertexColors: true,
+  side: THREE.DoubleSide,
+  transparent: false,
+  opacity: 1,
+  depthTest: true,
+  depthWrite: true,
+});
 const materialsurface = new THREE.MeshStandardMaterial({
   color: 0xa0a0a0, // Base color
   metalness: 0.75, // Fully metallic
   roughness: 0.2, // Smooth surface
+  side: THREE.DoubleSide,
+  transparent: false,
+  opacity: 1,
+  depthTest: true,
+  depthWrite: true,
 });
 const materialsurface_non_metal = new THREE.MeshStandardMaterial({
   color: 0xa0a0a0, // Base color
   metalness: 0, // Fully metallic
   roughness: 0.2, // Smooth surface
+  side: THREE.DoubleSide,
+  transparent: false,
+  opacity: 1,
+  depthTest: true,
+  depthWrite: true,
 });
 
 // Create an instance of the ApiClient with the base URL
@@ -104,16 +121,23 @@ const polylineCameraDirection = new THREE.Vector3();
 const polylineHandleGeometry = new THREE.SphereGeometry(1.05, 24, 16);
 const polylineHandleMaterial = new THREE.MeshStandardMaterial({
   color: 0xff8a00,
+  opacity: 1,
   roughness: 0.3,
   metalness: 0,
-  depthTest: false,
+  transparent: false,
+  depthTest: true,
   depthWrite: false,
 });
+const POLYLINE_TUBE_RADIUS = 0.75;
+const POLYLINE_TUBE_RADIAL_SEGMENTS = 8;
 let isPolylineOverlayVisible = true;
 let activePolylineDrag = null;
 let polylineMenuButton = null;
 let polylineMenuList = null;
 const polylineComponentVisibility = new Map();
+const polylineFocusMaterialState = new WeakMap();
+const polylineFocusObjectState = new WeakMap();
+const POLYLINE_FOCUS_FRAMEWORK_OPACITY = 0.28;
 const POLYLINE_COMPONENT_COLORS = [
   0x6f35ff,
   0x00a6ff,
@@ -142,6 +166,125 @@ function clearPolylineOverlay() {
     disposeObject3D(child);
   }
   updatePolylineComponentMenu();
+}
+
+function enforceOpaqueJawMesh(object) {
+  object.traverse((child) => {
+    if (!child.isMesh) return;
+
+    const materials = Array.isArray(child.material)
+      ? child.material
+      : [child.material];
+
+    materials.forEach((materialEntry) => {
+      if (!materialEntry) return;
+      materialEntry.transparent = false;
+      materialEntry.opacity = 1;
+      materialEntry.depthTest = true;
+      materialEntry.depthWrite = true;
+      materialEntry.side = THREE.DoubleSide;
+      materialEntry.needsUpdate = true;
+    });
+  });
+}
+
+function isPolylineFocusMesh(child) {
+  const text = `${child.name || ""} ${child.userData?.jaw_type || ""} ${
+    child.userData?.archLabel || ""
+  }`.toLowerCase();
+  const materials = Array.isArray(child.material) ? child.material : [child.material];
+  const usesVertexColors = materials.some(
+    (materialEntry) => materialEntry?.vertexColors
+  );
+  const hasGreyFrameworkMaterial = materials.some((materialEntry) => {
+    const color = materialEntry?.color;
+    if (!color) return false;
+    return (
+      Math.abs(color.r - color.g) < 0.08 &&
+      Math.abs(color.g - color.b) < 0.08 &&
+      color.r > 0.25 &&
+      color.r < 0.85
+    );
+  });
+
+  return (
+    child.isMesh &&
+    (text.includes("surface") ||
+      text.includes("denture") ||
+      text.includes("connector") ||
+      text.includes("major") ||
+      (!usesVertexColors && hasGreyFrameworkMaterial))
+  );
+}
+
+function storeMeshMaterialState(mesh) {
+  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+
+  materials.forEach((materialEntry) => {
+    if (!materialEntry) return;
+
+    if (!polylineFocusMaterialState.has(materialEntry)) {
+      polylineFocusMaterialState.set(materialEntry, {
+        transparent: materialEntry.transparent,
+        opacity: materialEntry.opacity,
+        depthWrite: materialEntry.depthWrite,
+      });
+    }
+  });
+}
+
+function setFocusedFrameworkMaterial(mesh) {
+  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+
+  materials.forEach((materialEntry) => {
+    if (!materialEntry) return;
+    materialEntry.transparent = true;
+    materialEntry.opacity = POLYLINE_FOCUS_FRAMEWORK_OPACITY;
+    materialEntry.depthWrite = false;
+    materialEntry.needsUpdate = true;
+  });
+}
+
+function restoreMeshMaterial(materialEntry) {
+  const state = polylineFocusMaterialState.get(materialEntry);
+  if (!state) return;
+
+  materialEntry.transparent = state.transparent;
+  materialEntry.opacity = state.opacity;
+  materialEntry.depthWrite = state.depthWrite;
+  materialEntry.needsUpdate = true;
+  polylineFocusMaterialState.delete(materialEntry);
+}
+
+function syncPolylineFocusMode() {
+  const shouldFocusFramework =
+    isPolylineOverlayVisible &&
+    Array.from(polylineComponentVisibility.values()).some(Boolean);
+
+  parentObject.children.forEach((child) => {
+    if (!child.isMesh) return;
+
+    const materials = Array.isArray(child.material)
+      ? child.material
+      : [child.material];
+
+    if (shouldFocusFramework && isPolylineFocusMesh(child)) {
+      if (!polylineFocusObjectState.has(child)) {
+        polylineFocusObjectState.set(child, { visible: child.visible });
+      }
+      storeMeshMaterialState(child);
+      child.visible = true;
+      setFocusedFrameworkMaterial(child);
+      return;
+    }
+
+    materials.forEach(restoreMeshMaterial);
+    const objectState = polylineFocusObjectState.get(child);
+    if (objectState) {
+      child.visible = objectState.visible;
+      polylineFocusObjectState.delete(child);
+    }
+  });
 }
 
 function normalizeJawKey(value) {
@@ -500,12 +643,143 @@ function normalizePolylineResponse(rawResponse) {
 }
 
 function getPolylineSegmentColor(component, segmentIndex) {
+  if (/reversal/i.test(component || "")) {
+    return 0xff1f1f;
+  }
+
   const text = String(component || "");
   let hash = 0;
   for (let i = 0; i < text.length; i += 1) {
     hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
   }
   return POLYLINE_COMPONENT_COLORS[hash % POLYLINE_COMPONENT_COLORS.length];
+}
+
+function getJawMeshForPolyline(jawType) {
+  const jawText = jawType.toLowerCase();
+  return parentObject.children.find((child) => {
+    const type = String(child.userData?.jaw_type || child.name || "").toLowerCase();
+    return type.includes(jawText);
+  });
+}
+
+function applyJawTransformToPolylineGroup(group, jawType) {
+  const jawMesh = getJawMeshForPolyline(jawType);
+  if (!jawMesh) return;
+
+  group.position.copy(jawMesh.position);
+  group.rotation.copy(jawMesh.rotation);
+  group.scale.copy(jawMesh.scale);
+}
+
+function getDistanceBetweenPoints(a, b) {
+  return Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+}
+
+function getPolylineTurnCosine(previous, current, next) {
+  const ax = current.x - previous.x;
+  const ay = current.y - previous.y;
+  const az = current.z - previous.z;
+  const bx = next.x - current.x;
+  const by = next.y - current.y;
+  const bz = next.z - current.z;
+  const aLength = Math.hypot(ax, ay, az);
+  const bLength = Math.hypot(bx, by, bz);
+
+  if (!aLength || !bLength) return 1;
+  return (ax * bx + ay * by + az * bz) / (aLength * bLength);
+}
+
+function getPolylineRenderableEdges(points, component) {
+  if (points.length < 2) return [];
+  if (points.length < 3) return [[0, 1]];
+
+  const isGingival = /gingival/i.test(component || "");
+  const distances = [];
+  for (let i = 1; i < points.length; i += 1) {
+    const distance = getDistanceBetweenPoints(points[i - 1], points[i]);
+    if (Number.isFinite(distance) && distance > 0) {
+      distances.push(distance);
+    }
+  }
+
+  if (!distances.length) {
+    return points.slice(1).map((_, index) => [index, index + 1]);
+  }
+
+  const sortedDistances = [...distances].sort((a, b) => a - b);
+  const medianDistance = sortedDistances[Math.floor(sortedDistances.length / 2)];
+  const highDistance = sortedDistances[Math.floor(sortedDistances.length * 0.9)];
+  const jumpThreshold = isGingival
+    ? Math.max(medianDistance * 3.5, highDistance * 0.65, 5)
+    : Math.max(medianDistance * 8, 12);
+  const turnThreshold = Math.max(medianDistance * 2.2, 4);
+  const edges = [];
+
+  for (let i = 1; i < points.length; i += 1) {
+    const previous = points[i - 1];
+    const current = points[i];
+    const distance = getDistanceBetweenPoints(previous, current);
+    const previousTurnCosine =
+      isGingival && i > 1
+        ? getPolylineTurnCosine(points[i - 2], previous, current)
+        : 1;
+    const nextTurnCosine =
+      isGingival && i < points.length - 1
+        ? getPolylineTurnCosine(previous, current, points[i + 1])
+        : 1;
+    const isSuspiciousGingivalTurn =
+      isGingival &&
+      distance > turnThreshold &&
+      (previousTurnCosine < -0.5 || nextTurnCosine < -0.5);
+
+    if (distance <= jumpThreshold && !isSuspiciousGingivalTurn) {
+      edges.push([i - 1, i]);
+    }
+  }
+
+  return edges;
+}
+
+function createPolylineTubeGeometry(positionAttribute, startIndex, endIndex) {
+  const start = new THREE.Vector3(
+    positionAttribute.getX(startIndex),
+    positionAttribute.getY(startIndex),
+    positionAttribute.getZ(startIndex)
+  );
+  const end = new THREE.Vector3(
+    positionAttribute.getX(endIndex),
+    positionAttribute.getY(endIndex),
+    positionAttribute.getZ(endIndex)
+  );
+  const curve = new THREE.LineCurve3(start, end);
+  return new THREE.TubeGeometry(
+    curve,
+    1,
+    POLYLINE_TUBE_RADIUS,
+    POLYLINE_TUBE_RADIAL_SEGMENTS,
+    false
+  );
+}
+
+function syncPolylineTubeGeometries(tubeGroup) {
+  const positionAttribute = tubeGroup.userData.sourcePositionAttribute;
+  const edges = tubeGroup.userData.edges || [];
+  if (!positionAttribute) return;
+
+  tubeGroup.children.forEach((tube, index) => {
+    const edge = edges[index];
+    if (!edge) return;
+
+    const nextGeometry = createPolylineTubeGeometry(
+      positionAttribute,
+      edge[0],
+      edge[1]
+    );
+    tube.geometry?.dispose?.();
+    tube.geometry = nextGeometry;
+    tube.geometry.computeBoundingSphere();
+  });
 }
 
 function createPolylineObjects(jawType, segment, segmentIndex) {
@@ -529,30 +803,51 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
     component,
     componentKey,
     segmentIndex,
+    originalPositionArray: positionArray.slice(),
     positionAttribute,
   };
 
   if (points.length >= 2) {
-    const lineGeometry = new THREE.BufferGeometry();
-    lineGeometry.setAttribute("position", positionAttribute);
-    const lineMaterial = new THREE.LineBasicMaterial({
+    const edges = getPolylineRenderableEdges(points, component);
+    const tubeMaterial = new THREE.MeshStandardMaterial({
       color: getPolylineSegmentColor(component, segmentIndex),
-      transparent: true,
+      transparent: false,
       opacity: 1,
-      depthTest: false,
+      roughness: 0.28,
+      metalness: 0,
+      depthTest: true,
       depthWrite: false,
     });
-    const line = new THREE.Line(lineGeometry, lineMaterial);
-    line.name = `${jawType}-${component}-polyline-segment-${segmentIndex}-line`;
-    line.renderOrder = 20;
-    line.userData = {
+    const tubeGroup = new THREE.Group();
+    tubeGroup.name = `${jawType}-${component}-polyline-segment-${segmentIndex}-tubes`;
+    tubeGroup.renderOrder = 20;
+    tubeGroup.userData = {
       overlayType: "polyline-line",
       arch: jawType,
       component,
       componentKey,
       segmentIndex,
+      edges,
+      sourcePositionAttribute: positionAttribute,
     };
-    group.add(line);
+    edges.forEach(([startIndex, endIndex], edgeIndex) => {
+      const tube = new THREE.Mesh(
+        createPolylineTubeGeometry(positionAttribute, startIndex, endIndex),
+        tubeMaterial.clone()
+      );
+      tube.name = `${jawType}-${component}-polyline-segment-${segmentIndex}-tube-${edgeIndex}`;
+      tube.renderOrder = 20;
+      tube.userData = {
+        overlayType: "polyline-tube",
+        arch: jawType,
+        component,
+        componentKey,
+        segmentIndex,
+        edgeIndex,
+      };
+      tubeGroup.add(tube);
+    });
+    group.add(tubeGroup);
   }
 
   if (points.length >= 1) {
@@ -592,6 +887,8 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
     group.add(handles);
   }
 
+  applyJawTransformToPolylineGroup(group, jawType);
+
   return group;
 }
 
@@ -608,6 +905,41 @@ function renderPolylineData(polylineByJaw) {
     });
   });
   updatePolylineComponentMenu();
+}
+
+function resetPolylineGroup(polylineGroup) {
+  const originalPositionArray = polylineGroup.userData?.originalPositionArray;
+  const positionAttribute = polylineGroup.userData?.positionAttribute;
+  if (!originalPositionArray || !positionAttribute) return;
+
+  for (let index = 0; index < positionAttribute.count; index += 1) {
+    positionAttribute.setXYZ(
+      index,
+      originalPositionArray[index * 3],
+      originalPositionArray[index * 3 + 1],
+      originalPositionArray[index * 3 + 2]
+    );
+  }
+  positionAttribute.needsUpdate = true;
+
+  polylineGroup.traverse((child) => {
+    if (child.userData?.overlayType === "polyline-edit-point") {
+      const pointIndex = child.userData.index;
+      child.position.set(
+        positionAttribute.getX(pointIndex),
+        positionAttribute.getY(pointIndex),
+        positionAttribute.getZ(pointIndex)
+      );
+    } else if (child.userData?.overlayType === "polyline-line") {
+      syncPolylineTubeGeometries(child);
+    } else {
+      child.geometry?.computeBoundingSphere?.();
+    }
+  });
+}
+
+function resetPolylineEdits() {
+  polylineOverlayGroup.children.forEach(resetPolylineGroup);
 }
 
 function countPolylinePoints(segments) {
@@ -631,6 +963,7 @@ function syncPolylineOverlayVisibility() {
       ? `Polylines (${componentCount})`
       : `Polylines hidden (${componentCount})`;
   }
+  syncPolylineFocusMode();
 }
 
 function getPolylineComponentSummary() {
@@ -796,6 +1129,7 @@ function createPolylineVisibilityToggle(container, domElement) {
       updatePolylineComponentMenu();
     })
   );
+  actions.appendChild(makeActionButton("Reset", resetPolylineEdits));
 
   const list = document.createElement("div");
   panel.appendChild(actions);
@@ -876,6 +1210,30 @@ function getPolylinePointHandles() {
   return handles;
 }
 
+function isSolidPolylineOccluder(child) {
+  if (!child.isMesh || !child.visible) return false;
+
+  const materials = Array.isArray(child.material) ? child.material : [child.material];
+  return materials.some((materialEntry) => {
+    if (!materialEntry) return false;
+    const opacity = materialEntry.opacity ?? 1;
+    return materialEntry.depthWrite !== false && opacity > 0.95;
+  });
+}
+
+function getPolylineOccluderMeshes() {
+  return parentObject.children.filter(isSolidPolylineOccluder);
+}
+
+function isPolylineHandleOccluded(hit) {
+  const occluders = getPolylineOccluderMeshes();
+  if (!occluders.length) return false;
+
+  const occluderHits = raycaster.intersectObjects(occluders, true);
+  const nearestOccluder = occluderHits.find((item) => item.object.visible);
+  return Boolean(nearestOccluder && nearestOccluder.distance < hit.distance - 0.05);
+}
+
 function pickPolylinePoint(event, domElement) {
   updatePointerPosition(event, domElement);
   raycaster.setFromCamera(pointer, camera);
@@ -883,7 +1241,7 @@ function pickPolylinePoint(event, domElement) {
   const hit = intersections.find((item) =>
     Number.isInteger(item.object?.userData?.index)
   );
-  if (!hit) return null;
+  if (!hit || isPolylineHandleOccluded(hit)) return null;
   return {
     handle: hit.object,
     index: hit.object.userData.index,
@@ -902,9 +1260,13 @@ function updatePolylinePoint(handle, index, worldPoint) {
   handle.position.copy(localPoint);
 
   const polylineGroup = handleGroup.parent;
-  polylineGroup?.children.forEach((child) =>
-    child.geometry?.computeBoundingSphere?.()
-  );
+  polylineGroup?.children.forEach((child) => {
+    if (child.userData?.overlayType === "polyline-line") {
+      syncPolylineTubeGeometries(child);
+    } else {
+      child.geometry?.computeBoundingSphere?.();
+    }
+  });
 }
 
 function setPolylineDragging(enabled) {
@@ -2029,6 +2391,7 @@ btnContainer.appendChild(edit2DStatic); */
             const [mesh] = stlLoader.load(binarySTL, null);
 
             mesh.name = result.filename || `Slot ${slot}`;
+            enforceOpaqueJawMesh(mesh);
             parentObject.add(mesh);
 
             console.log(`✅ Loaded STL from slot ${slot}`);
@@ -2129,7 +2492,10 @@ btnContainer.appendChild(edit2DStatic); */
         const slotMaterial = new THREE.MeshStandardMaterial({
           color: slotColorInfo.color,
           opacity: slotColorInfo.opacity,
-          transparent: slotColorInfo.opacity,
+          transparent: false,
+          side: THREE.DoubleSide,
+          depthTest: true,
+          depthWrite: true,
           metalness: 0.0,
           roughness: 0.7,
         });
@@ -2173,7 +2539,9 @@ btnContainer.appendChild(edit2DStatic); */
 			mesh.rotation.set(0, 0, 0);      // Reset rotation
 			mesh.scale.set(1, 1, 1);         // Reset scale */
 
+        enforceOpaqueJawMesh(mesh);
         parentObject.add(mesh);
+        syncPolylineFocusMode();
 
         controls.update();
         //render();
@@ -2279,7 +2647,9 @@ btnContainer.appendChild(edit2DStatic); */
         changeMeshRotation(mesh,0,105,0);
       }
         */
+    enforceOpaqueJawMesh(mesh);
     parentObject.add(mesh);
+    syncPolylineFocusMode();
   }
   await fetchAndRenderPolylines(paramValue);
   //console.log(all_mesh_mat);
@@ -2434,7 +2804,6 @@ btnContainer.appendChild(edit2DStatic); */
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
-    // Make the eye move
 
     renderer.render(scene, camera);
   }
