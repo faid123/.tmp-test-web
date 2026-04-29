@@ -130,7 +130,9 @@ const polylineHandleMaterial = new THREE.MeshStandardMaterial({
 });
 const POLYLINE_TUBE_RADIUS = 0.75;
 const POLYLINE_TUBE_RADIAL_SEGMENTS = 8;
-const POLYLINE_GINGIVAL_MAX_HANDLES = 64;
+const POLYLINE_MIN_HANDLES = 8;
+const POLYLINE_DEFAULT_HANDLES = 20;
+const POLYLINE_MAX_HANDLES = 24;
 let isPolylineOverlayVisible = true;
 let activePolylineDrag = null;
 let polylineMenuButton = null;
@@ -331,10 +333,35 @@ function normalizePolylineComponentName(component) {
   return /reversal/i.test(text) ? "reversalLine - Major Connector" : text;
 }
 
+function getPolylinePointSignature(point) {
+  return [point.x, point.y, point.z]
+    .map((value) => Number(value).toFixed(3))
+    .join(",");
+}
+
+function shouldDeduplicatePolylinePoints(component) {
+  return /gingival|reversal|major connector/i.test(component || "");
+}
+
+function deduplicatePolylinePoints(points, component) {
+  if (!shouldDeduplicatePolylinePoints(component)) {
+    return points;
+  }
+
+  const seenPoints = new Set();
+  return points.filter((point) => {
+    const signature = getPolylinePointSignature(point);
+    if (seenPoints.has(signature)) return false;
+    seenPoints.add(signature);
+    return true;
+  });
+}
+
 function createPolylineSegment(points, component = "polyline") {
+  const normalizedComponent = normalizePolylineComponentName(component);
   return {
-    component: normalizePolylineComponentName(component),
-    points,
+    component: normalizedComponent,
+    points: deduplicatePolylinePoints(points, normalizedComponent),
   };
 }
 
@@ -596,6 +623,13 @@ function isPolylineJawLoaded(jawKey, loadedJawKeys) {
   return !loadedJawKeys.length || loadedJawKeys.includes(jawKey);
 }
 
+function getPolylineSegmentSignature(segment) {
+  const component = getSegmentComponent(segment);
+  const points = getSegmentPoints(segment);
+  const pointSignature = points.map(getPolylinePointSignature).join("|");
+  return `${component}:${points.length}:${pointSignature}`;
+}
+
 function inferPolylineArrayJawKey(entry, index, total, loadedJawKeys) {
   const explicitJawKey = normalizeJawKey(
     entry?.jaw_type ??
@@ -624,13 +658,22 @@ function normalizePolylineResponse(rawResponse) {
     lower: [],
   };
   const loadedJawKeys = getLoadedPolylineJawKeys();
+  const seenSegmentSignatures = {
+    upper: new Set(),
+    lower: new Set(),
+  };
 
   const assignSegments = (jawKey, candidate) => {
     const segments = extractPolylineSegments(candidate);
     if (!jawKey || !segments.length || !isPolylineJawLoaded(jawKey, loadedJawKeys)) {
       return;
     }
-    normalized[jawKey].push(...segments);
+    segments.forEach((segment) => {
+      const signature = getPolylineSegmentSignature(segment);
+      if (seenSegmentSignatures[jawKey].has(signature)) return;
+      seenSegmentSignatures[jawKey].add(signature);
+      normalized[jawKey].push(segment);
+    });
   };
 
   if (!rawResponse) {
@@ -651,20 +694,19 @@ function normalizePolylineResponse(rawResponse) {
   }
 
   if (typeof rawResponse === "object") {
-    assignSegments(
-      "upper",
+    const upperCandidate =
       rawResponse.upper ??
-        rawResponse.upper_jaw ??
-        rawResponse.upperJaw ??
-        rawResponse.maxillary
-    );
-    assignSegments(
-      "lower",
+      rawResponse.upper_jaw ??
+      rawResponse.upperJaw ??
+      rawResponse.maxillary;
+    const lowerCandidate =
       rawResponse.lower ??
-        rawResponse.lower_jaw ??
-        rawResponse.lowerJaw ??
-        rawResponse.mandibular
-    );
+      rawResponse.lower_jaw ??
+      rawResponse.lowerJaw ??
+      rawResponse.mandibular;
+
+    assignSegments("upper", upperCandidate);
+    assignSegments("lower", lowerCandidate);
 
     const fallbackJawKey = normalizeJawKey(
       rawResponse.jaw_type ??
@@ -674,7 +716,9 @@ function normalizePolylineResponse(rawResponse) {
         rawResponse.jaws
     );
 
-    assignSegments(fallbackJawKey, rawResponse);
+    if (upperCandidate === undefined && lowerCandidate === undefined) {
+      assignSegments(fallbackJawKey, rawResponse);
+    }
   }
 
   return normalized;
@@ -820,18 +864,70 @@ function syncPolylineTubeGeometries(tubeGroup) {
   });
 }
 
-function getPolylineHandleIndices(points, component) {
-  if (
-    !/gingival/i.test(component || "") ||
-    points.length <= POLYLINE_GINGIVAL_MAX_HANDLES
-  ) {
+function getPolylineHandleTarget(points) {
+  if (points.length <= POLYLINE_MAX_HANDLES) {
+    return points.length;
+  }
+
+  if (points.length <= 80) {
+    return Math.min(
+      12,
+      Math.max(POLYLINE_MIN_HANDLES, Math.round(points.length / 6))
+    );
+  }
+
+  if (points.length <= 180) {
+    return Math.min(16, Math.max(12, Math.round(points.length / 11)));
+  }
+
+  if (points.length <= 360) {
+    return Math.min(
+      POLYLINE_DEFAULT_HANDLES,
+      Math.max(18, Math.round(points.length / 18))
+    );
+  }
+
+  return POLYLINE_DEFAULT_HANDLES;
+}
+
+function limitPolylineHandleIndices(candidateIndices, targetCount, pointCount) {
+  const sortedIndices = Array.from(candidateIndices).sort((a, b) => a - b);
+  if (sortedIndices.length <= targetCount) {
+    return sortedIndices;
+  }
+
+  const keep = new Set([0, pointCount - 1]);
+  const interiorIndices = sortedIndices.filter(
+    (index) => index > 0 && index < pointCount - 1
+  );
+  const availableSlots = Math.max(0, targetCount - keep.size);
+  const step = Math.max(1, interiorIndices.length / availableSlots);
+
+  for (let slot = 0; slot < availableSlots; slot += 1) {
+    const index = interiorIndices[Math.floor(slot * step)];
+    if (index !== undefined) keep.add(index);
+  }
+
+  return Array.from(keep).sort((a, b) => a - b);
+}
+
+function getPolylineHandleIndices(points) {
+  if (points.length <= POLYLINE_MIN_HANDLES) {
+    return points.map((_, index) => index);
+  }
+
+  const targetCount = Math.min(
+    POLYLINE_MAX_HANDLES,
+    getPolylineHandleTarget(points)
+  );
+  if (points.length <= targetCount) {
     return points.map((_, index) => index);
   }
 
   const handleIndices = new Set([0, points.length - 1]);
   const sampleStep = Math.max(
     1,
-    Math.ceil(points.length / (POLYLINE_GINGIVAL_MAX_HANDLES * 0.7))
+    Math.ceil(points.length / (targetCount * 0.7))
   );
 
   for (let index = sampleStep; index < points.length - 1; index += sampleStep) {
@@ -853,20 +949,10 @@ function getPolylineHandleIndices(points, component) {
 
   curvatureCandidates
     .sort((a, b) => b.score - a.score)
-    .slice(0, Math.floor(POLYLINE_GINGIVAL_MAX_HANDLES * 0.35))
+    .slice(0, Math.floor(targetCount * 0.35))
     .forEach(({ index }) => handleIndices.add(index));
 
-  return Array.from(handleIndices)
-    .sort((a, b) => a - b)
-    .filter((_, index, values) => {
-      if (values.length <= POLYLINE_GINGIVAL_MAX_HANDLES) return true;
-      return (
-        index === 0 ||
-        index === values.length - 1 ||
-        index % Math.ceil(values.length / POLYLINE_GINGIVAL_MAX_HANDLES) === 0
-      );
-    })
-    .slice(0, POLYLINE_GINGIVAL_MAX_HANDLES);
+  return limitPolylineHandleIndices(handleIndices, targetCount, points.length);
 }
 
 function createPolylineObjects(jawType, segment, segmentIndex) {
@@ -950,7 +1036,7 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
       positionAttribute,
     };
 
-    const handleIndices = getPolylineHandleIndices(points, component);
+    const handleIndices = getPolylineHandleIndices(points);
     group.userData.handleCount = handleIndices.length;
     handles.userData.handleCount = handleIndices.length;
     handles.userData.pointCount = points.length;
