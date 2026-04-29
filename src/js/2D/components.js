@@ -492,3 +492,18 @@ export {
   isBarComponent,
   isBarPlacementSurface,
 } from "./components.bar.js";
+
+export {
+  getMajorConnectorAssetReference,
+  isMajorConnectorComponent,
+} from "./components.major.js";
+
+export {
+  CONNECTOR_EXTRA_OFFSET_SEED_BY_TOOTH,
+  CONNECTOR_PLACEMENT_IMAGE_SIZE_BY_TOOTH,
+  CONNECTOR_RENDER_SCALE_BY_JAW,
+  CONNECTOR_RENDER_SCALE_BY_TEMPLATE_TOOTH,
+  getMajorConnectorPlacementImageSize,
+  getMajorConnectorPlacementOffset,
+  getMajorConnectorRenderScaleMultiplier,
+} from "./components.connector.js";

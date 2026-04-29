@@ -14,13 +14,6 @@ export function isPlateComponentId(componentId) {
   return Object.prototype.hasOwnProperty.call(PLATE_IMAGE_SUFFIX_BY_ID, componentId);
 }
 
-export function isPlateComponent(componentOrId) {
-  if (typeof componentOrId === "object" && componentOrId !== null) {
-    return isPlateComponentId(componentOrId.id);
-  }
-  return isPlateComponentId(String(componentOrId || ""));
-}
-
 const PLATE_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
   "11": { width: 300, height: 365 },
   "12": { width: 345, height: 330 },
@@ -65,7 +58,8 @@ const PLATE_POSITION_OFFSET_SEED_BY_TOOTH = Object.freeze({
   "23": { x: -10.3, y: 7 },
   "14": { x: 7, y: 8.2 },
   "24": { x: -7, y: 8.2 },
-  "15": { x: 4.5, y: 5.8 },
+  "15": { x: 4.5, y: 5.8 },  
+  "25": { x: -5.5, y: 5.8 },
   "16": { x: 4, y: 8 },
   "26": { x: -4, y: 8 },
   "17": { x: 6, y: 8 },

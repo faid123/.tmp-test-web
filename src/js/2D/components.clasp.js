@@ -392,10 +392,6 @@ export function getClaspCircSuggestionRadius() {
   return CLASP_CIRC_SUGGESTION_RADIUS;
 }
 
-export function getClaspCircSuggestionSurfaces() {
-  return [...CLASP_CIRC_SURFACE_ORDER];
-}
-
 /**
  * @param {string} toothId FDI
  * @param {string} jaw "upper" | "lower" (reserved; coordinates are per FDI row)

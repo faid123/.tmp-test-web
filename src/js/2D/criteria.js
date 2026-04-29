@@ -17,14 +17,8 @@ function isToothPresent(tooth) {
 }
 
 function isMeshComponentId(componentId, componentById) {
-  if (componentById && typeof componentById.get === "function") {
-    const componentDef = componentById.get(componentId);
-    if (componentDef) {
-      return isMeshComponent(componentDef);
-    }
-  }
-
-  return String(componentId || "").startsWith("mesh-");
+  const componentDef = componentById?.get?.(componentId);
+  return isMeshComponent(componentDef ?? componentId);
 }
 
 function failure(reason, actionUponFailure, conflictingComponents = []) {

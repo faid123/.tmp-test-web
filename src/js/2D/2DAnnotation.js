@@ -44,6 +44,11 @@ import {
   handleMeshToolDoubleClick,
   isClaspCircComponent,
   isMeshComponent,
+  isMajorConnectorComponent,
+  getMajorConnectorAssetReference,
+  getMajorConnectorPlacementImageSize,
+  getMajorConnectorPlacementOffset,
+  getMajorConnectorRenderScaleMultiplier,
   isRestComponent,
   meshHoleUniformScaleToothId,
   meshSelectionContextFromState,
@@ -65,6 +70,7 @@ import {
   JAW_BACKGROUND_SCALE_BY_JAW,
   JAW_CALIBRATION,
   JAW_IMAGE_FLIP_X,
+  PLATE_SUGGESTION_TRANSFORM_BY_JAW,
   PRESENCE_TOOTH_ASSET,
   STATUS_VALUES,
   SVG_NS,
@@ -386,10 +392,10 @@ function drawFromScratch() {
 
 // Build component tabs and initialize the first visible catalog view.
 function initComponentCatalog() {
-  if (!state.selectedTab) {
+  if (!state.selectedTab || !COMPONENT_TABS.some((t) => t.id === state.selectedTab)) {
     state.selectedTab = "bars";
   }
-  if (!state.selectedComponentId) {
+  if (!state.selectedComponentId || !COMPONENT_BY_ID.has(state.selectedComponentId)) {
     state.selectedComponentId = DEFAULT_COMPONENT_ID;
   }
   const tabsEl = document.getElementById("componentTabs");
@@ -618,7 +624,7 @@ function handleDesignComponentSelect(componentId) {
     renderComponentCatalog();
     renderJaws();
     setMessage(
-      `${selected.label} selected. Single-click a present tooth to toggle this plate; click the same plate again to clear all plates.`,
+      `${selected.label} selected. Click cyan suggestion markers on present teeth to toggle this plate; click the same plate again to clear all plates.`,
       false
     );
     return;
@@ -630,6 +636,7 @@ function handleDesignComponentSelect(componentId) {
   if (state.components.includes(componentId)) {
     state.components = state.components.filter((id) => id !== componentId);
     renderComponentCatalog();
+    renderJaws();
     setMessage(`${selected.label} removed from design list.`, false);
     return;
   }
@@ -686,7 +693,7 @@ function updateEditModeUI() {
   const hint = document.getElementById("designHint");
   if (hint) {
     hint.textContent = active
-      ? "Design mode: missing teeth get a default mesh; present teeth get a default plate if they had none. Meshes: single-click icon to select; double-click icon applies that mesh arch-wide. On a tooth: single-click places/removes mesh; double-click swaps mesh type. Plates: click the same plate again to remove all plates; use Clear all plates below; single-click a tooth to toggle the selected plate on that tooth. Clasps: use suggestion points to place; click a placed clasp to remove. Bars: select a bar, then click a highlighted tooth within two positions of a missing tooth; click a placed bar to remove it."
+      ? "Design mode: missing teeth get a default mesh; present teeth get a default plate if they had none. Meshes: single-click icon to select; double-click icon applies that mesh arch-wide. On a tooth: single-click places/removes mesh; double-click swaps mesh type. Plates: use cyan suggestion markers on present teeth to toggle the selected plate; click the same plate again to remove all plates. Clasps: use suggestion points to place; click a placed clasp to remove. Bars: select a bar, then click a highlighted tooth within two positions of a missing tooth; click a placed bar to remove it."
       : "Lock both arches to enter design mode.";
   }
 }
@@ -764,6 +771,8 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
       if (!def || !isMeshComponent(def)) {
         continue;
       }
+      const under = createMajorConnectorVisual(componentId, toothId, jaw);
+      if (under) group.appendChild(under);
       const visual = createComponentVisual(componentId, toothId, jaw);
       if (visual) {
         group.appendChild(visual);
@@ -776,6 +785,8 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
     if (!isPlateComponentId(componentId)) {
       continue;
     }
+    const under = createMajorConnectorVisual(componentId, toothId, jaw);
+    if (under) group.appendChild(under);
     const visual = createComponentVisual(componentId, toothId, jaw);
     if (visual) {
       group.appendChild(visual);
@@ -807,10 +818,6 @@ function getRestSurfacePointMap(toothId, jaw, componentId = null) {
 function getClaspSurfacePointMap(toothId, jaw) {
   const points = getClaspCircSuggestionPointsForTooth(toothId, jaw);
   return new Map(points.map((point) => [normalizeSurface(point.surface), point]));
-}
-
-function shouldHideRestSuggestionForSurface(_tooth, _toothId, pointSurfaceRaw) {
-  return !normalizeSurface(pointSurfaceRaw);
 }
 
 function restMarkerAnchorSurface(placementSurface, toothId) {
@@ -984,8 +991,9 @@ function appendPlacedRestMarkers(group, tooth, toothId, jaw) {
     const href = getBarPlacementAssetReference(placement.componentId, toothId, barSurface);
     const imageSize = getBarPlacementImageSize(placement.componentId, toothId, barSurface);
     const scale = getBarPlacementRenderScale(placement.componentId, toothId, barSurface);
-    const baseW = imageSize.width * scale;
-    const baseH = imageSize.height * scale;
+    const width = imageSize.width * scale;
+    const height = imageSize.height * scale;
+
     if (
       placement.barOffsetX == null &&
       placement.barOffsetY == null &&
@@ -996,11 +1004,10 @@ function appendPlacedRestMarkers(group, tooth, toothId, jaw) {
       delete placement.barX;
       delete placement.barY;
     }
+
     const uoff = getBarUserOffset(placement);
     const mirroredOffsetX = mirrored ? -off.x : off.x;
     const mirroredUserOffsetX = mirrored ? -uoff.x : uoff.x;
-    const width = baseW;
-    const height = baseH;
 
     const outerG = svgEl("g", {
       transform: `translate(${point.x + mirroredOffsetX + mirroredUserOffsetX} ${point.y + off.y + uoff.y}) rotate(${off.rotation}) scale(${mirrored ? -1 : 1} 1)`,
@@ -1021,12 +1028,26 @@ function appendPlacedRestMarkers(group, tooth, toothId, jaw) {
       })
     );
 
-    outerG.addEventListener("click", (event) => {
+    // Tightly-bounded hit target at the bar's tooth-side anchor so clicks
+    // on the surrounding transparent area of the bar's bounding rect fall
+    // through to whatever is underneath (e.g. a plate's hit target on a
+    // neighboring tooth). Without this, the full image rectangle catches
+    // clicks even where the bar SVG renders nothing.
+    const barHitTarget = svgEl("circle", {
+      cx: "0",
+      cy: "0",
+      r: "18",
+      class: `bar-placement-hit-target bar-placement-${barSurface}`,
+      "data-surface": barSurface,
+      "data-component-id": placement.componentId,
+    });
+    barHitTarget.addEventListener("click", (event) => {
       event.stopPropagation();
       removePlacement(tooth, placement.componentId, barSurface);
       setMessage(`Removed bar from tooth ${toothId}.`, false);
       renderJaw(jaw);
     });
+    outerG.appendChild(barHitTarget);
 
     group.appendChild(outerG);
   }
@@ -1175,14 +1196,71 @@ function handleRestSuggestionPick(jaw, toothId, pointSurface, anchor) {
 
 // Return true when rest guidance points should be shown in design mode.
 function shouldShowRestSuggestions() {
-  if (!state.designMode) return false;
-  if (isRestComponent(state.selectedComponentId)) return true;
-  return state.components.some((componentId) => isRestComponent(componentId));
+  return state.designMode && isRestComponent(state.selectedComponentId);
 }
 
 function shouldShowClaspCircSuggestions() {
   if (!state.designMode) return false;
   return isClaspCircComponent(state.selectedComponentId);
+}
+
+function shouldShowPlateSuggestions() {
+  if (!state.designMode) return false;
+  const selected = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+  return Boolean(selected && isPlateComponentId(selected.id));
+}
+
+function hasSelectedPlatePlacement(tooth) {
+  ensureToothPlacementState(tooth);
+  const selected = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+  if (!selected || !isPlateComponentId(selected.id)) return false;
+  return tooth.componentPlacements.some((entry) => entry.componentId === selected.id);
+}
+
+function handlePlateSuggestionPick(jaw, toothId) {
+  placeSelectedComponentOnTooth(toothId, null);
+  renderJaw(jaw);
+}
+
+function appendPlateSuggestionPoints(group, tooth, toothId, jaw) {
+  if (!shouldShowPlateSuggestions()) return;
+  if (!tooth.isPresent) return;
+  const selected = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+  if (!selected || !isPlateComponentId(selected.id)) return;
+
+  const suggestion = createComponentVisual(selected.id, toothId, jaw);
+  if (!suggestion) return;
+  const transformCfg = PLATE_SUGGESTION_TRANSFORM_BY_JAW[jaw] || {};
+  const suggestionScale = Number(transformCfg.scale) || 0.35;
+  const suggestionOffset = transformCfg.offset || { x: 0, y: 0 };
+  const sx = Number(suggestionOffset.x) || 0;
+  const sy = Number(suggestionOffset.y) || 0;
+
+  const wrapper = svgEl("g", {
+    class: hasSelectedPlatePlacement(tooth)
+      ? "plate-suggestion-visual is-selected"
+      : "plate-suggestion-visual",
+    transform: `translate(${sx.toFixed(2)} ${sy.toFixed(2)}) scale(${suggestionScale.toFixed(3)} ${suggestionScale.toFixed(3)})`,
+    "data-tooth-id": toothId,
+  });
+  wrapper.appendChild(suggestion);
+
+  // Tightly-bounded hit target centered on the tooth so clicks never bleed
+  // into the visually overlapping plate image of an adjacent tooth.
+  const hitTarget = svgEl("circle", {
+    cx: "0",
+    cy: "0",
+    r: "20",
+    class: "plate-suggestion-hit-target",
+    "data-tooth-id": toothId,
+  });
+  hitTarget.addEventListener("click", (event) => {
+    event.stopPropagation();
+    handlePlateSuggestionPick(jaw, toothId);
+  });
+  wrapper.appendChild(hitTarget);
+
+  group.appendChild(wrapper);
 }
 
 // Draw clickable rest guidance points when a rest component is selected.
@@ -1212,11 +1290,8 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
   const { mirrored } = getToothAssetSpec(toothId);
 
   for (const pointData of points) {
-    if (shouldHideRestSuggestionForSurface(tooth, toothId, pointData.surface)) {
-      continue;
-    }
-
     const surface = normalizeSurface(pointData.surface);
+    if (!surface) continue;
     const assetHref = getRestPlacementAssetReference(selectedComponent.id, toothId, surface);
     const imageSize = getRestPlacementImageSize(selectedComponent.id, toothId, surface);
     const restScale = getRestPlacementRenderScale(selectedComponent.id, toothId, surface);
@@ -1328,10 +1403,10 @@ function hasClaspCircPlacementAtSurface(tooth, surface) {
   });
 }
 
-function showBarSuggestions(){
+function showBarSuggestions() {
   if (!state.designMode) return false;
   const sel = COMPONENT_BY_ID.get(state.selectedComponentId || "");
-  return Boolean (sel && isBarComponent(sel));
+  return Boolean(sel && isBarComponent(sel));
 }
 
 function hasBarPlacementAtSurface(tooth, componentId) {
@@ -1375,17 +1450,16 @@ function renderJaw(jaw) {
     const tooth = state.teeth[toothId];
     applyToothStatusClass(group, tooth);
 
-    const barSel = COMPONENT_BY_ID.get(state.selectedComponentId || "");
-    if(
-      showBarSuggestions()&& 
-      tooth.isPresent && 
-      barSel && 
-      isBarComponent(barSel) && 
-      getBarSuggestibleToothIdSet(state.teeth,jaw).has(toothId) && !
-      hasBarPlacementAtSurface(tooth, barSel.id)
-    ){
-      group.classList.add("tooth-bar-suggestible");
-      group.classList.add(`tooth-bar-suggestible--${jaw}`);
+    if (showBarSuggestions() && tooth.isPresent) {
+      const barSel = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+      if (
+        barSel &&
+        getBarSuggestibleToothIdSet(state.teeth, jaw).has(toothId) &&
+        !hasBarPlacementAtSurface(tooth, barSel.id)
+      ) {
+        group.classList.add("tooth-bar-suggestible");
+        group.classList.add(`tooth-bar-suggestible--${jaw}`);
+      }
     }
     group.setAttribute(
       "transform",
@@ -1403,6 +1477,7 @@ function renderJaw(jaw) {
 
     group.appendChild(createToothVisual(toothId, jaw));
     appendToothComponentVisuals(group, tooth, toothId, jaw);
+    appendPlateSuggestionPoints(group, tooth, toothId, jaw);
     appendPlacedRestMarkers(group, tooth, toothId, jaw);
     appendRestSuggestionPoints(group, tooth, toothId, jaw);
     appendClaspCircSuggestionPoints(group, tooth, toothId, jaw);
@@ -1427,6 +1502,10 @@ function renderJaw(jaw) {
         }
         placeSelectedComponentOnTooth(toothId, { surface: barSurface });
         renderJaw(jaw);
+        return;
+      }
+      if (catalogPick && isPlateComponentId(catalogPick.id)) {
+        // Plates are handled through plate suggestion visuals only.
         return;
       }
       if (catalogPick && isMeshComponent(catalogPick)) {
@@ -1516,22 +1595,21 @@ function onToothClick(jaw, toothId) {
   renderJaw(jaw);
 }
 
-function normalizeSurface(surface){
+function normalizeSurface(surface) {
   if (typeof surface !== "string") {
     return null;
   }
-
   const normalized = surface.toLowerCase();
   return normalized === "occlusal" ? "lingual" : normalized;
 }
 
-function ensureToothPlacementState(tooth){
+function ensureToothPlacementState(tooth) {
   if (Array.isArray(tooth.componentPlacements)) return;
 
   const fallback = Array.isArray(tooth.components) ? tooth.components : [];
   tooth.componentPlacements = fallback.map((componentId) => ({
     componentId,
-    surface: null
+    surface: null,
   }));
 }
 
@@ -1547,7 +1625,7 @@ function syncToothComponentsFromPlacements(tooth) {
   ];
 }
 
-function hasPlacement(tooth, componentId, surface){
+function hasPlacement(tooth, componentId, surface) {
   const targetSurface = normalizeSurface(surface);
   return tooth.componentPlacements.some(
     (entry) =>
@@ -1559,7 +1637,7 @@ function hasPlacement(tooth, componentId, surface){
 function addPlacement(tooth, componentId, surface) {
   tooth.componentPlacements.push({
     componentId,
-    surface: normalizeSurface(surface)
+    surface: normalizeSurface(surface),
   });
   syncToothComponentsFromPlacements(tooth);
 }
@@ -1567,10 +1645,11 @@ function addPlacement(tooth, componentId, surface) {
 function removePlacement(tooth, componentId, surface) {
   const targetSurface = normalizeSurface(surface);
   tooth.componentPlacements = tooth.componentPlacements.filter(
-    (entry) => !(
-      entry.componentId === componentId && 
-      normalizeSurface(entry.surface) === targetSurface
-    )
+    (entry) =>
+      !(
+        entry.componentId === componentId &&
+        normalizeSurface(entry.surface) === targetSurface
+      )
   );
   syncToothComponentsFromPlacements(tooth);
 }
@@ -1590,6 +1669,14 @@ function placeSelectedComponentOnTooth(toothId, placementContext = null) {
 
   if (!selectedComponent) {
     setMessage("Select a component from the catalog first.", true);
+    return;
+  }
+
+  if (isMajorConnectorComponent(selectedComponent)) {
+    setMessage(
+      "Major connector art is shown on both arches. Individual tooth placement is not used for majors in this view.",
+      true
+    );
     return;
   }
 
@@ -1774,7 +1861,7 @@ function renderArchBackground(svg, jaw) {
       width: width.toFixed(2),
       height: height.toFixed(2),
       preserveAspectRatio: "xMidYMid meet",
-      class: "jaw-template"
+      class: "jaw-template",
     })
   );
 
@@ -1787,7 +1874,7 @@ function renderArchBackground(svg, jaw) {
         width: width.toFixed(2),
         height: height.toFixed(2),
         preserveAspectRatio: "xMidYMid meet",
-        class: "jaw-details"
+        class: "jaw-details",
       })
     );
   }
@@ -1873,6 +1960,69 @@ function createToothVisual(toothId, jaw) {
     })
   );
 
+  return visual;
+}
+
+// Major connector template (upper 11–18.svg) under mesh on missing teeth or plate on present teeth.
+function createMajorConnectorVisual(referenceComponentId, toothId, jaw) {
+  const connectorHref = getMajorConnectorAssetReference(toothId, jaw);
+  if (!connectorHref) return null;
+
+  const placement = getToothPlacement(jaw, toothId) || {};
+  const jawFlipX = JAW_IMAGE_FLIP_X[jaw] ?? 1;
+  const flipX = (placement.scaleX ?? 1) * jawFlipX;
+  const flipY = placement.scaleY ?? 1;
+
+  const { mirrored } = getToothAssetSpec(toothId);
+  const isMesh = isMeshComponent(referenceComponentId);
+  const isPlate = isPlateComponentId(referenceComponentId);
+  if (!isMesh && !isPlate) return null;
+
+  const scaleToothId = isMesh ? meshHoleUniformScaleToothId(jaw) : toothId;
+  const scaleBoost = TOOTH_SCALE_OVERRIDE[scaleToothId] || 1;
+  const toothScale = COMPONENT_SCALE_BY_TOOTH[scaleToothId] ?? 1;
+  const jawScaleMul = isMesh
+    ? getMeshPlacementRenderScale(referenceComponentId, toothId, jaw)
+    : getPlatePlacementRenderScale(referenceComponentId, toothId, jaw);
+  const base = getToothScale(scaleToothId, jaw) * 0.24 * scaleBoost * jawScaleMul * toothScale;
+
+  const scaleX = (mirrored ? -base : base) * flipX;
+  const scaleY = base * flipY;
+
+  const meshOffset = isMesh ? getMeshPlacementOffset(referenceComponentId, toothId) : { x: 0, y: 0 };
+  const plateOffset = isPlate ? getPlatePlacementOffset(referenceComponentId, toothId) : { x: 0, y: 0 };
+  const off = isMesh ? meshOffset : plateOffset;
+  const extra = getMajorConnectorPlacementOffset(toothId);
+  const ox = (Number.isFinite(off.x) ? off.x : 0) + (Number.isFinite(extra.x) ? extra.x : 0);
+  const oy = (Number.isFinite(off.y) ? off.y : 0) + (Number.isFinite(extra.y) ? extra.y : 0);
+
+  const meshSize = isMesh ? getMeshPlacementImageSize(referenceComponentId, toothId) : null;
+  const plateSize = isPlate ? getPlatePlacementImageSize(referenceComponentId, toothId) : null;
+  const connectorSize = getMajorConnectorPlacementImageSize(toothId);
+  const imgW = connectorSize?.width ?? meshSize?.width ?? plateSize?.width ?? COMPONENT_IMAGE_WIDTH;
+  const imgH = connectorSize?.height ?? meshSize?.height ?? plateSize?.height ?? COMPONENT_IMAGE_HEIGHT;
+  const halfW = imgW / 2;
+  const halfH = imgH / 2;
+
+  const connMul = getMajorConnectorRenderScaleMultiplier(toothId, jaw);
+  const scaleXConn = scaleX * connMul;
+  const scaleYConn = scaleY * connMul;
+
+  const visual = svgEl("g", {
+    class: `component-visual major-connector-visual component-ref-${referenceComponentId}`,
+    transform: `translate(${ox.toFixed(2)} ${oy.toFixed(2)}) scale(${scaleXConn.toFixed(3)} ${scaleYConn.toFixed(3)})`,
+  });
+  visual.appendChild(
+    svgEl("image", {
+      href: connectorHref,
+      x: String(-halfW),
+      y: String(-halfH),
+      width: String(imgW),
+      height: String(imgH),
+      preserveAspectRatio: "xMidYMid meet",
+      class: "component-image major-connector-image",
+    })
+  );
   return visual;
 }
 

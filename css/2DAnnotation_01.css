@@ -218,6 +218,7 @@ body {
   border: 0;
   background: transparent;
   display: block;
+  isolation: isolate;
 }
 
 .center-actions {
@@ -506,9 +507,39 @@ body {
   filter: brightness(0) saturate(100%) invert(27%) sepia(95%) saturate(1702%) hue-rotate(259deg) brightness(88%) contrast(97%);
 }
 
-/* RPD plate overlays: neutral gray (tune brightness/contrast to match arch) */
-.plate-image {
+/* RPD plate overlays and major-connector underlays: neutral gray (tune to match arch) */
+.plate-image,
+.major-connector-image {
   filter: grayscale(1) brightness(0.72) contrast(0.95);
+}
+
+.plate-suggestion-visual {
+  pointer-events: none;
+}
+
+.plate-suggestion-visual .component-visual,
+.plate-suggestion-visual .component-image,
+.plate-suggestion-visual .plate-image {
+  pointer-events: none;
+}
+
+.plate-suggestion-visual .plate-image {
+  opacity: 0.38;
+}
+
+.plate-suggestion-hit-target {
+  fill: transparent;
+  stroke: none;
+  pointer-events: visible;
+  cursor: pointer;
+}
+
+.plate-suggestion-visual:hover .plate-image {
+  opacity: 0.68;
+}
+
+.plate-suggestion-visual.is-selected .plate-image {
+  opacity: 0.92;
 }
 
 .rest-suggestion-point {
@@ -632,6 +663,19 @@ body {
   opacity: 1;
 }
 
+.major-connector-visual {
+  pointer-events: none;
+}
+
+.jaw-plate-frame {
+  pointer-events: none;
+  mix-blend-mode: normal;
+  opacity: 1;
+  /* Force white source pixels into a visible cyan-blue tint. */
+  filter: brightness(0) saturate(100%) invert(46%) sepia(85%) saturate(1714%) hue-rotate(165deg)
+    brightness(92%) contrast(101%);
+}
+
 .is-hidden { display: none !important; }
 
 .anterior-rest-dialog {
@@ -729,11 +773,17 @@ body {
 }
 
 .bar-placement-image {
-  pointer-events: all;
-  cursor: pointer;
+  pointer-events: none;
   opacity: 0.76;
   filter: brightness(0) saturate(100%) invert(31%) sepia(91%) saturate(2200%)
     hue-rotate(206deg) brightness(95%) contrast(104%);
+}
+
+.bar-placement-hit-target {
+  fill: transparent;
+  stroke: none;
+  pointer-events: visible;
+  cursor: pointer;
 }
 
 @media (max-width: 1200px) {

@@ -23,8 +23,6 @@ export const TOOTH_IMAGE_HALF_HEIGHT = TOOTH_IMAGE_HEIGHT / 2;
 
 export const COMPONENT_IMAGE_WIDTH = 154;
 export const COMPONENT_IMAGE_HEIGHT = 246;
-export const COMPONENT_IMAGE_HALF_WIDTH = COMPONENT_IMAGE_WIDTH / 2;
-export const COMPONENT_IMAGE_HALF_HEIGHT = COMPONENT_IMAGE_HEIGHT / 2;
 
 export const COMPONENT_SCALE_BY_JAW = Object.freeze({
   upper: 1.3,
@@ -39,6 +37,18 @@ export const JAW_BACKGROUND_SCALE_BY_JAW = Object.freeze({
 export const JAW_BACKGROUND_OFFSET_BY_JAW = Object.freeze({
   upper: { x: 8, y: 22 },
   lower: { x: 0, y: 0 },
+});
+
+/** Plate suggestion visual tuning (design mode). */
+export const PLATE_SUGGESTION_TRANSFORM_BY_JAW = Object.freeze({
+  upper: Object.freeze({
+    scale: 1,
+    offset: Object.freeze({ x: 0, y: 0 }),
+  }),
+  lower: Object.freeze({
+    scale: 1,
+    offset: Object.freeze({ x: 0, y: 0 }),
+  }),
 });
 
 export const COMPONENT_SCALE_BY_TOOTH = Object.freeze({
