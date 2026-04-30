@@ -1,4 +1,4 @@
-import { ACTION_UPON_FAILURE, isMeshComponent } from "./components.js";
+import { ACTION_UPON_FAILURE, isMajorConnectorComponent, isMeshComponent } from "./components.js";
 
 function getToothId(tooth) {
   return tooth?.tooth_id ?? tooth?.fdiId ?? "unknown";
@@ -36,19 +36,22 @@ export function assessPlacementCriteria(tooth, selectedComponent, componentById)
   const toothId = getToothId(tooth);
   const present = isToothPresent(tooth);
   const existingComponents = Array.isArray(tooth?.components) ? tooth.components : [];
+  const isMajor = isMajorConnectorComponent(selectedComponent);
 
-  if (selectedComponent.requiresPresence && !present) {
-    return failure(
-      `Tooth ${toothId} is missing.`,
-      ACTION_UPON_FAILURE.PREVENT_PLACEMENT
-    );
-  }
+  if (!isMajor) {
+    if (selectedComponent.requiresPresence && !present) {
+      return failure(
+        `Tooth ${toothId} is missing.`,
+        ACTION_UPON_FAILURE.PREVENT_PLACEMENT
+      );
+    }
 
-  if (selectedComponent.requiresMissing && present) {
-    return failure(
-      `Tooth ${toothId} is present.`,
-      ACTION_UPON_FAILURE.PREVENT_PLACEMENT
-    );
+    if (selectedComponent.requiresMissing && present) {
+      return failure(
+        `Tooth ${toothId} is present.`,
+        ACTION_UPON_FAILURE.PREVENT_PLACEMENT
+      );
+    }
   }
 
   const conflictsWith = Array.isArray(selectedComponent.conflictsWith)
@@ -61,6 +64,21 @@ export function assessPlacementCriteria(tooth, selectedComponent, componentById)
       selectedComponent.actionUponFailure,
       conflicts
     );
+  }
+
+  if (isMajor) {
+    const existingMajors = existingComponents.filter((id) => isMajorConnectorComponent(id));
+    if (existingMajors.length > 0 && !existingMajors.includes(selectedComponent.id)) {
+      return failure(
+        `Tooth ${toothId} already has a major connector; replacing with ${selectedComponent.id}.`,
+        ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
+        existingMajors
+      );
+    }
+    return {
+      pass: true,
+      failureData: null,
+    };
   }
 
   if (isMeshComponent(selectedComponent)) {

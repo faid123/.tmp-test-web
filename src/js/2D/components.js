@@ -494,16 +494,31 @@ export {
 } from "./components.bar.js";
 
 export {
-  getMajorConnectorAssetReference,
-  isMajorConnectorComponent,
-} from "./components.major.js";
-
-export {
   CONNECTOR_EXTRA_OFFSET_SEED_BY_TOOTH,
   CONNECTOR_PLACEMENT_IMAGE_SIZE_BY_TOOTH,
   CONNECTOR_RENDER_SCALE_BY_JAW,
   CONNECTOR_RENDER_SCALE_BY_TEMPLATE_TOOTH,
+  CONNECTOR_POSITION_IGNORE_MESH_PLATE_ANCHOR,
+  augmentTeethForPalatalBarConnectorNeighbors,
+  ensureMajorConnectorPlacementsOnSupportedTeeth,
+  getDefaultMajorConnectorIdForDesignMode,
+  getMajorConnectorAssetReference,
+  getMajorConnectorNeighborMajorFlags,
   getMajorConnectorPlacementImageSize,
   getMajorConnectorPlacementOffset,
   getMajorConnectorRenderScaleMultiplier,
-} from "./components.connector.js";
+  hasPalatalBarPlacementOnUpperArch,
+  hasPalatalHolePlacementOnUpperArch,
+  isMajorConnectorComponent,
+  isPalatalBarMajorComponent,
+  isPalatalHoleMajorComponent,
+  PALATAL_BAR_ARCH_OVERLAY,
+  PALATAL_BAR_CONNECTOR_TOOTH_IDS,
+  PALATAL_BAR_MAJOR_COMPONENT_ID,
+  PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS,
+  PALATAL_HOLE_ARCH_OVERLAY_LAYERS,
+  PALATAL_HOLE_MAJOR_COMPONENT_ID,
+  shouldMajorConnectorIgnoreMeshPlateAnchor,
+  shouldUseMajorConnectorEndAsset,
+  toothHasMajorConnectorPlacement,
+} from "./components.major.js";

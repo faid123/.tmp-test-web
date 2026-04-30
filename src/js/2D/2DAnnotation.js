@@ -45,10 +45,23 @@ import {
   isClaspCircComponent,
   isMeshComponent,
   isMajorConnectorComponent,
+  augmentTeethForPalatalBarConnectorNeighbors,
+  ensureMajorConnectorPlacementsOnSupportedTeeth,
+  getDefaultMajorConnectorIdForDesignMode,
   getMajorConnectorAssetReference,
   getMajorConnectorPlacementImageSize,
   getMajorConnectorPlacementOffset,
   getMajorConnectorRenderScaleMultiplier,
+  hasPalatalBarPlacementOnUpperArch,
+  hasPalatalHolePlacementOnUpperArch,
+  isPalatalBarMajorComponent,
+  isPalatalHoleMajorComponent,
+  PALATAL_BAR_ARCH_OVERLAY,
+  PALATAL_BAR_CONNECTOR_TOOTH_IDS,
+  PALATAL_BAR_MAJOR_COMPONENT_ID,
+  PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS,
+  PALATAL_HOLE_ARCH_OVERLAY_LAYERS,
+  shouldMajorConnectorIgnoreMeshPlateAnchor,
   isRestComponent,
   meshHoleUniformScaleToothId,
   meshSelectionContextFromState,
@@ -64,7 +77,7 @@ import {
   COMPONENT_SCALE_BY_TOOTH,
   EMPTY_JAW_CALIBRATION,
   forEachTooth,
-  isAutoMeshPlatePlacementExcludedToothId,
+  isAutoMeshPlacementExcludedToothId,
   JAW_BACKGROUND_IMAGES,
   JAW_BACKGROUND_OFFSET_BY_JAW,
   JAW_BACKGROUND_SCALE_BY_JAW,
@@ -98,6 +111,8 @@ const state = {
   teeth: {},
   components: [],
   selectedComponentId: DEFAULT_COMPONENT_ID,
+  /** When user selects Palatal Hole (major), keep arch straps until they choose a different major. */
+  archOverlayPalatalHoleActive: false,
   /** When true (rest-seat calibration boot), anterior rest hints are only cingulum ac_mesial / ac_distal. */
   restSeatCalibrationAcOnly: false,
 };
@@ -128,7 +143,6 @@ function init() {
     bindActionButtons();
     initComponentCatalog();
     loadPreviewImage();
-    bootstrapDefaultPlateOnAllPresentTeeth();
     syncDesignModeWithLocks(false);
     renderJaws();
     updateEditModeUI();
@@ -136,39 +150,6 @@ function init() {
     console.error("2D annotation init failed", err);
     setMessage("Loaded jaw view with limited tools. Check console for init error.", true);
   }
-}
-
-/**
- * On load: place the default plate component on every present tooth so plates are visible immediately.
- */
-function bootstrapDefaultPlateOnAllPresentTeeth() {
-  const plateId = getDefaultPlateIdForDesignMode(COMPONENT_BY_ID);
-  if (!plateId || !COMPONENT_BY_ID.has(plateId)) {
-    setMessage("Default plate not found in catalog.", true);
-    return;
-  }
-
-  state.components = [plateId];
-  state.selectedComponentId = plateId;
-  state.selectedTab = "plate";
-
-  forEachTooth((toothId) => {
-    const tooth = state.teeth[toothId];
-    if (!tooth) return;
-
-    tooth.isPresent = true;
-    tooth.status = "presence";
-    ensureToothPlacementState(tooth);
-    if (isAutoMeshPlatePlacementExcludedToothId(toothId)) {
-      tooth.componentPlacements = [];
-    } else {
-      tooth.componentPlacements = [{ componentId: plateId, surface: null }];
-    }
-    syncToothComponentsFromPlacements(tooth);
-  });
-
-  renderComponentCatalog();
-  setMessage("Default plate shown on all teeth.", false);
 }
 
 // Read encrypted case id from URL and display a human-readable label.
@@ -321,6 +302,9 @@ function clearJawTeethBaseline(jaw) {
     tooth.componentPlacements = [];
     syncToothComponentsFromPlacements(tooth);
   }
+  if (jaw === "upper") {
+    state.archOverlayPalatalHoleActive = false;
+  }
   renderJaw(jaw);
   setMessage(`${titleCase(jaw)} arch: all teeth marked missing.`, false);
 }
@@ -347,11 +331,11 @@ function clearDesignModeArch(jaw) {
   for (const toothId of TOOTH_ORDER[jaw]) {
     const tooth = state.teeth[toothId];
     if (!tooth) continue;
-    if (isAutoMeshPlatePlacementExcludedToothId(toothId)) {
-      continue;
-    }
 
     if (!tooth.isPresent) {
+      if (isAutoMeshPlacementExcludedToothId(toothId)) {
+        continue;
+      }
       if (meshId && COMPONENT_BY_ID.has(meshId)) {
         const def = COMPONENT_BY_ID.get(meshId);
         if (def && isMeshComponent(def)) {
@@ -359,10 +343,23 @@ function clearDesignModeArch(jaw) {
           syncToothComponentsFromPlacements(tooth);
         }
       }
+    } else if (isAutoMeshPlacementExcludedToothId(toothId)) {
+      continue;
     } else if (plateId && COMPONENT_BY_ID.has(plateId) && isPlateComponentId(plateId)) {
       tooth.componentPlacements.push({ componentId: plateId, surface: null });
       syncToothComponentsFromPlacements(tooth);
     }
+  }
+
+  if (jaw === "upper") {
+    const majorId =
+      state.selectedComponentId &&
+      isMajorConnectorComponent(state.selectedComponentId) &&
+      COMPONENT_BY_ID.has(state.selectedComponentId)
+        ? state.selectedComponentId
+        : getDefaultMajorConnectorIdForDesignMode(COMPONENT_BY_ID);
+    ensureMajorConnectorPlacementsOnSupportedTeeth(state.teeth, majorId, COMPONENT_BY_ID);
+    state.archOverlayPalatalHoleActive = false;
   }
 
   renderComponentCatalog();
@@ -381,6 +378,7 @@ function drawFromScratch() {
   forEachTooth((toothId) => resetToothRecord(toothId, null));
   state.components = [];
   state.selectedComponentId = DEFAULT_COMPONENT_ID;
+  state.archOverlayPalatalHoleActive = false;
   state.restSeatCalibrationAcOnly = false;
   refreshLockButtons();
   syncDesignModeWithLocks(false);
@@ -630,6 +628,24 @@ function handleDesignComponentSelect(componentId) {
     return;
   }
 
+  if (isMajorConnectorComponent(selected)) {
+    state.selectedComponentId = componentId;
+    if (isPalatalHoleMajorComponent(componentId)) {
+      state.archOverlayPalatalHoleActive = true;
+    } else {
+      state.archOverlayPalatalHoleActive = false;
+    }
+    renderComponentCatalog();
+    renderJaws();
+    const palatalMsg = isPalatalHoleMajorComponent(componentId)
+      ? `${selected.label} selected. On the upper arch, click any tooth to tag palatal-hole placement (arch-wide straps), or click again to remove. Other majors still need mesh or plate on that tooth.`
+      : isPalatalBarMajorComponent(componentId)
+        ? `${selected.label} selected. Connectors show on teeth 14–17 and 24–27 (anteriors and distal 18/28 are omitted). Click a tagged tooth in that span to add or remove placement. Other majors still need mesh or plate where applicable.`
+        : `${selected.label} selected. On upper teeth with a mesh (missing) or plate (present), click to place or remove this major connector under that component.`;
+    setMessage(palatalMsg, false);
+    return;
+  }
+
   state.selectedComponentId = componentId;
   renderJaws();
 
@@ -714,6 +730,13 @@ function syncDesignModeWithLocks(notify) {
         ? state.selectedComponentId
         : getDefaultPlateIdForDesignMode(COMPONENT_BY_ID);
     ensurePlatePlacementsOnPresentTeeth(state.teeth, plateId, COMPONENT_BY_ID);
+    const majorId =
+      state.selectedComponentId &&
+      isMajorConnectorComponent(state.selectedComponentId) &&
+      COMPONENT_BY_ID.has(state.selectedComponentId)
+        ? state.selectedComponentId
+        : getDefaultMajorConnectorIdForDesignMode(COMPONENT_BY_ID);
+    ensureMajorConnectorPlacementsOnSupportedTeeth(state.teeth, majorId, COMPONENT_BY_ID);
     forEachTooth((toothId) => {
       const t = state.teeth[toothId];
       if (t && !t.isPresent) {
@@ -761,19 +784,61 @@ function applyToothStatusClass(group, tooth) {
 
 // Draw mesh overlays on missing teeth; plate overlays on present teeth.
 function appendToothComponentVisuals(group, tooth, toothId, jaw) {
+  ensureToothPlacementState(tooth);
+
+  const catalogEntries = Array.isArray(tooth.components)
+    ? tooth.components
+        .map((id) => ({ id, def: COMPONENT_BY_ID.get(id) }))
+        .filter((x) => x.def)
+    : [];
+
+  for (const { id, def } of catalogEntries) {
+    if (!isMajorConnectorComponent(def)) {
+      continue;
+    }
+    if (
+      jaw === "upper" &&
+      shouldShowPalatalBarArchOverlay() &&
+      !isPalatalBarMajorComponent(id) &&
+      PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS.has(String(toothId))
+    ) {
+      continue;
+    }
+    const under = createMajorConnectorVisual(id, tooth, toothId, jaw);
+    if (under) {
+      group.appendChild(under);
+    }
+  }
+
+  const showPalatalBarSegment =
+    jaw === "upper" &&
+    shouldShowPalatalBarArchOverlay() &&
+    PALATAL_BAR_CONNECTOR_TOOTH_IDS.has(String(toothId));
+  const hasPalatalBarInList = catalogEntries.some(
+    (e) => e.id === PALATAL_BAR_MAJOR_COMPONENT_ID
+  );
+  if (showPalatalBarSegment && !hasPalatalBarInList) {
+    const barUnder = createMajorConnectorVisual(
+      PALATAL_BAR_MAJOR_COMPONENT_ID,
+      tooth,
+      toothId,
+      jaw
+    );
+    if (barUnder) {
+      group.appendChild(barUnder);
+    }
+  }
+
   if (!tooth.components.length) {
     return;
   }
 
   if (!tooth.isPresent) {
-    for (const componentId of tooth.components) {
-      const def = COMPONENT_BY_ID.get(componentId);
-      if (!def || !isMeshComponent(def)) {
+    for (const { id, def } of catalogEntries) {
+      if (!isMeshComponent(def)) {
         continue;
       }
-      const under = createMajorConnectorVisual(componentId, toothId, jaw);
-      if (under) group.appendChild(under);
-      const visual = createComponentVisual(componentId, toothId, jaw);
+      const visual = createComponentVisual(id, toothId, jaw);
       if (visual) {
         group.appendChild(visual);
       }
@@ -781,13 +846,11 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
     return;
   }
 
-  for (const componentId of tooth.components) {
-    if (!isPlateComponentId(componentId)) {
+  for (const { id } of catalogEntries) {
+    if (!isPlateComponentId(id)) {
       continue;
     }
-    const under = createMajorConnectorVisual(componentId, toothId, jaw);
-    if (under) group.appendChild(under);
-    const visual = createComponentVisual(componentId, toothId, jaw);
+    const visual = createComponentVisual(id, toothId, jaw);
     if (visual) {
       group.appendChild(visual);
     }
@@ -1422,6 +1485,90 @@ function renderJaws() {
   renderJaw("lower");
 }
 
+// Palatal hole / palatal bar arch overlays: show from saved placements whenever the catalog
+// is not actively selecting a *different* major type (so plate/clasp/mesh tabs do not hide them).
+function shouldShowPalatalHoleArchOverlay() {
+  const sel = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+  const suppressForOtherMajor =
+    state.designMode &&
+    sel &&
+    isMajorConnectorComponent(sel) &&
+    !isPalatalHoleMajorComponent(sel);
+
+  if (suppressForOtherMajor) {
+    return false;
+  }
+  if (hasPalatalHolePlacementOnUpperArch(state.teeth)) {
+    return true;
+  }
+  if (state.archOverlayPalatalHoleActive) {
+    return true;
+  }
+  return Boolean(state.designMode && sel && isPalatalHoleMajorComponent(sel));
+}
+
+function shouldShowPalatalBarArchOverlay() {
+  const sel = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+  const suppressForOtherMajor =
+    state.designMode &&
+    sel &&
+    isMajorConnectorComponent(sel) &&
+    !isPalatalBarMajorComponent(sel);
+
+  if (suppressForOtherMajor) {
+    return false;
+  }
+  if (hasPalatalBarPlacementOnUpperArch(state.teeth)) {
+    return true;
+  }
+  return Boolean(state.designMode && sel && isPalatalBarMajorComponent(sel));
+}
+
+// Arch-wide palatal hole artwork (AP_Strap01/02); not drawn per tooth.
+function appendPalatalHoleArchOverlay(svg) {
+  if (!svg || !shouldShowPalatalHoleArchOverlay()) {
+    return;
+  }
+  const g = svgEl("g", { class: "palatal-hole-arch-overlay" });
+  for (const layer of PALATAL_HOLE_ARCH_OVERLAY_LAYERS) {
+    const href = `../../assets/RPD_Component/MajorConnector/${layer.file}`;
+    g.appendChild(
+      svgEl("image", {
+        href,
+        x: String(layer.x),
+        y: String(layer.y),
+        width: String(layer.width),
+        height: String(layer.height),
+        preserveAspectRatio: "xMidYMid meet",
+        class: "palatal-hole-arch-image",
+      })
+    );
+  }
+  svg.appendChild(g);
+}
+
+// Arch-wide palatal bar (P_Bar.svg); per-tooth majors on 14–17 and 24–27 only (no 18/28/anterior crosses).
+function appendPalatalBarArchOverlay(svg) {
+  if (!svg || !shouldShowPalatalBarArchOverlay()) {
+    return;
+  }
+  const layer = PALATAL_BAR_ARCH_OVERLAY;
+  const g = svgEl("g", { class: "palatal-bar-arch-overlay" });
+  const href = `../../assets/RPD_Component/MajorConnector/${layer.file}`;
+  g.appendChild(
+    svgEl("image", {
+      href,
+      x: String(layer.x),
+      y: String(layer.y),
+      width: String(layer.width),
+      height: String(layer.height),
+      preserveAspectRatio: "xMidYMid meet",
+      class: "palatal-bar-arch-image",
+    })
+  );
+  svg.appendChild(g);
+}
+
 // Render one arch with PNG jaw + positioned PNG teeth.
 function renderJaw(jaw) {
   const config = JAW_BACKGROUND_IMAGES[jaw];
@@ -1532,6 +1679,11 @@ function renderJaw(jaw) {
     });
     svg.appendChild(group);
   });
+
+  if (jaw === "upper") {
+    appendPalatalHoleArchOverlay(svg);
+    appendPalatalBarArchOverlay(svg);
+  }
 }
 
 // Toggle a tooth between present and missing in presence mode.
@@ -1672,16 +1824,72 @@ function placeSelectedComponentOnTooth(toothId, placementContext = null) {
     return;
   }
 
-  if (isMajorConnectorComponent(selectedComponent)) {
-    setMessage(
-      "Major connector art is shown on both arches. Individual tooth placement is not used for majors in this view.",
-      true
-    );
-    return;
-  }
-
   ensureToothPlacementState(tooth);
   syncToothComponentsFromPlacements(tooth);
+
+  if (isMajorConnectorComponent(selectedComponent)) {
+    const jaw = TOOTH_ORDER.upper.includes(toothId)
+      ? "upper"
+      : TOOTH_ORDER.lower.includes(toothId)
+        ? "lower"
+        : null;
+    if (!jaw) {
+      setMessage("Unknown tooth.", true);
+      return;
+    }
+    const palatalHoleUpper =
+      isPalatalHoleMajorComponent(selectedComponent.id) &&
+      jaw === "upper" &&
+      /^[12][1-8]$/.test(String(toothId));
+    const palatalBarUpper =
+      isPalatalBarMajorComponent(selectedComponent.id) &&
+      jaw === "upper" &&
+      PALATAL_BAR_CONNECTOR_TOOTH_IDS.has(String(toothId));
+    if (
+      !palatalHoleUpper &&
+      !palatalBarUpper &&
+      !getMajorConnectorAssetReference(toothId, jaw)
+    ) {
+      setMessage("No major connector artwork is available for this tooth in the 2D view (upper arch only).", true);
+      return;
+    }
+
+    if (hasPlacement(tooth, selectedComponent.id, null)) {
+      removePlacement(tooth, selectedComponent.id, null);
+      setMessage(`Removed ${selectedComponent.label} from tooth ${toothId}.`, false);
+      return;
+    }
+
+    if (!toothSupportsMajorConnectorOverlay(tooth, toothId, selectedComponent.id)) {
+      setMessage(
+        tooth.isPresent
+          ? "Place a plate on this tooth before adding this major connector (design mode)."
+          : "Place a mesh on this missing tooth before adding this major connector (design mode).",
+        true
+      );
+      return;
+    }
+
+    const majorCriteria = assessPlacementCriteria(tooth, selectedComponent, COMPONENT_BY_ID);
+    if (majorCriteria.pass) {
+      addPlacement(tooth, selectedComponent.id, null);
+      setMessage(`Placed ${selectedComponent.label} on tooth ${toothId}.`, false);
+      return;
+    }
+
+    const { failureData: majorFailure } = majorCriteria;
+    if (majorFailure.actionUponFailure === ACTION_UPON_FAILURE.PREVENT_PLACEMENT) {
+      setMessage(majorFailure.reason, true);
+      return;
+    }
+
+    if (majorFailure.actionUponFailure === ACTION_UPON_FAILURE.REMOVE_THEN_PLACE) {
+      removePlacementsByComponentIds(tooth, majorFailure.conflictingComponents || []);
+      addPlacement(tooth, selectedComponent.id, null);
+      setMessage(`Replaced prior major and placed ${selectedComponent.label} on tooth ${toothId}.`, false);
+    }
+    return;
+  }
 
   const requiresSurface =
     isRestComponent(selectedComponent) || isClaspCircComponent(selectedComponent) || isBarComponent(selectedComponent);
@@ -1801,6 +2009,7 @@ function buildPayload() {
     editMode: state.designMode,
     components: state.components,
     selectedComponentId: state.selectedComponentId,
+    archOverlayPalatalHoleActive: state.archOverlayPalatalHoleActive,
     activeStatus: state.activeStatus,
     teeth,
     arches: {
@@ -1963,9 +2172,60 @@ function createToothVisual(toothId, jaw) {
   return visual;
 }
 
-// Major connector template (upper 11–18.svg) under mesh on missing teeth or plate on present teeth.
-function createMajorConnectorVisual(referenceComponentId, toothId, jaw) {
-  const connectorHref = getMajorConnectorAssetReference(toothId, jaw);
+function resolveMajorConnectorAnchorComponentId(tooth) {
+  ensureToothPlacementState(tooth);
+  for (const { componentId } of tooth.componentPlacements) {
+    const def = COMPONENT_BY_ID.get(componentId);
+    if (!def) {
+      continue;
+    }
+    if (tooth.isPresent && isPlateComponentId(componentId)) {
+      return componentId;
+    }
+    if (!tooth.isPresent && isMeshComponent(def)) {
+      return componentId;
+    }
+  }
+  return null;
+}
+
+/** True when we allow **adding** this major on the tooth (mesh/plate anchor), with a Palatal Hole exception. */
+function toothSupportsMajorConnectorOverlay(tooth, toothId, majorComponentId) {
+  if (resolveMajorConnectorAnchorComponentId(tooth) !== null) {
+    return true;
+  }
+  // Palatal Hole uses arch-wide straps only (no per-tooth SVG). Placements are tags for the arch overlay +
+  // saved state, so any upper tooth qualifies — including distal missing sites without auto-mesh (18/28)
+  // and present teeth if the plate was cleared.
+  if (
+    isPalatalHoleMajorComponent(majorComponentId) &&
+    TOOTH_ORDER.upper.includes(String(toothId))
+  ) {
+    return true;
+  }
+  if (
+    isPalatalBarMajorComponent(majorComponentId) &&
+    PALATAL_BAR_CONNECTOR_TOOTH_IDS.has(String(toothId))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+// Major connector: explicit catalog placement. Scale follows the *tooth* (not mesh/plate render scale).
+function createMajorConnectorVisual(majorComponentId, tooth, toothId, jaw) {
+  const def = COMPONENT_BY_ID.get(majorComponentId);
+  if (!def || !isMajorConnectorComponent(def)) {
+    return null;
+  }
+  if (isPalatalHoleMajorComponent(majorComponentId)) {
+    return null;
+  }
+  const teethForConnector =
+    isPalatalBarMajorComponent(majorComponentId) && shouldShowPalatalBarArchOverlay()
+      ? augmentTeethForPalatalBarConnectorNeighbors(state.teeth)
+      : state.teeth;
+  const connectorHref = getMajorConnectorAssetReference(toothId, jaw, teethForConnector);
   if (!connectorHref) return null;
 
   const placement = getToothPlacement(jaw, toothId) || {};
@@ -1974,33 +2234,29 @@ function createMajorConnectorVisual(referenceComponentId, toothId, jaw) {
   const flipY = placement.scaleY ?? 1;
 
   const { mirrored } = getToothAssetSpec(toothId);
-  const isMesh = isMeshComponent(referenceComponentId);
-  const isPlate = isPlateComponentId(referenceComponentId);
-  if (!isMesh && !isPlate) return null;
-
-  const scaleToothId = isMesh ? meshHoleUniformScaleToothId(jaw) : toothId;
-  const scaleBoost = TOOTH_SCALE_OVERRIDE[scaleToothId] || 1;
-  const toothScale = COMPONENT_SCALE_BY_TOOTH[scaleToothId] ?? 1;
-  const jawScaleMul = isMesh
-    ? getMeshPlacementRenderScale(referenceComponentId, toothId, jaw)
-    : getPlatePlacementRenderScale(referenceComponentId, toothId, jaw);
-  const base = getToothScale(scaleToothId, jaw) * 0.24 * scaleBoost * jawScaleMul * toothScale;
+  const scaleBoost = TOOTH_SCALE_OVERRIDE[toothId] || 1;
+  const base = getToothScale(toothId, jaw) * 0.24 * scaleBoost;
 
   const scaleX = (mirrored ? -base : base) * flipX;
   const scaleY = base * flipY;
 
-  const meshOffset = isMesh ? getMeshPlacementOffset(referenceComponentId, toothId) : { x: 0, y: 0 };
-  const plateOffset = isPlate ? getPlatePlacementOffset(referenceComponentId, toothId) : { x: 0, y: 0 };
-  const off = isMesh ? meshOffset : plateOffset;
+  const anchorId = resolveMajorConnectorAnchorComponentId(tooth);
+  let off = { x: 0, y: 0 };
+  if (!shouldMajorConnectorIgnoreMeshPlateAnchor() && anchorId) {
+    const anchorDef = COMPONENT_BY_ID.get(anchorId);
+    if (anchorDef && isMeshComponent(anchorDef)) {
+      off = getMeshPlacementOffset(anchorId, toothId);
+    } else if (isPlateComponentId(anchorId)) {
+      off = getPlatePlacementOffset(anchorId, toothId);
+    }
+  }
   const extra = getMajorConnectorPlacementOffset(toothId);
   const ox = (Number.isFinite(off.x) ? off.x : 0) + (Number.isFinite(extra.x) ? extra.x : 0);
   const oy = (Number.isFinite(off.y) ? off.y : 0) + (Number.isFinite(extra.y) ? extra.y : 0);
 
-  const meshSize = isMesh ? getMeshPlacementImageSize(referenceComponentId, toothId) : null;
-  const plateSize = isPlate ? getPlatePlacementImageSize(referenceComponentId, toothId) : null;
   const connectorSize = getMajorConnectorPlacementImageSize(toothId);
-  const imgW = connectorSize?.width ?? meshSize?.width ?? plateSize?.width ?? COMPONENT_IMAGE_WIDTH;
-  const imgH = connectorSize?.height ?? meshSize?.height ?? plateSize?.height ?? COMPONENT_IMAGE_HEIGHT;
+  const imgW = connectorSize?.width ?? COMPONENT_IMAGE_WIDTH;
+  const imgH = connectorSize?.height ?? COMPONENT_IMAGE_HEIGHT;
   const halfW = imgW / 2;
   const halfH = imgH / 2;
 
@@ -2009,7 +2265,7 @@ function createMajorConnectorVisual(referenceComponentId, toothId, jaw) {
   const scaleYConn = scaleY * connMul;
 
   const visual = svgEl("g", {
-    class: `component-visual major-connector-visual component-ref-${referenceComponentId}`,
+    class: `component-visual major-connector-visual component-ref-${majorComponentId}`,
     transform: `translate(${ox.toFixed(2)} ${oy.toFixed(2)}) scale(${scaleXConn.toFixed(3)} ${scaleYConn.toFixed(3)})`,
   });
   visual.appendChild(

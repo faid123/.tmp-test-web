@@ -513,8 +513,22 @@ body {
   filter: grayscale(1) brightness(0.72) contrast(0.95);
 }
 
-.plate-suggestion-visual {
+/* Palatal hole arch overlay (AP_Strap01/02): neutral gray, non-interactive */
+.palatal-hole-arch-overlay {
   pointer-events: none;
+}
+
+.palatal-hole-arch-image {
+  filter: grayscale(1) brightness(0.72) contrast(0.95);
+}
+
+/* Palatal bar arch overlay (P_Bar.svg): neutral gray, non-interactive */
+.palatal-bar-arch-overlay {
+  pointer-events: none;
+}
+
+.palatal-bar-arch-image {
+  filter: grayscale(1) brightness(0.72) contrast(0.95);
 }
 
 .plate-suggestion-visual .component-visual,
@@ -524,7 +538,7 @@ body {
 }
 
 .plate-suggestion-visual .plate-image {
-  opacity: 0.38;
+  opacity: 0.18;
 }
 
 .plate-suggestion-hit-target {
@@ -535,11 +549,11 @@ body {
 }
 
 .plate-suggestion-visual:hover .plate-image {
-  opacity: 0.68;
+  opacity: 0.34;
 }
 
 .plate-suggestion-visual.is-selected .plate-image {
-  opacity: 0.92;
+  opacity: 0.5;
 }
 
 .rest-suggestion-point {
