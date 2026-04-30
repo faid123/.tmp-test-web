@@ -133,6 +133,10 @@ const POLYLINE_TUBE_RADIAL_SEGMENTS = 8;
 const POLYLINE_SURFACE_MIN_OFFSET = -4;
 const POLYLINE_SURFACE_MAX_OFFSET = 8;
 const POLYLINE_NORMAL_DRAG_SCALE = 0.035;
+const POLYLINE_GINGIVAL_MESH_DISTANCE = 5;
+const POLYLINE_GINGIVAL_MESH_RELEVANT_RATIO = 0.45;
+const POLYLINE_GINGIVAL_CHAIN_SAMPLE_COUNT = 24;
+const POLYLINE_REFERENCE_VERTEX_SAMPLE_LIMIT = 2500;
 let isPolylineOverlayVisible = true;
 let activePolylineDrag = null;
 let polylineMenuButton = null;
@@ -149,6 +153,25 @@ const POLYLINE_COMPONENT_COLORS = [
   0xff4f81,
   0xffd400,
 ];
+const POLYLINE_TEXT_COMPONENTS = [
+  "retentionPins",
+  "tissueStop",
+  "mesh",
+  "reversalLine",
+  "endingProximalPlate",
+  "startingProximalPlate",
+  "majorConnector",
+  "GingivalPoints",
+  "minorConnectorTooth",
+];
+const POLYLINE_TEXT_COMPONENT_PATTERN = new RegExp(
+  `^(${POLYLINE_TEXT_COMPONENTS.join("|")})\\b`,
+  "i"
+);
+const POLYLINE_TEXT_DETECTION_PATTERN = new RegExp(
+  `nodeCount|${POLYLINE_TEXT_COMPONENTS.join("|")}`,
+  "i"
+);
 
 function disposeObject3D(object) {
   if (!object) return;
@@ -332,6 +355,14 @@ function normalizePolylineComponentName(component) {
   const text = String(component || "polyline");
   if (/retention\s*pins?/i.test(text)) return "Retainer Points";
   if (/^mesh$/i.test(text)) return "mesh";
+  if (/tissue\s*stop/i.test(text)) return "Tissue Stop";
+  if (/ending\s*proximal\s*plate/i.test(text)) {
+    return "Ending Proximal Plate";
+  }
+  if (/starting\s*proximal\s*plate/i.test(text)) {
+    return "Starting Proximal Plate";
+  }
+  if (/minor\s*connector\s*tooth/i.test(text)) return "Minor Connector Tooth";
   if (/major\s*connector/i.test(text)) return "Major Connector";
   if (/reversal/i.test(text)) return "Reversal Line";
   if (/gingival/i.test(text)) return "Gingival Points";
@@ -380,6 +411,10 @@ function getSegmentComponent(segment) {
   );
 }
 
+function getSegmentRenderableEdges(segment, points, component) {
+  return segment?.renderEdges || getPolylineRenderableEdges(points, component);
+}
+
 function getPolylineComponentKey(arch, component) {
   return `${arch}:${component}`;
 }
@@ -388,6 +423,10 @@ function formatPolylineComponentLabel(key) {
   const [arch, ...componentParts] = key.split(":");
   const component = componentParts.join(":") || "polyline";
   return `${arch.charAt(0).toUpperCase()}${arch.slice(1)} - ${component}`;
+}
+
+function isPolylineComponentVisibleByDefault(key) {
+  return !/omit\s*reference/i.test(key || "");
 }
 
 function toPointObject(value) {
@@ -481,18 +520,14 @@ function decodePolylineText(value) {
 
   try {
     const decoded = atob(value.trim());
-    if (
-      /nodeCount|retentionPins|mesh|reversalLine|GingivalPoints/i.test(decoded)
-    ) {
+    if (POLYLINE_TEXT_DETECTION_PATTERN.test(decoded)) {
       return decoded;
     }
   } catch {
     // Keep going: the value may already be plain text.
   }
 
-  return /nodeCount|retentionPins|mesh|reversalLine|GingivalPoints/i.test(value)
-    ? value
-    : "";
+  return POLYLINE_TEXT_DETECTION_PATTERN.test(value) ? value : "";
 }
 
 function parsePolylineTextSegments(value) {
@@ -504,6 +539,12 @@ function parsePolylineTextSegments(value) {
   const numberPattern = /[-+]?\d*\.?\d+(?:e[-+]?\d+)?/gi;
   const ignoredPointValue = -9e91;
   let currentComponent = "polyline";
+
+  const getComponentName = (line) => {
+    return line.trim().match(POLYLINE_TEXT_COMPONENT_PATTERN)?.[1] || "";
+  };
+
+  const isComponentHeader = (line) => Boolean(getComponentName(line));
 
   const parseCoordinateLine = (line) => {
     if (!/^[\s+\-.0-9eE]+$/.test(line)) return null;
@@ -524,11 +565,27 @@ function parsePolylineTextSegments(value) {
     return { x: coords[0], y: coords[1], z: coords[2] };
   };
 
+  const collectPoints = (startIndex, nodeCount = 0) => {
+    const points = [];
+    let nextIndex = startIndex;
+
+    while (nextIndex < lines.length) {
+      const candidateLine = lines[nextIndex];
+      if (nextIndex !== startIndex && isComponentHeader(candidateLine)) break;
+
+      const point = parseCoordinateLine(candidateLine);
+      if (point) points.push(point);
+      nextIndex += 1;
+
+      if (nodeCount && points.length >= nodeCount) break;
+    }
+
+    return { points, nextIndex };
+  };
+
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i].trim();
-    const componentMatch = line.match(
-      /^(retentionPins|mesh|reversalLine|GingivalPoints|[A-Za-z][\w -]*(?:component|segment|line)[\w -]*)/i
-    );
+    const componentMatch = line.match(POLYLINE_TEXT_COMPONENT_PATTERN);
     if (componentMatch) {
       currentComponent = componentMatch[1].trim();
     }
@@ -537,17 +594,16 @@ function parsePolylineTextSegments(value) {
     const gingivalMatch = line.match(/^GingivalPoints\s+(\d+)/i);
     const nodeCount = Number(nodeMatch?.[1] ?? gingivalMatch?.[1] ?? 0);
 
-    if (!nodeCount) continue;
+    if (!componentMatch && !nodeCount) continue;
+    if ((nodeMatch || gingivalMatch) && nodeCount === 0) continue;
 
-    const points = [];
-    for (let j = i + 1; j < lines.length && points.length < nodeCount; j += 1) {
-      const point = parseCoordinateLine(lines[j]);
-      if (point) points.push(point);
-    }
-
+    const startIndex = i + 1;
+    const { points, nextIndex } = collectPoints(startIndex, nodeCount);
     if (points.length >= 2) {
       segments.push(createPolylineSegment(points, currentComponent));
     }
+
+    i = Math.max(i, nextIndex - 1);
   }
 
   return segments;
@@ -645,6 +701,12 @@ function getPolylineSegmentArcLength(segment) {
 }
 
 function splitMajorConnectorSegments(segments) {
+  if (
+    segments.some((segment) => getSegmentComponent(segment) === "Major Connector")
+  ) {
+    return segments;
+  }
+
   const reversalSegments = segments.filter(
     (segment) => getSegmentComponent(segment) === "Reversal Line"
   );
@@ -663,10 +725,220 @@ function splitMajorConnectorSegments(segments) {
   );
 }
 
+function getPolylineEdgeChains(edges) {
+  if (!edges.length) return [];
+
+  const chains = [];
+  let currentChain = [edges[0][0], edges[0][1]];
+
+  for (let index = 1; index < edges.length; index += 1) {
+    const [startIndex, endIndex] = edges[index];
+    const previousIndex = currentChain[currentChain.length - 1];
+    if (startIndex === previousIndex) {
+      currentChain.push(endIndex);
+    } else {
+      chains.push(currentChain);
+      currentChain = [startIndex, endIndex];
+    }
+  }
+
+  chains.push(currentChain);
+  return chains.filter((chain) => chain.length >= 2);
+}
+
+function getPolylineChainLength(points, chain) {
+  return chain.slice(1).reduce(
+    (total, pointIndex, index) =>
+      total + getDistanceBetweenPoints(points[chain[index]], points[pointIndex]),
+    0
+  );
+}
+
+function getPolylineReferenceMeshes(jawType) {
+  const jawMesh = getJawMeshForPolyline(jawType);
+  return parentObject.children.filter(
+    (child) => child !== jawMesh && isPolylineFocusMesh(child)
+  );
+}
+
+function getSampledReferenceMeshVertices(jawType) {
+  const vertices = [];
+  getPolylineReferenceMeshes(jawType).forEach((mesh) => {
+    const positionAttribute = mesh.geometry?.attributes?.position;
+    if (!positionAttribute) return;
+
+    mesh.updateMatrixWorld(true);
+    const step = Math.max(
+      1,
+      Math.ceil(positionAttribute.count / POLYLINE_REFERENCE_VERTEX_SAMPLE_LIMIT)
+    );
+    for (let index = 0; index < positionAttribute.count; index += step) {
+      vertices.push(
+        new THREE.Vector3(
+          positionAttribute.getX(index),
+          positionAttribute.getY(index),
+          positionAttribute.getZ(index)
+        ).applyMatrix4(mesh.matrixWorld)
+      );
+    }
+  });
+  return vertices;
+}
+
+function getPolylineWorldPoint(jawType, point) {
+  const jawMesh = getJawMeshForPolyline(jawType);
+  const worldPoint = new THREE.Vector3(point.x, point.y, point.z);
+  if (!jawMesh) return worldPoint;
+
+  jawMesh.updateMatrixWorld(true);
+  return worldPoint.applyMatrix4(jawMesh.matrixWorld);
+}
+
+function getNearestDistanceToReferenceVertices(point, referenceVertices) {
+  let nearestDistanceSq = Infinity;
+  referenceVertices.forEach((vertex) => {
+    nearestDistanceSq = Math.min(nearestDistanceSq, point.distanceToSquared(vertex));
+  });
+  return Math.sqrt(nearestDistanceSq);
+}
+
+function isGingivalChainNearReferenceMesh(points, chain, jawType, referenceVertices) {
+  if (!referenceVertices.length) return true;
+
+  const step = Math.max(
+    1,
+    Math.floor(chain.length / POLYLINE_GINGIVAL_CHAIN_SAMPLE_COUNT)
+  );
+  let sampledCount = 0;
+  let closeCount = 0;
+
+  for (let index = 0; index < chain.length; index += step) {
+    const point = getPolylineWorldPoint(jawType, points[chain[index]]);
+    const distance = getNearestDistanceToReferenceVertices(point, referenceVertices);
+    sampledCount += 1;
+    if (distance <= POLYLINE_GINGIVAL_MESH_DISTANCE) {
+      closeCount += 1;
+    }
+  }
+
+  return sampledCount > 0 &&
+    closeCount / sampledCount >= POLYLINE_GINGIVAL_MESH_RELEVANT_RATIO;
+}
+
+function splitGingivalPointSegments(segments, jawType) {
+  const splitSegments = [];
+  const referenceVertices = getSampledReferenceMeshVertices(jawType);
+
+  segments.forEach((segment) => {
+    if (getSegmentComponent(segment) !== "Gingival Points") {
+      splitSegments.push(segment);
+      return;
+    }
+
+    const points = getSegmentPoints(segment);
+    const chains = getPolylineEdgeChains(
+      getPolylineRenderableEdges(points, "Gingival Points")
+    );
+    if (chains.length < 2) {
+      splitSegments.push(segment);
+      return;
+    }
+
+    const chainEntries = chains
+      .map((chain, chainIndex) => {
+        return {
+          chain,
+          chainIndex,
+          length: getPolylineChainLength(points, chain),
+        };
+      })
+      .filter(({ length }) => length > 0);
+    if (chainEntries.length < 2) {
+      splitSegments.push(segment);
+      return;
+    }
+
+    const chainGroups = new Map();
+    chainEntries.forEach(({ chain, chainIndex }) => {
+      const isRelevant = isGingivalChainNearReferenceMesh(
+        points,
+        chain,
+        jawType,
+        referenceVertices
+      );
+      chainGroups.set(
+        chainIndex,
+        isRelevant
+          ? "Gingival Points - Relevant"
+          : "Gingival Points - Omit Reference"
+      );
+    });
+
+    const groupedSegments = new Map([
+      ["Gingival Points - Relevant", { points: [], renderEdges: [] }],
+      ["Gingival Points - Omit Reference", { points: [], renderEdges: [] }],
+    ]);
+    const originalToGroupedIndex = new Map();
+
+    const addPointToGroup = (pointIndex, groupName) => {
+      const group = groupedSegments.get(groupName);
+      if (!originalToGroupedIndex.has(pointIndex)) {
+        originalToGroupedIndex.set(pointIndex, {
+          groupName,
+          index: group.points.length,
+        });
+        group.points.push(points[pointIndex]);
+      }
+      return originalToGroupedIndex.get(pointIndex);
+    };
+
+    chains.forEach((chain, chainIndex) => {
+      const groupName =
+        chainGroups.get(chainIndex) || "Gingival Points - Omit Reference";
+      for (let index = 0; index < chain.length; index += 1) {
+        addPointToGroup(chain[index], groupName);
+        if (index > 0) {
+          const previous = originalToGroupedIndex.get(chain[index - 1]);
+          const current = originalToGroupedIndex.get(chain[index]);
+          groupedSegments.get(groupName).renderEdges.push([
+            previous.index,
+            current.index,
+          ]);
+        }
+      }
+    });
+
+    points.forEach((point, pointIndex) => {
+      if (originalToGroupedIndex.has(pointIndex)) return;
+      groupedSegments.get("Gingival Points - Omit Reference").points.push(point);
+    });
+
+    groupedSegments.forEach(({ points: groupPoints, renderEdges }, component) => {
+      if (groupPoints.length >= 2) {
+        splitSegments.push({
+          ...segment,
+          component,
+          points: groupPoints,
+          renderEdges,
+        });
+      }
+    });
+  });
+
+  return splitSegments;
+}
+
+function classifyJawPolylineSegments(segments, jawType) {
+  return splitGingivalPointSegments(
+    splitMajorConnectorSegments(segments),
+    jawType
+  );
+}
+
 function classifyPolylineSegmentsByComponent(polylineByJaw) {
   return {
-    upper: splitMajorConnectorSegments(polylineByJaw.upper || []),
-    lower: splitMajorConnectorSegments(polylineByJaw.lower || []),
+    upper: classifyJawPolylineSegments(polylineByJaw.upper || [], "upper"),
+    lower: classifyJawPolylineSegments(polylineByJaw.lower || [], "lower"),
   };
 }
 
@@ -765,6 +1037,14 @@ function normalizePolylineResponse(rawResponse) {
 }
 
 function getPolylineSegmentColor(component, segmentIndex) {
+  if (/omit\s*reference/i.test(component || "")) {
+    return 0x9ca3af;
+  }
+
+  if (/gingival.*relevant/i.test(component || "")) {
+    return 0xff8a00;
+  }
+
   if (/major\s*connector/i.test(component || "")) {
     return 0x8b5cf6;
   }
@@ -775,6 +1055,18 @@ function getPolylineSegmentColor(component, segmentIndex) {
 
   if (/retainer/i.test(component || "")) {
     return 0xff4f81;
+  }
+
+  if (/tissue\s*stop/i.test(component || "")) {
+    return 0x2dd4bf;
+  }
+
+  if (/proximal\s*plate/i.test(component || "")) {
+    return 0x38bdf8;
+  }
+
+  if (/minor\s*connector/i.test(component || "")) {
+    return 0x22c55e;
   }
 
   if (/rest|^mesh$/i.test(component || "")) {
@@ -1042,7 +1334,7 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
   };
 
   if (points.length >= 2) {
-    const edges = getPolylineRenderableEdges(points, component);
+    const edges = getSegmentRenderableEdges(segment, points, component);
     const tubeMaterial = new THREE.MeshStandardMaterial({
       color: getPolylineSegmentColor(component, segmentIndex),
       transparent: false,
@@ -1229,7 +1521,10 @@ function updatePolylineComponentMenu() {
   const summary = getPolylineComponentSummary();
   summary.forEach(({ key }) => {
     if (!polylineComponentVisibility.has(key)) {
-      polylineComponentVisibility.set(key, true);
+      polylineComponentVisibility.set(
+        key,
+        isPolylineComponentVisibleByDefault(key)
+      );
     }
   });
 
