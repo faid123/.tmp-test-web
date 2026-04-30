@@ -130,13 +130,6 @@ const polylineHandleMaterial = new THREE.MeshStandardMaterial({
 });
 const POLYLINE_TUBE_RADIUS = 0.75;
 const POLYLINE_TUBE_RADIAL_SEGMENTS = 8;
-const POLYLINE_MIN_HANDLES = 6;
-const POLYLINE_DEFAULT_HANDLES = 14;
-const POLYLINE_MAX_HANDLES = 16;
-const POLYLINE_GINGIVAL_MIN_CONTROLS = 4;
-const POLYLINE_GINGIVAL_DEFAULT_CONTROLS = 8;
-const POLYLINE_GINGIVAL_MAX_CONTROLS = 10;
-const POLYLINE_CONSTRUCTED_GINGIVAL_SAMPLES = 64;
 const POLYLINE_SURFACE_MIN_OFFSET = -4;
 const POLYLINE_SURFACE_MAX_OFFSET = 8;
 const POLYLINE_NORMAL_DRAG_SCALE = 0.035;
@@ -337,7 +330,12 @@ function getPolylineComponentName(candidate, fallback = "polyline") {
 
 function normalizePolylineComponentName(component) {
   const text = String(component || "polyline");
-  return /reversal/i.test(text) ? "reversalLine - Major Connector" : text;
+  if (/retention\s*pins?/i.test(text)) return "Retainer Points";
+  if (/^mesh$/i.test(text)) return "mesh";
+  if (/major\s*connector/i.test(text)) return "Major Connector";
+  if (/reversal/i.test(text)) return "Reversal Line";
+  if (/gingival/i.test(text)) return "Gingival Points";
+  return text;
 }
 
 function getPolylinePointSignature(point) {
@@ -637,6 +635,41 @@ function getPolylineSegmentSignature(segment) {
   return `${component}:${points.length}:${pointSignature}`;
 }
 
+function getPolylineSegmentArcLength(segment) {
+  const points = getSegmentPoints(segment);
+  return points.slice(1).reduce(
+    (total, point, index) =>
+      total + getDistanceBetweenPoints(points[index], point),
+    0
+  );
+}
+
+function splitMajorConnectorSegments(segments) {
+  const reversalSegments = segments.filter(
+    (segment) => getSegmentComponent(segment) === "Reversal Line"
+  );
+  if (reversalSegments.length < 2) return segments;
+
+  const majorConnectorSegment = reversalSegments.reduce((longest, segment) =>
+    getPolylineSegmentArcLength(segment) > getPolylineSegmentArcLength(longest)
+      ? segment
+      : longest
+  );
+
+  return segments.map((segment) =>
+    segment === majorConnectorSegment
+      ? { ...segment, component: "Major Connector" }
+      : segment
+  );
+}
+
+function classifyPolylineSegmentsByComponent(polylineByJaw) {
+  return {
+    upper: splitMajorConnectorSegments(polylineByJaw.upper || []),
+    lower: splitMajorConnectorSegments(polylineByJaw.lower || []),
+  };
+}
+
 function inferPolylineArrayJawKey(entry, index, total, loadedJawKeys) {
   const explicitJawKey = normalizeJawKey(
     entry?.jaw_type ??
@@ -732,8 +765,20 @@ function normalizePolylineResponse(rawResponse) {
 }
 
 function getPolylineSegmentColor(component, segmentIndex) {
+  if (/major\s*connector/i.test(component || "")) {
+    return 0x8b5cf6;
+  }
+
   if (/reversal/i.test(component || "")) {
     return 0xff1f1f;
+  }
+
+  if (/retainer/i.test(component || "")) {
+    return 0xff4f81;
+  }
+
+  if (/rest|^mesh$/i.test(component || "")) {
+    return 0xffd400;
   }
 
   const text = String(component || "");
@@ -926,56 +971,6 @@ function createPolylineTubeGeometry(positionAttribute, startIndex, endIndex) {
   );
 }
 
-function getPolylineEdgeChains(edges) {
-  if (!edges.length) return [];
-
-  const chains = [];
-  let currentChain = [edges[0][0], edges[0][1]];
-
-  for (let index = 1; index < edges.length; index += 1) {
-    const [startIndex, endIndex] = edges[index];
-    const previousIndex = currentChain[currentChain.length - 1];
-    if (startIndex === previousIndex) {
-      currentChain.push(endIndex);
-    } else {
-      chains.push(currentChain);
-      currentChain = [startIndex, endIndex];
-    }
-  }
-
-  chains.push(currentChain);
-  return chains.filter((chain) => chain.length >= 2);
-}
-
-function getConstructedPolylinePoints(
-  positionAttribute,
-  controlIndices,
-  fallbackIndices = []
-) {
-  const selectedIndices = controlIndices.length >= 2
-    ? controlIndices
-    : fallbackIndices;
-  const controlPoints = selectedIndices
-    .map((index) => getPositionAttributePoint(positionAttribute, index))
-    .filter((point) => Number.isFinite(point.x + point.y + point.z));
-
-  if (controlPoints.length < 3) {
-    return controlPoints;
-  }
-
-  const curve = new THREE.CatmullRomCurve3(
-    controlPoints,
-    false,
-    "centripetal",
-    0.5
-  );
-  const sampleCount = Math.max(
-    controlPoints.length * 4,
-    POLYLINE_CONSTRUCTED_GINGIVAL_SAMPLES
-  );
-  return curve.getPoints(sampleCount);
-}
-
 function addPolylineTube(
   tubeGroup,
   geometry,
@@ -1000,63 +995,7 @@ function addPolylineTube(
   tubeGroup.add(tube);
 }
 
-function rebuildConstructedPolylineTubes(tubeGroup) {
-  const positionAttribute = tubeGroup.userData.sourcePositionAttribute;
-  const controlIndices = tubeGroup.userData.controlIndices || [];
-  const edges = tubeGroup.userData.edges || [];
-  const material = tubeGroup.userData.tubeMaterial;
-  if (!positionAttribute || !material) return;
-
-  while (tubeGroup.children.length) {
-    const child = tubeGroup.children[0];
-    tubeGroup.remove(child);
-    child.geometry?.dispose?.();
-    child.material?.dispose?.();
-  }
-
-  const edgeChains = getPolylineEdgeChains(edges);
-  const chains = edgeChains.length ? edgeChains : [controlIndices];
-  let tubeIndex = 0;
-
-  chains.forEach((chain) => {
-    const chainIndices = new Set(chain);
-    const chainControlIndices = controlIndices.filter((index) =>
-      chainIndices.has(index)
-    );
-    const fallbackIndices = chainControlIndices.length >= 2
-      ? chainControlIndices
-      : chain;
-    const constructedPoints = getConstructedPolylinePoints(
-      positionAttribute,
-      chainControlIndices,
-      fallbackIndices
-    );
-
-    for (let index = 1; index < constructedPoints.length; index += 1) {
-      addPolylineTube(
-        tubeGroup,
-        createPolylineTubeGeometryBetweenPoints(
-          constructedPoints[index - 1],
-          constructedPoints[index]
-        ),
-        material,
-        tubeGroup.userData.arch,
-        tubeGroup.userData.component,
-        tubeGroup.userData.componentKey,
-        tubeGroup.userData.segmentIndex,
-        tubeIndex
-      );
-      tubeIndex += 1;
-    }
-  });
-}
-
 function syncPolylineTubeGeometries(tubeGroup) {
-  if (tubeGroup.userData.constructedCurve) {
-    rebuildConstructedPolylineTubes(tubeGroup);
-    return;
-  }
-
   const positionAttribute = tubeGroup.userData.sourcePositionAttribute;
   const edges = tubeGroup.userData.edges || [];
   if (!positionAttribute) return;
@@ -1076,209 +1015,6 @@ function syncPolylineTubeGeometries(tubeGroup) {
   });
 }
 
-function getPolylineArcLengths(points) {
-  const arcLengths = [0];
-  for (let index = 1; index < points.length; index += 1) {
-    arcLengths[index] =
-      arcLengths[index - 1] + getDistanceBetweenPoints(points[index - 1], points[index]);
-  }
-  return arcLengths;
-}
-
-function getPolylineIndexAtArcLength(arcLengths, targetDistance) {
-  if (!arcLengths.length) return 0;
-  if (targetDistance <= 0) return 0;
-
-  const lastIndex = arcLengths.length - 1;
-  if (targetDistance >= arcLengths[lastIndex]) return lastIndex;
-
-  for (let index = 1; index < arcLengths.length; index += 1) {
-    if (arcLengths[index] >= targetDistance) {
-      const previousDistance = arcLengths[index - 1];
-      const nextDistance = arcLengths[index];
-      return targetDistance - previousDistance <= nextDistance - targetDistance
-        ? index - 1
-        : index;
-    }
-  }
-
-  return lastIndex;
-}
-
-function getPolylineHandleTarget(points, arcLengths, component) {
-  if (isGingivalPolylineComponent(component)) {
-    if (points.length <= POLYLINE_GINGIVAL_MAX_CONTROLS) {
-      return points.length;
-    }
-
-    const totalLength = arcLengths[arcLengths.length - 1] || 0;
-    if (totalLength > 0) {
-      if (totalLength <= 45) return Math.min(5, points.length);
-      if (totalLength <= 90) return Math.min(6, points.length);
-      if (totalLength <= 160) return Math.min(8, points.length);
-      return Math.min(POLYLINE_GINGIVAL_MAX_CONTROLS, points.length);
-    }
-
-    return Math.min(POLYLINE_GINGIVAL_DEFAULT_CONTROLS, points.length);
-  }
-
-  if (points.length <= POLYLINE_MAX_HANDLES) {
-    return points.length;
-  }
-
-  const totalLength = arcLengths[arcLengths.length - 1] || 0;
-  if (totalLength > 0) {
-    if (totalLength <= 45) return Math.min(8, points.length);
-    if (totalLength <= 90) return Math.min(10, points.length);
-    if (totalLength <= 160) return Math.min(12, points.length);
-    if (totalLength <= 260) return Math.min(POLYLINE_DEFAULT_HANDLES, points.length);
-    return Math.min(POLYLINE_MAX_HANDLES, points.length);
-  }
-
-  if (points.length <= 80) {
-    return Math.min(
-      10,
-      Math.max(POLYLINE_MIN_HANDLES, Math.round(points.length / 6))
-    );
-  }
-
-  if (points.length <= 180) {
-    return Math.min(12, Math.max(10, Math.round(points.length / 14)));
-  }
-
-  if (points.length <= 360) {
-    return Math.min(
-      POLYLINE_DEFAULT_HANDLES,
-      Math.max(12, Math.round(points.length / 24))
-    );
-  }
-
-  return POLYLINE_DEFAULT_HANDLES;
-}
-
-function getClosestSelectedArcDistance(index, selectedIndices, arcLengths) {
-  let closestDistance = Infinity;
-  selectedIndices.forEach((selectedIndex) => {
-    closestDistance = Math.min(
-      closestDistance,
-      Math.abs(arcLengths[selectedIndex] - arcLengths[index])
-    );
-  });
-  return closestDistance;
-}
-
-function addPolylineHandleIndex(
-  selectedIndices,
-  index,
-  arcLengths,
-  minSpacing,
-  force = false
-) {
-  if (!Number.isInteger(index) || selectedIndices.has(index)) return false;
-  if (
-    !force &&
-    selectedIndices.size > 1 &&
-    getClosestSelectedArcDistance(index, selectedIndices, arcLengths) < minSpacing
-  ) {
-    return false;
-  }
-
-  selectedIndices.add(index);
-  return true;
-}
-
-function getPolylineCurvatureCandidates(points, arcLengths) {
-  const candidates = [];
-  for (let index = 1; index < points.length - 1; index += 1) {
-    const turnCosine = getPolylineTurnCosine(
-      points[index - 1],
-      points[index],
-      points[index + 1]
-    );
-    const adjacentDistance =
-      getDistanceBetweenPoints(points[index - 1], points[index]) +
-      getDistanceBetweenPoints(points[index], points[index + 1]);
-    candidates.push({
-      index,
-      distance: arcLengths[index],
-      score: (1 - turnCosine) * Math.max(adjacentDistance, 1),
-    });
-  }
-
-  return candidates.sort((a, b) => b.score - a.score);
-}
-
-function fillPolylineHandleGaps(selectedIndices, arcLengths, targetCount) {
-  while (selectedIndices.size < targetCount) {
-    const sortedIndices = Array.from(selectedIndices).sort((a, b) => a - b);
-    let largestGap = 0;
-    let bestIndex = null;
-
-    for (let index = 1; index < sortedIndices.length; index += 1) {
-      const startIndex = sortedIndices[index - 1];
-      const endIndex = sortedIndices[index];
-      const gap = arcLengths[endIndex] - arcLengths[startIndex];
-      if (gap > largestGap && endIndex - startIndex > 1) {
-        largestGap = gap;
-        bestIndex = getPolylineIndexAtArcLength(
-          arcLengths,
-          arcLengths[startIndex] + gap / 2
-        );
-      }
-    }
-
-    if (bestIndex === null || selectedIndices.has(bestIndex)) break;
-    selectedIndices.add(bestIndex);
-  }
-}
-
-function getPolylineHandleIndices(points, component) {
-  const minimumHandleCount = isGingivalPolylineComponent(component)
-    ? POLYLINE_GINGIVAL_MIN_CONTROLS
-    : POLYLINE_MIN_HANDLES;
-  const maximumHandleCount = isGingivalPolylineComponent(component)
-    ? POLYLINE_GINGIVAL_MAX_CONTROLS
-    : POLYLINE_MAX_HANDLES;
-
-  if (points.length <= minimumHandleCount) {
-    return points.map((_, index) => index);
-  }
-
-  const arcLengths = getPolylineArcLengths(points);
-  const totalLength = arcLengths[arcLengths.length - 1] || 0;
-  const targetCount = Math.min(
-    maximumHandleCount,
-    getPolylineHandleTarget(points, arcLengths, component)
-  );
-  if (points.length <= targetCount) {
-    return points.map((_, index) => index);
-  }
-
-  const handleIndices = new Set([0, points.length - 1]);
-  const minSpacing = totalLength > 0 ? totalLength / (targetCount * 1.65) : 0;
-  const curvatureTargetCount = Math.max(1, Math.floor(targetCount * 0.3));
-  const curvatureCandidates = getPolylineCurvatureCandidates(points, arcLengths);
-
-  curvatureCandidates.some(({ index }) => {
-    addPolylineHandleIndex(handleIndices, index, arcLengths, minSpacing);
-    return handleIndices.size >= curvatureTargetCount + 2;
-  });
-
-  for (let slot = 1; slot < targetCount - 1; slot += 1) {
-    const index = getPolylineIndexAtArcLength(
-      arcLengths,
-      (totalLength * slot) / (targetCount - 1)
-    );
-    addPolylineHandleIndex(handleIndices, index, arcLengths, minSpacing);
-  }
-
-  fillPolylineHandleGaps(handleIndices, arcLengths, targetCount);
-
-  return Array.from(handleIndices)
-    .sort((a, b) => a - b)
-    .slice(0, targetCount);
-}
-
 function createPolylineObjects(jawType, segment, segmentIndex) {
   const points = getSegmentPoints(segment);
   const component = getSegmentComponent(segment);
@@ -1290,10 +1026,7 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
     positionArray[index * 3 + 2] = point.z;
   });
   const positionAttribute = new THREE.BufferAttribute(positionArray, 3);
-  const handleIndices = points.length >= 1
-    ? getPolylineHandleIndices(points, component)
-    : [];
-  const isConstructedGingivalCurve = isGingivalPolylineComponent(component);
+  const handleIndices = points.map((_, index) => index);
   const group = new THREE.Group();
   group.name = `${jawType}-${component}-polyline-segment-${segmentIndex}`;
   group.visible = isPolylineOverlayVisible &&
@@ -1306,8 +1039,6 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
     segmentIndex,
     originalPositionArray: positionArray.slice(),
     positionAttribute,
-    rawPointCount: points.length,
-    constructedCurve: isConstructedGingivalCurve,
   };
 
   if (points.length >= 2) {
@@ -1331,27 +1062,21 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
       componentKey,
       segmentIndex,
       edges,
-      constructedCurve: isConstructedGingivalCurve,
-      controlIndices: handleIndices,
       tubeMaterial,
       sourcePositionAttribute: positionAttribute,
     };
-    if (isConstructedGingivalCurve) {
-      rebuildConstructedPolylineTubes(tubeGroup);
-    } else {
-      edges.forEach(([startIndex, endIndex], edgeIndex) => {
-        addPolylineTube(
-          tubeGroup,
-          createPolylineTubeGeometry(positionAttribute, startIndex, endIndex),
-          tubeMaterial,
-          jawType,
-          component,
-          componentKey,
-          segmentIndex,
-          edgeIndex
-        );
-      });
-    }
+    edges.forEach(([startIndex, endIndex], edgeIndex) => {
+      addPolylineTube(
+        tubeGroup,
+        createPolylineTubeGeometry(positionAttribute, startIndex, endIndex),
+        tubeMaterial,
+        jawType,
+        component,
+        componentKey,
+        segmentIndex,
+        edgeIndex
+      );
+    });
     group.add(tubeGroup);
   }
 
@@ -1368,16 +1093,13 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
       positionAttribute,
     };
 
-    group.userData.handleCount = handleIndices.length;
-    group.userData.controlCount = handleIndices.length;
-    handles.userData.handleCount = handleIndices.length;
-    handles.userData.pointCount = points.length;
-
     handleIndices.forEach((index) => {
       const point = points[index];
+      const handleMaterial = polylineHandleMaterial.clone();
+      handleMaterial.color.setHex(getPolylineSegmentColor(component, segmentIndex));
       const handle = new THREE.Mesh(
         polylineHandleGeometry,
-        polylineHandleMaterial.clone()
+        handleMaterial
       );
       handle.name = `${jawType}-${component}-polyline-segment-${segmentIndex}-point-${index}`;
       handle.position.set(point.x, point.y, point.z);
@@ -1490,14 +1212,9 @@ function getPolylineComponentSummary() {
       color: getPolylineSegmentColor(group.userData.component, 0),
       segments: 0,
       points: 0,
-      handles: 0,
-      constructed: false,
     };
     current.segments += 1;
     current.points += group.userData.positionAttribute?.count || 0;
-    current.handles +=
-      group.userData.handleCount || group.userData.positionAttribute?.count || 0;
-    current.constructed = current.constructed || Boolean(group.userData.constructedCurve);
     summary.set(key, current);
   });
 
@@ -1529,7 +1246,7 @@ function updatePolylineComponentMenu() {
     return;
   }
 
-  summary.forEach(({ key, color, segments, points, handles, constructed }) => {
+  summary.forEach(({ key, color, segments, points }) => {
     const row = document.createElement("label");
     row.style.display = "grid";
     row.style.gridTemplateColumns = "18px 12px 1fr";
@@ -1557,9 +1274,7 @@ function updatePolylineComponentMenu() {
     swatch.style.display = "inline-block";
 
     const text = document.createElement("span");
-    text.textContent = constructed && handles < points
-      ? `${formatPolylineComponentLabel(key)} (${segments} seg, ${handles} controls)`
-      : `${formatPolylineComponentLabel(key)} (${segments} seg, ${points} pts)`;
+    text.textContent = `${formatPolylineComponentLabel(key)} (${segments} seg, ${points} pts)`;
     text.style.fontSize = "12px";
     text.style.lineHeight = "1.25";
 
@@ -1690,7 +1405,9 @@ async function fetchAndRenderPolylines(caseIntID) {
       false,
       "Polyline"
     );
-    const normalized = normalizePolylineResponse(response);
+    const normalized = classifyPolylineSegmentsByComponent(
+      normalizePolylineResponse(response)
+    );
     const upperPointCount = countPolylinePoints(normalized.upper);
     const lowerPointCount = countPolylinePoints(normalized.lower);
     const hasAnyPoints = upperPointCount || lowerPointCount;
