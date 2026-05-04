@@ -13,10 +13,8 @@ import {
 import { EMPTY_JAW_CALIBRATION, JAW_BACKGROUND_IMAGES, JAW_BACKGROUND_OFFSET_BY_JAW, JAW_BACKGROUND_SCALE_BY_JAW, JAW_CALIBRATION, TOOTH_ASSET_BASE, TOOTH_ORDER } from "./constants.js";
 import { state } from "./annotationState.js";
 import { svgEl, setMessage } from "./annotationDom.js";
-import { registerRender } from "./annotationRenderBridge.js";
-import { registerMeshAnnotationEnv, meshAnnotationEnv } from "./annotationMeshEnv.js";
+import { registerRender, registerMeshAnnotationEnv, meshAnnotationEnv } from "./annotationRenderBridge.js";
 import { renderComponentCatalog } from "./annotationCatalog.js";
-import { ensureMajorCatalogPickForTooth } from "./annotationMajorPick.js";
 import { placeSelectedComponentOnTooth } from "./annotationPlacement.js";
 import { showPresentToothRadialQuickPick } from "./annotationRadial.js";
 import { openRemoveComponentPicker } from "./annotationRemove.js";
@@ -157,13 +155,6 @@ export function renderJaw(jaw) {
       }
       const hadSuppressedHints = state.suppressArchPlacementSuggestions;
       state.suppressArchPlacementSuggestions = false;
-      const beforeSel = state.selectedComponentId;
-      if (state.selectedTab === "major") {
-        ensureMajorCatalogPickForTooth(toothId);
-        if (state.selectedComponentId !== beforeSel) {
-          renderComponentCatalog();
-        }
-      }
       const catalogPick = COMPONENT_BY_ID.get(state.selectedComponentId || "");
       if (catalogPick && isPlateComponentId(catalogPick.id)) {
         if (hadSuppressedHints) renderJaw(jaw);

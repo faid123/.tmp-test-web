@@ -7,6 +7,7 @@ import {
   isClaspCircComponent,
   isClaspComponent,
   isMajorConnectorComponent,
+  isMeshComponent,
   isPalatalBarMajorComponent,
   isPalatalHoleMajorComponent,
   isPlateComponentId,
@@ -14,7 +15,6 @@ import {
   PALATAL_BAR_CONNECTOR_TOOTH_IDS,
   PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS,
 } from "./components.js";
-import { assessPlacementCriteria } from "./criteria.js";
 import { TOOTH_ORDER } from "./constants.js";
 import { state } from "./annotationState.js";
 import { setMessage } from "./annotationDom.js";
@@ -27,8 +27,7 @@ import {
   removePlacementsByComponentIds,
   syncToothComponentsFromPlacements,
 } from "./annotationTeethModel.js";
-import { toothSupportsMajorConnectorOverlay } from "./annotationMajorOnTooth.js";
-import { ensureMajorCatalogPickForTooth } from "./annotationMajorPick.js";
+import { ensureMajorCatalogPickForTooth } from "./annotationCatalog.js";
 
 export function applyRemovalSideEffectsForTooth(tooth, removedEntry) {
   if (!removedEntry) return;
@@ -245,4 +244,103 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
       false
     );
   }
+}
+
+export function resolveMajorConnectorAnchorComponentId(tooth) {
+  ensureToothPlacementState(tooth);
+  for (const { componentId } of tooth.componentPlacements) {
+    const def = COMPONENT_BY_ID.get(componentId);
+    if (!def) continue;
+    if (tooth.isPresent && isPlateComponentId(componentId)) return componentId;
+    if (!tooth.isPresent && isMeshComponent(def)) return componentId;
+  }
+  return null;
+}
+
+export function toothSupportsMajorConnectorOverlay(tooth, toothId, majorComponentId) {
+  if (resolveMajorConnectorAnchorComponentId(tooth) !== null) return true;
+  if (isPalatalHoleMajorComponent(majorComponentId) && TOOTH_ORDER.upper.includes(String(toothId))) return true;
+  if (isPalatalBarMajorComponent(majorComponentId) && PALATAL_BAR_CONNECTOR_TOOTH_IDS.has(String(toothId))) return true;
+  if (
+    majorComponentId === "major-lower-lingual-bar" &&
+    TOOTH_ORDER.lower.includes(String(toothId)) &&
+    getMajorConnectorAssetReference(toothId, "lower")
+  ) return true;
+  return false;
+}
+
+function _getToothId(tooth) {
+  return tooth?.tooth_id ?? tooth?.fdiId ?? "unknown";
+}
+
+function _isToothPresent(tooth) {
+  if (typeof tooth?.isPresent === "boolean") return tooth.isPresent;
+  if (typeof tooth?.presence === "string") return tooth.presence === "present";
+  return true;
+}
+
+function _isMeshComponentId(componentId, componentById) {
+  return isMeshComponent(componentById?.get?.(componentId) ?? componentId);
+}
+
+function _failure(reason, actionUponFailure, conflictingComponents = []) {
+  return { pass: false, failureData: { reason, actionUponFailure, conflictingComponents } };
+}
+
+export function assessPlacementCriteria(tooth, selectedComponent, componentById) {
+  const toothId = _getToothId(tooth);
+  const present = _isToothPresent(tooth);
+  const existingComponents = Array.isArray(tooth?.components) ? tooth.components : [];
+  const isMajor = isMajorConnectorComponent(selectedComponent);
+
+  if (!isMajor) {
+    if (selectedComponent.requiresPresence && !present)
+      return _failure(`Tooth ${toothId} is missing.`, ACTION_UPON_FAILURE.PREVENT_PLACEMENT);
+    if (selectedComponent.requiresMissing && present)
+      return _failure(`Tooth ${toothId} is present.`, ACTION_UPON_FAILURE.PREVENT_PLACEMENT);
+  }
+
+  const conflictsWith = Array.isArray(selectedComponent.conflictsWith) ? selectedComponent.conflictsWith : [];
+  const conflicts = existingComponents.filter((id) => conflictsWith.includes(id));
+  if (conflicts.length > 0)
+    return _failure(`Conflicting components on tooth ${toothId}: ${conflicts.join(", ")}`, selectedComponent.actionUponFailure, conflicts);
+
+  const selectedIsBar = isBarComponent(selectedComponent);
+  const selectedIsClasp = isClaspComponent(selectedComponent);
+  if (selectedIsBar || selectedIsClasp) {
+    const barClaspConflicts = existingComponents.filter((id) =>
+      selectedIsBar ? isClaspComponent(id) : isBarComponent(id)
+    );
+    if (barClaspConflicts.length > 0)
+      return _failure(
+        `Tooth ${toothId} already has ${selectedIsBar ? "a clasp" : "a bar"}; replacing with ${selectedComponent.id}.`,
+        ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
+        barClaspConflicts
+      );
+  }
+
+  if (isMajor) {
+    const existingMajors = existingComponents.filter((id) => isMajorConnectorComponent(id));
+    if (existingMajors.length > 0 && !existingMajors.includes(selectedComponent.id))
+      return _failure(
+        `Tooth ${toothId} already has a major connector; replacing with ${selectedComponent.id}.`,
+        ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
+        existingMajors
+      );
+    return { pass: true, failureData: null };
+  }
+
+  if (isMeshComponent(selectedComponent)) {
+    const overlappingMeshes = existingComponents.filter(
+      (id) => id !== selectedComponent.id && _isMeshComponentId(id, componentById)
+    );
+    if (overlappingMeshes.length > 0)
+      return _failure(
+        `Tooth ${toothId} already has a mesh; replacing with ${selectedComponent.id}.`,
+        ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
+        overlappingMeshes
+      );
+  }
+
+  return { pass: true, failureData: null };
 }

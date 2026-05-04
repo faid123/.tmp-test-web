@@ -8,7 +8,7 @@ import {
   removePlacementAtIndex,
 } from "./annotationTeethModel.js";
 import { applyRemovalSideEffectsForTooth } from "./annotationPlacement.js";
-import { closePresentToothRadialQuickPick } from "./annotationRadial.js";
+import { closePresentToothRadialQuickPick } from "./annotationCatalog.js";
 
 function formatPlacementSurfaceForRemoveUi(surface) {
   const s = normalizeSurface(surface);

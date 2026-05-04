@@ -17,7 +17,7 @@ const CLASP_CIRC_SURFACE_ORDER = [
 
 const CLASP_ASSET_BASE = "../../../assets/RPD_Component";
 
-const CLASP_CIRC_SUGGESTION_RADIUS = 5;
+const CLASP_CIRC_SUGGESTION_RADIUS = 6;
 
 /**
  * Per-template (Q1: 11–18, Q4: 41–48) clasp anchor quad in tooth-local space.

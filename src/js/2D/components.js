@@ -1,3 +1,5 @@
+import { TOOTH_ORDER, isAutoMeshPlacementExcludedToothId, isAutoMeshPlatePlacementExcludedToothId } from "./constants.js";
+
 export const COMPONENT_TABS = [
   { id: "mesh", label: "MESH" },
   { id: "assembly", label: "ASSEMBLY" },

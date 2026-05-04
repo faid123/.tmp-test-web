@@ -68,11 +68,10 @@ import {
   TOOTH_ORDER,
   TOOTH_SCALE_OVERRIDE,
 } from "./constants.js";
-import { REST_CALIBRATION_COMPONENT_ID, state } from "./annotationState.js";
+import { REST_CALIBRATION_COMPONENT_ID, state, ui } from "./annotationState.js";
 import { positionAnteriorRestPanel, setMessage, svgEl } from "./annotationDom.js";
-import { renderJaw } from "./annotationRenderBridge.js";
-import { resolveMajorConnectorAnchorComponentId } from "./annotationMajorOnTooth.js";
-import { placeSelectedComponentOnTooth } from "./annotationPlacement.js";
+import { renderJaw, renderJaws } from "./annotationRenderBridge.js";
+import { placeSelectedComponentOnTooth, resolveMajorConnectorAnchorComponentId } from "./annotationPlacement.js";
 import {
   ensureToothPlacementState,
   getToothAssetSpec,
@@ -81,6 +80,7 @@ import {
   normalizeStatus,
   normalizeSurface,
   removePlacement,
+  removePlacementAtIndex,
 } from "./annotationTeethModel.js";
 
 function applyToothStatusClass(group, tooth) {

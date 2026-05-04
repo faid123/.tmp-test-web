@@ -4,10 +4,10 @@
  */
 import "./annotationRender.js";
 
-import { ui } from "./annotationState.js";
+import { lol } from "../../crypt.js";
+import { ui, state } from "./annotationState.js";
 import { setMessage } from "./annotationDom.js";
 import { renderJaws } from "./annotationRenderBridge.js";
-import { initializeCaseIds } from "./annotationCase.js";
 import { initializeTeethState } from "./annotationTeethModel.js";
 import {
   bindActionButtons,
@@ -19,7 +19,24 @@ import {
   updateEditModeUI,
 } from "./annotationLocks.js";
 import { initComponentCatalog } from "./annotationCatalog.js";
-import { loadPreviewImage } from "./annotationPersistence.js";
+import { loadPreviewImage } from "./annotationLocks.js";
+
+function initializeCaseIds() {
+  const params = new URLSearchParams(window.location.search);
+  state.encryptedCaseId = params.get("id") || "";
+  let parsedCaseId = null;
+  if (state.encryptedCaseId) {
+    try {
+      const decrypted = Number(lol(state.encryptedCaseId));
+      if (Number.isFinite(decrypted)) parsedCaseId = decrypted;
+    } catch {
+      parsedCaseId = null;
+    }
+  }
+  state.caseIntID = parsedCaseId;
+  const label = document.getElementById("caseLabel");
+  if (label) label.textContent = `Case: ${state.caseIntID ?? "Unknown"}`;
+}
 
 function start() {
   if (ui.hasInitialized) return;
