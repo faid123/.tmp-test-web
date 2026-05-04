@@ -41,15 +41,33 @@
         <div class="jaw-combined-canvas">
           <svg id="upperArchSvg" class="arch-svg"></svg>
           <div class="jaw-lock-strip">
-            <button
-              type="button"
-              id="jawLockToggleBtn"
-              class="lock-btn jaw-lock-between-btn"
-              aria-label="Switch to design mode"
-            >
-              <img class="lock-icon" src="../../assets/unlock.png" alt="" />
-              <span class="lock-text jaw-lock-between-text">Selected mode</span>
-            </button>
+            <div class="jaw-lock-strip-cluster">
+              <button
+                type="button"
+                id="jawLockToggleBtn"
+                class="lock-btn jaw-lock-between-btn"
+                aria-label="Switch to design mode"
+              >
+                <span class="lock-text jaw-lock-between-text">Selected mode</span>
+              </button>
+              <button
+                type="button"
+                id="removeComponentModeBtn"
+                class="jaw-lock-eraser-btn"
+                aria-label="Remove component mode"
+                aria-pressed="false"
+                title="Remove components: click a tooth, then pick what to remove"
+                disabled
+              >
+                <img
+                  class="jaw-lock-eraser-icon"
+                  src="../../assets/eraser.svg"
+                  alt=""
+                  width="22"
+                  height="22"
+                />
+              </button>
+            </div>
           </div>
           <svg id="lowerArchSvg" class="arch-svg"></svg>
         </div>
@@ -94,6 +112,25 @@
       </aside>
     </section>
   </main>
+
+  <div id="removeComponentDialog" class="remove-component-dialog is-hidden" aria-hidden="true">
+    <div class="remove-component-dialog-backdrop" aria-hidden="true"></div>
+    <div
+      class="remove-component-dialog-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="removeComponentDialogTitle"
+    >
+      <h2 id="removeComponentDialogTitle" class="remove-component-dialog-title">Remove component</h2>
+      <p id="removeComponentDialogHint" class="remove-component-dialog-hint is-hidden"></p>
+      <div id="removeComponentList" class="remove-component-list"></div>
+      <div class="remove-component-dialog-footer">
+        <button type="button" id="removeComponentDialogCancel" class="remove-component-cancel-btn">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
 
   <div id="anteriorRestSurfaceDialog" class="anterior-rest-dialog is-hidden" aria-hidden="true">
     <div class="anterior-rest-dialog-backdrop" aria-hidden="true"></div>

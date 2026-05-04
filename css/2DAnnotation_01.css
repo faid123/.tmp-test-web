@@ -151,21 +151,12 @@ body {
   background: rgba(196, 79, 112, 0.08);
 }
 
-.lock-btn .lock-icon {
-  width: 12px;
-  height: 12px;
-}
-
 .lock-btn .lock-text {
   display: none;
 }
 
 .lock-btn.is-locked {
   background: transparent;
-}
-
-.lock-btn.is-locked .lock-icon {
-  filter: none;
 }
 
 .jaw-combined-canvas {
@@ -189,17 +180,61 @@ body {
   padding: 4px 0 8px;
 }
 
+.jaw-lock-strip-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jaw-lock-eraser-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--rose-600);
+  cursor: pointer;
+  appearance: none;
+  box-shadow: none;
+}
+
+.jaw-lock-eraser-btn:hover:not(:disabled) {
+  border-color: var(--rose-500);
+  background: rgba(196, 79, 112, 0.08);
+  color: var(--rose-700);
+}
+
+.jaw-lock-eraser-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.jaw-lock-eraser-btn.is-active {
+  border-color: var(--rose-600);
+  background: rgba(196, 79, 112, 0.16);
+  color: var(--rose-800);
+}
+
+.jaw-lock-eraser-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
 .jaw-lock-between-btn {
   width: auto;
   height: auto;
   min-height: 28px;
   padding: 4px 12px;
-  gap: 6px;
-}
-
-.jaw-lock-between-btn .lock-icon {
-  width: 13px;
-  height: 13px;
 }
 
 .jaw-lock-between-btn .lock-text {
@@ -520,6 +555,8 @@ body {
 
 .palatal-hole-arch-image {
   filter: grayscale(1) brightness(0.72) contrast(0.95);
+  /* SVG <image> defaults can still capture hits even when parent <g> has none */
+  pointer-events: none;
 }
 
 /* Palatal bar arch overlay (P_Bar.svg): neutral gray, non-interactive */
@@ -529,6 +566,7 @@ body {
 
 .palatal-bar-arch-image {
   filter: grayscale(1) brightness(0.72) contrast(0.95);
+  pointer-events: none;
 }
 
 .plate-suggestion-visual .component-visual,
@@ -538,7 +576,7 @@ body {
 }
 
 .plate-suggestion-visual .plate-image {
-  opacity: 0.18;
+  opacity: 0;
 }
 
 .plate-suggestion-hit-target {
@@ -681,6 +719,11 @@ body {
   pointer-events: none;
 }
 
+/* Plates are painted in a second SVG pass so they sit above adjacent teeth' major connectors. */
+.tooth-plate-overlay {
+  pointer-events: none;
+}
+
 .jaw-plate-frame {
   pointer-events: none;
   mix-blend-mode: normal;
@@ -691,6 +734,122 @@ body {
 }
 
 .is-hidden { display: none !important; }
+
+/* Remove-component picker (design mode eraser) */
+.remove-component-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 4050;
+  pointer-events: none;
+}
+
+.remove-component-dialog:not(.is-hidden) {
+  pointer-events: auto;
+}
+
+.remove-component-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.remove-component-dialog-panel {
+  position: fixed;
+  z-index: 1;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 156px;
+  max-width: min(220px, calc(100vw - 16px));
+  max-height: min(50vh, 240px);
+  display: flex;
+  flex-direction: column;
+  background: transparent;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(197, 205, 214, 0.75);
+  border-radius: 10px;
+  padding: 6px 8px 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  pointer-events: auto;
+}
+
+.remove-component-dialog-title {
+  margin: 0 0 2px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #374151;
+  text-align: center;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.remove-component-dialog-hint {
+  margin: 0 0 4px;
+  font-size: 0.58rem;
+  color: #6b7280;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.remove-component-dialog-hint.is-hidden {
+  display: none !important;
+}
+
+.remove-component-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: 4px;
+}
+
+.remove-component-item-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 4px 6px;
+  font-size: 0.58rem;
+  font-weight: 600;
+  color: #1f2937;
+  background: rgba(249, 250, 251, 0.85);
+  border: 1px solid rgba(209, 213, 219, 0.9);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.2;
+}
+
+.remove-component-item-btn:hover {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: #c45a6f;
+  color: #9d174d;
+}
+
+.remove-component-dialog-footer {
+  display: flex;
+  justify-content: center;
+  padding-top: 0;
+}
+
+.remove-component-cancel-btn {
+  padding: 3px 10px;
+  font-size: 0.55rem;
+  font-weight: 600;
+  color: #4b5563;
+  background: rgba(243, 244, 246, 0.9);
+  border: 1px solid rgba(209, 213, 219, 0.9);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.remove-component-cancel-btn:hover {
+  background: rgba(229, 231, 235, 0.95);
+}
 
 .anterior-rest-dialog {
   position: fixed;
@@ -869,4 +1028,81 @@ body {
   .jaw-lock-strip {
     min-width: var(--arch-jaw-min-width, 340px);
   }
+}
+
+/* Present-tooth radial quick-pick (design mode): compact white disk, black labels */
+.tooth-radial-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(45, 28, 34, 0.28);
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 0;
+}
+
+.tooth-radial-panel {
+  position: fixed;
+  width: 160px;
+  height: 160px;
+  pointer-events: auto;
+  background: transparent;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 4px 18px rgba(45, 28, 34, 0.12);
+}
+
+.tooth-radial-svg {
+  display: block;
+  width: 160px;
+  height: 160px;
+  user-select: none;
+}
+
+.tooth-radial-sector {
+  cursor: pointer;
+  stroke: rgba(0, 0, 0, 0.1);
+  stroke-width: 1.15;
+  transition: filter 0.12s ease;
+}
+
+.tooth-radial-sector path {
+  fill: #ffffff;
+}
+
+.tooth-radial-sector:hover path,
+.tooth-radial-sector:focus path {
+  fill: #f4f4f4;
+}
+
+.tooth-radial-sector:focus {
+  outline: none;
+}
+
+.tooth-radial-sector:focus-visible path {
+  fill: #ececec;
+  stroke: var(--rose-500);
+  stroke-width: 1.75;
+}
+
+.tooth-radial-label {
+  pointer-events: none;
+  font-size: 10px;
+  font-weight: 600;
+  fill: #000000;
+  letter-spacing: 0.03em;
+}
+
+.tooth-radial-center-box {
+  fill: #ffffff;
+  stroke: rgba(0, 0, 0, 0.14);
+  stroke-width: 1.15;
+}
+
+.tooth-radial-tooth-id {
+  font-size: 12px;
+  font-weight: 700;
+  fill: #000000;
+  pointer-events: none;
 }

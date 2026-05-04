@@ -149,7 +149,7 @@ const MESH_POSITION_OFFSET_OVERRIDE_SEED_BY_TOOTH = Object.freeze({
   "22": { "mesh-hole": { x: 1.5, y: 5 } },
   "23": { "mesh-hole": { x: -4.3, y: 0.5 } },
   "24": { "mesh-hole": { x: -4.0, y: 0.2 } },
-  "25": { "mesh-hole": { x: -0.5, y: -1.2 } },
+  "25": { "mesh-hole": { x: -1.5, y: -1.2 } },
   "26": { "mesh-hole": { x: 2, y: 1 } },
   "27": { "mesh-hole": { x: 0, y: 0 } },
   "28": { "mesh-hole": { x: -1.5, y: 2 } },
@@ -159,7 +159,7 @@ const MESH_POSITION_OFFSET_OVERRIDE_SEED_BY_TOOTH = Object.freeze({
   "33": { "mesh-hole": { x: -12.6, y: -14.5 } },
   "34": { "mesh-hole": { x: -22.5, y: -8.5 } },
   "35": { "mesh-hole": { x: -19, y: -5.7 } },
-  "36": { "mesh-hole": { x: -17.5, y: -6.5 } },
+  "36": { "mesh-hole": { x: -18.5, y: -6.5 } },
   "37": { "mesh-hole": { x: -17, y: -7 } },
   "38": { "mesh-hole": { x: -20.5, y: -5.8 } },
 

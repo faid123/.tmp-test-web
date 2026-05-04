@@ -381,6 +381,17 @@ const CLASP_CIRC_POSITION_OFFSET_BY_TOOTH = buildClaspCircPositionOffsetByTooth(
 
 const CLASP_CIRC_RENDER_SCALE = 0.48;
 
+const CLASP_COMPONENT_IDS = new Set(["clasp-circ", "clasp-bar", "clasp-ring"]);
+
+/** True for catalog clasp types (circumferential, bar, ring). */
+export function isClaspComponent(componentOrId) {
+  const id =
+    typeof componentOrId === "object" && componentOrId !== null
+      ? String(componentOrId.id || "")
+      : String(componentOrId || "");
+  return CLASP_COMPONENT_IDS.has(id);
+}
+
 export function isClaspCircComponent(componentOrId) {
   if (typeof componentOrId === "object" && componentOrId !== null) {
     return String(componentOrId.id || "") === "clasp-circ";

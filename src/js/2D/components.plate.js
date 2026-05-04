@@ -141,19 +141,31 @@ export function getDefaultPlateIdForDesignMode(componentById) {
 }
 
 /**
- * When both arches are locked, add `plateComponentId` to every **present** tooth that has no plate yet.
- * Mirrors {@link ensureMeshPlacementsOnMissingTeeth} for the plate tab.
+ * Add default plate on every **present** tooth in `jawKeys` that has no plate yet (`upper` / `lower`).
+ * Pass both arches via `Object.keys(TOOTH_ORDER)` for full-arch behavior.
  */
-export function ensurePlatePlacementsOnPresentTeeth(teeth, plateComponentId, componentById) {
+export function ensurePlatePlacementsOnPresentTeethInJaws(
+  teeth,
+  plateComponentId,
+  componentById,
+  jawKeys
+) {
   if (
     !plateComponentId ||
     !componentById.has(plateComponentId) ||
-    !isPlateComponentId(plateComponentId)
+    !isPlateComponentId(plateComponentId) ||
+    !teeth ||
+    typeof teeth !== "object" ||
+    !Array.isArray(jawKeys)
   ) {
     return;
   }
-  for (const jaw of Object.keys(TOOTH_ORDER)) {
-    for (const toothId of TOOTH_ORDER[jaw]) {
+  for (const jaw of jawKeys) {
+    const ids = TOOTH_ORDER[jaw];
+    if (!Array.isArray(ids)) {
+      continue;
+    }
+    for (const toothId of ids) {
       if (isAutoMeshPlatePlacementExcludedToothId(toothId)) {
         continue;
       }
@@ -172,4 +184,12 @@ export function ensurePlatePlacementsOnPresentTeeth(teeth, plateComponentId, com
       syncToothComponentsFromCatalog(tooth, componentById);
     }
   }
+}
+
+/**
+ * When both arches are locked, add `plateComponentId` to every **present** tooth that has no plate yet.
+ * Mirrors {@link ensureMeshPlacementsOnMissingTeeth} for the plate tab.
+ */
+export function ensurePlatePlacementsOnPresentTeeth(teeth, plateComponentId, componentById) {
+  ensurePlatePlacementsOnPresentTeethInJaws(teeth, plateComponentId, componentById, Object.keys(TOOTH_ORDER));
 }

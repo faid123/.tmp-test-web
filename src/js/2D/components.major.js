@@ -6,7 +6,8 @@ const MAJOR_TAB = "major";
 const DEFAULT_MAJOR_CONNECTOR_ID_FOR_LOCK_DESIGN_MODE = "major-upper-palatal-strap";
 
 /**
- * Palatal Hole uses shared arch artwork ({@link PALATAL_HOLE_ARCH_OVERLAY_LAYERS}), not per-tooth `11.svg`-style majors.
+ * Palatal Hole uses shared arch artwork ({@link PALATAL_HOLE_ARCH_OVERLAY_LAYERS}) and the same per-tooth
+ * `MajorConnector/{11–18}*.svg` segments as other upper majors (e.g. Horseshoe) when tagged on a tooth.
  */
 export const PALATAL_HOLE_MAJOR_COMPONENT_ID = "major-upper-palatal-hole";
 
@@ -14,23 +15,22 @@ export const PALATAL_HOLE_MAJOR_COMPONENT_ID = "major-upper-palatal-hole";
 export const PALATAL_BAR_MAJOR_COMPONENT_ID = "major-upper-palatal-bar";
 
 /**
- * Per-tooth palatal-bar major SVGs: posterior segments **without** distal tails (18 / 28) or anteriors
- * (11–13, 21–23). Matches the regions hidden when palatal bar is selected in the 2D view.
- * Derived from {@link TOOTH_ORDER}.upper: indices 1–4 (17→14) and 11–14 (24→27).
+ * Per-tooth palatal-bar segments: both posterior runs including distal second molars, excluding anteriors
+ * (11–13, 21–23). Derived from {@link TOOTH_ORDER}.upper: indices 0–4 (18→14) and 11–15 (24→28).
  */
 export const PALATAL_BAR_CONNECTOR_TOOTH_IDS = Object.freeze(
   new Set([
-    ...TOOTH_ORDER.upper.slice(1, 5),
-    ...TOOTH_ORDER.upper.slice(11, 15),
+    ...TOOTH_ORDER.upper.slice(0, 5),
+    ...TOOTH_ORDER.upper.slice(11, 16),
   ])
 );
 
 /**
- * When palatal bar is shown, hide other major types (e.g. auto strap) on these teeth so anterior
- * and distal “cross” connector art does not appear.
+ * Upper teeth where choosing Palatal Bar **clears** any major connector from placements (anteriors only).
+ * Posterior bar span uses {@link PALATAL_BAR_CONNECTOR_TOOTH_IDS}.
  */
 export const PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS = Object.freeze(
-  new Set(["18", "28", "13", "12", "11", "21", "22", "23"])
+  new Set(["13", "12", "11", "21", "22", "23"])
 );
 
 /**
@@ -45,11 +45,16 @@ export const PALATAL_BAR_ARCH_OVERLAY = Object.freeze({
 });
 
 /**
- * Template bases that ship a matching `*_end.svg` beside `{base}.svg` under MajorConnector/.
- * (There is no `18_end.svg`; terminal 18/28 sites keep `18.svg`.)
+ * Templates with shipped `{base}_mesial.svg` / `{base}_distal.svg` under MajorConnector/ (upper 11–17).
+ * `18` only has `18.svg` (no mesial/distal pair); open ends on 18 use the base body art.
  */
-const MAJOR_CONNECTOR_END_TEMPLATE_BASES = Object.freeze(
+const MAJOR_CONNECTOR_MESIAL_DISTAL_TEMPLATES = Object.freeze(
   new Set(["11", "12", "13", "14", "15", "16", "17"])
+);
+
+/** Lower quadrant 4 (41–47): `48` uses `48.svg` only. */
+const MAJOR_CONNECTOR_LOWER_Q4_MESIAL_DISTAL_TEMPLATES = Object.freeze(
+  new Set(["41", "42", "43", "44", "45", "46", "47"])
 );
 
 /**
@@ -60,20 +65,17 @@ export function toothHasMajorConnectorPlacement(tooth) {
   if (!tooth || !Array.isArray(tooth.componentPlacements)) {
     return false;
   }
-  return tooth.componentPlacements.some(
-    (e) =>
-      isMajorConnectorComponent(e.componentId) && !isPalatalHoleMajorComponent(e.componentId)
-  );
+  return tooth.componentPlacements.some((e) => isMajorConnectorComponent(e.componentId));
 }
 
 /**
- * Along {@link TOOTH_ORDER}.upper (18→…→11→21→…→28), whether the mesial/distal neighbor carries a major connector.
+ * Along arch order, whether the previous/next neighbor tooth carries a major connector.
  * @param {string} toothId
  * @param {Record<string, unknown> | null | undefined} teeth
+ * @param {readonly string[]} order {@link TOOTH_ORDER}.upper or .lower
  */
-export function getMajorConnectorNeighborMajorFlags(toothId, teeth) {
+function getMajorConnectorNeighborMajorFlagsInOrder(toothId, teeth, order) {
   const id = String(toothId);
-  const order = TOOTH_ORDER.upper;
   const idx = order.indexOf(id);
   if (idx < 0 || !teeth || typeof teeth !== "object") {
     return { prevHasMajor: false, nextHasMajor: false };
@@ -87,7 +89,56 @@ export function getMajorConnectorNeighborMajorFlags(toothId, teeth) {
 }
 
 /**
- * Use `{template}_end.svg` when this tooth is a run endpoint: mesial or distal neighbor has no major placement.
+ * Along {@link TOOTH_ORDER}.upper (18→…→11→21→…→28), whether the mesial/distal neighbor carries a major connector.
+ * @param {string} toothId
+ * @param {Record<string, unknown> | null | undefined} teeth
+ */
+export function getMajorConnectorNeighborMajorFlags(toothId, teeth) {
+  return getMajorConnectorNeighborMajorFlagsInOrder(toothId, teeth, TOOTH_ORDER.upper);
+}
+
+/**
+ * Along {@link TOOTH_ORDER}.lower (38→…→31→41→…→48), same neighbor convention for lower FDI.
+ * @param {string} toothId
+ * @param {Record<string, unknown> | null | undefined} teeth
+ */
+export function getMajorConnectorNeighborMajorFlagsLower(toothId, teeth) {
+  return getMajorConnectorNeighborMajorFlagsInOrder(toothId, teeth, TOOTH_ORDER.lower);
+}
+
+/**
+ * Map arch neighbor flags to FDI mesial/distal major continuity.
+ * Upper: Q1 same as lower Q3; upper Q2 same as lower Q4 (arch direction vs FDI).
+ * @param {string} toothId
+ * @param {Record<string, unknown> | null | undefined} teeth
+ * @param {"upper"|"lower"} jaw
+ */
+function getMesialDistalConnectorMajorFlags(toothId, teeth, jaw) {
+  const id = String(toothId);
+  const q = Number(id[0]);
+  if (jaw === "upper") {
+    const { prevHasMajor, nextHasMajor } = getMajorConnectorNeighborMajorFlags(toothId, teeth);
+    if (q === 1) {
+      return { mesialHasMajor: nextHasMajor, distalHasMajor: prevHasMajor };
+    }
+    if (q === 2) {
+      return { mesialHasMajor: prevHasMajor, distalHasMajor: nextHasMajor };
+    }
+  }
+  if (jaw === "lower") {
+    const { prevHasMajor, nextHasMajor } = getMajorConnectorNeighborMajorFlagsLower(toothId, teeth);
+    if (q === 3) {
+      return { mesialHasMajor: nextHasMajor, distalHasMajor: prevHasMajor };
+    }
+    if (q === 4) {
+      return { mesialHasMajor: prevHasMajor, distalHasMajor: nextHasMajor };
+    }
+  }
+  return { mesialHasMajor: false, distalHasMajor: false };
+}
+
+/**
+ * True when mesial or distal neighbor has no adjacent major-connector placement (open end of a run).
  * @param {string} toothId
  * @param {Record<string, unknown> | null | undefined} teeth
  */
@@ -95,29 +146,91 @@ export function shouldUseMajorConnectorEndAsset(toothId, teeth) {
   if (!teeth || typeof teeth !== "object") {
     return false;
   }
-  const { prevHasMajor, nextHasMajor } = getMajorConnectorNeighborMajorFlags(toothId, teeth);
-  return !prevHasMajor || !nextHasMajor;
+  const id = String(toothId);
+  const jaw = /^[12]/.test(id) ? "upper" : /^[34]/.test(id) ? "lower" : null;
+  if (!jaw) {
+    return false;
+  }
+  if (!getMajorConnectorAssetReference(toothId, jaw)) {
+    return false;
+  }
+  const { mesialHasMajor, distalHasMajor } = getMesialDistalConnectorMajorFlags(toothId, teeth, jaw);
+  return !mesialHasMajor || !distalHasMajor;
 }
 
 /**
- * Page-relative href for a MajorConnector template SVG (upper arch only).
- * Quadrant 1 (11–18): file matches tooth id; quadrant 2 (21–28): maps by unit → 11–18 (e.g. 21 → 11.svg).
+ * Page-relative href for a MajorConnector template SVG.
+ * Upper Q1/Q2: template 11–18 naming (Q2 maps to 11–18 by unit digit).
+ * Lower Q4 (`41`–`48`) and Q3 (`31`–`38`): same rule as upper — Q4 uses FDI id; Q3 uses the Q4
+ * twin basename `4${u}` (only `41`–`48` SVGs on disk). View mirroring comes from the tooth transform.
+ * When `teeth` is passed: mesial/distal open ends use `_mesial` / `_distal` where available.
  * @param {string} toothId
  * @param {string} jaw
- * @param {Record<string, unknown> | null | undefined} [teeth] When passed, run-end teeth use `*_end.svg` where available.
+ * @param {Record<string, unknown> | null | undefined} [teeth]
+ * @param {{ palatalBarSecondMolarDistal?: boolean }} [options] Palatal bar: when true, `17` / `27` use `{17}_distal.svg` (caller should set this only while `18` / `28` have no palatal-bar placement).
  */
-export function getMajorConnectorAssetReference(toothId, jaw, teeth) {
-  if (jaw !== "upper") return null;
+export function getMajorConnectorAssetReference(toothId, jaw, teeth, options) {
   const id = String(toothId);
-  if (!/^[12][1-8]$/.test(id)) return null;
-  const q = Number(id[0]);
-  const u = Number(id[1]);
-  const file = q === 1 ? id : `1${u}`;
-  const useEnd = shouldUseMajorConnectorEndAsset(id, teeth);
-  if (useEnd && MAJOR_CONNECTOR_END_TEMPLATE_BASES.has(file)) {
-    return `../../assets/RPD_Component/MajorConnector/${file}_end.svg`;
+  const baseDir = "../../assets/RPD_Component/MajorConnector";
+
+  if (jaw === "upper") {
+    if (!/^[12][1-8]$/.test(id)) {
+      return null;
+    }
+    const q = Number(id[0]);
+    const u = Number(id[1]);
+    const file = q === 1 ? id : `1${u}`;
+
+    if (options?.palatalBarSecondMolarDistal && (id === "17" || id === "27")) {
+      if (MAJOR_CONNECTOR_MESIAL_DISTAL_TEMPLATES.has(file)) {
+        return `${baseDir}/${file}_distal.svg`;
+      }
+    }
+
+    if (teeth && typeof teeth === "object") {
+      const { mesialHasMajor, distalHasMajor } = getMesialDistalConnectorMajorFlags(id, teeth, "upper");
+      if (!mesialHasMajor) {
+        if (MAJOR_CONNECTOR_MESIAL_DISTAL_TEMPLATES.has(file)) {
+          return `${baseDir}/${file}_mesial.svg`;
+        }
+        return `${baseDir}/${file}.svg`;
+      }
+      if (!distalHasMajor) {
+        if (MAJOR_CONNECTOR_MESIAL_DISTAL_TEMPLATES.has(file)) {
+          return `${baseDir}/${file}_distal.svg`;
+        }
+        return `${baseDir}/${file}.svg`;
+      }
+    }
+    return `${baseDir}/${file}.svg`;
   }
-  return `../../assets/RPD_Component/MajorConnector/${file}.svg`;
+
+  if (jaw === "lower") {
+    if (!/^3[1-8]$/.test(id) && !/^4[1-8]$/.test(id)) {
+      return null;
+    }
+    const q = Number(id[0]);
+    const u = Number(id[1]);
+    const file = q === 4 ? id : `4${u}`;
+    if (teeth && typeof teeth === "object") {
+      const { mesialHasMajor, distalHasMajor } = getMesialDistalConnectorMajorFlags(id, teeth, "lower");
+      if (!mesialHasMajor) {
+        if (MAJOR_CONNECTOR_LOWER_Q4_MESIAL_DISTAL_TEMPLATES.has(file)) {
+          return `${baseDir}/${file}_mesial.svg`;
+        }
+        return `${baseDir}/${file}.svg`;
+      }
+      if (!distalHasMajor) {
+        if (MAJOR_CONNECTOR_LOWER_Q4_MESIAL_DISTAL_TEMPLATES.has(file)) {
+          return `${baseDir}/${file}_distal.svg`;
+        }
+        return `${baseDir}/${file}.svg`;
+      }
+    }
+    return `${baseDir}/${file}.svg`;
+  }
+
+  return null;
 }
 
 export function isMajorConnectorComponent(componentOrId) {
@@ -166,9 +279,37 @@ export function hasPalatalBarPlacementOnUpperArch(teeth) {
   return false;
 }
 
+function toothHasPalatalBarPlacementOnTooth(tooth) {
+  if (!tooth || !Array.isArray(tooth.componentPlacements)) {
+    return false;
+  }
+  return tooth.componentPlacements.some((e) => e.componentId === PALATAL_BAR_MAJOR_COMPONENT_ID);
+}
+
+/**
+ * Palatal bar: distal second-molar caps (`17_distal.svg` / mirrored on `27`) only while **18** / **28**
+ * have no real palatal-bar placement—same idea as palatal hole. After tagging 18–28, use augmented
+ * neighbors so {@link getMajorConnectorAssetReference} returns body art and segments connect.
+ * @param {string} toothId
+ * @param {Record<string, unknown> | null | undefined} teeth Un-augmented arch state ({@link state.teeth}).
+ */
+export function shouldUsePalatalBarSecondMolarDistalTemplate(toothId, teeth) {
+  const id = String(toothId);
+  if (id !== "17" && id !== "27") {
+    return false;
+  }
+  if (!teeth || typeof teeth !== "object") {
+    return true;
+  }
+  if (id === "17") {
+    return !toothHasPalatalBarPlacementOnTooth(teeth["18"]);
+  }
+  return !toothHasPalatalBarPlacementOnTooth(teeth["28"]);
+}
+
 /**
  * Mirrors Unity palatal-bar connector **span** continuity: both posterior runs use virtual palatal-bar
- * placements so internal teeth prefer straight templates over `_end.svg`.
+ * placements so internal teeth prefer straight templates over `{base}_mesial.svg` / `{base}_distal.svg` at run ends.
  * @param {Record<string, unknown> | null | undefined} teeth
  * @returns {Record<string, unknown>}
  */
@@ -245,8 +386,8 @@ export const CONNECTOR_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
 /**
  * Extra x/y in tooth-local units, added on top of the mesh/plate anchor (unless
  * {@link CONNECTOR_POSITION_IGNORE_MESH_PLATE_ANCHOR} is true).
- * Keys: template teeth `11`–`18`, or exact FDI (e.g. `"21"`) to override mirroring.
- * Quadrants 2 / 3 flip X when only the template row exists (same rule as plates).
+ * Keys: upper template `11`–`18` (Q2 mirrors); lower template `41`–`48` (Q3 mirrors); optional exact
+ * FDI rows to override mirroring. Quadrants 2 / 3 flip X when resolving from the template row only.
  */
 export const CONNECTOR_EXTRA_OFFSET_SEED_BY_TOOTH = Object.freeze({
   "11": { x: 13, y: 76 },
@@ -259,9 +400,22 @@ export const CONNECTOR_EXTRA_OFFSET_SEED_BY_TOOTH = Object.freeze({
   "15": { x: 55, y: 23.6 },
   "25": { x: -56, y: 23.6 },
   "16": { x: 57.3, y: 22 },
+  "26": { x: -56.3, y: 22 },
   "17": { x: 61.3, y: 16.6 },
+  "27": { x: -60.3, y: 16.6 },
   "18": { x: 62.2, y: 9.5 },
-  "28": { x: -63.2, y: 9.5 },
+  "28": { x: -62.2, y: 9.5 },
+  "41": { x: 5.35, y: -62 },
+  "42": { x: 21.6, y: -55.6 },
+  "43": { x: 39.7, y: -46.4 },
+  "44": { x: 56, y: -30 },
+  "45": { x: 56.4, y: -17.1 },
+  "35": { x: -55.4, y: -17.1 },
+  "46": { x: 55.8, y: -14.8 },
+  "47": { x: 55.3, y: -13.6 },
+  "37": { x: -54.3, y: -13.6 },
+  "48": { x: 60, y: -8 },
+  "38": { x: -59, y: -8 },
 });
 
 /** Multiplier on the scaled connector group per arch. */
@@ -270,7 +424,10 @@ export const CONNECTOR_RENDER_SCALE_BY_JAW = Object.freeze({
   lower: 1,
 });
 
-/** Optional per–template-tooth (11–18) scale multiplier. */
+/**
+ * Per–template-tooth scale: `11`–`18` on upper, `41`–`48` on lower (Q3 mirrors Q4 like Q2 mirrors Q1).
+ * Optional exact FDI overrides — see {@link getMajorConnectorRenderScaleMultiplier}.
+ */
 export const CONNECTOR_RENDER_SCALE_BY_TEMPLATE_TOOTH = Object.freeze({
   "11": 0.58,
   "12": 0.565,
@@ -280,20 +437,57 @@ export const CONNECTOR_RENDER_SCALE_BY_TEMPLATE_TOOTH = Object.freeze({
   "16": 0.7,
   "17": 0.63,
   "18": 0.6,
+  "41": 0.35,
+  "42": 0.4,
+  "43": 0.55,
+  "44": 0.85,
+  "45": 0.85,
+  "46": 0.8,
+  "47": 0.66,
+  "48": 0.61,
 });
 
-function getMajorConnectorTemplateToothId(toothId) {
+function inferMajorConnectorJawFromFdiToothId(toothId) {
   const id = String(toothId);
   if (!VALID_FDI_TOOTH_ID.test(id)) {
-    return "11";
+    return "upper";
   }
-  const unit = id[1];
-  return `1${unit}`;
+  const q = Number(id[0]);
+  return q >= 3 ? "lower" : "upper";
 }
 
-export function getMajorConnectorPlacementOffset(toothId) {
+/**
+ * Basename / tuning-table key for connector seeds — mirrors {@link getMajorConnectorAssetReference}:
+ * upper Q1/Q2 → `11`–`18`; lower Q3/Q4 → `41`–`48`.
+ * @param {string} toothId
+ * @param {"upper"|"lower"} jaw
+ */
+function getMajorConnectorSeedTemplateToothId(toothId, jaw) {
   const id = String(toothId);
-  const tmpl = getMajorConnectorTemplateToothId(toothId);
+  if (!VALID_FDI_TOOTH_ID.test(id)) {
+    return jaw === "lower" ? "41" : "11";
+  }
+  const q = Number(id[0]);
+  const u = id[1];
+  if (jaw === "lower") {
+    if (q === 3 || q === 4) {
+      return q === 4 ? id : `4${u}`;
+    }
+    return "41";
+  }
+  if (q === 1 || q === 2) {
+    return q === 1 ? id : `1${u}`;
+  }
+  return "11";
+}
+
+/**
+ * @param {string} toothId
+ * @param {"upper"|"lower"} [jaw] Defaults from FDI quadrant (3–4 → lower).
+ */
+export function getMajorConnectorPlacementOffset(toothId, jaw = inferMajorConnectorJawFromFdiToothId(toothId)) {
+  const id = String(toothId);
+  const tmpl = getMajorConnectorSeedTemplateToothId(toothId, jaw);
   const exact = CONNECTOR_EXTRA_OFFSET_SEED_BY_TOOTH[id];
   const tmplSeed = CONNECTOR_EXTRA_OFFSET_SEED_BY_TOOTH[tmpl];
   const row = exact ?? tmplSeed ?? DEFAULT_OFFSET;
@@ -307,15 +501,23 @@ export function getMajorConnectorPlacementOffset(toothId) {
   };
 }
 
-export function getMajorConnectorPlacementImageSize(toothId) {
-  const tmpl = getMajorConnectorTemplateToothId(toothId);
+/**
+ * @param {string} toothId
+ * @param {"upper"|"lower"} [jaw] Defaults from FDI quadrant (3–4 → lower).
+ */
+export function getMajorConnectorPlacementImageSize(toothId, jaw = inferMajorConnectorJawFromFdiToothId(toothId)) {
+  const tmpl = getMajorConnectorSeedTemplateToothId(toothId, jaw);
   return CONNECTOR_PLACEMENT_IMAGE_SIZE_BY_TOOTH[tmpl] ?? null;
 }
 
 export function getMajorConnectorRenderScaleMultiplier(toothId, jaw) {
   const jawM = CONNECTOR_RENDER_SCALE_BY_JAW[jaw] ?? 1;
-  const tmpl = getMajorConnectorTemplateToothId(toothId);
-  const toothM = CONNECTOR_RENDER_SCALE_BY_TEMPLATE_TOOTH[tmpl] ?? 1;
+  const id = String(toothId);
+  const tmpl = getMajorConnectorSeedTemplateToothId(toothId, jaw);
+  const toothM =
+    CONNECTOR_RENDER_SCALE_BY_TEMPLATE_TOOTH[id] ??
+    CONNECTOR_RENDER_SCALE_BY_TEMPLATE_TOOTH[tmpl] ??
+    1;
   return jawM * toothM;
 }
 
@@ -337,9 +539,9 @@ export function getDefaultMajorConnectorIdForDesignMode(componentById) {
 }
 
 /**
- * When both arches lock, drop a default major connector on every upper tooth that already has
- * mesh (missing) or plate (present) — siblings to the auto mesh/plate flow. Lower arch is skipped
- * because lower-arch major artwork isn't wired into the 2D view yet.
+ * When both arches lock, drop a default major connector on every tooth that already has
+ * mesh (missing) or plate (present) **where** {@link getMajorConnectorAssetReference} returns art
+ * for that jaw (upper 11–28; lower 31–48 using `41`–`48` basenames; Q3 mirrored like upper Q2).
  */
 export function ensureMajorConnectorPlacementsOnSupportedTeeth(teeth, majorComponentId, componentById) {
   if (
@@ -349,8 +551,61 @@ export function ensureMajorConnectorPlacementsOnSupportedTeeth(teeth, majorCompo
   ) {
     return;
   }
-  const upperIds = TOOTH_ORDER && Array.isArray(TOOTH_ORDER.upper) ? TOOTH_ORDER.upper : [];
-  for (const toothId of upperIds) {
+
+  const tryArch = (jawKey) => {
+    const ids = TOOTH_ORDER && Array.isArray(TOOTH_ORDER[jawKey]) ? TOOTH_ORDER[jawKey] : [];
+    for (const toothId of ids) {
+      if (!getMajorConnectorAssetReference(toothId, jawKey)) {
+        continue;
+      }
+      const tooth = teeth[toothId];
+      if (!tooth) {
+        continue;
+      }
+      if (!Array.isArray(tooth.componentPlacements)) {
+        tooth.componentPlacements = [];
+      }
+      const hasMeshOrPlate = tooth.componentPlacements.some(({ componentId }) => {
+        const def = componentById.get(componentId);
+        if (!def) {
+          return false;
+        }
+        if (tooth.isPresent) {
+          return String(componentId).startsWith("plate-");
+        }
+        return def.tab === "mesh" || String(componentId).startsWith("mesh-");
+      });
+      if (!hasMeshOrPlate) {
+        continue;
+      }
+      const hasMajor = tooth.componentPlacements.some(({ componentId }) =>
+        isMajorConnectorComponent(componentId)
+      );
+      if (hasMajor) {
+        continue;
+      }
+      tooth.componentPlacements.push({ componentId: majorComponentId, surface: null });
+      if (Array.isArray(tooth.components) && !tooth.components.includes(majorComponentId)) {
+        tooth.components.push(majorComponentId);
+      }
+    }
+  };
+
+  tryArch("upper");
+  tryArch("lower");
+}
+
+/**
+ * When the user picks Palatal Bar in the catalog, place per-tooth bar segments on
+ * {@link PALATAL_BAR_CONNECTOR_TOOTH_IDS} wherever mesh/plate exists, replacing any other major on those
+ * teeth so straps/horseshoe do not block. Sync `tooth.components` after calling (see 2DAnnotation).
+ */
+export function ensurePalatalBarPlacementsOnConnectorTeeth(teeth, componentById) {
+  const majorId = PALATAL_BAR_MAJOR_COMPONENT_ID;
+  if (!teeth || !componentById?.has?.(majorId)) {
+    return;
+  }
+  for (const toothId of PALATAL_BAR_CONNECTOR_TOOTH_IDS) {
     if (!getMajorConnectorAssetReference(toothId, "upper")) {
       continue;
     }
@@ -363,7 +618,9 @@ export function ensureMajorConnectorPlacementsOnSupportedTeeth(teeth, majorCompo
     }
     const hasMeshOrPlate = tooth.componentPlacements.some(({ componentId }) => {
       const def = componentById.get(componentId);
-      if (!def) return false;
+      if (!def) {
+        return false;
+      }
       if (tooth.isPresent) {
         return String(componentId).startsWith("plate-");
       }
@@ -372,15 +629,50 @@ export function ensureMajorConnectorPlacementsOnSupportedTeeth(teeth, majorCompo
     if (!hasMeshOrPlate) {
       continue;
     }
-    const hasMajor = tooth.componentPlacements.some(({ componentId }) =>
-      isMajorConnectorComponent(componentId)
+    tooth.componentPlacements = tooth.componentPlacements.filter(
+      (e) => !isMajorConnectorComponent(e.componentId)
     );
-    if (hasMajor) {
+    tooth.componentPlacements.push({ componentId: majorId, surface: null });
+  }
+}
+
+/**
+ * Strip all major-connector placements from {@link PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS} so those
+ * regions start “empty” when Palatal Bar is selected.
+ */
+export function removeMajorPlacementsFromPalatalBarExcludedUpperTeeth(teeth) {
+  if (!teeth || typeof teeth !== "object") {
+    return;
+  }
+  for (const toothId of PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS) {
+    const tooth = teeth[toothId];
+    if (!tooth || !Array.isArray(tooth.componentPlacements)) {
       continue;
     }
-    tooth.componentPlacements.push({ componentId: majorComponentId, surface: null });
-    if (Array.isArray(tooth.components) && !tooth.components.includes(majorComponentId)) {
-      tooth.components.push(majorComponentId);
+    tooth.componentPlacements = tooth.componentPlacements.filter(
+      (e) => !isMajorConnectorComponent(e.componentId)
+    );
+  }
+}
+
+/**
+ * When switching the catalog from **Palatal Bar** to **Palatal Hole**, swap per-tooth bar segment tags
+ * to hole so posterior straps stay consistent, then callers can run
+ * {@link ensureMajorConnectorPlacementsOnSupportedTeeth} to re-fill anteriors (11–13, 21–23).
+ */
+export function replaceUpperPalatalBarPlacementsWithPalatalHole(teeth) {
+  if (!teeth || typeof teeth !== "object") {
+    return;
+  }
+  const barId = PALATAL_BAR_MAJOR_COMPONENT_ID;
+  const holeId = PALATAL_HOLE_MAJOR_COMPONENT_ID;
+  for (const toothId of TOOTH_ORDER.upper) {
+    const tooth = teeth[toothId];
+    if (!tooth || !Array.isArray(tooth.componentPlacements)) {
+      continue;
     }
+    tooth.componentPlacements = tooth.componentPlacements.map((e) =>
+      e.componentId === barId ? { ...e, componentId: holeId } : e
+    );
   }
 }

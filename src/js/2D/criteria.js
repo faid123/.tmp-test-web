@@ -1,4 +1,10 @@
-import { ACTION_UPON_FAILURE, isMajorConnectorComponent, isMeshComponent } from "./components.js";
+import {
+  ACTION_UPON_FAILURE,
+  isBarComponent,
+  isClaspComponent,
+  isMajorConnectorComponent,
+  isMeshComponent,
+} from "./components.js";
 
 function getToothId(tooth) {
   return tooth?.tooth_id ?? tooth?.fdiId ?? "unknown";
@@ -64,6 +70,24 @@ export function assessPlacementCriteria(tooth, selectedComponent, componentById)
       selectedComponent.actionUponFailure,
       conflicts
     );
+  }
+
+  const selectedIsBar = isBarComponent(selectedComponent);
+  const selectedIsClasp = isClaspComponent(selectedComponent);
+  if (selectedIsBar || selectedIsClasp) {
+    const barClaspConflicts = existingComponents.filter((id) => {
+      if (selectedIsBar) {
+        return isClaspComponent(id);
+      }
+      return isBarComponent(id);
+    });
+    if (barClaspConflicts.length > 0) {
+      return failure(
+        `Tooth ${toothId} already has ${selectedIsBar ? "a clasp" : "a bar"}; replacing with ${selectedComponent.id}.`,
+        ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
+        barClaspConflicts
+      );
+    }
   }
 
   if (isMajor) {
