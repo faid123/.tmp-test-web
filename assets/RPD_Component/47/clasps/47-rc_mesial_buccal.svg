@@ -1,9 +1,15 @@
 <svg width="187" height="201" viewBox="0 0 187 201" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <g id="47-rc_mesial_buccal">
-<path d="M0 0H186V201H0V0Z" fill="url(#pattern0_126_147)"/>
-<path d="M0.5 0H186.5V201H0.5V0Z" fill="url(#pattern1_126_147)"/>
+<path d="M0 0H186V201H0V0Z" fill="url(#pattern0_126_147)" filter="url(#claspGreen_47-rc_mesial_buccal)"/>
+<path d="M0.5 0H186.5V201H0.5V0Z" fill="url(#pattern1_126_147)" filter="url(#claspRed_47-rc_mesial_buccal)"/>
 </g>
 <defs>
+<filter id="claspGreen_47-rc_mesial_buccal" x="0" y="0" width="100%" height="100%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+  <feColorMatrix type="matrix" values="0 0 0 0 0.564706  0 0 0 0 0.933333  0 0 0 0 0.564706  0 0 0 1 0"/>
+</filter>
+<filter id="claspRed_47-rc_mesial_buccal" x="0" y="0" width="100%" height="100%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+  <feColorMatrix type="matrix" values="0 0 0 0 0.898039  0 0 0 0 0.223529  0 0 0 0 0.207843  0 0 0 1 0"/>
+</filter>
 <pattern id="pattern0_126_147" patternContentUnits="objectBoundingBox" width="1" height="1">
 <use xlink:href="#image0_126_147" transform="matrix(0.00537634 0 0 0.0049885 0 -0.00134409)"/>
 </pattern>

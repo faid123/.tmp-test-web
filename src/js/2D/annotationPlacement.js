@@ -16,8 +16,7 @@ import {
   PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS,
 } from "./components.js";
 import { TOOTH_ORDER } from "./constants.js";
-import { state } from "./annotationState.js";
-import { setMessage } from "./annotationDom.js";
+import { state, setMessage } from "./2DAnnotation.js";
 import {
   addPlacement,
   ensureToothPlacementState,

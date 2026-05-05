@@ -1,9 +1,15 @@
 <svg width="115" height="66" viewBox="0 0 115 66" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <g id="41-rc_distal_lingual">
-<path d="M0 0H115V66H0V0Z" fill="url(#pattern0_124_76)"/>
-<path d="M0 0H115V66H0V0Z" fill="url(#pattern1_124_76)"/>
+<path d="M0 0H115V66H0V0Z" fill="url(#pattern0_124_76)" filter="url(#claspGreen_41-rc_distal_lingual)"/>
+<path d="M0 0H115V66H0V0Z" fill="url(#pattern1_124_76)" filter="url(#claspRed_41-rc_distal_lingual)"/>
 </g>
 <defs>
+<filter id="claspGreen_41-rc_distal_lingual" x="0" y="0" width="100%" height="100%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+  <feColorMatrix type="matrix" values="0 0 0 0 0.564706  0 0 0 0 0.933333  0 0 0 0 0.564706  0 0 0 1 0"/>
+</filter>
+<filter id="claspRed_41-rc_distal_lingual" x="0" y="0" width="100%" height="100%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+  <feColorMatrix type="matrix" values="0 0 0 0 0.898039  0 0 0 0 0.223529  0 0 0 0 0.207843  0 0 0 1 0"/>
+</filter>
 <pattern id="pattern0_124_76" patternContentUnits="objectBoundingBox" width="1" height="1">
 <use xlink:href="#image0_124_76" transform="scale(0.00869565 0.0151515)"/>
 </pattern>

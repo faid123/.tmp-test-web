@@ -17,109 +17,109 @@ const CLASP_CIRC_SURFACE_ORDER = [
 
 const CLASP_ASSET_BASE = "../../../assets/RPD_Component";
 
-const CLASP_CIRC_SUGGESTION_RADIUS = 6;
+const CLASP_CIRC_SUGGESTION_RADIUS = 7;
 
 /**
  * Per-template (Q1: 11–18, Q4: 41–48) clasp anchor quad in tooth-local space.
  * Intentionally **not** derived from rest M/D/L suggestion points — separate layout for clasp arms.
  */
 const CLASP_QUAD_BY_TEMPLATE = Object.freeze({
-  "11": {
-    mesial_buccal: { x: 17, y: -20 },
-    distal_buccal: { x: -17, y: -10 },
-    mesial_lingual: { x: 13, y: 13 },
-    distal_lingual: { x: -2, y: 15 },
-  },
-  "12": {
-    mesial_buccal: { x: 5, y: -16 },
-    distal_buccal: { x: -14, y: -3 },
-    mesial_lingual: { x: 10, y: 5 },
-    distal_lingual: { x: -4, y: 12 },
-  },
-  "13": {
-    mesial_buccal: { x: 3, y: -16 },
-    distal_buccal: { x: -16, y: 7 },
-    mesial_lingual: { x: 11, y: 4 },
-    distal_lingual: { x: 1, y: 15 },
-  },
-  "14": {
-    mesial_buccal: { x: -1, y: -15 },
-    distal_buccal: { x: -14, y: 10 },
-    mesial_lingual: { x: 15, y: -2 },
-    distal_lingual: { x: 5, y: 18 },
-  },
-  "15": {
-    mesial_buccal: { x: -5, y: -16 },
-    distal_buccal: { x: -14, y: 10 },
-    mesial_lingual: { x: 15, y: -6 },
-    distal_lingual: { x: 6, y: 16 },
-  },
-  "16": {
-    mesial_buccal: { x: -8, y: -25 },
-    distal_buccal: { x: -20, y: 18 },
-    mesial_lingual: { x: 20, y: -8 },
-    distal_lingual: { x: 10, y: 25 },
-  },
-  "17": {
-    mesial_buccal: { x: -10, y: -20 },
-    distal_buccal: { x: -17, y: 16 },
-    mesial_lingual: { x: 19, y: -8 },
-    distal_lingual: { x: 12, y: 18 },
-  },
-  "18": {
-    mesial_buccal: { x: -13, y: -20 },
-    distal_buccal: { x: -16, y: 16 },
-    mesial_lingual: { x: 17, y: -10 },
-    distal_lingual: { x: 13, y: 19 },
-  },
-  "41": {
-    mesial_buccal: { x: 7, y: 15 },
-    distal_buccal: { x: -11, y: 12 },
-    mesial_lingual: { x: 6, y: -8 },
-    distal_lingual: { x: -5, y: -9 },
-  },
-  "42": {
-    mesial_buccal: { x: 3, y: 15 },
-    distal_buccal: { x: -13, y: 10 },
-    mesial_lingual: { x: 8, y: -6 },
-    distal_lingual: { x: -3, y: -9 },
-  },
-  "43": {
-    mesial_buccal: { x: 4, y: 15 },
-    distal_buccal: { x: -16, y: 1 },
-    mesial_lingual: { x: 10, y: -5 },
-    distal_lingual: { x: 0, y: -12 },
-  },
-  "44": {
-    mesial_buccal: { x: 5, y: 16 },
-    distal_buccal: { x: -15, y: -7 },
-    mesial_lingual: { x: 17, y: 4 },
-    distal_lingual: { x: 0, y: -15 },
-  },
-  "45": {
-    mesial_buccal: { x: -2, y: 19 },
-    distal_buccal: { x: -15, y: -8 },
-    mesial_lingual: { x: 15, y: 10 },
-    distal_lingual: { x: 7, y: -16 },
-  },
-  "46": {
-    mesial_buccal: { x: -7, y: 28 },
-    distal_buccal: { x: -21, y: -16 },
-    mesial_lingual: { x: 22, y: 18 },
-    distal_lingual: { x: 8, y: -26 },
-  },
-  "47": {
-    mesial_buccal: { x: -8, y: 24 },
-    distal_buccal: { x: -18, y: -16 },
-    mesial_lingual: { x: 17, y: 18 },
-    distal_lingual: { x: 11, y: -23 },
-  },
-  "48": {
-    mesial_buccal: { x: -8, y: 20 },
-    distal_buccal: { x: -15, y: -20 },
-    mesial_lingual: { x: 16, y: 13 },
-    distal_lingual: { x: 9, y: -20 },
-  },
+ "11": {
+  mesial_buccal: { x: -17, y: -10 },
+  distal_buccal: { x: 17, y: -20 },
+  mesial_lingual: { x: -2, y: 15 },
+  distal_lingual: { x: 13, y: 13 },
+},
+"12": {
+  mesial_buccal: { x: -14, y: -3 },
+  distal_buccal: { x: 5, y: -16 },
+  mesial_lingual: { x: -4, y: 12 },
+  distal_lingual: { x: 10, y: 5 },
+},
+"13": {
+  mesial_buccal: { x: -16, y: 7 },
+  distal_buccal: { x: 3, y: -16 },
+  mesial_lingual: { x: 1, y: 15 },
+  distal_lingual: { x: 11, y: 4 },
+},
+"14": {
+  mesial_buccal: { x: -14, y: 10 },
+  distal_buccal: { x: -1, y: -15 },
+  mesial_lingual: { x: 5, y: 18 },
+  distal_lingual: { x: 15, y: -2 },
+},
+"15": {
+  mesial_buccal: { x: -14, y: 10 },
+  distal_buccal: { x: -5, y: -16 },
+  mesial_lingual: { x: 6, y: 16 },
+  distal_lingual: { x: 15, y: -6 },
+},
+"16": {
+  mesial_buccal: { x: -20, y: 18 },
+  distal_buccal: { x: -8, y: -25 },
+  mesial_lingual: { x: 10, y: 25 },
+  distal_lingual: { x: 20, y: -8 },
+},
+"17": {
+  mesial_buccal: { x: -17, y: 16 },
+  distal_buccal: { x: -10, y: -20 },
+  mesial_lingual: { x: 12, y: 18 },
+  distal_lingual: { x: 19, y: -8 },
+},
+"18": {
+  mesial_buccal: { x: -16, y: 16 },
+  distal_buccal: { x: -13, y: -20 },
+  mesial_lingual: { x: 13, y: 19 },
+  distal_lingual: { x: 17, y: -10 },
+},
+"41": {
+  mesial_buccal: { x: -11, y: 12 },
+  distal_buccal: { x: 7, y: 15 },
+  mesial_lingual: { x: -5, y: -9 },
+  distal_lingual: { x: 6, y: -8 },
+},
+"42": {
+  mesial_buccal: { x: -13, y: 10 },
+  distal_buccal: { x: 3, y: 15 },
+  mesial_lingual: { x: -3, y: -9 },
+  distal_lingual: { x: 8, y: -6 },
+},
+"43": {
+  mesial_buccal: { x: -16, y: 1 },
+  distal_buccal: { x: 4, y: 15 },
+  mesial_lingual: { x: 0, y: -12 },
+  distal_lingual: { x: 10, y: -5 },
+},
+"44": {
+  mesial_buccal: { x: -15, y: -7 },
+  distal_buccal: { x: 5, y: 16 },
+  mesial_lingual: { x: 0, y: -15 },
+  distal_lingual: { x: 17, y: 4 },
+},
+"45": {
+  mesial_buccal: { x: -15, y: -8 },
+  distal_buccal: { x: -2, y: 19 },
+  mesial_lingual: { x: 7, y: -16 },
+  distal_lingual: { x: 15, y: 10 },
+},
+"46": {
+  mesial_buccal: { x: -21, y: -16 },
+  distal_buccal: { x: -7, y: 28 },
+  mesial_lingual: { x: 8, y: -26 },
+  distal_lingual: { x: 22, y: 18 },
+},
+"47": {
+  mesial_buccal: { x: -18, y: -16 },
+  distal_buccal: { x: -8, y: 24 },
+  mesial_lingual: { x: 11, y: -23 },
+  distal_lingual: { x: 17, y: 18 },
+},
+"48": {
+  mesial_buccal: { x: -15, y: -20 },
+  distal_buccal: { x: -8, y: 20 },
+  mesial_lingual: { x: 9, y: -20 },
+  distal_lingual: { x: 16, y: 13 },
+},
 });
 
 function mirrorQuad(row) {
@@ -214,101 +214,101 @@ const CLASP_CIRC_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
  */
 const CLASP_CIRC_POSITION_OFFSET_OVERRIDE_SEED_BY_TOOTH = Object.freeze({
   "11": {
-    mesial_buccal: { x: -13, y: -4 },
-    distal_buccal: { x: 5, y: -8 },
-    mesial_lingual: { x: -7, y: 3.8 },
-    distal_lingual: { x: 11, y: 7 },
-  },
-  "12": {
-    mesial_buccal: { x: -10, y: -4 },
-    distal_buccal: { x: 1, y: -9 },
-    mesial_lingual: { x: -3.7, y: 12 },
-    distal_lingual: { x: 13, y: 7 },
-  },
-  "13": {
-    mesial_buccal: { x: -13, y: 8 },
-    distal_buccal: { x: -3, y: -12 },
-    mesial_lingual: { x: -4, y: 9 },
-    distal_lingual: { x: 13, y: -4 },
-  },
-  "14": {
-    mesial_buccal: { x: -12, y: 11.7 },
-    distal_buccal: { x: -3, y: -17 },
-    mesial_lingual: { x: 9, y: 13 },
-    distal_lingual: { x: 9, y: -4 },
-  },
-  "15": {
-    mesial_buccal: { x: -9, y: 10 },
-    distal_buccal: { x: -10, y: -17 },
-    mesial_lingual: { x: 8.5, y: 11 },
-    distal_lingual: { x: 11, y: -13 },
-  },
-  "16": {
-    mesial_buccal: { x: -8, y: 18 },
-    distal_buccal: { x: -6, y: -21 },
-    mesial_lingual: { x: 9, y: 12 },
-    distal_lingual: { x: 7, y: -18 },
-  },
-  "17": {
-    mesial_buccal: { x: -10, y: 20 },
-    distal_buccal: { x: -9, y: -18 },
-    mesial_lingual: { x: 6, y: 12 },
-    distal_lingual: { x: 4, y: -13 },
-  },
-  "18": {
-    mesial_buccal: { x: -9, y: 15 },
-    distal_buccal: { x: -6, y: -19 },
-    mesial_lingual: { x: 6, y: 8 },
-    distal_lingual: { x: 9, y: -18 },
-  },
-  "41": {
-    mesial_buccal: { x: -11, y: 4 },
-    distal_buccal: { x: 6, y: 7 },
-    mesial_lingual: { x: -3, y: 1 },
-    distal_lingual: { x: 2, y: 1 },
-  }, 
-  "42": {
-    mesial_buccal: { x: -9, y: 5 },
-    distal_buccal: { x: 3, y: 5.2 },
-    mesial_lingual: { x: -5, y: 6 },
-    distal_lingual: { x: 0, y: 0.5 },
-  },
-  "43": {
-    mesial_buccal: { x: -10, y: 2 },
-    distal_buccal: { x: 3, y: 8 },
-    mesial_lingual: { x: -4, y: 2.2 },
-    distal_lingual: { x: 0, y: -0.5 },
-  },
-  "44": {
-    mesial_buccal: { x: -11, y: -2 },
-    distal_buccal: { x: -2.5, y: 11 },
-    mesial_lingual: { x: 2, y: -9 },
-    distal_lingual: { x: 11, y: 0 },
-  },
-  "45": {
-    mesial_buccal: { x: -10.8, y: -9 },
-    distal_buccal: { x: -5, y: 6 },
-    mesial_lingual: { x: 6, y: -7.7 },
-    distal_lingual: { x: 8, y: 9 },
-  },
-  "46": {
-    mesial_buccal: { x: -11.2, y: -16.5 },
-    distal_buccal: { x: -8, y: 9 },
-    mesial_lingual: { x: 5.8, y: -14.5 },
-    distal_lingual: { x: 12, y: 12 },
-  },
-  "47": {
-    mesial_buccal: { x: -10, y:-14 },
-    distal_buccal: { x: -4, y: 15 },
-    mesial_lingual: { x: 6, y: -13 },
-    distal_lingual: { x: 7, y: 10 },
-  },
-  "48": {
-    mesial_buccal: { x: -8, y: -9 },
-    distal_buccal: { x: -6, y: 18 },
-    mesial_lingual: { x: 8.6, y: -11 },
-    distal_lingual: { x: 9, y: 9 },
-  },
+  mesial_buccal: { x: 5, y: -8 },
+  distal_buccal: { x: -13, y: -4 },
+  mesial_lingual: { x: 11, y: 7 },
+  distal_lingual: { x: -7, y: 3.8 },
+},
+"12": {
+  mesial_buccal: { x: 1, y: -9 },
+  distal_buccal: { x: -10, y: -4 },
+  mesial_lingual: { x: 13, y: 7 },
+  distal_lingual: { x: -3.7, y: 12 },
+},
+"13": {
+  mesial_buccal: { x: -3, y: -12 },
+  distal_buccal: { x: -13, y: 8 },
+  mesial_lingual: { x: 13, y: -4 },
+  distal_lingual: { x: -4, y: 9 },
+},
+"14": {
+  mesial_buccal: { x: -3, y: -17 },
+  distal_buccal: { x: -12, y: 11.7 },
+  mesial_lingual: { x: 9, y: -4 },
+  distal_lingual: { x: 9, y: 13 },
+},
+"15": {
+  mesial_buccal: { x: -10, y: -17 },
+  distal_buccal: { x: -9, y: 10 },
+  mesial_lingual: { x: 11, y: -13 },
+  distal_lingual: { x: 8.5, y: 11 },
+},
+"16": {
+  mesial_buccal: { x: -6, y: -21 },
+  distal_buccal: { x: -8, y: 18 },
+  mesial_lingual: { x: 7, y: -18 },
+  distal_lingual: { x: 9, y: 12 },
+},
+"17": {
+  mesial_buccal: { x: -9, y: -18 },
+  distal_buccal: { x: -10, y: 20 },
+  mesial_lingual: { x: 4, y: -13 },
+  distal_lingual: { x: 6, y: 12 },
+},
+"18": {
+  mesial_buccal: { x: -6, y: -19 },
+  distal_buccal: { x: -9, y: 15 },
+  mesial_lingual: { x: 9, y: -18 },
+  distal_lingual: { x: 6, y: 8 },
+},
+"41": {
+  mesial_buccal: { x: 6, y: 7 },
+  distal_buccal: { x: -11, y: 4 },
+  mesial_lingual: { x: 2, y: 1 },
+  distal_lingual: { x: -3, y: 1 },
+},
+"42": {
+  mesial_buccal: { x: 3, y: 5.2 },
+  distal_buccal: { x: -9, y: 5 },
+  mesial_lingual: { x: 0, y: 0.5 },
+  distal_lingual: { x: -5, y: 6 },
+},
+"43": {
+  mesial_buccal: { x: 3, y: 8 },
+  distal_buccal: { x: -10, y: 2 },
+  mesial_lingual: { x: 0, y: -0.5 },
+  distal_lingual: { x: -4, y: 2.2 },
+},
+"44": {
+  mesial_buccal: { x: -2.5, y: 11 },
+  distal_buccal: { x: -11, y: -2 },
+  mesial_lingual: { x: 11, y: 0 },
+  distal_lingual: { x: 2, y: -9 },
+},
+"45": {
+  mesial_buccal: { x: -5, y: 6 },
+  distal_buccal: { x: -10.8, y: -9 },
+  mesial_lingual: { x: 8, y: 9 },
+  distal_lingual: { x: 6, y: -7.7 },
+},
+"46": {
+  mesial_buccal: { x: -8, y: 9 },
+  distal_buccal: { x: -11.2, y: -16.5 },
+  mesial_lingual: { x: 12, y: 12 },
+  distal_lingual: { x: 5.8, y: -14.5 },
+},
+"47": {
+  mesial_buccal: { x: -4, y: 15 },
+  distal_buccal: { x: -10, y: -14 },
+  mesial_lingual: { x: 7, y: 10 },
+  distal_lingual: { x: 6, y: -13 },
+},
+"48": {
+  mesial_buccal: { x: -6, y: 18 },
+  distal_buccal: { x: -8, y: -9 },
+  mesial_lingual: { x: 9, y: 9 },
+  distal_lingual: { x: 8.6, y: -11 },
+},
 });
 
 const CLASP_CIRC_ALL_TOOTH_IDS = Object.freeze([...TOOTH_ORDER.upper, ...TOOTH_ORDER.lower]);

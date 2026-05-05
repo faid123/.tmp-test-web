@@ -15,10 +15,9 @@ import {
 } from "./components.js";
 import { forEachTooth, isAutoMeshPlacementExcludedToothId, TOOTH_ORDER } from "./constants.js";
 import { closePresentToothRadialQuickPick } from "./annotationCatalog.js";
-import { state, DEFAULT_COMPONENT_ID } from "./annotationState.js";
-import { downloadJson, titleCase, setMessage } from "./annotationDom.js";
+import { state, DEFAULT_COMPONENT_ID, downloadJson, titleCase, setMessage } from "./2DAnnotation.js";
 import { renderComponentCatalog } from "./annotationCatalog.js";
-import { renderJaw, renderJaws } from "./annotationRenderBridge.js";
+import { renderJaw, renderJaws } from "./2DAnnotation.js";
 import {
   ensureToothPlacementState,
   normalizeSurface,
@@ -323,12 +322,11 @@ export function bindArchWhitespaceDismiss() {
       setMessage("Remove mode off.", false);
     }
 
-    const selected = COMPONENT_BY_ID.get(state.selectedComponentId || "");
-    if (selected && (isPlateComponentId(selected.id) || isMajorConnectorComponent(selected))) {
-      state.selectedComponentId = null;
-      renderComponentCatalog();
-      setMessage(`${selected.label} selection cleared.`, false);
-    }
+    // Clicking whitespace cancels the current placement workflow (e.g. clasp/rest suggestion mode)
+    // and returns the catalog to the default mesh tab.
+    state.selectedTab = "mesh";
+    state.selectedComponentId = DEFAULT_COMPONENT_ID;
+    renderComponentCatalog();
 
     state.suppressArchPlacementSuggestions = true;
     closePresentToothRadialQuickPick();

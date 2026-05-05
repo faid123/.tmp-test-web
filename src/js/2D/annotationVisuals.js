@@ -68,9 +68,16 @@ import {
   TOOTH_ORDER,
   TOOTH_SCALE_OVERRIDE,
 } from "./constants.js";
-import { REST_CALIBRATION_COMPONENT_ID, state, ui } from "./annotationState.js";
-import { positionAnteriorRestPanel, setMessage, svgEl } from "./annotationDom.js";
-import { renderJaw, renderJaws } from "./annotationRenderBridge.js";
+import {
+  REST_CALIBRATION_COMPONENT_ID,
+  state,
+  ui,
+  positionAnteriorRestPanel,
+  setMessage,
+  svgEl,
+  renderJaw,
+  renderJaws,
+} from "./2DAnnotation.js";
 import { placeSelectedComponentOnTooth, resolveMajorConnectorAnchorComponentId } from "./annotationPlacement.js";
 import {
   ensureToothPlacementState,
@@ -239,6 +246,17 @@ export function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
   const radius = getRestSuggestionRadius() + 0.6;
   const { mirrored } = getToothAssetSpec(toothId);
 
+  const canRemoveComponentId = (componentId) => {
+    // In remove-mode, removal is only allowed via the remove list UI.
+    if (state.removeComponentMode) return false;
+    return Boolean(componentId && state.selectedComponentId === componentId);
+  };
+
+  const blockRemoveMessage = (componentId) => {
+    const label = COMPONENT_BY_ID.get(componentId)?.label || componentId;
+    setMessage(`Select ${label} to remove it, or enable Remove mode.`, true);
+  };
+
   for (const placement of tooth.componentPlacements) {
     if (!isRestComponent(placement.componentId)) continue;
 
@@ -279,6 +297,11 @@ export function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
       );
 
       imageGroup.addEventListener("click", (event) => {
+        if (state.removeComponentMode) return;
+        if (!canRemoveComponentId(placement.componentId)) {
+          // Let the tooth click handler run (radial / placement), don't trap the click.
+          return;
+        }
         event.stopPropagation();
         removePlacement(tooth, placement.componentId, surface);
         const label = COMPONENT_BY_ID.get(placement.componentId)?.label || placement.componentId;
@@ -302,6 +325,11 @@ export function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
       });
 
     marker.addEventListener("click", (event) => {
+      if (state.removeComponentMode) return;
+      if (!canRemoveComponentId(placement.componentId)) {
+        // Let the tooth click handler run (radial / placement), don't trap the click.
+        return;
+      }
       event.stopPropagation();
       removePlacement(tooth, placement.componentId, surface);
       const label = COMPONENT_BY_ID.get(placement.componentId)?.label || placement.componentId;
@@ -364,6 +392,11 @@ export function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
     }
 
     outerG.addEventListener("click", (event) => {
+      if (state.removeComponentMode) return;
+      if (!canRemoveComponentId(placement.componentId)) {
+        // Let the tooth click handler run (radial / placement), don't trap the click.
+        return;
+      }
       event.stopPropagation();
       removePlacement(tooth, placement.componentId, surface);
       setMessage(`Removed clasp (${surface}) from tooth ${toothId}.`, false);
@@ -438,6 +471,11 @@ export function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
       "data-component-id": placement.componentId,
     });
     barHitTarget.addEventListener("click", (event) => {
+      if (state.removeComponentMode) return;
+      if (!canRemoveComponentId(placement.componentId)) {
+        // Let the tooth click handler run (radial / placement), don't trap the click.
+        return;
+      }
       event.stopPropagation();
       removePlacement(tooth, placement.componentId, barSurface);
       setMessage(`Removed bar from tooth ${toothId}.`, false);

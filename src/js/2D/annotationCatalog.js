@@ -20,9 +20,14 @@ import {
   replaceUpperPalatalBarPlacementsWithPalatalHole,
 } from "./components.js";
 import { COMPONENT_GROUPS, forEachTooth, TOOTH_ORDER } from "./constants.js";
-import { state, ui, DEFAULT_COMPONENT_ID } from "./annotationState.js";
-import { setMessage } from "./annotationDom.js";
-import { renderJaws, meshAnnotationEnv } from "./annotationRenderBridge.js";
+import {
+  state,
+  ui,
+  DEFAULT_COMPONENT_ID,
+  setMessage,
+  renderJaws,
+  meshAnnotationEnv,
+} from "./2DAnnotation.js";
 import {
   ensureToothPlacementState,
   syncToothComponentsFromPlacements,

@@ -1,9 +1,15 @@
 <svg width="87" height="202" viewBox="0 0 87 202" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <g id="16-rc_mesial_lingual">
-<path d="M0 0H82V202H0V0Z" fill="url(#pattern0_99_85)"/>
-<path d="M5 0H87V202H5V0Z" fill="url(#pattern1_99_85)"/>
+<path d="M0 0H82V202H0V0Z" fill="url(#pattern0_99_85)" filter="url(#claspGreen_16-rc_mesial_lingual)"/>
+<path d="M5 0H87V202H5V0Z" fill="url(#pattern1_99_85)" filter="url(#claspRed_16-rc_mesial_lingual)"/>
 </g>
 <defs>
+<filter id="claspGreen_16-rc_mesial_lingual" x="0" y="0" width="100%" height="100%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+  <feColorMatrix type="matrix" values="0 0 0 0 0.564706  0 0 0 0 0.933333  0 0 0 0 0.564706  0 0 0 1 0"/>
+</filter>
+<filter id="claspRed_16-rc_mesial_lingual" x="0" y="0" width="100%" height="100%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+  <feColorMatrix type="matrix" values="0 0 0 0 0.898039  0 0 0 0 0.223529  0 0 0 0 0.207843  0 0 0 1 0"/>
+</filter>
 <pattern id="pattern0_99_85" patternContentUnits="objectBoundingBox" width="1" height="1">
 <use xlink:href="#image0_99_85" transform="matrix(0.0121951 0 0 0.00525235 0 -0.0304878)"/>
 </pattern>

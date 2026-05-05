@@ -11,13 +11,18 @@ import {
   isPlateComponentId,
 } from "./components.js";
 import { EMPTY_JAW_CALIBRATION, JAW_BACKGROUND_IMAGES, JAW_BACKGROUND_OFFSET_BY_JAW, JAW_BACKGROUND_SCALE_BY_JAW, JAW_CALIBRATION, TOOTH_ASSET_BASE, TOOTH_ORDER } from "./constants.js";
-import { state } from "./annotationState.js";
-import { svgEl, setMessage } from "./annotationDom.js";
-import { registerRender, registerMeshAnnotationEnv, meshAnnotationEnv } from "./annotationRenderBridge.js";
+import {
+  state,
+  svgEl,
+  setMessage,
+  registerRender,
+  registerMeshAnnotationEnv,
+  meshAnnotationEnv,
+  showPresentToothRadialQuickPick,
+  openRemoveComponentPicker,
+} from "./2DAnnotation.js";
 import { renderComponentCatalog } from "./annotationCatalog.js";
 import { placeSelectedComponentOnTooth } from "./annotationPlacement.js";
-import { showPresentToothRadialQuickPick } from "./annotationRadial.js";
-import { openRemoveComponentPicker } from "./annotationRemove.js";
 import {
   getToothPlacement,
   toggleToothPresence,
@@ -137,6 +142,8 @@ export function renderJaw(jaw) {
 
     group.appendChild(createToothVisual(toothId, jaw));
     appendToothComponentVisuals(group, tooth, toothId, jaw);
+    // Plates should render above tooth bitmap, but below placed clasps/markers.
+    appendToothPlateComponentVisuals(group, tooth, toothId, jaw);
     appendPlateSuggestionPoints(group, tooth, toothId, jaw);
     appendPlacedComponentMarkers(group, tooth, toothId, jaw);
     appendRestSuggestionPoints(group, tooth, toothId, jaw);
@@ -229,34 +236,6 @@ export function renderJaw(jaw) {
       handleMeshToolDoubleClick(meshAnnotationEnv(), jaw, toothId);
     });
     svg.appendChild(group);
-  });
-
-  // Plates after all tooth bodies/majors so wide lower major segments (e.g. lingual bar) do not
-  // occlude neighboring teeth' plates.
-  ids.forEach((toothId) => {
-    const placement = getToothPlacement(jaw, toothId);
-    if (!placement) return;
-    const tooth = state.teeth[toothId];
-    if (!tooth?.isPresent) return;
-    const calibration = JAW_CALIBRATION[jaw] || EMPTY_JAW_CALIBRATION;
-    const point = {
-      x: placement.x + calibration.x,
-      y: placement.y + calibration.y,
-    };
-    const rotation = placement.rotation + calibration.rotation;
-    const plateOverlay = svgEl("g", {
-      class: "tooth-plate-overlay",
-      "data-tooth-id": toothId,
-      "data-jaw": jaw,
-    });
-    plateOverlay.setAttribute(
-      "transform",
-      `translate(${point.x.toFixed(2)} ${point.y.toFixed(2)}) rotate(${rotation.toFixed(2)})`
-    );
-    appendToothPlateComponentVisuals(plateOverlay, tooth, toothId, jaw);
-    if (plateOverlay.childNodes.length > 0) {
-      svg.appendChild(plateOverlay);
-    }
   });
 
   if (jaw === "upper") {

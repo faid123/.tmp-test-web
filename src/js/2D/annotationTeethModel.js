@@ -1,6 +1,6 @@
 import { COMPONENT_BY_ID } from "./components.js";
 import { forEachTooth, STATUS_VALUES, TOOTH_POSITION_MAP, TOOTH_SCALE_BY_UNIT, TOOTH_SCALE_OVERRIDE } from "./constants.js";
-import { state } from "./annotationState.js";
+import { state } from "./2DAnnotation.js";
 
 export function initializeTeethState() {
   forEachTooth((toothId, jaw) => {
