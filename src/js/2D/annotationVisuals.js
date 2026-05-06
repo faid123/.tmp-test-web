@@ -2,12 +2,13 @@ import {
   augmentTeethForPalatalBarConnectorNeighbors,
   COMPONENT_BY_ID,
   getBarUserOffset,
-  getClaspCircAssetReference,
-  getClaspCircPlacementImageSize,
-  getClaspCircPlacementOffset,
-  getClaspCircPlacementRenderScale,
-  getClaspCircSuggestionPointsForTooth,
-  getClaspCircSuggestionRadius,
+  getReciprocatingClaspAssetReference,
+  getRetainerClaspAssetReference,
+  getRetainerClaspPlacementImageSize,
+  getRetainerClaspPlacementOffset,
+  getRetainerClaspPlacementRenderScale,
+  getRetainerClaspSuggestionPointsForTooth,
+  getRetainerClaspSuggestionRadius,
   getCingulumAcSuggestionPointsForTooth,
   getComponentAssetReference,
   BAR_PLACEMENT_ANCHOR_SURFACE,
@@ -34,7 +35,8 @@ import {
   hasPalatalHolePlacementOnUpperArch,
   isBarComponent,
   isBarPlacementSurface,
-  isClaspCircComponent,
+  isReciprocatingClaspComponent,
+  isRetainerClaspComponent,
   isMajorConnectorComponent,
   isMeshComponent,
   isPalatalBarMajorComponent,
@@ -219,7 +221,7 @@ function getRestSurfacePointMap(toothId, jaw, componentId = null) {
 }
 
 function getClaspSurfacePointMap(toothId, jaw) {
-  const points = getClaspCircSuggestionPointsForTooth(toothId, jaw);
+  const points = getRetainerClaspSuggestionPointsForTooth(toothId, jaw);
   return new Map(points.map((point) => [normalizeSurface(point.surface), point]));
 }
 
@@ -235,6 +237,8 @@ function restMarkerAnchorSurface(placementSurface, toothId) {
 
 export function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
   ensureToothPlacementState(tooth);
+  const { mirrored } = getToothAssetSpec(toothId);
+
   if (!tooth.componentPlacements.length) return;
   if (!tooth.isPresent) {
     const hasBarPlacement = tooth.componentPlacements.some((placement) =>
@@ -244,7 +248,6 @@ export function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
   }
 
   const radius = getRestSuggestionRadius() + 0.6;
-  const { mirrored } = getToothAssetSpec(toothId);
 
   const canRemoveComponentId = (componentId) => {
     // In remove-mode, removal is only allowed via the remove list UI.
@@ -340,9 +343,11 @@ export function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
     group.appendChild(marker);
   }
 
-  const claspRadius = getClaspCircSuggestionRadius() + 0.6;
+  const claspRadius = getRetainerClaspSuggestionRadius() + 0.6;
   for (const placement of tooth.componentPlacements) {
-    if (!isClaspCircComponent(placement.componentId)) continue;
+    const isRetainer = isRetainerClaspComponent(placement.componentId);
+    const isReciprocating = isReciprocatingClaspComponent(placement.componentId);
+    if (!isRetainer && !isReciprocating) continue;
 
     const surface = normalizeSurface(placement.surface);
     if (!surface) continue;
@@ -351,15 +356,17 @@ export function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
     const point = claspPointMap.get(surface);
     if (!point) continue;
 
-    const claspOffset = getClaspCircPlacementOffset(placement.componentId, toothId, surface);
+    const claspOffset = getRetainerClaspPlacementOffset(placement.componentId, toothId, surface);
     const outerG = svgEl("g", {
       transform: `translate(${point.x + claspOffset.x} ${point.y + claspOffset.y}) scale(${mirrored ? -1 : 1} 1)`,
       class: `clasp-placement-root clasp-placement-${surface}`,
     });
 
-    const assetHref = getClaspCircAssetReference(toothId, surface);
-    const imageSize = getClaspCircPlacementImageSize(placement.componentId, toothId, surface);
-    const claspScale = getClaspCircPlacementRenderScale(placement.componentId, toothId, surface);
+    const assetHref = isReciprocating
+      ? getReciprocatingClaspAssetReference(toothId, surface)
+      : getRetainerClaspAssetReference(toothId, surface);
+    const imageSize = getRetainerClaspPlacementImageSize(placement.componentId, toothId, surface);
+    const claspScale = getRetainerClaspPlacementRenderScale(placement.componentId, toothId, surface);
 
     if (assetHref && imageSize) {
       const width = imageSize.width * claspScale;
@@ -485,6 +492,7 @@ export function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
 
     group.appendChild(outerG);
   }
+
 }
 
 function isAnteriorRestSurfaceDialogTooth(toothId) {
@@ -612,10 +620,13 @@ function shouldShowRestSuggestions() {
   return state.designMode && isRestComponent(state.selectedComponentId);
 }
 
-function shouldShowClaspCircSuggestions() {
+function shouldShowRetainerClaspSuggestions() {
   if (state.suppressArchPlacementSuggestions) return false;
   if (!state.designMode) return false;
-  return isClaspCircComponent(state.selectedComponentId);
+  return (
+    isRetainerClaspComponent(state.selectedComponentId) ||
+    isReciprocatingClaspComponent(state.selectedComponentId)
+  );
 }
 
 function shouldShowPlateSuggestions() {
@@ -764,7 +775,7 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
   }
 }
 
-function handleClaspCircSuggestionPick(jaw, toothId, surface) {
+function handleRetainerClaspSuggestionPick(jaw, toothId, surface) {
   const normalized = normalizeSurface(surface);
   if (!normalized) return;
   placeSelectedComponentOnTooth(toothId, { surface: normalized });
@@ -772,24 +783,40 @@ function handleClaspCircSuggestionPick(jaw, toothId, surface) {
 }
 
 // Clickable circumferential clasp anchors (separate geometry from rest suggestions).
-function appendClaspCircSuggestionPoints(group, tooth, toothId, jaw) {
-  if (!shouldShowClaspCircSuggestions()) return;
+function appendRetainerClaspSuggestionPoints(group, tooth, toothId, jaw) {
+  if (!shouldShowRetainerClaspSuggestions()) return;
   if (!tooth.isPresent) return;
 
   const selectedComponent = COMPONENT_BY_ID.get(state.selectedComponentId || "");
-  if (!selectedComponent || !isClaspCircComponent(selectedComponent)) return;
+  const isRetainer = isRetainerClaspComponent(selectedComponent);
+  const isReciprocating = isReciprocatingClaspComponent(selectedComponent);
+  if (!selectedComponent || (!isRetainer && !isReciprocating)) return;
 
   ensureToothPlacementState(tooth);
 
-  const points = getClaspCircSuggestionPointsForTooth(toothId, jaw);
-  const radius = getClaspCircSuggestionRadius();
+  if (isReciprocating && hasClaspTypePlacement(tooth, isReciprocatingClaspComponent)) {
+    return;
+  }
+
+  let points = getRetainerClaspSuggestionPointsForTooth(toothId, jaw);
+  if (isReciprocating) {
+    const retainerSurface = getPlacedClaspSurface(tooth, isRetainerClaspComponent);
+    if (retainerSurface) {
+      points = points.filter((p) => normalizeSurface(p.surface) !== retainerSurface);
+    }
+  }
+  const radius = getRetainerClaspSuggestionRadius();
 
   for (const pointData of points) {
     const surface = normalizeSurface(pointData.surface);
     if (!surface) continue;
-    if (hasClaspCircPlacementAtSurface(tooth, surface)) continue;
+    if (hasRetainerClaspPlacementAtSurface(tooth, surface)) continue;
 
-    const className = ["clasp-suggestion-point", `clasp-suggestion-${surface}`].join(" ");
+    const className = [
+      "clasp-suggestion-point",
+      isReciprocating ? "rpc-suggestion-point" : "",
+      `clasp-suggestion-${surface}`,
+    ].filter(Boolean).join(" ");
 
     const point = svgEl("circle", {
       cx: String(pointData.x),
@@ -800,21 +827,37 @@ function appendClaspCircSuggestionPoints(group, tooth, toothId, jaw) {
     });
     point.addEventListener("click", (event) => {
       event.stopPropagation();
-      handleClaspCircSuggestionPick(jaw, toothId, surface);
+      handleRetainerClaspSuggestionPick(jaw, toothId, surface);
     });
     group.appendChild(point);
   }
 }
 
-function hasClaspCircPlacementAtSurface(tooth, surface) {
+function hasClaspTypePlacement(tooth, classifier) {
+  ensureToothPlacementState(tooth);
+  return tooth.componentPlacements.some((entry) => classifier(entry.componentId));
+}
+
+function getPlacedClaspSurface(tooth, classifier) {
+  ensureToothPlacementState(tooth);
+  const found = tooth.componentPlacements.find((entry) => classifier(entry.componentId));
+  return normalizeSurface(found?.surface);
+}
+
+function hasRetainerClaspPlacementAtSurface(tooth, surface) {
   ensureToothPlacementState(tooth);
   const targetSurface = normalizeSurface(surface);
   if (!targetSurface) return false;
 
+  const selectedComponent = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+  const matchReciprocating = isReciprocatingClaspComponent(selectedComponent);
+
   return tooth.componentPlacements.some((entry) => {
     const sameSurface = normalizeSurface(entry.surface) === targetSurface;
     if (!sameSurface) return false;
-    return isClaspCircComponent(entry.componentId);
+    return matchReciprocating
+      ? isReciprocatingClaspComponent(entry.componentId)
+      : isRetainerClaspComponent(entry.componentId);
   });
 }
 
@@ -1094,7 +1137,7 @@ function createComponentVisual(componentId, toothId, jaw) {
 
 export {
   applyToothStatusClass,
-  appendClaspCircSuggestionPoints,
+  appendRetainerClaspSuggestionPoints,
   appendPalatalBarArchOverlay,
   appendPalatalHoleArchOverlay,
   appendPlateSuggestionPoints,

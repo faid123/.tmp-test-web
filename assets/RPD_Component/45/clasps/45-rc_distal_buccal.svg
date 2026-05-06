@@ -1,7 +1,7 @@
 <svg width="99" height="198" viewBox="0 0 99 198" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <g id="45-rc_distal_buccal">
-<path d="M0 0H99V198H0V0Z" fill="url(#pattern0_126_125)" filter="url(#claspGreen_45-rc_distal_buccal)"/>
-<path d="M0 0H99V198H0V0Z" fill="url(#pattern1_126_125)" filter="url(#claspRed_45-rc_distal_buccal)"/>
+<path d="M0 0H99V198H0V0Z" fill="url(#pattern1_126_125)" filter="url(#claspGreen_45-rc_distal_buccal)"/>
+<path d="M0 0H99V198H0V0Z" fill="url(#pattern0_126_125)" filter="url(#claspRed_45-rc_distal_buccal)"/>
 </g>
 <defs>
 <filter id="claspGreen_45-rc_distal_buccal" x="0" y="0" width="100%" height="100%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">

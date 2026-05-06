@@ -643,6 +643,25 @@ body {
   opacity: 1;
 }
 
+.clasp-suggestion-point.rpc-suggestion-point {
+  fill: #7ec8ff;
+}
+
+.clasp-suggestion-point.rpc-suggestion-point:hover {
+  fill: #63b8f5;
+}
+
+.clasp-suggestion-image {
+  pointer-events: all;
+  cursor: pointer;
+  opacity: 1;
+  filter: saturate(1.2) brightness(1.08) contrast(1.04);
+}
+
+.clasp-suggestion-image:hover {
+  opacity: 1;
+}
+
 .clasp-placement-marker {
   fill: #81c784;
   stroke: #ffffff;
@@ -655,8 +674,7 @@ body {
   pointer-events: all;
   cursor: pointer;
   opacity: 1;
-  /* Use the original SVG colors (no recolor filter). */
-  filter: none;
+  filter: saturate(1.2) brightness(1.08) contrast(1.04);
 }
 
 .rest-placement-marker {
@@ -932,24 +950,25 @@ body {
   opacity: 0.3;
   cursor: not-allowed;
 }
-/* Bar suggestions: deep navy over the full tooth bitmap (invert/sepia fills the silhouette). */
+/* Bar suggestions: light green to match retainer clasp base color. */
 .tooth.tooth-bar-suggestible .tooth-image {
-  filter: brightness(0) saturate(100%) invert(34%) sepia(88%) saturate(1820%)
-    hue-rotate(204deg) brightness(95%) contrast(98%);
+  filter: brightness(0) saturate(100%) invert(31%) sepia(35%) saturate(1068%)
+    hue-rotate(72deg) brightness(104%) contrast(95%);
   opacity: 0.62;
 }
 
 .tooth.tooth-bar-suggestible:hover .tooth-image {
-  filter: brightness(0) saturate(100%) invert(31%) sepia(91%) saturate(2200%)
-    hue-rotate(206deg) brightness(95%) contrast(104%);
+  filter: brightness(0) saturate(100%) invert(31%) sepia(35%) saturate(1068%)
+    hue-rotate(72deg) brightness(112%) contrast(98%);
   opacity: 0.78;
 }
 
 .bar-placement-image {
   pointer-events: none;
-  opacity: 0.76;
-  filter: brightness(0) saturate(100%) invert(31%) sepia(91%) saturate(2200%)
-    hue-rotate(206deg) brightness(95%) contrast(104%);
+  opacity: 1;
+  /* Force visible light-green tint like retainer clasp base. */
+  filter: brightness(0) saturate(100%) invert(82%) sepia(22%) saturate(760%)
+    hue-rotate(68deg) brightness(116%) contrast(95%);
 }
 
 .bar-placement-hit-target {

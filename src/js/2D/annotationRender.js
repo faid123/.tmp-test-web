@@ -29,7 +29,7 @@ import {
   toggleToothStatus,
 } from "./annotationTeethModel.js";
 import {
-  appendClaspCircSuggestionPoints,
+  appendRetainerClaspSuggestionPoints,
   appendPalatalBarArchOverlay,
   appendPalatalHoleArchOverlay,
   appendPlacedComponentMarkers,
@@ -147,7 +147,7 @@ export function renderJaw(jaw) {
     appendPlateSuggestionPoints(group, tooth, toothId, jaw);
     appendPlacedComponentMarkers(group, tooth, toothId, jaw);
     appendRestSuggestionPoints(group, tooth, toothId, jaw);
-    appendClaspCircSuggestionPoints(group, tooth, toothId, jaw);
+    appendRetainerClaspSuggestionPoints(group, tooth, toothId, jaw);
 
     const toothClickKey = `mesh-tooth:${jaw}:${toothId}`;
     group.addEventListener("click", (event) => {

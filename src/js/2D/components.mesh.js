@@ -77,22 +77,70 @@ const MESH_IMAGE_SIZE_BY_COMPONENT = Object.freeze({
  * Teeth with no row fall back to {@link MESH_IMAGE_SIZE_BY_COMPONENT}.
  */
 const MESH_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
-  "11": { "mesh-hole": { width: 155, height: 370 } },
-  "12": { "mesh-hole": { width: 188, height: 350 } },
-  "13": { "mesh-hole": { width: 215, height: 420 } },
-  "14": { "mesh-hole": { width: 225, height: 420 } },
-  "15": { "mesh-hole": { width: 225, height: 420 } },
-  "16": { "mesh-hole": { width: 240, height: 420 } },
-  "17": { "mesh-hole": { width: 235, height: 420 } },
-  "18": { "mesh-hole": { width: 220, height: 420 } },
-  "41": { "mesh-hole": { width: 105, height: 160 } },
-  "42": { "mesh-hole": { width: 135, height: 285 } },
-  "43": { "mesh-hole": { width: 175, height: 405 } },
-  "44": { "mesh-hole": { width: 200, height: 420 } },
-  "45": { "mesh-hole": { width: 185, height: 420 } },
-  "46": { "mesh-hole": { width: 200, height: 420 } },
-  "47": { "mesh-hole": { width: 190, height: 420 } },
-  "48": { "mesh-hole": { width: 185, height: 420 } },
+  "11": {
+    "mesh-hole": { width: 155, height: 370 },
+    "mesh-flange": { width: 155, height: 370 },
+  },
+  "12": {
+    "mesh-hole": { width: 188, height: 350 },
+    "mesh-flange": { width: 188, height: 350 },
+  },
+  "13": {
+    "mesh-hole": { width: 215, height: 420 },
+    "mesh-flange": { width: 215, height: 420 },
+  },
+  "14": {
+    "mesh-hole": { width: 225, height: 420 },
+    "mesh-flange": { width: 225, height: 420 },
+  },
+  "15": {
+    "mesh-hole": { width: 225, height: 420 },
+    "mesh-flange": { width: 225, height: 420 },
+  },
+  "16": {
+    "mesh-hole": { width: 240, height: 420 },
+    "mesh-flange": { width: 240, height: 420 },
+  },
+  "17": {
+    "mesh-hole": { width: 235, height: 420 },
+    "mesh-flange": { width: 235, height: 420 },
+  },
+  "18": {
+    "mesh-hole": { width: 220, height: 420 },
+    "mesh-flange": { width: 210, height: 420 },
+  },
+  "41": {
+    "mesh-hole": { width: 105, height: 160 },
+    "mesh-flange": { width: 205, height: 248 },
+  },
+  "42": {
+    "mesh-hole": { width: 135, height: 285 },
+    "mesh-flange": { width: 175, height: 285 },
+  },
+  "43": {
+    "mesh-hole": { width: 175, height: 405 },
+    "mesh-flange": { width: 260, height: 405 },
+  },
+  "44": {
+    "mesh-hole": { width: 200, height: 420 },
+    "mesh-flange": { width: 310, height: 420 },
+  },
+  "45": {
+    "mesh-hole": { width: 185, height: 420 },
+    "mesh-flange": { width: 300, height: 420 },
+  },
+  "46": {
+    "mesh-hole": { width: 200, height: 420 },
+    "mesh-flange": { width: 315, height: 420 },
+  },
+  "47": {
+    "mesh-hole": { width: 190, height: 420 },
+    "mesh-flange": { width: 300, height: 420 },
+  },
+  "48": {
+    "mesh-hole": { width: 185, height: 420 },
+    "mesh-flange": { width: 280, height: 420 },
+  },
 });
 
 const MESH_RENDER_SCALE_BY_COMPONENT = Object.freeze({
@@ -136,41 +184,134 @@ const MESH_POSITION_OFFSET_BY_COMPONENT = Object.freeze({
 });
 
 const MESH_POSITION_OFFSET_OVERRIDE_SEED_BY_TOOTH = Object.freeze({
-  "11": { "mesh-hole": { x: -4.7, y: 7 } },
-  "12": { "mesh-hole": { x: -0.5, y: 5} },
-  "13": { "mesh-hole": { x: 2.3, y: 0.5 } },
-  "14": { "mesh-hole": { x: 4.0, y: 0.2 } },
-  "15": { "mesh-hole": { x: 0.5, y: -1.2 } },
-  "16": { "mesh-hole": { x: -2, y: 1 } },
-  "17": { "mesh-hole": { x: 0, y: 0 } },
-  "18": { "mesh-hole": { x: 1.5, y: 2 } },
-
-  "21": { "mesh-hole": { x: 4.7, y: 7 } },
-  "22": { "mesh-hole": { x: 1.5, y: 5 } },
-  "23": { "mesh-hole": { x: -4.3, y: 0.5 } },
-  "24": { "mesh-hole": { x: -4.0, y: 0.2 } },
-  "25": { "mesh-hole": { x: -1.5, y: -1.2 } },
-  "26": { "mesh-hole": { x: 2, y: 1 } },
-  "27": { "mesh-hole": { x: 0, y: 0 } },
-  "28": { "mesh-hole": { x: -1.5, y: 2 } },
-
-  "31": { "mesh-hole": { x: 0, y: -21 } },
-  "32": { "mesh-hole": { x: -5.6, y: -17} },
-  "33": { "mesh-hole": { x: -12.6, y: -14.5 } },
-  "34": { "mesh-hole": { x: -22.5, y: -8.5 } },
-  "35": { "mesh-hole": { x: -19, y: -5.7 } },
-  "36": { "mesh-hole": { x: -18.5, y: -6.5 } },
-  "37": { "mesh-hole": { x: -17, y: -7 } },
-  "38": { "mesh-hole": { x: -20.5, y: -5.8 } },
-
-  "41": { "mesh-hole": { x: 0, y: -21 } },
-  "42": { "mesh-hole": { x: 5.6, y: -17 } },
-  "43": { "mesh-hole": { x: 12.6, y: -14.5 } },
-  "44": { "mesh-hole": { x: 22.5, y: -8.5 } },
-  "45": { "mesh-hole": { x: 19, y: -5.7 } },
-  "46": { "mesh-hole": { x: 17.5, y: -6.5 } },
-  "47": { "mesh-hole": { x: 17, y: -7 } },
-  "48": { "mesh-hole": { x: 20.5, y: -5.8 } },
+  "11": {
+    "mesh-hole": { x: -4.7, y: 7 },
+    "mesh-flange": { x: -4.7, y: 10 },
+  },
+  "12": {
+    "mesh-hole": { x: -0.5, y: 5 },
+    "mesh-flange": { x: -0.5, y: 8 },
+  },
+  "13": {
+    "mesh-hole": { x: 2.3, y: 0.5 },
+    "mesh-flange": { x: 2.3, y: 3.5 },
+  },
+  "14": {
+    "mesh-hole": { x: 4.0, y: 0.2 },
+    "mesh-flange": { x: 6, y: 3.2 },
+  },
+  "15": {
+    "mesh-hole": { x: 0.5, y: -1.2 },
+    "mesh-flange": { x: 3.5, y: -0.2 },
+  },
+  "16": {
+    "mesh-hole": { x: -2, y: 1 },
+    "mesh-flange": { x: 1, y: 1 },
+  },
+  "17": {
+    "mesh-hole": { x: 0, y: 0 },
+    "mesh-flange": { x: 4, y: -2 },
+  },
+  "18": {
+    "mesh-hole": { x: 1.5, y: 2 },
+    "mesh-flange": { x: 6.5, y: -3 },
+  },
+  "21": {
+    "mesh-hole": { x: 4.7, y: 7 },
+    "mesh-flange": { x: 4.7, y: 10 },
+  },
+  "22": {
+    "mesh-hole": { x: 1.5, y: 5 },
+    "mesh-flange": { x: 1.5, y: 8 },
+  },
+  "23": {
+    "mesh-hole": { x: -4.3, y: 0.5 },
+    "mesh-flange": { x: -4.3, y: 3.5 },
+  },
+  "24": {
+    "mesh-hole": { x: -4, y: 0.2 },
+    "mesh-flange": { x: -6, y: 3.2 },
+  },
+  "25": {
+    "mesh-hole": { x: -1.5, y: -1.2 },
+    "mesh-flange": { x: -3.5, y: -0.2 },
+  },
+  "26": {
+    "mesh-hole": { x: 3, y: 1 },
+    "mesh-flange": { x: 0, y: 1 },
+  },
+  "27": {
+    "mesh-hole": { x: 1, y: 0 },
+    "mesh-flange": { x: -3, y: -2 },
+  },
+  "28": {
+    "mesh-hole": { x: -1.5, y: 2 },
+    "mesh-flange": { x: -6.5, y: -3 },
+  },
+  "31": {
+    "mesh-hole": { x: 0, y: -21 },
+    "mesh-flange": { x: 3, y: -8 },
+  },
+  "32": {
+    "mesh-hole": { x: -5.6, y: -17 },
+    "mesh-flange": { x: 1.4, y: -4 },
+  },
+  "33": {
+    "mesh-hole": { x: -12.6, y: -14.5 },
+    "mesh-flange": { x: -0.6, y: -3.5 },
+  },
+  "34": {
+    "mesh-hole": { x: -22.5, y: -8.5 },
+    "mesh-flange": { x: -6, y: 1.5 },
+  },
+  "35": {
+    "mesh-hole": { x: -19, y: -5.7 },
+    "mesh-flange": { x: -1, y: 1.3 },
+  },
+  "36": {
+    "mesh-hole": { x: -18.5, y: -6.5 },
+    "mesh-flange": { x: 0.5, y: -0.5 },
+  },
+  "37": {
+    "mesh-hole": { x: -17, y: -7 },
+    "mesh-flange": { x: 0, y: 0 },
+  },
+  "38": {
+    "mesh-hole": { x: -20.5, y: -5.8 },
+    "mesh-flange": { x: -7.5, y: 2.8 },
+  },
+  "41": {
+    "mesh-hole": { x: 0, y: -21 },
+    "mesh-flange": { x: -3, y: -8 },
+  },
+  "42": {
+    "mesh-hole": { x: 5.6, y: -17 },
+    "mesh-flange": { x: -1.4, y: -4 },
+  },
+  "43": {
+    "mesh-hole": { x: 12.6, y: -14.5 },
+    "mesh-flange": { x: -0.6, y: -3.5 },
+  },
+  "44": {
+    "mesh-hole": { x: 22.5, y: -8.5 },
+    "mesh-flange": { x: 6, y: 1.5 },
+  },
+  "45": {
+    "mesh-hole": { x: 19, y: -5.7 },
+    "mesh-flange": { x: 1, y: 1.3 },
+  },
+  "46": {
+    "mesh-hole": { x: 17.5, y: -6.5 },
+    "mesh-flange": { x: -0.5, y: -0.5 },
+  },
+  "47": {
+    "mesh-hole": { x: 17, y: -7 },
+    "mesh-flange": { x: 0, y: 0 },
+  },
+  "48": {
+    "mesh-hole": { x: 20.5, y: -5.8 },
+    "mesh-flange": { x: 7.5, y: 2.8 },
+  },
 });
 
 function buildMeshPositionOffsetByTooth(seedByTooth) {

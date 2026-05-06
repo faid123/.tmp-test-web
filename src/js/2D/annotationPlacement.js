@@ -4,7 +4,8 @@ import {
   getMajorConnectorAssetReference,
   hasPalatalHolePlacementOnUpperArch,
   isBarComponent,
-  isClaspCircComponent,
+  isReciprocatingClaspComponent,
+  isRetainerClaspComponent,
   isClaspComponent,
   isMajorConnectorComponent,
   isMeshComponent,
@@ -173,7 +174,8 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
 
   const requiresSurface =
     isRestComponent(selectedComponent) ||
-    isClaspCircComponent(selectedComponent) ||
+    isRetainerClaspComponent(selectedComponent) ||
+    isReciprocatingClaspComponent(selectedComponent) ||
     isBarComponent(selectedComponent);
   const surface = normalizeSurface(placementContext?.surface);
   const targetSurface = requiresSurface ? surface : null;
@@ -183,7 +185,7 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
       placeSelectedComponentOnTooth(toothId, { surface: "mesial" });
       return;
     }
-    if (isClaspCircComponent(selectedComponent)) {
+    if (isRetainerClaspComponent(selectedComponent) || isReciprocatingClaspComponent(selectedComponent)) {
       setMessage(
         `For ${selectedComponent.label}, click a clasp suggestion point (mesial or distal, buccal or lingual).`,
         true
@@ -217,6 +219,22 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
       false
     );
     return;
+  }
+
+  // Clasp-circ constraint: max one clasp per tooth.
+  // Any existing retainer-clasp on this tooth is replaced by the new placement.
+  if ((isRetainerClaspComponent(selectedComponent) || isReciprocatingClaspComponent(selectedComponent)) && targetSurface) {
+    const existingClasp = (tooth.componentPlacements || []).find((entry) => {
+      const sameClaspType = isRetainerClaspComponent(selectedComponent)
+        ? isRetainerClaspComponent(entry.componentId)
+        : isReciprocatingClaspComponent(entry.componentId);
+      if (!sameClaspType) return false;
+      const s = normalizeSurface(entry.surface);
+      return Boolean(s && s !== targetSurface);
+    });
+    if (existingClasp) {
+      removePlacement(tooth, existingClasp.componentId, existingClasp.surface);
+    }
   }
 
   const criteriaResult = assessPlacementCriteria(tooth, selectedComponent, COMPONENT_BY_ID);

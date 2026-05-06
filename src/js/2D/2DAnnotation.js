@@ -8,7 +8,10 @@
 
 import { lol } from "../../crypt.js";
 import { SVG_NS } from "./constants.js";
-import { COMPONENT_BY_ID, COMPONENT_CATALOG } from "./components.js";
+import {
+  COMPONENT_BY_ID,
+  COMPONENT_CATALOG,
+} from "./components.js";
 
 /** Calibrated tooth-image scale (SVG tooth-local units). */
 export const TOOTH_SCALE_BASE = 0.24;

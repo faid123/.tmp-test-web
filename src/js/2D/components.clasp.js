@@ -131,7 +131,7 @@ function mirrorQuad(row) {
   };
 }
 
-function buildClaspCircPointOverrides() {
+function buildRetainerClaspPointOverrides() {
   const out = {};
   for (let u = 1; u <= 8; u += 1) {
     const unit = String(u);
@@ -150,9 +150,9 @@ function buildClaspCircPointOverrides() {
 }
 
 /** FDI tooth id → four clasp suggestion anchors (independent of rest suggestion geometry). */
-export const CLASP_CIRC_POINT_OVERRIDES = buildClaspCircPointOverrides();
+export const CLASP_CIRC_POINT_OVERRIDES = buildRetainerClaspPointOverrides();
 
-/** Fallback `<image>` box when a template tooth has no `clasp-circ` row in {@link CLASP_CIRC_PLACEMENT_IMAGE_SIZE_BY_TOOTH}. */
+/** Fallback `<image>` box when a template tooth has no `retainer-clasp` row in {@link CLASP_CIRC_PLACEMENT_IMAGE_SIZE_BY_TOOTH}. */
 const CLASP_CIRC_IMAGE_DEFAULT = Object.freeze({ width: 40, height: 40 });
 
 /**
@@ -203,111 +203,111 @@ const CLASP_CIRC_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
  "43": { mesial_buccal: { width: 105, height: 100 },distal_buccal: { width: 100, height: 100 },mesial_lingual: { width: 100, height: 85 },distal_lingual: { width: 92, height: 85 },},
   "44": { mesial_buccal: { width: 115, height: 100 },distal_buccal: { width: 120, height: 120 },mesial_lingual: { width: 130, height: 110 },distal_lingual: { width: 100, height: 100 },},
    "45": { mesial_buccal: { width: 105, height: 100 },distal_buccal: { width: 130, height: 120 },mesial_lingual: { width: 145, height: 117 },distal_lingual: { width: 112, height: 105 },},
-  "46": { mesial_buccal: { width: 165, height: 140 },distal_buccal: { width: 170, height: 155 },mesial_lingual: { width: 155, height: 167 },distal_lingual: { width: 145, height: 145 },}, 
+  "46": { mesial_buccal: { width: 165, height: 140 },distal_buccal: { width: 170, height: 155 },mesial_lingual: { width: 152, height: 163 },distal_lingual: { width: 145, height: 145 },}, 
   "47": { mesial_buccal: { width: 135, height: 125 },distal_buccal: { width: 170, height: 150 },mesial_lingual: { width: 115, height: 137 },distal_lingual: { width: 115, height: 115 },},
    "48": { mesial_buccal: { width: 115, height: 110 },distal_buccal: { width: 145, height: 145 },mesial_lingual: { width: 115, height: 137 },distal_lingual: { width: 102, height: 125 },},
 });
 
 /**
- * Nudge placed clasp art on top of the suggestion anchor. Use **`clasp-circ`** for all four surfaces, or set per-surface keys to override.
+ * Nudge placed clasp art on top of the suggestion anchor. Use **`retainer-clasp`** for all four surfaces, or set per-surface keys to override.
  * Template teeth `11`–`18` / `41`–`48` only; `21`–`28` / `31`–`38` mirror **x** unless you add an explicit FDI row.
  */
 const CLASP_CIRC_POSITION_OFFSET_OVERRIDE_SEED_BY_TOOTH = Object.freeze({
   "11": {
-  mesial_buccal: { x: 5, y: -8 },
-  distal_buccal: { x: -13, y: -4 },
-  mesial_lingual: { x: 11, y: 7 },
-  distal_lingual: { x: -7, y: 3.8 },
+  mesial_buccal: { x: 18, y: -14 },
+  distal_buccal: { x: -28, y: 3 },
+  mesial_lingual: { x: 5, y: 1 },
+  distal_lingual: { x: -3, y: 9.8 },
 },
 "12": {
-  mesial_buccal: { x: 1, y: -9 },
-  distal_buccal: { x: -10, y: -4 },
-  mesial_lingual: { x: 13, y: 7 },
-  distal_lingual: { x: -3.7, y: 12 },
+  mesial_buccal: { x: 9, y: -16 },
+  distal_buccal: { x: -17, y: 5 },
+  mesial_lingual: { x: 11, y: 6.7 },
+  distal_lingual: { x: 0.3, y: 15 },
 },
 "13": {
-  mesial_buccal: { x: -3, y: -12 },
-  distal_buccal: { x: -13, y: 8 },
-  mesial_lingual: { x: 13, y: -4 },
-  distal_lingual: { x: -4, y: 9 },
+  mesial_buccal: { x: 5, y: -16 },
+  distal_buccal: { x: -20, y: 9 },
+  mesial_lingual: { x: 6, y: -2 },
+  distal_lingual: { x: 5, y: 6 },
 },
 "14": {
-  mesial_buccal: { x: -3, y: -17 },
-  distal_buccal: { x: -12, y: 11.7 },
-  mesial_lingual: { x: 9, y: -4 },
-  distal_lingual: { x: 9, y: 13 },
+  mesial_buccal: { x: 1, y: -13 },
+  distal_buccal: { x: -16, y: 7.7 },
+  mesial_lingual: { x: 18, y: -8 },
+  distal_lingual: { x: -2, y: 15 },
 },
 "15": {
-  mesial_buccal: { x: -10, y: -17 },
-  distal_buccal: { x: -9, y: 10 },
-  mesial_lingual: { x: 11, y: -13 },
-  distal_lingual: { x: 8.5, y: 11 },
+  mesial_buccal: { x: 0, y: -15 },
+  distal_buccal: { x: -18, y: 10 },
+  mesial_lingual: { x: 18, y: -10 },
+  distal_lingual: { x: 0.5, y: 10 },
 },
 "16": {
-  mesial_buccal: { x: -6, y: -21 },
-  distal_buccal: { x: -8, y: 18 },
-  mesial_lingual: { x: 7, y: -18 },
-  distal_lingual: { x: 9, y: 12 },
+  mesial_buccal: { x: 3, y: -25 },
+  distal_buccal: { x: -18, y: 23 },
+  mesial_lingual: { x: 17, y: -21 },
+  distal_lingual: { x: -3, y: 16 },
 },
 "17": {
-  mesial_buccal: { x: -9, y: -18 },
-  distal_buccal: { x: -10, y: 20 },
-  mesial_lingual: { x: 4, y: -13 },
-  distal_lingual: { x: 6, y: 12 },
+  mesial_buccal: { x: -3, y: -16 },
+  distal_buccal: { x: -16, y: 18 },
+  mesial_lingual: { x: 13, y: -14 },
+  distal_lingual: { x: -2, y: 13 },
 },
 "18": {
-  mesial_buccal: { x: -6, y: -19 },
-  distal_buccal: { x: -9, y: 15 },
-  mesial_lingual: { x: 9, y: -18 },
-  distal_lingual: { x: 6, y: 8 },
+  mesial_buccal: { x: -6, y: -20 },
+  distal_buccal: { x: -9, y: 16 },
+  mesial_lingual: { x: 10, y: -21 },
+  distal_lingual: { x: 5, y: 10 },
 },
 "41": {
   mesial_buccal: { x: 6, y: 7 },
-  distal_buccal: { x: -11, y: 4 },
-  mesial_lingual: { x: 2, y: 1 },
-  distal_lingual: { x: -3, y: 1 },
+  distal_buccal: { x: -13, y: 4 },
+  mesial_lingual: { x: 8, y: 2 },
+  distal_lingual: { x: -10, y: 0 },
 },
 "42": {
-  mesial_buccal: { x: 3, y: 5.2 },
-  distal_buccal: { x: -9, y: 5 },
-  mesial_lingual: { x: 0, y: 0.5 },
-  distal_lingual: { x: -5, y: 6 },
+  mesial_buccal: { x: 8, y: 11.2 },
+  distal_buccal: { x: -13, y: 0 },
+  mesial_lingual: { x: 7, y: 10.5 },
+  distal_lingual: { x: -11, y: -3 },
 },
 "43": {
-  mesial_buccal: { x: 3, y: 8 },
-  distal_buccal: { x: -10, y: 2 },
-  mesial_lingual: { x: 0, y: -0.5 },
-  distal_lingual: { x: -4, y: 2.2 },
+  mesial_buccal: { x: 10, y: 15 },
+  distal_buccal: { x: -17, y: -6 },
+  mesial_lingual: { x: 6, y: 8.5 },
+  distal_lingual: { x: -10, y: -7.2 },
 },
 "44": {
-  mesial_buccal: { x: -2.5, y: 11 },
-  distal_buccal: { x: -11, y: -2 },
-  mesial_lingual: { x: 11, y: 0 },
-  distal_lingual: { x: 2, y: -9 },
+  mesial_buccal: { x: 9.5, y: 21 },
+  distal_buccal: { x: -23, y: -13 },
+  mesial_lingual: { x: 19, y: 11 },
+  distal_lingual: { x: -7, y: -19.6 },
 },
 "45": {
-  mesial_buccal: { x: -5, y: 6 },
-  distal_buccal: { x: -10.8, y: -9 },
-  mesial_lingual: { x: 8, y: 9 },
-  distal_lingual: { x: 6, y: -7.7 },
+  mesial_buccal: { x: 2, y: 18 },
+  distal_buccal: { x: -17.8, y: -21 },
+  mesial_lingual: { x: 13.5, y: 18 },
+  distal_lingual: { x: 1, y: -16.7 },
 },
 "46": {
-  mesial_buccal: { x: -8, y: 9 },
-  distal_buccal: { x: -11.2, y: -16.5 },
-  mesial_lingual: { x: 12, y: 12 },
-  distal_lingual: { x: 5.8, y: -14.5 },
+  mesial_buccal: { x: 3, y: 27 },
+  distal_buccal: { x: -21.2, y: -35.5 },
+  mesial_lingual: { x: 20, y: 29 },
+  distal_lingual: { x: -1.2, y: -32.5 },
 },
 "47": {
-  mesial_buccal: { x: -4, y: 15 },
-  distal_buccal: { x: -10, y: -14 },
-  mesial_lingual: { x: 7, y: 10 },
-  distal_lingual: { x: 6, y: -13 },
+  mesial_buccal: { x: -1, y: 25 },
+  distal_buccal: { x: -13, y: -24 },
+  mesial_lingual: { x: 12, y: 26 },
+  distal_lingual: { x: 1, y: -31 },
 },
 "48": {
-  mesial_buccal: { x: -6, y: 18 },
-  distal_buccal: { x: -8, y: -9 },
-  mesial_lingual: { x: 9, y: 9 },
-  distal_lingual: { x: 8.6, y: -11 },
+  mesial_buccal: { x: -2, y: 30 },
+  distal_buccal: { x: -12, y: -22 },
+  mesial_lingual: { x: 15, y: 21 },
+  distal_lingual: { x: 3.6, y: -24 },
 },
 });
 
@@ -315,9 +315,9 @@ const CLASP_CIRC_ALL_TOOTH_IDS = Object.freeze([...TOOTH_ORDER.upper, ...TOOTH_O
 
 function mirrorClaspOffsetSeedRow(row) {
   const next = {};
-  if (row["clasp-circ"]) {
-    const p = row["clasp-circ"];
-    next["clasp-circ"] = {
+  if (row["retainer-clasp"]) {
+    const p = row["retainer-clasp"];
+    next["retainer-clasp"] = {
       x: Number.isFinite(p.x) ? -p.x : 0,
       y: Number.isFinite(p.y) ? p.y : 0,
     };
@@ -352,12 +352,12 @@ function expandClaspOffsetSeed(seedByTooth) {
   return out;
 }
 
-function buildClaspCircPositionOffsetByTooth(seedByTooth) {
+function buildRetainerClaspPositionOffsetByTooth(seedByTooth) {
   const expanded = expandClaspOffsetSeed(seedByTooth);
   const result = {};
   for (const toothId of CLASP_CIRC_ALL_TOOTH_IDS) {
     const seedRow = expanded[toothId] || {};
-    const defaultCirc = seedRow["clasp-circ"];
+    const defaultCirc = seedRow["retainer-clasp"];
     const fb = {
       x: Number.isFinite(defaultCirc?.x) ? defaultCirc.x : 0,
       y: Number.isFinite(defaultCirc?.y) ? defaultCirc.y : 0,
@@ -375,13 +375,13 @@ function buildClaspCircPositionOffsetByTooth(seedByTooth) {
   return Object.freeze(result);
 }
 
-const CLASP_CIRC_POSITION_OFFSET_BY_TOOTH = buildClaspCircPositionOffsetByTooth(
+const CLASP_CIRC_POSITION_OFFSET_BY_TOOTH = buildRetainerClaspPositionOffsetByTooth(
   CLASP_CIRC_POSITION_OFFSET_OVERRIDE_SEED_BY_TOOTH
 );
 
 const CLASP_CIRC_RENDER_SCALE = 0.48;
 
-const CLASP_COMPONENT_IDS = new Set(["clasp-circ", "clasp-bar", "clasp-ring"]);
+const CLASP_COMPONENT_IDS = new Set(["retainer-clasp", "reciprocating-clasp", "ring-clasp"]);
 
 /** True for catalog clasp types (circumferential, bar, ring). */
 export function isClaspComponent(componentOrId) {
@@ -392,14 +392,21 @@ export function isClaspComponent(componentOrId) {
   return CLASP_COMPONENT_IDS.has(id);
 }
 
-export function isClaspCircComponent(componentOrId) {
+export function isRetainerClaspComponent(componentOrId) {
   if (typeof componentOrId === "object" && componentOrId !== null) {
-    return String(componentOrId.id || "") === "clasp-circ";
+    return String(componentOrId.id || "") === "retainer-clasp";
   }
-  return String(componentOrId || "") === "clasp-circ";
+  return String(componentOrId || "") === "retainer-clasp";
 }
 
-export function getClaspCircSuggestionRadius() {
+export function isReciprocatingClaspComponent(componentOrId) {
+  if (typeof componentOrId === "object" && componentOrId !== null) {
+    return String(componentOrId.id || "") === "reciprocating-clasp";
+  }
+  return String(componentOrId || "") === "reciprocating-clasp";
+}
+
+export function getRetainerClaspSuggestionRadius() {
   return CLASP_CIRC_SUGGESTION_RADIUS;
 }
 
@@ -407,7 +414,7 @@ export function getClaspCircSuggestionRadius() {
  * @param {string} toothId FDI
  * @param {string} jaw "upper" | "lower" (reserved; coordinates are per FDI row)
  */
-export function getClaspCircSuggestionPointsForTooth(toothId, _jaw) {
+export function getRetainerClaspSuggestionPointsForTooth(toothId, _jaw) {
   const row = CLASP_CIRC_POINT_OVERRIDES[String(toothId)];
   if (!row) return [];
 
@@ -418,14 +425,21 @@ export function getClaspCircSuggestionPointsForTooth(toothId, _jaw) {
   }));
 }
 
-export function getClaspCircAssetReference(toothId, surface) {
+export function getRetainerClaspAssetReference(toothId, surface) {
   const normalized = normalizeClaspSurface(surface);
   if (!normalized) return null;
   const templateToothId = getComponentTemplateToothId(toothId);
   return `${CLASP_ASSET_BASE}/${templateToothId}/clasps/${templateToothId}-rc_${normalized}.svg`;
 }
 
-export function getClaspCircPlacementImageSize(_componentId, toothId, surface) {
+export function getReciprocatingClaspAssetReference(toothId, surface) {
+  const normalized = normalizeClaspSurface(surface);
+  if (!normalized) return null;
+  const templateToothId = getComponentTemplateToothId(toothId);
+  return `${CLASP_ASSET_BASE}/${templateToothId}/clasps/${templateToothId}-rpc_${normalized}.svg`;
+}
+
+export function getRetainerClaspPlacementImageSize(_componentId, toothId, surface) {
   const norm = normalizeClaspSurface(surface);
   const templateToothId = getComponentTemplateToothId(toothId);
   const row = CLASP_CIRC_PLACEMENT_IMAGE_SIZE_BY_TOOTH[templateToothId];
@@ -438,14 +452,14 @@ export function getClaspCircPlacementImageSize(_componentId, toothId, surface) {
       return { width: per.width, height: per.height };
     }
   }
-  const box = row["clasp-circ"];
+  const box = row["retainer-clasp"];
   if (box && Number.isFinite(box.width) && Number.isFinite(box.height)) {
     return { width: box.width, height: box.height };
   }
   return CLASP_CIRC_IMAGE_DEFAULT;
 }
 
-export function getClaspCircPlacementOffset(_componentId, toothId, surface) {
+export function getRetainerClaspPlacementOffset(_componentId, toothId, surface) {
   const norm = normalizeClaspSurface(surface);
   if (!norm) return { x: 0, y: 0 };
   const exactToothId = String(toothId ?? "");
@@ -460,7 +474,7 @@ export function getClaspCircPlacementOffset(_componentId, toothId, surface) {
   };
 }
 
-export function getClaspCircPlacementRenderScale(_componentId, _toothId, _surface) {
+export function getRetainerClaspPlacementRenderScale(_componentId, _toothId, _surface) {
   return CLASP_CIRC_RENDER_SCALE;
 }
 
