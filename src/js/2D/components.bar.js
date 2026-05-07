@@ -5,8 +5,56 @@ const BAR_TAB = "bars";
 const BAR_SURFACE_RE = /^bar_(d[12])_(mesial|distal)$/;
 const BAR_SURFACE_SIDE_RE = /^bar_d[12]_(mesial|distal)$/;
 
-/** Anchor key in `getClaspSurfacePointMap` used to place bar SVGs. */
+/** Surface key used by bar anchor-point defaults. */
 export const BAR_PLACEMENT_ANCHOR_SURFACE = "mesial_buccal";
+
+/**
+ * Dedicated bar anchor points (tooth-local), independent from clasp suggestion geometry.
+ * Seeded from prior clasp mesial-buccal anchors for template teeth only.
+ */
+const BAR_ANCHOR_POINT_BY_TEMPLATE_TOOTH = Object.freeze({
+  "11": { x: -17, y: -10 },
+  "12": { x: -14, y: -3 },
+  "13": { x: -16, y: 7 },
+  "14": { x: -14, y: 10 },
+  "15": { x: -14, y: 10 },
+  "16": { x: -20, y: 18 },
+  "17": { x: -17, y: 16 },
+  "18": { x: -16, y: 16 },
+  "41": { x: -11, y: 12 },
+  "42": { x: -13, y: 10 },
+  "43": { x: -16, y: 1 },
+  "44": { x: -15, y: -7 },
+  "45": { x: -15, y: -8 },
+  "46": { x: -21, y: -16 },
+  "47": { x: -18, y: -16 },
+  "48": { x: -15, y: -20 },
+});
+
+export function getBarPlacementAnchorPointForTooth(toothId) {
+  const numeric = Number(toothId);
+  if (!Number.isFinite(numeric)) return null;
+
+  const unit = numeric % 10;
+  const quadrant = Math.floor(numeric / 10);
+
+  if (quadrant === 1 || quadrant === 4) {
+    const p = BAR_ANCHOR_POINT_BY_TEMPLATE_TOOTH[String(toothId)];
+    return p ? { x: p.x, y: p.y } : null;
+  }
+
+  if (quadrant === 2) {
+    const base = BAR_ANCHOR_POINT_BY_TEMPLATE_TOOTH[`1${unit}`];
+    return base ? { x: -base.x, y: base.y } : null;
+  }
+
+  if (quadrant === 3) {
+    const base = BAR_ANCHOR_POINT_BY_TEMPLATE_TOOTH[`4${unit}`];
+    return base ? { x: -base.x, y: base.y } : null;
+  }
+
+  return null;
+}
 
 /** Logical source box for bar SVG art. */
 export const BAR_IMAGE_SIZE = Object.freeze({ width: 92, height: 92 });
@@ -34,100 +82,115 @@ const BAR_TIER_DISPLAY_UNIT = Object.freeze({
  */
 export const BAR_RENDER_SCALE_BY_TOOTH_SURFACE = Object.freeze({
   "11": {
-    bar_d1_mesial: 1.2,
-    bar_d1_distal: 1.25,
-    bar_d2_mesial: 2,
-    bar_d2_distal: 1.9,
+    bar_d1_distal: 1.2,
+    bar_d1_mesial: 1.25,
+    bar_d2_distal: 2,
+    bar_d2_mesial: 1.9,
   },
+
   "12": {
-    bar_d1_mesial: 1.05,
-    bar_d1_distal: 1.25,
-    bar_d2_mesial: 1.95,
-    bar_d2_distal: 1.95,
-  },
-  "13": {
-    bar_d1_mesial: 1.25,
-    bar_d1_distal: 1.15,
-    bar_d2_mesial: 1.95,
-    bar_d2_distal: 1.95,
-  },
-  "14": {
-    bar_d1_mesial: 1.05,
     bar_d1_distal: 1.05,
-    bar_d2_mesial: 1.5,
-    bar_d2_distal: 1.65,
-  },
-  "15": {
-    bar_d1_mesial: 1.15,
-    bar_d1_distal: 1.15,
-    bar_d2_mesial: 1.6,
-    bar_d2_distal: 1.95,
-  },
-  "16": {
-    bar_d1_mesial: 1.35,
-    bar_d1_distal: 1.35,
-    bar_d2_mesial: 1.8,
-    bar_d2_distal: 1.95,
-  },
-  "17": {
-    bar_d1_mesial: 1.35,
-    bar_d1_distal: 1.25,
-    bar_d2_mesial: 1.85,
-    bar_d2_distal: 0,
-  },
-  "18": {
-    bar_d1_mesial: 0.95,
-    bar_d1_distal: 0,
-    bar_d2_mesial: 1.75,
-    bar_d2_distal: 0,
-  },
-  "41": {
-    bar_d1_mesial: 0.75,
-    bar_d1_distal: 0.85,
-    bar_d2_mesial: 1.15,
-    bar_d2_distal: 1.05,
-  },
-  "42": {
-    bar_d1_mesial: 0.8,
-    bar_d1_distal: 0.95,
-    bar_d2_mesial: 1.10,
-    bar_d2_distal: 1.30,
-  },
-  "43": {
-    bar_d1_mesial: 0.85,
-    bar_d1_distal: 1.25,
-    bar_d2_mesial: 1.25,
-    bar_d2_distal: 1.45,
-  },
-  "44": {
-    bar_d1_mesial: 0.95,
-    bar_d1_distal: 1.25,
-    bar_d2_mesial: 1.05,
-    bar_d2_distal: 1.65,
-  },
-  "45": {
-    bar_d1_mesial: 1.05,
-    bar_d1_distal: 1.35,
-    bar_d2_mesial: 1.15,
-    bar_d2_distal: 1.80,
-  },
-  "46": {
     bar_d1_mesial: 1.25,
-    bar_d1_distal: 1.45,
-    bar_d2_mesial: 1.55,
-    bar_d2_distal: 1.75,
+    bar_d2_distal: 1.95,
+    bar_d2_mesial: 1.95,
   },
-  "47": {
-    bar_d1_mesial: 1.2,
-    bar_d1_distal: 1.3,
+
+  "13": {
+    bar_d1_distal: 1.25,
+    bar_d1_mesial: 1.15,
+    bar_d2_distal: 1.95,
+    bar_d2_mesial: 1.95,
+  },
+
+  "14": {
+    bar_d1_distal: 1.05,
+    bar_d1_mesial: 1.05,
+    bar_d2_distal: 1.5,
     bar_d2_mesial: 1.65,
-    bar_d2_distal: 0,
   },
+
+  "15": {
+    bar_d1_distal: 1.15,
+    bar_d1_mesial: 1.15,
+    bar_d2_distal: 1.6,
+    bar_d2_mesial: 1.95,
+  },
+
+  "16": {
+    bar_d1_distal: 1.35,
+    bar_d1_mesial: 1.35,
+    bar_d2_distal: 1.8,
+    bar_d2_mesial: 1.95,
+  },
+
+  "17": {
+    bar_d1_distal: 1.35,
+    bar_d1_mesial: 1.25,
+    bar_d2_distal: 1.85,
+    bar_d2_mesial: 0,
+  },
+
+  "18": {
+    bar_d1_distal: 0.95,
+    bar_d1_mesial: 0,
+    bar_d2_distal: 1.75,
+    bar_d2_mesial: 0,
+  },
+
+  "41": {
+    bar_d1_distal: 0.75,
+    bar_d1_mesial: 0.85,
+    bar_d2_distal: 1.15,
+    bar_d2_mesial: 1.05,
+  },
+
+  "42": {
+    bar_d1_distal: 0.8,
+    bar_d1_mesial: 0.95,
+    bar_d2_distal: 1.10,
+    bar_d2_mesial: 1.30,
+  },
+
+  "43": {
+    bar_d1_distal: 0.85,
+    bar_d1_mesial: 1.25,
+    bar_d2_distal: 1.25,
+    bar_d2_mesial: 1.45,
+  },
+
+  "44": {
+    bar_d1_distal: 0.95,
+    bar_d1_mesial: 1.25,
+    bar_d2_distal: 1.05,
+    bar_d2_mesial: 1.65,
+  },
+
+  "45": {
+    bar_d1_distal: 1.05,
+    bar_d1_mesial: 1.35,
+    bar_d2_distal: 1.15,
+    bar_d2_mesial: 1.80,
+  },
+
+  "46": {
+    bar_d1_distal: 1.25,
+    bar_d1_mesial: 1.45,
+    bar_d2_distal: 1.55,
+    bar_d2_mesial: 1.75,
+  },
+
+  "47": {
+    bar_d1_distal: 1.2,
+    bar_d1_mesial: 1.3,
+    bar_d2_distal: 1.65,
+    bar_d2_mesial: 0,
+  },
+
   "48": {
-    bar_d1_mesial: 1.4,
-    bar_d1_distal: 0,
-    bar_d2_mesial: 1.74,
-    bar_d2_distal: 0,
+    bar_d1_distal: 1.4,
+    bar_d1_mesial: 0,
+    bar_d2_distal: 1.74,
+    bar_d2_mesial: 0,
   },
 });
 
@@ -138,184 +201,215 @@ export const BAR_RENDER_SCALE_BY_TOOTH_SURFACE = Object.freeze({
  */
 export const BAR_PLACEMENT_OFFSET_BY_TOOTH_SURFACE = Object.freeze({
   "11": {
-    bar_d1_mesial: { x: 46, y: -21, rotation: 4 },
-    bar_d1_distal: { x: -15, y: -10, rotation: -22 },
-    bar_d2_mesial: { x: 60, y: -15, rotation: -5 },
-    bar_d2_distal: { x: -22, y: 4, rotation: -3 },
+    bar_d1_distal: { x: 10, y: -12, rotation: 4 },
+    bar_d1_mesial: { x: -45, y: -3, rotation: -22 },
+    bar_d2_distal: { x: 28, y: -5, rotation: -5 },
+    bar_d2_mesial: { x: -60, y: 15, rotation: -3 },
   },
+
   "21": {
-    bar_d1_mesial: { x: 46, y: -21, rotation: -4 },
-    bar_d1_distal: { x: -15, y: -10, rotation: 22  },
-    bar_d2_mesial: { x: 60, y: -15, rotation: 5 },
-    bar_d2_distal: { x: -22, y: 4, rotation: 3 },
+    bar_d1_distal: { x: 10, y: -12, rotation: -4 },
+    bar_d1_mesial: { x: -45, y: -3, rotation: 22 },
+    bar_d2_distal: { x: 28, y: -5, rotation: 5 },
+    bar_d2_mesial: { x: -60, y: 15, rotation: 3 },
   },
+
   "12": {
-    bar_d1_mesial: { x: 20, y: -38, rotation: 15 },
-    bar_d1_distal: { x: -15, y: -13, rotation: -21 },
-    bar_d2_mesial: { x: 41, y: -38, rotation: 3 },
-    bar_d2_distal: { x: -35, y: 7, rotation: -1 },
+    bar_d1_distal: { x: 1, y: -26, rotation: 15 },
+    bar_d1_mesial: { x: -30, y: -5, rotation: -21 },
+    bar_d2_distal: { x: 21, y: -250, rotation: 3 },
+    bar_d2_mesial: { x: -55, y: 20, rotation: -1 },
   },
+
   "22": {
-    bar_d1_mesial: { x: 20, y: -38, rotation: -15 },
-    bar_d1_distal: { x: -15, y: -13, rotation: 21 },
-    bar_d2_mesial: { x: 41, y: -38, rotation: -3},
-    bar_d2_distal: {  x: -35, y: 7, rotation: 1 },
+    bar_d1_distal: { x: 1, y: -26, rotation: -15 },
+    bar_d1_mesial: { x: -30, y: -5, rotation: 21 },
+    bar_d2_distal: { x: 21, y: -250, rotation: -3 },
+    bar_d2_mesial: { x: -55, y: 20, rotation: 1 },
   },
+
   "13": {
-    bar_d1_mesial: { x: 8, y: -43, rotation: 19 },
-    bar_d1_distal: { x: -20, y: -6, rotation: -24 },
-    bar_d2_mesial: { x: 28, y: -53, rotation: 4 },
-    bar_d2_distal: { x: -30, y: 15, rotation: -2 },
+    bar_d1_distal: { x: -15, y: -17, rotation: 19 },
+    bar_d1_mesial: { x: -39, y: 16, rotation: -24 },
+    bar_d2_distal: { x: 7, y: -30, rotation: 4 },
+    bar_d2_mesial: { x: -50, y: 35, rotation: -2 },
   },
+
   "23": {
-    bar_d1_mesial: { x: 8, y: -43, rotation: -20 },
-    bar_d1_distal: { x: -18, y: -6, rotation: 24 },
-    bar_d2_mesial: { x:  28, y: -53, rotation: -4 },
-    bar_d2_distal: { x: -30, y: 15, rotation: 2  },
+    bar_d1_distal: { x: -15, y: -17, rotation: -20 },
+    bar_d1_mesial: { x: -38, y: 16, rotation: 24 },
+    bar_d2_distal: { x: 7, y: -30, rotation: -4 },
+    bar_d2_mesial: { x: -48, y: 35, rotation: 2 },
   },
+
   "14": {
-    bar_d1_mesial: { x: 2, y: -50, rotation: 8 },
-    bar_d1_distal: { x: -16, y: -13, rotation: -5 },
-    bar_d2_mesial: { x: 20, y: -65, rotation: 6 },
-    bar_d2_distal: { x: -25, y: 11, rotation: -3 },
+    bar_d1_distal: { x: -10, y: -25, rotation: 8 },
+    bar_d1_mesial: { x: -30, y: 12, rotation: -5 },
+    bar_d2_distal: { x: 5, y: -40, rotation: 6 },
+    bar_d2_mesial: { x: -40, y: 36, rotation: -3 },
   },
+
   "24": {
-    bar_d1_mesial: { x: 2, y: -50, rotation: -8 },
-    bar_d1_distal: { x: -16, y: -13, rotation: 5  },
-    bar_d2_mesial: { x: 20, y: -65, rotation: -6  },
-    bar_d2_distal: { x: -25, y: 11, rotation: 3 },
+    bar_d1_distal: { x: -10, y: -25, rotation: -8 },
+    bar_d1_mesial: { x: -30, y: 12, rotation: 5 },
+    bar_d2_distal: { x: 5, y: -40, rotation: -6 },
+    bar_d2_mesial: { x: -40, y: 36, rotation: 3 },
   },
+
   "15": {
-    bar_d1_mesial: { x: -11, y: -36, rotation: 8 },
-    bar_d1_distal: { x: -23, y: -10, rotation: -5 },
-    bar_d2_mesial: { x: 0, y: -54, rotation: 2 },
-    bar_d2_distal: { x: -34, y: 45, rotation: -6 },
+    bar_d1_distal: { x: -19, y: -12, rotation: 8 },
+    bar_d1_mesial: { x: -33, y: 14, rotation: -5 },
+    bar_d2_distal: { x: -10, y: -30, rotation: 2 },
+    bar_d2_mesial: { x: -43, y: 73, rotation: -6 },
   },
+
   "25": {
-    bar_d1_mesial: { x: -11, y: -36, rotation: -8 },
-    bar_d1_distal: { x: -23, y: -10, rotation: 5 },
-    bar_d2_mesial: { x: 0, y: -54, rotation: -2 },
-    bar_d2_distal: { x: -34, y: 45, rotation: 6  },
+    bar_d1_distal: { x: -19, y: -12, rotation: -8 },
+    bar_d1_mesial: { x: -32, y: 14, rotation: 5 },
+    bar_d2_distal: { x: -8, y: -30, rotation: -2 },
+    bar_d2_mesial: { x: -43, y: 73, rotation: 6 },
   },
+
   "16": {
-    bar_d1_mesial: { x: -8, y: -50, rotation: 1 },
-    bar_d1_distal: { x: -16, y: -5, rotation: -3 },
-    bar_d2_mesial: { x: 5, y: -70, rotation: -1 },
-    bar_d2_distal: { x: -23, y: 45, rotation: -1 },
+    bar_d1_distal: { x: -20, y: -5, rotation: 1 },
+    bar_d1_mesial: { x: -29, y: 40, rotation: -3 },
+    bar_d2_distal: { x: -7, y: -30, rotation: -1 },
+    bar_d2_mesial: { x: -36, y: 85, rotation: -1 },
   },
+
   "26": {
-    bar_d1_mesial: { x: -9, y: -50, rotation: -1 },
-    bar_d1_distal: { x: -17, y: -5, rotation: 3 },
-    bar_d2_mesial: { x: 5, y: -70, rotation: 1  },
-    bar_d2_distal: { x: -23, y: 45, rotation: 1 },
+    bar_d1_distal: { x: -22, y: -5, rotation: -1 },
+    bar_d1_mesial: { x: -30, y: 40, rotation: 3 },
+    bar_d2_distal: { x: -7, y: -30, rotation: 1 },
+    bar_d2_mesial: { x: -36, y: 85, rotation: 1 },
   },
+
   "17": {
-    bar_d1_mesial: { x: -14, y: -40, rotation: 4 },
-    bar_d1_distal: { x: -18, y: 4, rotation: -8 },
-    bar_d2_mesial: { x: 9, y: -95, rotation: -1 },
+    bar_d1_distal: { x: -20, y: -4, rotation: 4 },
+    bar_d1_mesial: { x: -26, y: 40, rotation: -8 },
+    bar_d2_distal: { x: 1, y: -60, rotation: -1 },
   },
+
   "27": {
-    bar_d1_mesial: { x: -15, y: -40, rotation: -4 },
-    bar_d1_distal: { x: -18, y: 4, rotation: 8  },
-    bar_d2_mesial: { x: 9, y: -95, rotation: 1 },
+    bar_d1_distal: { x: -23, y: -4, rotation: -4 },
+    bar_d1_mesial: { x: -26, y: 40, rotation: 8 },
+    bar_d2_distal: { x: 1, y: -60, rotation: 1 },
   },
+
   "18": {
-    bar_d1_mesial: { x: -10, y: -42, rotation: 15 },
-    bar_d2_mesial: { x: -6, y: -90, rotation: 11 },
+    bar_d1_distal: { x: -13, y: -5, rotation: 15 },
+    bar_d2_distal: { x: -10, y: -50, rotation: 11 },
   },
+
   "28": {
-    bar_d1_mesial: { x: -10, y: -42, rotation: -15 },
-    bar_d2_mesial: { x: -6, y: -90, rotation: -11 },
+    bar_d1_distal: { x: -13, y: -5, rotation: -15 },
+    bar_d2_distal: { x: -10, y: -50, rotation: -11 },
   },
+
   "41": {
-    bar_d1_mesial: { x: 21, y: 9, rotation: -17 },
-    bar_d1_distal: { x: -9, y: 9, rotation: 13 },
-    bar_d2_mesial: { x: 40, y: 5, rotation: 9 },
-    bar_d2_distal: { x: -20, y: 0, rotation: 8 },
+    bar_d1_distal: { x: 2, y: 7, rotation: -17 },
+    bar_d1_mesial: { x: -25, y: 6, rotation: 13 },
+    bar_d2_distal: { x: 22, y: 3, rotation: 9 },
+    bar_d2_mesial: { x: -37, y: -2, rotation: 8 },
   },
+
   "31": {
-    bar_d1_mesial: { x: 21, y: 9, rotation: 17 },
-    bar_d1_distal: { x: -9, y: 9, rotation: -13  },
-    bar_d2_mesial: { x: 40, y: 5, rotation: -9 },
-    bar_d2_distal: { x: -20, y: 0, rotation: -8 },
+    bar_d1_distal: { x: 2, y: 7, rotation: 17 },
+    bar_d1_mesial: { x: -25, y: 6, rotation: -13 },
+    bar_d2_distal: { x: 22, y: 3, rotation: -9 },
+    bar_d2_mesial: { x: -37, y: -2, rotation: -8 },
   },
+
   "42": {
-    bar_d1_mesial: { x: 16, y: 22, rotation: -20 },
-    bar_d1_distal: { x: -9, y: 13, rotation: 14 },
-    bar_d2_mesial: { x: 38, y: 24, rotation: -3 },
-    bar_d2_distal: { x: -25, y: 0, rotation: 13 },
+    bar_d1_distal: { x: -2, y: 16, rotation: -20 },
+    bar_d1_mesial: { x: -27, y: 7, rotation: 14 },
+    bar_d2_distal: { x: 23, y: 20, rotation: -3 },
+    bar_d2_mesial: { x: -41, y: -4, rotation: 13 },
   },
+
   "32": {
-    bar_d1_mesial: { x: 16, y: 22, rotation: 20 },
-    bar_d1_distal: { x: -9, y: 13, rotation: -14 },
-    bar_d2_mesial: { x: 38, y: 24, rotation: 3 },
-    bar_d2_distal: { x: -25, y: 0, rotation: -13 },
+    bar_d1_distal: { x: -2, y: 16, rotation: 20 },
+    bar_d1_mesial: { x: -27, y: 7, rotation: -14 },
+    bar_d2_distal: { x: 23, y: 20, rotation: 3 },
+    bar_d2_mesial: { x: -41, y: -4, rotation: -13 },
   },
+
   "43": {
-    bar_d1_mesial: { x: 18, y: 32, rotation: -33 },
-    bar_d1_distal: { x: -16, y: 14, rotation: 19},
-    bar_d2_mesial: { x: 36, y: 36, rotation: -11 },
-    bar_d2_distal: { x: -35, y: -20, rotation: -2 },
+    bar_d1_distal: { x: -5, y: 17, rotation: -33 },
+    bar_d1_mesial: { x: -36, y: 0, rotation: 19 },
+    bar_d2_distal: { x: 19, y: 23, rotation: -11 },
+    bar_d2_mesial: { x: -53, y: -30, rotation: -2 },
   },
+
   "33": {
-    bar_d1_mesial: { x: 18, y: 32, rotation: 33 },
-    bar_d1_distal: { x: -16, y: 14, rotation: -19 },
-    bar_d2_mesial: { x: 36, y: 36, rotation: 11 },
-    bar_d2_distal: { x: -35, y: -20, rotation: 2 },
+    bar_d1_distal: { x: -5, y: 17, rotation: 33 },
+    bar_d1_mesial: { x: -36, y: 0, rotation: -19 },
+    bar_d2_distal: { x: 19, y: 23, rotation: 11 },
+    bar_d2_mesial: { x: -53, y: -30, rotation: 2 },
   },
+
   "44": {
-    bar_d1_mesial: { x: 7, y: 39, rotation: -30 },
-    bar_d1_distal: { x: -22, y: 10, rotation: 9 },
-    bar_d2_mesial: { x: 27, y: 53, rotation: -6 },
-    bar_d2_distal: { x: -30, y: -38, rotation: 17 },
+    bar_d1_distal: { x: -14, y: 15, rotation: -30 },
+    bar_d1_mesial: { x: -40, y: -10, rotation: 9 },
+    bar_d2_distal: { x: 7, y: 30, rotation: -6 },
+    bar_d2_mesial: { x: -50, y: -58, rotation: 17 },
   },
+
   "34": {
-    bar_d1_mesial: { x: 7, y: 39, rotation: 30 },
-    bar_d1_distal: { x: -22, y: 10, rotation: -9 },
-    bar_d2_mesial: { x: 27, y: 53, rotation: 6 },
-    bar_d2_distal: {  x: -30, y: -38, rotation: -17 },
+    bar_d1_distal: { x: -14, y: 15, rotation: 30 },
+    bar_d1_mesial: { x: -40, y: -10, rotation: -9 },
+    bar_d2_distal: { x: 7, y: 30, rotation: 6 },
+    bar_d2_mesial: { x: -50, y: -58, rotation: -17 },
   },
+
   "45": {
-    bar_d1_mesial: { x: -1, y: 40, rotation: -15 },
-    bar_d1_distal: { x: -20, y: 10, rotation: 3 },
-    bar_d2_mesial: { x: 18, y: 65, rotation: -7 },
-    bar_d2_distal: { x: -30, y: -45, rotation: -1 },
+    bar_d1_distal: { x: -13, y: 15, rotation: -15 },
+    bar_d1_mesial: { x: -33, y: -15, rotation: 3 },
+    bar_d2_distal: { x: 5, y: 38, rotation: -7 },
+    bar_d2_mesial: { x: -43, y: -70, rotation: -1 },
   },
+
   "35": {
-    bar_d1_mesial: { x: -1, y: 40, rotation: 15 },
-    bar_d1_distal: { x: -20, y: 10, rotation: -3 },
-    bar_d2_mesial: { x: 18, y: 65, rotation: 8 },
-    bar_d2_distal: { x: -30, y: -45, rotation: 1 },
+    bar_d1_distal: { x: -13, y: 15, rotation: 15 },
+    bar_d1_mesial: { x: -33, y: -15, rotation: -3 },
+    bar_d2_distal: { x: 5, y: 38, rotation: 8 },
+    bar_d2_mesial: { x: -43, y: -70, rotation: 1 },
   },
+
   "46": {
-    bar_d1_mesial: { x: -4, y: 55, rotation: -11 },
-    bar_d1_distal: { x: -14, y: 12, rotation: 4 },
-    bar_d2_mesial: { x: 11, y: 80, rotation: -5 },
-    bar_d2_distal: { x: -27, y: -35, rotation: 1 },
+    bar_d1_distal: { x: -19, y: 10, rotation: -11 },
+    bar_d1_mesial: { x: -28, y: -30, rotation: 4 },
+    bar_d2_distal: { x: -5, y: 35, rotation: -5 },
+    bar_d2_mesial: { x: -40, y: -75, rotation: 1 },
   },
+
   "36": {
-    bar_d1_mesial: { x: -4, y: 54, rotation: 12 },
-    bar_d1_distal: { x: -14, y: 12, rotation: -4 },
-    bar_d2_mesial: { x: 11, y: 80, rotation: 5 },
-    bar_d2_distal: { x: -27, y: -35, rotation: -1 },
+    bar_d1_distal: { x: -19, y: 10, rotation: 12 },
+    bar_d1_mesial: { x: -28, y: -30, rotation: -4 },
+    bar_d2_distal: { x: -5, y: 35, rotation: 5 },
+    bar_d2_mesial: { x: -40, y: -75, rotation: -1 },
   },
+
   "47": {
-    bar_d1_mesial: { x: -12, y: 42, rotation: -2 },
-    bar_d1_distal: { x: -17, y: 6, rotation: 1 },
-    bar_d2_mesial: { x: 2, y: 80, rotation: -5 },
+    bar_d1_distal: { x: -22, y: 4, rotation: -2 },
+    bar_d1_mesial: { x: -28, y: -36, rotation: 1 },
+    bar_d2_distal: { x: -9, y: 40, rotation: -5 },
   },
+
   "37": {
-    bar_d1_mesial: { x: -12, y: 42, rotation: 2 },
-    bar_d1_distal: { x: -17, y: 6, rotation: -1 },
-    bar_d2_mesial: { x: 2, y: 80, rotation: 5 },
+    bar_d1_distal: { x: -22, y: 4, rotation: 2 },
+    bar_d1_mesial: { x: -28, y: -36, rotation: -1 },
+    bar_d2_distal: { x: -9, y: 40, rotation: 5 },
   },
+
   "48": {
-    bar_d1_mesial: { x: -7, y: 40, rotation: -1 },
-    bar_d2_mesial: { x: 0, y: 82, rotation: -3 },
+    bar_d1_distal: { x: -15, y: -2, rotation: -1 },
+    bar_d2_distal: { x: -8, y: 40, rotation: -3 },
   },
+
   "38": {
-    bar_d1_mesial: { x: -7, y: 40, rotation: 1 },
-    bar_d2_mesial: { x: 0, y: 82, rotation: 3 },
+    bar_d1_distal: { x: -15, y: -2, rotation: 1 },
+    bar_d2_distal: { x: -8, y: 40, rotation: 3 },
   },
 });
 
@@ -390,7 +484,7 @@ export function getBarPlacementSurfaceForTooth(toothId, jaw, teethById) {
   const rightHemisphereStartIndex = order.length / 2;
   const mesialDirection = toothIndex < rightHemisphereStartIndex ? 1 : -1;
   const missingDirection = nearestMissingIndex > toothIndex ? 1 : -1;
-  const side = missingDirection === mesialDirection ? "mesial" : "distal";
+  const side = missingDirection === mesialDirection ? "distal" : "mesial";
   const tier = nearestDistance === 1 ? "d1" : "d2";
 
   return `bar_${tier}_${side}`;

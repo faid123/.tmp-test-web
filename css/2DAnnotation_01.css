@@ -8,7 +8,9 @@
   --rose-050: #fff1f6;
   --rose-100: #ffe7ef;
   --rose-500: #c44f70;
+  --rose-600: #b03460;
   --rose-700: #902a46;
+  --rose-800: #6e1e35;
 }
 
 * { box-sizing: border-box; }

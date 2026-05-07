@@ -464,18 +464,23 @@ export {
 export {
   getRetainerClaspAssetReference,
   getReciprocatingClaspAssetReference,
+  getRingClaspAssetReference,
+  getRingClaspPlacementImageSize,
+  getRingClaspPlacementOffset,
   getRetainerClaspPlacementImageSize,
   getRetainerClaspPlacementOffset,
   getRetainerClaspPlacementRenderScale,
   getRetainerClaspSuggestionPointsForTooth,
   getRetainerClaspSuggestionRadius,
   isReciprocatingClaspComponent,
+  isRingClaspComponent,
   isRetainerClaspComponent,
   isClaspComponent,
 } from "./components.clasp.js";
 
 export {
   BAR_PLACEMENT_ANCHOR_SURFACE,
+  getBarPlacementAnchorPointForTooth,
   getBarPlacementAssetReference,
   getBarPlacementImageSize,
   getBarPlacementOffset,

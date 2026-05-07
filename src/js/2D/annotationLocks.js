@@ -14,10 +14,17 @@ import {
   meshSelectionContextFromState,
 } from "./components.js";
 import { forEachTooth, isAutoMeshPlacementExcludedToothId, TOOTH_ORDER } from "./constants.js";
-import { closePresentToothRadialQuickPick } from "./annotationCatalog.js";
-import { state, DEFAULT_COMPONENT_ID, downloadJson, titleCase, setMessage } from "./2DAnnotation.js";
+import {
+  state,
+  DEFAULT_COMPONENT_ID,
+  downloadJson,
+  titleCase,
+  setMessage,
+  closePresentToothRadialQuickPick,
+  renderJaw,
+  renderJaws,
+} from "./2DAnnotation.js";
 import { renderComponentCatalog } from "./annotationCatalog.js";
-import { renderJaw, renderJaws } from "./2DAnnotation.js";
 import {
   ensureToothPlacementState,
   normalizeSurface,

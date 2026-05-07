@@ -5,6 +5,7 @@ import {
   hasPalatalHolePlacementOnUpperArch,
   isBarComponent,
   isReciprocatingClaspComponent,
+  isRingClaspComponent,
   isRetainerClaspComponent,
   isClaspComponent,
   isMajorConnectorComponent,
@@ -28,6 +29,7 @@ import {
   syncToothComponentsFromPlacements,
 } from "./annotationTeethModel.js";
 import { ensureMajorCatalogPickForTooth } from "./annotationCatalog.js";
+import { assessPlacementCriteria } from "./criteria.js";
 
 export function applyRemovalSideEffectsForTooth(tooth, removedEntry) {
   if (!removedEntry) return;
@@ -176,6 +178,7 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
     isRestComponent(selectedComponent) ||
     isRetainerClaspComponent(selectedComponent) ||
     isReciprocatingClaspComponent(selectedComponent) ||
+    isRingClaspComponent(selectedComponent) ||
     isBarComponent(selectedComponent);
   const surface = normalizeSurface(placementContext?.surface);
   const targetSurface = requiresSurface ? surface : null;
@@ -185,7 +188,11 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
       placeSelectedComponentOnTooth(toothId, { surface: "mesial" });
       return;
     }
-    if (isRetainerClaspComponent(selectedComponent) || isReciprocatingClaspComponent(selectedComponent)) {
+    if (
+      isRetainerClaspComponent(selectedComponent) ||
+      isReciprocatingClaspComponent(selectedComponent) ||
+      isRingClaspComponent(selectedComponent)
+    ) {
       setMessage(
         `For ${selectedComponent.label}, click a clasp suggestion point (mesial or distal, buccal or lingual).`,
         true
@@ -223,11 +230,20 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
 
   // Clasp-circ constraint: max one clasp per tooth.
   // Any existing retainer-clasp on this tooth is replaced by the new placement.
-  if ((isRetainerClaspComponent(selectedComponent) || isReciprocatingClaspComponent(selectedComponent)) && targetSurface) {
+  if (
+    (
+      isRetainerClaspComponent(selectedComponent) ||
+      isReciprocatingClaspComponent(selectedComponent) ||
+      isRingClaspComponent(selectedComponent)
+    ) &&
+    targetSurface
+  ) {
     const existingClasp = (tooth.componentPlacements || []).find((entry) => {
       const sameClaspType = isRetainerClaspComponent(selectedComponent)
         ? isRetainerClaspComponent(entry.componentId)
-        : isReciprocatingClaspComponent(entry.componentId);
+        : isReciprocatingClaspComponent(selectedComponent)
+          ? isReciprocatingClaspComponent(entry.componentId)
+          : isRingClaspComponent(entry.componentId);
       if (!sameClaspType) return false;
       const s = normalizeSurface(entry.surface);
       return Boolean(s && s !== targetSurface);
@@ -284,80 +300,4 @@ export function toothSupportsMajorConnectorOverlay(tooth, toothId, majorComponen
     getMajorConnectorAssetReference(toothId, "lower")
   ) return true;
   return false;
-}
-
-function _getToothId(tooth) {
-  return tooth?.tooth_id ?? tooth?.fdiId ?? "unknown";
-}
-
-function _isToothPresent(tooth) {
-  if (typeof tooth?.isPresent === "boolean") return tooth.isPresent;
-  if (typeof tooth?.presence === "string") return tooth.presence === "present";
-  return true;
-}
-
-function _isMeshComponentId(componentId, componentById) {
-  return isMeshComponent(componentById?.get?.(componentId) ?? componentId);
-}
-
-function _failure(reason, actionUponFailure, conflictingComponents = []) {
-  return { pass: false, failureData: { reason, actionUponFailure, conflictingComponents } };
-}
-
-export function assessPlacementCriteria(tooth, selectedComponent, componentById) {
-  const toothId = _getToothId(tooth);
-  const present = _isToothPresent(tooth);
-  const existingComponents = Array.isArray(tooth?.components) ? tooth.components : [];
-  const isMajor = isMajorConnectorComponent(selectedComponent);
-
-  if (!isMajor) {
-    if (selectedComponent.requiresPresence && !present)
-      return _failure(`Tooth ${toothId} is missing.`, ACTION_UPON_FAILURE.PREVENT_PLACEMENT);
-    if (selectedComponent.requiresMissing && present)
-      return _failure(`Tooth ${toothId} is present.`, ACTION_UPON_FAILURE.PREVENT_PLACEMENT);
-  }
-
-  const conflictsWith = Array.isArray(selectedComponent.conflictsWith) ? selectedComponent.conflictsWith : [];
-  const conflicts = existingComponents.filter((id) => conflictsWith.includes(id));
-  if (conflicts.length > 0)
-    return _failure(`Conflicting components on tooth ${toothId}: ${conflicts.join(", ")}`, selectedComponent.actionUponFailure, conflicts);
-
-  const selectedIsBar = isBarComponent(selectedComponent);
-  const selectedIsClasp = isClaspComponent(selectedComponent);
-  if (selectedIsBar || selectedIsClasp) {
-    const barClaspConflicts = existingComponents.filter((id) =>
-      selectedIsBar ? isClaspComponent(id) : isBarComponent(id)
-    );
-    if (barClaspConflicts.length > 0)
-      return _failure(
-        `Tooth ${toothId} already has ${selectedIsBar ? "a clasp" : "a bar"}; replacing with ${selectedComponent.id}.`,
-        ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
-        barClaspConflicts
-      );
-  }
-
-  if (isMajor) {
-    const existingMajors = existingComponents.filter((id) => isMajorConnectorComponent(id));
-    if (existingMajors.length > 0 && !existingMajors.includes(selectedComponent.id))
-      return _failure(
-        `Tooth ${toothId} already has a major connector; replacing with ${selectedComponent.id}.`,
-        ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
-        existingMajors
-      );
-    return { pass: true, failureData: null };
-  }
-
-  if (isMeshComponent(selectedComponent)) {
-    const overlappingMeshes = existingComponents.filter(
-      (id) => id !== selectedComponent.id && _isMeshComponentId(id, componentById)
-    );
-    if (overlappingMeshes.length > 0)
-      return _failure(
-        `Tooth ${toothId} already has a mesh; replacing with ${selectedComponent.id}.`,
-        ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
-        overlappingMeshes
-      );
-  }
-
-  return { pass: true, failureData: null };
 }
