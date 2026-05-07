@@ -134,6 +134,7 @@ let isPolylineOverlayVisible = true;
 let activePolylineDrag = null;
 let polylineMenuButton = null;
 let polylineMenuList = null;
+let polylineDepthTestEnabled = true;
 const polylineComponentVisibility = new Map();
 const POLYLINE_COMPONENT_COLORS = [
   0x6f35ff,
@@ -730,7 +731,7 @@ function getPolylineSegmentColor(component, segmentIndex) {
   }
 
   if (/lingual\s*clasp/i.test(component || "")) {
-    return 0x14b8a6;
+    return 0xf97316;
   }
 
   if (/minor\s*(connector|conn)/i.test(component || "")) {
@@ -738,7 +739,7 @@ function getPolylineSegmentColor(component, segmentIndex) {
   }
 
   if (/^mesh$/i.test(component || "")) {
-    return 0xffd400;
+    return 0x0891b2;
   }
 
   if (/rest/i.test(component || "")) {
@@ -880,6 +881,8 @@ function addPolylineTube(
   edgeIndex
 ) {
   const tube = new THREE.Mesh(geometry, material.clone());
+  tube.material.depthTest = polylineDepthTestEnabled;
+  tube.material.needsUpdate = true;
   tube.name = `${jawType}-${component}-polyline-segment-${segmentIndex}-tube-${edgeIndex}`;
   tube.renderOrder = 20;
   tube.userData = {
@@ -946,7 +949,7 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
       opacity: 1,
       roughness: 0.28,
       metalness: 0,
-      depthTest: true,
+      depthTest: polylineDepthTestEnabled,
       depthWrite: false,
     });
     const tubeGroup = new THREE.Group();
@@ -993,6 +996,8 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
     points.forEach((point, index) => {
       const handleMaterial = polylineHandleMaterial.clone();
       handleMaterial.color.setHex(getPolylineSegmentColor(component, segmentIndex));
+      handleMaterial.depthTest = polylineDepthTestEnabled;
+      handleMaterial.needsUpdate = true;
       const handle = new THREE.Mesh(
         polylineHandleGeometry,
         handleMaterial
@@ -1093,6 +1098,28 @@ function syncPolylineOverlayVisibility() {
       : `Polylines hidden (${componentCount})`;
   }
   syncPolylineFocusMode();
+}
+
+function syncPolylineDepthTest() {
+  polylineOverlayGroup.traverse((child) => {
+    const overlayType = child.userData?.overlayType;
+    if (
+      overlayType !== "polyline-tube" &&
+      overlayType !== "polyline-edit-point"
+    ) {
+      return;
+    }
+
+    const materials = Array.isArray(child.material)
+      ? child.material
+      : [child.material];
+    materials.forEach((materialEntry) => {
+      if (!materialEntry) return;
+      materialEntry.depthTest = polylineDepthTestEnabled;
+      materialEntry.depthWrite = false;
+      materialEntry.needsUpdate = true;
+    });
+  });
 }
 
 function getPolylineComponentSummary() {
@@ -1285,6 +1312,14 @@ function createPolylineVisibilityToggle(container, domElement) {
     return actionButton;
   };
 
+  const depthButton = makeActionButton("Depth On", () => {
+    polylineDepthTestEnabled = !polylineDepthTestEnabled;
+    depthButton.textContent = polylineDepthTestEnabled
+      ? "Depth On"
+      : "Float On";
+    syncPolylineDepthTest();
+  });
+
   actions.appendChild(
     makeActionButton("All", () => {
       setPolylineMenuVisibility(() => true, true);
@@ -1305,6 +1340,7 @@ function createPolylineVisibilityToggle(container, domElement) {
       setPolylineMenuVisibility(({ points }) => points > 0, false);
     })
   );
+  actions.appendChild(depthButton);
   actions.appendChild(makeActionButton("Reset", resetPolylineEdits));
 
   const list = document.createElement("div");
