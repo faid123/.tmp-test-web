@@ -130,21 +130,11 @@ const polylineHandleMaterial = new THREE.MeshStandardMaterial({
 });
 const POLYLINE_TUBE_RADIUS = 0.75;
 const POLYLINE_TUBE_RADIAL_SEGMENTS = 8;
-const POLYLINE_SURFACE_MIN_OFFSET = -4;
-const POLYLINE_SURFACE_MAX_OFFSET = 8;
-const POLYLINE_NORMAL_DRAG_SCALE = 0.035;
-const POLYLINE_GINGIVAL_MESH_DISTANCE = 5;
-const POLYLINE_GINGIVAL_MESH_RELEVANT_RATIO = 0.45;
-const POLYLINE_GINGIVAL_CHAIN_SAMPLE_COUNT = 24;
-const POLYLINE_REFERENCE_VERTEX_SAMPLE_LIMIT = 2500;
 let isPolylineOverlayVisible = true;
 let activePolylineDrag = null;
 let polylineMenuButton = null;
 let polylineMenuList = null;
 const polylineComponentVisibility = new Map();
-const polylineFocusMaterialState = new WeakMap();
-const polylineFocusObjectState = new WeakMap();
-const POLYLINE_FOCUS_FRAMEWORK_OPACITY = 0.28;
 const POLYLINE_COMPONENT_COLORS = [
   0x6f35ff,
   0x00a6ff,
@@ -153,15 +143,31 @@ const POLYLINE_COMPONENT_COLORS = [
   0xff4f81,
   0xffd400,
 ];
+const POLYLINE_APP_COMPONENTS = [
+  "Retainer",
+  "Lingual Clasp",
+  "Major Conn",
+  "Proximal Plate",
+  "Rest",
+  "Minor Conn",
+  "Mesh",
+  "Reversal Line",
+];
 const POLYLINE_TEXT_COMPONENTS = [
   "retentionPins",
+  "retainer",
   "tissueStop",
   "mesh",
   "reversalLine",
+  "proximalPlate",
+  "proximalPlates",
   "endingProximalPlate",
   "startingProximalPlate",
   "majorConnector",
   "GingivalPoints",
+  "reciprocatingArm",
+  "rests",
+  "rest",
   "minorConnectorTooth",
 ];
 const POLYLINE_TEXT_COMPONENT_PATTERN = new RegExp(
@@ -214,102 +220,10 @@ function enforceOpaqueJawMesh(object) {
   });
 }
 
-function isPolylineFocusMesh(child) {
-  const text = `${child.name || ""} ${child.userData?.jaw_type || ""} ${
-    child.userData?.archLabel || ""
-  }`.toLowerCase();
-  const materials = Array.isArray(child.material) ? child.material : [child.material];
-  const usesVertexColors = materials.some(
-    (materialEntry) => materialEntry?.vertexColors
-  );
-  const hasGreyFrameworkMaterial = materials.some((materialEntry) => {
-    const color = materialEntry?.color;
-    if (!color) return false;
-    return (
-      Math.abs(color.r - color.g) < 0.08 &&
-      Math.abs(color.g - color.b) < 0.08 &&
-      color.r > 0.25 &&
-      color.r < 0.85
-    );
-  });
-
-  return (
-    child.isMesh &&
-    (text.includes("surface") ||
-      text.includes("denture") ||
-      text.includes("connector") ||
-      text.includes("major") ||
-      (!usesVertexColors && hasGreyFrameworkMaterial))
-  );
-}
-
-function storeMeshMaterialState(mesh) {
-  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-
-  materials.forEach((materialEntry) => {
-    if (!materialEntry) return;
-
-    if (!polylineFocusMaterialState.has(materialEntry)) {
-      polylineFocusMaterialState.set(materialEntry, {
-        transparent: materialEntry.transparent,
-        opacity: materialEntry.opacity,
-        depthWrite: materialEntry.depthWrite,
-      });
-    }
-  });
-}
-
-function setFocusedFrameworkMaterial(mesh) {
-  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-
-  materials.forEach((materialEntry) => {
-    if (!materialEntry) return;
-    materialEntry.transparent = true;
-    materialEntry.opacity = POLYLINE_FOCUS_FRAMEWORK_OPACITY;
-    materialEntry.depthWrite = false;
-    materialEntry.needsUpdate = true;
-  });
-}
-
-function restoreMeshMaterial(materialEntry) {
-  const state = polylineFocusMaterialState.get(materialEntry);
-  if (!state) return;
-
-  materialEntry.transparent = state.transparent;
-  materialEntry.opacity = state.opacity;
-  materialEntry.depthWrite = state.depthWrite;
-  materialEntry.needsUpdate = true;
-  polylineFocusMaterialState.delete(materialEntry);
-}
-
 function syncPolylineFocusMode() {
-  const shouldFocusFramework =
-    isPolylineOverlayVisible &&
-    Array.from(polylineComponentVisibility.values()).some(Boolean);
-
   parentObject.children.forEach((child) => {
     if (!child.isMesh) return;
-
-    const materials = Array.isArray(child.material)
-      ? child.material
-      : [child.material];
-
-    if (shouldFocusFramework && isPolylineFocusMesh(child)) {
-      if (!polylineFocusObjectState.has(child)) {
-        polylineFocusObjectState.set(child, { visible: child.visible });
-      }
-      storeMeshMaterialState(child);
-      child.visible = true;
-      setFocusedFrameworkMaterial(child);
-      return;
-    }
-
-    materials.forEach(restoreMeshMaterial);
-    const objectState = polylineFocusObjectState.get(child);
-    if (objectState) {
-      child.visible = objectState.visible;
-      polylineFocusObjectState.delete(child);
-    }
+    enforceOpaqueJawMesh(child);
   });
 }
 
@@ -353,19 +267,21 @@ function getPolylineComponentName(candidate, fallback = "polyline") {
 
 function normalizePolylineComponentName(component) {
   const text = String(component || "polyline");
-  if (/retention\s*pins?/i.test(text)) return "Retainer Points";
-  if (/^mesh$/i.test(text)) return "mesh";
-  if (/tissue\s*stop/i.test(text)) return "Tissue Stop";
+  if (/retention\s*pins?|^retainer$/i.test(text)) return "Retainer";
+  if (/gingival/i.test(text)) return "Gingival Points";
+  if (/reciprocating\s*arm/i.test(text)) return "Lingual Clasp";
+  if (/^mesh$/i.test(text)) return "Mesh";
+  if (/tissue\s*stop|^rests?$|rest/i.test(text)) return "Rest";
   if (/ending\s*proximal\s*plate/i.test(text)) {
-    return "Ending Proximal Plate";
+    return "Proximal Plate";
   }
   if (/starting\s*proximal\s*plate/i.test(text)) {
-    return "Starting Proximal Plate";
+    return "Proximal Plate";
   }
-  if (/minor\s*connector\s*tooth/i.test(text)) return "Minor Connector Tooth";
-  if (/major\s*connector/i.test(text)) return "Major Connector";
+  if (/proximal\s*plates?/i.test(text)) return "Proximal Plate";
+  if (/minor\s*connector\s*tooth/i.test(text)) return "Minor Conn";
+  if (/major\s*connector/i.test(text)) return "Major Conn";
   if (/reversal/i.test(text)) return "Reversal Line";
-  if (/gingival/i.test(text)) return "Gingival Points";
   return text;
 }
 
@@ -375,29 +291,12 @@ function getPolylinePointSignature(point) {
     .join(",");
 }
 
-function shouldDeduplicatePolylinePoints(component) {
-  return /gingival|reversal|major connector/i.test(component || "");
-}
-
-function deduplicatePolylinePoints(points, component) {
-  if (!shouldDeduplicatePolylinePoints(component)) {
-    return points;
-  }
-
-  const seenPoints = new Set();
-  return points.filter((point) => {
-    const signature = getPolylinePointSignature(point);
-    if (seenPoints.has(signature)) return false;
-    seenPoints.add(signature);
-    return true;
-  });
-}
-
 function createPolylineSegment(points, component = "polyline") {
   const normalizedComponent = normalizePolylineComponentName(component);
   return {
     component: normalizedComponent,
-    points: deduplicatePolylinePoints(points, normalizedComponent),
+    sourceComponent: component,
+    points,
   };
 }
 
@@ -412,7 +311,8 @@ function getSegmentComponent(segment) {
 }
 
 function getSegmentRenderableEdges(segment, points, component) {
-  return segment?.renderEdges || getPolylineRenderableEdges(points, component);
+  return segment?.renderEdges ||
+    getPolylineRenderableEdges(points, segment?.sourceComponent || component);
 }
 
 function getPolylineComponentKey(arch, component) {
@@ -422,11 +322,28 @@ function getPolylineComponentKey(arch, component) {
 function formatPolylineComponentLabel(key) {
   const [arch, ...componentParts] = key.split(":");
   const component = componentParts.join(":") || "polyline";
-  return `${arch.charAt(0).toUpperCase()}${arch.slice(1)} - ${component}`;
+  if (component === "Major Conn") {
+    return `${arch.charAt(0).toUpperCase()}${arch.slice(1)} Major Connector`;
+  }
+  return component;
 }
 
 function isPolylineComponentVisibleByDefault(key) {
-  return !/omit\s*reference/i.test(key || "");
+  return !/gingival\s*points/i.test(key || "");
+}
+
+function getPolylineComponentSortRank(key) {
+  const [arch, ...componentParts] = key.split(":");
+  const component = componentParts.join(":") || "polyline";
+  if (component === "Major Conn") {
+    return arch === "upper" ? 0 : arch === "lower" ? 1 : 2;
+  }
+
+  const appOrder = POLYLINE_APP_COMPONENTS.filter(
+    (componentName) => componentName !== "Major Conn"
+  );
+  const componentIndex = appOrder.indexOf(component);
+  return componentIndex >= 0 ? componentIndex + 3 : appOrder.length + 3;
 }
 
 function toPointObject(value) {
@@ -576,8 +493,6 @@ function parsePolylineTextSegments(value) {
       const point = parseCoordinateLine(candidateLine);
       if (point) points.push(point);
       nextIndex += 1;
-
-      if (nodeCount && points.length >= nodeCount) break;
     }
 
     return { points, nextIndex };
@@ -691,257 +606,6 @@ function getPolylineSegmentSignature(segment) {
   return `${component}:${points.length}:${pointSignature}`;
 }
 
-function getPolylineSegmentArcLength(segment) {
-  const points = getSegmentPoints(segment);
-  return points.slice(1).reduce(
-    (total, point, index) =>
-      total + getDistanceBetweenPoints(points[index], point),
-    0
-  );
-}
-
-function splitMajorConnectorSegments(segments) {
-  if (
-    segments.some((segment) => getSegmentComponent(segment) === "Major Connector")
-  ) {
-    return segments;
-  }
-
-  const reversalSegments = segments.filter(
-    (segment) => getSegmentComponent(segment) === "Reversal Line"
-  );
-  if (reversalSegments.length < 2) return segments;
-
-  const majorConnectorSegment = reversalSegments.reduce((longest, segment) =>
-    getPolylineSegmentArcLength(segment) > getPolylineSegmentArcLength(longest)
-      ? segment
-      : longest
-  );
-
-  return segments.map((segment) =>
-    segment === majorConnectorSegment
-      ? { ...segment, component: "Major Connector" }
-      : segment
-  );
-}
-
-function getPolylineEdgeChains(edges) {
-  if (!edges.length) return [];
-
-  const chains = [];
-  let currentChain = [edges[0][0], edges[0][1]];
-
-  for (let index = 1; index < edges.length; index += 1) {
-    const [startIndex, endIndex] = edges[index];
-    const previousIndex = currentChain[currentChain.length - 1];
-    if (startIndex === previousIndex) {
-      currentChain.push(endIndex);
-    } else {
-      chains.push(currentChain);
-      currentChain = [startIndex, endIndex];
-    }
-  }
-
-  chains.push(currentChain);
-  return chains.filter((chain) => chain.length >= 2);
-}
-
-function getPolylineChainLength(points, chain) {
-  return chain.slice(1).reduce(
-    (total, pointIndex, index) =>
-      total + getDistanceBetweenPoints(points[chain[index]], points[pointIndex]),
-    0
-  );
-}
-
-function getPolylineReferenceMeshes(jawType) {
-  const jawMesh = getJawMeshForPolyline(jawType);
-  return parentObject.children.filter(
-    (child) => child !== jawMesh && isPolylineFocusMesh(child)
-  );
-}
-
-function getSampledReferenceMeshVertices(jawType) {
-  const vertices = [];
-  getPolylineReferenceMeshes(jawType).forEach((mesh) => {
-    const positionAttribute = mesh.geometry?.attributes?.position;
-    if (!positionAttribute) return;
-
-    mesh.updateMatrixWorld(true);
-    const step = Math.max(
-      1,
-      Math.ceil(positionAttribute.count / POLYLINE_REFERENCE_VERTEX_SAMPLE_LIMIT)
-    );
-    for (let index = 0; index < positionAttribute.count; index += step) {
-      vertices.push(
-        new THREE.Vector3(
-          positionAttribute.getX(index),
-          positionAttribute.getY(index),
-          positionAttribute.getZ(index)
-        ).applyMatrix4(mesh.matrixWorld)
-      );
-    }
-  });
-  return vertices;
-}
-
-function getPolylineWorldPoint(jawType, point) {
-  const jawMesh = getJawMeshForPolyline(jawType);
-  const worldPoint = new THREE.Vector3(point.x, point.y, point.z);
-  if (!jawMesh) return worldPoint;
-
-  jawMesh.updateMatrixWorld(true);
-  return worldPoint.applyMatrix4(jawMesh.matrixWorld);
-}
-
-function getNearestDistanceToReferenceVertices(point, referenceVertices) {
-  let nearestDistanceSq = Infinity;
-  referenceVertices.forEach((vertex) => {
-    nearestDistanceSq = Math.min(nearestDistanceSq, point.distanceToSquared(vertex));
-  });
-  return Math.sqrt(nearestDistanceSq);
-}
-
-function isGingivalChainNearReferenceMesh(points, chain, jawType, referenceVertices) {
-  if (!referenceVertices.length) return true;
-
-  const step = Math.max(
-    1,
-    Math.floor(chain.length / POLYLINE_GINGIVAL_CHAIN_SAMPLE_COUNT)
-  );
-  let sampledCount = 0;
-  let closeCount = 0;
-
-  for (let index = 0; index < chain.length; index += step) {
-    const point = getPolylineWorldPoint(jawType, points[chain[index]]);
-    const distance = getNearestDistanceToReferenceVertices(point, referenceVertices);
-    sampledCount += 1;
-    if (distance <= POLYLINE_GINGIVAL_MESH_DISTANCE) {
-      closeCount += 1;
-    }
-  }
-
-  return sampledCount > 0 &&
-    closeCount / sampledCount >= POLYLINE_GINGIVAL_MESH_RELEVANT_RATIO;
-}
-
-function splitGingivalPointSegments(segments, jawType) {
-  const splitSegments = [];
-  const referenceVertices = getSampledReferenceMeshVertices(jawType);
-
-  segments.forEach((segment) => {
-    if (getSegmentComponent(segment) !== "Gingival Points") {
-      splitSegments.push(segment);
-      return;
-    }
-
-    const points = getSegmentPoints(segment);
-    const chains = getPolylineEdgeChains(
-      getPolylineRenderableEdges(points, "Gingival Points")
-    );
-    if (chains.length < 2) {
-      splitSegments.push(segment);
-      return;
-    }
-
-    const chainEntries = chains
-      .map((chain, chainIndex) => {
-        return {
-          chain,
-          chainIndex,
-          length: getPolylineChainLength(points, chain),
-        };
-      })
-      .filter(({ length }) => length > 0);
-    if (chainEntries.length < 2) {
-      splitSegments.push(segment);
-      return;
-    }
-
-    const chainGroups = new Map();
-    chainEntries.forEach(({ chain, chainIndex }) => {
-      const isRelevant = isGingivalChainNearReferenceMesh(
-        points,
-        chain,
-        jawType,
-        referenceVertices
-      );
-      chainGroups.set(
-        chainIndex,
-        isRelevant
-          ? "Gingival Points - Relevant"
-          : "Gingival Points - Omit Reference"
-      );
-    });
-
-    const groupedSegments = new Map([
-      ["Gingival Points - Relevant", { points: [], renderEdges: [] }],
-      ["Gingival Points - Omit Reference", { points: [], renderEdges: [] }],
-    ]);
-    const originalToGroupedIndex = new Map();
-
-    const addPointToGroup = (pointIndex, groupName) => {
-      const group = groupedSegments.get(groupName);
-      if (!originalToGroupedIndex.has(pointIndex)) {
-        originalToGroupedIndex.set(pointIndex, {
-          groupName,
-          index: group.points.length,
-        });
-        group.points.push(points[pointIndex]);
-      }
-      return originalToGroupedIndex.get(pointIndex);
-    };
-
-    chains.forEach((chain, chainIndex) => {
-      const groupName =
-        chainGroups.get(chainIndex) || "Gingival Points - Omit Reference";
-      for (let index = 0; index < chain.length; index += 1) {
-        addPointToGroup(chain[index], groupName);
-        if (index > 0) {
-          const previous = originalToGroupedIndex.get(chain[index - 1]);
-          const current = originalToGroupedIndex.get(chain[index]);
-          groupedSegments.get(groupName).renderEdges.push([
-            previous.index,
-            current.index,
-          ]);
-        }
-      }
-    });
-
-    points.forEach((point, pointIndex) => {
-      if (originalToGroupedIndex.has(pointIndex)) return;
-      groupedSegments.get("Gingival Points - Omit Reference").points.push(point);
-    });
-
-    groupedSegments.forEach(({ points: groupPoints, renderEdges }, component) => {
-      if (groupPoints.length >= 2) {
-        splitSegments.push({
-          ...segment,
-          component,
-          points: groupPoints,
-          renderEdges,
-        });
-      }
-    });
-  });
-
-  return splitSegments;
-}
-
-function classifyJawPolylineSegments(segments, jawType) {
-  return splitGingivalPointSegments(
-    splitMajorConnectorSegments(segments),
-    jawType
-  );
-}
-
-function classifyPolylineSegmentsByComponent(polylineByJaw) {
-  return {
-    upper: classifyJawPolylineSegments(polylineByJaw.upper || [], "upper"),
-    lower: classifyJawPolylineSegments(polylineByJaw.lower || [], "lower"),
-  };
-}
-
 function inferPolylineArrayJawKey(entry, index, total, loadedJawKeys) {
   const explicitJawKey = normalizeJawKey(
     entry?.jaw_type ??
@@ -1045,7 +709,7 @@ function getPolylineSegmentColor(component, segmentIndex) {
     return 0xff8a00;
   }
 
-  if (/major\s*connector/i.test(component || "")) {
+  if (/major\s*(connector|conn)/i.test(component || "")) {
     return 0x8b5cf6;
   }
 
@@ -1065,11 +729,19 @@ function getPolylineSegmentColor(component, segmentIndex) {
     return 0x38bdf8;
   }
 
-  if (/minor\s*connector/i.test(component || "")) {
+  if (/lingual\s*clasp/i.test(component || "")) {
+    return 0x14b8a6;
+  }
+
+  if (/minor\s*(connector|conn)/i.test(component || "")) {
     return 0x22c55e;
   }
 
-  if (/rest|^mesh$/i.test(component || "")) {
+  if (/^mesh$/i.test(component || "")) {
+    return 0xffd400;
+  }
+
+  if (/rest/i.test(component || "")) {
     return 0xffd400;
   }
 
@@ -1118,72 +790,6 @@ function getPolylineTurnCosine(previous, current, next) {
 
   if (!aLength || !bLength) return 1;
   return (ax * bx + ay * by + az * bz) / (aLength * bLength);
-}
-
-function clampValue(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function getNearestJawSurfaceBinding(jawType, localPoint) {
-  const jawMesh = getJawMeshForPolyline(jawType);
-  const geometry = jawMesh?.geometry;
-  const positionAttribute = geometry?.attributes?.position;
-  if (!positionAttribute) return null;
-
-  if (!geometry.attributes.normal) {
-    geometry.computeVertexNormals();
-  }
-
-  const normalAttribute = geometry.attributes.normal;
-  let nearestIndex = -1;
-  let nearestDistanceSq = Infinity;
-
-  for (let index = 0; index < positionAttribute.count; index += 1) {
-    const dx = positionAttribute.getX(index) - localPoint.x;
-    const dy = positionAttribute.getY(index) - localPoint.y;
-    const dz = positionAttribute.getZ(index) - localPoint.z;
-    const distanceSq = dx * dx + dy * dy + dz * dz;
-    if (distanceSq < nearestDistanceSq) {
-      nearestDistanceSq = distanceSq;
-      nearestIndex = index;
-    }
-  }
-
-  if (nearestIndex < 0) return null;
-
-  const anchor = new THREE.Vector3(
-    positionAttribute.getX(nearestIndex),
-    positionAttribute.getY(nearestIndex),
-    positionAttribute.getZ(nearestIndex)
-  );
-  const normal = new THREE.Vector3(
-    normalAttribute.getX(nearestIndex),
-    normalAttribute.getY(nearestIndex),
-    normalAttribute.getZ(nearestIndex)
-  ).normalize();
-
-  if (!Number.isFinite(normal.lengthSq()) || normal.lengthSq() === 0) {
-    normal.set(0, 0, 1);
-  }
-
-  const offset = localPoint.clone().sub(anchor).dot(normal);
-  return { anchor, normal, offset };
-}
-
-function bindPolylineHandleToSurface(handle) {
-  const binding = getNearestJawSurfaceBinding(
-    handle.userData.arch,
-    handle.position
-  );
-  if (!binding) return;
-
-  handle.userData.surfaceAnchor = binding.anchor;
-  handle.userData.surfaceNormal = binding.normal;
-  handle.userData.surfaceOffset = clampValue(
-    binding.offset,
-    POLYLINE_SURFACE_MIN_OFFSET,
-    POLYLINE_SURFACE_MAX_OFFSET
-  );
 }
 
 function getPolylineRenderableEdges(points, component) {
@@ -1311,6 +917,7 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
   const points = getSegmentPoints(segment);
   const component = getSegmentComponent(segment);
   const componentKey = getPolylineComponentKey(jawType, component);
+  const edges = getSegmentRenderableEdges(segment, points, component);
   const positionArray = new Float32Array(points.length * 3);
   points.forEach((point, index) => {
     positionArray[index * 3] = point.x;
@@ -1318,7 +925,6 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
     positionArray[index * 3 + 2] = point.z;
   });
   const positionAttribute = new THREE.BufferAttribute(positionArray, 3);
-  const handleIndices = points.map((_, index) => index);
   const group = new THREE.Group();
   group.name = `${jawType}-${component}-polyline-segment-${segmentIndex}`;
   group.visible = isPolylineOverlayVisible &&
@@ -1334,7 +940,6 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
   };
 
   if (points.length >= 2) {
-    const edges = getSegmentRenderableEdges(segment, points, component);
     const tubeMaterial = new THREE.MeshStandardMaterial({
       color: getPolylineSegmentColor(component, segmentIndex),
       transparent: false,
@@ -1385,8 +990,7 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
       positionAttribute,
     };
 
-    handleIndices.forEach((index) => {
-      const point = points[index];
+    points.forEach((point, index) => {
       const handleMaterial = polylineHandleMaterial.clone();
       handleMaterial.color.setHex(getPolylineSegmentColor(component, segmentIndex));
       const handle = new THREE.Mesh(
@@ -1406,7 +1010,6 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
         handleGroup: handles,
         positionAttribute,
       };
-      bindPolylineHandleToSurface(handle);
       handles.add(handle);
     });
 
@@ -1456,7 +1059,6 @@ function resetPolylineGroup(polylineGroup) {
         positionAttribute.getY(pointIndex),
         positionAttribute.getZ(pointIndex)
       );
-      bindPolylineHandleToSurface(child);
     } else if (child.userData?.overlayType === "polyline-line") {
       syncPolylineTubeGeometries(child);
     } else {
@@ -1510,11 +1112,40 @@ function getPolylineComponentSummary() {
     summary.set(key, current);
   });
 
-  return Array.from(summary.values()).sort((a, b) =>
-    formatPolylineComponentLabel(a.key).localeCompare(
+  const loadedArches = new Set();
+  polylineOverlayGroup.children.forEach((group) => {
+    const arch = group.userData?.arch;
+    if (arch) loadedArches.add(arch);
+  });
+  if (!loadedArches.size) {
+    getLoadedPolylineJawKeys().forEach((arch) => loadedArches.add(arch));
+  }
+  if (!loadedArches.size) {
+    loadedArches.add("upper");
+    loadedArches.add("lower");
+  }
+
+  loadedArches.forEach((arch) => {
+    POLYLINE_APP_COMPONENTS.forEach((component) => {
+      const key = getPolylineComponentKey(arch, component);
+      if (summary.has(key)) return;
+      summary.set(key, {
+        key,
+        color: getPolylineSegmentColor(component, 0),
+        segments: 0,
+        points: 0,
+      });
+    });
+  });
+
+  return Array.from(summary.values()).sort((a, b) => {
+    const rankDelta =
+      getPolylineComponentSortRank(a.key) - getPolylineComponentSortRank(b.key);
+    if (rankDelta) return rankDelta;
+    return formatPolylineComponentLabel(a.key).localeCompare(
       formatPolylineComponentLabel(b.key)
-    )
-  );
+    );
+  });
 }
 
 function updatePolylineComponentMenu() {
@@ -1582,6 +1213,18 @@ function updatePolylineComponentMenu() {
   syncPolylineOverlayVisibility();
 }
 
+function setPolylineMenuVisibility(filterSummaryItem, isVisible) {
+  getPolylineComponentSummary().forEach((summaryItem) => {
+    if (filterSummaryItem(summaryItem)) {
+      polylineComponentVisibility.set(summaryItem.key, isVisible);
+    }
+  });
+  isPolylineOverlayVisible = Array.from(polylineComponentVisibility.values()).some(
+    Boolean
+  );
+  updatePolylineComponentMenu();
+}
+
 function createPolylineVisibilityToggle(container, domElement) {
   if (document.getElementById("polyline-visibility-menu")) return;
 
@@ -1623,6 +1266,7 @@ function createPolylineVisibilityToggle(container, domElement) {
 
   const actions = document.createElement("div");
   actions.style.display = "flex";
+  actions.style.flexWrap = "wrap";
   actions.style.gap = "6px";
   actions.style.marginBottom = "8px";
 
@@ -1643,20 +1287,22 @@ function createPolylineVisibilityToggle(container, domElement) {
 
   actions.appendChild(
     makeActionButton("All", () => {
-      isPolylineOverlayVisible = true;
-      getPolylineComponentSummary().forEach(({ key }) =>
-        polylineComponentVisibility.set(key, true)
-      );
-      updatePolylineComponentMenu();
+      setPolylineMenuVisibility(() => true, true);
     })
   );
   actions.appendChild(
     makeActionButton("None", () => {
-      isPolylineOverlayVisible = false;
-      getPolylineComponentSummary().forEach(({ key }) =>
-        polylineComponentVisibility.set(key, false)
-      );
-      updatePolylineComponentMenu();
+      setPolylineMenuVisibility(() => true, false);
+    })
+  );
+  actions.appendChild(
+    makeActionButton("API On", () => {
+      setPolylineMenuVisibility(({ points }) => points > 0, true);
+    })
+  );
+  actions.appendChild(
+    makeActionButton("API Off", () => {
+      setPolylineMenuVisibility(({ points }) => points > 0, false);
     })
   );
   actions.appendChild(makeActionButton("Reset", resetPolylineEdits));
@@ -1700,9 +1346,7 @@ async function fetchAndRenderPolylines(caseIntID) {
       false,
       "Polyline"
     );
-    const normalized = classifyPolylineSegmentsByComponent(
-      normalizePolylineResponse(response)
-    );
+    const normalized = normalizePolylineResponse(response);
     const upperPointCount = countPolylinePoints(normalized.upper);
     const lowerPointCount = countPolylinePoints(normalized.lower);
     const hasAnyPoints = upperPointCount || lowerPointCount;
@@ -1802,9 +1446,6 @@ function updatePolylinePointFromLocal(handle, index, localPoint, options = {}) {
   positionAttribute.needsUpdate = true;
   handle.position.copy(localPoint);
 
-  if (options.refreshSurfaceBinding !== false) {
-    bindPolylineHandleToSurface(handle);
-  }
   refreshPolylineGeometryForHandle(handle);
 }
 
@@ -1812,26 +1453,6 @@ function updatePolylinePoint(handle, index, worldPoint, options = {}) {
   const handleGroup = handle.userData.handleGroup;
   const localPoint = handleGroup.worldToLocal(worldPoint.clone());
   updatePolylinePointFromLocal(handle, index, localPoint, options);
-}
-
-function updatePolylinePointAlongSurfaceNormal(activeDrag, event) {
-  const handle = activeDrag.handle;
-  const anchor = handle.userData.surfaceAnchor;
-  const normal = handle.userData.surfaceNormal;
-  if (!anchor || !normal) return false;
-
-  const pixelDelta = activeDrag.startClientY - event.clientY;
-  const nextOffset = clampValue(
-    activeDrag.startSurfaceOffset + pixelDelta * POLYLINE_NORMAL_DRAG_SCALE,
-    POLYLINE_SURFACE_MIN_OFFSET,
-    POLYLINE_SURFACE_MAX_OFFSET
-  );
-  const localPoint = anchor.clone().addScaledVector(normal, nextOffset);
-  handle.userData.surfaceOffset = nextOffset;
-  updatePolylinePointFromLocal(handle, activeDrag.index, localPoint, {
-    refreshSurfaceBinding: false,
-  });
-  return true;
 }
 
 function setPolylineDragging(enabled) {
@@ -1849,7 +1470,6 @@ function attachPolylineDragHandlers(domElement) {
 
     event.preventDefault();
     domElement.setPointerCapture?.(event.pointerId);
-    bindPolylineHandleToSurface(hit.handle);
     camera.getWorldDirection(polylineCameraDirection);
     polylineDragPlane.setFromNormalAndCoplanarPoint(
       polylineCameraDirection,
@@ -1859,8 +1479,6 @@ function attachPolylineDragHandlers(domElement) {
       handle: hit.handle,
       index: hit.index,
       pointerId: event.pointerId,
-      startClientY: event.clientY,
-      startSurfaceOffset: hit.handle.userData.surfaceOffset || 0,
     };
     setPolylineDragging(true);
   });
@@ -1875,10 +1493,6 @@ function attachPolylineDragHandlers(domElement) {
 
     updatePointerPosition(event, domElement);
     raycaster.setFromCamera(pointer, camera);
-    if (event.shiftKey && updatePolylinePointAlongSurfaceNormal(activePolylineDrag, event)) {
-      domElement.style.cursor = "ns-resize";
-      return;
-    }
 
     if (raycaster.ray.intersectPlane(polylineDragPlane, polylineDragPoint)) {
       updatePolylinePoint(
