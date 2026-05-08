@@ -34,6 +34,7 @@ import {
   getPlatePlacementRenderScale,
   getRestPlacementAssetReference,
   getRestPlacementImageSize,
+  getRestPlacementOffset,
   getRestPlacementRenderScale,
   getRestSuggestionPointsForTooth,
   getRestSuggestionRadius,
@@ -46,6 +47,7 @@ import {
   isRingClaspComponent,
   isRetainerClaspComponent,
   isMajorConnectorComponent,
+  isMajorConnectorToothExcluded,
   isMajorConnectorPlacementSeparated,
   isMeshComponent,
   isPalatalBarMajorComponent,
@@ -89,7 +91,11 @@ import {
   renderJaw,
   renderJaws,
 } from "./2DAnnotation.js";
-import { placeSelectedComponentOnTooth, resolveMajorConnectorAnchorComponentId } from "./annotationPlacement.js";
+import {
+  placeSelectedComponentOnTooth,
+  resolveMajorConnectorAnchorComponentId,
+  toothSupportsMajorConnectorOverlay,
+} from "./annotationPlacement.js";
 import {
   ensureToothPlacementState,
   getToothAssetSpec,
@@ -130,6 +136,14 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
     shouldShowPalatalBarArchOverlay() &&
     PALATAL_BAR_CONNECTOR_TOOTH_IDS.has(String(toothId));
 
+  const jawOrder = TOOTH_ORDER[jaw] || [];
+  const toothIndexInJaw = jawOrder.indexOf(String(toothId));
+  const prevToothId = toothIndexInJaw > 0 ? jawOrder[toothIndexInJaw - 1] : null;
+  const nextToothId =
+    toothIndexInJaw >= 0 && toothIndexInJaw < jawOrder.length - 1
+      ? jawOrder[toothIndexInJaw + 1]
+      : null;
+
   const majorIds = [];
   for (const { id, def } of catalogEntries) {
     if (!isMajorConnectorComponent(def)) {
@@ -145,14 +159,32 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
     if (showPalatalBarSegment && !isPalatalBarMajorComponent(id)) {
       continue;
     }
+    if (isMajorConnectorToothExcluded(id, toothId)) {
+      continue;
+    }
     if (!majorIds.includes(id)) {
       majorIds.push(id);
     }
   }
 
   const selectedMajor = COMPONENT_BY_ID.get(state.selectedComponentId || "");
-  if (selectedMajor && isMajorConnectorComponent(selectedMajor) && selectedMajor.section === jaw) {
+  if (
+    selectedMajor &&
+    isMajorConnectorComponent(selectedMajor) &&
+    selectedMajor.section === jaw &&
+    !isMajorConnectorToothExcluded(selectedMajor.id, toothId)
+  ) {
+    const supportsSelectedMajor = toothSupportsMajorConnectorOverlay(tooth, toothId, selectedMajor.id);
+    const prevHasMajor = Boolean(
+      prevToothId && state.teeth[prevToothId]?.componentPlacements?.some((e) => isMajorConnectorComponent(e.componentId))
+    );
+    const nextHasMajor = Boolean(
+      nextToothId && state.teeth[nextToothId]?.componentPlacements?.some((e) => isMajorConnectorComponent(e.componentId))
+    );
+    const hasAdjacentPlacedMajor = prevHasMajor || nextHasMajor;
     if (
+      supportsSelectedMajor &&
+      hasAdjacentPlacedMajor &&
       !(
         jaw === "upper" &&
         shouldShowPalatalBarArchOverlay() &&
@@ -268,7 +300,6 @@ function restMarkerAnchorSurface(placementSurface, toothId) {
 function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
   ensureToothPlacementState(tooth);
   const { mirrored } = getToothAssetSpec(toothId);
-
   if (!tooth.componentPlacements.length) return;
   if (!tooth.isPresent) {
     const hasBarPlacement = tooth.componentPlacements.some((placement) =>
@@ -332,13 +363,18 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
     const surface = normalizeSurface(placement.surface);
     if (!surface) continue;
 
-    const pointMap = getRestSurfacePointMap(toothId, jaw, placement.componentId);
+    const pointMap = getRestSurfacePointMap(
+      toothId,
+      jaw,
+      placement.componentId === "rest-onlay" ? null : placement.componentId
+    );
     const anchorSurface = restMarkerAnchorSurface(placement.surface, toothId);
     const point = anchorSurface ? pointMap.get(anchorSurface) : null;
     if (!point) continue;
 
     const assetHref = getRestPlacementAssetReference(placement.componentId, toothId, surface);
     const imageSize = getRestPlacementImageSize(placement.componentId, toothId, surface);
+    const restOffset = getRestPlacementOffset(placement.componentId, toothId, surface);
     const restScale = getRestPlacementRenderScale(placement.componentId, toothId, surface);
 
     if (assetHref && imageSize) {
@@ -346,7 +382,7 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
       const height = imageSize.height * restScale;
 
       const imageGroup = svgEl("g", {
-        transform: `translate(${point.x} ${point.y}) scale(${mirrored ? -1 : 1} 1)`
+        transform: `translate(${point.x + (Number.isFinite(restOffset?.x) ? restOffset.x : 0)} ${point.y + (Number.isFinite(restOffset?.y) ? restOffset.y : 0)}) scale(${mirrored ? -1 : 1} 1)`
       });
 
       imageGroup.appendChild(

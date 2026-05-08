@@ -38,7 +38,6 @@ export const state = {
   restSeatCalibrationAcOnly: false,
   removeComponentMode: false,
   hideLowerPlateVisuals: false,
-  tempShowMinorConnectors: false,
   suppressArchPlacementSuggestions: false,
 };
 
@@ -403,6 +402,11 @@ export async function openRemoveComponentPicker(toothId, jaw, anchorEvent) {
         return;
       }
       teethModel.ensureToothPlacementState(t);
+      const placement = await import("./annotationPlacement.js");
+      if (placement.shouldBlockMajorConnectorRemoval(toothId, entry, state.teeth)) {
+        setMessage("Cannot remove this major connector part because it is connected on both sides.", true);
+        return;
+      }
       let removed = null;
       if (Number.isInteger(entry._index) && entry._index >= 0) {
         removed = teethModel.removePlacementAtIndex(t, entry._index);
@@ -414,7 +418,6 @@ export async function openRemoveComponentPicker(toothId, jaw, anchorEvent) {
           removed = teethModel.removePlacementAtIndex(t, idx);
         }
       }
-      const placement = await import("./annotationPlacement.js");
       placement.applyRemovalSideEffectsForTooth(t, removed);
       const defR = removed ? COMPONENT_BY_ID.get(removed.componentId) : null;
       const name = defR?.label || removed?.componentId || "item";
@@ -471,8 +474,6 @@ function start() {
 
 function init() {
   initializeCaseIds();
-  const TEMP_SHOW_ALL_MINOR_CONNECTOR = true;
-  state.tempShowMinorConnectors = TEMP_SHOW_ALL_MINOR_CONNECTOR;
   // Load render module early so render bridge + mesh env are registered.
   const renderLoad = import("./annotationRender.js");
 

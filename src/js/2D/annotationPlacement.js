@@ -9,6 +9,8 @@ import {
   isRetainerClaspComponent,
   isClaspComponent,
   isMajorConnectorComponent,
+  toothHasMajorConnectorPlacement,
+  isMajorConnectorToothExcluded,
   isMeshComponent,
   isPalatalBarMajorComponent,
   isPalatalHoleMajorComponent,
@@ -70,6 +72,10 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
   syncToothComponentsFromPlacements(tooth);
 
   if (isMajorConnectorComponent(selectedComponent)) {
+    if (isMajorConnectorToothExcluded(selectedComponent.id, toothId)) {
+      setMessage(`${selectedComponent.label} is not supported on tooth ${toothId}.`, true);
+      return;
+    }
     const jaw = TOOTH_ORDER.upper.includes(toothId)
       ? "upper"
       : TOOTH_ORDER.lower.includes(toothId)
@@ -115,6 +121,12 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
     }
 
     if (hasPlacement(tooth, selectedComponent.id, null)) {
+      if (
+        shouldBlockMajorConnectorRemoval(toothId, { componentId: selectedComponent.id, surface: null }, state.teeth)
+      ) {
+        setMessage("Cannot remove this major connector part because it is connected on both sides.", true);
+        return;
+      }
       removePlacement(tooth, selectedComponent.id, null);
       if (isPalatalHoleMajorComponent(selectedComponent.id)) {
         state.archOverlayPalatalHoleActive = hasPalatalHolePlacementOnUpperArch(state.teeth);
@@ -126,7 +138,7 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
     if (!toothSupportsMajorConnectorOverlay(tooth, toothId, selectedComponent.id)) {
       setMessage(
         tooth.isPresent
-          ? "Place a plate on this tooth before adding this major connector (design mode)."
+          ? "Place a plate or reciprocating clasp on this tooth before adding this major connector (design mode)."
           : "Place a mesh on this missing tooth before adding this major connector (design mode).",
         true
       );
@@ -299,10 +311,37 @@ export function resolveMajorConnectorAnchorComponentId(tooth) {
     const def = COMPONENT_BY_ID.get(componentId);
     if (!def) continue;
     if (tooth.isPresent && isPlateComponentId(componentId)) return componentId;
+    if (tooth.isPresent && isReciprocatingClaspComponent(componentId)) return componentId;
     if (!tooth.isPresent && isMeshComponent(def)) return componentId;
   }
   return null;
 }
+
+export function shouldBlockMajorConnectorRemoval(toothId, placementEntry, teeth) {
+  if (!placementEntry || !isMajorConnectorComponent(placementEntry.componentId)) {
+    return false;
+  }
+  const id = String(toothId);
+  const jaw = TOOTH_ORDER.upper.includes(id)
+    ? "upper"
+    : TOOTH_ORDER.lower.includes(id)
+      ? "lower"
+      : null;
+  if (!jaw) {
+    return false;
+  }
+  const order = TOOTH_ORDER[jaw] || [];
+  const idx = order.indexOf(id);
+  if (idx < 0) {
+    return false;
+  }
+  const prevId = idx > 0 ? order[idx - 1] : null;
+  const nextId = idx < order.length - 1 ? order[idx + 1] : null;
+  const prevHasMajor = Boolean(prevId && toothHasMajorConnectorPlacement(teeth?.[prevId]));
+  const nextHasMajor = Boolean(nextId && toothHasMajorConnectorPlacement(teeth?.[nextId]));
+  return prevHasMajor && nextHasMajor;
+}
+
 
 export function toothSupportsMajorConnectorOverlay(tooth, toothId, majorComponentId) {
   if (resolveMajorConnectorAnchorComponentId(tooth) !== null) return true;

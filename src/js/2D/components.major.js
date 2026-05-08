@@ -2,6 +2,14 @@ import { TOOTH_ORDER } from "./constants.js";
 
 const MAJOR_TAB = "major";
 
+const MAJOR_CONNECTOR_EXCLUDED_TOOTH_IDS_BY_COMPONENT = Object.freeze({
+  "major-upper-horseshoe": Object.freeze(new Set(["18", "28"])),
+  "major-upper-palatal-hole": Object.freeze(new Set(["18", "28"])),
+  "major-upper-palatal-plate": Object.freeze(new Set(["18", "28"])),
+  "major-upper-palatal-bar": Object.freeze(new Set(["18", "28"])),
+  "major-lower-lingual-bar": Object.freeze(new Set(["38", "48"])),
+});
+
 /** Fallback major-connector id auto-placed on lock (design mode). Upper-arch only for now. */
 const DEFAULT_MAJOR_CONNECTOR_ID_FOR_LOCK_DESIGN_MODE = "major-upper-palatal-strap";
 
@@ -240,6 +248,12 @@ export function isMajorConnectorComponent(componentOrId) {
     );
   }
   return String(componentOrId || "").startsWith("major-");
+}
+
+export function isMajorConnectorToothExcluded(componentId, toothId) {
+  const excluded = MAJOR_CONNECTOR_EXCLUDED_TOOTH_IDS_BY_COMPONENT[String(componentId)];
+  if (!excluded) return false;
+  return excluded.has(String(toothId));
 }
 
 /** True when this major type is Palatal Hole (arch-wide AP_Strap SVGs). */
@@ -577,6 +591,9 @@ export function ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
       if (!getMajorConnectorAssetReference(toothId, jawKey)) {
         continue;
       }
+      if (isMajorConnectorToothExcluded(majorComponentId, toothId)) {
+        continue;
+      }
       const tooth = teeth[toothId];
       if (!tooth) {
         continue;
@@ -590,7 +607,10 @@ export function ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
           return false;
         }
         if (tooth.isPresent) {
-          return String(componentId).startsWith("plate-");
+          return (
+            String(componentId).startsWith("plate-") ||
+            String(componentId) === "reciprocating-clasp"
+          );
         }
         return def.tab === "mesh" || String(componentId).startsWith("mesh-");
       });
@@ -631,6 +651,9 @@ export function ensurePalatalBarPlacementsOnConnectorTeeth(teeth, componentById)
     if (!getMajorConnectorAssetReference(toothId, "upper")) {
       continue;
     }
+    if (isMajorConnectorToothExcluded(majorId, toothId)) {
+      continue;
+    }
     const tooth = teeth[toothId];
     if (!tooth) {
       continue;
@@ -644,7 +667,10 @@ export function ensurePalatalBarPlacementsOnConnectorTeeth(teeth, componentById)
         return false;
       }
       if (tooth.isPresent) {
-        return String(componentId).startsWith("plate-");
+        return (
+          String(componentId).startsWith("plate-") ||
+          String(componentId) === "reciprocating-clasp"
+        );
       }
       return def.tab === "mesh" || String(componentId).startsWith("mesh-");
     });
@@ -699,22 +725,6 @@ export function replaceUpperPalatalBarPlacementsWithPalatalHole(teeth) {
   }
 }
 
-function toothHasMeshOrPlateAnchor(tooth, componentById) {
-  if (!tooth || !Array.isArray(tooth.componentPlacements)) {
-    return false;
-  }
-  return tooth.componentPlacements.some(({ componentId }) => {
-    const def = componentById?.get?.(componentId);
-    if (!def) {
-      return false;
-    }
-    if (tooth.isPresent) {
-      return String(componentId).startsWith("plate-");
-    }
-    return def.tab === "mesh" || String(componentId).startsWith("mesh-");
-  });
-}
-
 export function pruneInvalidMajorConnectorPlacementsInJaw(teeth, componentById, jawKey) {
   if (!teeth || typeof teeth !== "object") {
     return;
@@ -727,19 +737,76 @@ export function pruneInvalidMajorConnectorPlacementsInJaw(teeth, componentById, 
 
   const touchedToothIds = new Set();
 
+  const hasAnchorSupport = (tooth) => {
+    if (!tooth || !Array.isArray(tooth.componentPlacements)) {
+      return false;
+    }
+    return tooth.componentPlacements.some(({ componentId }) => {
+      const def = componentById?.get?.(componentId);
+      if (!def) {
+        return false;
+      }
+      if (tooth.isPresent) {
+        return (
+          String(componentId).startsWith("plate-") ||
+          String(componentId) === "reciprocating-clasp"
+        );
+      }
+      return def.tab === "mesh" || String(componentId).startsWith("mesh-");
+    });
+  };
+
   for (const toothId of order) {
     const tooth = teeth[toothId];
     if (!tooth || !Array.isArray(tooth.componentPlacements)) {
       continue;
     }
-    const hasAnchor = toothHasMeshOrPlateAnchor(tooth, componentById);
-    if (hasAnchor) {
+    const beforeLen = tooth.componentPlacements.length;
+    tooth.componentPlacements = tooth.componentPlacements.filter(
+      (entry) =>
+        !(
+          isMajorConnectorComponent(entry.componentId) &&
+          isMajorConnectorToothExcluded(entry.componentId, toothId)
+        )
+    );
+    if (tooth.componentPlacements.length !== beforeLen) {
+      touchedToothIds.add(toothId);
+    }
+  }
+
+  for (let i = 0; i < order.length; i += 1) {
+    const toothId = order[i];
+    const tooth = teeth[toothId];
+    if (!tooth || !Array.isArray(tooth.componentPlacements)) {
       continue;
     }
+    const hasMajor = tooth.componentPlacements.some((entry) =>
+      isMajorConnectorComponent(entry.componentId)
+    );
+    if (!hasMajor) {
+      continue;
+    }
+    if (hasAnchorSupport(tooth)) {
+      continue;
+    }
+
+    const prevId = i > 0 ? order[i - 1] : null;
+    const nextId = i < order.length - 1 ? order[i + 1] : null;
+    const prevHasMajor = Boolean(prevId && toothHasMajorConnectorPlacement(teeth[prevId]));
+    const nextHasMajor = Boolean(nextId && toothHasMajorConnectorPlacement(teeth[nextId]));
+
+    // Keep the segment when it is structurally connected on both sides.
+    if (prevHasMajor && nextHasMajor) {
+      continue;
+    }
+
+    const beforeLen = tooth.componentPlacements.length;
     tooth.componentPlacements = tooth.componentPlacements.filter(
       (entry) => !isMajorConnectorComponent(entry.componentId)
     );
-    touchedToothIds.add(toothId);
+    if (tooth.componentPlacements.length !== beforeLen) {
+      touchedToothIds.add(toothId);
+    }
   }
 
   for (const toothId of touchedToothIds) {

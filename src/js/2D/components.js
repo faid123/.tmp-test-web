@@ -523,6 +523,7 @@ export {
   hasPalatalBarPlacementOnUpperArch,
   hasPalatalHolePlacementOnUpperArch,
   isMajorConnectorComponent,
+  isMajorConnectorToothExcluded,
   isMajorConnectorPlacementSeparated,
   isPalatalBarMajorComponent,
   isPalatalHoleMajorComponent,
