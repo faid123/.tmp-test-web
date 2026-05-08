@@ -11,6 +11,7 @@ import { SVG_NS } from "./constants.js";
 import {
   COMPONENT_BY_ID,
   COMPONENT_CATALOG,
+  isPlateComponentId,
 } from "./components.js";
 
 /** Calibrated tooth-image scale (SVG tooth-local units). */
@@ -36,6 +37,8 @@ export const state = {
   archOverlayPalatalHoleActive: false,
   restSeatCalibrationAcOnly: false,
   removeComponentMode: false,
+  hideLowerPlateVisuals: false,
+  tempShowMinorConnectors: false,
   suppressArchPlacementSuggestions: false,
 };
 
@@ -333,18 +336,26 @@ export async function openRemoveComponentPicker(toothId, jaw, anchorEvent) {
   teethModel.ensureToothPlacementState(tooth);
   // Source of truth is `componentPlacements`, but some older/partial states may still only
   // have `components`. Ensure the remove list includes those so the user can recover.
-  const placements = [...(tooth.componentPlacements || [])];
+  const placements = (tooth.componentPlacements || []).map((entry, idx) => ({
+    ...entry,
+    _index: idx,
+  }));
   const legacy = Array.isArray(tooth.components) ? tooth.components : [];
   for (const componentId of legacy) {
     if (!placements.some((p) => p.componentId === componentId)) {
-      placements.push({ componentId, surface: null });
+      placements.push({ componentId, surface: null, _index: null });
     }
   }
+
+  const visiblePlacements =
+    state.hideLowerPlateVisuals && jaw === "lower"
+      ? placements.filter((entry) => !isPlateComponentId(entry.componentId))
+      : placements;
 
   titleEl.textContent = `Remove component — Tooth ${toothId}`;
   listEl.innerHTML = "";
 
-  if (placements.length === 0) {
+  if (visiblePlacements.length === 0) {
     hintEl.textContent = "This tooth has no components to remove.";
     hintEl.classList.remove("is-hidden");
   } else {
@@ -377,7 +388,7 @@ export async function openRemoveComponentPicker(toothId, jaw, anchorEvent) {
   const onBackdrop = () => finish();
   const onCancel = () => finish();
 
-  placements.forEach((entry, index) => {
+  visiblePlacements.forEach((entry) => {
     const def = COMPONENT_BY_ID.get(entry.componentId);
     const label = def?.label || entry.componentId;
     const surf = formatPlacementSurfaceForRemoveUi(entry.surface);
@@ -392,7 +403,17 @@ export async function openRemoveComponentPicker(toothId, jaw, anchorEvent) {
         return;
       }
       teethModel.ensureToothPlacementState(t);
-      const removed = teethModel.removePlacementAtIndex(t, index);
+      let removed = null;
+      if (Number.isInteger(entry._index) && entry._index >= 0) {
+        removed = teethModel.removePlacementAtIndex(t, entry._index);
+      } else {
+        const idx = (t.componentPlacements || []).findIndex(
+          (p) => p.componentId === entry.componentId && p.surface === entry.surface
+        );
+        if (idx >= 0) {
+          removed = teethModel.removePlacementAtIndex(t, idx);
+        }
+      }
       const placement = await import("./annotationPlacement.js");
       placement.applyRemovalSideEffectsForTooth(t, removed);
       const defR = removed ? COMPONENT_BY_ID.get(removed.componentId) : null;
@@ -450,6 +471,8 @@ function start() {
 
 function init() {
   initializeCaseIds();
+  const TEMP_SHOW_ALL_MINOR_CONNECTOR = true;
+  state.tempShowMinorConnectors = TEMP_SHOW_ALL_MINOR_CONNECTOR;
   // Load render module early so render bridge + mesh env are registered.
   const renderLoad = import("./annotationRender.js");
 

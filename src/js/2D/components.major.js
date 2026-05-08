@@ -405,17 +405,17 @@ export const CONNECTOR_EXTRA_OFFSET_SEED_BY_TOOTH = Object.freeze({
   "27": { x: -60.3, y: 16.6 },
   "18": { x: 62.2, y: 9.5 },
   "28": { x: -62.2, y: 9.5 },
-  "41": { x: 5.35, y: -62 },
-  "42": { x: 21.6, y: -55.6 },
-  "43": { x: 39.7, y: -46.4 },
-  "44": { x: 56, y: -30 },
-  "45": { x: 56.4, y: -17.1 },
-  "35": { x: -55.4, y: -17.1 },
-  "46": { x: 55.8, y: -14.8 },
-  "47": { x: 55.3, y: -13.6 },
-  "37": { x: -54.3, y: -13.6 },
-  "48": { x: 60, y: -8 },
-  "38": { x: -59, y: -8 },
+  "41": { x: 5., y: -64 },
+  "42": { x: 21.6, y: -57.6 },
+  "43": { x: 38.7, y: -48.4 },
+  "44": { x: 55.2, y: -33 },
+  "45": { x: 57, y: -20.6 },
+  "35": { x: -56.4, y: -20.6 },
+  "46": { x: 55.8, y: -17.4 },
+  "47": { x: 54.9, y: -16.3 },
+  "37": { x: -53.9, y: -16.3 },
+  "48": { x: 60, y: -11 },
+  "38": { x: -59, y: -11 },
 });
 
 /** Multiplier on the scaled connector group per arch. */
@@ -437,13 +437,13 @@ export const CONNECTOR_RENDER_SCALE_BY_TEMPLATE_TOOTH = Object.freeze({
   "16": 0.7,
   "17": 0.63,
   "18": 0.6,
-  "41": 0.35,
-  "42": 0.4,
-  "43": 0.55,
-  "44": 0.85,
-  "45": 0.85,
+  "41": 0.375,
+  "42": 0.43,
+  "43": 0.59,
+  "44": 0.88,
+  "45": 0.825,
   "46": 0.8,
-  "47": 0.66,
+  "47": 0.665,
   "48": 0.61,
 });
 
@@ -544,10 +544,29 @@ export function getDefaultMajorConnectorIdForDesignMode(componentById) {
  * for that jaw (upper 11–28; lower 31–48 using `41`–`48` basenames; Q3 mirrored like upper Q2).
  */
 export function ensureMajorConnectorPlacementsOnSupportedTeeth(teeth, majorComponentId, componentById) {
+  ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
+    teeth,
+    majorComponentId,
+    componentById,
+    ["upper", "lower"]
+  );
+}
+
+/**
+ * Jaw-scoped variant of major auto-placement.
+ * `jawKeys` accepts `"upper"` and/or `"lower"`.
+ */
+export function ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
+  teeth,
+  majorComponentId,
+  componentById,
+  jawKeys
+) {
   if (
     !majorComponentId ||
     !componentById.has(majorComponentId) ||
-    !isMajorConnectorComponent(majorComponentId)
+    !isMajorConnectorComponent(majorComponentId) ||
+    !Array.isArray(jawKeys)
   ) {
     return;
   }
@@ -591,8 +610,11 @@ export function ensureMajorConnectorPlacementsOnSupportedTeeth(teeth, majorCompo
     }
   };
 
-  tryArch("upper");
-  tryArch("lower");
+  for (const jawKey of jawKeys) {
+    if (jawKey === "upper" || jawKey === "lower") {
+      tryArch(jawKey);
+    }
+  }
 }
 
 /**

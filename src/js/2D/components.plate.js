@@ -45,6 +45,30 @@ const PLATE_RENDER_SCALE_BY_JAW = Object.freeze({
 });
 
 /**
+ * Mesh Plate (`plate-crossmesh`) scale overrides for tuning.
+ * Supports exact tooth ids first, then template tooth fallback.
+ */
+const PLATE_CROSSMESH_SCALE_OVERRIDE_BY_TOOTH = Object.freeze({
+  "11": 1.05,
+  "12": 1.05,
+  "13": 1.05,
+  "14": .92,
+  "15": .95,
+  "16": .95,
+  "17": .93,
+  "18": .87,
+
+  "41": .65,
+  "42": .64,
+  "43": .80,
+  "44": .75,
+  "45": .75,
+  "46": .65,
+  "47": .65,
+  "48": .65
+});
+
+/**
  * Tooth-local translation before scale (same units as mesh offsets).
  * Keys: template teeth `11`–`18`, `41`–`48`; optional exact FDI keys override template.
  * Quadrants 2 / 3 mirror X when only the template row exists.
@@ -76,12 +100,54 @@ const PLATE_POSITION_OFFSET_SEED_BY_TOOTH = Object.freeze({
   "48": { x: 34.5, y: 2.2 },
 });
 
+/**
+ * Mesh Plate (`plate-crossmesh`) x/y offset overrides for tuning.
+ * Values are additive offsets on top of the base plate seed map.
+ * Supports exact tooth ids first, then template tooth fallback.
+ */
+const PLATE_CROSSMESH_OFFSET_OVERRIDE_BY_TOOTH = Object.freeze({
+"11": { x: 0, y: 0 },
+"12": { x: -6, y: -7 },"22": { x: 6, y: -7 },
+"13": { x: -8, y: -10 },"23": { x: 8, y: -10 },
+"14": { x: -2, y: -7 },"24": { x: 2, y: -7 },
+"15": { x: -1, y: -7 },"25": { x: 1, y: -7 },
+"16": { x: -2, y: -7 },"26": { x: 2, y: -7 },
+"17": { x: -1.5, y: -10 },"27": { x: 1.5, y: -10 },
+"18": { x: -3, y: 1 },"28": { x: 3, y: 1 },
+
+"41": { x: -4, y: 2 },
+"42": { x: -2, y: 1.5 },
+"43": { x: -4, y: 2.5 },
+"44": { x: -7, y: 2 },
+"45": { x: -8, y: -1 },
+"46": { x: -1, y: 4 },
+"47": { x: -2.5, y: 5 },
+"48": { x: -2, y: -4 },
+"31": { x: 4, y: 2 },
+"32": { x: 2, y: 1.5 },
+"33": { x: 4, y: 2.5 },
+"34": { x: 7, y: 2 },
+"35": { x: 8, y: -1 },
+"36": { x: 0, y: 4 },
+"37": { x: 2.5, y: 5 },
+"38": { x: 2, y: -4 },
+});
+
 export function getPlatePlacementRenderScale(componentId, _toothId, jaw) {
   if (!isPlateComponentId(componentId)) {
     return 1;
   }
   const componentScale = PLATE_RENDER_SCALE_BY_COMPONENT[componentId] || 1;
   const jawScale = PLATE_RENDER_SCALE_BY_JAW[jaw] || 1;
+  if (componentId === "plate-crossmesh") {
+    const exactToothId = String(_toothId ?? "");
+    const templateToothId = getComponentTemplateToothId(_toothId);
+    const toothScale =
+      PLATE_CROSSMESH_SCALE_OVERRIDE_BY_TOOTH[exactToothId] ??
+      PLATE_CROSSMESH_SCALE_OVERRIDE_BY_TOOTH[templateToothId] ??
+      1;
+    return componentScale * jawScale * (Number.isFinite(toothScale) ? toothScale : 1);
+  }
   return componentScale * jawScale;
 }
 
@@ -97,6 +163,17 @@ export function getPlatePlacementOffset(componentId, toothId) {
   const quadrant = Number.isFinite(numeric) ? Math.floor(numeric / 10) : 0;
   const mirrorX = !exact && (quadrant === 2 || quadrant === 3);
   const x = mirrorX ? -row.x : row.x;
+  if (componentId === "plate-crossmesh") {
+    const exactToothId = String(toothId ?? "");
+    const ov =
+      PLATE_CROSSMESH_OFFSET_OVERRIDE_BY_TOOTH[exactToothId] ??
+      PLATE_CROSSMESH_OFFSET_OVERRIDE_BY_TOOTH[templateToothId] ??
+      null;
+    return {
+      x: (Number.isFinite(x) ? x : 0) + (Number.isFinite(ov?.x) ? ov.x : 0),
+      y: (Number.isFinite(row.y) ? row.y : 0) + (Number.isFinite(ov?.y) ? ov.y : 0),
+    };
+  }
   return {
     x: Number.isFinite(x) ? x : 0,
     y: Number.isFinite(row.y) ? row.y : 0,

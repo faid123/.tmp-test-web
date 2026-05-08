@@ -29,6 +29,11 @@ import {
   syncToothComponentsFromPlacements,
 } from "./annotationTeethModel.js";
 import { ensureMajorCatalogPickForTooth } from "./annotationCatalog.js";
+
+function isAnteriorToothId(toothId) {
+  const unit = Number(toothId) % 10;
+  return Number.isFinite(unit) && unit >= 1 && unit <= 3;
+}
 import { assessPlacementCriteria } from "./criteria.js";
 
 export function applyRemovalSideEffectsForTooth(tooth, removedEntry) {
@@ -185,6 +190,10 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
 
   if (requiresSurface && !targetSurface) {
     if (selectedComponent.id === "rest-onlay") {
+      if (isAnteriorToothId(toothId)) {
+        setMessage("Onlay rest is only allowed on posterior teeth.", true);
+        return;
+      }
       placeSelectedComponentOnTooth(toothId, { surface: "mesial" });
       return;
     }
@@ -207,6 +216,11 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
       `For ${selectedComponent.label}, click a rest suggestion point (mesial, distal, or lingual).`,
       true
     );
+    return;
+  }
+
+  if (selectedComponent.id === "rest-onlay" && isAnteriorToothId(toothId)) {
+    setMessage("Onlay rest is only allowed on posterior teeth.", true);
     return;
   }
 

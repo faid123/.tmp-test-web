@@ -14,10 +14,9 @@ import {
   isPalatalHoleMajorComponent,
   isPalatalBarMajorComponent,
   isPlateComponentId,
-  ensureMajorConnectorPlacementsOnSupportedTeeth,
+  ensureMajorConnectorPlacementsOnSupportedTeethInJaws,
   ensurePalatalBarPlacementsOnConnectorTeeth,
   removeMajorPlacementsFromPalatalBarExcludedUpperTeeth,
-  replaceUpperPalatalBarPlacementsWithPalatalHole,
 } from "./components.js";
 import { COMPONENT_GROUPS, forEachTooth, TOOTH_ORDER } from "./constants.js";
 import {
@@ -264,26 +263,46 @@ export function handleDesignComponentSelect(componentId) {
   if (isMajorConnectorComponent(selected)) {
     state.selectedComponentId = componentId;
     state.archOverlayPalatalHoleActive = isPalatalHoleMajorComponent(componentId);
+    if (componentId === "major-lower-lingual-bar") {
+      state.hideLowerPlateVisuals = true;
+    } else if (componentId === "major-lower-lingual-plate") {
+      state.hideLowerPlateVisuals = false;
+      for (const toothId of TOOTH_ORDER.lower) {
+        const tooth = state.teeth[toothId];
+        if (!tooth || !Array.isArray(tooth.componentPlacements)) continue;
+        tooth.componentPlacements = tooth.componentPlacements.filter(
+          (entry) => entry.componentId !== "major-lower-lingual-bar"
+        );
+      }
+    }
 
     if (isPalatalBarMajorComponent(componentId)) {
       ensurePalatalBarPlacementsOnConnectorTeeth(state.teeth, COMPONENT_BY_ID);
       removeMajorPlacementsFromPalatalBarExcludedUpperTeeth(state.teeth);
     } else {
-      if (isPalatalHoleMajorComponent(componentId)) {
-        replaceUpperPalatalBarPlacementsWithPalatalHole(state.teeth);
-      } else {
+      const jawKeys = String(componentId).startsWith("major-lower-")
+        ? ["lower"]
+        : String(componentId).startsWith("major-upper-")
+          ? ["upper"]
+          : ["upper", "lower"];
+      // Clear major connectors from the target arch only so the new connector replaces
+      // whatever was there without disturbing the opposite arch.
+      for (const jawKey of jawKeys) {
         forEachTooth((toothId, jaw) => {
-          if (jaw !== "upper") return;
+          if (jaw !== jawKey) return;
           const tooth = state.teeth[toothId];
-          if (!tooth || !Array.isArray(tooth.componentPlacements)) {
-            return;
-          }
+          if (!tooth || !Array.isArray(tooth.componentPlacements)) return;
           tooth.componentPlacements = tooth.componentPlacements.filter(
-            (entry) => !isPalatalBarMajorComponent(entry.componentId)
+            (entry) => !isMajorConnectorComponent(entry.componentId)
           );
         });
       }
-      ensureMajorConnectorPlacementsOnSupportedTeeth(state.teeth, componentId, COMPONENT_BY_ID);
+      ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
+        state.teeth,
+        componentId,
+        COMPONENT_BY_ID,
+        jawKeys
+      );
     }
 
     forEachTooth((toothId) => {

@@ -1,8 +1,8 @@
 import { getComponentTemplateToothId } from "./components.mesh.js";
 
 export const REST_SURFACE = Object.freeze({
-  MESIAL: "mesial",
-  DISTAL: "distal",
+  MESIAL: "distal",
+  DISTAL: "mesial",
   LINGUAL: "lingual",
 });
 
@@ -150,6 +150,42 @@ const REST_PLACEMENT_SCALE_OVERRIDE_BY_TOOTH = Object.freeze({
   "18": { p_lingual: 0.5 },
 });
 
+const REST_ONLAY_FULL_SCALE_OVERRIDE_BY_TOOTH = Object.freeze({
+  "14": 0.42,
+  "15": 0.42,
+  "16": 0.42,
+  "17": 0.42,
+  "18": 0.42,
+  "44": 0.43,
+  "45": 0.43,
+  "46": 0.43,
+  "47": 0.43,
+  "48": 0.43,
+});
+
+const REST_ONLAY_FULL_OFFSET_OVERRIDE_BY_TOOTH = Object.freeze({
+  "14": { x: -16, y: 11 },
+  "15": { x: -9, y: 15 },
+  "16": { x: -10, y: 22 },
+  "17": { x: -7, y: 21 },
+  "18": { x: -2, y: 22 },
+  "24": { x: 16, y: 11 },
+  "25": { x: 9, y: 15 },
+  "26": { x: 11, y: 22 },
+  "27": { x: 7, y: 21 },
+  "28": { x: 2, y: 22 },
+  "44": { x: -12, y: -13 },
+  "45": { x: -9, y: -16 },
+  "46": { x: -12, y: -27 },
+  "47": { x: -9, y: -23 },
+  "48": { x: -7, y: -21 },
+  "34": { x: 12, y: -13 },
+  "35": { x: 9, y: -16 },
+  "36": { x: 12, y: -27 },
+  "37": { x: 9, y: -23 },
+  "38": { x: 7, y: -20 },
+});
+
 function getToothUnit(toothId) {
   const numeric = Number(toothId);
   if (!Number.isFinite(numeric)) return null;
@@ -170,6 +206,11 @@ function normalizeRestSurface(surface) {
 
 function getRestPlacementToken(_componentId, toothId, surface) {
   const variant = getRestVariantForTooth(toothId);
+
+  if (_componentId === "rest-onlay") {
+    return variant === "anterior" ? null : "p_full";
+  }
+
   const normalizedSurface = normalizeRestSurface(surface);
   if (!normalizedSurface) return null;
 
@@ -206,12 +247,37 @@ export function getRestPlacementImageSize(componentId, toothId, surface) {
 }
 
 export function getRestPlacementRenderScale(componentId, toothId, surface) {
+  const exactToothId = String(toothId ?? "");
   const templateToothId = getComponentTemplateToothId(toothId);
   const token = getRestPlacementToken(componentId, toothId, surface);
   if (!token) return 0.55;
+
+  if (componentId === "rest-onlay" && token === "p_full") {
+    const onlayOverride =
+      REST_ONLAY_FULL_SCALE_OVERRIDE_BY_TOOTH[exactToothId] ??
+      REST_ONLAY_FULL_SCALE_OVERRIDE_BY_TOOTH[templateToothId];
+    if (Number.isFinite(onlayOverride)) return onlayOverride;
+  }
+
   const override = REST_PLACEMENT_SCALE_OVERRIDE_BY_TOOTH[templateToothId]?.[token];
   if (Number.isFinite(override)) return override;
   return REST_PLACEMENT_SCALE_BY_TOKEN[token] || 0.55;
+}
+
+export function getRestPlacementOffset(componentId, toothId, surface) {
+  const token = getRestPlacementToken(componentId, toothId, surface);
+  if (!(componentId === "rest-onlay" && token === "p_full")) {
+    return { x: 0, y: 0 };
+  }
+  const exactToothId = String(toothId ?? "");
+  const templateToothId = getComponentTemplateToothId(toothId);
+  const ov =
+    REST_ONLAY_FULL_OFFSET_OVERRIDE_BY_TOOTH[exactToothId] ??
+    REST_ONLAY_FULL_OFFSET_OVERRIDE_BY_TOOTH[templateToothId];
+  return {
+    x: Number.isFinite(ov?.x) ? ov.x : 0,
+    y: Number.isFinite(ov?.y) ? ov.y : 0,
+  };
 }
 
 export function getRestSuggestionSurfaces(componentId, _toothId) {

@@ -550,6 +550,10 @@ body {
   filter: grayscale(1) brightness(0.72) contrast(0.95);
 }
 
+.minor-connector-image {
+  filter: grayscale(1) brightness(0.72) contrast(0.95);
+}
+
 /* Palatal hole arch overlay (AP_Strap01/02): neutral gray, non-interactive */
 .palatal-hole-arch-overlay {
   pointer-events: none;
@@ -691,6 +695,12 @@ body {
   cursor: pointer;
   opacity: 0.95;
   filter: brightness(0) saturate(100%) invert(46%) sepia(72%) saturate(2000%) hue-rotate(336deg) brightness(95%) contrast(97%);
+}
+
+/* Ensure onlay/full rest artwork uses the same rose rest tint. */
+.rest-placement-image[data-component-id="rest-onlay"] {
+  opacity: 1;
+  filter: brightness(0) saturate(100%) invert(22%) sepia(85%) saturate(2800%) hue-rotate(332deg) brightness(86%) contrast(118%);
 }
 
 /* Placed Rest seat only: dark rose pink, not violet. */

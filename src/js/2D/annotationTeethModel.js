@@ -1,6 +1,8 @@
 import { COMPONENT_BY_ID } from "./components.js";
 import { forEachTooth, STATUS_VALUES, TOOTH_POSITION_MAP, TOOTH_SCALE_BY_UNIT, TOOTH_SCALE_OVERRIDE } from "./constants.js";
 import { state } from "./2DAnnotation.js";
+import { normalizeSurface } from "./toothUtils.js";
+export { normalizeSurface } from "./toothUtils.js";
 
 export function initializeTeethState() {
   forEachTooth((toothId, jaw) => {
@@ -43,14 +45,6 @@ export function toggleToothStatus(tooth, toothId, status) {
   }
   tooth.status = tooth.status === status ? "presence" : status;
   return `Tooth ${toothId} set to ${tooth.status}.`;
-}
-
-export function normalizeSurface(surface) {
-  if (typeof surface !== "string") {
-    return null;
-  }
-  const normalized = surface.toLowerCase();
-  return normalized === "occlusal" ? "lingual" : normalized;
 }
 
 export function ensureToothPlacementState(tooth) {

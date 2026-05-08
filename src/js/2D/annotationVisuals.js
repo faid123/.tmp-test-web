@@ -175,6 +175,10 @@ function appendToothPlateComponentVisuals(group, tooth, toothId, jaw) {
   ensureToothPlacementState(tooth);
   if (!tooth.isPresent) return;
 
+  if (state.hideLowerPlateVisuals && jaw === "lower") {
+    return;
+  }
+
   const selected = COMPONENT_BY_ID.get(state.selectedComponentId || "");
   if (
     state.designMode &&
@@ -889,15 +893,6 @@ function hasBarPlacementAtSurface(tooth, componentId) {
 // is not actively selecting a *different* major type (so plate/clasp/mesh tabs do not hide them).
 function shouldShowPalatalHoleArchOverlay() {
   const sel = COMPONENT_BY_ID.get(state.selectedComponentId || "");
-  const suppressForOtherMajor =
-    state.designMode &&
-    sel &&
-    isMajorConnectorComponent(sel) &&
-    !isPalatalHoleMajorComponent(sel);
-
-  if (suppressForOtherMajor) {
-    return false;
-  }
   if (hasPalatalHolePlacementOnUpperArch(state.teeth)) {
     return true;
   }
@@ -909,15 +904,6 @@ function shouldShowPalatalHoleArchOverlay() {
 
 function shouldShowPalatalBarArchOverlay() {
   const sel = COMPONENT_BY_ID.get(state.selectedComponentId || "");
-  const suppressForOtherMajor =
-    state.designMode &&
-    sel &&
-    isMajorConnectorComponent(sel) &&
-    !isPalatalBarMajorComponent(sel);
-
-  if (suppressForOtherMajor) {
-    return false;
-  }
   if (hasPalatalBarPlacementOnUpperArch(state.teeth)) {
     return true;
   }

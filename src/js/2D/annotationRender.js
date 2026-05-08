@@ -6,9 +6,11 @@ import {
   getBarSuggestibleToothIdSet,
   handleMeshToolDoubleClick,
   isBarComponent,
+  isClaspComponent,
   isMajorConnectorComponent,
   isMeshComponent,
   isPlateComponentId,
+  isRestComponent,
 } from "./components.js";
 import { EMPTY_JAW_CALIBRATION, JAW_BACKGROUND_IMAGES, JAW_BACKGROUND_OFFSET_BY_JAW, JAW_BACKGROUND_SCALE_BY_JAW, JAW_CALIBRATION, TOOTH_ASSET_BASE, TOOTH_ORDER } from "./constants.js";
 import {
@@ -163,14 +165,29 @@ export function renderJaw(jaw) {
       const hadSuppressedHints = state.suppressArchPlacementSuggestions;
       state.suppressArchPlacementSuggestions = false;
       const catalogPick = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+      const suggestionModeActive = Boolean(
+        state.designMode &&
+          catalogPick &&
+          (
+            (isRestComponent(catalogPick) && catalogPick.id !== "rest-onlay") ||
+            isClaspComponent(catalogPick) ||
+            isPlateComponentId(catalogPick.id) ||
+            (isBarComponent(catalogPick) && showBarSuggestions())
+          )
+      );
       if (catalogPick && isPlateComponentId(catalogPick.id)) {
         if (hadSuppressedHints) renderJaw(jaw);
         return;
       }
-      if (tooth.isPresent) {
-        if (catalogPick && isBarComponent(catalogPick)) {
-          const set = getBarSuggestibleToothIdSet(state.teeth, jaw);
-          if (set.has(toothId) && !hasBarPlacementAtSurface(tooth, catalogPick.id)) {
+        if (tooth.isPresent) {
+          if (catalogPick?.id === "rest-onlay") {
+            placeSelectedComponentOnTooth(toothId, null);
+            renderJaw(jaw);
+            return;
+          }
+          if (catalogPick && isBarComponent(catalogPick)) {
+            const set = getBarSuggestibleToothIdSet(state.teeth, jaw);
+            if (set.has(toothId) && !hasBarPlacementAtSurface(tooth, catalogPick.id)) {
             const barSurface = getBarPlacementSurfaceForTooth(toothId, jaw, state.teeth);
             if (!barSurface) {
               setMessage("Could not resolve bar type for this tooth.", true);
@@ -182,7 +199,7 @@ export function renderJaw(jaw) {
             return;
           }
         }
-        if (!catalogPick || !isMajorConnectorComponent(catalogPick)) {
+        if (!catalogPick || !suggestionModeActive) {
           showPresentToothRadialQuickPick(toothId, event.clientX, event.clientY);
           if (hadSuppressedHints) renderJaw(jaw);
           return;
