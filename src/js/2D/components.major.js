@@ -698,3 +698,88 @@ export function replaceUpperPalatalBarPlacementsWithPalatalHole(teeth) {
     );
   }
 }
+
+function toothHasMeshOrPlateAnchor(tooth, componentById) {
+  if (!tooth || !Array.isArray(tooth.componentPlacements)) {
+    return false;
+  }
+  return tooth.componentPlacements.some(({ componentId }) => {
+    const def = componentById?.get?.(componentId);
+    if (!def) {
+      return false;
+    }
+    if (tooth.isPresent) {
+      return String(componentId).startsWith("plate-");
+    }
+    return def.tab === "mesh" || String(componentId).startsWith("mesh-");
+  });
+}
+
+export function pruneInvalidMajorConnectorPlacementsInJaw(teeth, componentById, jawKey) {
+  if (!teeth || typeof teeth !== "object") {
+    return;
+  }
+  if (!Array.isArray(TOOTH_ORDER?.[jawKey])) {
+    return;
+  }
+
+  const order = TOOTH_ORDER[jawKey];
+
+  const touchedToothIds = new Set();
+
+  for (const toothId of order) {
+    const tooth = teeth[toothId];
+    if (!tooth || !Array.isArray(tooth.componentPlacements)) {
+      continue;
+    }
+    const hasAnchor = toothHasMeshOrPlateAnchor(tooth, componentById);
+    if (hasAnchor) {
+      continue;
+    }
+    tooth.componentPlacements = tooth.componentPlacements.filter(
+      (entry) => !isMajorConnectorComponent(entry.componentId)
+    );
+    touchedToothIds.add(toothId);
+  }
+
+  for (const toothId of touchedToothIds) {
+    const tooth = teeth[toothId];
+    if (!tooth || !Array.isArray(tooth.componentPlacements)) {
+      continue;
+    }
+    const ids = [];
+    for (const entry of tooth.componentPlacements) {
+      const cid = entry?.componentId;
+      if (!cid || !componentById?.has?.(cid)) {
+        continue;
+      }
+      if (!ids.includes(cid)) {
+        ids.push(cid);
+      }
+    }
+    tooth.components = ids;
+  }
+}
+
+export function isMajorConnectorPlacementSeparated(toothId, teeth, jawKey) {
+  if (!teeth || typeof teeth !== "object") {
+    return false;
+  }
+  const order = Array.isArray(TOOTH_ORDER?.[jawKey]) ? TOOTH_ORDER[jawKey] : null;
+  if (!order) {
+    return false;
+  }
+  const idx = order.indexOf(String(toothId));
+  if (idx < 0) {
+    return false;
+  }
+  const tooth = teeth[String(toothId)];
+  if (!toothHasMajorConnectorPlacement(tooth)) {
+    return false;
+  }
+  const prevId = idx > 0 ? order[idx - 1] : null;
+  const nextId = idx < order.length - 1 ? order[idx + 1] : null;
+  const prevHasMajor = Boolean(prevId && toothHasMajorConnectorPlacement(teeth[prevId]));
+  const nextHasMajor = Boolean(nextId && toothHasMajorConnectorPlacement(teeth[nextId]));
+  return !prevHasMajor && !nextHasMajor;
+}

@@ -19,6 +19,10 @@ import {
   getBarPlacementImageSize,
   getBarPlacementOffset,
   getBarPlacementRenderScale,
+  getMinorConnectorAssetReference,
+  getMinorConnectorImageSize,
+  getMinorConnectorOffset,
+  getMinorConnectorRenderScale,
   getMajorConnectorPlacementImageSize,
   getMajorConnectorPlacementOffset,
   getMajorConnectorRenderScaleMultiplier,
@@ -42,6 +46,7 @@ import {
   isRingClaspComponent,
   isRetainerClaspComponent,
   isMajorConnectorComponent,
+  isMajorConnectorPlacementSeparated,
   isMeshComponent,
   isPalatalBarMajorComponent,
   isPalatalHoleMajorComponent,
@@ -142,6 +147,23 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
     }
     if (!majorIds.includes(id)) {
       majorIds.push(id);
+    }
+  }
+
+  const selectedMajor = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+  if (selectedMajor && isMajorConnectorComponent(selectedMajor) && selectedMajor.section === jaw) {
+    if (
+      !(
+        jaw === "upper" &&
+        shouldShowPalatalBarArchOverlay() &&
+        PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS.has(String(toothId))
+      )
+    ) {
+      if (!(showPalatalBarSegment && !isPalatalBarMajorComponent(selectedMajor.id))) {
+        if (!majorIds.includes(selectedMajor.id)) {
+          majorIds.push(selectedMajor.id);
+        }
+      }
     }
   }
 
@@ -262,6 +284,47 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
     if (state.removeComponentMode) return false;
     return Boolean(componentId && state.selectedComponentId === componentId);
   };
+
+  const hasMinorConnectorSupportPlacement = tooth.componentPlacements.some((placement) => {
+    const componentId = placement?.componentId;
+    return (
+      isRestComponent(componentId) ||
+      isRetainerClaspComponent(componentId) ||
+      isReciprocatingClaspComponent(componentId) ||
+      isRingClaspComponent(componentId) ||
+      isBarComponent(componentId)
+    );
+  });
+
+  if (hasMinorConnectorSupportPlacement) {
+    const href = getMinorConnectorAssetReference(toothId);
+    const size = getMinorConnectorImageSize(toothId);
+    const offset = getMinorConnectorOffset(toothId);
+    if (href && size) {
+      const scale = getMinorConnectorRenderScale(jaw);
+      const width = size.width * scale;
+      const height = size.height * scale;
+      const minor = svgEl("g", {
+        class: "minor-connector-placement",
+        transform: `translate(${offset.x} ${offset.y}) scale(${mirrored ? -1 : 1} 1)`,
+      });
+
+      minor.appendChild(
+        svgEl("image", {
+          href,
+          x: String(-width / 2),
+          y: String(-height / 2),
+          width: String(width),
+          height: String(height),
+          preserveAspectRatio: "xMidYMid meet",
+          class: "minor-connector-image",
+          "data-component-id": "minor-connector",
+        })
+      );
+
+      group.appendChild(minor);
+    }
+  }
 
   for (const placement of tooth.componentPlacements) {
     if (!isRestComponent(placement.componentId)) continue;
@@ -1049,6 +1112,10 @@ function createMajorConnectorVisual(majorComponentId, tooth, toothId, jaw) {
     class: `component-visual major-connector-visual component-ref-${majorComponentId}`,
     transform: `translate(${ox.toFixed(2)} ${oy.toFixed(2)}) scale(${scaleXConn.toFixed(3)} ${scaleYConn.toFixed(3)})`,
   });
+  const isSeparated = isMajorConnectorPlacementSeparated(toothId, state.teeth, jaw);
+  const imageClass = isSeparated
+    ? "component-image major-connector-image is-separated"
+    : "component-image major-connector-image";
   visual.appendChild(
     svgEl("image", {
       href: connectorHref,
@@ -1057,7 +1124,7 @@ function createMajorConnectorVisual(majorComponentId, tooth, toothId, jaw) {
       width: String(imgW),
       height: String(imgH),
       preserveAspectRatio: "xMidYMid meet",
-      class: "component-image major-connector-image",
+      class: imageClass,
     })
   );
   return visual;

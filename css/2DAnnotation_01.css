@@ -550,6 +550,10 @@ body {
   filter: grayscale(1) brightness(0.72) contrast(0.95);
 }
 
+.major-connector-image.is-separated {
+  filter: brightness(0) saturate(100%) invert(18%) sepia(89%) saturate(4019%) hue-rotate(352deg) brightness(93%) contrast(107%);
+}
+
 .minor-connector-image {
   filter: grayscale(1) brightness(0.72) contrast(0.95);
 }

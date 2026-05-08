@@ -4,6 +4,8 @@ import {
   isClaspComponent,
   isMajorConnectorComponent,
   isMeshComponent,
+  isPlateComponentId,
+  isReciprocatingClaspComponent,
 } from "./components.js";
 
 function getToothId(tooth) {
@@ -86,6 +88,24 @@ export function assessPlacementCriteria(tooth, selectedComponent, componentById)
         `Tooth ${toothId} already has ${selectedIsBar ? "a clasp" : "a bar"}; replacing with ${selectedComponent.id}.`,
         ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
         barClaspConflicts
+      );
+    }
+  }
+
+  const selectedIsReciprocatingClasp = isReciprocatingClaspComponent(selectedComponent);
+  const selectedIsReciprocatingPlate = isPlateComponentId(selectedComponent.id);
+  if (selectedIsReciprocatingClasp || selectedIsReciprocatingPlate) {
+    const reciprocatingConflicts = existingComponents.filter((id) => {
+      if (selectedIsReciprocatingClasp) {
+        return isPlateComponentId(id);
+      }
+      return isReciprocatingClaspComponent(id);
+    });
+    if (reciprocatingConflicts.length > 0) {
+      return failure(
+        `Tooth ${toothId} already has a reciprocating component; replacing with ${selectedComponent.id}.`,
+        ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
+        reciprocatingConflicts
       );
     }
   }

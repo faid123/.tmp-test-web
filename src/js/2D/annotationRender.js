@@ -10,6 +10,7 @@ import {
   isMajorConnectorComponent,
   isMeshComponent,
   isPlateComponentId,
+  pruneInvalidMajorConnectorPlacementsInJaw,
   isRestComponent,
 } from "./components.js";
 import { EMPTY_JAW_CALIBRATION, JAW_BACKGROUND_IMAGES, JAW_BACKGROUND_OFFSET_BY_JAW, JAW_BACKGROUND_SCALE_BY_JAW, JAW_CALIBRATION, TOOTH_ASSET_BASE, TOOTH_ORDER } from "./constants.js";
@@ -101,6 +102,7 @@ export function renderJaw(jaw) {
   renderArchBackground(svg, jaw);
 
   const ids = TOOTH_ORDER[jaw];
+  pruneInvalidMajorConnectorPlacementsInJaw(state.teeth, COMPONENT_BY_ID, jaw);
   ids.forEach((toothId) => {
     const placement = getToothPlacement(jaw, toothId);
     if (!placement) return;

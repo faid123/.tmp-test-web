@@ -494,6 +494,13 @@ export {
 } from "./components.bar.js";
 
 export {
+  getMinorConnectorAssetReference,
+  getMinorConnectorImageSize,
+  getMinorConnectorOffset,
+  getMinorConnectorRenderScale,
+} from "./components.minor.js";
+
+export {
   CONNECTOR_EXTRA_OFFSET_SEED_BY_TOOTH,
   CONNECTOR_PLACEMENT_IMAGE_SIZE_BY_TOOTH,
   CONNECTOR_RENDER_SCALE_BY_JAW,
@@ -503,6 +510,7 @@ export {
   ensureMajorConnectorPlacementsOnSupportedTeeth,
   ensureMajorConnectorPlacementsOnSupportedTeethInJaws,
   ensurePalatalBarPlacementsOnConnectorTeeth,
+  pruneInvalidMajorConnectorPlacementsInJaw,
   removeMajorPlacementsFromPalatalBarExcludedUpperTeeth,
   replaceUpperPalatalBarPlacementsWithPalatalHole,
   getDefaultMajorConnectorIdForDesignMode,
@@ -515,6 +523,7 @@ export {
   hasPalatalBarPlacementOnUpperArch,
   hasPalatalHolePlacementOnUpperArch,
   isMajorConnectorComponent,
+  isMajorConnectorPlacementSeparated,
   isPalatalBarMajorComponent,
   isPalatalHoleMajorComponent,
   PALATAL_BAR_ARCH_OVERLAY,
