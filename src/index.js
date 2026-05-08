@@ -768,6 +768,10 @@ function isGingivalPolylineComponent(component) {
   return /gingival/i.test(component || "");
 }
 
+function isMeshPolylineComponent(component) {
+  return /^mesh$/i.test(component || "");
+}
+
 function getJawMeshForPolyline(jawType) {
   const jawText = jawType.toLowerCase();
   return parentObject.children.find((child) => {
@@ -808,6 +812,7 @@ function getPolylineRenderableEdges(points, component) {
   if (points.length < 3) return [[0, 1]];
 
   const isGingival = isGingivalPolylineComponent(component);
+  const isMesh = isMeshPolylineComponent(component);
   const distances = [];
   for (let i = 1; i < points.length; i += 1) {
     const distance = getDistanceBetweenPoints(points[i - 1], points[i]);
@@ -825,8 +830,10 @@ function getPolylineRenderableEdges(points, component) {
   const highDistance = sortedDistances[Math.floor(sortedDistances.length * 0.9)];
   const jumpThreshold = isGingival
     ? Math.max(medianDistance * 3.5, highDistance * 0.65, 5)
-    : Math.max(medianDistance * 8, 12);
-  const turnThreshold = Math.max(medianDistance * 2.2, 4);
+    : isMesh
+      ? Math.max(medianDistance * 2.8, highDistance * 0.7, 3)
+      : Math.max(medianDistance * 8, 12);
+  const turnThreshold = Math.max(medianDistance * (isMesh ? 1.8 : 2.2), 4);
   const edges = [];
 
   for (let i = 1; i < points.length; i += 1) {
@@ -834,19 +841,27 @@ function getPolylineRenderableEdges(points, component) {
     const current = points[i];
     const distance = getDistanceBetweenPoints(previous, current);
     const previousTurnCosine =
-      isGingival && i > 1
+      (isGingival || isMesh) && i > 1
         ? getPolylineTurnCosine(points[i - 2], previous, current)
         : 1;
     const nextTurnCosine =
-      isGingival && i < points.length - 1
+      (isGingival || isMesh) && i < points.length - 1
         ? getPolylineTurnCosine(previous, current, points[i + 1])
         : 1;
     const isSuspiciousGingivalTurn =
       isGingival &&
       distance > turnThreshold &&
       (previousTurnCosine < -0.5 || nextTurnCosine < -0.5);
+    const isSuspiciousMeshTurn =
+      isMesh &&
+      distance > turnThreshold &&
+      (previousTurnCosine < -0.25 || nextTurnCosine < -0.25);
 
-    if (distance <= jumpThreshold && !isSuspiciousGingivalTurn) {
+    if (
+      distance <= jumpThreshold &&
+      !isSuspiciousGingivalTurn &&
+      !isSuspiciousMeshTurn
+    ) {
       edges.push([i - 1, i]);
     }
   }
