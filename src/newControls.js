@@ -256,6 +256,21 @@ export { addVisibilityAndTransparencyControls };
      padding: 2px 5px;
      line-height: 1;
    }
+   .polyline-jaw-button {
+     background-image: none !important;
+     background-color: #00a651 !important;
+     border: 2px solid #07853f !important;
+     border-radius: 6px;
+     color: #ffffff;
+     font-size: 12px;
+     font-weight: 700;
+     line-height: 1;
+   }
+
+   .polyline-jaw-button.inactive {
+     background-color: rgba(0, 166, 81, 0.25) !important;
+     border-color: rgba(7, 133, 63, 0.55) !important;
+   }
  `;
  document.head.appendChild(style);
  
@@ -294,11 +309,158 @@ export { addVisibilityAndTransparencyControls };
      }
  
      // 🔍 First scan for surface meshes
+     const meshesByJaw = {
+         upper: { jaw: [], surface: [] },
+         lower: { jaw: [], surface: [] },
+     };
+
+     const getJawKey = (child) => {
+         const nameText = String(child.name || '').toLowerCase();
+         const jawTypeText = String(child.userData?.jaw_type || '').toLowerCase();
+         if (nameText.includes('upper') || jawTypeText.includes('upper') || jawTypeText === '2') return 'upper';
+         if (nameText.includes('lower') || jawTypeText.includes('lower') || jawTypeText === '1') return 'lower';
+         return null;
+     };
+
+     parentObject.children.forEach(child => {
+         if (!child.isMesh) return;
+         const jawKey = getJawKey(child);
+         if (!jawKey) return;
+         const bucket = child.name.toLowerCase().includes('surface') ? 'surface' : 'jaw';
+         meshesByJaw[jawKey][bucket].push(child);
+     });
+
+     const setButtonState = (button, isActive) => {
+         button.classList.toggle('active', Boolean(isActive));
+         button.classList.toggle('inactive', !isActive);
+     };
+
+     const setMeshGroupVisible = (meshes, isVisible) => {
+         meshes.forEach(mesh => {
+             mesh.visible = isVisible;
+         });
+     };
+
+     const areAnyVisible = (meshes) => meshes.some(mesh => mesh.visible);
+
+     const applyJawMaterial = (meshes, index) => {
+         meshes.forEach(mesh => {
+             const meshMaterials = material_array[mesh.name];
+             if (!meshMaterials || !meshMaterials[index]) return;
+             mesh.geometry.dispose();
+             mesh.geometry = meshMaterials[index];
+             mesh.geometry.needsUpdate = true;
+         });
+     };
+
+     const makeGroupVisibilityButton = (iconPath, tooltip, meshes) => {
+         const button = createIconBtn(iconPath, tooltip, () => {
+             const nextVisible = !areAnyVisible(meshes);
+             setMeshGroupVisible(meshes, nextVisible);
+             setButtonState(button, nextVisible);
+         });
+         if (!meshes.length) {
+             button.disabled = true;
+             button.style.cursor = 'not-allowed';
+             button.style.opacity = '0.45';
+             setButtonState(button, false);
+             return button;
+         }
+         setButtonState(button, areAnyVisible(meshes));
+         return button;
+     };
+
+     ['upper', 'lower'].forEach(jawKey => {
+         const jawMeshes = meshesByJaw[jawKey].jaw;
+         const surfaceMeshes = meshesByJaw[jawKey].surface;
+         if (!jawMeshes.length && !surfaceMeshes.length) return;
+
+         const meshControls = document.createElement('div');
+         meshControls.style.display = 'flex';
+         meshControls.style.gap = '4px';
+         meshControls.style.alignItems = 'center';
+
+         const titlePrefix = jawKey === 'upper' ? 'Upper' : 'Lower';
+         const jawIcon = `${basePath}/assets/Icon_${titlePrefix}Jaw_Occlusal.png`;
+         const surfaceIcon = `${basePath}/assets/Icon_${titlePrefix}Jaw.png`;
+
+         meshControls.appendChild(
+             makeGroupVisibilityButton(jawIcon, `${titlePrefix} Jaw`, jawMeshes)
+         );
+         meshControls.appendChild(
+             makeGroupVisibilityButton(
+                 surfaceIcon,
+                 `${titlePrefix} Jaw Surface`,
+                 surfaceMeshes
+             )
+         );
+
+         let currentMode = 'normal';
+         const undercutBtn = createIconBtn(`${basePath}/assets/Undercut.png`, `${titlePrefix} Undercut`, () => {});
+         const occlusionBtn = createIconBtn(`${basePath}/assets/Occlusion.png`, `${titlePrefix} Occlusion`, () => {});
+         setButtonState(undercutBtn, false);
+         setButtonState(occlusionBtn, false);
+
+         undercutBtn.onclick = () => {
+             if (currentMode === 'undercut') {
+                 currentMode = 'normal';
+                 applyJawMaterial(jawMeshes, 0);
+                 setButtonState(undercutBtn, false);
+             } else {
+                 currentMode = 'undercut';
+                 applyJawMaterial(jawMeshes, 2);
+                 setButtonState(undercutBtn, true);
+                 setButtonState(occlusionBtn, false);
+             }
+         };
+         occlusionBtn.onclick = () => {
+             if (currentMode === 'occlusion') {
+                 currentMode = 'normal';
+                 applyJawMaterial(jawMeshes, 0);
+                 setButtonState(occlusionBtn, false);
+             } else {
+                 currentMode = 'occlusion';
+                 applyJawMaterial(jawMeshes, 1);
+                 setButtonState(occlusionBtn, true);
+                 setButtonState(undercutBtn, false);
+             }
+         };
+         meshControls.appendChild(undercutBtn);
+         meshControls.appendChild(occlusionBtn);
+
+         const polylineBtn = createIconBtn('', `${titlePrefix} Polyline`, () => {});
+         polylineBtn.classList.add('polyline-jaw-button');
+         polylineBtn.textContent = 'PL';
+         const syncPolylineButtonState = () => {
+             const isVisible = window.getPolylineJawVisibility?.(jawKey) ?? true;
+             setButtonState(polylineBtn, isVisible);
+         };
+         polylineBtn.onclick = () => {
+             const nextVisible = !(window.getPolylineJawVisibility?.(jawKey) ?? true);
+             window.setPolylineJawVisibility?.(jawKey, nextVisible);
+             syncPolylineButtonState();
+         };
+         syncPolylineButtonState();
+         meshControls.appendChild(polylineBtn);
+
+         container.appendChild(meshControls);
+     });
+
+     document.body.appendChild(container);
+
+     if (/Mobi|Android|iPhone/i.test(navigator.userAgent)) {
+         container.style.transform = 'scale(1.5)';
+         container.style.transformOrigin = 'top left';
+     }
+
+     return;
+
      const meshNames = parentObject.children
          .filter(child => child.isMesh)
          .map(child => child.name);
  
      const hasSurfaceMesh = meshNames.some(name => name.includes('surface'));
+     const addedPolylineJawButtons = new Set();
  
      // 💡 Now generate buttons per mesh
      parentObject.children.forEach(child => {
@@ -407,6 +569,32 @@ export { addVisibilityAndTransparencyControls };
  
  
          // 🟣 Metallic toggle (only if any surface mesh exists)
+         const jawKey = meshName.toLowerCase().includes('upper')
+             ? 'upper'
+             : meshName.toLowerCase().includes('lower')
+                ? 'lower'
+                : null;
+         if (jawKey && !addedPolylineJawButtons.has(jawKey)) {
+             addedPolylineJawButtons.add(jawKey);
+             const polylineBtn = createIconBtn('', `Toggle ${jawKey} polyline`, () => {});
+             polylineBtn.classList.add('polyline-jaw-button');
+             polylineBtn.textContent = 'PL';
+
+             const syncPolylineButtonState = () => {
+                 const isVisible = window.getPolylineJawVisibility?.(jawKey) ?? true;
+                 polylineBtn.classList.toggle('active', isVisible);
+                 polylineBtn.classList.toggle('inactive', !isVisible);
+             };
+
+             polylineBtn.onclick = () => {
+                 const nextVisible = !(window.getPolylineJawVisibility?.(jawKey) ?? true);
+                 window.setPolylineJawVisibility?.(jawKey, nextVisible);
+                 syncPolylineButtonState();
+             };
+             syncPolylineButtonState();
+             meshControls.appendChild(polylineBtn);
+         }
+
          if (hasSurfaceMesh && meshName.includes('surface')) {
              const metallicBtn = createIconBtn(`${basePath}/assets/Model.png`, 'Toggle Metallic', () => {
                  const isMetallic = child.material === material_array[meshName][2];

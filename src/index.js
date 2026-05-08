@@ -136,6 +136,10 @@ let polylineMenuButton = null;
 let polylineMenuList = null;
 let polylineDepthTestEnabled = true;
 const polylineComponentVisibility = new Map();
+const polylineJawVisibility = new Map([
+  ["upper", true],
+  ["lower", true],
+]);
 const POLYLINE_COMPONENT_COLORS = [
   0x6f35ff,
   0x00a6ff,
@@ -147,12 +151,13 @@ const POLYLINE_COMPONENT_COLORS = [
 const POLYLINE_APP_COMPONENTS = [
   "Retainer",
   "Lingual Clasp",
-  "Major Conn",
+  "MajorConnector",
   "Proximal Plate",
   "Rest",
   "Minor Conn",
   "Mesh",
   "Reversal Line",
+  "Gingival Points",
 ];
 const POLYLINE_TEXT_COMPONENTS = [
   "retentionPins",
@@ -281,7 +286,7 @@ function normalizePolylineComponentName(component) {
   }
   if (/proximal\s*plates?/i.test(text)) return "Proximal Plate";
   if (/minor\s*connector\s*tooth/i.test(text)) return "Minor Conn";
-  if (/major\s*connector/i.test(text)) return "Major Conn";
+  if (/major\s*connector/i.test(text)) return "MajorConnector";
   if (/reversal/i.test(text)) return "Reversal Line";
   return text;
 }
@@ -317,16 +322,28 @@ function getSegmentRenderableEdges(segment, points, component) {
 }
 
 function getPolylineComponentKey(arch, component) {
-  return `${arch}:${component}`;
+  return component;
 }
 
+function isPolylineJawVisible(arch) {
+  return polylineJawVisibility.get(arch) ?? true;
+}
+
+function setPolylineJawVisibility(arch, isVisible) {
+  if (arch !== "upper" && arch !== "lower") return;
+  polylineJawVisibility.set(arch, Boolean(isVisible));
+  syncPolylineOverlayVisibility();
+}
+
+function getPolylineJawVisibility(arch) {
+  return isPolylineJawVisible(arch);
+}
+
+window.setPolylineJawVisibility = setPolylineJawVisibility;
+window.getPolylineJawVisibility = getPolylineJawVisibility;
+
 function formatPolylineComponentLabel(key) {
-  const [arch, ...componentParts] = key.split(":");
-  const component = componentParts.join(":") || "polyline";
-  if (component === "Major Conn") {
-    return `${arch.charAt(0).toUpperCase()}${arch.slice(1)} Major Connector`;
-  }
-  return component;
+  return key || "polyline";
 }
 
 function isPolylineComponentVisibleByDefault(key) {
@@ -334,17 +351,10 @@ function isPolylineComponentVisibleByDefault(key) {
 }
 
 function getPolylineComponentSortRank(key) {
-  const [arch, ...componentParts] = key.split(":");
-  const component = componentParts.join(":") || "polyline";
-  if (component === "Major Conn") {
-    return arch === "upper" ? 0 : arch === "lower" ? 1 : 2;
-  }
-
-  const appOrder = POLYLINE_APP_COMPONENTS.filter(
-    (componentName) => componentName !== "Major Conn"
-  );
-  const componentIndex = appOrder.indexOf(component);
-  return componentIndex >= 0 ? componentIndex + 3 : appOrder.length + 3;
+  const componentIndex = POLYLINE_APP_COMPONENTS.indexOf(key);
+  return componentIndex >= 0
+    ? componentIndex
+    : POLYLINE_APP_COMPONENTS.length;
 }
 
 function toPointObject(value) {
@@ -931,6 +941,7 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
   const group = new THREE.Group();
   group.name = `${jawType}-${component}-polyline-segment-${segmentIndex}`;
   group.visible = isPolylineOverlayVisible &&
+    isPolylineJawVisible(jawType) &&
     (polylineComponentVisibility.get(componentKey) ?? true);
   group.userData = {
     overlayType: "polyline",
@@ -1087,8 +1098,11 @@ function syncPolylineOverlayVisibility() {
   polylineOverlayGroup.visible = true;
   polylineOverlayGroup.children.forEach((group) => {
     const key = group.userData?.componentKey;
+    const arch = group.userData?.arch;
     group.visible =
-      isPolylineOverlayVisible && (polylineComponentVisibility.get(key) ?? true);
+      isPolylineOverlayVisible &&
+      isPolylineJawVisible(arch) &&
+      (polylineComponentVisibility.get(key) ?? true);
   });
 
   if (polylineMenuButton) {
@@ -1312,14 +1326,6 @@ function createPolylineVisibilityToggle(container, domElement) {
     return actionButton;
   };
 
-  const depthButton = makeActionButton("Depth On", () => {
-    polylineDepthTestEnabled = !polylineDepthTestEnabled;
-    depthButton.textContent = polylineDepthTestEnabled
-      ? "Depth On"
-      : "Float On";
-    syncPolylineDepthTest();
-  });
-
   actions.appendChild(
     makeActionButton("All", () => {
       setPolylineMenuVisibility(() => true, true);
@@ -1330,17 +1336,6 @@ function createPolylineVisibilityToggle(container, domElement) {
       setPolylineMenuVisibility(() => true, false);
     })
   );
-  actions.appendChild(
-    makeActionButton("API On", () => {
-      setPolylineMenuVisibility(({ points }) => points > 0, true);
-    })
-  );
-  actions.appendChild(
-    makeActionButton("API Off", () => {
-      setPolylineMenuVisibility(({ points }) => points > 0, false);
-    })
-  );
-  actions.appendChild(depthButton);
   actions.appendChild(makeActionButton("Reset", resetPolylineEdits));
 
   const list = document.createElement("div");
@@ -1563,6 +1558,29 @@ function setupChatToggle() {
   }
 
   chatIcon.dataset.viewerChatBound = "true";
+  const isMobile =
+    /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+
+  let hideChatButton = document.getElementById("hide-chat-button");
+  if (!hideChatButton) {
+    hideChatButton = document.createElement("button");
+    hideChatButton.id = "hide-chat-button";
+    hideChatButton.type = "button";
+    hideChatButton.textContent = "Hide Chat";
+    hideChatButton.style.alignSelf = "flex-end";
+    hideChatButton.style.marginBottom = "8px";
+    hideChatButton.style.border = "none";
+    hideChatButton.style.borderRadius = "6px";
+    hideChatButton.style.background = "#1d4ed8";
+    hideChatButton.style.color = "white";
+    hideChatButton.style.padding = "6px 10px";
+    hideChatButton.style.fontSize = "12px";
+    hideChatButton.style.cursor = "pointer";
+    chatWidget.prepend(hideChatButton);
+  }
+
   chatIcon.style.display = "block";
   chatIcon.style.position = "fixed";
   chatIcon.style.top = "14px";
@@ -1572,8 +1590,8 @@ function setupChatToggle() {
   chatIcon.style.height = "56px";
   chatIcon.style.zIndex = "1001";
 
-  chatWidget.classList.remove("active");
-  chatWidget.style.display = "none";
+  chatWidget.classList.toggle("active", !isMobile);
+  chatWidget.style.display = isMobile ? "none" : "flex";
   chatWidget.style.position = "fixed";
   chatWidget.style.top = "84px";
   chatWidget.style.right = "150px";
@@ -1583,12 +1601,21 @@ function setupChatToggle() {
   chatWidget.style.width = "280px";
   chatWidget.style.height = "280px";
   chatWidget.style.zIndex = "1001";
+  chatIcon.style.display = isMobile ? "block" : "none";
 
   chatIcon.addEventListener("click", (event) => {
     event.stopPropagation();
     const isOpen = chatWidget.style.display === "flex";
     chatWidget.classList.toggle("active", !isOpen);
     chatWidget.style.display = isOpen ? "none" : "flex";
+    chatIcon.style.display = isOpen ? "block" : "none";
+  });
+
+  hideChatButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    chatWidget.classList.remove("active");
+    chatWidget.style.display = "none";
+    chatIcon.style.display = "block";
   });
 }
 
@@ -1663,9 +1690,14 @@ function setupChatToggle() {
         if (thumbnailData[thumb].slot == 0) {
           const test = thumbnailData[thumb].data;
           window.thumbnailBase64 = test;
+          const isMobile =
+            /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+              navigator.userAgent
+            );
           // Container for thumbnail + 2D buttons
           const thumbWrapper = document.createElement("div");
-          thumbWrapper.style.position = "absolute"; // allows layout inside container3D
+          thumbWrapper.dataset.twodViewerBlock = "true";
+          thumbWrapper.style.position = "fixed";
           thumbWrapper.style.left = "20px"; // left side of screen
           thumbWrapper.style.top = "20px"; // top offset
           thumbWrapper.style.zIndex = "1000";
@@ -1676,17 +1708,21 @@ function setupChatToggle() {
 
           // Create thumbnail button
           const button = document.createElement("button");
+          button.dataset.twodViewerButton = "true";
           button.style.padding = "0";
           button.style.border = "none";
           button.style.background = "none";
           button.style.cursor = "pointer";
-          button.style.width = "30px";
-          button.style.height = "30px";
+          button.style.width = isMobile ? "300px" : "280px";
+          button.style.height = "auto";
 
           // Create thumbnail image
           const img = new Image();
           img.src = "data:image/png;base64," + test;
-          img.style.transform = `scale(0.3)`;
+          img.style.width = "100%";
+          img.style.height = "auto";
+          img.style.display = "block";
+          img.style.transform = "none";
           button.appendChild(img);
 
           // Create "Click me" watermark overlay
@@ -1696,14 +1732,10 @@ function setupChatToggle() {
           watermark.style.top = "50%";
           watermark.style.left = "50%";
           watermark.style.transform = "translate(-50%, -50%)";
-          watermark.style.color = "white";
+          watermark.style.color = "#0078d4";
           watermark.style.fontWeight = "bold";
-          const isMobile =
-            /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-              navigator.userAgent
-            );
-          watermark.style.fontSize = isMobile ? "34px" : "16px";
-          watermark.style.textShadow = "1px 1px 4px rgba(0, 0, 0, 1.0)";
+          watermark.style.fontSize = isMobile ? "34px" : "22px";
+          watermark.style.textShadow = "1px 1px 3px rgba(255, 255, 255, 0.9)";
           watermark.style.pointerEvents = "none"; // so clicks go through to the button
           button.style.position = "relative"; // Make sure parent is positioned
           button.appendChild(watermark);
@@ -1749,6 +1781,35 @@ btnContainer.appendChild(edit2DStatic); */
           // Finally, append everything to container3D so it's layout-aware
           const container3D = document.getElementById("container3D");
           container3D.appendChild(thumbWrapper);
+
+          const positionThumbWrapperAboveLegend = () => {
+            const legend = document.querySelector(".legend-container");
+            if (!legend) return false;
+            const legendRect = legend.getBoundingClientRect();
+            const wrapperRect = thumbWrapper.getBoundingClientRect();
+            thumbWrapper.style.left = `${Math.max(20, legendRect.left)}px`;
+            thumbWrapper.style.top = `${Math.max(
+              16,
+              legendRect.top - wrapperRect.height - 14
+            )}px`;
+            return true;
+          };
+          if (!positionThumbWrapperAboveLegend()) {
+            setTimeout(positionThumbWrapperAboveLegend, 500);
+            setTimeout(positionThumbWrapperAboveLegend, 1500);
+          }
+          window.addEventListener(
+            "legend-positioned",
+            positionThumbWrapperAboveLegend
+          );
+          window.addEventListener("resize", positionThumbWrapperAboveLegend);
+          if (img.complete) {
+            positionThumbWrapperAboveLegend();
+          } else {
+            img.addEventListener("load", positionThumbWrapperAboveLegend, {
+              once: true,
+            });
+          }
 
           button.addEventListener("click", function () {
             // Fullscreen overlay
@@ -3201,6 +3262,7 @@ window.addEventListener("load", () => {
   const fixToothMapPosition = () => {
     const allButtons = document.getElementsByTagName("button");
     for (let btn of allButtons) {
+      if (btn.dataset.twodViewerButton === "true") continue;
       const img = btn.querySelector("img");
 
       if (img && img.src.startsWith("data:image/png;base64")) {
@@ -3242,6 +3304,7 @@ window.addEventListener("load", () => {
     const allButtons = document.getElementsByTagName("button");
 
     for (let btn of allButtons) {
+      if (btn.dataset.twodViewerButton === "true") continue;
       const img = btn.querySelector("img");
 
       if (img && img.src.startsWith("data:image/png")) {
@@ -3253,6 +3316,7 @@ window.addEventListener("load", () => {
               "div[style*='position: fixed']"
             );
             for (let div of overlayDivs) {
+              if (div.dataset.twodViewerBlock === "true") continue;
               const popupImg = div.querySelector("img");
               if (popupImg && popupImg.src.startsWith("data:image/png")) {
                 // ✅ 放大样式

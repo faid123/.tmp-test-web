@@ -268,4 +268,5 @@ export function addResetButton(camera, clone, controls) {
 
     // Assign the class to the legend container
     legendContainer.className = 'legend-container';
+    window.dispatchEvent(new Event('legend-positioned'));
 }

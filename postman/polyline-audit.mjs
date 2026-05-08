@@ -64,7 +64,7 @@ function getAppCategory(component) {
   if (/retention\s*pins?|^retainer$/i.test(text)) return "Retainer";
   if (/gingival/i.test(text)) return "Gingival Points";
   if (/reciprocating\s*arm/i.test(text)) return "Lingual Clasp";
-  if (/major\s*connector/i.test(text)) return "Major Conn";
+  if (/major\s*connector/i.test(text)) return "MajorConnector";
   if (/proximal\s*plate/i.test(text)) return "Proximal Plate";
   if (/tissue\s*stop|^rests?$|rest/i.test(text)) return "Rest";
   if (/minor\s*connector\s*tooth/i.test(text)) return "Minor Conn";

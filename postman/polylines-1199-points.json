@@ -641,7 +641,7 @@
     },
     {
       "name": "majorConnector",
-      "appCategory": "Major Conn",
+      "appCategory": "MajorConnector",
       "tooth": "-01",
       "objectNo": 0,
       "lineNumber": null,
