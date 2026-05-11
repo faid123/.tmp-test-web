@@ -483,16 +483,23 @@ body {
 }
 
 .component-icon {
-  width: 50px;
-  height: 50px;
-  flex: 0 0 50px;
-  border: 1px solid var(--line);
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border: 0;
   border-radius: 4px;
-  background: #e6e6e6;
+  background: transparent;
   display: grid;
   place-items: center;
   font-size: 0.66rem;
   color: var(--rose-700);
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.component-item:hover .component-icon,
+.component-item:focus-visible .component-icon {
+  background: rgba(196, 79, 112, 0.14);
+  box-shadow: 0 0 0 1px rgba(196, 79, 112, 0.32) inset;
 }
 
 .component-icon-img {
@@ -500,6 +507,7 @@ body {
   height: 100%;
   object-fit: contain;
   display: block;
+  filter: drop-shadow(0 0 1px rgba(125, 66, 82, 0.55)) drop-shadow(0 1px 2px rgba(125, 66, 82, 0.25));
 }
 
 .component-label {
@@ -576,6 +584,25 @@ body {
 
 .palatal-bar-arch-image {
   filter: grayscale(1) brightness(0.72) contrast(0.95);
+  pointer-events: none;
+}
+
+/* Palatal plate arch overlay (Plate_{n}.svg): neutral gray, non-interactive */
+.palatal-plate-arch-overlay {
+  pointer-events: none;
+}
+
+.palatal-plate-arch-image {
+  filter: grayscale(1) brightness(0.72) contrast(0.95);
+  pointer-events: none;
+}
+
+/* Palatal strap arch overlay: drawn as inline SVG polygon with polka-dot fill */
+.palatal-strap-arch-overlay {
+  pointer-events: none;
+}
+
+.palatal-strap-arch-shape {
   pointer-events: none;
 }
 

@@ -33,6 +33,9 @@ import {
 
 // Build component tabs and initialize the first visible catalog view.
 export function initComponentCatalog() {
+  state.components = Array.isArray(state.components)
+    ? state.components.filter((id) => COMPONENT_BY_ID.has(id))
+    : [];
   if (!state.selectedTab || !COMPONENT_TABS.some((t) => t.id === state.selectedTab)) {
     state.selectedTab = "mesh";
   }
@@ -73,7 +76,9 @@ export function renderComponentCatalog() {
   if (!itemsEl) return;
   itemsEl.innerHTML = "";
 
-  const tabItems = COMPONENT_CATALOG.filter((entry) => entry.tab === state.selectedTab);
+  const tabItems = COMPONENT_CATALOG.filter(
+    (entry) => entry.tab === state.selectedTab && entry.hidden !== true
+  );
   const groups = COMPONENT_GROUPS[state.selectedTab];
   if (groups) {
     const columns = document.createElement("div");
@@ -350,6 +355,55 @@ export function handleDesignComponentSelect(componentId) {
   if (isBarComponent(selected)) {
     setMessage(
       `${selected.label} selected. Click a highlighted present tooth within two positions of a missing tooth to place.`,
+      false
+    );
+    return;
+  }
+  if (componentId === "assembly-circ") {
+    setMessage(
+      "Simple Circum Assembly selected. Click a mesial or distal rest-seat suggestion on posterior teeth (14-18, 24-28, 34-38, 44-48).",
+      false
+    );
+    return;
+  }
+  if (componentId === "assembly-circ-embrasure") {
+    setMessage(
+      "Embrasure selected. Click distal rest-seat suggestion on a posterior tooth to place components on the selected tooth and its adjacent distal tooth.",
+      false
+    );
+    return;
+  }
+  if (componentId === "assembly-circ-multi") {
+    setMessage(
+      "Multi selected. Click mesial rest-seat suggestion on a posterior tooth to place components on the selected tooth and its adjacent distal tooth.",
+      false
+    );
+    return;
+  }
+  if (componentId === "assembly-circ-half-n-half") {
+    setMessage(
+      "Half & Half selected. Click mesial or distal rest-seat suggestion on posterior teeth to place buccal retainer/reciprocating clasp pair.",
+      false
+    );
+    return;
+  }
+  if (componentId === "assembly-tbar") {
+    setMessage(
+      "T-bar selected. Suggestions appear on posterior teeth adjacent to missing teeth (mesial for distal-adjacent, distal for mesial-adjacent).",
+      false
+    );
+    return;
+  }
+  if (componentId === "assembly-tbar-mod") {
+    setMessage(
+      "Mod.T-bar selected. Suggestions appear on posterior teeth adjacent to missing teeth.",
+      false
+    );
+    return;
+  }
+  if (componentId === "assembly-ibar") {
+    setMessage(
+      "I-bar selected. Suggestions appear on posterior teeth adjacent to missing teeth.",
       false
     );
     return;

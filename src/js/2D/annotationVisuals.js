@@ -40,7 +40,11 @@ import {
   getRestSuggestionRadius,
   getRestSuggestionSurfaces,
   hasPalatalBarPlacementOnUpperArch,
+  hasPalatalPlatePlacementOnUpperArch,
   hasPalatalHolePlacementOnUpperArch,
+  hasPalatalStrapPlacementOnUpperArch,
+  isPalatalStrapMajorComponent,
+  PALATAL_STRAP_ARCH_POLYGON,
   isBarComponent,
   isBarPlacementSurface,
   isReciprocatingClaspComponent,
@@ -60,10 +64,12 @@ import {
   PALATAL_BAR_MAJOR_COMPONENT_ID,
   PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS,
   PALATAL_HOLE_ARCH_OVERLAY_LAYERS,
+  getPalatalPlateArchOverlayFrame,
   shouldMajorConnectorIgnoreMeshPlateAnchor,
   shouldUsePalatalBarSecondMolarDistalTemplate,
   getMajorConnectorAssetReference,
-} from "./components.js";
+  getPalatalPlateOverlayIndexFromUpperPlacements,
+   } from "./components.js";
 import {
   ANTERIOR_REST_SURFACE_DIALOG_TEETH,
   COMPONENT_IMAGE_HEIGHT,
@@ -84,7 +90,6 @@ import {
 import {
   REST_CALIBRATION_COMPONENT_ID,
   state,
-  ui,
   positionAnteriorRestPanel,
   setMessage,
   svgEl,
@@ -92,7 +97,14 @@ import {
   renderJaws,
 } from "./2DAnnotation.js";
 import {
+  placeAssemblyIBarOnTooth,
+  placeAssemblyModTBarOnTooth,
+  placeEmbrasureCircumAssemblyOnTooth,
+  placeHalfAndHalfAssemblyOnTooth,
+  placeAssemblyTBarOnTooth,
+  placeMultiCircumAssemblyOnTooth,
   placeSelectedComponentOnTooth,
+  placeSimpleCircumAssemblyOnTooth,
   resolveMajorConnectorAnchorComponentId,
   toothSupportsMajorConnectorOverlay,
 } from "./annotationPlacement.js";
@@ -608,6 +620,49 @@ function isAnteriorRestSurfaceDialogTooth(toothId) {
   return ANTERIOR_REST_SURFACE_DIALOG_TEETH.has(String(toothId));
 }
 
+const SIMPLE_CIRCUM_POSTERIOR_TOOTH_IDS = new Set([
+  "14", "15", "16", "17", "18",
+  "24", "25", "26", "27", "28",
+  "34", "35", "36", "37", "38",
+  "44", "45", "46", "47", "48",
+]);
+
+function getEmbrasureNeighborToothId(toothId, jaw, clickedSurface) {
+  const order = TOOTH_ORDER[jaw] || [];
+  const idx = order.indexOf(String(toothId));
+  if (idx < 0) return null;
+  const quadrant = Number(String(toothId).charAt(0));
+  const mesialStep = quadrant === 1 || quadrant === 3 ? 1 : -1;
+  const distalStep = -mesialStep;
+  const step = clickedSurface === "mesial" ? mesialStep : clickedSurface === "distal" ? distalStep : 0;
+  if (!step) return null;
+  const neighbor = order[idx + step];
+  return neighbor ? String(neighbor) : null;
+}
+
+function canPlaceEmbrasureAtSurface(toothId, jaw, surface) {
+  const neighbor = getEmbrasureNeighborToothId(toothId, jaw, surface);
+  return Boolean(neighbor && SIMPLE_CIRCUM_POSTERIOR_TOOTH_IDS.has(neighbor));
+}
+
+function canPlaceMultiAtTooth(toothId, jaw) {
+  const distalNeighbor = getEmbrasureNeighborToothId(toothId, jaw, "distal");
+  return Boolean(distalNeighbor && SIMPLE_CIRCUM_POSTERIOR_TOOTH_IDS.has(distalNeighbor));
+}
+
+function getAssemblyTBarAllowedRestSurfaces(toothId, jaw) {
+  const id = String(toothId);
+  const order = TOOTH_ORDER[jaw] || [];
+  const idx = order.indexOf(id);
+  if (idx < 0) return [];
+  const prevId = idx > 0 ? order[idx - 1] : null;
+  const nextId = idx < order.length - 1 ? order[idx + 1] : null;
+  const hasMissingAdjacent =
+    Boolean(prevId && state.teeth[prevId] && !state.teeth[prevId].isPresent) ||
+    Boolean(nextId && state.teeth[nextId] && !state.teeth[nextId].isPresent);
+  return hasMissingAdjacent ? ["mesial", "distal"] : [];
+}
+
 
 // Popup: mesial / distal / full (lingual) for anterior teeth 13–23 and 33–43; anchored near click.
 function showAnteriorRestSurfaceDialog(toothId, anchor, onComplete) {
@@ -700,6 +755,78 @@ function showAnteriorRestSurfaceDialog(toothId, anchor, onComplete) {
 }
 
 function handleRestSuggestionPick(jaw, toothId, pointSurface, anchor) {
+  const selectedComponent = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+  if (selectedComponent?.id === "assembly-circ") {
+    const surface = normalizeSurface(pointSurface);
+    if (surface !== "mesial" && surface !== "distal") {
+      setMessage("Simple Circum Assembly supports mesial or distal rest seat only.", true);
+      return;
+    }
+    placeSimpleCircumAssemblyOnTooth(toothId, surface);
+    renderJaw(jaw);
+    return;
+  }
+  if (selectedComponent?.id === "assembly-circ-multi") {
+    const surface = normalizeSurface(pointSurface);
+    if (surface !== "mesial") {
+      setMessage("Multi Assembly supports mesial rest-seat suggestion only.", true);
+      return;
+    }
+    placeMultiCircumAssemblyOnTooth(toothId, jaw);
+    renderJaws();
+    return;
+  }
+  if (selectedComponent?.id === "assembly-circ-half-n-half") {
+    const surface = normalizeSurface(pointSurface);
+    if (surface !== "mesial" && surface !== "distal") {
+      setMessage("Half & Half supports mesial or distal rest-seat suggestion only.", true);
+      return;
+    }
+    placeHalfAndHalfAssemblyOnTooth(toothId, surface);
+    renderJaw(jaw);
+    return;
+  }
+  if (selectedComponent?.id === "assembly-circ-embrasure") {
+    const surface = normalizeSurface(pointSurface);
+    if (surface !== "distal") {
+      setMessage("Embrasure Assembly supports distal rest-seat suggestion only.", true);
+      return;
+    }
+    placeEmbrasureCircumAssemblyOnTooth(toothId, jaw, surface);
+    renderJaws();
+    return;
+  }
+  if (selectedComponent?.id === "assembly-tbar") {
+    const surface = normalizeSurface(pointSurface);
+    if (surface !== "mesial" && surface !== "distal") {
+      setMessage("T-bar Assembly supports mesial or distal rest-seat suggestion only.", true);
+      return;
+    }
+    placeAssemblyTBarOnTooth(toothId, jaw, surface);
+    renderJaw(jaw);
+    return;
+  }
+  if (selectedComponent?.id === "assembly-tbar-mod") {
+    const surface = normalizeSurface(pointSurface);
+    if (surface !== "mesial" && surface !== "distal") {
+      setMessage("Mod.T-bar Assembly supports mesial or distal rest-seat suggestion only.", true);
+      return;
+    }
+    placeAssemblyModTBarOnTooth(toothId, jaw, surface);
+    renderJaw(jaw);
+    return;
+  }
+  if (selectedComponent?.id === "assembly-ibar") {
+    const surface = normalizeSurface(pointSurface);
+    if (surface !== "mesial" && surface !== "distal") {
+      setMessage("I-bar Assembly supports mesial or distal rest-seat suggestion only.", true);
+      return;
+    }
+    placeAssemblyIBarOnTooth(toothId, jaw, surface);
+    renderJaw(jaw);
+    return;
+  }
+
   const applySurface = (surface) => {
     const normalized = normalizeSurface(surface);
     if (!normalized) return;
@@ -726,7 +853,17 @@ function handleRestSuggestionPick(jaw, toothId, pointSurface, anchor) {
 // Return true when rest guidance points should be shown in design mode.
 function shouldShowRestSuggestions() {
   if (state.suppressArchPlacementSuggestions) return false;
-  return state.designMode && isRestComponent(state.selectedComponentId);
+  if (!state.designMode) return false;
+  if (
+    state.selectedComponentId === "assembly-circ" ||
+    state.selectedComponentId === "assembly-circ-embrasure" ||
+    state.selectedComponentId === "assembly-circ-multi" ||
+    state.selectedComponentId === "assembly-circ-half-n-half" ||
+    state.selectedComponentId === "assembly-tbar" ||
+    state.selectedComponentId === "assembly-tbar-mod" ||
+    state.selectedComponentId === "assembly-ibar"
+  ) return true;
+  return isRestComponent(state.selectedComponentId);
 }
 
 function shouldShowRetainerClaspSuggestions() {
@@ -805,7 +942,16 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
   if (!tooth.isPresent) return;
 
   const selectedComponent = COMPONENT_BY_ID.get(state.selectedComponentId || "");
-  if (!selectedComponent || !isRestComponent(selectedComponent)) return;
+  if (!selectedComponent) return;
+  const isSimpleCircumAssembly = selectedComponent.id === "assembly-circ";
+  const isEmbrasureCircumAssembly = selectedComponent.id === "assembly-circ-embrasure";
+  const isMultiCircumAssembly = selectedComponent.id === "assembly-circ-multi";
+  const isHalfAndHalfAssembly = selectedComponent.id === "assembly-circ-half-n-half";
+  const isAssemblyTBar = selectedComponent.id === "assembly-tbar";
+  const isAssemblyModTBar = selectedComponent.id === "assembly-tbar-mod";
+  const isAssemblyIBar = selectedComponent.id === "assembly-ibar";
+  if (!isSimpleCircumAssembly && !isEmbrasureCircumAssembly && !isMultiCircumAssembly && !isHalfAndHalfAssembly && !isAssemblyTBar && !isAssemblyModTBar && !isAssemblyIBar && !isRestComponent(selectedComponent)) return;
+  if ((isSimpleCircumAssembly || isEmbrasureCircumAssembly || isMultiCircumAssembly || isHalfAndHalfAssembly || isAssemblyTBar || isAssemblyModTBar || isAssemblyIBar) && !SIMPLE_CIRCUM_POSTERIOR_TOOTH_IDS.has(String(toothId))) return;
 
   ensureToothPlacementState(tooth);
 
@@ -817,10 +963,38 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
   ) {
     points = getCingulumAcSuggestionPointsForTooth(toothId) ?? [];
   } else {
-    const allowedSurfaces = new Set(getRestSuggestionSurfaces(selectedComponent.id, toothId));
+    const allowedSurfaces = isSimpleCircumAssembly
+      ? new Set(["mesial", "distal"])
+      : isEmbrasureCircumAssembly
+        ? new Set(["distal"])
+      : isMultiCircumAssembly
+        ? new Set(["mesial"])
+      : isHalfAndHalfAssembly
+        ? new Set(["mesial", "distal"])
+      : isAssemblyTBar
+        ? new Set(["mesial", "distal"])
+      : isAssemblyModTBar
+        ? new Set(["mesial", "distal"])
+      : isAssemblyIBar
+        ? new Set(["mesial", "distal"])
+      : new Set(getRestSuggestionSurfaces(selectedComponent.id, toothId));
     points = [...getRestSurfacePointMap(toothId, jaw, selectedComponent.id).values()].filter((point) =>
       allowedSurfaces.has(normalizeSurface(point.surface))
     );
+    if (isEmbrasureCircumAssembly) {
+      points = points.filter((point) => canPlaceEmbrasureAtSurface(toothId, jaw, normalizeSurface(point.surface)));
+    }
+    if (isMultiCircumAssembly) {
+      points = points.filter(() => canPlaceMultiAtTooth(toothId, jaw));
+    }
+    if (isAssemblyTBar) {
+      const allowedByMissingAdjacency = new Set(getAssemblyTBarAllowedRestSurfaces(toothId, jaw));
+      points = points.filter((point) => allowedByMissingAdjacency.has(normalizeSurface(point.surface)));
+    }
+    if (isAssemblyModTBar || isAssemblyIBar) {
+      const allowedByMissingAdjacency = new Set(getAssemblyTBarAllowedRestSurfaces(toothId, jaw));
+      points = points.filter((point) => allowedByMissingAdjacency.has(normalizeSurface(point.surface)));
+    }
   }
   const radius = getRestSuggestionRadius();
   const { mirrored } = getToothAssetSpec(toothId);
@@ -828,9 +1002,12 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
   for (const pointData of points) {
     const surface = normalizeSurface(pointData.surface);
     if (!surface) continue;
-    const assetHref = getRestPlacementAssetReference(selectedComponent.id, toothId, surface);
-    const imageSize = getRestPlacementImageSize(selectedComponent.id, toothId, surface);
-    const restScale = getRestPlacementRenderScale(selectedComponent.id, toothId, surface);
+    const restVisualComponentId = (isSimpleCircumAssembly || isEmbrasureCircumAssembly || isMultiCircumAssembly || isHalfAndHalfAssembly || isAssemblyTBar || isAssemblyModTBar || isAssemblyIBar)
+      ? "rest-seat"
+      : selectedComponent.id;
+    const assetHref = getRestPlacementAssetReference(restVisualComponentId, toothId, surface);
+    const imageSize = getRestPlacementImageSize(restVisualComponentId, toothId, surface);
+    const restScale = getRestPlacementRenderScale(restVisualComponentId, toothId, surface);
 
     if (assetHref && imageSize) {
       const width = imageSize.width * restScale;
@@ -1009,6 +1186,14 @@ function shouldShowPalatalBarArchOverlay() {
   return Boolean(state.designMode && sel && isPalatalBarMajorComponent(sel));
 }
 
+function shouldShowPalatalPlateArchOverlay() {
+  const sel = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+  if (hasPalatalPlatePlacementOnUpperArch(state.teeth)) {
+    return true;
+  }
+  return Boolean(state.designMode && sel && sel.id === "major-upper-palatal-plate");
+}
+
 // Arch-wide palatal hole artwork (AP_Strap01/02); not drawn per tooth.
 function appendPalatalHoleArchOverlay(svg) {
   if (!svg || !shouldShowPalatalHoleArchOverlay()) {
@@ -1050,6 +1235,34 @@ function appendPalatalBarArchOverlay(svg) {
       height: String(layer.height),
       preserveAspectRatio: "xMidYMid meet",
       class: "palatal-bar-arch-image",
+      "pointer-events": "none",
+    })
+  );
+  svg.appendChild(g);
+}
+
+function appendPalatalPlateArchOverlay(svg) {
+  if (!svg || !shouldShowPalatalPlateArchOverlay()) {
+    return;
+  }
+
+  const idx = getPalatalPlateOverlayIndexFromUpperPlacements(state.teeth);
+  if (!Number.isFinite(idx)) {
+    return;
+  }
+
+  const frame = getPalatalPlateArchOverlayFrame(idx);
+  const g = svgEl("g", { class: "palatal-plate-arch-overlay" });
+  const href = `../../assets/RPD_Component/MajorConnector/Plalatal%20Plate/Plate_${idx}.svg`;
+  g.appendChild(
+    svgEl("image", {
+      href,
+      x: String(frame.x),
+      y: String(frame.y),
+      width: String(frame.width),
+      height: String(frame.height),
+      preserveAspectRatio: "xMidYMid meet",
+      class: "palatal-plate-arch-image",
       "pointer-events": "none",
     })
   );
@@ -1235,12 +1448,38 @@ function createComponentVisual(componentId, toothId, jaw) {
   return visual;
 }
 
+function shouldShowPalatalStrapArchOverlay() {
+  const sel = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+  if (hasPalatalStrapPlacementOnUpperArch(state.teeth)) {
+    return true;
+  }
+  return Boolean(state.designMode && sel && isPalatalStrapMajorComponent(sel));
+}
+
+function appendPalatalStrapArchOverlay(svg) {
+  if (!svg || !shouldShowPalatalStrapArchOverlay()) {
+    return;
+  }
+  const points = PALATAL_STRAP_ARCH_POLYGON.map((p) => `${p.x},${p.y}`).join(" ");
+  const g = svgEl("g", { class: "palatal-strap-arch-overlay" });
+  g.appendChild(
+    svgEl("polygon", {
+      points,
+      class: "palatal-strap-arch-shape",
+      "pointer-events": "none",
+    })
+  );
+  svg.appendChild(g);
+}
+
 export {
   applyToothStatusClass,
   appendPlacedComponentMarkers,
   appendRetainerClaspSuggestionPoints,
   appendPalatalBarArchOverlay,
+  appendPalatalPlateArchOverlay,
   appendPalatalHoleArchOverlay,
+  appendPalatalStrapArchOverlay,
   appendPlateSuggestionPoints,
   appendRestSuggestionPoints,
   appendToothComponentVisuals,

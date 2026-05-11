@@ -34,7 +34,9 @@ import {
 import {
   appendRetainerClaspSuggestionPoints,
   appendPalatalBarArchOverlay,
+  appendPalatalPlateArchOverlay,
   appendPalatalHoleArchOverlay,
+  appendPalatalStrapArchOverlay,
   appendPlacedComponentMarkers,
   appendPlateSuggestionPoints,
   appendRestSuggestionPoints,
@@ -174,6 +176,7 @@ export function renderJaw(jaw) {
             (isRestComponent(catalogPick) && catalogPick.id !== "rest-onlay") ||
             isClaspComponent(catalogPick) ||
             isPlateComponentId(catalogPick.id) ||
+            catalogPick.tab === "assembly" ||
             (isBarComponent(catalogPick) && showBarSuggestions())
           )
       );
@@ -181,15 +184,15 @@ export function renderJaw(jaw) {
         if (hadSuppressedHints) renderJaw(jaw);
         return;
       }
-        if (tooth.isPresent) {
-          if (catalogPick?.id === "rest-onlay") {
-            placeSelectedComponentOnTooth(toothId, null);
-            renderJaw(jaw);
-            return;
-          }
-          if (catalogPick && isBarComponent(catalogPick)) {
-            const set = getBarSuggestibleToothIdSet(state.teeth, jaw);
-            if (set.has(toothId) && !hasBarPlacementAtSurface(tooth, catalogPick.id)) {
+      if (tooth.isPresent) {
+        if (catalogPick?.id === "rest-onlay") {
+          placeSelectedComponentOnTooth(toothId, null);
+          renderJaw(jaw);
+          return;
+        }
+        if (catalogPick && isBarComponent(catalogPick)) {
+          const set = getBarSuggestibleToothIdSet(state.teeth, jaw);
+          if (set.has(toothId) && !hasBarPlacementAtSurface(tooth, catalogPick.id)) {
             const barSurface = getBarPlacementSurfaceForTooth(toothId, jaw, state.teeth);
             if (!barSurface) {
               setMessage("Could not resolve bar type for this tooth.", true);
@@ -260,6 +263,8 @@ export function renderJaw(jaw) {
   if (jaw === "upper") {
     appendPalatalHoleArchOverlay(svg);
     appendPalatalBarArchOverlay(svg);
+    appendPalatalPlateArchOverlay(svg);
+    appendPalatalStrapArchOverlay(svg);
   }
 }
 

@@ -31,12 +31,12 @@ import {
   syncToothComponentsFromPlacements,
 } from "./annotationTeethModel.js";
 import { ensureMajorCatalogPickForTooth } from "./annotationCatalog.js";
+import { assessPlacementCriteria } from "./criteria.js";
 
 function isAnteriorToothId(toothId) {
   const unit = Number(toothId) % 10;
   return Number.isFinite(unit) && unit >= 1 && unit <= 3;
 }
-import { assessPlacementCriteria } from "./criteria.js";
 
 export function applyRemovalSideEffectsForTooth(tooth, removedEntry) {
   if (!removedEntry) return;
@@ -303,6 +303,309 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
       false
     );
   }
+}
+
+export function placeSimpleCircumAssemblyOnTooth(toothId, restSurface) {
+  const id = String(toothId);
+  const tooth = state.teeth[id];
+  if (!tooth) {
+    setMessage("Unknown tooth.", true);
+    return false;
+  }
+
+  ensureToothPlacementState(tooth);
+  const normalizedRestSurface = normalizeSurface(restSurface);
+  if (normalizedRestSurface !== "mesial" && normalizedRestSurface !== "distal") {
+    setMessage("Simple Circum Assembly supports mesial or distal rest seat only.", true);
+    return false;
+  }
+
+  const mapped = normalizedRestSurface === "mesial"
+    ? {
+      rest: "mesial",
+      retainer: "distal_buccal",
+      reciprocating: "distal_lingual",
+    }
+    : {
+      rest: "distal",
+      retainer: "mesial_buccal",
+      reciprocating: "mesial_lingual",
+    };
+
+  tooth.componentPlacements = (tooth.componentPlacements || []).filter((entry) => {
+    const cid = entry.componentId;
+    return !(
+      cid === "rest-seat" ||
+      isRetainerClaspComponent(cid) ||
+      isReciprocatingClaspComponent(cid)
+    );
+  });
+  clearReciprocatingPlateMeshOnTooth(tooth);
+
+  addPlacement(tooth, "rest-seat", mapped.rest);
+  addPlacement(tooth, "retainer-clasp", mapped.retainer);
+  addPlacement(tooth, "reciprocating-clasp", mapped.reciprocating);
+  syncToothComponentsFromPlacements(tooth);
+
+  setMessage(
+    `Placed Simple Circum Assembly on tooth ${id} (${mapped.rest} rest, ${mapped.retainer} retainer, ${mapped.reciprocating} reciprocating).`,
+    false
+  );
+  return true;
+}
+
+function getEmbrasureNeighborToothId(toothId, jaw, clickedSurface) {
+  const order = TOOTH_ORDER[jaw] || [];
+  const idx = order.indexOf(String(toothId));
+  if (idx < 0) return null;
+  const quadrant = Number(String(toothId).charAt(0));
+  const mesialStep = quadrant === 1 || quadrant === 3 ? 1 : -1;
+  const distalStep = -mesialStep;
+  const step = clickedSurface === "mesial" ? mesialStep : clickedSurface === "distal" ? distalStep : 0;
+  if (!step) return null;
+  const neighbor = order[idx + step];
+  return neighbor ? String(neighbor) : null;
+}
+
+function getDistalNeighborToothId(toothId, jaw) {
+  return getEmbrasureNeighborToothId(toothId, jaw, "distal");
+}
+
+function clearRestAndCircumClaspsOnTooth(tooth) {
+  tooth.componentPlacements = (tooth.componentPlacements || []).filter((entry) => {
+    const cid = entry.componentId;
+    return !(cid === "rest-seat" || isRetainerClaspComponent(cid) || isReciprocatingClaspComponent(cid));
+  });
+}
+
+function clearReciprocatingPlateMeshOnTooth(tooth) {
+  tooth.componentPlacements = (tooth.componentPlacements || []).filter((entry) => {
+    const cid = entry.componentId;
+    return !(isPlateComponentId(cid) || isMeshComponent(cid));
+  });
+}
+
+function placeCircumBundle(tooth, mode) {
+  if (mode === "mesial") {
+    addPlacement(tooth, "rest-seat", "mesial");
+    addPlacement(tooth, "retainer-clasp", "distal_buccal");
+    addPlacement(tooth, "reciprocating-clasp", "distal_lingual");
+    return;
+  }
+  addPlacement(tooth, "rest-seat", "distal");
+  addPlacement(tooth, "retainer-clasp", "mesial_buccal");
+  addPlacement(tooth, "reciprocating-clasp", "mesial_lingual");
+}
+
+export function placeEmbrasureCircumAssemblyOnTooth(toothId, jaw, restSurface) {
+  const id = String(toothId);
+  const tooth = state.teeth[id];
+  if (!tooth) {
+    setMessage("Unknown tooth.", true);
+    return false;
+  }
+
+  const clicked = normalizeSurface(restSurface);
+  if (clicked !== "distal") {
+    setMessage("Embrasure Assembly supports distal rest-seat suggestion only.", true);
+    return false;
+  }
+
+  const neighborToothId = getEmbrasureNeighborToothId(id, jaw, "distal");
+  if (!neighborToothId || !state.teeth[neighborToothId]) {
+    setMessage("No adjacent posterior tooth available for Embrasure Assembly.", true);
+    return false;
+  }
+
+  const neighborTooth = state.teeth[neighborToothId];
+  if (!tooth.isPresent || !neighborTooth.isPresent) {
+    setMessage("Embrasure Assembly requires both adjacent teeth to be present.", true);
+    return false;
+  }
+
+  ensureToothPlacementState(tooth);
+  ensureToothPlacementState(neighborTooth);
+
+  clearRestAndCircumClaspsOnTooth(tooth);
+  clearRestAndCircumClaspsOnTooth(neighborTooth);
+  clearReciprocatingPlateMeshOnTooth(tooth);
+  clearReciprocatingPlateMeshOnTooth(neighborTooth);
+
+  placeCircumBundle(tooth, "distal");
+  placeCircumBundle(neighborTooth, "mesial");
+
+  syncToothComponentsFromPlacements(tooth);
+  syncToothComponentsFromPlacements(neighborTooth);
+
+  setMessage(`Placed Embrasure Assembly on teeth ${id} and ${neighborToothId}.`, false);
+  return true;
+}
+
+export function placeMultiCircumAssemblyOnTooth(toothId, jaw) {
+  const id = String(toothId);
+  const tooth = state.teeth[id];
+  if (!tooth) {
+    setMessage("Unknown tooth.", true);
+    return false;
+  }
+
+  const neighborToothId = getDistalNeighborToothId(id, jaw);
+  if (!neighborToothId || !state.teeth[neighborToothId]) {
+    setMessage("No adjacent distal posterior tooth available for Multi Assembly.", true);
+    return false;
+  }
+
+  const neighborTooth = state.teeth[neighborToothId];
+  if (!tooth.isPresent || !neighborTooth.isPresent) {
+    setMessage("Multi Assembly requires both selected and adjacent distal teeth to be present.", true);
+    return false;
+  }
+
+  ensureToothPlacementState(tooth);
+  ensureToothPlacementState(neighborTooth);
+
+  clearRestAndCircumClaspsOnTooth(tooth);
+  clearRestAndCircumClaspsOnTooth(neighborTooth);
+  clearReciprocatingPlateMeshOnTooth(tooth);
+  clearReciprocatingPlateMeshOnTooth(neighborTooth);
+
+  placeCircumBundle(tooth, "mesial");
+  placeCircumBundle(neighborTooth, "distal");
+
+  syncToothComponentsFromPlacements(tooth);
+  syncToothComponentsFromPlacements(neighborTooth);
+
+  setMessage(`Placed Multi Assembly on teeth ${id} and distal adjacent ${neighborToothId}.`, false);
+  return true;
+}
+
+export function placeHalfAndHalfAssemblyOnTooth(toothId, restSurface) {
+  const id = String(toothId);
+  const tooth = state.teeth[id];
+  if (!tooth) {
+    setMessage("Unknown tooth.", true);
+    return false;
+  }
+
+  const clicked = normalizeSurface(restSurface);
+  if (clicked !== "mesial" && clicked !== "distal") {
+    setMessage("Half & Half supports mesial or distal rest-seat suggestion only.", true);
+    return false;
+  }
+
+  ensureToothPlacementState(tooth);
+  clearRestAndCircumClaspsOnTooth(tooth);
+  clearReciprocatingPlateMeshOnTooth(tooth);
+
+  if (clicked === "mesial") {
+    addPlacement(tooth, "retainer-clasp", "distal_buccal");
+    addPlacement(tooth, "reciprocating-clasp", "mesial_buccal");
+  } else {
+    addPlacement(tooth, "retainer-clasp", "mesial_buccal");
+    addPlacement(tooth, "reciprocating-clasp", "distal_buccal");
+  }
+
+  syncToothComponentsFromPlacements(tooth);
+  setMessage(`Placed Half & Half on tooth ${id}.`, false);
+  return true;
+}
+
+export function placeAssemblyTBarOnTooth(toothId, jaw, restSurface) {
+  return placeAssemblyBarOnTooth(toothId, jaw, restSurface, {
+    barComponentId: "bar-t",
+    label: "T-bar",
+    getReciprocatingSurface: (clicked) =>
+      clicked === "mesial" ? "distal_lingual" : "mesial_lingual",
+  });
+}
+
+function getAssemblyBarContext(toothId, jaw, restSurface, label) {
+  const id = String(toothId);
+  const tooth = state.teeth[id];
+  if (!tooth) {
+    setMessage("Unknown tooth.", true);
+    return null;
+  }
+
+  const clicked = normalizeSurface(restSurface);
+  if (clicked !== "mesial" && clicked !== "distal") {
+    setMessage(`${label} Assembly supports mesial or distal rest-seat suggestion only.`, true);
+    return null;
+  }
+
+  ensureToothPlacementState(tooth);
+
+  const order = TOOTH_ORDER[jaw] || [];
+  const idx = order.indexOf(id);
+  if (idx < 0) {
+    setMessage("Unknown jaw for this tooth.", true);
+    return null;
+  }
+  const prevId = idx > 0 ? order[idx - 1] : null;
+  const nextId = idx < order.length - 1 ? order[idx + 1] : null;
+  const prevMissing = Boolean(prevId && state.teeth[prevId] && !state.teeth[prevId].isPresent);
+  const nextMissing = Boolean(nextId && state.teeth[nextId] && !state.teeth[nextId].isPresent);
+
+  if (!prevMissing && !nextMissing) {
+    setMessage("Choose a tooth adjacent to a missing tooth.", true);
+    return null;
+  }
+
+  const quadrant = Number(id.charAt(0));
+  const mesialStep = quadrant === 1 || quadrant === 3 ? 1 : -1;
+  const missingNeighborStep = prevMissing ? -1 : 1;
+  const missingOnMesial = missingNeighborStep === mesialStep;
+  const barSurface = missingOnMesial ? "bar_d1_distal" : "bar_d1_mesial";
+
+  return { id, tooth, clicked, barSurface, missingOnMesial };
+}
+
+function placeAssemblyBarOnTooth(toothId, jaw, restSurface, config) {
+  const context = getAssemblyBarContext(toothId, jaw, restSurface, config.label);
+  if (!context) return false;
+  const { id, tooth, clicked, barSurface, missingOnMesial } = context;
+
+  tooth.componentPlacements = (tooth.componentPlacements || []).filter((entry) => {
+    const cid = entry.componentId;
+    return !(cid === "rest-seat" || isReciprocatingClaspComponent(cid) || cid === "bar-t" || cid === "bar-i");
+  });
+
+  tooth.componentPlacements = tooth.componentPlacements.filter((entry) => {
+    const cid = entry.componentId;
+    return !(isPlateComponentId(cid) || isMeshComponent(cid));
+  });
+
+  if (clicked === "mesial") {
+    addPlacement(tooth, config.barComponentId, barSurface);
+    addPlacement(tooth, "reciprocating-clasp", config.getReciprocatingSurface(clicked, missingOnMesial));
+    addPlacement(tooth, "rest-seat", "mesial");
+  } else if (clicked === "distal") {
+    addPlacement(tooth, config.barComponentId, barSurface);
+    addPlacement(tooth, "reciprocating-clasp", config.getReciprocatingSurface(clicked, missingOnMesial));
+    addPlacement(tooth, "rest-seat", "distal");
+  }
+
+  syncToothComponentsFromPlacements(tooth);
+  setMessage(`Placed ${config.label} Assembly on tooth ${id}.`, false);
+  return true;
+}
+
+export function placeAssemblyModTBarOnTooth(toothId, jaw, restSurface) {
+  return placeAssemblyBarOnTooth(toothId, jaw, restSurface, {
+    barComponentId: "bar-t",
+    label: "Mod.T-bar",
+    getReciprocatingSurface: (clicked) =>
+      clicked === "mesial" ? "distal_lingual" : "mesial_lingual",
+  });
+}
+
+export function placeAssemblyIBarOnTooth(toothId, jaw, restSurface) {
+  return placeAssemblyBarOnTooth(toothId, jaw, restSurface, {
+    barComponentId: "bar-i",
+    label: "I-bar",
+    getReciprocatingSurface: (clicked) =>
+      clicked === "mesial" ? "distal_lingual" : "mesial_lingual",
+  });
 }
 
 export function resolveMajorConnectorAnchorComponentId(tooth) {

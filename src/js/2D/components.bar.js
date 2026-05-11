@@ -416,6 +416,7 @@ export const BAR_PLACEMENT_OFFSET_BY_TOOTH_SURFACE = Object.freeze({
 const BAR_SHAPE_LETTER = Object.freeze({
   "bar-i": "I",
   "bar-s": "S",
+  "bar-t": "T",
   "bar-u": "U",
   "bar-y": "Y",
 });

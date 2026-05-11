@@ -477,34 +477,29 @@ function init() {
   // Load render module early so render bridge + mesh env are registered.
   const renderLoad = import("./annotationRender.js");
 
-  try {
-    Promise.all([
-      renderLoad,
-      import("./annotationTeethModel.js"),
-      import("./annotationLocks.js"),
-      import("./annotationCatalog.js"),
-    ])
-      .then(([, teethModel, locks, catalog]) => {
-        teethModel.initializeTeethState();
-        locks.bindStatusPicker();
-        locks.bindJawControls();
-        locks.bindArchWhitespaceDismiss();
-        locks.bindRemoveComponentModeBtn();
-        locks.bindActionButtons();
-        catalog.initComponentCatalog();
-        locks.loadPreviewImage();
-        locks.syncDesignModeWithLocks(false);
-        renderJaws();
-        locks.updateEditModeUI();
-      })
-      .catch((err) => {
-        console.error("2D annotation init failed", err);
-        setMessage("Loaded jaw view with limited tools. Check console for init error.", true);
-      });
-  } catch (err) {
-    console.error("2D annotation init failed", err);
-    setMessage("Loaded jaw view with limited tools. Check console for init error.", true);
-  }
+  Promise.all([
+    renderLoad,
+    import("./annotationTeethModel.js"),
+    import("./annotationLocks.js"),
+    import("./annotationCatalog.js"),
+  ])
+    .then(([, teethModel, locks, catalog]) => {
+      teethModel.initializeTeethState();
+      locks.bindStatusPicker();
+      locks.bindJawControls();
+      locks.bindArchWhitespaceDismiss();
+      locks.bindRemoveComponentModeBtn();
+      locks.bindActionButtons();
+      catalog.initComponentCatalog();
+      locks.loadPreviewImage();
+      locks.syncDesignModeWithLocks(false);
+      renderJaws();
+      locks.updateEditModeUI();
+    })
+    .catch((err) => {
+      console.error("2D annotation init failed", err);
+      setMessage("Loaded jaw view with limited tools. Check console for init error.", true);
+    });
 }
 
 if (document.readyState === "loading") {

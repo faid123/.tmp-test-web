@@ -11,7 +11,42 @@ const MAJOR_CONNECTOR_EXCLUDED_TOOTH_IDS_BY_COMPONENT = Object.freeze({
 });
 
 /** Fallback major-connector id auto-placed on lock (design mode). Upper-arch only for now. */
-const DEFAULT_MAJOR_CONNECTOR_ID_FOR_LOCK_DESIGN_MODE = "major-upper-palatal-strap";
+const DEFAULT_MAJOR_CONNECTOR_ID_FOR_LOCK_DESIGN_MODE = "major-upper-horseshoe";
+
+export const PALATAL_STRAP_MAJOR_COMPONENT_ID = "major-upper-palatal-strap";
+
+/**
+ * Polygon vertices for the Palatal Strap arch-wide visual (upper jaw SVG viewBox 0 0 600 420).
+ * Represents a transverse strap band across the premolar region of the palate.
+ */
+export const PALATAL_STRAP_ARCH_POLYGON = Object.freeze([
+  { x: 213, y: 195 },
+  { x: 422, y: 195 },
+  { x: 422, y: 255 },
+  { x: 213, y: 255 },
+]);
+
+/** True when this major type is Palatal Strap. */
+export function isPalatalStrapMajorComponent(componentOrId) {
+  const id =
+    typeof componentOrId === "object" && componentOrId !== null
+      ? String(componentOrId.id || "")
+      : String(componentOrId || "");
+  return id === PALATAL_STRAP_MAJOR_COMPONENT_ID;
+}
+
+/** Any upper tooth carries a palatal-strap placement — drives arch overlay visibility. */
+export function hasPalatalStrapPlacementOnUpperArch(teeth) {
+  if (!teeth || typeof teeth !== "object") return false;
+  for (const tid of TOOTH_ORDER.upper) {
+    const tooth = teeth[tid];
+    if (!tooth?.componentPlacements?.length) continue;
+    if (tooth.componentPlacements.some((e) => e.componentId === PALATAL_STRAP_MAJOR_COMPONENT_ID)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /**
  * Palatal Hole uses shared arch artwork ({@link PALATAL_HOLE_ARCH_OVERLAY_LAYERS}) and the same per-tooth
@@ -21,6 +56,9 @@ export const PALATAL_HOLE_MAJOR_COMPONENT_ID = "major-upper-palatal-hole";
 
 /** Palatal Bar: arch-wide {@link PALATAL_BAR_ARCH_OVERLAY} plus per-tooth majors on {@link PALATAL_BAR_CONNECTOR_TOOTH_IDS} only. */
 export const PALATAL_BAR_MAJOR_COMPONENT_ID = "major-upper-palatal-bar";
+
+/** Palatal Plate: arch-wide Plate_{n}.svg chosen from latest major connector endpoints. */
+export const PALATAL_PLATE_MAJOR_COMPONENT_ID = "major-upper-palatal-plate";
 
 /**
  * Per-tooth palatal-bar segments: both posterior runs including distal second molars, excluding anteriors
@@ -51,6 +89,41 @@ export const PALATAL_BAR_ARCH_OVERLAY = Object.freeze({
   width: 195,
   height: 186,
 });
+
+/** Arch-wide palatal plate overlay box (Plate_{n}.svg). */
+export const PALATAL_PLATE_ARCH_OVERLAY = Object.freeze({
+  x: 212,
+  y: 190,
+  width: 212,
+  height: 192,
+});
+
+/**
+ * Optional per-plate frame tuning. Set only plates that need unique placement/size.
+ * Example: "5": { x: 210, y: 188, width: 216, height: 196 }
+ */
+export const PALATAL_PLATE_ARCH_OVERLAY_BY_INDEX = Object.freeze({
+  "1": { x: 203, y: 123.7, width: 230, height: 292 },
+  "2": { x: 203, y: 123, width: 230, height: 292 },
+  "3": { x: 203, y: 123.5, width: 230, height: 292 },
+  "4": { x: 203, y: 122, width: 230, height: 292 },
+  "5": { x: 203, y: 122, width: 230, height: 292 },
+  "6": { x: 203, y: 124, width: 230, height: 292 },
+  "7": { x: 203, y: 122, width: 230, height: 292 },
+  "8": { x: 203, y: 119, width: 230, height: 292 },
+});
+
+export function getPalatalPlateArchOverlayFrame(index) {
+  const key = String(index);
+  const perIndex = PALATAL_PLATE_ARCH_OVERLAY_BY_INDEX[key];
+  const src = perIndex || PALATAL_PLATE_ARCH_OVERLAY;
+  return {
+    x: Number.isFinite(src?.x) ? src.x : PALATAL_PLATE_ARCH_OVERLAY.x,
+    y: Number.isFinite(src?.y) ? src.y : PALATAL_PLATE_ARCH_OVERLAY.y,
+    width: Number.isFinite(src?.width) ? src.width : PALATAL_PLATE_ARCH_OVERLAY.width,
+    height: Number.isFinite(src?.height) ? src.height : PALATAL_PLATE_ARCH_OVERLAY.height,
+  };
+}
 
 /**
  * Templates with shipped `{base}_mesial.svg` / `{base}_distal.svg` under MajorConnector/ (upper 11–17).
@@ -272,6 +345,91 @@ export function isPalatalBarMajorComponent(componentOrId) {
       ? String(componentOrId.id || "")
       : String(componentOrId || "");
   return id === PALATAL_BAR_MAJOR_COMPONENT_ID;
+}
+
+/** True when this major type is Palatal Plate. */
+export function isPalatalPlateMajorComponent(componentOrId) {
+  const id =
+    typeof componentOrId === "object" && componentOrId !== null
+      ? String(componentOrId.id || "")
+      : String(componentOrId || "");
+  return id === PALATAL_PLATE_MAJOR_COMPONENT_ID;
+}
+
+/** Any upper tooth carries a palatal-plate placement. */
+export function hasPalatalPlatePlacementOnUpperArch(teeth) {
+  if (!teeth || typeof teeth !== "object") {
+    return false;
+  }
+  for (const tid of TOOTH_ORDER.upper) {
+    const tooth = teeth[tid];
+    if (!tooth?.componentPlacements?.length) {
+      continue;
+    }
+    if (tooth.componentPlacements.some((e) => e.componentId === PALATAL_PLATE_MAJOR_COMPONENT_ID)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isUpperRightToothId(toothId) {
+  return /^1[1-8]$/.test(String(toothId));
+}
+
+function isUpperLeftToothId(toothId) {
+  return /^2[1-8]$/.test(String(toothId));
+}
+
+/**
+ * Select Plate_{n} from palatal-plate major endpoints.
+ * Right side endpoint: largest unit among 11..18 with palatal-plate placement (most posterior).
+ * Left side endpoint: largest unit among 21..28 with palatal-plate placement (most posterior).
+ * Chosen n = max(rightUnit, leftUnit), with single-side fallback.
+ */
+export function getPalatalPlateOverlayIndexFromUpperPlacements(teeth) {
+  if (!teeth || typeof teeth !== "object") {
+    return null;
+  }
+
+  let rightUnit = null;
+  let leftUnit = null;
+
+  for (const toothId of TOOTH_ORDER.upper) {
+    const tooth = teeth[toothId];
+    if (!tooth?.componentPlacements?.length) {
+      continue;
+    }
+    const hasPalatalPlate = tooth.componentPlacements.some(
+      (e) => e.componentId === PALATAL_PLATE_MAJOR_COMPONENT_ID
+    );
+    if (!hasPalatalPlate) {
+      continue;
+    }
+
+    const unit = Number(String(toothId).slice(1));
+    if (!Number.isFinite(unit)) {
+      continue;
+    }
+
+    if (isUpperRightToothId(toothId)) {
+      rightUnit = rightUnit === null ? unit : Math.max(rightUnit, unit);
+    } else if (isUpperLeftToothId(toothId)) {
+      leftUnit = leftUnit === null ? unit : Math.max(leftUnit, unit);
+    }
+  }
+
+  if (rightUnit === null && leftUnit === null) {
+    return null;
+  }
+
+  const overlay = rightUnit === null
+    ? leftUnit
+    : leftUnit === null
+      ? rightUnit
+      : Math.max(rightUnit, leftUnit);
+
+  return Math.max(1, Math.min(8, overlay));
 }
 
 /** Any tooth in {@link PALATAL_BAR_CONNECTOR_TOOTH_IDS} carries a palatal-bar placement — drives overlay + connectors. */
