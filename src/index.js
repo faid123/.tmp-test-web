@@ -12,6 +12,7 @@ console.log(THREE.REVISION);
 import { OFFLoader } from "./OFFLoader.js";
 // Import the ApiClient class
 import { ApiClient } from "./ApiClient.js";
+import { createArtificialTeethRenderer } from "./artificialTeeth.js";
 
 import { addResetButton } from "./resetButton.js";
 import { lol } from "./crypt.js";
@@ -140,6 +141,11 @@ const polylineJawVisibility = new Map([
   ["upper", true],
   ["lower", true],
 ]);
+const artificialTeethRenderer = createArtificialTeethRenderer({
+  scene,
+  parentObject,
+  apiClient,
+});
 const POLYLINE_COMPONENT_COLORS = [
   0x6f35ff,
   0x00a6ff,
@@ -2857,6 +2863,7 @@ btnContainer.appendChild(edit2DStatic); */
     } else {
       alert("✅ STL loading completed.");
       await fetchAndRenderPolylines(paramValue);
+      await artificialTeethRenderer.fetchAndRender(paramValue);
       removeVisibilityAndTransparencyControls();
       // 🧩 Re-enable visibility/transparency controls after loading
       addVisibilityAndTransparencyControls(
@@ -2951,6 +2958,7 @@ btnContainer.appendChild(edit2DStatic); */
     syncPolylineFocusMode();
   }
   await fetchAndRenderPolylines(paramValue);
+  await artificialTeethRenderer.fetchAndRender(paramValue);
   //console.log(all_mesh_mat);
 
   function changeMeshRotation(mesh, x, y, z) {
