@@ -92,6 +92,22 @@ export function assessPlacementCriteria(tooth, selectedComponent, componentById)
     }
   }
 
+  if (selectedIsBar) {
+    const barConflicts = existingComponents.filter((id) => {
+      if (id === selectedComponent.id) {
+        return false;
+      }
+      return isBarComponent(id);
+    });
+    if (barConflicts.length > 0) {
+      return failure(
+        `Tooth ${toothId} already has a bar; replacing with ${selectedComponent.id}.`,
+        ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
+        barConflicts
+      );
+    }
+  }
+
   const selectedIsReciprocatingClasp = isReciprocatingClaspComponent(selectedComponent);
   const selectedIsReciprocatingPlate = isPlateComponentId(selectedComponent.id);
   if (selectedIsReciprocatingClasp || selectedIsReciprocatingPlate) {

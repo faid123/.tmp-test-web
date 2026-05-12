@@ -1,4 +1,4 @@
-import { isAutoMeshPlatePlacementExcludedToothId, TOOTH_ORDER } from "./constants.js";
+import { isAutoMeshPlacementExcludedToothId, TOOTH_ORDER } from "./constants.js";
 import { COMPONENT_ASSET_BASE, getComponentTemplateToothId } from "./components.mesh.js";
 
 /** Default plate when entering design mode (both arches locked) if no plate is selected in the catalog. */
@@ -243,7 +243,7 @@ export function ensurePlatePlacementsOnPresentTeethInJaws(
       continue;
     }
     for (const toothId of ids) {
-      if (isAutoMeshPlatePlacementExcludedToothId(toothId)) {
+      if (isAutoMeshPlacementExcludedToothId(toothId)) {
         continue;
       }
       const tooth = teeth[toothId];

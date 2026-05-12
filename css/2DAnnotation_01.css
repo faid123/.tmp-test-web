@@ -169,7 +169,7 @@ body {
   align-items: stretch;
   justify-content: flex-start;
   gap: 0;
-  margin: 0px;
+  margin: 0;
   flex: 1;
   min-height: 0;
 }
@@ -186,6 +186,78 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.jaw-history-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--rose-600);
+  cursor: pointer;
+  appearance: none;
+  box-shadow: none;
+}
+
+.jaw-history-btn:hover:not(:disabled) {
+  border-color: var(--rose-500);
+  background: rgba(196, 79, 112, 0.08);
+}
+
+.jaw-history-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.jaw-history-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
+.jaw-history-btn-redo .jaw-history-icon {
+  transform: scaleX(-1);
+}
+
+.jaw-range-missing-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--rose-700);
+  cursor: pointer;
+}
+
+.jaw-range-missing-btn:hover {
+  border-color: var(--rose-500);
+  background: rgba(196, 79, 112, 0.08);
+}
+
+.jaw-range-missing-btn.is-active {
+  border-color: var(--rose-600);
+  background: rgba(196, 79, 112, 0.16);
+  color: var(--rose-800);
+}
+
+.jaw-range-missing-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
 }
 
 .jaw-lock-eraser-btn {
@@ -236,7 +308,8 @@ body {
   width: auto;
   height: auto;
   min-height: 28px;
-  padding: 4px 12px;
+  padding:1px 12px;
+  border-radius: 8px;
 }
 
 .jaw-lock-between-btn .lock-text {
@@ -552,9 +625,13 @@ body {
   filter: brightness(0) saturate(100%) invert(27%) sepia(95%) saturate(1702%) hue-rotate(259deg) brightness(88%) contrast(97%);
 }
 
-/* RPD plate overlays and major-connector underlays: neutral gray (tune to match arch) */
+/* RPD overlays and connectors: neutral gray (tune to match arch) */
 .plate-image,
-.major-connector-image {
+.major-connector-image,
+.minor-connector-image,
+.palatal-hole-arch-image,
+.palatal-bar-arch-image,
+.palatal-plate-arch-image {
   filter: grayscale(1) brightness(0.72) contrast(0.95);
 }
 
@@ -562,38 +639,17 @@ body {
   filter: brightness(0) saturate(100%) invert(18%) sepia(89%) saturate(4019%) hue-rotate(352deg) brightness(93%) contrast(107%);
 }
 
-.minor-connector-image {
-  filter: grayscale(1) brightness(0.72) contrast(0.95);
-}
-
-/* Palatal hole arch overlay (AP_Strap01/02): neutral gray, non-interactive */
-.palatal-hole-arch-overlay {
-  pointer-events: none;
-}
-
-.palatal-hole-arch-image {
-  filter: grayscale(1) brightness(0.72) contrast(0.95);
-  /* SVG <image> defaults can still capture hits even when parent <g> has none */
-  pointer-events: none;
-}
-
-/* Palatal bar arch overlay (P_Bar.svg): neutral gray, non-interactive */
-.palatal-bar-arch-overlay {
-  pointer-events: none;
-}
-
-.palatal-bar-arch-image {
-  filter: grayscale(1) brightness(0.72) contrast(0.95);
-  pointer-events: none;
-}
-
-/* Palatal plate arch overlay (Plate_{n}.svg): neutral gray, non-interactive */
+/* Palatal arch overlays: non-interactive */
+.palatal-hole-arch-overlay,
+.palatal-bar-arch-overlay,
 .palatal-plate-arch-overlay {
   pointer-events: none;
 }
 
+/* SVG <image> defaults can still capture hits even when parent <g> has none */
+.palatal-hole-arch-image,
+.palatal-bar-arch-image,
 .palatal-plate-arch-image {
-  filter: grayscale(1) brightness(0.72) contrast(0.95);
   pointer-events: none;
 }
 
@@ -695,10 +751,6 @@ body {
   filter: saturate(1.2) brightness(1.08) contrast(1.04);
 }
 
-.clasp-suggestion-image:hover {
-  opacity: 1;
-}
-
 .clasp-placement-marker {
   fill: #81c784;
   stroke: #ffffff;
@@ -760,7 +812,17 @@ body {
 }
 
 .tooth.is-missing .tooth-image { opacity: 0; }
-.tooth.is-locked { opacity: 0.78; }
+.tooth.is-locked { opacity: 0.88; }
+
+.tooth.tooth-range-selected .tooth-image {
+  filter: drop-shadow(0 0 4px rgba(35, 170, 85, 0.75));
+}
+
+/* .tooth.tooth-range-selected .tooth-hit-target {
+  fill: rgba(35, 170, 85, 0.18);
+  stroke: rgba(35, 170, 85, 0.65);
+  stroke-width: 1.2;
+} */
 
 .component-note {
   font-size: 10px;
@@ -1092,12 +1154,12 @@ body {
   }
 }
 
-/* Present-tooth radial quick-pick (design mode): compact white disk, black labels */
+/* Present-tooth quick-pick (design mode): square 2x2 layout */
 .tooth-radial-backdrop {
   position: fixed;
   inset: 0;
   z-index: 9000;
-  background: rgba(45, 28, 34, 0.28);
+  background: transparent;
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
@@ -1106,65 +1168,86 @@ body {
 
 .tooth-radial-panel {
   position: fixed;
-  width: 160px;
-  height: 160px;
+  width: 120px;
+  height: 120px;
   pointer-events: auto;
-  background: transparent;
-  border-radius: 50%;
-  overflow: hidden;
-  box-shadow: 0 4px 18px rgba(45, 28, 34, 0.12);
-}
-
-.tooth-radial-svg {
-  display: block;
-  width: 160px;
-  height: 160px;
-  user-select: none;
-}
-
-.tooth-radial-sector {
-  cursor: pointer;
-  stroke: rgba(0, 0, 0, 0.1);
-  stroke-width: 1.15;
-  transition: filter 0.12s ease;
-}
-
-.tooth-radial-sector path {
-  fill: #ffffff;
-}
-
-.tooth-radial-sector:hover path,
-.tooth-radial-sector:focus path {
-  fill: #f4f4f4;
-}
-
-.tooth-radial-sector:focus {
-  outline: none;
-}
-
-.tooth-radial-sector:focus-visible path {
-  fill: #ececec;
-  stroke: var(--rose-500);
-  stroke-width: 1.75;
-}
-
-.tooth-radial-label {
-  pointer-events: none;
-  font-size: 10px;
-  font-weight: 600;
-  fill: #000000;
-  letter-spacing: 0.03em;
-}
-
-.tooth-radial-center-box {
-  fill: #ffffff;
-  stroke: rgba(0, 0, 0, 0.14);
-  stroke-width: 1.15;
+  background: lightgrey;
+  opacity: 0.87;
+  border-radius: 10px;
 }
 
 .tooth-radial-tooth-id {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   font-size: 12px;
-  font-weight: 700;
-  fill: #000000;
+  line-height: 1;
+  font-weight: 500;
+  color: #b33a4e;
   pointer-events: none;
+  background: white;
+  border: 1px solid red;
+  padding: 5px;
+  border-radius: 5px;
+}
+
+.tooth-radial-option {
+  position: absolute;
+  width: 45px;
+  height: 45px;
+  border: 1px solid #b33a4e;
+  border-radius: 10px;
+  background: transparent;
+  margin: 5px;
+  color: #b33a4e;
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.12s ease;
+}
+
+.tooth-radial-option-icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+}
+
+.tooth-radial-option.top-left {
+  left: 0;
+  top: 0;
+}
+
+.tooth-radial-option.top-right {
+  right: 0;
+  top: 0;
+}
+
+.tooth-radial-option.bottom-left {
+  left: 0;
+  bottom: 0;
+}
+
+.tooth-radial-option.bottom-right {
+  right: 0;
+  bottom: 0;
+}
+
+.tooth-radial-option:hover {
+  background: #fff2f5;
+}
+
+.tooth-radial-option:active {
+  transform: translateY(1px);
+}
+
+.tooth-radial-option:focus {
+  outline: none;
+}
+
+.tooth-radial-option:focus-visible {
+  box-shadow: 0 0 0 3px rgba(120, 48, 74, 0.55);
 }

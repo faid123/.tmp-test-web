@@ -20,7 +20,7 @@ import {
   PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS,
 } from "./components.js";
 import { TOOTH_ORDER } from "./constants.js";
-import { state, setMessage } from "./2DAnnotation.js";
+import { getHistoryStateSignature, recordHistoryIfChanged, state, setMessage } from "./2DAnnotation.js";
 import {
   addPlacement,
   ensureToothPlacementState,
@@ -56,6 +56,8 @@ export function applyRemovalSideEffectsForTooth(tooth, removedEntry) {
 }
 
 export function placeSelectedComponentOnTooth(toothId, placementContext = null) {
+  const historyBefore = getHistoryStateSignature();
+  try {
   toothId = String(toothId);
   if (state.designMode) {
     ensureMajorCatalogPickForTooth(toothId);
@@ -303,6 +305,9 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
       false
     );
   }
+  } finally {
+    recordHistoryIfChanged(historyBefore);
+  }
 }
 
 export function placeSimpleCircumAssemblyOnTooth(toothId, restSurface) {
@@ -354,7 +359,7 @@ export function placeSimpleCircumAssemblyOnTooth(toothId, restSurface) {
   return true;
 }
 
-function getEmbrasureNeighborToothId(toothId, jaw, clickedSurface) {
+export function getEmbrasureNeighborToothId(toothId, jaw, clickedSurface) {
   const order = TOOTH_ORDER[jaw] || [];
   const idx = order.indexOf(String(toothId));
   if (idx < 0) return null;

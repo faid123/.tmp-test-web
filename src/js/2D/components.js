@@ -1,4 +1,4 @@
-import { TOOTH_ORDER, isAutoMeshPlacementExcludedToothId, isAutoMeshPlatePlacementExcludedToothId } from "./constants.js";
+import { TOOTH_ORDER } from "./constants.js";
 
 export const COMPONENT_TABS = [
   { id: "mesh", label: "MESH" },
@@ -85,7 +85,7 @@ export const COMPONENT_CATALOG = [
   },
   {
     id: "assembly-tbar-mod",
-    label: "Mod.T-bar",
+    label: "Mod. T-bar",
     shortLabel: "TBM",
     icon: "/assets/menu-icon/Assembly/Bars/Assembly_TbarMod.png",
     section: "bars",
@@ -158,7 +158,7 @@ export const COMPONENT_CATALOG = [
   },
   {
     id: "assembly-circ-embrasure",
-    label: "Embrasure",
+    label: "EMB",
     shortLabel: "EMB",
     icon: "/assets/menu-icon/Assembly/Circum/Assembly_embrasure.png",
     section: "circum",
@@ -363,7 +363,7 @@ export const COMPONENT_CATALOG = [
   },
   {
     id: "major-upper-horseshoe",
-    label: "Horseshoe",
+    label: "Horse shoe",
     shortLabel: "HS",
     icon: "/assets/menu-icon/Connectors/Upper/MC_Horseshoe.png",
     section: "upper",

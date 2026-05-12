@@ -39,6 +39,8 @@ export const state = {
   removeComponentMode: false,
   hideLowerPlateVisuals: false,
   suppressArchPlacementSuggestions: false,
+  rangeMissingMode: false,
+  rangeMissingStartToothId: null,
 };
 
 /** Attach transient UI refs here so other modules can mutate without import reassignment issues. */
@@ -48,6 +50,164 @@ export const ui = {
   removeComponentDialogCleanup: null,
   hasInitialized: false,
 };
+
+const HISTORY_MAX = 120;
+const history = {
+  past: [],
+  future: [],
+  restoring: false,
+};
+
+function cloneStateForHistory() {
+  return {
+    activeStatus: state.activeStatus,
+    locks: { upper: Boolean(state.locks?.upper), lower: Boolean(state.locks?.lower) },
+    designMode: Boolean(state.designMode),
+    teeth: JSON.parse(JSON.stringify(state.teeth || {})),
+    components: [...(state.components || [])],
+    selectedTab: state.selectedTab,
+    selectedComponentId: state.selectedComponentId,
+    archOverlayPalatalHoleActive: Boolean(state.archOverlayPalatalHoleActive),
+    restSeatCalibrationAcOnly: Boolean(state.restSeatCalibrationAcOnly),
+    removeComponentMode: Boolean(state.removeComponentMode),
+    hideLowerPlateVisuals: Boolean(state.hideLowerPlateVisuals),
+    suppressArchPlacementSuggestions: Boolean(state.suppressArchPlacementSuggestions),
+    rangeMissingMode: Boolean(state.rangeMissingMode),
+    rangeMissingStartToothId: state.rangeMissingStartToothId,
+  };
+}
+
+function applyHistorySnapshot(snapshot) {
+  state.activeStatus = snapshot.activeStatus;
+  state.locks = { upper: Boolean(snapshot.locks?.upper), lower: Boolean(snapshot.locks?.lower) };
+  state.designMode = Boolean(snapshot.designMode);
+  state.teeth = JSON.parse(JSON.stringify(snapshot.teeth || {}));
+  state.components = [...(snapshot.components || [])];
+  state.selectedTab = snapshot.selectedTab;
+  state.selectedComponentId = snapshot.selectedComponentId;
+  state.archOverlayPalatalHoleActive = Boolean(snapshot.archOverlayPalatalHoleActive);
+  state.restSeatCalibrationAcOnly = Boolean(snapshot.restSeatCalibrationAcOnly);
+  state.removeComponentMode = Boolean(snapshot.removeComponentMode);
+  state.hideLowerPlateVisuals = Boolean(snapshot.hideLowerPlateVisuals);
+  state.suppressArchPlacementSuggestions = Boolean(snapshot.suppressArchPlacementSuggestions);
+  state.rangeMissingMode = Boolean(snapshot.rangeMissingMode);
+  state.rangeMissingStartToothId = snapshot.rangeMissingStartToothId ?? null;
+}
+
+export function getHistoryStateSignature() {
+  return JSON.stringify(cloneStateForHistory());
+}
+
+function pushHistorySnapshot(snapshot) {
+  const nextSig = JSON.stringify(snapshot);
+  const last = history.past[history.past.length - 1];
+  if (last && JSON.stringify(last) === nextSig) {
+    return false;
+  }
+  history.past.push(snapshot);
+  if (history.past.length > HISTORY_MAX) {
+    history.past.splice(0, history.past.length - HISTORY_MAX);
+  }
+  history.future = [];
+  return true;
+}
+
+export function recordHistoryCheckpoint() {
+  if (history.restoring) return false;
+  const changed = pushHistorySnapshot(cloneStateForHistory());
+  updateUndoRedoButtons();
+  return changed;
+}
+
+export function recordHistoryIfChanged(beforeSignature) {
+  if (history.restoring) return false;
+  const afterSnapshot = cloneStateForHistory();
+  const afterSignature = JSON.stringify(afterSnapshot);
+  if (beforeSignature === afterSignature) {
+    return false;
+  }
+  const changed = pushHistorySnapshot(afterSnapshot);
+  updateUndoRedoButtons();
+  return changed;
+}
+
+async function refreshUiAfterHistoryRestore() {
+  closePresentToothRadialQuickPick();
+  try {
+    const [catalog, locks] = await Promise.all([
+      import("./annotationCatalog.js"),
+      import("./annotationLocks.js"),
+    ]);
+    catalog.renderComponentCatalog();
+    locks.updateEditModeUI();
+  } catch (_) {}
+  renderJaws();
+}
+
+function updateUndoRedoButtons() {
+  const undoBtn = document.getElementById("undoWorkflowBtn");
+  const redoBtn = document.getElementById("redoWorkflowBtn");
+  if (undoBtn) undoBtn.disabled = history.past.length < 2;
+  if (redoBtn) redoBtn.disabled = history.future.length === 0;
+}
+
+export async function undoWorkflow() {
+  if (history.past.length < 2) {
+    setMessage("Nothing to undo.", true);
+    return;
+  }
+  const current = history.past.pop();
+  history.future.push(current);
+  const target = history.past[history.past.length - 1];
+  history.restoring = true;
+  try {
+    applyHistorySnapshot(target);
+  } finally {
+    history.restoring = false;
+  }
+  await refreshUiAfterHistoryRestore();
+  updateUndoRedoButtons();
+  setMessage("Undo applied.", false);
+}
+
+export async function redoWorkflow() {
+  if (history.future.length === 0) {
+    setMessage("Nothing to redo.", true);
+    return;
+  }
+  const target = history.future.pop();
+  history.past.push(target);
+  history.restoring = true;
+  try {
+    applyHistorySnapshot(target);
+  } finally {
+    history.restoring = false;
+  }
+  await refreshUiAfterHistoryRestore();
+  updateUndoRedoButtons();
+  setMessage("Redo applied.", false);
+}
+
+function bindHistoryControls() {
+  const undoBtn = document.getElementById("undoWorkflowBtn");
+  const redoBtn = document.getElementById("redoWorkflowBtn");
+  if (undoBtn) undoBtn.addEventListener("click", () => undoWorkflow());
+  if (redoBtn) redoBtn.addEventListener("click", () => redoWorkflow());
+  document.addEventListener("keydown", (event) => {
+    const tag = document.activeElement?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    const key = String(event.key || "").toLowerCase();
+    if ((event.metaKey || event.ctrlKey) && !event.shiftKey && key === "z") {
+      event.preventDefault();
+      undoWorkflow();
+      return;
+    }
+    if ((event.metaKey || event.ctrlKey) && (key === "y" || (event.shiftKey && key === "z"))) {
+      event.preventDefault();
+      redoWorkflow();
+    }
+  });
+}
 
 export function titleCase(value) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : "";
@@ -131,13 +291,8 @@ export function meshAnnotationEnv() {
   return meshAnnotationEnvImpl();
 }
 
-// Present-tooth radial quick pick (Rest / Clasps / Bars).
-const RADIAL_SIZE = 160;
-const VIEW = 160;
-const CX = VIEW / 2;
-const CY = VIEW / 2;
-const R_OUTER = 76;
-const R_INNER = 22;
+// Present-tooth quick pick (square 2x2 layout).
+const QUICK_PICK_SIZE = 120;
 
 function onPresentToothRadialKeydown(ev) {
   if (ev.key === "Escape") {
@@ -160,49 +315,63 @@ function firstCatalogIdForTab(tabId) {
   return row?.id || null;
 }
 
-function applyRadialTab(tabId) {
-  const id = firstCatalogIdForTab(tabId);
-  if (!id || !COMPONENT_BY_ID.has(id)) {
-    setMessage(`No component found for tab “${tabId}”.`, true);
-    return;
+async function applyQuickPickSelection(tabId, componentId, options = {}) {
+  const historyBefore = getHistoryStateSignature();
+  try {
+    const id = componentId && COMPONENT_BY_ID.has(componentId) ? componentId : firstCatalogIdForTab(tabId);
+    if (!id || !COMPONENT_BY_ID.has(id)) {
+      setMessage(`No component found for tab "${tabId}".`, true);
+      return;
+    }
+    state.selectedTab = tabId;
+    state.selectedComponentId = id;
+    state.suppressArchPlacementSuggestions = false;
+    // Lazy-load catalog renderer to avoid static import cycle.
+    import("./annotationCatalog.js")
+      .then(({ renderComponentCatalog }) => renderComponentCatalog())
+      .catch(() => {});
+    renderJaws();
+
+    const placeOnToothId = options?.placeOnToothId ? String(options.placeOnToothId) : null;
+    if (placeOnToothId) {
+      if (id === "plate-crossmesh" || id === "plate-prox") {
+        const tooth = state.teeth[placeOnToothId];
+        if (tooth) {
+          const teethModel = await import("./annotationTeethModel.js");
+          teethModel.ensureToothPlacementState(tooth);
+          tooth.componentPlacements = (tooth.componentPlacements || []).filter(
+            (entry) =>
+              entry.componentId !== "reciprocating-clasp" &&
+              entry.componentId !== "plate-prox" &&
+              entry.componentId !== "plate-crossmesh"
+          );
+          teethModel.addPlacement(tooth, id, null);
+          teethModel.syncToothComponentsFromPlacements(tooth);
+          const label = COMPONENT_BY_ID.get(id)?.label || id;
+          setMessage(`Placed ${label} on tooth ${placeOnToothId}.`, false);
+          renderJaws();
+          return;
+        }
+      }
+      const placement = await import("./annotationPlacement.js");
+      placement.placeSelectedComponentOnTooth(placeOnToothId);
+      renderJaws();
+      return;
+    }
+
+    const label = COMPONENT_BY_ID.get(id)?.label || id;
+    setMessage(`${label} selected - use suggestion markers on the arch.`, false);
+  } catch (error) {
+    console.error("applyQuickPickSelection failed", error);
+    setMessage("Could not apply quick pick selection.", true);
+    renderJaws();
+  } finally {
+    recordHistoryIfChanged(historyBefore);
   }
-  state.selectedTab = tabId;
-  state.selectedComponentId = id;
-  state.suppressArchPlacementSuggestions = false;
-  // Lazy-load catalog renderer to avoid static import cycle.
-  import("./annotationCatalog.js")
-    .then(({ renderComponentCatalog }) => renderComponentCatalog())
-    .catch(() => {});
-  renderJaws();
-  const label = COMPONENT_BY_ID.get(id)?.label || id;
-  setMessage(`${label} selected — use suggestion markers on the arch.`, false);
-}
-
-function sectorPath(startDeg, endDeg) {
-  const r0 = R_INNER;
-  const r1 = R_OUTER;
-  const t0 = (startDeg * Math.PI) / 180;
-  const t1 = (endDeg * Math.PI) / 180;
-  const x0 = CX + r0 * Math.cos(t0);
-  const y0 = CY + r0 * Math.sin(t0);
-  const x1 = CX + r1 * Math.cos(t0);
-  const y1 = CY + r1 * Math.sin(t0);
-  const x2 = CX + r1 * Math.cos(t1);
-  const y2 = CY + r1 * Math.sin(t1);
-  const x3 = CX + r0 * Math.cos(t1);
-  const y3 = CY + r0 * Math.sin(t1);
-  const large = endDeg - startDeg > 180 ? 1 : 0;
-  return `M ${x0.toFixed(2)} ${y0.toFixed(2)} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r1} ${r1} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} L ${x3.toFixed(2)} ${y3.toFixed(2)} A ${r0} ${r0} 0 ${large} 0 ${x0.toFixed(2)} ${y0.toFixed(2)} Z`;
-}
-
-function labelPoint(angleDeg) {
-  const t = (angleDeg * Math.PI) / 180;
-  const r = (R_INNER + R_OUTER) / 2;
-  return { x: CX + r * Math.cos(t), y: CY + r * Math.sin(t) };
 }
 
 /**
- * Present-tooth quick picker: Rest / Clasps / Bars → switches catalog tab and default item.
+ * Present-tooth quick picker: Rest / Bar / Recip / Clasp.
  */
 export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
   closePresentToothRadialQuickPick();
@@ -214,82 +383,84 @@ export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
 
   const panel = document.createElement("div");
   panel.className = "tooth-radial-panel";
+  const center = document.createElement("div");
+  center.className = "tooth-radial-tooth-id";
+  center.textContent = String(toothId);
+  panel.appendChild(center);
 
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", `0 0 ${VIEW} ${VIEW}`);
-  svg.setAttribute("class", "tooth-radial-svg");
-
-  const sectors = [
-    { label: "Rest", tab: "rests", start: 0, end: 120 },
-    { label: "Clasps", tab: "clasps", start: 120, end: 240 },
-    { label: "Bars", tab: "bars", start: 240, end: 360 },
+  const mainActions = [
+    { label: "REST", tab: "rests", componentId: "rest-seat", pos: "top-left" },
+    { label: "BAR", tab: "bars", componentId: "bar-i", pos: "top-right" },
+    { label: "RECIP", menu: "recip", pos: "bottom-left" },
+    { label: "CLASP", tab: "clasps", componentId: "retainer-clasp", pos: "bottom-right" },
   ];
 
-  const wedgeGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
-  wedgeGroup.setAttribute("transform", `rotate(-90 ${CX} ${CY})`);
+  const recipActions = [
+    {
+      label: "RECIP CLASP",
+      tab: "clasps",
+      componentId: "reciprocating-clasp",
+      pos: "top-left",
+    },
+    { label: "RECIP PLATE", tab: "plate", componentId: "plate-prox", pos: "top-right" },
+    { label: "RECIP MESH", tab: "plate", componentId: "plate-crossmesh", pos: "bottom-left" },
+    { label: "BACK", menu: "main", pos: "bottom-right", textOnly: true },
+  ];
 
-  for (const s of sectors) {
-    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    g.setAttribute("class", "tooth-radial-sector");
-    g.setAttribute("tabindex", "0");
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", sectorPath(s.start, s.end));
-    g.appendChild(path);
-    const mid = (s.start + s.end) / 2;
-    const p = labelPoint(mid);
-    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    text.setAttribute("x", String(p.x));
-    text.setAttribute("y", String(p.y));
-    text.setAttribute("text-anchor", "middle");
-    text.setAttribute("dominant-baseline", "middle");
-    text.setAttribute("transform", `rotate(90 ${p.x} ${p.y})`);
-    text.setAttribute("class", "tooth-radial-label");
-    text.textContent = s.label;
-    g.appendChild(text);
-
-    const activate = () => {
-      applyRadialTab(s.tab);
-      closePresentToothRadialQuickPick();
-    };
-    g.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      activate();
-    });
-    g.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        activate();
+  function renderQuickPickMenu(menu) {
+    panel.querySelectorAll(".tooth-radial-option").forEach((node) => node.remove());
+    const actions = menu === "recip" ? recipActions : mainActions;
+    for (const action of actions) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `tooth-radial-option ${action.pos}`;
+      button.setAttribute("aria-label", action.label);
+      const iconPath = action.componentId ? COMPONENT_BY_ID.get(action.componentId)?.icon : null;
+      if (!action.textOnly && iconPath) {
+        const icon = document.createElement("img");
+        icon.className = "tooth-radial-option-icon";
+        icon.src = iconPath;
+        icon.alt = action.label;
+        button.appendChild(icon);
+      } else {
+        button.textContent = action.label;
       }
-    });
-    wedgeGroup.appendChild(g);
+      button.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (action.menu === "recip") {
+          renderQuickPickMenu("recip");
+          return;
+        }
+        if (action.menu === "main") {
+          renderQuickPickMenu("main");
+          return;
+        }
+        const placeOnToothId =
+          action.componentId === "plate-crossmesh" || action.componentId === "plate-prox"
+            ? toothId
+            : null;
+        await applyQuickPickSelection(action.tab, action.componentId, { placeOnToothId });
+        closePresentToothRadialQuickPick();
+      });
+      panel.appendChild(button);
+    }
   }
 
-  svg.appendChild(wedgeGroup);
+  renderQuickPickMenu("main");
 
-  const hole = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-  hole.setAttribute("cx", String(CX));
-  hole.setAttribute("cy", String(CY));
-  hole.setAttribute("r", String(R_INNER));
-  hole.setAttribute("class", "tooth-radial-center-box");
-  svg.appendChild(hole);
-
-  const idText = document.createElementNS("http://www.w3.org/2000/svg", "text");
-  idText.setAttribute("x", String(CX));
-  idText.setAttribute("y", String(CY));
-  idText.setAttribute("text-anchor", "middle");
-  idText.setAttribute("dominant-baseline", "middle");
-  idText.setAttribute("class", "tooth-radial-tooth-id");
-  idText.textContent = String(toothId);
-  svg.appendChild(idText);
-
-  panel.appendChild(svg);
   backdrop.appendChild(panel);
   document.body.appendChild(backdrop);
   ui.presentToothRadialHost = backdrop;
 
-  const left = Math.max(8, Math.min(clientX - RADIAL_SIZE / 2, window.innerWidth - RADIAL_SIZE - 8));
-  const top = Math.max(8, Math.min(clientY - RADIAL_SIZE / 2, window.innerHeight - RADIAL_SIZE - 8));
+  const left = Math.max(
+    8,
+    Math.min(clientX - QUICK_PICK_SIZE / 2, window.innerWidth - QUICK_PICK_SIZE - 8)
+  );
+  const top = Math.max(
+    8,
+    Math.min(clientY - QUICK_PICK_SIZE / 2, window.innerHeight - QUICK_PICK_SIZE - 8)
+  );
   panel.style.left = `${Math.round(left)}px`;
   panel.style.top = `${Math.round(top)}px`;
 
@@ -396,6 +567,7 @@ export async function openRemoveComponentPicker(toothId, jaw, anchorEvent) {
     btn.className = "remove-component-item-btn";
     btn.textContent = surf ? `${label} (${surf})` : label;
     const fn = async () => {
+      const historyBefore = getHistoryStateSignature();
       const t = state.teeth[toothId];
       if (!t) {
         finish();
@@ -424,6 +596,7 @@ export async function openRemoveComponentPicker(toothId, jaw, anchorEvent) {
       setMessage(`Removed ${name} from tooth ${toothId}.`, false);
       finish();
       renderJaws();
+      recordHistoryIfChanged(historyBefore);
     };
     btn.addEventListener("click", fn);
     itemHandlers.push({ btn, fn });
@@ -485,6 +658,7 @@ function init() {
   ])
     .then(([, teethModel, locks, catalog]) => {
       teethModel.initializeTeethState();
+      bindHistoryControls();
       locks.bindStatusPicker();
       locks.bindJawControls();
       locks.bindArchWhitespaceDismiss();
@@ -495,6 +669,9 @@ function init() {
       locks.syncDesignModeWithLocks(false);
       renderJaws();
       locks.updateEditModeUI();
+      history.past = [cloneStateForHistory()];
+      history.future = [];
+      updateUndoRedoButtons();
     })
     .catch((err) => {
       console.error("2D annotation init failed", err);

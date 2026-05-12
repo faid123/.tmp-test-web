@@ -44,11 +44,41 @@
             <div class="jaw-lock-strip-cluster">
               <button
                 type="button"
+                id="undoWorkflowBtn"
+                class="jaw-history-btn"
+                aria-label="Undo"
+                title="Undo"
+              >
+                <img
+                  class="jaw-history-icon"
+                  src="../../assets/undo.png"
+                  alt="Undo"
+                  width="18"
+                  height="18"
+                />
+              </button>
+              <button
+                type="button"
                 id="jawLockToggleBtn"
                 class="lock-btn jaw-lock-between-btn"
                 aria-label="Switch to design mode"
               >
                 <span class="lock-text jaw-lock-between-text">Selected mode</span>
+              </button>
+              <button
+                type="button"
+                id="teethRangeMissingBtn"
+                class="jaw-range-missing-btn"
+                aria-pressed="false"
+                title="Range missing mode"
+              >
+                <img
+                  class="jaw-range-missing-icon"
+                  src="../../assets/PresenceToothIconGreen.png"
+                  alt="Teeth selected"
+                  width="18"
+                  height="18"
+                />
               </button>
               <button
                 type="button"
@@ -65,6 +95,21 @@
                   alt=""
                   width="22"
                   height="22"
+                />
+              </button>
+              <button
+                type="button"
+                id="redoWorkflowBtn"
+                class="jaw-history-btn jaw-history-btn-redo"
+                aria-label="Redo"
+                title="Redo"
+              >
+                <img
+                  class="jaw-history-icon"
+                  src="../../assets/undo.png"
+                  alt="Redo"
+                  width="18"
+                  height="18"
                 />
               </button>
             </div>
@@ -100,7 +145,6 @@
 
         <section id="editModePanel" class="edit-mode-panel is-hidden">
           <h3 class="edit-mode-title">Components</h3>
-          <div class="design-hint" id="designHint">Lock both arches to enter design mode.</div>
           <div class="catalog-wrap">
             <div id="componentTabs" class="component-tabs"></div>
             <div class="component-canvas">

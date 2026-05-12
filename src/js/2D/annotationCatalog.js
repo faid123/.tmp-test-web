@@ -22,6 +22,8 @@ import { COMPONENT_GROUPS, forEachTooth, TOOTH_ORDER } from "./constants.js";
 import {
   state,
   DEFAULT_COMPONENT_ID,
+  getHistoryStateSignature,
+  recordHistoryIfChanged,
   setMessage,
   renderJaws,
   meshAnnotationEnv,
@@ -105,6 +107,7 @@ export function renderComponentCatalog() {
     clearBtn.textContent = "Clear all plates";
     clearBtn.disabled = !state.designMode;
     clearBtn.addEventListener("click", () => {
+      const historyBefore = getHistoryStateSignature();
       if (!state.designMode) {
         setMessage("Lock both arches to clear plates.", true);
         return;
@@ -116,6 +119,7 @@ export function renderComponentCatalog() {
       renderComponentCatalog();
       renderJaws();
       setMessage("All plates removed from the arch.", false);
+      recordHistoryIfChanged(historyBefore);
     });
     clearRow.appendChild(clearBtn);
     itemsEl.appendChild(clearRow);
@@ -185,6 +189,7 @@ export function createComponentItemButton(item) {
   }
   return button;
 }
+
 export function removeAllPlatePlacementsFromTeeth() {
   forEachTooth((toothId) => {
     const tooth = state.teeth[toothId];
@@ -200,6 +205,8 @@ export function removeAllPlatePlacementsFromTeeth() {
   });
 }
 export function handleDesignComponentSelect(componentId) {
+  const historyBefore = getHistoryStateSignature();
+  try {
   if (!state.designMode) {
     setMessage("Lock both arches to use the component catalog.", true);
     return;
@@ -409,6 +416,9 @@ export function handleDesignComponentSelect(componentId) {
     return;
   }
   setMessage(`${selected.label} added to design list.`, false);
+  } finally {
+    recordHistoryIfChanged(historyBefore);
+  }
 }
 
 // Render the selected component chips in the summary panel.

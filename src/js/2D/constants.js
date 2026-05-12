@@ -8,21 +8,16 @@ export const TOOTH_ORDER = {
 
 /**
  * Distal-most uppers/lowers — skip automatic **plate** on these present teeth when entering design mode
- * (lock) and when re-applying defaults on “clear arch”. Matches automatic **mesh** skips on missing teeth.
+ * (lock) and when re-applying defaults on "clear arch". Matches automatic **mesh** skips on missing teeth.
  */
 export const AUTO_MESH_PLATE_EXCLUDED_TOOTH_IDS = Object.freeze(
   new Set(["18", "28", "38", "48"])
 );
 
-/** Same teeth as {@link AUTO_MESH_PLATE_EXCLUDED_TOOTH_IDS}: skip automatic **mesh** when locking / clear-arch. */
-export const AUTO_MESH_EXCLUDED_TOOTH_IDS = AUTO_MESH_PLATE_EXCLUDED_TOOTH_IDS;
-
-/** Teeth skipped for automatic mesh (missing) and plate (present) defaults — same rule set; see {@link AUTO_MESH_EXCLUDED_TOOTH_IDS}. */
+/** Teeth skipped for automatic mesh (missing) and plate (present) defaults. */
 export function isAutoMeshPlacementExcludedToothId(toothId) {
-  return AUTO_MESH_EXCLUDED_TOOTH_IDS.has(String(toothId));
+  return AUTO_MESH_PLATE_EXCLUDED_TOOTH_IDS.has(String(toothId));
 }
-
-export const isAutoMeshPlatePlacementExcludedToothId = isAutoMeshPlacementExcludedToothId;
 
 /** Base path for tooth SVG assets in the 2D arch view. */
 export const TOOTH_ASSET_BASE = "../../assets/teeth";

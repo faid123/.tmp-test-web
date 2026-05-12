@@ -97,6 +97,7 @@ import {
   renderJaws,
 } from "./2DAnnotation.js";
 import {
+  getEmbrasureNeighborToothId,
   placeAssemblyIBarOnTooth,
   placeAssemblyModTBarOnTooth,
   placeEmbrasureCircumAssemblyOnTooth,
@@ -620,25 +621,22 @@ function isAnteriorRestSurfaceDialogTooth(toothId) {
   return ANTERIOR_REST_SURFACE_DIALOG_TEETH.has(String(toothId));
 }
 
+const ASSEMBLY_REST_SUGGESTION_IDS = new Set([
+  "assembly-circ",
+  "assembly-circ-embrasure",
+  "assembly-circ-multi",
+  "assembly-circ-half-n-half",
+  "assembly-tbar",
+  "assembly-tbar-mod",
+  "assembly-ibar",
+]);
+
 const SIMPLE_CIRCUM_POSTERIOR_TOOTH_IDS = new Set([
   "14", "15", "16", "17", "18",
   "24", "25", "26", "27", "28",
   "34", "35", "36", "37", "38",
   "44", "45", "46", "47", "48",
 ]);
-
-function getEmbrasureNeighborToothId(toothId, jaw, clickedSurface) {
-  const order = TOOTH_ORDER[jaw] || [];
-  const idx = order.indexOf(String(toothId));
-  if (idx < 0) return null;
-  const quadrant = Number(String(toothId).charAt(0));
-  const mesialStep = quadrant === 1 || quadrant === 3 ? 1 : -1;
-  const distalStep = -mesialStep;
-  const step = clickedSurface === "mesial" ? mesialStep : clickedSurface === "distal" ? distalStep : 0;
-  if (!step) return null;
-  const neighbor = order[idx + step];
-  return neighbor ? String(neighbor) : null;
-}
 
 function canPlaceEmbrasureAtSurface(toothId, jaw, surface) {
   const neighbor = getEmbrasureNeighborToothId(toothId, jaw, surface);
@@ -850,19 +848,10 @@ function handleRestSuggestionPick(jaw, toothId, pointSurface, anchor) {
   });
 }
 
-// Return true when rest guidance points should be shown in design mode.
 function shouldShowRestSuggestions() {
   if (state.suppressArchPlacementSuggestions) return false;
   if (!state.designMode) return false;
-  if (
-    state.selectedComponentId === "assembly-circ" ||
-    state.selectedComponentId === "assembly-circ-embrasure" ||
-    state.selectedComponentId === "assembly-circ-multi" ||
-    state.selectedComponentId === "assembly-circ-half-n-half" ||
-    state.selectedComponentId === "assembly-tbar" ||
-    state.selectedComponentId === "assembly-tbar-mod" ||
-    state.selectedComponentId === "assembly-ibar"
-  ) return true;
+  if (ASSEMBLY_REST_SUGGESTION_IDS.has(state.selectedComponentId)) return true;
   return isRestComponent(state.selectedComponentId);
 }
 
@@ -943,15 +932,9 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
 
   const selectedComponent = COMPONENT_BY_ID.get(state.selectedComponentId || "");
   if (!selectedComponent) return;
-  const isSimpleCircumAssembly = selectedComponent.id === "assembly-circ";
-  const isEmbrasureCircumAssembly = selectedComponent.id === "assembly-circ-embrasure";
-  const isMultiCircumAssembly = selectedComponent.id === "assembly-circ-multi";
-  const isHalfAndHalfAssembly = selectedComponent.id === "assembly-circ-half-n-half";
-  const isAssemblyTBar = selectedComponent.id === "assembly-tbar";
-  const isAssemblyModTBar = selectedComponent.id === "assembly-tbar-mod";
-  const isAssemblyIBar = selectedComponent.id === "assembly-ibar";
-  if (!isSimpleCircumAssembly && !isEmbrasureCircumAssembly && !isMultiCircumAssembly && !isHalfAndHalfAssembly && !isAssemblyTBar && !isAssemblyModTBar && !isAssemblyIBar && !isRestComponent(selectedComponent)) return;
-  if ((isSimpleCircumAssembly || isEmbrasureCircumAssembly || isMultiCircumAssembly || isHalfAndHalfAssembly || isAssemblyTBar || isAssemblyModTBar || isAssemblyIBar) && !SIMPLE_CIRCUM_POSTERIOR_TOOTH_IDS.has(String(toothId))) return;
+  const isAssembly = ASSEMBLY_REST_SUGGESTION_IDS.has(selectedComponent.id);
+  if (!isAssembly && !isRestComponent(selectedComponent)) return;
+  if (isAssembly && !SIMPLE_CIRCUM_POSTERIOR_TOOTH_IDS.has(String(toothId))) return;
 
   ensureToothPlacementState(tooth);
 
@@ -963,35 +946,23 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
   ) {
     points = getCingulumAcSuggestionPointsForTooth(toothId) ?? [];
   } else {
-    const allowedSurfaces = isSimpleCircumAssembly
-      ? new Set(["mesial", "distal"])
-      : isEmbrasureCircumAssembly
-        ? new Set(["distal"])
-      : isMultiCircumAssembly
+    const allowedSurfaces = selectedComponent.id === "assembly-circ-embrasure"
+      ? new Set(["distal"])
+      : selectedComponent.id === "assembly-circ-multi"
         ? new Set(["mesial"])
-      : isHalfAndHalfAssembly
-        ? new Set(["mesial", "distal"])
-      : isAssemblyTBar
-        ? new Set(["mesial", "distal"])
-      : isAssemblyModTBar
-        ? new Set(["mesial", "distal"])
-      : isAssemblyIBar
-        ? new Set(["mesial", "distal"])
-      : new Set(getRestSuggestionSurfaces(selectedComponent.id, toothId));
+        : isAssembly
+          ? new Set(["mesial", "distal"])
+          : new Set(getRestSuggestionSurfaces(selectedComponent.id, toothId));
     points = [...getRestSurfacePointMap(toothId, jaw, selectedComponent.id).values()].filter((point) =>
       allowedSurfaces.has(normalizeSurface(point.surface))
     );
-    if (isEmbrasureCircumAssembly) {
+    if (selectedComponent.id === "assembly-circ-embrasure") {
       points = points.filter((point) => canPlaceEmbrasureAtSurface(toothId, jaw, normalizeSurface(point.surface)));
     }
-    if (isMultiCircumAssembly) {
+    if (selectedComponent.id === "assembly-circ-multi") {
       points = points.filter(() => canPlaceMultiAtTooth(toothId, jaw));
     }
-    if (isAssemblyTBar) {
-      const allowedByMissingAdjacency = new Set(getAssemblyTBarAllowedRestSurfaces(toothId, jaw));
-      points = points.filter((point) => allowedByMissingAdjacency.has(normalizeSurface(point.surface)));
-    }
-    if (isAssemblyModTBar || isAssemblyIBar) {
+    if (selectedComponent.id === "assembly-tbar" || selectedComponent.id === "assembly-tbar-mod" || selectedComponent.id === "assembly-ibar") {
       const allowedByMissingAdjacency = new Set(getAssemblyTBarAllowedRestSurfaces(toothId, jaw));
       points = points.filter((point) => allowedByMissingAdjacency.has(normalizeSurface(point.surface)));
     }
@@ -1002,9 +973,7 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
   for (const pointData of points) {
     const surface = normalizeSurface(pointData.surface);
     if (!surface) continue;
-    const restVisualComponentId = (isSimpleCircumAssembly || isEmbrasureCircumAssembly || isMultiCircumAssembly || isHalfAndHalfAssembly || isAssemblyTBar || isAssemblyModTBar || isAssemblyIBar)
-      ? "rest-seat"
-      : selectedComponent.id;
+    const restVisualComponentId = isAssembly ? "rest-seat" : selectedComponent.id;
     const assetHref = getRestPlacementAssetReference(restVisualComponentId, toothId, surface);
     const imageSize = getRestPlacementImageSize(restVisualComponentId, toothId, surface);
     const restScale = getRestPlacementRenderScale(restVisualComponentId, toothId, surface);
@@ -1138,8 +1107,8 @@ function hasRetainerClaspPlacementAtSurface(tooth, surface) {
   if (!targetSurface) return false;
 
   const selectedComponent = COMPONENT_BY_ID.get(state.selectedComponentId || "");
-    const matchReciprocating = isReciprocatingClaspComponent(selectedComponent);
-    const matchRing = isRingClaspComponent(selectedComponent);
+  const matchReciprocating = isReciprocatingClaspComponent(selectedComponent);
+  const matchRing = isRingClaspComponent(selectedComponent);
 
   return tooth.componentPlacements.some((entry) => {
     const sameSurface = normalizeSurface(entry.surface) === targetSurface;

@@ -18,6 +18,8 @@ import {
   state,
   DEFAULT_COMPONENT_ID,
   downloadJson,
+  getHistoryStateSignature,
+  recordHistoryIfChanged,
   titleCase,
   setMessage,
   closePresentToothRadialQuickPick,
@@ -51,7 +53,37 @@ export function bindStatusPicker() {
 export function bindJawControls() {
   const toggle = document.getElementById("jawLockToggleBtn");
   if (toggle) toggle.addEventListener("click", toggleBothJawsLock);
+  const rangeBtn = document.getElementById("teethRangeMissingBtn");
+  if (rangeBtn) {
+    rangeBtn.addEventListener("click", toggleRangeMissingMode);
+  }
   refreshLockButtons();
+  refreshRangeMissingButton();
+}
+
+function refreshRangeMissingButton() {
+  const btn = document.getElementById("teethRangeMissingBtn");
+  if (!btn) return;
+  const active = Boolean(state.rangeMissingMode);
+  btn.classList.toggle("is-active", active);
+  btn.setAttribute("aria-pressed", active ? "true" : "false");
+}
+
+function toggleRangeMissingMode() {
+  const historyBefore = getHistoryStateSignature();
+  if (state.designMode) {
+    setMessage("Switch to selected mode to mark teeth missing by range.", true);
+    return;
+  }
+  state.rangeMissingMode = !state.rangeMissingMode;
+  state.rangeMissingStartToothId = null;
+  refreshRangeMissingButton();
+  if (state.rangeMissingMode) {
+    setMessage("Range missing mode: click first tooth, then second tooth to mark the span missing.", false);
+    return;
+  }
+  setMessage("Range missing mode off.", false);
+  recordHistoryIfChanged(historyBefore);
 }
 
 export function bindActionButtons() {
@@ -66,11 +98,13 @@ export function bindActionButtons() {
 }
 
 function toggleBothJawsLock() {
+  const historyBefore = getHistoryStateSignature();
   const bothLocked = state.locks.upper && state.locks.lower;
   state.locks.upper = !bothLocked;
   state.locks.lower = !bothLocked;
   refreshLockButtons();
   syncDesignModeWithLocks(true);
+  recordHistoryIfChanged(historyBefore);
 }
 
 function refreshLockButtons() {
@@ -121,6 +155,7 @@ function clearArchButtonClicked(jaw) {
 }
 
 function clearJawTeethBaseline(jaw) {
+  const historyBefore = getHistoryStateSignature();
   for (const toothId of TOOTH_ORDER[jaw]) {
     const tooth = state.teeth[toothId];
     if (!tooth) continue;
@@ -128,16 +163,17 @@ function clearJawTeethBaseline(jaw) {
     tooth.status = "missing";
     tooth.components = [];
     tooth.componentPlacements = [];
-    syncToothComponentsFromPlacements(tooth);
   }
   if (jaw === "upper") {
     state.archOverlayPalatalHoleActive = false;
   }
   renderJaw(jaw);
   setMessage(`${titleCase(jaw)} arch: all teeth marked missing.`, false);
+  recordHistoryIfChanged(historyBefore);
 }
 
 function clearDesignModeArch(jaw) {
+  const historyBefore = getHistoryStateSignature();
   if (!state.designMode) return;
 
   const meshId = getDefaultMeshIdForDesignMode(meshSelectionContextFromState(state), COMPONENT_BY_ID);
@@ -148,34 +184,24 @@ function clearDesignModeArch(jaw) {
       ? state.selectedComponentId
       : getDefaultPlateIdForDesignMode(COMPONENT_BY_ID);
 
+  const meshDef = meshId ? COMPONENT_BY_ID.get(meshId) : null;
+  const meshValid = meshDef && isMeshComponent(meshDef);
+  const plateValid = plateId && COMPONENT_BY_ID.has(plateId) && isPlateComponentId(plateId);
+
   for (const toothId of TOOTH_ORDER[jaw]) {
     const tooth = state.teeth[toothId];
     if (!tooth) continue;
     tooth.componentPlacements = [];
-    syncToothComponentsFromPlacements(tooth);
-  }
 
-  for (const toothId of TOOTH_ORDER[jaw]) {
-    const tooth = state.teeth[toothId];
-    if (!tooth) continue;
-
-    if (!tooth.isPresent) {
-      if (isAutoMeshPlacementExcludedToothId(toothId)) {
-        continue;
+    if (!isAutoMeshPlacementExcludedToothId(toothId)) {
+      if (!tooth.isPresent && meshValid) {
+        tooth.componentPlacements.push({ componentId: meshId, surface: null });
+      } else if (tooth.isPresent && plateValid) {
+        tooth.componentPlacements.push({ componentId: plateId, surface: null });
       }
-      if (meshId && COMPONENT_BY_ID.has(meshId)) {
-        const def = COMPONENT_BY_ID.get(meshId);
-        if (def && isMeshComponent(def)) {
-          tooth.componentPlacements.push({ componentId: meshId, surface: null });
-          syncToothComponentsFromPlacements(tooth);
-        }
-      }
-    } else if (isAutoMeshPlacementExcludedToothId(toothId)) {
-      continue;
-    } else if (plateId && COMPONENT_BY_ID.has(plateId) && isPlateComponentId(plateId)) {
-      tooth.componentPlacements.push({ componentId: plateId, surface: null });
-      syncToothComponentsFromPlacements(tooth);
     }
+
+    syncToothComponentsFromPlacements(tooth);
   }
 
   if (jaw === "upper") {
@@ -195,9 +221,11 @@ function clearDesignModeArch(jaw) {
     `${titleCase(jaw)} arch cleared in design mode; default mesh/plate restored where needed.`,
     false
   );
+  recordHistoryIfChanged(historyBefore);
 }
 
 function drawFromScratch() {
+  const historyBefore = getHistoryStateSignature();
   for (const jaw of Object.keys(TOOTH_ORDER)) {
     state.locks[jaw] = false;
   }
@@ -207,14 +235,18 @@ function drawFromScratch() {
   state.archOverlayPalatalHoleActive = false;
   state.restSeatCalibrationAcOnly = false;
   state.removeComponentMode = false;
+  state.rangeMissingMode = false;
+  state.rangeMissingStartToothId = null;
   const rmBtn = document.getElementById("removeComponentModeBtn");
   if (rmBtn) rmBtn.classList.remove("is-active");
+  refreshRangeMissingButton();
   refreshLockButtons();
   syncDesignModeWithLocks(false);
   renderComponentCatalog();
   updateEditModeUI();
   renderJaws();
   setMessage("All teeth reset. Both arches unlocked.", false);
+  recordHistoryIfChanged(historyBefore);
 }
 
 export function updateEditModeUI() {
@@ -229,15 +261,20 @@ export function updateEditModeUI() {
     selectPanel.classList.toggle("is-hidden", active);
   }
 
-  const hint = document.getElementById("designHint");
-  if (hint) {
-    hint.textContent = active
-      ? "Design mode: missing teeth get a default mesh; present teeth get a default plate if they had none. Meshes: single-click icon to select; double-click icon applies that mesh arch-wide. On a tooth: single-click places/removes mesh; double-click swaps mesh type. Plates: use cyan suggestion markers on present teeth to toggle the selected plate; click the same plate again to remove all plates. Clasps: use suggestion points to place; click a placed clasp to remove. Bars: select a bar, then click a highlighted tooth within two positions of a missing tooth; click a placed bar to remove it."
-      : "Lock both arches to enter design mode.";
+  const eraser = document.getElementById("removeComponentModeBtn");
+  const rangeBtn = document.getElementById("teethRangeMissingBtn");
+
+  if (rangeBtn) {
+    rangeBtn.classList.toggle("is-hidden", active);
+    rangeBtn.disabled = active;
+    if (active) {
+      rangeBtn.classList.remove("is-active");
+      rangeBtn.setAttribute("aria-pressed", "false");
+    }
   }
 
-  const eraser = document.getElementById("removeComponentModeBtn");
   if (eraser) {
+    eraser.classList.toggle("is-hidden", !active);
     eraser.disabled = !active;
     eraser.setAttribute("aria-pressed", state.removeComponentMode ? "true" : "false");
     if (!active) {
@@ -252,6 +289,12 @@ export function syncDesignModeWithLocks(notify) {
   if (!next) {
     closePresentToothRadialQuickPick();
     state.removeComponentMode = false;
+    refreshRangeMissingButton();
+  }
+  if (next) {
+    state.rangeMissingMode = false;
+    state.rangeMissingStartToothId = null;
+    refreshRangeMissingButton();
   }
   state.designMode = next;
 
@@ -345,6 +388,7 @@ export function bindRemoveComponentModeBtn() {
   const btn = document.getElementById("removeComponentModeBtn");
   if (!btn) return;
   btn.addEventListener("click", () => {
+    const historyBefore = getHistoryStateSignature();
     if (!state.designMode) {
       setMessage("Lock both arches to remove components.", true);
       return;
@@ -359,6 +403,7 @@ export function bindRemoveComponentModeBtn() {
       false
     );
     renderJaws();
+    recordHistoryIfChanged(historyBefore);
   });
 }
 

@@ -15,9 +15,11 @@ import {
 } from "./components.js";
 import { EMPTY_JAW_CALIBRATION, JAW_BACKGROUND_IMAGES, JAW_BACKGROUND_OFFSET_BY_JAW, JAW_BACKGROUND_SCALE_BY_JAW, JAW_CALIBRATION, TOOTH_ASSET_BASE, TOOTH_ORDER } from "./constants.js";
 import {
+  getHistoryStateSignature,
   state,
   svgEl,
   setMessage,
+  recordHistoryIfChanged,
   registerRender,
   registerMeshAnnotationEnv,
   meshAnnotationEnv,
@@ -120,6 +122,9 @@ export function renderJaw(jaw) {
     if (state.locks[jaw]) group.classList.add("is-locked");
     const tooth = state.teeth[toothId];
     applyToothStatusClass(group, tooth);
+    if (!state.designMode && state.rangeMissingMode && state.rangeMissingStartToothId === toothId) {
+      group.classList.add("tooth-range-selected");
+    }
 
     if (showBarSuggestions() && tooth.isPresent) {
       const barSel = COMPONENT_BY_ID.get(state.selectedComponentId || "");
@@ -157,6 +162,9 @@ export function renderJaw(jaw) {
 
     const toothClickKey = `mesh-tooth:${jaw}:${toothId}`;
     group.addEventListener("click", (event) => {
+      if (!state.designMode && state.rangeMissingMode && event.detail > 1) {
+        return;
+      }
       if (!state.designMode) {
         onToothClick(jaw, toothId);
         return;
@@ -242,6 +250,16 @@ export function renderJaw(jaw) {
       renderJaw(jaw);
     });
     group.addEventListener("dblclick", (event) => {
+      if (!state.designMode && state.rangeMissingMode) {
+        const historyBefore = getHistoryStateSignature();
+        event.preventDefault();
+        markToothMissing(toothId);
+        state.rangeMissingStartToothId = null;
+        renderJaw(jaw);
+        setMessage(`Tooth ${toothId} marked missing. Range mode still active.`, false);
+        recordHistoryIfChanged(historyBefore);
+        return;
+      }
       if (!state.designMode) {
         return;
       }
@@ -269,6 +287,13 @@ export function renderJaw(jaw) {
 }
 
 export function onToothClick(jaw, toothId) {
+  const historyBefore = getHistoryStateSignature();
+  try {
+  if (state.rangeMissingMode && !state.designMode) {
+    handleRangeMissingToothClick(jaw, toothId);
+    return;
+  }
+
   if (state.designMode) {
     return;
   }
@@ -276,7 +301,7 @@ export function onToothClick(jaw, toothId) {
   const catalogPick = COMPONENT_BY_ID.get(state.selectedComponentId || "");
   if (catalogPick && isBarComponent(catalogPick)) {
     setMessage(
-      "Bars: lock both arches to enter design mode, then click a highlighted tooth to place. Click a placed bar to remove it. Unlock arches to mark teeth missing.",
+      "Bars: click a highlighted tooth to place. Click a placed bar to remove it.",
       true
     );
     return;
@@ -304,6 +329,46 @@ export function onToothClick(jaw, toothId) {
 
   tooth.status = "presence";
   renderJaw(jaw);
+  } finally {
+    recordHistoryIfChanged(historyBefore);
+  }
+}
+
+function markToothMissing(toothId) {
+  const tooth = state.teeth[toothId];
+  if (!tooth) return;
+  tooth.isPresent = false;
+  tooth.status = "missing";
+  tooth.components = [];
+  tooth.componentPlacements = [];
+}
+
+function handleRangeMissingToothClick(jaw, toothId) {
+  const historyBefore = getHistoryStateSignature();
+  const ids = TOOTH_ORDER[jaw] || [];
+  const start = state.rangeMissingStartToothId;
+  if (!start) {
+    state.rangeMissingStartToothId = toothId;
+    renderJaw(jaw);
+    setMessage(`Range start set at tooth ${toothId}. Select end tooth.`, false);
+    return;
+  }
+  if (!ids.includes(start) || !ids.includes(toothId)) {
+    setMessage("Range selection must stay on the same arch.", true);
+    state.rangeMissingStartToothId = toothId;
+    return;
+  }
+  const startIndex = ids.indexOf(start);
+  const endIndex = ids.indexOf(toothId);
+  const lo = Math.min(startIndex, endIndex);
+  const hi = Math.max(startIndex, endIndex);
+  for (let i = lo; i <= hi; i += 1) {
+    markToothMissing(ids[i]);
+  }
+  state.rangeMissingStartToothId = null;
+  renderJaw(jaw);
+  setMessage(`Teeth ${ids[lo]} to ${ids[hi]} marked missing. Range mode still active.`, false);
+  recordHistoryIfChanged(historyBefore);
 }
 
 registerRender({ renderJaw, renderJaws });
