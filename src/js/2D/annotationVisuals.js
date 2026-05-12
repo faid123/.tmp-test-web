@@ -42,7 +42,9 @@ import {
   hasPalatalBarPlacementOnUpperArch,
   hasPalatalPlatePlacementOnUpperArch,
   hasPalatalHolePlacementOnUpperArch,
+  computePalatalStrapPolygonPoints,
   hasPalatalStrapPlacementOnUpperArch,
+  PALATAL_STRAP_MAJOR_COMPONENT_ID,
   isPalatalStrapMajorComponent,
   PALATAL_STRAP_ARCH_POLYGON,
   isBarComponent,
@@ -1425,16 +1427,141 @@ function shouldShowPalatalStrapArchOverlay() {
   return Boolean(state.designMode && sel && isPalatalStrapMajorComponent(sel));
 }
 
+function roundedPolygonPath(pts, r) {
+  const n = pts.length;
+  let d = "";
+  for (let i = 0; i < n; i++) {
+    const prev = pts[(i - 1 + n) % n];
+    const curr = pts[i];
+    const next = pts[(i + 1) % n];
+    const d1x = curr.x - prev.x, d1y = curr.y - prev.y;
+    const d2x = next.x - curr.x, d2y = next.y - curr.y;
+    const l1 = Math.hypot(d1x, d1y), l2 = Math.hypot(d2x, d2y);
+    const cr = Math.min(r, l1 / 2, l2 / 2);
+    const p1x = curr.x - cr * d1x / l1, p1y = curr.y - cr * d1y / l1;
+    const p2x = curr.x + cr * d2x / l2, p2y = curr.y + cr * d2y / l2;
+    d += i === 0 ? `M ${p1x},${p1y}` : ` L ${p1x},${p1y}`;
+    d += ` Q ${curr.x},${curr.y} ${p2x},${p2y}`;
+  }
+  return d + " Z";
+}
+
+// Editable attachment map for palatal strap control points.
+// Values are OFFSETS from each associated tooth center.
+const PALATAL_STRAP_ATTACHED_POINTS = Object.freeze([
+  { toothId: "14", dx: 45, dy: 10 },
+  { toothId: "15", dx: 37, dy: 35 },
+  { toothId: "16", dx: 35, dy: 45 },
+  { toothId: "17", dx: 40, dy: 45 },
+  { toothId: "27", dx: -40, dy: 45 },
+  { toothId: "26", dx: -35, dy: 45 },
+  { toothId: "25", dx: -37, dy: 35 },
+  { toothId: "24", dx: -45, dy: 10 },
+]);
+
+const PALATAL_STRAP_CENTER_POINTS = Object.freeze({
+  top: { dx: 0, dy: -20 },
+  bottom: { dx: 0, dy: 50 },
+});
+
+function getPalatalStrapPointsFromAttachments() {
+  const pointByToothId = new Map();
+  const cfgByToothId = new Map();
+  for (const cfg of PALATAL_STRAP_ATTACHED_POINTS) {
+    cfgByToothId.set(cfg.toothId, cfg);
+    const center = state.teeth[cfg.toothId]?.center;
+    if (!Array.isArray(center)) {
+      return PALATAL_STRAP_ARCH_POLYGON;
+    }
+    pointByToothId.set(cfg.toothId, {
+      x: (Number(center[0]) || 0) + cfg.dx,
+      y: (Number(center[1]) || 0) + cfg.dy,
+    });
+  }
+
+  const hasStrapOnTooth = (toothId) => {
+    const placements = state.teeth[toothId]?.componentPlacements;
+    return Array.isArray(placements)
+      && placements.some((entry) => entry.componentId === PALATAL_STRAP_MAJOR_COMPONENT_ID);
+  };
+
+  const resolveAttachedPoint = (toothId, fallbackIds) => {
+    const slotCfg = cfgByToothId.get(toothId);
+    if (!slotCfg) return pointByToothId.get(toothId);
+    if (hasStrapOnTooth(toothId)) {
+      return pointByToothId.get(toothId);
+    }
+    for (const id of fallbackIds) {
+      if (hasStrapOnTooth(id)) {
+        const center = state.teeth[id]?.center;
+        if (!Array.isArray(center)) {
+          break;
+        }
+        return {
+          x: (Number(center[0]) || 0) + slotCfg.dx,
+          y: (Number(center[1]) || 0) + slotCfg.dy,
+        };
+      }
+    }
+    return pointByToothId.get(toothId);
+  };
+
+  const p14 = resolveAttachedPoint("14", ["15", "16", "17"]);
+  const p15 = resolveAttachedPoint("15", ["16", "14", "17"]);
+  const p16 = resolveAttachedPoint("16", ["15", "17", "14"]);
+  const p17 = resolveAttachedPoint("17", ["16", "15", "14"]);
+  const p27 = resolveAttachedPoint("27", ["26", "25", "24"]);
+  const p26 = resolveAttachedPoint("26", ["25", "27", "24"]);
+  const p25 = resolveAttachedPoint("25", ["26", "24", "27"]);
+  const p24 = resolveAttachedPoint("24", ["25", "26", "27"]);
+
+  if (!p14 || !p15 || !p16 || !p17 || !p27 || !p26 || !p25 || !p24) {
+    return PALATAL_STRAP_ARCH_POLYGON;
+  }
+
+  const c16 = state.teeth["16"]?.center;
+  const c26 = state.teeth["26"]?.center;
+  if (!Array.isArray(c16) || !Array.isArray(c26)) {
+    return PALATAL_STRAP_ARCH_POLYGON;
+  }
+  const midX = ((Number(c16[0]) || 0) + (Number(c26[0]) || 0)) / 2;
+  const midY = ((Number(c16[1]) || 0) + (Number(c26[1]) || 0)) / 2;
+  const centerTop = {
+    x: midX + PALATAL_STRAP_CENTER_POINTS.top.dx,
+    y: midY + PALATAL_STRAP_CENTER_POINTS.top.dy,
+  };
+  const centerBottom = {
+    x: midX + PALATAL_STRAP_CENTER_POINTS.bottom.dx,
+    y: midY + PALATAL_STRAP_CENTER_POINTS.bottom.dy,
+  };
+
+  return [
+    p14,
+    p15,
+    p16,
+    p17,
+    centerBottom,
+    p27,
+    p26,
+    p25,
+    p24,
+    centerTop,
+  ];
+}
+
 function appendPalatalStrapArchOverlay(svg) {
   if (!svg || !shouldShowPalatalStrapArchOverlay()) {
     return;
   }
-  const points = PALATAL_STRAP_ARCH_POLYGON.map((p) => `${p.x},${p.y}`).join(" ");
+  const strapPoints = getPalatalStrapPointsFromAttachments();
   const g = svgEl("g", { class: "palatal-strap-arch-overlay" });
   g.appendChild(
-    svgEl("polygon", {
-      points,
+    svgEl("path", {
+      d: roundedPolygonPath(strapPoints, 22),
       class: "palatal-strap-arch-shape",
+      fill: "rgba(175,175,175,0.75)",
+      stroke: "rgba(120,120,120,0.5)",
+      "stroke-width": "1",
       "pointer-events": "none",
     })
   );

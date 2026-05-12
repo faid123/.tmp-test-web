@@ -79,10 +79,10 @@ function toggleRangeMissingMode() {
   state.rangeMissingStartToothId = null;
   refreshRangeMissingButton();
   if (state.rangeMissingMode) {
-    setMessage("Range missing mode: click first tooth, then second tooth to mark the span missing.", false);
+    setMessage("Remove multiple teeth: click first tooth, then second tooth to mark the span missing.", false);
     return;
   }
-  setMessage("Range missing mode off.", false);
+  setMessage("Remove multiple teeth off.", false);
   recordHistoryIfChanged(historyBefore);
 }
 
@@ -129,6 +129,12 @@ function refreshLockButtons() {
     bothLocked
       ? "Design mode — click to switch to selected mode"
       : "Selected mode — click to switch to design mode"
+  );
+  btn.setAttribute(
+    "data-tooltip",
+    bothLocked
+      ? "Switch to selected mode to edit teeth status"
+      : "Switch to design mode to add components"
   );
 }
 

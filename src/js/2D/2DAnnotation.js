@@ -415,6 +415,7 @@ export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
       button.type = "button";
       button.className = `tooth-radial-option ${action.pos}`;
       button.setAttribute("aria-label", action.label);
+      button.setAttribute("data-tooltip", action.label);
       const iconPath = action.componentId ? COMPONENT_BY_ID.get(action.componentId)?.icon : null;
       if (!action.textOnly && iconPath) {
         const icon = document.createElement("img");

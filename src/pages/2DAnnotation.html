@@ -47,7 +47,7 @@
                 id="undoWorkflowBtn"
                 class="jaw-history-btn"
                 aria-label="Undo"
-                title="Undo"
+                data-tooltip="Undo"
               >
                 <img
                   class="jaw-history-icon"
@@ -62,15 +62,22 @@
                 id="jawLockToggleBtn"
                 class="lock-btn jaw-lock-between-btn"
                 aria-label="Switch to design mode"
+                data-tooltip="Switch to design mode to add components"
               >
-                <span class="lock-text jaw-lock-between-text">Selected mode</span>
+                <img
+                  class="lock-icon"
+                  src="../../assets/unlock.png"
+                  alt=""
+                  width="20"
+                  height="20"
+                />
               </button>
               <button
                 type="button"
                 id="teethRangeMissingBtn"
                 class="jaw-range-missing-btn"
                 aria-pressed="false"
-                title="Range missing mode"
+                data-tooltip="Remove multiple teeth"
               >
                 <img
                   class="jaw-range-missing-icon"
@@ -86,7 +93,7 @@
                 class="jaw-lock-eraser-btn"
                 aria-label="Remove component mode"
                 aria-pressed="false"
-                title="Remove components: click a tooth, then pick what to remove"
+                data-tooltip="Remove components: click a tooth, then pick what to remove"
                 disabled
               >
                 <img
@@ -102,7 +109,7 @@
                 id="redoWorkflowBtn"
                 class="jaw-history-btn jaw-history-btn-redo"
                 aria-label="Redo"
-                title="Redo"
+                data-tooltip="Redo"
               >
                 <img
                   class="jaw-history-icon"

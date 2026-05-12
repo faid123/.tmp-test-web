@@ -157,6 +157,15 @@ body {
   display: none;
 }
 
+.lock-btn .lock-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
 .lock-btn.is-locked {
   background: transparent;
 }
@@ -186,6 +195,23 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+#jawLockToggleBtn {
+  order: 1;
+}
+
+#undoWorkflowBtn {
+  order: 2;
+}
+
+#teethRangeMissingBtn,
+#removeComponentModeBtn {
+  order: 3;
+}
+
+#redoWorkflowBtn {
+  order: 4;
 }
 
 .jaw-history-btn {
@@ -225,6 +251,38 @@ body {
 
 .jaw-history-btn-redo .jaw-history-icon {
   transform: scaleX(-1);
+}
+
+.jaw-lock-strip-cluster button[data-tooltip] {
+  position: relative;
+}
+
+.jaw-lock-strip-cluster button[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translate(-50%, 2px);
+  white-space: nowrap;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  background: #ffffff;
+  color: #222222;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.2;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.06s ease-out, transform 0.06s ease-out;
+  z-index: 50;
+}
+
+.jaw-lock-strip-cluster button[data-tooltip]:hover::after,
+.jaw-lock-strip-cluster button[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .jaw-range-missing-btn {
@@ -307,9 +365,10 @@ body {
 .jaw-lock-between-btn {
   width: auto;
   height: auto;
-  min-height: 28px;
-  padding:1px 12px;
+  min-height: 32px;
+  padding: 2px 10px;
   border-radius: 8px;
+  gap: 6px;
 }
 
 .jaw-lock-between-btn .lock-text {
@@ -1198,7 +1257,7 @@ body {
   height: 45px;
   border: 1px solid #b33a4e;
   border-radius: 10px;
-  background: transparent;
+  background: white;
   margin: 5px;
   color: #b33a4e;
   font-size: 9px;
@@ -1250,4 +1309,36 @@ body {
 
 .tooth-radial-option:focus-visible {
   box-shadow: 0 0 0 3px rgba(120, 48, 74, 0.55);
+}
+
+.tooth-radial-option[data-tooltip] {
+  position: absolute;
+}
+
+.tooth-radial-option[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  transform: translate(-50%, 2px);
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  background: #ffffff;
+  color: #222222;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.08s ease-out, transform 0.08s ease-out;
+  z-index: 60;
+}
+
+.tooth-radial-option[data-tooltip]:hover::after,
+.tooth-radial-option[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }

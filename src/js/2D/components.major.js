@@ -1,8 +1,9 @@
-import { TOOTH_ORDER } from "./constants.js";
+import { TOOTH_ORDER, TOOTH_POSITION_MAP } from "./constants.js";
 
 const MAJOR_TAB = "major";
 
 const MAJOR_CONNECTOR_EXCLUDED_TOOTH_IDS_BY_COMPONENT = Object.freeze({
+  "major-upper-palatal-strap": Object.freeze(new Set(["11", "12", "13", "18", "21", "22", "23", "28"])),
   "major-upper-horseshoe": Object.freeze(new Set(["18", "28"])),
   "major-upper-palatal-hole": Object.freeze(new Set(["18", "28"])),
   "major-upper-palatal-plate": Object.freeze(new Set(["18", "28"])),
@@ -17,13 +18,16 @@ export const PALATAL_STRAP_MAJOR_COMPONENT_ID = "major-upper-palatal-strap";
 
 /**
  * Polygon vertices for the Palatal Strap arch-wide visual (upper jaw SVG viewBox 0 0 600 420).
- * Represents a transverse strap band across the premolar region of the palate.
+ * Order: 14 → 15 → 16 → 17 → center2 → 27 → 26 → 25 → 24 → center1
  */
 export const PALATAL_STRAP_ARCH_POLYGON = Object.freeze([
-  { x: 213, y: 195 },
-  { x: 422, y: 195 },
-  { x: 422, y: 255 },
-  { x: 213, y: 255 },
+  { x: 320, y: 240 }, // 14
+  { x: 239, y: 155 }, // 15
+  { x: 211, y: 360 }, // 16
+  { x: 321, y: 305 }, // 17
+  { x: 425, y: 360 }, // center2
+  { x: 400, y: 155 }, // 27
+
 ]);
 
 /** True when this major type is Palatal Strap. */
@@ -46,6 +50,64 @@ export function hasPalatalStrapPlacementOnUpperArch(teeth) {
     }
   }
   return false;
+}
+
+const STRAP_PALATAL_OFFSET = 32;
+const STRAP_BUCCAL_OFFSET = 22;
+const LEFT_STRAP_TEETH = ["14", "15", "16", "17"];  // anterior → posterior
+const RIGHT_STRAP_TEETH = ["24", "25", "26", "27"]; // anterior → posterior
+const LEFT_STRAP_DEFAULTS = ["15", "16"];
+const RIGHT_STRAP_DEFAULTS = ["25", "26"];
+
+function strapAttachPoints(toothId, archCenter) {
+  const pos = TOOTH_POSITION_MAP.upper[toothId];
+  if (!pos) return null;
+  const dx = archCenter.x - pos.x, dy = archCenter.y - pos.y;
+  const len = Math.hypot(dx, dy);
+  const nx = dx / len, ny = dy / len;
+  return {
+    palatal: { x: Math.round(pos.x + nx * STRAP_PALATAL_OFFSET), y: Math.round(pos.y + ny * STRAP_PALATAL_OFFSET) },
+    buccal:  { x: Math.round(pos.x - nx * STRAP_BUCCAL_OFFSET),  y: Math.round(pos.y - ny * STRAP_BUCCAL_OFFSET)  },
+  };
+}
+
+/**
+ * Computes 8 polygon points for the palatal strap overlay based on which teeth have placements.
+ * Each pair of points (palatal + buccal) attaches to an associated major connector tooth.
+ * Left and right sides each use their most-anterior and most-posterior placed tooth.
+ */
+export function computePalatalStrapPolygonPoints(teeth) {
+  const has = (id) => teeth?.[id]?.componentPlacements?.some((e) => e.componentId === PALATAL_STRAP_MAJOR_COMPONENT_ID);
+
+  const leftPlaced  = LEFT_STRAP_TEETH.filter(has);
+  const rightPlaced = RIGHT_STRAP_TEETH.filter(has);
+
+  const [laId, lpId] = leftPlaced.length
+    ? [leftPlaced[0], leftPlaced[leftPlaced.length - 1]]
+    : LEFT_STRAP_DEFAULTS;
+  const [raId, rpId] = rightPlaced.length
+    ? [rightPlaced[0], rightPlaced[rightPlaced.length - 1]]
+    : RIGHT_STRAP_DEFAULTS;
+
+  const p11 = TOOTH_POSITION_MAP.upper["11"], p21 = TOOTH_POSITION_MAP.upper["21"];
+  const archCenter = { x: Math.round((p11.x + p21.x) / 2), y: Math.round((p11.y + p21.y) / 2) };
+
+  const la = strapAttachPoints(laId, archCenter);
+  const lp = strapAttachPoints(lpId, archCenter);
+  const ra = strapAttachPoints(raId, archCenter);
+  const rp = strapAttachPoints(rpId, archCenter);
+
+  // 8 points clockwise: outer-anterior left → inner-anterior → inner-posterior → outer-posterior
+  return [
+    la.buccal,
+    la.palatal,
+    ra.palatal,
+    ra.buccal,
+    rp.buccal,
+    rp.palatal,
+    lp.palatal,
+    lp.buccal,
+  ];
 }
 
 /**
