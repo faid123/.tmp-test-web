@@ -652,8 +652,6 @@ body {
   white-space: normal;
   overflow-wrap: anywhere;
 }
-.selected-components { display: none; }
-
 .tooth {
   cursor: pointer;
   transition: opacity 100ms ease;
@@ -667,17 +665,13 @@ body {
 
 .tooth-image {
   pointer-events: none;
-  opacity: 0.98;
-  filter: brightness(0) saturate(0);
+  opacity: 1;
+  filter: brightness(0) saturate(0) drop-shadow(0 0 2px rgba(0,0,0,0.6));
 }
 
 .component-visual,
 .component-image {
   pointer-events: none;
-}
-
-.component-image {
-  opacity: 1;
 }
 
 .mesh-image {
@@ -713,17 +707,8 @@ body {
 }
 
 /* Palatal strap arch overlay: drawn as inline SVG polygon with polka-dot fill */
-.palatal-strap-arch-overlay {
-  pointer-events: none;
-}
-
+.palatal-strap-arch-overlay,
 .palatal-strap-arch-shape {
-  pointer-events: none;
-}
-
-.plate-suggestion-visual .component-visual,
-.plate-suggestion-visual .component-image,
-.plate-suggestion-visual .plate-image {
   pointer-events: none;
 }
 
@@ -750,19 +735,16 @@ body {
   fill: #e85a8e;
   stroke: #ffffff;
   stroke-width: 1.1;
-  opacity: 1;
   cursor: pointer;
   pointer-events: all;
 }
 
 .rest-suggestion-point:hover {
   fill: #d43d6f;
-  opacity: 1;
 }
 
 .rest-suggestion-point.is-selected {
   fill: #b01258;
-  opacity: 1;
 }
 
 .rest-suggestion-group {
@@ -785,14 +767,12 @@ body {
   fill: #90ee90;
   stroke: #ffffff;
   stroke-width: 1.1;
-  opacity: 1;
   cursor: pointer;
   pointer-events: all;
 }
 
 .clasp-suggestion-point:hover {
   fill: #7dce7d;
-  opacity: 1;
 }
 
 .clasp-suggestion-point.rpc-suggestion-point {
@@ -806,7 +786,6 @@ body {
 .clasp-suggestion-image {
   pointer-events: all;
   cursor: pointer;
-  opacity: 1;
   filter: saturate(1.2) brightness(1.08) contrast(1.04);
 }
 
@@ -821,7 +800,6 @@ body {
 .clasp-placement-image {
   pointer-events: all;
   cursor: pointer;
-  opacity: 1;
   filter: saturate(1.2) brightness(1.08) contrast(1.04);
 }
 
@@ -839,13 +817,8 @@ body {
   filter: brightness(0) saturate(100%) invert(46%) sepia(72%) saturate(2000%) hue-rotate(336deg) brightness(95%) contrast(97%);
 }
 
-/* Ensure onlay/full rest artwork uses the same rose rest tint. */
-.rest-placement-image[data-component-id="rest-onlay"] {
-  opacity: 1;
-  filter: brightness(0) saturate(100%) invert(22%) sepia(85%) saturate(2800%) hue-rotate(332deg) brightness(86%) contrast(118%);
-}
-
-/* Placed Rest seat only: dark rose pink, not violet. */
+/* Onlay/full rest and placed rest seat: dark rose pink tint. */
+.rest-placement-image[data-component-id="rest-onlay"],
 .rest-placement-image.is-placed-rest-seat {
   opacity: 1;
   filter: brightness(0) saturate(100%) invert(22%) sepia(85%) saturate(2800%) hue-rotate(332deg) brightness(86%) contrast(118%);
@@ -870,18 +843,12 @@ body {
   filter: brightness(0) saturate(100%) invert(31%) sepia(35%) saturate(1068%) hue-rotate(72deg) brightness(86%) contrast(92%);
 }
 
-.tooth.is-missing .tooth-image { opacity: 0; }
+.tooth.is-missing .tooth-image { opacity: 0.02; }
 .tooth.is-locked { opacity: 0.88; }
 
 .tooth.tooth-range-selected .tooth-image {
   filter: drop-shadow(0 0 4px rgba(35, 170, 85, 0.75));
 }
-
-/* .tooth.tooth-range-selected .tooth-hit-target {
-  fill: rgba(35, 170, 85, 0.18);
-  stroke: rgba(35, 170, 85, 0.65);
-  stroke-width: 1.2;
-} */
 
 .component-note {
   font-size: 10px;
@@ -894,7 +861,6 @@ body {
 .jaw-details {
   pointer-events: none;
   filter: grayscale(100%) brightness(40%);
-  opacity: 1;
 }
 
 .major-connector-visual {
@@ -908,8 +874,6 @@ body {
 
 .jaw-plate-frame {
   pointer-events: none;
-  mix-blend-mode: normal;
-  opacity: 1;
   /* Force white source pixels into a visible cyan-blue tint. */
   filter: brightness(0) saturate(100%) invert(46%) sepia(85%) saturate(1714%) hue-rotate(165deg)
     brightness(92%) contrast(101%);
@@ -1129,7 +1093,6 @@ body {
 
 .bar-placement-image {
   pointer-events: none;
-  opacity: 1;
   /* Force visible light-green tint like retainer clasp base. */
   filter: brightness(0) saturate(100%) invert(82%) sepia(22%) saturate(760%)
     hue-rotate(68deg) brightness(116%) contrast(95%);
@@ -1309,10 +1272,6 @@ body {
 
 .tooth-radial-option:focus-visible {
   box-shadow: 0 0 0 3px rgba(120, 48, 74, 0.55);
-}
-
-.tooth-radial-option[data-tooltip] {
-  position: absolute;
 }
 
 .tooth-radial-option[data-tooltip]::after {

@@ -81,6 +81,7 @@ export const COMPONENT_GROUPS = Object.freeze({
   ],
 });
 
+// Iterate every tooth in both arches in configured FDI order.
 export function forEachTooth(callback) {
   for (const jaw of Object.keys(TOOTH_ORDER)) {
     for (const toothId of TOOTH_ORDER[jaw]) {

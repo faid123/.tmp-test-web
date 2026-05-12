@@ -129,6 +129,7 @@ export function renderComponentCatalog() {
 }
 
 // Create one column block for grouped component sections.
+// Build one grouped major-component column.
 export function createMajorColumn(title, items) {
   const column = document.createElement("section");
   column.className = "major-column";
@@ -148,7 +149,7 @@ export function createMajorColumn(title, items) {
 }
 
 
-// Create a selectable component button with icon and label tooltip.
+// Create one catalog item button and bind its click/double-click actions.
 export function createComponentItemButton(item) {
   const button = document.createElement("button");
   button.type = "button";
@@ -190,6 +191,7 @@ export function createComponentItemButton(item) {
   return button;
 }
 
+// Remove all plate placements across teeth (and dependent clasps when needed).
 export function removeAllPlatePlacementsFromTeeth() {
   forEachTooth((toothId) => {
     const tooth = state.teeth[toothId];
@@ -204,6 +206,7 @@ export function removeAllPlatePlacementsFromTeeth() {
     syncToothComponentsFromPlacements(tooth);
   });
 }
+// Handle catalog selection logic in design mode (select/deselect/replace behaviors).
 export function handleDesignComponentSelect(componentId) {
   const historyBefore = getHistoryStateSignature();
   try {
@@ -421,7 +424,7 @@ export function handleDesignComponentSelect(componentId) {
   }
 }
 
-// Render the selected component chips in the summary panel.
+// Render selected component chips in the summary panel.
 export function renderSelectedComponents() {
   const selectedEl = document.getElementById("selectedComponents");
   if (!selectedEl) return;
@@ -435,12 +438,14 @@ export function renderSelectedComponents() {
   }
 }
 
+// Get default major connector pick for a specific jaw.
 export function getDefaultMajorConnectorIdForJaw(jaw) {
   const section = jaw === "upper" ? "upper" : "lower";
   const entry = COMPONENT_CATALOG.find((e) => e.tab === "major" && e.section === section);
   return entry?.id ?? getDefaultMajorConnectorIdForDesignMode(COMPONENT_BY_ID);
 }
 
+// Ensure major-tab selection matches clicked tooth jaw.
 export function ensureMajorCatalogPickForTooth(toothId) {
   if (state.selectedTab !== "major" || !state.designMode) return;
   const jaw = TOOTH_ORDER.upper.includes(toothId)
@@ -461,6 +466,7 @@ export function ensureMajorCatalogPickForTooth(toothId) {
   }
 }
 
+// Ensure major tab has a valid default selected component.
 export function ensureMajorTabDefaultSelection() {
   if (!state.designMode) return;
   const sel = COMPONENT_BY_ID.get(state.selectedComponentId || "");

@@ -80,6 +80,7 @@ function buildMinorConnectorOffsetByTooth() {
 
 const MINOR_CONNECTOR_OFFSET_BY_TOOTH = buildMinorConnectorOffsetByTooth();
 
+// Resolve minor-connector asset by tooth.
 export function getMinorConnectorAssetReference(toothId) {
   const templateToothId = getComponentTemplateToothId(toothId);
   const size = MINOR_CONNECTOR_IMAGE_SIZE_BY_TEMPLATE_TOOTH[templateToothId];
@@ -87,15 +88,18 @@ export function getMinorConnectorAssetReference(toothId) {
   return `${MINOR_CONNECTOR_ASSET_BASE}/${templateToothId}_minor.svg`;
 }
 
+// Resolve minor-connector image size by tooth.
 export function getMinorConnectorImageSize(toothId) {
   const templateToothId = getComponentTemplateToothId(toothId);
   return MINOR_CONNECTOR_IMAGE_SIZE_BY_TEMPLATE_TOOTH[templateToothId] ?? null;
 }
 
+// Resolve render scale for minor connector by jaw.
 export function getMinorConnectorRenderScale(jaw) {
   return MINOR_CONNECTOR_RENDER_SCALE[jaw] ?? 0.56;
 }
 
+// Resolve per-tooth XY offset for minor connector.
 export function getMinorConnectorOffset(toothId) {
   const offset = MINOR_CONNECTOR_OFFSET_BY_TOOTH[String(toothId)];
   if (!offset) return { x: 0, y: 0 };

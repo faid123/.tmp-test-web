@@ -10,6 +10,7 @@ export const PLATE_IMAGE_SUFFIX_BY_ID = Object.freeze({
   "plate-crossmesh": "mesh.svg",
 });
 
+// Check whether a component id is a plate type.
 export function isPlateComponentId(componentId) {
   return Object.prototype.hasOwnProperty.call(PLATE_IMAGE_SUFFIX_BY_ID, componentId);
 }
@@ -133,6 +134,7 @@ const PLATE_CROSSMESH_OFFSET_OVERRIDE_BY_TOOTH = Object.freeze({
 "38": { x: 2, y: -4 },
 });
 
+// Get render scale for plate placement.
 export function getPlatePlacementRenderScale(componentId, _toothId, jaw) {
   if (!isPlateComponentId(componentId)) {
     return 1;
@@ -151,6 +153,7 @@ export function getPlatePlacementRenderScale(componentId, _toothId, jaw) {
   return componentScale * jawScale;
 }
 
+// Get per-tooth offset for plate placement.
 export function getPlatePlacementOffset(componentId, toothId) {
   if (!isPlateComponentId(componentId)) {
     return { x: 0, y: 0 };
@@ -180,6 +183,7 @@ export function getPlatePlacementOffset(componentId, toothId) {
   };
 }
 
+// Get plate image size for a tooth.
 export function getPlatePlacementImageSize(componentId, toothId) {
   if (!isPlateComponentId(componentId)) {
     return null;
@@ -188,6 +192,7 @@ export function getPlatePlacementImageSize(componentId, toothId) {
   return PLATE_PLACEMENT_IMAGE_SIZE_BY_TOOTH[templateToothId] ?? null;
 }
 
+// Resolve plate SVG asset reference.
 export function getPlateAssetReference(componentId, toothId) {
   const suffix = PLATE_IMAGE_SUFFIX_BY_ID[componentId];
   if (!suffix) {
@@ -205,6 +210,7 @@ function syncToothComponentsFromCatalog(tooth, componentById) {
 }
 
 /** Fallback plate id for auto-placement when locking both arches (design mode). */
+// Get default plate id for auto-placement in design mode.
 export function getDefaultPlateIdForDesignMode(componentById) {
   if (componentById.has(DEFAULT_PLATE_ID_FOR_LOCK_DESIGN_MODE)) {
     return DEFAULT_PLATE_ID_FOR_LOCK_DESIGN_MODE;
@@ -221,6 +227,7 @@ export function getDefaultPlateIdForDesignMode(componentById) {
  * Add default plate on every **present** tooth in `jawKeys` that has no plate yet (`upper` / `lower`).
  * Pass both arches via `Object.keys(TOOTH_ORDER)` for full-arch behavior.
  */
+// Ensure present teeth have default plate in selected jaws.
 export function ensurePlatePlacementsOnPresentTeethInJaws(
   teeth,
   plateComponentId,
@@ -267,6 +274,7 @@ export function ensurePlatePlacementsOnPresentTeethInJaws(
  * When both arches are locked, add `plateComponentId` to every **present** tooth that has no plate yet.
  * Mirrors {@link ensureMeshPlacementsOnMissingTeeth} for the plate tab.
  */
+// Ensure present teeth have default plate on both jaws.
 export function ensurePlatePlacementsOnPresentTeeth(teeth, plateComponentId, componentById) {
   ensurePlatePlacementsOnPresentTeethInJaws(teeth, plateComponentId, componentById, Object.keys(TOOTH_ORDER));
 }

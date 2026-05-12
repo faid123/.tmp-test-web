@@ -35,6 +35,7 @@ import {
   syncToothComponentsFromPlacements,
 } from "./annotationTeethModel.js";
 
+// Bind tooth status picker buttons (presence/abutment/compromised).
 export function bindStatusPicker() {
   const buttons = document.querySelectorAll(".status-btn");
   buttons.forEach((button) => {
@@ -50,6 +51,7 @@ export function bindStatusPicker() {
   });
 }
 
+// Bind lock toggle + multi-tooth removal mode button.
 export function bindJawControls() {
   const toggle = document.getElementById("jawLockToggleBtn");
   if (toggle) toggle.addEventListener("click", toggleBothJawsLock);
@@ -61,6 +63,7 @@ export function bindJawControls() {
   refreshRangeMissingButton();
 }
 
+// Update visual active state for multi-tooth removal button.
 function refreshRangeMissingButton() {
   const btn = document.getElementById("teethRangeMissingBtn");
   if (!btn) return;
@@ -69,6 +72,7 @@ function refreshRangeMissingButton() {
   btn.setAttribute("aria-pressed", active ? "true" : "false");
 }
 
+// Toggle multi-tooth removal mode used in selected mode.
 function toggleRangeMissingMode() {
   const historyBefore = getHistoryStateSignature();
   if (state.designMode) {
@@ -86,6 +90,7 @@ function toggleRangeMissingMode() {
   recordHistoryIfChanged(historyBefore);
 }
 
+// Bind clear/reset/save action buttons.
 export function bindActionButtons() {
   const clearTop = document.getElementById("clearTopBtn");
   const clearBottom = document.getElementById("clearBottomBtn");
@@ -133,8 +138,8 @@ function refreshLockButtons() {
   btn.setAttribute(
     "data-tooltip",
     bothLocked
-      ? "Switch to selected mode to edit teeth status"
-      : "Switch to design mode to add components"
+      ? "Unlock for selected mode"
+      : "Lock for design mode"
   );
 }
 

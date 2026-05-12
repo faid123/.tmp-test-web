@@ -122,6 +122,7 @@ import {
   removePlacementAtIndex,
 } from "./annotationTeethModel.js";
 
+// Apply status CSS classes for present/abutment/compromised/missing tooth visuals.
 function applyToothStatusClass(group, tooth) {
   if (!tooth.isPresent) {
     group.classList.add("is-missing");
@@ -136,7 +137,7 @@ function applyToothStatusClass(group, tooth) {
   group.classList.add("status-presence");
 }
 
-// Draw mesh overlays on missing teeth; plate overlays on present teeth.
+// For tooth rendering: draw placed major connectors and mesh visuals.
 function appendToothComponentVisuals(group, tooth, toothId, jaw) {
   ensureToothPlacementState(tooth);
 
@@ -239,7 +240,7 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
   }
 }
 
-/** Placed plates only — rendered in a separate SVG pass after all tooth bodies/majors (see {@link renderJaw}). */
+// For tooth rendering: draw placed plates in a dedicated pass above tooth bodies.
 function appendToothPlateComponentVisuals(group, tooth, toothId, jaw) {
   ensureToothPlacementState(tooth);
   if (!tooth.isPresent) return;
@@ -1460,9 +1461,11 @@ const PALATAL_STRAP_ATTACHED_POINTS = Object.freeze([
 ]);
 
 const PALATAL_STRAP_CENTER_POINTS = Object.freeze({
-  top: { dx: 0, dy: -20 },
-  bottom: { dx: 0, dy: 50 },
+  top: { dx: 0, dy: -70 },
+  bottom: { dx: 0, dy: -50 },
 });
+
+const PALATAL_STRAP_FIXED_CENTER_Y_GAP = 70;
 
 function getPalatalStrapPointsFromAttachments() {
   const pointByToothId = new Map();
@@ -1519,20 +1522,29 @@ function getPalatalStrapPointsFromAttachments() {
     return PALATAL_STRAP_ARCH_POLYGON;
   }
 
-  const c16 = state.teeth["16"]?.center;
-  const c26 = state.teeth["26"]?.center;
-  if (!Array.isArray(c16) || !Array.isArray(c26)) {
-    return PALATAL_STRAP_ARCH_POLYGON;
-  }
-  const midX = ((Number(c16[0]) || 0) + (Number(c26[0]) || 0)) / 2;
-  const midY = ((Number(c16[1]) || 0) + (Number(c26[1]) || 0)) / 2;
+  const pickActivePoint = (ids, fallbackPoint) => {
+    for (const id of ids) {
+      if (hasStrapOnTooth(id)) {
+        const pt = ({ "14": p14, "15": p15, "16": p16, "17": p17, "24": p24, "25": p25, "26": p26, "27": p27 })[id];
+        if (pt) return pt;
+      }
+    }
+    return fallbackPoint;
+  };
+
+  const leftDeepPoint = pickActivePoint(["17", "16", "15", "14"], p17);
+  const rightDeepPoint = pickActivePoint(["27", "26", "25", "24"], p27);
+  const topMidX = (p16.x + p26.x) / 2;
+  const topMidY = (p16.y + p26.y) / 2;
+  const bottomMidX = (leftDeepPoint.x + rightDeepPoint.x) / 2;
+
   const centerTop = {
-    x: midX + PALATAL_STRAP_CENTER_POINTS.top.dx,
-    y: midY + PALATAL_STRAP_CENTER_POINTS.top.dy,
+    x: topMidX + PALATAL_STRAP_CENTER_POINTS.top.dx,
+    y: topMidY + PALATAL_STRAP_CENTER_POINTS.top.dy,
   };
   const centerBottom = {
-    x: midX + PALATAL_STRAP_CENTER_POINTS.bottom.dx,
-    y: midY + PALATAL_STRAP_CENTER_POINTS.bottom.dy,
+    x: bottomMidX + PALATAL_STRAP_CENTER_POINTS.bottom.dx,
+    y: centerTop.y + PALATAL_STRAP_FIXED_CENTER_Y_GAP,
   };
 
   return [

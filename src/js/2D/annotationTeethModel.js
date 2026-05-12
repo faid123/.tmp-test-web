@@ -4,6 +4,7 @@ import { state } from "./2DAnnotation.js";
 import { normalizeSurface } from "./toothUtils.js";
 export { normalizeSurface } from "./toothUtils.js";
 
+// Initialize default tooth records for both arches.
 export function initializeTeethState() {
   forEachTooth((toothId, jaw) => {
     state.teeth[toothId] = {
@@ -18,6 +19,7 @@ export function initializeTeethState() {
   });
 }
 
+// Reset one tooth to default state (present with no components).
 export function resetToothRecord(toothId, status) {
   const tooth = state.teeth[toothId];
   if (!tooth) return;
@@ -27,6 +29,7 @@ export function resetToothRecord(toothId, status) {
   tooth.isPresent = true;
 }
 
+// Toggle one tooth between present and missing.
 export function toggleToothPresence(tooth, toothId) {
   tooth.isPresent = !tooth.isPresent;
   if (!tooth.isPresent) {
@@ -39,6 +42,7 @@ export function toggleToothPresence(tooth, toothId) {
   return `Tooth ${toothId} is now ${tooth.isPresent ? "present" : "missing"}.`;
 }
 
+// Toggle clinical tooth status (presence/abutment/compromised).
 export function toggleToothStatus(tooth, toothId, status) {
   if (!tooth.isPresent) {
     tooth.isPresent = true;
@@ -47,6 +51,7 @@ export function toggleToothStatus(tooth, toothId, status) {
   return `Tooth ${toothId} set to ${tooth.status}.`;
 }
 
+// Ensure modern placement array exists (migrate from legacy components list).
 export function ensureToothPlacementState(tooth) {
   if (Array.isArray(tooth.componentPlacements)) return;
 
@@ -57,6 +62,7 @@ export function ensureToothPlacementState(tooth) {
   }));
 }
 
+// Rebuild tooth.components from placement entries.
 export function syncToothComponentsFromPlacements(tooth) {
   const placements = Array.isArray(tooth.componentPlacements) ? tooth.componentPlacements : [];
   tooth.components = [
@@ -68,6 +74,7 @@ export function syncToothComponentsFromPlacements(tooth) {
   ];
 }
 
+// Check whether a specific component placement already exists on tooth.
 export function hasPlacement(tooth, componentId, surface) {
   const targetSurface = normalizeSurface(surface);
   return tooth.componentPlacements.some(
@@ -76,6 +83,7 @@ export function hasPlacement(tooth, componentId, surface) {
   );
 }
 
+// Add one component placement on tooth.
 export function addPlacement(tooth, componentId, surface) {
   tooth.componentPlacements.push({
     componentId,
@@ -84,6 +92,7 @@ export function addPlacement(tooth, componentId, surface) {
   syncToothComponentsFromPlacements(tooth);
 }
 
+// Remove one exact component placement from tooth.
 export function removePlacement(tooth, componentId, surface) {
   const targetSurface = normalizeSurface(surface);
   tooth.componentPlacements = tooth.componentPlacements.filter(
@@ -95,6 +104,7 @@ export function removePlacement(tooth, componentId, surface) {
   syncToothComponentsFromPlacements(tooth);
 }
 
+// Remove all placements whose component IDs are in the remove list.
 export function removePlacementsByComponentIds(tooth, componentIds) {
   const removeSet = new Set(componentIds || []);
   tooth.componentPlacements = tooth.componentPlacements.filter(
@@ -103,6 +113,7 @@ export function removePlacementsByComponentIds(tooth, componentIds) {
   syncToothComponentsFromPlacements(tooth);
 }
 
+// Remove placement by array index (used by remove dialog).
 export function removePlacementAtIndex(tooth, index) {
   ensureToothPlacementState(tooth);
   const pl = tooth.componentPlacements;
@@ -114,6 +125,7 @@ export function removePlacementAtIndex(tooth, index) {
   return removed;
 }
 
+// Normalize status string to accepted values.
 export function normalizeStatus(value) {
   return STATUS_VALUES.includes(value) ? value : null;
 }

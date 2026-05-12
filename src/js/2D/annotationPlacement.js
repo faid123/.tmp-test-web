@@ -33,11 +33,13 @@ import {
 import { ensureMajorCatalogPickForTooth } from "./annotationCatalog.js";
 import { assessPlacementCriteria } from "./criteria.js";
 
+// Check whether a tooth ID is anterior (unit 1-3).
 function isAnteriorToothId(toothId) {
   const unit = Number(toothId) % 10;
   return Number.isFinite(unit) && unit >= 1 && unit <= 3;
 }
 
+// Apply follow-up cleanup rules after removing a placement.
 export function applyRemovalSideEffectsForTooth(tooth, removedEntry) {
   if (!removedEntry) return;
   const { componentId } = removedEntry;
@@ -55,6 +57,7 @@ export function applyRemovalSideEffectsForTooth(tooth, removedEntry) {
   }
 }
 
+// Main placement engine for currently selected component on one tooth.
 export function placeSelectedComponentOnTooth(toothId, placementContext = null) {
   const historyBefore = getHistoryStateSignature();
   try {

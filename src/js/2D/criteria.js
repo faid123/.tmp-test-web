@@ -8,10 +8,12 @@ import {
   isReciprocatingClaspComponent,
 } from "./components.js";
 
+// Resolve stable tooth id used in validation messages.
 function getToothId(tooth) {
   return tooth?.tooth_id ?? tooth?.fdiId ?? "unknown";
 }
 
+// Normalize tooth presence from mixed record shapes.
 function isToothPresent(tooth) {
   if (typeof tooth?.isPresent === "boolean") {
     return tooth.isPresent;
@@ -24,11 +26,13 @@ function isToothPresent(tooth) {
   return true;
 }
 
+// Check mesh family using id lookup (supports id or component object).
 function isMeshComponentId(componentId, componentById) {
   const componentDef = componentById?.get?.(componentId);
   return isMeshComponent(componentDef ?? componentId);
 }
 
+// Build standardized failure response payload.
 function failure(reason, actionUponFailure, conflictingComponents = []) {
   return {
     pass: false,
@@ -40,6 +44,7 @@ function failure(reason, actionUponFailure, conflictingComponents = []) {
   };
 }
 
+// Validate whether selected component can be placed on a tooth.
 export function assessPlacementCriteria(tooth, selectedComponent, componentById) {
   const toothId = getToothId(tooth);
   const present = isToothPresent(tooth);

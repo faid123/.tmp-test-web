@@ -31,6 +31,7 @@ const BAR_ANCHOR_POINT_BY_TEMPLATE_TOOTH = Object.freeze({
   "48": { x: -15, y: -20 },
 });
 
+// Get anchor point for bar placement on a tooth.
 export function getBarPlacementAnchorPointForTooth(toothId) {
   const numeric = Number(toothId);
   if (!Number.isFinite(numeric)) return null;
@@ -422,11 +423,13 @@ const BAR_SHAPE_LETTER = Object.freeze({
 });
 
 /** Surfaces: `bar_d1_mesial` | `bar_d1_distal` | `bar_d2_mesial` | `bar_d2_distal` */
+// Validate a bar placement surface token.
 export function isBarPlacementSurface(surface) {
   const s = typeof surface === "string" ? surface.toLowerCase() : "";
   return BAR_SURFACE_SIDE_RE.test(s);
 }
 
+// Check whether a component belongs to bar family.
 export function isBarComponent(componentOrId) {
   if (typeof componentOrId === "object" && componentOrId !== null) {
     return componentOrId.tab === BAR_TAB || String(componentOrId.id || "").startsWith("bar-");
@@ -435,6 +438,7 @@ export function isBarComponent(componentOrId) {
 }
 
 /** Present teeth within arch index ±1/±2 from any missing tooth in the same jaw. */
+// Compute teeth eligible for bar suggestions on a jaw.
 export function getBarSuggestibleToothIdSet(teethById, jaw) {
   const order = TOOTH_ORDER[jaw];
   const out = new Set();
@@ -462,6 +466,7 @@ export function getBarSuggestibleToothIdSet(teethById, jaw) {
  * - distance 2 => d2
  * - side => mesial/distal (relative to each side of the arch)
  */
+// Resolve bar surface for a selected suggestible tooth.
 export function getBarPlacementSurfaceForTooth(toothId, jaw, teethById) {
   const order = TOOTH_ORDER[jaw];
   const toothIndex = order.indexOf(toothId);
@@ -491,6 +496,7 @@ export function getBarPlacementSurfaceForTooth(toothId, jaw, teethById) {
   return `bar_${tier}_${side}`;
 }
 
+// Resolve bar asset path for component/tooth/surface.
 export function getBarPlacementAssetReference(componentId, toothId, surface) {
   const templateToothId = getComponentTemplateToothId(toothId);
   const letter = BAR_SHAPE_LETTER[String(componentId || "").toLowerCase()] || "I";
@@ -505,6 +511,7 @@ export function getBarPlacementAssetReference(componentId, toothId, surface) {
   return `${COMPONENT_ASSET_BASE}/${templateToothId}/bars/${templateToothId}_${modelName}_${side}.svg`;
 }
 
+// Return image size for bar assets.
 export function getBarPlacementImageSize() {
   return { width: BAR_IMAGE_SIZE.width, height: BAR_IMAGE_SIZE.height };
 }
@@ -520,6 +527,7 @@ function getBarToothConfig(configByTooth, toothId) {
   return configByTooth[exactToothId] ?? configByTooth[templateToothId] ?? null;
 }
 
+// Return render scale for bar placement.
 export function getBarPlacementRenderScale(_componentId, toothId, surface) {
   const normalizedSurface = String(surface || "").toLowerCase();
   const tier = normalizedSurface.startsWith("bar_d2_") ? "d2" : "d1";
@@ -536,6 +544,7 @@ export function getBarPlacementRenderScale(_componentId, toothId, surface) {
   return tierScale * BAR_DEFAULT_RENDER_SCALE * toothScale;
 }
 
+// Return placement offset for bar placement.
 export function getBarPlacementOffset(_componentId, toothId, surface) {
   const normalizedSurface = String(surface || "").toLowerCase();
   const side = getBarSurfaceSide(surface);
@@ -554,6 +563,7 @@ export function getBarPlacementOffset(_componentId, toothId, surface) {
   };
 }
 
+// Return persisted user drag offset for a placed bar.
 export function getBarUserOffset(placement) {
   const x = Number(placement?.barOffsetX);
   const y = Number(placement?.barOffsetY);

@@ -50,6 +50,7 @@ import {
   showBarSuggestions,
 } from "./annotationVisuals.js";
 
+// Render jaw background templates for upper/lower arch SVG.
 function renderArchBackground(svg, jaw) {
   const background = JAW_BACKGROUND_IMAGES[jaw];
   if (!background) return;
@@ -90,11 +91,13 @@ function renderArchBackground(svg, jaw) {
   }
 }
 
+// Render both arches.
 export function renderJaws() {
   renderJaw("upper");
   renderJaw("lower");
 }
 
+// Render one jaw: teeth, overlays, and click handlers.
 export function renderJaw(jaw) {
   const config = JAW_BACKGROUND_IMAGES[jaw];
   if (!config) return;
@@ -286,6 +289,7 @@ export function renderJaw(jaw) {
   }
 }
 
+// Handle tooth click in selected mode (status/range) and block in design mode.
 export function onToothClick(jaw, toothId) {
   const historyBefore = getHistoryStateSignature();
   try {
@@ -334,6 +338,7 @@ export function onToothClick(jaw, toothId) {
   }
 }
 
+// Mark one tooth as missing and clear its components.
 function markToothMissing(toothId) {
   const tooth = state.teeth[toothId];
   if (!tooth) return;
@@ -343,6 +348,7 @@ function markToothMissing(toothId) {
   tooth.componentPlacements = [];
 }
 
+// Range-missing flow: first click sets start, second click applies missing span.
 function handleRangeMissingToothClick(jaw, toothId) {
   const historyBefore = getHistoryStateSignature();
   const ids = TOOTH_ORDER[jaw] || [];

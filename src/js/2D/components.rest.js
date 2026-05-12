@@ -229,6 +229,7 @@ function getRestPlacementToken(_componentId, toothId, surface) {
   return null;
 }
 
+// Resolve rest SVG reference for component/tooth/surface.
 export function getRestPlacementAssetReference(componentId, toothId, surface) {
   const templateToothId = getComponentTemplateToothId(toothId);
   const token = getRestPlacementToken(componentId, toothId, surface);
@@ -239,6 +240,7 @@ export function getRestPlacementAssetReference(componentId, toothId, surface) {
   return `${REST_PLACEMENT_ASSET_BASE}/${templateToothId}/rest/${templateToothId}-${token}.svg`;
 }
 
+// Resolve rest image size by component/tooth/surface.
 export function getRestPlacementImageSize(componentId, toothId, surface) {
   const templateToothId = getComponentTemplateToothId(toothId);
   const token = getRestPlacementToken(componentId, toothId, surface);
@@ -246,6 +248,7 @@ export function getRestPlacementImageSize(componentId, toothId, surface) {
   return REST_PLACEMENT_IMAGE_SIZE_BY_TOOTH[templateToothId]?.[token] ?? null;
 }
 
+// Resolve rest render scale by component/tooth/surface.
 export function getRestPlacementRenderScale(componentId, toothId, surface) {
   const exactToothId = String(toothId ?? "");
   const templateToothId = getComponentTemplateToothId(toothId);
@@ -264,6 +267,7 @@ export function getRestPlacementRenderScale(componentId, toothId, surface) {
   return REST_PLACEMENT_SCALE_BY_TOKEN[token] || 0.55;
 }
 
+// Resolve rest placement offset by component/tooth/surface.
 export function getRestPlacementOffset(componentId, toothId, surface) {
   const token = getRestPlacementToken(componentId, toothId, surface);
   if (!(componentId === "rest-onlay" && token === "p_full")) {
@@ -280,6 +284,7 @@ export function getRestPlacementOffset(componentId, toothId, surface) {
   };
 }
 
+// Return allowed suggestion surfaces for selected rest component.
 export function getRestSuggestionSurfaces(componentId, _toothId) {
   if (componentId === "rest-onlay") {
     return [];
@@ -287,11 +292,13 @@ export function getRestSuggestionSurfaces(componentId, _toothId) {
   return [...REST_SURFACE_ORDER];
 }
 
+// Radius for clickable rest suggestion markers.
 export function getRestSuggestionRadius() {
   return REST_SUGGESTION_CONFIG.radius;
 }
 
 /** Positions for {@link REST_CINGULUM_AC_POINT_BY_TOOTH}; maps to ac_mesial / ac_distal assets. */
+// Return cingulum AC suggestion points for anterior teeth.
 export function getCingulumAcSuggestionPointsForTooth(toothId) {
   if (getRestVariantForTooth(toothId) !== "anterior") return null;
   const row = REST_CINGULUM_AC_POINT_BY_TOOTH[String(toothId)];
@@ -313,6 +320,7 @@ export function getCingulumAcSuggestionPointsForTooth(toothId) {
   ];
 }
 
+// Check whether a component belongs to rest family.
 export function isRestComponent(componentOrId) {
   if (typeof componentOrId === "object" && componentOrId !== null) {
     if (componentOrId.tab === "rests") return true;
@@ -321,6 +329,7 @@ export function isRestComponent(componentOrId) {
   return String(componentOrId || "").startsWith("rest-");
 }
 
+// Return geometric suggestion points for rest placement on tooth.
 export function getRestSuggestionPointsForTooth(
   toothId,
   _jaw,
