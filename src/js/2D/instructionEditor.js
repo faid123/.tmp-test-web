@@ -76,6 +76,8 @@ function redraw() {
   const ch = canvas.height;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, cw, ch);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
 
   if (state.bgImage) {
     const r = getBgRect();

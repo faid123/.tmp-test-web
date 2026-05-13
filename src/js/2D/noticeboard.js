@@ -2,6 +2,209 @@ import { state, setMessage } from "./2DAnnotation.js";
 import { captureJawJpegDataUrl } from "./annotationLocks.js";
 import { openInstructionEditor } from "./instructionEditor.js";
 
+//Add constants
+const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
+const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
+
+//Add helper to read logged-in user
+function getLoggedInUser(){
+  try{
+    return JSON.parse(localStorage.getItem("loggedInUser") || "null");
+  }
+  catch{
+    return null;
+  }
+}
+
+//Add a common payload builder
+function noticeboardPayload(caseIntID, uuid){
+  return [
+    {machine_id: MACHINE_ID,uuid,caseIntID},
+    {case_id: caseIntID}
+  ];
+}
+
+//Add safe parse helpers
+function safeJsonParse(raw, fallback){
+  try{
+    return JSON.parse(raw);
+  } catch{
+    return fallback;
+  }
+}
+
+function normalizeApiRow(apiResult){
+  if (!apiResult) return null;
+  if (Array.isArray(apiResult)) return apiResult[0] || null;
+  return apiResult;
+}
+
+//Add endpoint fetchers
+async function postNoticeboardEndpoint(path, payload){
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+async function fetchNoticeboardBase(caseIntID, uuid) {
+  return postNoticeboardEndpoint("/noticeboard/get", noticeboardPayload(caseIntID, uuid));
+}
+
+async function fetchNoticeboardDrawn(caseIntID, uuid) {
+  return postNoticeboardEndpoint("/noticeboard/drawnview/get", noticeboardPayload(caseIntID, uuid));
+}
+
+async function fetchNoticeboardEdited(caseIntID, uuid) {
+  return postNoticeboardEndpoint("/noticeboard/editedview/get", noticeboardPayload(caseIntID, uuid));
+}
+
+function parseRowToArrays(row) {
+  if (!row) return { filenames: [], data: [] };
+  const filenames = safeJsonParse(row.filenames || "[]", []);
+  const data = safeJsonParse(row.data || "[]", []);
+  return {
+    filenames: Array.isArray(filenames) ? filenames : [],
+    data: Array.isArray(data) ? data : []
+  };
+}
+
+function isDataUrlImage(v) {
+  return typeof v === "string" && v.startsWith("data:image/");
+}
+
+function loadImage(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+async function composeBaseAndOverlay(baseDataUrl, overlayDataUrl) {
+  if (!baseDataUrl && !overlayDataUrl) return "";
+  const [base, overlay] = await Promise.all([
+    baseDataUrl ? loadImage(baseDataUrl) : Promise.resolve(null),
+    overlayDataUrl ? loadImage(overlayDataUrl) : Promise.resolve(null),
+  ]);
+  const ref = base || overlay;
+  if (!ref) return "";
+  const canvas = document.createElement("canvas");
+  canvas.width = ref.naturalWidth || ref.width;
+  canvas.height = ref.naturalHeight || ref.height;
+  const ctx = canvas.getContext("2d");
+  if (base) ctx.drawImage(base, 0, 0);
+  if (overlay) ctx.drawImage(overlay, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
+
+function maybeStrokeJson(v) {
+  if (typeof v !== "string") return null;
+  const parsed = safeJsonParse(v, null);
+  if (!parsed) return null;
+  return parsed; // keep generic for fallback
+}
+
+async function buildServerViewcaptures(baseRow, drawnRow, editedRow) {
+  const base = parseRowToArrays(baseRow);
+  const drawn = parseRowToArrays(drawnRow);
+  const edited = parseRowToArrays(editedRow);
+
+  // Prefer edited if present, else composed base+drawn
+  const maxLen = Math.max(base.data.length, drawn.data.length, edited.data.length, base.filenames.length);
+
+  const out = [];
+  for (let i = 0; i < maxLen; i += 1) {
+    const filename = edited.filenames[i] || base.filenames[i] || `Viewcapture ${i + 1}`;
+    const editedItem = edited.data[i];
+    const baseItem = base.data[i];
+    const drawnItem = drawn.data[i];
+
+    let preview = "";
+    let strokes = null;
+
+    if (isDataUrlImage(editedItem)) {
+      preview = editedItem;
+    } else {
+      const baseImage = isDataUrlImage(baseItem) ? baseItem : "";
+      const drawnImage = isDataUrlImage(drawnItem) ? drawnItem : "";
+      preview = await composeBaseAndOverlay(baseImage, drawnImage);
+    }
+
+    if (!preview) {
+      const s1 = maybeStrokeJson(drawnItem);
+      const s2 = maybeStrokeJson(baseItem);
+      const s3 = maybeStrokeJson(editedItem);
+      strokes = s1 || s2 || s3 || null;
+    }
+
+    if (!preview && !strokes) continue;
+
+    out.push({
+      id: `vc_srv_${i}_${filename}`,
+      title: filename,
+      preview: preview || "",
+      strokes: strokes || undefined,
+      createdAt: new Date().toISOString(),
+      source: "server"
+    });
+  }
+
+  return out;
+}
+
+function mergeViewcaptures(localItems, serverItems) {
+  const map = new Map();
+
+  const keyOf = (item) => {
+    if (item.title) return `title:${item.title}`;
+    if (item.id) return `id:${item.id}`;
+    return `preview:${item.preview || ""}`;
+  };
+
+  for (const it of localItems || []) map.set(keyOf(it), it);
+  for (const it of serverItems || []) map.set(keyOf(it), { ...(map.get(keyOf(it)) || {}), ...it });
+
+  return Array.from(map.values());
+}
+
+async function hydrateNoticeboardFromServer() {
+  const user = getLoggedInUser();
+  if (!user?.uuid || !state.caseIntID) return false;
+
+  try {
+    const [baseRaw, drawnRaw, editedRaw] = await Promise.all([
+      fetchNoticeboardBase(state.caseIntID, user.uuid),
+      fetchNoticeboardDrawn(state.caseIntID, user.uuid),
+      fetchNoticeboardEdited(state.caseIntID, user.uuid)
+    ]);
+
+    const baseRow = normalizeApiRow(baseRaw);
+    const drawnRow = normalizeApiRow(drawnRaw);
+    const editedRow = normalizeApiRow(editedRaw);
+
+    const serverViewcaptures = await buildServerViewcaptures(baseRow, drawnRow, editedRow);
+    if (!serverViewcaptures.length) return false;
+
+    const data = ensureCache();
+    data.viewcaptures = mergeViewcaptures(data.viewcaptures || [], serverViewcaptures);
+
+    saveData(data);
+    renderGrids();
+    setMessage("Loaded previous noticeboard from server.", false);
+    return true;
+  } catch (err) {
+    console.error("Noticeboard hydrate failed", err);
+    setMessage("Using local noticeboard cache.", true);
+    return false;
+  }
+}
+
+
 const STORAGE_PREFIX = "noticeboard";
 
 function getStorageKey() {
@@ -311,6 +514,8 @@ function bindTabSwitching() {
 }
 
 export function initNoticeboard() {
+  cache = loadData();
+  renderGrids();
   document.getElementById("openNoticeboardBtn")?.addEventListener("click", openNoticeboard);
   document.getElementById("noticeboardCloseBtn")?.addEventListener("click", closeNoticeboard);
   document
@@ -335,4 +540,5 @@ export function initNoticeboard() {
     }
   });
   bindTabSwitching();
+  hydrateNoticeboardFromServer();
 }

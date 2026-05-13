@@ -20,6 +20,7 @@ import {
   downloadJson,
   getHistoryStateSignature,
   recordHistoryIfChanged,
+  registerAutosaveHook,
   titleCase,
   setMessage,
   closePresentToothRadialQuickPick,
@@ -34,6 +35,7 @@ import {
   statusJsonForToothRecord,
   syncToothComponentsFromPlacements,
 } from "./annotationTeethModel.js";
+import { loadInteractiveJawPreview, teardown3DPreview } from "./preview3D.js";
 
 // Bind tooth status picker buttons (presence/abutment/compromised).
 export function bindStatusPicker() {
@@ -91,6 +93,12 @@ function toggleRangeMissingMode() {
 }
 
 // Bind clear/reset/save action buttons.
+function silentSaveToStorage() {
+  try {
+    localStorage.setItem(getStorageKey(), JSON.stringify(buildPayload()));
+  } catch { /* storage full — ignore */ }
+}
+
 export function bindActionButtons() {
   const clearTop = document.getElementById("clearTopBtn");
   const clearBottom = document.getElementById("clearBottomBtn");
@@ -102,6 +110,12 @@ export function bindActionButtons() {
   if (reset) reset.addEventListener("click", drawFromScratch);
   if (save) save.addEventListener("click", saveAnnotation);
   if (saveJpeg) saveJpeg.addEventListener("click", saveAsJpeg);
+
+  registerAutosaveHook(silentSaveToStorage);
+  window.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") silentSaveToStorage();
+  });
+  window.addEventListener("pagehide", silentSaveToStorage);
 }
 
 function toggleBothJawsLock() {
@@ -432,6 +446,46 @@ export function saveAnnotation() {
   }
 }
 
+export function restoreAnnotationFromStorage() {
+  const storageKey = getStorageKey();
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return false;
+    const payload = JSON.parse(raw);
+    if (payload?.schema !== "smartrpd.2d-arch.v1") return false;
+    // Guard: don't restore a different case's data.
+    if (payload.caseIntID != null && payload.caseIntID !== state.caseIntID) return false;
+
+    if (payload.locks) {
+      state.locks.upper = Boolean(payload.locks.upper);
+      state.locks.lower = Boolean(payload.locks.lower);
+    }
+    if (payload.editMode != null) state.designMode = Boolean(payload.editMode);
+    if (Array.isArray(payload.components)) state.components = payload.components;
+    if (payload.selectedComponentId != null) state.selectedComponentId = payload.selectedComponentId;
+    if (payload.archOverlayPalatalHoleActive != null) {
+      state.archOverlayPalatalHoleActive = Boolean(payload.archOverlayPalatalHoleActive);
+    }
+    if (payload.activeStatus) state.activeStatus = payload.activeStatus;
+
+    if (Array.isArray(payload.teeth)) {
+      for (const saved of payload.teeth) {
+        const tooth = state.teeth[saved.tooth_id];
+        if (!tooth) continue;
+        if (saved.status != null) tooth.status = saved.status;
+        if (saved.isPresent != null) tooth.isPresent = Boolean(saved.isPresent);
+        if (Array.isArray(saved.componentPlacements)) tooth.componentPlacements = saved.componentPlacements;
+        if (Array.isArray(saved.components)) tooth.components = saved.components;
+        if (Array.isArray(saved.center)) tooth.center = saved.center;
+      }
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function fetchAsDataUrl(href) {
   const absoluteHref = href.startsWith("http") || href.startsWith("data:")
     ? href
@@ -446,9 +500,33 @@ async function fetchAsDataUrl(href) {
   });
 }
 
-let cachedPageCss = null;
+let cachedPageCss = "";
+function readCssFromStyleSheets() {
+  const parts = [];
+  for (const sheet of Array.from(document.styleSheets)) {
+    let rules = null;
+    try {
+      rules = sheet.cssRules || sheet.rules;
+    } catch {
+      rules = null;
+    }
+    if (!rules) continue;
+    for (const rule of Array.from(rules)) {
+      if (rule && rule.cssText) parts.push(rule.cssText);
+    }
+  }
+  return parts.join("\n");
+}
+
 async function fetchPageCss() {
-  if (cachedPageCss !== null) return cachedPageCss;
+  if (cachedPageCss) return cachedPageCss;
+
+  const fromSheets = readCssFromStyleSheets();
+  if (fromSheets.trim()) {
+    cachedPageCss = fromSheets;
+    return cachedPageCss;
+  }
+
   const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
   const texts = await Promise.all(
     links.map(async (link) => {
@@ -463,8 +541,9 @@ async function fetchPageCss() {
   const inlineStyles = Array.from(document.querySelectorAll("style"))
     .map((s) => s.textContent || "")
     .join("\n");
-  cachedPageCss = `${texts.join("\n")}\n${inlineStyles}`;
-  return cachedPageCss;
+  const combined = `${texts.join("\n")}\n${inlineStyles}`;
+  if (combined.trim()) cachedPageCss = combined;
+  return combined;
 }
 
 async function inlineImagesInSvg(svg) {
@@ -496,8 +575,14 @@ async function inlineImagesInSvg(svg) {
   return clone;
 }
 
-function svgToImage(inlinedSvg) {
+function svgToImage(inlinedSvg, targetWidth, targetHeight) {
   return new Promise((resolve, reject) => {
+    if (Number.isFinite(targetWidth)) {
+      inlinedSvg.setAttribute("width", String(Math.round(targetWidth)));
+    }
+    if (Number.isFinite(targetHeight)) {
+      inlinedSvg.setAttribute("height", String(Math.round(targetHeight)));
+    }
     const serializer = new XMLSerializer();
     const svgStr = serializer.serializeToString(inlinedSvg);
     const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
@@ -509,7 +594,7 @@ function svgToImage(inlinedSvg) {
   });
 }
 
-async function composeJawCanvas() {
+async function composeJawCanvas(scale = 1) {
   const upperSvg = document.getElementById("upperArchSvg");
   const lowerSvg = document.getElementById("lowerArchSvg");
   if (!upperSvg || !lowerSvg) return null;
@@ -522,13 +607,17 @@ async function composeJawCanvas() {
   const upperDims = parseViewBox(upperSvg);
   const lowerDims = parseViewBox(lowerSvg);
   const gap = 20;
-  const canvasW = Math.max(upperDims.w, lowerDims.w);
-  const canvasH = upperDims.h + gap + lowerDims.h;
+  const baseW = Math.max(upperDims.w, lowerDims.w);
+  const baseH = upperDims.h + gap + lowerDims.h;
+  const canvasW = Math.round(baseW * scale);
+  const canvasH = Math.round(baseH * scale);
 
   const canvas = document.createElement("canvas");
   canvas.width = canvasW;
   canvas.height = canvasH;
   const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvasW, canvasH);
 
@@ -537,16 +626,16 @@ async function composeJawCanvas() {
     inlineImagesInSvg(lowerSvg),
   ]);
   const [upperImg, lowerImg] = await Promise.all([
-    svgToImage(upperInlined),
-    svgToImage(lowerInlined),
+    svgToImage(upperInlined, upperDims.w * scale, upperDims.h * scale),
+    svgToImage(lowerInlined, lowerDims.w * scale, lowerDims.h * scale),
   ]);
-  ctx.drawImage(upperImg, 0, 0, upperDims.w, upperDims.h);
-  ctx.drawImage(lowerImg, 0, upperDims.h + gap, lowerDims.w, lowerDims.h);
+  ctx.drawImage(upperImg, 0, 0, upperDims.w * scale, upperDims.h * scale);
+  ctx.drawImage(lowerImg, 0, (upperDims.h + gap) * scale, lowerDims.w * scale, lowerDims.h * scale);
   return canvas;
 }
 
-export async function captureJawJpegDataUrl(quality = 0.92) {
-  const canvas = await composeJawCanvas();
+export async function captureJawJpegDataUrl(quality = 0.92, scale = 3) {
+  const canvas = await composeJawCanvas(scale);
   if (!canvas) return null;
   return canvas.toDataURL("image/jpeg", quality);
 }
@@ -554,7 +643,7 @@ export async function captureJawJpegDataUrl(quality = 0.92) {
 export async function saveAsJpeg() {
   try {
     setMessage("Exporting JPEG…", false);
-    const canvas = await composeJawCanvas();
+    const canvas = await composeJawCanvas(3);
     if (!canvas) {
       setMessage("Cannot find jaw SVGs to export.", true);
       return;
@@ -627,24 +716,44 @@ export function buildPayload() {
 export function loadPreviewImage() {
   const img = document.getElementById("previewImage");
   const fallback = document.getElementById("previewFallback");
-  if (!img || !fallback) return;
+  const area = document.getElementById("imagePreviewArea");
+  if (!img || !fallback || !area) return;
 
   if (!state.encryptedCaseId) {
     fallback.style.display = "block";
     img.style.display = "none";
+    teardown3DPreview();
     return;
   }
 
-  const localImage = localStorage.getItem(`annotateBackground_${state.encryptedCaseId}`);
-  if (localImage) {
-    img.src = localImage;
-    img.style.display = "block";
-    fallback.style.display = "none";
-    return;
-  }
-
-  fallback.style.display = "block";
-  img.style.display = "none";
+  loadInteractiveJawPreview(area).then((loaded3D) => {
+    if (loaded3D) {
+      img.style.display = "none";
+      fallback.style.display = "none";
+      return;
+    }
+    const localImage = localStorage.getItem(`annotateBackground_${state.encryptedCaseId}`);
+    if (localImage) {
+      img.src = localImage;
+      img.style.display = "block";
+      fallback.style.display = "none";
+      return;
+    }
+    fallback.style.display = "block";
+    img.style.display = "none";
+  }).catch((err) => {
+    console.error("3D preview load failed", err);
+    teardown3DPreview();
+    const localImage = localStorage.getItem(`annotateBackground_${state.encryptedCaseId}`);
+    if (localImage) {
+      img.src = localImage;
+      img.style.display = "block";
+      fallback.style.display = "none";
+      return;
+    }
+    fallback.style.display = "block";
+    img.style.display = "none";
+  });
 }
 
 export function getStorageKey() {

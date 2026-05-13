@@ -98,6 +98,11 @@ export function getHistoryStateSignature() {
   return JSON.stringify(cloneStateForHistory());
 }
 
+let _autosaveHook = null;
+export function registerAutosaveHook(fn) {
+  _autosaveHook = fn;
+}
+
 function pushHistorySnapshot(snapshot) {
   const nextSig = JSON.stringify(snapshot);
   const last = history.past[history.past.length - 1];
@@ -128,6 +133,7 @@ export function recordHistoryIfChanged(beforeSignature) {
   }
   const changed = pushHistorySnapshot(afterSnapshot);
   updateUndoRedoButtons();
+  if (changed) _autosaveHook?.();
   return changed;
 }
 
@@ -660,6 +666,7 @@ function init() {
   ])
     .then(([, teethModel, locks, catalog, noticeboard]) => {
       teethModel.initializeTeethState();
+      locks.restoreAnnotationFromStorage();
       bindHistoryControls();
       locks.bindStatusPicker();
       locks.bindJawControls();
