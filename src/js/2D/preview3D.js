@@ -1,7 +1,8 @@
-import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { state } from "./2DAnnotation.js";
+
+let THREE = null;
+let OrbitControls = null;
+let STLLoader = null;
 
 const PREVIEW_MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 const preview3DState = {
@@ -21,6 +22,11 @@ const preview3DState = {
 export async function loadInteractiveJawPreview(area) {
   showPreviewLoading(area, "Loading 3D jaws...");
   try {
+    const depsReady = await ensureThreeDeps();
+    if (!depsReady) {
+      teardown3DPreview();
+      return false;
+    }
     const jawFiles = await fetchJawFilesForCase();
     if (!jawFiles.length) {
       teardown3DPreview();
@@ -31,6 +37,24 @@ export async function loadInteractiveJawPreview(area) {
     return true;
   } finally {
     hidePreviewLoading(area);
+  }
+}
+
+async function ensureThreeDeps() {
+  if (THREE && OrbitControls && STLLoader) return true;
+  try {
+    const [threeMod, orbitMod, stlMod] = await Promise.all([
+      import("https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"),
+      import("https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js"),
+      import("https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/STLLoader.js"),
+    ]);
+    THREE = threeMod;
+    OrbitControls = orbitMod.OrbitControls;
+    STLLoader = stlMod.STLLoader;
+    return true;
+  } catch (err) {
+    console.error("Failed loading three.js dependencies", err);
+    return false;
   }
 }
 
