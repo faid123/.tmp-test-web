@@ -646,6 +646,49 @@ function initializeCaseIds() {
   if (label) label.textContent = `Case: ${state.caseIntID ?? "Unknown"}`;
 }
 
+function bindPreviewPanelToggle() {
+  const shell = document.querySelector(".annotation-shell");
+  const btn = document.getElementById("preview3dMaximizeBtn");
+  if (!shell || !btn) return;
+
+  const maxIcon = document.getElementById("preview3dMaximizeIcon");
+  const restoreIcon = document.getElementById("preview3dRestoreIcon");
+
+  const applyMode = (mode) => {
+    shell.classList.remove("preview-maximized");
+    if (mode === "max") {
+      shell.classList.add("preview-maximized");
+      btn.setAttribute("aria-label", "Restore split view");
+      if (maxIcon) maxIcon.style.display = "none";
+      if (restoreIcon) restoreIcon.style.display = "";
+    } else {
+      btn.setAttribute("aria-label", "Maximize 3D panel");
+      if (maxIcon) maxIcon.style.display = "";
+      if (restoreIcon) restoreIcon.style.display = "none";
+    }
+    shell._previewMode = mode;
+    try {
+      localStorage.setItem("previewPanelMode", mode);
+    } catch {
+      // ignore storage failures
+    }
+    window.dispatchEvent(new Event("resize"));
+  };
+
+  let mode = "split";
+  try {
+    const stored = localStorage.getItem("previewPanelMode");
+    if (stored === "max" || stored === "split") mode = stored;
+  } catch {
+    mode = "split";
+  }
+  applyMode(mode);
+
+  btn.addEventListener("click", () => {
+    applyMode(shell._previewMode === "max" ? "split" : "max");
+  });
+}
+
 function start() {
   if (ui.hasInitialized) return;
   ui.hasInitialized = true;
@@ -654,6 +697,7 @@ function start() {
 
 function init() {
   initializeCaseIds();
+  bindPreviewPanelToggle();
   // Load render module early so render bridge + mesh env are registered.
   const renderLoad = import("./annotationRender.js");
 

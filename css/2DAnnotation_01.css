@@ -41,6 +41,43 @@ body {
   flex-direction: column;
 }
 
+.preview-3d-max-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 1px 4px rgba(77, 34, 48, 0.08);
+}
+
+.preview-3d-max-btn:hover {
+  border-color: var(--rose-500);
+  color: var(--rose-700);
+  background: var(--rose-050);
+}
+
+.annotation-shell.preview-maximized {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.annotation-shell.preview-maximized .workspace-panel {
+  display: none;
+}
+
+.annotation-shell.preview-maximized .preview-frame {
+  min-height: 740px;
+}
+
+
 .panel-header h1 {
   margin: 0 0 8px;
   font-size: 1rem;
@@ -1380,6 +1417,7 @@ body {
   .arch-panel {
     grid-template-rows: auto auto auto auto auto;
   }
+
 }
 
 /* Keep jaw diagrams usable on phones: minimum drawing size + scroll if viewport is narrower */

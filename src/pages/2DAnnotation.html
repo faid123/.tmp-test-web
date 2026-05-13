@@ -10,10 +10,22 @@
 <body>
   <main class="annotation-shell">
     <aside class="panel preview-panel">
-      <header class="panel-header">
-        <h1>3D</h1>
-      </header>
       <div class="preview-frame" id="imagePreviewArea">
+        <button
+          type="button"
+          id="preview3dMaximizeBtn"
+          class="preview-3d-max-btn"
+          aria-label="Maximize 3D panel"
+        >
+          <!-- maximize icon -->
+          <svg id="preview3dMaximizeIcon" viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 6V2h4M2 2l4 4M16 6V2h-4M16 2l-4 4M2 12v4h4M2 16l4-4M16 12v4h-4M16 16l-4-4"/>
+          </svg>
+          <!-- restore icon (shown when maximized) -->
+          <svg id="preview3dRestoreIcon" viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+            <path d="M6 2v4H2M2 6l4-4M12 2v4h4M16 6l-4-4M6 16v-4H2M2 12l4 4M12 16v-4h4M16 12l-4 4"/>
+          </svg>
+        </button>
         <img id="previewImage" alt="Composed dental preview" />
         <p id="previewFallback" class="preview-fallback">
           No preview image found. Open from the 3D page after generating the composed image.
