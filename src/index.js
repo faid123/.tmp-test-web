@@ -36,6 +36,63 @@ const url = new URL(window.location.href);
 let paramValue = url.searchParams.get("id");
 const close = url.searchParams.get("close");
 
+function showViewerLoader(message = "Loading 3D viewer", progress = 0.08) {
+  const host = document.getElementById("loading-container");
+  if (!host) return;
+  host.className = "loading-container";
+  host.style.display = "flex";
+  host.innerHTML = "";
+
+  const label = document.createElement("div");
+  label.dataset.viewerLoaderLabel = "true";
+  label.textContent = message;
+  label.style.position = "fixed";
+  label.style.top = "calc(50% - 34px)";
+  label.style.left = "50%";
+  label.style.transform = "translateX(-50%)";
+  label.style.fontWeight = "700";
+  label.style.fontSize = "14px";
+  label.style.fontFamily = "Arial, sans-serif";
+  label.style.color = "#111827";
+
+  const bar = document.createElement("div");
+  bar.className = "loading-bar";
+
+  const fill = document.createElement("div");
+  fill.className = "loading-progress";
+  fill.dataset.viewerLoaderFill = "true";
+  fill.style.width = `${Math.max(0, Math.min(1, progress)) * 100}%`;
+  fill.style.left = "0";
+  fill.style.animation = "none";
+  fill.style.transition = "width 0.25s ease";
+  bar.appendChild(fill);
+
+  host.appendChild(label);
+  host.appendChild(bar);
+}
+
+function updateViewerLoader(message, progress) {
+  const host = document.getElementById("loading-container");
+  const label = host?.querySelector("[data-viewer-loader-label]");
+  const fill = host?.querySelector("[data-viewer-loader-fill]");
+  if (!host || !label || !fill) {
+    showViewerLoader(message, progress);
+    return;
+  }
+  host.style.display = "flex";
+  label.textContent = message;
+  fill.style.width = `${Math.max(0, Math.min(1, progress)) * 100}%`;
+}
+
+function hideViewerLoader() {
+  const host = document.getElementById("loading-container");
+  if (!host) return;
+  host.style.display = "none";
+  host.innerHTML = "";
+}
+
+showViewerLoader();
+
 //decrypts the paramvalue
 //if doing testing with test cases jus comment it out
 //paramValue = lol(paramValue);
@@ -144,8 +201,62 @@ const polylineJawVisibility = new Map([
 const artificialTeethRenderer = createArtificialTeethRenderer({
   scene,
   parentObject,
+  camera,
   apiClient,
+  onStatus: (label, progress) => updateViewerLoader(label, 0.78 + Math.max(0, Math.min(1, progress)) * 0.2),
 });
+
+function queueArtificialTeethRender(caseIntID) {
+  const shouldAutoLoadArtificialTeeth =
+    url.searchParams.get("artificialTeeth") !== "0" &&
+    url.searchParams.get("artificialTeeth") !== "false";
+
+  if (!shouldAutoLoadArtificialTeeth) {
+    console.log("[artificial teeth] auto-load skipped; disable only with ?artificialTeeth=0/false");
+    hideViewerLoader();
+    return Promise.resolve();
+  }
+
+  updateViewerLoader("Preparing artificial teeth", 0.78);
+
+  const teethReady = new Promise((resolve) => {
+    window.setTimeout(() => {
+      updateViewerLoader("Decoding artificial teeth", 0.86);
+      artificialTeethRenderer.fetchAndRender(caseIntID)
+        .catch((error) => {
+          console.warn("[artificial teeth] deferred render failed", error);
+          artificialTeethRenderer.ensureFallbackTeeth({
+            upper: 16,
+            lower: 16,
+            source: "persistent-fallback-fetch-error",
+          });
+        })
+        .finally(() => {
+          artificialTeethRenderer.ensureFallbackTeeth({
+            upper: 16,
+            lower: 16,
+            source: "persistent-fallback-ready",
+          });
+          updateViewerLoader("Artificial teeth ready", 1);
+          window.setTimeout(hideViewerLoader, 450);
+          resolve();
+        });
+    }, 900);
+  });
+
+  [1600, 3500, 7000].forEach((delay) => {
+    window.setTimeout(() => {
+      artificialTeethRenderer.ensureFallbackTeeth({
+        upper: 16,
+        lower: 16,
+        source: `persistent-fallback-${delay}`,
+      });
+    }, delay);
+  });
+
+  return teethReady;
+}
+
 const POLYLINE_COMPONENT_COLORS = [
   0x6f35ff,
   0x00a6ff,
@@ -2082,6 +2193,7 @@ btnContainer.appendChild(edit2DStatic); */
   // to get the undercut and occulsion values
   let undercut_values = [];
 
+  updateViewerLoader("Loading jaw analysis", 0.2);
   const heatmap_urldatas = ["/undercutheatmap/get"];
   try {
     // Call the post method and wait for the response
@@ -2118,6 +2230,7 @@ btnContainer.appendChild(edit2DStatic); */
 
   //Processing mesh
 
+  updateViewerLoader("Loading jaw meshes", 0.36);
   // stl will be true is fail to process parameterisation
   let stl = false;
   const urls = ["/parameterisation/mesh/getall", "/surface/getall"];
@@ -2707,6 +2820,7 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     if (!anyLoaded) {
+      hideViewerLoader();
         alert("❌ No STL files found in slots 1 to 4.");
     } else {
         alert("✅ STL loading completed.");
@@ -2730,6 +2844,7 @@ btnContainer.appendChild(edit2DStatic); */
       if (child.material) child.material.dispose();
     }
     clearPolylineOverlay();
+    artificialTeethRenderer.clear();
 
     // Remove previous GUI controls if any
     const oldGui = document.querySelector(".dg.ac");
@@ -2862,8 +2977,8 @@ btnContainer.appendChild(edit2DStatic); */
       alert("❌ No STL files found in slots 1 to 4.");
     } else {
       alert("✅ STL loading completed.");
+      updateViewerLoader("Loading jaw design polylines", 0.62);
       await fetchAndRenderPolylines(paramValue);
-      await artificialTeethRenderer.fetchAndRender(paramValue);
       removeVisibilityAndTransparencyControls();
       // 🧩 Re-enable visibility/transparency controls after loading
       addVisibilityAndTransparencyControls(
@@ -2872,6 +2987,7 @@ btnContainer.appendChild(edit2DStatic); */
         all_mesh_mat,
         undercut_type
       );
+      await queueArtificialTeethRender(paramValue);
     }
   }
 
@@ -2957,8 +3073,9 @@ btnContainer.appendChild(edit2DStatic); */
     parentObject.add(mesh);
     syncPolylineFocusMode();
   }
+  updateViewerLoader("Loading jaw design polylines", 0.62);
   await fetchAndRenderPolylines(paramValue);
-  await artificialTeethRenderer.fetchAndRender(paramValue);
+  await queueArtificialTeethRender(paramValue);
   //console.log(all_mesh_mat);
 
   function changeMeshRotation(mesh, x, y, z) {
@@ -3111,6 +3228,7 @@ btnContainer.appendChild(edit2DStatic); */
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
+    artificialTeethRenderer.updateCameraVisibility(camera);
 
     renderer.render(scene, camera);
   }

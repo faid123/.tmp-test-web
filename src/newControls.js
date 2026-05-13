@@ -469,6 +469,12 @@ export { addVisibilityAndTransparencyControls };
          artificialTeethBtn.onclick = () => {
              const nextVisible = !(window.getArtificialTeethJawVisibility?.(jawKey) ?? true);
              window.setArtificialTeethJawVisibility?.(jawKey, nextVisible);
+             if (nextVisible && !window.hasRenderedArtificialTeeth?.()) {
+                 window.ensureFallbackArtificialTeeth?.({ upper: 16, lower: 16, source: 'control-force-visible' });
+             }
+             if (nextVisible) {
+                 window.revealArtificialTeeth?.();
+             }
              syncArtificialTeethButtonState();
          };
          syncArtificialTeethButtonState();
