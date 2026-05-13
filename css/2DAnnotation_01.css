@@ -87,8 +87,8 @@ body {
 }
 
 .preview-frame {
-  flex: 1;
-  min-height: 740px;
+  flex: 1 1 0;
+  min-height: 0;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: #ffffff;
@@ -99,6 +99,7 @@ body {
   gap: 10px;
   padding: 10px;
   position: relative;
+  overflow: hidden;
 }
 
 #previewImage {
@@ -121,15 +122,14 @@ body {
 .jaw-preview-shell {
   width: 100%;
   height: 100%;
-  min-height: 680px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  min-height: 0;
   background: #fff;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   padding: 14px 14px 12px;
   gap: 12px;
   position: relative;
+  overflow: hidden;
 }
 
 .jaw-preview-toolbar {
@@ -142,14 +142,15 @@ body {
 
 .jaw-preview-rows {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .jaw-preview-row {
   display: grid;
-  grid-template-columns: 28px 1fr 32px auto;
+  grid-template-columns: 28px 170px 32px 1fr;
   align-items: center;
-  gap: 10px;
+  column-gap: 14px;
+  padding: 2px 4px;
 }
 
 .jaw-preview-row-icon {
@@ -157,17 +158,28 @@ body {
   height: 26px;
   object-fit: contain;
   filter: brightness(0) saturate(0) opacity(0.75);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+/* .jaw-preview-row-icon:hover {
+  background: var(--rose-050);
+} */
+
+.jaw-preview-row.is-hidden-jaw .jaw-preview-row-icon {
+  opacity: 0.35;
 }
 
 .jaw-preview-row-check {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 0.74rem;
   font-weight: 700;
   color: var(--ink);
   letter-spacing: 0.04em;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .jaw-preview-row-check input {
@@ -175,19 +187,21 @@ body {
   height: 16px;
   accent-color: var(--rose-500);
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .jaw-preview-delete-btn {
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 8px;
   background: #fff;
-  height: 30px;
-  width: 30px;
+  height: 32px;
+  width: 32px;
   display: grid;
   place-items: center;
   cursor: pointer;
   color: var(--muted);
   font-family: inherit;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
 .jaw-preview-delete-btn:hover {
@@ -197,17 +211,22 @@ body {
 }
 
 .jaw-preview-survey-btn {
+  justify-self: start;
   border: 1px solid var(--rose-500);
   background: #fff;
   color: var(--rose-700);
-  border-radius: 6px;
-  padding: 7px 14px;
+  border-radius: 8px;
+  height: 32px;
+  padding: 0 16px;
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   cursor: pointer;
   font-family: inherit;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
 .jaw-preview-survey-btn:hover {
@@ -218,7 +237,8 @@ body {
 
 .jaw-preview-3d-mount {
   width: 100%;
-  min-height: 420px;
+  min-height: 0;
+  height: 100%;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #ffffff;

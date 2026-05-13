@@ -21,18 +21,7 @@
             placeholder="Enter your password"
           />
 
-          <div class="otp-wrapper">
-                    <input type="text" id="otp" placeholder="Enter verification code" maxlength="6" />
-                    <button type="button" id="send-otp-btn" onclick="sendOTP()">Send Code</button>
-                </div>
-
-                <button id="login-btn" onclick="verifyAndLogin()">Log In</button>
-
-          <!-- Comment out the otp-wrapper and login-btn above, and restore 
-            <button id="btn" onclick="login()">Log In</button> 
-            to disable the OTP feature -->
-
-          <!-- <button id="btn" onclick="login()">Log In</button> -->
+          <button id="btn" onclick="login()">Log In</button>
 
           <p id="error-message"></p>
         </div>

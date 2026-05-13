@@ -266,24 +266,46 @@ function init3DPreview(area) {
   rowUpper.surveyBtn.addEventListener("click", () => controls.reset());
   rowLower.surveyBtn.addEventListener("click", () => controls.reset());
 
-  rowUpper.toggle.addEventListener("change", () => {
-    if (preview3DState.groups.upper) {
-      preview3DState.groups.upper.visible = rowUpper.toggle.checked;
+  // Intentionally keep ALLOW PROCESSING checkboxes as display-only (no jaw visibility behavior).
+
+  const onIconToggleUpper = () => {
+    if (!preview3DState.groups.upper) return;
+    const visible = !preview3DState.groups.upper.visible;
+    preview3DState.groups.upper.visible = visible;
+    rowUpper.row.classList.toggle("is-hidden-jaw", !visible);
+  };
+  const onIconToggleLower = () => {
+    if (!preview3DState.groups.lower) return;
+    const visible = !preview3DState.groups.lower.visible;
+    preview3DState.groups.lower.visible = visible;
+    rowLower.row.classList.toggle("is-hidden-jaw", !visible);
+  };
+  rowUpper.iconEl.addEventListener("click", onIconToggleUpper);
+  rowLower.iconEl.addEventListener("click", onIconToggleLower);
+  rowUpper.iconEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onIconToggleUpper();
     }
   });
-  rowLower.toggle.addEventListener("change", () => {
-    if (preview3DState.groups.lower) {
-      preview3DState.groups.lower.visible = rowLower.toggle.checked;
+  rowLower.iconEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onIconToggleLower();
     }
   });
 
   rowUpper.deleteBtn.addEventListener("click", () => {
-    rowUpper.toggle.checked = false;
-    if (preview3DState.groups.upper) preview3DState.groups.upper.visible = false;
+    if (preview3DState.groups.upper) {
+      preview3DState.groups.upper.visible = false;
+      rowUpper.row.classList.add("is-hidden-jaw");
+    }
   });
   rowLower.deleteBtn.addEventListener("click", () => {
-    rowLower.toggle.checked = false;
-    if (preview3DState.groups.lower) preview3DState.groups.lower.visible = false;
+    if (preview3DState.groups.lower) {
+      preview3DState.groups.lower.visible = false;
+      rowLower.row.classList.add("is-hidden-jaw");
+    }
   });
 
   preview3DState.renderer = renderer;
@@ -408,6 +430,10 @@ function buildJawRow({ jaw, icon, label }) {
   iconEl.className = "jaw-preview-row-icon";
   iconEl.src = icon;
   iconEl.alt = jaw;
+  iconEl.role = "button";
+  iconEl.tabIndex = 0;
+  iconEl.title = `Toggle ${jaw} jaw`;
+  iconEl.setAttribute("aria-label", `Toggle ${jaw} jaw visibility`);
 
   const allowWrap = document.createElement("label");
   allowWrap.className = "jaw-preview-row-check";
@@ -436,7 +462,7 @@ function buildJawRow({ jaw, icon, label }) {
   row.appendChild(allowWrap);
   row.appendChild(deleteBtn);
   row.appendChild(surveyBtn);
-  return { row, toggle, deleteBtn, surveyBtn };
+  return { row, toggle, deleteBtn, surveyBtn, iconEl };
 }
 
 function showPreviewLoading(area, text) {
