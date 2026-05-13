@@ -496,6 +496,25 @@ export function getBarPlacementSurfaceForTooth(toothId, jaw, teethById) {
   return `bar_${tier}_${side}`;
 }
 
+// True when this anchor tooth has missing teeth on both mesial and distal sides (distance 1/2).
+export function hasMissingTeethOnBothSidesForBar(toothId, jaw, teethById) {
+  const order = TOOTH_ORDER[jaw];
+  const toothIndex = order.indexOf(String(toothId));
+  if (toothIndex < 0) return false;
+
+  let hasLeftMissing = false;
+  let hasRightMissing = false;
+  for (let i = 0; i < order.length; i += 1) {
+    if (teethById[order[i]]?.isPresent) continue;
+    const distance = Math.abs(toothIndex - i);
+    if (distance !== 1 && distance !== 2) continue;
+    if (i < toothIndex) hasLeftMissing = true;
+    if (i > toothIndex) hasRightMissing = true;
+    if (hasLeftMissing && hasRightMissing) return true;
+  }
+  return false;
+}
+
 // Resolve bar asset path for component/tooth/surface.
 export function getBarPlacementAssetReference(componentId, toothId, surface) {
   const templateToothId = getComponentTemplateToothId(toothId);

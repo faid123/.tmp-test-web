@@ -501,6 +501,7 @@ export {
   getBarPlacementRenderScale,
   getBarPlacementSurfaceForTooth,
   getBarSuggestibleToothIdSet,
+  hasMissingTeethOnBothSidesForBar,
   getBarUserOffset,
   isBarComponent,
   isBarPlacementSurface,

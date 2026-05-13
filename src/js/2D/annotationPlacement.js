@@ -259,6 +259,19 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
     return;
   }
 
+  // Bar constraint: keep exactly one placement per selected bar on a tooth.
+  // If user switches side (mesial/distal), replace previous surface with new one.
+  if (isBarComponent(selectedComponent) && targetSurface) {
+    const existingSameBarDifferentSurface = (tooth.componentPlacements || []).find((entry) => {
+      if (entry.componentId !== selectedComponent.id) return false;
+      const s = normalizeSurface(entry.surface);
+      return Boolean(s && s !== targetSurface);
+    });
+    if (existingSameBarDifferentSurface) {
+      removePlacement(tooth, existingSameBarDifferentSurface.componentId, existingSameBarDifferentSurface.surface);
+    }
+  }
+
   // Clasp-circ constraint: max one clasp per tooth.
   // Any existing retainer-clasp on this tooth is replaced by the new placement.
   if (

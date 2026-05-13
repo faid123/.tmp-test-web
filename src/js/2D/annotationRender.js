@@ -2,6 +2,7 @@ import {
   cancelMeshInteractionDefer,
   COMPONENT_BY_ID,
   deferMeshInteraction,
+  hasMissingTeethOnBothSidesForBar,
   getBarPlacementSurfaceForTooth,
   getBarSuggestibleToothIdSet,
   handleMeshToolDoubleClick,
@@ -89,6 +90,13 @@ function renderArchBackground(svg, jaw) {
       })
     );
   }
+}
+
+function getOppositeBarSurface(surface) {
+  const s = String(surface || "").toLowerCase();
+  if (s.endsWith("_mesial")) return s.replace(/_mesial$/, "_distal");
+  if (s.endsWith("_distal")) return s.replace(/_distal$/, "_mesial");
+  return null;
 }
 
 // Render both arches.
@@ -203,14 +211,26 @@ export function renderJaw(jaw) {
         }
         if (catalogPick && isBarComponent(catalogPick)) {
           const set = getBarSuggestibleToothIdSet(state.teeth, jaw);
-          if (set.has(toothId) && !hasBarPlacementAtSurface(tooth, catalogPick.id)) {
+          if (set.has(toothId)) {
             const barSurface = getBarPlacementSurfaceForTooth(toothId, jaw, state.teeth);
             if (!barSurface) {
               setMessage("Could not resolve bar type for this tooth.", true);
               if (hadSuppressedHints) renderJaw(jaw);
               return;
             }
-            placeSelectedComponentOnTooth(toothId, { surface: barSurface });
+            const existing = (tooth.componentPlacements || []).find(
+              (entry) => entry.componentId === catalogPick.id && String(entry.surface || "").startsWith("bar_")
+            );
+            const canSwitchSide = hasMissingTeethOnBothSidesForBar(toothId, jaw, state.teeth);
+            if (existing && !canSwitchSide) {
+              setMessage("Bar side switch requires missing teeth on both sides of this anchor tooth.", true);
+              renderJaw(jaw);
+              return;
+            }
+            const surfaceToPlace = existing
+              ? (canSwitchSide ? (getOppositeBarSurface(existing.surface) || barSurface) : String(existing.surface))
+              : barSurface;
+            placeSelectedComponentOnTooth(toothId, { surface: surfaceToPlace });
             renderJaw(jaw);
             return;
           }
@@ -237,7 +257,19 @@ export function renderJaw(jaw) {
           if (hadSuppressedHints) renderJaw(jaw);
           return;
         }
-        placeSelectedComponentOnTooth(toothId, { surface: barSurface });
+        const existing = (tooth.componentPlacements || []).find(
+          (entry) => entry.componentId === catalogPick.id && String(entry.surface || "").startsWith("bar_")
+        );
+        const canSwitchSide = hasMissingTeethOnBothSidesForBar(toothId, jaw, state.teeth);
+        if (existing && !canSwitchSide) {
+          setMessage("Bar side switch requires missing teeth on both sides of this anchor tooth.", true);
+          renderJaw(jaw);
+          return;
+        }
+        const surfaceToPlace = existing
+          ? (canSwitchSide ? (getOppositeBarSurface(existing.surface) || barSurface) : String(existing.surface))
+          : barSurface;
+        placeSelectedComponentOnTooth(toothId, { surface: surfaceToPlace });
         renderJaw(jaw);
         return;
       }

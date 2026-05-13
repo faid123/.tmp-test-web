@@ -656,8 +656,9 @@ function init() {
     import("./annotationTeethModel.js"),
     import("./annotationLocks.js"),
     import("./annotationCatalog.js"),
+    import("./noticeboard.js"),
   ])
-    .then(([, teethModel, locks, catalog]) => {
+    .then(([, teethModel, locks, catalog, noticeboard]) => {
       teethModel.initializeTeethState();
       bindHistoryControls();
       locks.bindStatusPicker();
@@ -670,6 +671,7 @@ function init() {
       locks.syncDesignModeWithLocks(false);
       renderJaws();
       locks.updateEditModeUI();
+      noticeboard.initNoticeboard();
       history.past = [cloneStateForHistory()];
       history.future = [];
       updateUndoRedoButtons();

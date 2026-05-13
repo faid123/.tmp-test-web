@@ -96,10 +96,12 @@ export function bindActionButtons() {
   const clearBottom = document.getElementById("clearBottomBtn");
   const reset = document.getElementById("drawFromScratchBtn");
   const save = document.getElementById("saveAnnotationBtn");
+  const saveJpeg = document.getElementById("saveJpegBtn");
   if (clearTop) clearTop.addEventListener("click", () => clearArchButtonClicked("upper"));
   if (clearBottom) clearBottom.addEventListener("click", () => clearArchButtonClicked("lower"));
   if (reset) reset.addEventListener("click", drawFromScratch);
   if (save) save.addEventListener("click", saveAnnotation);
+  if (saveJpeg) saveJpeg.addEventListener("click", saveAsJpeg);
 }
 
 function toggleBothJawsLock() {
@@ -427,6 +429,147 @@ export function saveAnnotation() {
     setMessage(`Saved to localStorage key "${storageKey}" and downloaded JSON file.`, false);
   } catch {
     setMessage("Failed to save annotation JSON.", true);
+  }
+}
+
+async function fetchAsDataUrl(href) {
+  const absoluteHref = href.startsWith("http") || href.startsWith("data:")
+    ? href
+    : new URL(href, location.href).href;
+  const response = await fetch(absoluteHref);
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(/** @type {string} */ (reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+let cachedPageCss = null;
+async function fetchPageCss() {
+  if (cachedPageCss !== null) return cachedPageCss;
+  const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+  const texts = await Promise.all(
+    links.map(async (link) => {
+      try {
+        const response = await fetch(link.href);
+        return await response.text();
+      } catch {
+        return "";
+      }
+    })
+  );
+  const inlineStyles = Array.from(document.querySelectorAll("style"))
+    .map((s) => s.textContent || "")
+    .join("\n");
+  cachedPageCss = `${texts.join("\n")}\n${inlineStyles}`;
+  return cachedPageCss;
+}
+
+async function inlineImagesInSvg(svg) {
+  const clone = svg.cloneNode(true);
+
+  const cssText = await fetchPageCss();
+  if (cssText) {
+    const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
+    styleEl.textContent = cssText;
+    clone.insertBefore(styleEl, clone.firstChild);
+  }
+
+  const imageEls = Array.from(clone.querySelectorAll("image"));
+  await Promise.all(
+    imageEls.map(async (imgEl) => {
+      const href =
+        imgEl.getAttribute("href") ||
+        imgEl.getAttributeNS("http://www.w3.org/1999/xlink", "href") ||
+        "";
+      if (!href || href.startsWith("data:")) return;
+      try {
+        const dataUrl = await fetchAsDataUrl(href);
+        imgEl.setAttribute("href", dataUrl);
+      } catch (e) {
+        console.warn("Could not inline image:", href, e);
+      }
+    })
+  );
+  return clone;
+}
+
+function svgToImage(inlinedSvg) {
+  return new Promise((resolve, reject) => {
+    const serializer = new XMLSerializer();
+    const svgStr = serializer.serializeToString(inlinedSvg);
+    const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("SVG image load failed")); };
+    img.src = url;
+  });
+}
+
+async function composeJawCanvas() {
+  const upperSvg = document.getElementById("upperArchSvg");
+  const lowerSvg = document.getElementById("lowerArchSvg");
+  if (!upperSvg || !lowerSvg) return null;
+
+  const parseViewBox = (svg) => {
+    const parts = (svg.getAttribute("viewBox") || "0 0 620 380").trim().split(/\s+/).map(Number);
+    return { w: parts[2] || 620, h: parts[3] || 380 };
+  };
+
+  const upperDims = parseViewBox(upperSvg);
+  const lowerDims = parseViewBox(lowerSvg);
+  const gap = 20;
+  const canvasW = Math.max(upperDims.w, lowerDims.w);
+  const canvasH = upperDims.h + gap + lowerDims.h;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = canvasW;
+  canvas.height = canvasH;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  const [upperInlined, lowerInlined] = await Promise.all([
+    inlineImagesInSvg(upperSvg),
+    inlineImagesInSvg(lowerSvg),
+  ]);
+  const [upperImg, lowerImg] = await Promise.all([
+    svgToImage(upperInlined),
+    svgToImage(lowerInlined),
+  ]);
+  ctx.drawImage(upperImg, 0, 0, upperDims.w, upperDims.h);
+  ctx.drawImage(lowerImg, 0, upperDims.h + gap, lowerDims.w, lowerDims.h);
+  return canvas;
+}
+
+export async function captureJawJpegDataUrl(quality = 0.92) {
+  const canvas = await composeJawCanvas();
+  if (!canvas) return null;
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
+export async function saveAsJpeg() {
+  try {
+    setMessage("Exporting JPEG…", false);
+    const canvas = await composeJawCanvas();
+    if (!canvas) {
+      setMessage("Cannot find jaw SVGs to export.", true);
+      return;
+    }
+    const jpegUrl = canvas.toDataURL("image/jpeg", 0.92);
+    const a = document.createElement("a");
+    a.href = jpegUrl;
+    a.download = `case_${state.caseIntID ?? "unknown"}_arch_annotation.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setMessage("Arch annotation saved as JPEG.", false);
+  } catch (err) {
+    console.error("JPEG export failed", err);
+    setMessage("Failed to export as JPEG.", true);
   }
 }
 

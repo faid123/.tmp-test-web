@@ -354,6 +354,7 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
       const minor = svgEl("g", {
         class: "minor-connector-placement",
         transform: `translate(${offset.x} ${offset.y}) scale(${mirrored ? -1 : 1} 1)`,
+        "pointer-events": "none",
       });
 
       minor.appendChild(
@@ -366,6 +367,7 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
           preserveAspectRatio: "xMidYMid meet",
           class: "minor-connector-image",
           "data-component-id": "minor-connector",
+          "pointer-events": "none",
         })
       );
 
