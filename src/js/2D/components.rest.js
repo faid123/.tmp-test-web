@@ -113,7 +113,7 @@ export const REST_CINGULUM_AC_POINT_BY_TOOTH = Object.freeze({
   },
 });
 
-const REST_PLACEMENT_ASSET_BASE = "../../../assets/RPD_Component";
+const REST_PLACEMENT_ASSET_BASE = "../../assets/RPD_Component";
 
 const REST_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
   "11": { ac_mesial: { width: 30, height: 25 }, ac_distal: { width: 25, height: 33 }, ac_full: { width: 40, height: 37 }, ai_mesial: { width: 32, height: 30 }, ai_distal: { width: 33, height: 41 } },

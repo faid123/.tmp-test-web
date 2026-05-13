@@ -1,7 +1,7 @@
 import { getPlateAssetReference } from "./components.plate.js";
 import { isAutoMeshPlacementExcludedToothId, TOOTH_ORDER } from "./constants.js";
 
-export const COMPONENT_ASSET_BASE = "../../../assets/RPD_Component";
+export const COMPONENT_ASSET_BASE = "../../assets/RPD_Component";
 
 /** When no mesh is selected in the annotation UI, new mesh sites use this component id. */
 export const MESH_PLACEMENT_FALLBACK_ID = "mesh-hole";

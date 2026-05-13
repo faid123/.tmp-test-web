@@ -15,7 +15,7 @@ const CLASP_CIRC_SURFACE_ORDER = [
   CLASP_CIRC_SURFACE.DISTAL_LINGUAL,
 ];
 
-const CLASP_ASSET_BASE = "../../../assets/RPD_Component";
+const CLASP_ASSET_BASE = "../../assets/RPD_Component";
 
 const CLASP_CIRC_SUGGESTION_RADIUS = 7;
 

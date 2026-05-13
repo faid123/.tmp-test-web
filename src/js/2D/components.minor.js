@@ -1,6 +1,6 @@
 import { getComponentTemplateToothId } from "./components.mesh.js";
 
-const MINOR_CONNECTOR_ASSET_BASE = "../../../assets/RPD_Component/MinorConnector";
+const MINOR_CONNECTOR_ASSET_BASE = "../../assets/RPD_Component/MinorConnector";
 
 const MINOR_CONNECTOR_IMAGE_SIZE_BY_TEMPLATE_TOOTH = Object.freeze({
   "11": { width: 151, height: 152 },
