@@ -399,8 +399,90 @@ body {
 
 .arch-topbar {
   display: flex;
+  align-items: center;
   justify-content: center;
+  gap: 12px;
   margin-bottom: 30px;
+  position: relative;
+}
+
+.back-to-case-list {
+  position: absolute;
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+  padding-top: 10px;
+  background: white;
+  color: var(--line);
+  font-size: 1.5rem;
+  font-weight: 800;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.back-to-case-list:hover {
+  background: transparent;
+  color: var(--rose-700);
+  border-radius: 10px;
+}
+
+.back-confirm-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 18, 28, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 1100;
+}
+
+.back-confirm-modal.is-hidden {
+  display: none;
+}
+
+.back-confirm-panel {
+  width: min(420px, calc(100vw - 32px));
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #d7dce4;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.2);
+  padding: 18px;
+}
+
+.back-confirm-panel h3 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  color: #142434;
+}
+
+.back-confirm-panel p {
+  margin: 0;
+  font-size: 0.94rem;
+  color: #4a5663;
+}
+
+.back-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.back-confirm-actions button {
+  border: 1px solid #c9d1dc;
+  border-radius: 8px;
+  background: #fff;
+  color: #1d2b38;
+  font-weight: 600;
+  padding: 8px 12px;
+}
+
+#backConfirmSaveBack {
+  background: var(--rose-500);
+  border-color: black;
+  color: #fff;
 }
 
 .case-label {
@@ -411,7 +493,7 @@ body {
   background: white;
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 7px 10px;
+  padding: 6px 12px;
   margin-top: 5px;
 }
 

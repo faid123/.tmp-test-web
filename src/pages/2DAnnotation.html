@@ -6,6 +6,10 @@
   <title>2D Annotate</title>
   <link rel="stylesheet" href="../../css/2DAnnotation_01.css" />
   <link rel="icon" href="/assets/favicon.ico" type="image/x-icon" />
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+  />
 </head>
 <body>
   <main class="annotation-shell">
@@ -36,6 +40,9 @@
     <section class="workspace-panel">
       <section class="panel arch-panel">
         <div class="arch-topbar">
+          <a id="backToCaseListBtn" class="back-to-case-list" href="case_list.html" title="Back to case list">
+            <i class="fa fa-arrow-left"></i>
+          </a>
           <div id="caseLabel" class="case-label">Case: Unknown</div>
         </div>
 
@@ -535,6 +542,18 @@
           </div>
         </section>
       </aside>
+    </div>
+  </div>
+
+  <div id="backConfirmModal" class="back-confirm-modal is-hidden" aria-hidden="true">
+    <div class="back-confirm-panel" role="dialog" aria-modal="true" aria-labelledby="backConfirmTitle">
+      <h3 id="backConfirmTitle">Leave this page?</h3>
+      <p>Your latest edits may be unsaved.</p>
+      <div class="back-confirm-actions">
+        <button id="backConfirmCancel" type="button">Cancel</button>
+        <button id="backConfirmBack" type="button">Back</button>
+        <button id="backConfirmSaveBack" type="button">Save and Back</button>
+      </div>
     </div>
   </div>
 

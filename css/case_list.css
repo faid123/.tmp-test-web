@@ -49,6 +49,33 @@ body {
 
 .top-row {
   width: 100%;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.top-row .create-case {
+  flex: 1;
+}
+
+.logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  border: 1.5px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  border-radius: 6px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.logout:hover {
+  background: var(--accent);
+  color: #fff;
 }
 
 button {

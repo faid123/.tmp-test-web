@@ -692,6 +692,56 @@ function bindPreviewPanelToggle() {
   });
 }
 
+function bindBackNavigationDialog(locks) {
+  const backLink = document.getElementById("backToCaseListBtn");
+  const modal = document.getElementById("backConfirmModal");
+  const cancelBtn = document.getElementById("backConfirmCancel");
+  const backBtn = document.getElementById("backConfirmBack");
+  const saveBackBtn = document.getElementById("backConfirmSaveBack");
+  if (!backLink || !modal || !cancelBtn || !backBtn || !saveBackBtn || !locks) return;
+
+  const targetHref = backLink.getAttribute("href") || "case_list.html";
+
+  const closeModal = () => {
+    modal.classList.add("is-hidden");
+    modal.setAttribute("aria-hidden", "true");
+  };
+
+  const openModal = () => {
+    modal.classList.remove("is-hidden");
+    modal.setAttribute("aria-hidden", "false");
+    cancelBtn.focus();
+  };
+
+  backLink.addEventListener("click", (event) => {
+    event.preventDefault();
+    openModal();
+  });
+
+  cancelBtn.addEventListener("click", closeModal);
+  backBtn.addEventListener("click", () => {
+    window.location.href = targetHref;
+  });
+  saveBackBtn.addEventListener("click", () => {
+    try {
+      localStorage.setItem(locks.getStorageKey(), JSON.stringify(locks.buildPayload()));
+    } catch {
+      setMessage("Could not save locally. Going back anyway.", true);
+    }
+    window.location.href = targetHref;
+  });
+
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) closeModal();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !modal.classList.contains("is-hidden")) {
+      closeModal();
+    }
+  });
+}
+
 function start() {
   if (ui.hasInitialized) return;
   ui.hasInitialized = true;
@@ -725,6 +775,7 @@ function init() {
       locks.syncDesignModeWithLocks(false);
       renderJaws();
       locks.updateEditModeUI();
+      bindBackNavigationDialog(locks);
       noticeboard.initNoticeboard();
       history.past = [cloneStateForHistory()];
       history.future = [];
