@@ -1,16 +1,16 @@
 :root {
-  --bg: #fff8fb;
+  --bg: #fff5f7;
   --panel: #ffffff;
-  --line: #f1c8d4;
-  --ink: #4d2230;
-  --muted: #8d5a67;
-  --dark-block: #b34967;
-  --rose-050: #fff1f6;
-  --rose-100: #ffe7ef;
-  --rose-500: #c44f70;
-  --rose-600: #b03460;
-  --rose-700: #902a46;
-  --rose-800: #6e1e35;
+  --line: #BB0D27;
+  --ink: #4d1922;
+  --muted: #8d525c;
+  --dark-block: #a8253a;
+  --rose-050: #fdeaed;
+  --rose-100: #fbd0d6;
+  --rose-500: #BB0D27;
+  --rose-600: #9e0b21;
+  --rose-700: #82091c;
+  --rose-800: #660716;
 }
 
 * { box-sizing: border-box; }
@@ -18,7 +18,7 @@
 body {
   margin: 0;
   font-family: "Montserrat", "Segoe UI", sans-serif;
-  background: linear-gradient(180deg, #fff 0%, var(--bg) 100%);
+  background: linear-gradient(180deg, hsl(0, 0%, 100%) 0%, var(--bg) 100%);
   color: var(--ink);
 }
 
@@ -408,8 +408,9 @@ body {
   text-align: center;
   font-size: 1rem;
   color: var(--muted);
-  background: var(--rose-050);
+  background: white;
   border: 1px solid var(--line);
+  border-radius: 10px;
   padding: 7px 10px;
   margin-top: 5px;
 }
@@ -435,9 +436,7 @@ body {
 }
 
 .jaw-row-name {
-  background: var(--rose-050);
-  border: 1px solid var(--line);
-  border-radius: 5px;
+  background: white;
   color: var(--muted);
   font-size: 0.8rem;
   text-align: center;
@@ -579,7 +578,7 @@ body {
   white-space: nowrap;
   padding: 6px 10px;
   border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.18);
+  border: 1px solid #BB0D27;
   background: #ffffff;
   color: #222222;
   font-size: 0.8rem;
@@ -1227,7 +1226,7 @@ body {
   background: transparent;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(197, 205, 214, 0.75);
+  border: 1px solid #BB0D27;
   border-radius: 10px;
   padding: 6px 8px 6px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
@@ -1275,7 +1274,7 @@ body {
   font-weight: 600;
   color: #1f2937;
   background: rgba(249, 250, 251, 0.85);
-  border: 1px solid rgba(209, 213, 219, 0.9);
+  border: 1px solid #BB0D27;
   border-radius: 6px;
   cursor: pointer;
   font-family: inherit;
@@ -1284,7 +1283,7 @@ body {
 
 .remove-component-item-btn:hover {
   background: rgba(255, 255, 255, 0.95);
-  border-color: #c45a6f;
+  border-color: #BB0D27;
   color: #9d174d;
 }
 
@@ -1300,7 +1299,7 @@ body {
   font-weight: 600;
   color: #4b5563;
   background: rgba(243, 244, 246, 0.9);
-  border: 1px solid rgba(209, 213, 219, 0.9);
+  border: 1px solid #BB0D27;
   border-radius: 6px;
   cursor: pointer;
   font-family: inherit;
@@ -1336,7 +1335,7 @@ body {
   width: max-content;
   max-width: min(268px, calc(100vw - 16px));
   background: #e8eaed;
-  border: 1px solid #c5cdd6;
+  border: 1px solid #BB0D27;
   border-radius: 14px;
   padding: 8px 10px 8px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
@@ -1376,7 +1375,7 @@ body {
   letter-spacing: 0.05em;
   color: #374151;
   background: #f3f4f6;
-  border: 2px solid #0d9488;
+  border: 2px solid #BB0D27;
   border-radius: 8px;
   cursor: pointer;
   font-family: inherit;
@@ -1427,7 +1426,7 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .preview-frame { min-height: 380px; }
+  .preview-frame { min-height: 500px; }
 
   .center-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1440,12 +1439,129 @@ body {
 
 }
 
+/* iPad-range (above phone breakpoint, below desktop): place lower arch on the
+   left and upper arch on the right so each jaw fills half the row instead of
+   being letterboxed in a centered single column. */
+@media (min-width: 720px) and (max-width: 1200px) {
+  .jaw-combined-canvas {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+    column-gap: 24px;
+    row-gap: 8px;
+    align-items: center;
+    justify-items: center;
+  }
+
+  .jaw-combined-canvas > #lowerArchSvg {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    height: 100%;
+    flex: none;
+  }
+
+  .jaw-combined-canvas > #upperArchSvg {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    height: 100%;
+    flex: none;
+  }
+
+  .jaw-combined-canvas > .jaw-lock-strip {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+}
+
 /* Keep jaw diagrams usable on phones: minimum drawing size + scroll if viewport is narrower */
-@media (max-width: 768px) {
+/* @media (max-width: 768px) {
+
   .preview-frame {
     min-height: min(280px, 42vh);
   }
 
+  
+} */
+
+/* Narrow viewports: keep icon + checkbox-label + delete + survey button on one line
+   by letting the label column flex and compacting the survey button. */
+@media (max-width: 720px) {
+    .preview-frame {
+    min-height: min(480px, 82vh);
+  }
+
+  .jaw-preview-shell {
+    padding: 10px 10px 10px;
+    gap: 10px;
+  }
+
+  .jaw-preview-toolbar {
+    gap: 8px;
+    padding-bottom: 10px;
+  }
+
+  .jaw-preview-row {
+    grid-template-columns: 26px minmax(0, 1fr) 32px auto;
+    column-gap: 10px;
+  }
+
+  .jaw-preview-row-check {
+    font-size: 0.7rem;
+    letter-spacing: 0.02em;
+    min-width: 0;
+  }
+
+  .jaw-preview-row-check span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .jaw-preview-survey-btn {
+    justify-self: end;
+    padding: 0 10px;
+    font-size: 0.62rem;
+    letter-spacing: 0.02em;
+    height: 30px;
+  }
+
+  .jaw-preview-footer {
+    gap: 8px;
+  }
+
+  .jaw-preview-footer-btn {
+    padding: 9px 8px;
+    font-size: 0.66rem;
+    letter-spacing: 0.03em;
+  }
+
+  .jaw-preview-undercut {
+    left: 12px;
+    top: 12px;
+    padding: 6px 8px;
+    border-radius: 6px;
+  }
+
+  .jaw-preview-undercut-title {
+    font-size: 0.6rem;
+    margin-bottom: 5px;
+  }
+
+  .jaw-preview-undercut-body {
+    grid-template-columns: 16px auto;
+    gap: 6px;
+  }
+
+  .jaw-preview-undercut-scale {
+    height: 60px;
+  }
+
+  .jaw-preview-undercut-labels {
+    font-size: 0.54rem;
+  }
   .tools-panel {
     gap: 10px;
     max-height: none;
@@ -1490,7 +1606,7 @@ body {
   }
 }
 
-/* Present-tooth quick-pick (design mode): square 2x2 layout */
+/* Present-tooth quick-pick (design mode): circular 4-quadrant layout */
 .tooth-radial-backdrop {
   position: fixed;
   inset: 0;
@@ -1504,12 +1620,39 @@ body {
 
 .tooth-radial-panel {
   position: fixed;
-  width: 120px;
-  height: 120px;
+  width: 104px;
+  height: 104px;
   pointer-events: auto;
-  background: lightgrey;
-  opacity: 0.87;
-  border-radius: 10px;
+  background: #ffffff;
+  border: 2px solid var(--rose-500);
+  border-radius: 50%;
+  box-shadow: 0 6px 18px rgba(200, 21, 21, 0.12);
+}
+
+.tooth-radial-panel::before,
+.tooth-radial-panel::after {
+  content: "";
+  position: absolute;
+  background: #BB0D27;
+  opacity: 0.85;
+  border-radius: 2px;
+  z-index: 1;
+}
+
+.tooth-radial-panel::before {
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  transform: translateX(-50%);
+}
+
+.tooth-radial-panel::after {
+  left: 0;
+  top: 50%;
+  width: 100%;
+  height: 1px;
+  transform: translateY(-50%);
 }
 
 .tooth-radial-tooth-id {
@@ -1517,31 +1660,37 @@ body {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  font-size: 12px;
+  font-size: 10px;
   line-height: 1;
-  font-weight: 500;
-  color: #b33a4e;
+  font-weight: 600;
+  color: var(--rose-500);
   pointer-events: none;
   background: white;
-  border: 1px solid red;
-  padding: 5px;
-  border-radius: 5px;
+  border: 1px solid #BB0D27;
+  padding: 4px 7px;
+  border-radius: 6px;
+  z-index: 3;
+  letter-spacing: 0.01em;
 }
 
 .tooth-radial-option {
   position: absolute;
-  width: 45px;
-  height: 45px;
-  border: 1px solid #b33a4e;
-  border-radius: 10px;
-  background: white;
-  margin: 5px;
-  color: #b33a4e;
-  font-size: 9px;
-  font-weight: 400;
+  width: 50%;
+  height: 50%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  margin: 0;
+  color: #7a3e52;
+  font-size: 8.5px;
+  font-weight: 600;
   letter-spacing: 0.01em;
   cursor: pointer;
-  transition: background 0.12s ease, transform 0.12s ease;
+  transition: background 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tooth-radial-option-icon {
@@ -1552,28 +1701,39 @@ body {
   margin: 0 auto;
 }
 
+.tooth-radial-option-icon-back {
+  width: 20px;
+  height: 20px;
+  padding-bottom: 3px;
+}
+
 .tooth-radial-option.top-left {
   left: 0;
   top: 0;
+  border-top-left-radius: 100%;
 }
 
 .tooth-radial-option.top-right {
   right: 0;
   top: 0;
+  border-top-right-radius: 100%;
 }
 
 .tooth-radial-option.bottom-left {
   left: 0;
   bottom: 0;
+  border-bottom-left-radius: 100%;
 }
 
 .tooth-radial-option.bottom-right {
   right: 0;
   bottom: 0;
+  border-bottom-right-radius: 100%;
 }
 
 .tooth-radial-option:hover {
-  background: #fff2f5;
+  background: rgba(200, 133, 156, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(127, 90, 105, 0.35);
 }
 
 .tooth-radial-option:active {
@@ -1585,29 +1745,37 @@ body {
 }
 
 .tooth-radial-option:focus-visible {
-  box-shadow: 0 0 0 3px rgba(120, 48, 74, 0.55);
+  box-shadow: 0 0 0 2px rgba(127, 90, 105, 0.55);
 }
 
 .tooth-radial-option[data-tooltip]::after {
   content: attr(data-tooltip);
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 6px);
-  transform: translate(-50%, 2px);
+  bottom: calc(100% + 10px);
+  transform: translate(-50%, 4px);
   white-space: nowrap;
-  padding: 4px 8px;
+  padding: 4px 9px;
   border-radius: 6px;
-  border: 1px solid rgba(0, 0, 0, 0.18);
+  border: 1px solid #BB0D27;
   background: #ffffff;
-  color: #222222;
+  color: var(--rose-600);
   font-size: 0.68rem;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   line-height: 1.2;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 10px rgba(187, 13, 39, 0.18);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.08s ease-out, transform 0.08s ease-out;
+  transition: opacity 0.1s ease-out, transform 0.1s ease-out;
   z-index: 60;
+}
+
+.tooth-radial-option.bottom-left[data-tooltip]::after,
+.tooth-radial-option.bottom-right[data-tooltip]::after {
+  bottom: auto;
+  top: calc(100% + 10px);
+  transform: translate(-50%, -4px);
 }
 
 .tooth-radial-option[data-tooltip]:hover::after,
@@ -2142,7 +2310,7 @@ body {
 .instruction-editor-color-swatch {
   height: 46px;
   border-radius: 8px;
-  border: 2px solid #fff;
+  border: 2px solid #BB0D27;
   cursor: pointer;
   box-shadow: 0 0 0 1px var(--line);
   font-family: inherit;

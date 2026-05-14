@@ -1,5 +1,5 @@
 import { TOOTH_ORDER } from "./constants.js";
-import { COMPONENT_ASSET_BASE, getComponentTemplateToothId } from "./components.mesh.js";
+import { COMPONENT_ASSET_BASE, getComponentTemplateToothId, isMeshComponent } from "./components.mesh.js";
 
 const BAR_TAB = "bars";
 const BAR_SURFACE_RE = /^bar_(d[12])_(mesial|distal)$/;
@@ -68,7 +68,7 @@ export const BAR_IMAGE_SIZE = Object.freeze({ width: 92, height: 92 });
 export const BAR_DEFAULT_RENDER_SCALE = 1.2;
 
 /**
- * d1: adjacent to missing tooth, d2: two teeth away.
+ * d1: adjacent to reference tooth, d2: two teeth away.
  * These units preserve previous visible size with the new common source box.
  */
 const BAR_TIER_DISPLAY_UNIT = Object.freeze({
@@ -76,6 +76,10 @@ const BAR_TIER_DISPLAY_UNIT = Object.freeze({
   d2: (88 * 1) / BAR_IMAGE_SIZE.width,
 });
 
+function toothHasAnyMeshPlacement(tooth) {
+  const placements = Array.isArray(tooth?.componentPlacements) ? tooth.componentPlacements : [];
+  return placements.some((entry) => isMeshComponent(entry?.componentId));
+}
 /**
  * Optional per-tooth size fine tuning.
  * Keys per tooth: `mesial` / `distal` (side of the bar), and/or the full bar surface
@@ -437,15 +441,15 @@ export function isBarComponent(componentOrId) {
   return String(componentOrId || "").startsWith("bar-");
 }
 
-/** Present teeth within arch index ±1/±2 from any missing tooth in the same jaw. */
+/** Present teeth within arch index ±1/±2 from any mesh-bearing tooth in the same jaw. */
 // Compute teeth eligible for bar suggestions on a jaw.
 export function getBarSuggestibleToothIdSet(teethById, jaw) {
   const order = TOOTH_ORDER[jaw];
   const out = new Set();
 
   for (let i = 0; i < order.length; i += 1) {
-    const missingTooth = teethById[order[i]];
-    if (!missingTooth || missingTooth.isPresent) continue;
+    const meshTooth = teethById[order[i]];
+    if (!meshTooth || !toothHasAnyMeshPlacement(meshTooth)) continue;
 
     for (const delta of [-2, -1, 1, 2]) {
       const j = i + delta;
@@ -461,7 +465,7 @@ export function getBarSuggestibleToothIdSet(teethById, jaw) {
 }
 
 /**
- * Resolve bar surface from nearest missing tooth:
+ * Resolve bar surface from nearest mesh-bearing tooth:
  * - distance 1 => d1
  * - distance 2 => d2
  * - side => mesial/distal (relative to each side of the arch)
@@ -469,48 +473,52 @@ export function getBarSuggestibleToothIdSet(teethById, jaw) {
 // Resolve bar surface for a selected suggestible tooth.
 export function getBarPlacementSurfaceForTooth(toothId, jaw, teethById) {
   const order = TOOTH_ORDER[jaw];
-  const toothIndex = order.indexOf(toothId);
+  const toothIndex = order.indexOf(String(toothId));
   if (toothIndex < 0 || !teethById[toothId]?.isPresent) return null;
 
-  let nearestMissingIndex = null;
+  let nearestMeshIndex = null;
   let nearestDistance = null;
 
   for (let i = 0; i < order.length; i += 1) {
-    if (teethById[order[i]]?.isPresent) continue;
+    if (!toothHasAnyMeshPlacement(teethById[order[i]])) continue;
     const distance = Math.abs(toothIndex - i);
     if (distance !== 1 && distance !== 2) continue;
-    if (nearestDistance === null || distance < nearestDistance || (distance === nearestDistance && i < nearestMissingIndex)) {
+    if (
+      nearestDistance === null ||
+      distance < nearestDistance ||
+      (distance === nearestDistance && i < nearestMeshIndex)
+    ) {
       nearestDistance = distance;
-      nearestMissingIndex = i;
+      nearestMeshIndex = i;
     }
   }
 
-  if (nearestDistance === null || nearestMissingIndex === null) return null;
+  if (nearestDistance === null || nearestMeshIndex === null) return null;
 
   const rightHemisphereStartIndex = order.length / 2;
   const mesialDirection = toothIndex < rightHemisphereStartIndex ? 1 : -1;
-  const missingDirection = nearestMissingIndex > toothIndex ? 1 : -1;
-  const side = missingDirection === mesialDirection ? "distal" : "mesial";
+  const meshDirection = nearestMeshIndex > toothIndex ? 1 : -1;
+  const side = meshDirection === mesialDirection ? "distal" : "mesial";
   const tier = nearestDistance === 1 ? "d1" : "d2";
 
   return `bar_${tier}_${side}`;
 }
 
-// True when this anchor tooth has missing teeth on both mesial and distal sides (distance 1/2).
+// True when this anchor tooth has mesh-bearing teeth on both mesial and distal sides (distance 1/2).
 export function hasMissingTeethOnBothSidesForBar(toothId, jaw, teethById) {
   const order = TOOTH_ORDER[jaw];
   const toothIndex = order.indexOf(String(toothId));
   if (toothIndex < 0) return false;
 
-  let hasLeftMissing = false;
-  let hasRightMissing = false;
+  let hasLeftMesh = false;
+  let hasRightMesh = false;
   for (let i = 0; i < order.length; i += 1) {
-    if (teethById[order[i]]?.isPresent) continue;
+    if (!toothHasAnyMeshPlacement(teethById[order[i]])) continue;
     const distance = Math.abs(toothIndex - i);
     if (distance !== 1 && distance !== 2) continue;
-    if (i < toothIndex) hasLeftMissing = true;
-    if (i > toothIndex) hasRightMissing = true;
-    if (hasLeftMissing && hasRightMissing) return true;
+    if (i < toothIndex) hasLeftMesh = true;
+    if (i > toothIndex) hasRightMesh = true;
+    if (hasLeftMesh && hasRightMesh) return true;
   }
   return false;
 }

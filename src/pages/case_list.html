@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=1024" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Case List</title>
     <link rel="stylesheet" href="../../css/case_list.css" />
     <link rel="stylesheet" href="../../css/createCase.css" />
@@ -19,8 +19,33 @@
       <!-- 左侧主列表 -->
       <div class="case-list">
         <div class="case-header">
-          <button id="notificationBtn" class="notifications">
-            🔔 NOTIFICATIONS
+          <div class="top-row">
+            <button class="create-case">NEW CASE</button>
+          </div>
+          <div class="toolbar-row">
+            <div class="toolbar-group">
+              <label for="dateFilterInput">Filter by Date</label>
+              <div class="input-wrap">
+                <input id="dateFilterInput" type="date" />
+                <button id="clearDateBtn" class="clear-btn" type="button">x</button>
+              </div>
+            </div>
+            <div class="toolbar-group">
+              <label for="searchCaseInput">Search Case Name</label>
+              <div class="input-wrap search-wrap">
+                <button id="searchBtn" class="search-btn" type="button" aria-label="Search"><i class="fa fa-search"></i></button>
+                <input id="searchCaseInput" type="text" placeholder="Search by name…" />
+              </div>
+            </div>
+            <label class="checkbox-wrap" for="todayOnly">
+              <input id="todayOnly" type="checkbox" />
+              <span>FILTER CREATED TODAY</span>
+            </label>
+            <button id="refreshListBtn" class="refresh" type="button">REFRESH LIST</button>
+          </div>
+
+          <button id="notificationBtn" class="notifications hidden">
+            NOTIFICATIONS
             <span id="notificationDot" class="notif-dot" aria-hidden="true"></span>
           </button>
           <!-- 通知弹出框 -->
@@ -33,7 +58,7 @@
               <!-- 通知列表将由 JS 动态插入 -->
             </div>
           </div>
-          <div class="filter">
+          <div class="filter hidden">
             <label for="filter-status">FILTER BY STATUS</label>
             <select id="filter-status" class="status-dropdown">
               <option value="all">ALL</option>
@@ -51,9 +76,6 @@
               <option value="completed">Completed</option>
             </select>
           </div>
-          <button class="create-case">CREATE NEW CASE</button>
-          <button class="refresh">⟳ REFRESH</button>
-          <button class="logout">LOGOUT</button>
         </div>
 
         <!-- <div class="case-tabs">
@@ -62,30 +84,27 @@
             </div> -->
 
         <!-- 表头独立 -->
-        <table class="case-table">
-          <thead>
-            <tr>
-              <th class="sortable" data-sort="case_id" style="width: 17%">
-                CASE NAME
-              </th>
-              <th class="sortable" data-sort="creation_date" style="width: 17%">
-                DATE REQUESTED
-              </th>
-              <th class="sortable" data-sort="expected_date" style="width: 17%">
-                DUE DATE
-              </th>
-              <th class="sortable" data-sort="new_status" style="width: 17%">
-                STATUS
-              </th>
-              <!-- ✅ 修正字段 -->
-              <th class="sortable" data-sort="assigned_to" style="width: 18%">
-                ASSIGNED TO
-              </th>
-              <th style="width: 12%">ACTIONS</th>
-              <!-- ✅ 修正字段 -->
-            </tr>
-          </thead>
-        </table>
+        <div class="table-head-wrapper">
+          <table class="case-table">
+            <thead>
+              <tr>
+                <th class="sortable" data-sort="case_id" style="width: 30%">
+                  CASE NAME
+                </th>
+                <th class="sortable col-date" data-sort="creation_date" style="width: 20%">
+                  DATE CREATED
+                </th>
+                <th class="sortable col-date" data-sort="last_updated" style="width: 20%">
+                  LAST EDITED
+                </th>
+                <th class="sortable" data-sort="username" style="width: 24%">
+                  CASE OWNER
+                </th>
+                <th class="col-action" style="width: 6%"></th>
+              </tr>
+            </thead>
+          </table>
+        </div>
 
         <!-- 滚动区域只包含 tbody -->
         <div class="table-body-wrapper">
@@ -99,11 +118,14 @@
 
       <!-- 右侧详情区域 -->
       <div class="case-details">
+        <button id="backToListBtn" class="back-to-list" type="button" aria-label="Back to list">
+          <i class="fa fa-arrow-left"></i> Back to list
+        </button>
         <!-- <div class="case-actions">
                 <button class="mark-important">⭐ MARK AS IMPORTANT</button>
                 <button class="mark-unread">🟢 UNREAD</button>
             </div> -->
-        <div class="case-actions">
+        <div class="case-actions hidden">
           <div class="case-name" id="caseNameDisplay"></div>
           <div class="dropdown-menu-wrapper">
             <button class="dropdown-toggle">⋯</button>
@@ -131,11 +153,11 @@
           <button id="nextBtn">▶</button>
         </div>
 
-        <!-- <button class="case-dashboard">CASE DASHBOARD</button> -->
+        <button class="case-dashboard" type="button">CASE DASHBOARD</button>
 
         <div class="case-info">
-          <label for="status">STATUS:</label>
-          <select id="status">
+          <label for="status">Status:</label>
+          <select id="status" class="hidden-status-select">
             <option value="na">N/A</option>
             <option value="draft">Draft</option>
             <option value="2d_design_pending">2D design pending</option>
@@ -150,13 +172,19 @@
             <option value="completed">Completed</option>
           </select>
 
-          <p>CASE NAME: <span id="selected-case"></span></p>
-          <p>CREATED BY: <span id="created-by"></span></p>
-          <p>DATE CREATED: <span id="date-created"></span></p>
-          <p>LAST EDITED: <span id="last-edited"></span></p>
+          <p><strong>Case Name:</strong> <span id="selected-case"></span></p>
+          <p><strong>Created by:</strong> <span id="created-by"></span></p>
+          <p><strong>Date Created:</strong> <span id="date-created"></span></p>
+          <p><strong>Last Edited:</strong> <span id="last-edited"></span></p>
+          <p><strong>Status:</strong> <span id="status-text">-</span></p>
+          <p><strong>Web URL:</strong> <span id="web-url">-</span></p>
+          <div class="detail-actions">
+            <button class="icon-link-btn" id="openWebUrl" type="button" title="Open URL"><i class="fa fa-up-right-from-square"></i></button>
+            <button class="icon-link-btn" id="copyWebUrl" type="button" title="Copy URL"><i class="fa fa-copy"></i></button>
+          </div>
         </div>
 
-        <div class="case-comments">
+        <div class="case-comments hidden">
           <label for="caseComments">Comments:</label>
           <textarea
             id="caseComments"
@@ -356,7 +384,8 @@
     <script type="module" src="../js/notifications.js"></script>
     <script type="module" src="../js/versionHistory.js"></script>
     <script>
-      document.querySelector(".logout").addEventListener("click", () => {
+      const logoutBtn = document.querySelector(".logout");
+      if (logoutBtn) logoutBtn.addEventListener("click", () => {
         localStorage.removeItem("loggedInUser"); // 清除登录信息
         window.location.href = "../../index.html";
       });

@@ -67,8 +67,6 @@ function populateTable(cases) {
     row.dataset.caseId   = caseItem.id || caseItem.case_int_id;  
 
     // 🔍 获取附加数据（包括 expected_date, new_status, assigned_to）
-    const dueDate = formatDateTime(caseItem.expected_date); // ✅ 与字段统一
-    const newStatus = caseItem.new_status || "N/A";
     const assignedTo = caseItem.assigned_to || "N/A";
 
     // row 开始处
@@ -79,15 +77,15 @@ function populateTable(cases) {
     // });
 
     row.innerHTML = `
-      <td style="width: 18%;">${caseItem.case_id || "N/A"}</td>
-      <td style="width: 18%;">${formatDateTime(caseItem.creation_date)}</td>
-      <td style="width: 18%;">${dueDate}</td>
-      <td style="width: 18%;">${newStatus}</td>
-      <td style="width: 18%;">${assignedTo}</td>
-      <td style="width: 12%;">
-        <button class="icon-button" title="Attachment"><i class="fa fa-paperclip"></i></button>
-        <button class="icon-button" title="Download"><i class="fa fa-download"></i></button>
-        <button class="icon-button" title="Flag"><i class="fa fa-flag"></i></button>
+      <td style="width: 30%;">${caseItem.case_id || "N/A"}</td>
+      <td class="col-date" style="width: 20%;">${formatDateTime(caseItem.creation_date)}</td>
+      <td class="col-date" style="width: 20%;">${formatDateTime(caseItem.last_updated)}</td>
+      <td style="width: 24%;">${caseItem.username || assignedTo}</td>
+      <td class="col-action" style="width: 6%; text-align: center;">
+        <button class="icon-button row-action-btn" title="Details">
+          <i class="fa fa-bars" aria-hidden="true"></i>
+          <span class="row-action-label">Details</span>
+        </button>
       </td>
     `;
 
@@ -98,6 +96,20 @@ function populateTable(cases) {
       allRows.forEach((r) => r.classList.remove("active"));
       row.classList.add("active");
     });
+
+    const detailsBtn = row.querySelector(".row-action-btn");
+    if (detailsBtn) {
+      detailsBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        handleRowClick(caseItem.id);
+
+        const allRows = tbody.querySelectorAll("tr");
+        allRows.forEach((r) => r.classList.remove("active"));
+        row.classList.add("active");
+
+        document.body.classList.add("show-details");
+      });
+    }
 
     tbody.appendChild(row);
   });
@@ -173,6 +185,48 @@ function displayCaseDetails(data) {
   );
   const statusSel = document.getElementById("status");
   if (statusSel) statusSel.value = apiStatusToValue(data.new_status);
+  const statusText = document.getElementById("status-text");
+  if (statusText) statusText.textContent = data.new_status || "-";
+
+  const webUrl = data.web_url || data.weburl || data.url || "-";
+  const webUrlEl = document.getElementById("web-url");
+  if (webUrlEl) webUrlEl.textContent = webUrl;
+}
+
+function applyClientFilters() {
+  const searchInput = document.getElementById("searchCaseInput");
+  const dateInput = document.getElementById("dateFilterInput");
+  const todayOnly = document.getElementById("todayOnly");
+
+  const q = (searchInput?.value || "").trim().toLowerCase();
+  const dateVal = dateInput?.value || "";
+  const todayFlag = !!todayOnly?.checked;
+
+  const today = new Date();
+  const base = currentCases.filter((item) => {
+    const caseName = (item.case_id || "").toLowerCase();
+    const matchName = !q || caseName.includes(q);
+
+    const createdDate = item.creation_date
+      ? new Date(Number(item.creation_date) * (String(item.creation_date).length === 13 ? 1 : 1000))
+      : null;
+
+    const createdYmd = createdDate && !Number.isNaN(createdDate.getTime())
+      ? `${createdDate.getFullYear()}-${String(createdDate.getMonth() + 1).padStart(2, "0")}-${String(createdDate.getDate()).padStart(2, "0")}`
+      : "";
+
+    const matchDate = !dateVal || createdYmd === dateVal;
+    const matchToday = !todayFlag || (
+      createdDate &&
+      createdDate.getFullYear() === today.getFullYear() &&
+      createdDate.getMonth() === today.getMonth() &&
+      createdDate.getDate() === today.getDate()
+    );
+
+    return matchName && matchDate && matchToday;
+  });
+
+  populateTable(base);
 }
 
 // 日期格式化
@@ -316,8 +370,48 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.log("[after merge]", cases[0]);
     currentCases = cases; // 放到 merge 之后
     populateTable(currentCases);
+    applyClientFilters();
+
+    const searchInput = document.getElementById("searchCaseInput");
+    const dateInput = document.getElementById("dateFilterInput");
+    const clearDateBtn = document.getElementById("clearDateBtn");
+    const todayOnly = document.getElementById("todayOnly");
+    const refreshListBtn = document.getElementById("refreshListBtn");
+    const searchBtn = document.getElementById("searchBtn");
+
+    searchInput?.addEventListener("input", applyClientFilters);
+    dateInput?.addEventListener("change", applyClientFilters);
+    todayOnly?.addEventListener("change", applyClientFilters);
+    searchBtn?.addEventListener("click", applyClientFilters);
+    clearDateBtn?.addEventListener("click", () => {
+      if (!dateInput) return;
+      dateInput.value = "";
+      applyClientFilters();
+    });
+    refreshListBtn?.addEventListener("click", () => {
+      window.location.reload();
+    });
+
+    const headWrap = document.querySelector(".table-head-wrapper");
+    const bodyWrap = document.querySelector(".table-body-wrapper");
+    if (headWrap && bodyWrap) {
+      let syncing = false;
+      const sync = (src, dst) => {
+        if (syncing) return;
+        syncing = true;
+        dst.scrollLeft = src.scrollLeft;
+        syncing = false;
+      };
+      bodyWrap.addEventListener("scroll", () => sync(bodyWrap, headWrap));
+      headWrap.addEventListener("scroll", () => sync(headWrap, bodyWrap));
+    }
+
+    document.getElementById("backToListBtn")?.addEventListener("click", () => {
+      document.body.classList.remove("show-details");
+    });
+
     const filterSel = document.getElementById("filter-status");
-if (filterSel) filterSel.addEventListener("change", () => populateTable(currentCases));
+if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
 
 
     // 排序逻辑绑定
@@ -334,7 +428,7 @@ if (filterSel) filterSel.addEventListener("change", () => populateTable(currentC
 
         const sorted = sortCases(currentCases, sortKey, currentSortOrder);
         currentCases = sorted; // ✅ 保证下一轮点击时用的是更新后的顺序
-        populateTable(sorted); // ✅ 每次点击都重新渲染
+        applyClientFilters();
 
         // 箭头样式更新（你原来就有）
         document
@@ -625,7 +719,7 @@ if (filterSel) filterSel.addEventListener("change", () => populateTable(currentC
 
     /* ===== 状态下拉框保存 ===== */
   const statusSel = document.getElementById("status");
-if (statusSel) {
+  if (statusSel) {
   statusSel.addEventListener("change", async (e) => {
     const newVal   = e.target.value;           // 下划线或 "na"
     const apiValue = valueToApiStatus(newVal); // 空格或 ""
@@ -646,11 +740,34 @@ if (statusSel) {
     try {
       await postNewStatus(caseObj, apiValue);   // ← 发送空格写法
       caseObj.new_status = apiValue;            // 本地同步
-      populateTable(currentCases);
+      applyClientFilters();
     } catch (err) {
       console.error("❌ Status update failed:", err);
       alert("❌ Failed to update status.");
       e.target.value = apiStatusToValue(caseObj.new_status);
+    }
+  });
+}
+
+const openWebUrlBtn = document.getElementById("openWebUrl");
+if (openWebUrlBtn) {
+  openWebUrlBtn.addEventListener("click", () => {
+    const value = document.getElementById("web-url")?.textContent?.trim();
+    if (!value || value === "-") return;
+    const url = value.startsWith("http") ? value : `https://${value}`;
+    window.open(url, "_blank");
+  });
+}
+
+const copyWebUrlBtn = document.getElementById("copyWebUrl");
+if (copyWebUrlBtn) {
+  copyWebUrlBtn.addEventListener("click", async () => {
+    const value = document.getElementById("web-url")?.textContent?.trim();
+    if (!value || value === "-") return;
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch (err) {
+      console.warn("Failed to copy URL", err);
     }
   });
 }

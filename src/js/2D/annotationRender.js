@@ -223,7 +223,7 @@ export function renderJaw(jaw) {
             );
             const canSwitchSide = hasMissingTeethOnBothSidesForBar(toothId, jaw, state.teeth);
             if (existing && !canSwitchSide) {
-              setMessage("Bar side switch requires missing teeth on both sides of this anchor tooth.", true);
+              setMessage("Bar side switch requires mesh-bearing teeth on both sides of this anchor tooth.", true);
               renderJaw(jaw);
               return;
             }
@@ -245,7 +245,7 @@ export function renderJaw(jaw) {
         const set = getBarSuggestibleToothIdSet(state.teeth, jaw);
         if (!set.has(toothId)) {
           setMessage(
-            "Choose a highlighted tooth within two positions of a missing tooth on the arch.",
+            "Choose a highlighted tooth within two positions of a mesh-bearing tooth on the arch.",
             true
           );
           if (hadSuppressedHints) renderJaw(jaw);
@@ -262,7 +262,7 @@ export function renderJaw(jaw) {
         );
         const canSwitchSide = hasMissingTeethOnBothSidesForBar(toothId, jaw, state.teeth);
         if (existing && !canSwitchSide) {
-          setMessage("Bar side switch requires missing teeth on both sides of this anchor tooth.", true);
+          setMessage("Bar side switch requires mesh-bearing teeth on both sides of this anchor tooth.", true);
           renderJaw(jaw);
           return;
         }

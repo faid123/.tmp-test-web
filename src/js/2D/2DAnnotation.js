@@ -298,7 +298,7 @@ export function meshAnnotationEnv() {
 }
 
 // Present-tooth quick pick (square 2x2 layout).
-const QUICK_PICK_SIZE = 120;
+const QUICK_PICK_SIZE = 104;
 
 function onPresentToothRadialKeydown(ev) {
   if (ev.key === "Escape") {
@@ -410,7 +410,7 @@ export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
     },
     { label: "RECIP PLATE", tab: "plate", componentId: "plate-prox", pos: "top-right" },
     { label: "RECIP MESH", tab: "plate", componentId: "plate-crossmesh", pos: "bottom-left" },
-    { label: "BACK", menu: "main", pos: "bottom-right", textOnly: true },
+    { label: "BACK", menu: "main", pos: "bottom-right", icon: "../../back.png" },
   ];
 
   function renderQuickPickMenu(menu) {
@@ -422,10 +422,13 @@ export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
       button.className = `tooth-radial-option ${action.pos}`;
       button.setAttribute("aria-label", action.label);
       button.setAttribute("data-tooltip", action.label);
-      const iconPath = action.componentId ? COMPONENT_BY_ID.get(action.componentId)?.icon : null;
-      if (!action.textOnly && iconPath) {
+      const iconPath = action.icon || (action.componentId ? COMPONENT_BY_ID.get(action.componentId)?.icon : null);
+      if (iconPath) {
         const icon = document.createElement("img");
         icon.className = "tooth-radial-option-icon";
+        if (action.menu === "main") {
+          icon.classList.add("tooth-radial-option-icon-back");
+        }
         icon.src = iconPath;
         icon.alt = action.label;
         button.appendChild(icon);

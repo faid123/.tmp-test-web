@@ -1,507 +1,609 @@
 * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: Arial, sans-serif;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: "Poppins", "Segoe UI", sans-serif;
 }
 
-html, body {
-    width: 100vw;
-    height: 100vh;
-    background: #e3f2fd;  
-    overflow: hidden;
+:root {
+  --bg: #fff5f7;
+  --panel: #ffffff;
+  --line: #BB0D27;
+  --head: #d8d8db;
+  --ink: #4d1922;
+  --muted: #8d525c;
+  --accent:  #BB0D27;;
+  --accent-dark: #82091c;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  overflow: hidden;
 }
 
 .container {
-    display: flex;
-    width: 100vw;
-    height: 100vh;
-    background: white;
-    overflow: hidden;
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg);
 }
 
-/* ✅ Left main list */
 .case-list {
-    flex: 1;
-    padding: 15px;
-    background: #e3f2fd; 
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  padding: 18px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .case-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-bottom: 10px;
-    gap: 5px; 
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.case-header button {
-    flex: 1; 
-    margin: 0; 
-    text-align: center;
-    max-width: 200px; 
+.top-row {
+  width: 100%;
 }
 
 button {
-    padding: 8px 15px;
-    border: none;
-    border-radius: 5px;
-    background: #88abda; 
-    color: white;
-    cursor: pointer;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
-button.refresh {
-    background: #88abda;
+.create-case {
+  width: 100%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  font-size: 20px;
+  padding: 16px 12px;
 }
 
-button.create-case {
-    background:  #88ABDA; 
+.toolbar-row {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr) auto auto;
+  gap: 18px;
+  align-items: center;
 }
 
-button:hover {
-    opacity: 0.8;
-    background: #90caf9 !important;
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.toolbar-group label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: #2b3a45;
+  white-space: nowrap;
+}
+
+.input-wrap {
+  height: 38px;
+  border: 1.5px solid #c8ced3;
+  border-radius: 8px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.toolbar-group:has(#dateFilterInput) .input-wrap {
+  max-width: 220px;
+}
+
+.search-wrap {
+  max-width: 420px;
+}
+
+.input-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(187, 13, 39, 0.12);
+}
+
+.input-wrap input {
+  border: 0;
+  outline: none;
+  flex: 1;
+  background: transparent;
+  height: 100%;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #31424e;
+  letter-spacing: 0.1px;
+}
+
+.input-wrap input::placeholder {
+  color: #9aa5ad;
+  font-weight: 400;
+}
+
+.clear-btn {
+  width: 36px;
+  height: 100%;
+  border: 0;
+  border-left: 1px solid #d6dadd;
+  background: transparent;
+  font-size: 16px;
+  color: #6b7a84;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-wrap .search-btn {
+  width: 34px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+  color: #8a96a0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 6px;
+  cursor: pointer;
+}
+
+.search-wrap .search-btn:hover {
+  color: var(--accent);
+}
+
+.search-wrap input {
+  padding-left: 4px;
+}
+
+.checkbox-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  color: #2b3a45;
+}
+
+.checkbox-wrap input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.refresh {
+  min-width: 160px;
+  height: 38px;
+  border: 1.5px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 0 16px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.refresh:hover {
+  background: var(--accent);
+  color: #fff;
 }
 
 .case-table {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-}
-
-.case-table th, .case-table td {
-    padding: 10px;
-    text-align: left;
-    border-bottom: 1px solid #ddd;
-}
-
-.case-table thead th {
-    border-right: 2.5px solid #555; /* 深灰色线条 */
-  }
-  
-.case-table th:last-child,
-.case-table td:last-child {
-    border-right: none;
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .case-table thead {
-    background: rgba(211, 211, 211, 1);
-    color: black;
+  background: var(--head);
 }
 
-/* ✅ 滚动区域 */
+.case-table th {
+  text-align: left;
+  padding: 12px 10px;
+  font-size: 15px;
+  font-weight: 700;
+  border-right: 3px solid #b2b2b7;
+}
+
+.case-table th:last-child {
+  border-right: 0;
+}
+
 .table-body-wrapper {
-    border: 4px solid #88abda;
-    max-height: 100vh;
-    overflow-y: auto;
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
 }
 
-.case-table tbody {
-    background-color: rgb(245, 245, 245); /* ✅ 你想换的背景色，比如浅蓝 */
+.case-table tbody td {
+  padding: 12px 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #233744;
 }
 
-/* ✅ Hover 效果 */
-.case-table tbody tr:hover {
-    background: rgba(21, 101, 192, 0.2);
-    cursor: pointer;
+.case-table tbody tr:hover td,
+.case-table tbody tr.active td {
+  background: rgba(136, 171, 218, 0.12);
+  box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent);
 }
 
-.case-table tbody tr.active {
-    background: rgba(21, 101, 192, 0.2);
+.case-table tbody tr:hover td:first-child,
+.case-table tbody tr.active td:first-child {
+  box-shadow:
+    inset 0 2px 0 var(--accent),
+    inset 0 -2px 0 var(--accent),
+    inset 2px 0 0 var(--accent);
 }
 
+.case-table tbody tr:hover td:last-child,
+.case-table tbody tr.active td:last-child {
+  box-shadow:
+    inset 0 2px 0 var(--accent),
+    inset 0 -2px 0 var(--accent),
+    inset -2px 0 0 var(--accent);
+}
 
-
-/* Add a pointer cursor and hover effect to enhance user experience */
-/* Add a pointer cursor and hover effect to enhance user experience */
 .sortable {
-    cursor: pointer; /* Change mouse cursor to pointer, indicating it's clickable */
-    position: relative; /* Ensure pseudo-element positions correctly */
+  cursor: pointer;
+  position: relative;
 }
 
-.sortable:hover {
-    background-color: #b0bec5; /* Change background color on hover */
-}
-
-/* 默认不显示箭头 */
 .sortable::after {
-    content: ''; /* No icon by default */
-    font-size: 12px;
-    position: absolute;
-    right: 5px;
-    top: 50%;
-    transform: translateY(-50%);
+  content: "";
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
 }
 
-/* 升序箭头 ▲ */
 .sortable.active-asc::after {
-    content: '\25B2'; /* BLACK UP-POINTING TRIANGLE */
+  content: "\25B2";
 }
 
-/* 降序箭头 ▼ */
 .sortable.active-desc::after {
-    content: '\25BC'; /* BLACK DOWN-POINTING TRIANGLE */
+  content: "\25BC";
 }
 
-/* ✅ Right-side details */
 .case-details {
-    width: 30%;
-    max-width: 400px;
-    background: white;
-    display: flex;
-    flex-direction: column;
-    padding: 15px;
-    border-left: 2px solid #ddd;
+  width: 400px;
+  flex: 0 0 400px;
+  background: var(--bg);
+  border-left: 1px solid #d5d5d5;
+  padding: 18px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-/* .case-actions {
-    display: flex;
-    width: 100%; 
-    gap: 5px; 
-}
-
-.case-actions button:first-child {
-    flex: 2; 
-    min-width: 180px; 
-}
-
-.case-actions button:last-child {
-    flex: 1; 
-    min-width: 100px; 
-    max-width: 150px; 
-} */
-
-.thumbnail-wrapper {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%; /* 限制外层不要超 */
-  }
-  
-  .case-thumbnail {
-    width: 100%;
-    max-width: 360px;          
-    aspect-ratio: 1 / 1.1;     
-    background-color: #ccc;   
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 10px auto 0;
-    overflow: hidden;
-    border-radius: 0px;
+.case-thumbnail {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #cfcfcf;
+  padding: 10px;
 }
 
 #caseImage {
-    width: 100%;
-    height: auto;
-    max-height: 100%;
-    object-fit: contain;
-    background-color: white;  
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #f2f2f2;
 }
-
-#caseImage:empty::after {
-    content: "NO IMAGES AVAILABLE";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    font-size: 16px;
-    font-weight: bold;
-    text-align: center;
-    pointer-events: none;
-  }
-
-  
-/* .case-thumbnail {
-    width: 100%;
-    max-width: 360px;
-    aspect-ratio: 1 / 1.04;     
-    background-color: #ccc;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 10px auto 0;
-    overflow: hidden;
-    border-radius: 8px;
-}
-
-#caseImage {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    background-color: white;
-} */
-
-
 
 .image-navigation {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    margin-top: 10px;
+  margin-top: -12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #9a9a9a;
+  padding: 8px 10px;
 }
 
 .image-navigation button {
-    width: auto; 
-    height: auto;
-    padding: 5px 10px;
-    border: none;
-    border-radius: 5px; 
-    background: #88ABDA; 
-    color: white;
-    font-size: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); 
+  background: transparent;
+  color: #34404b;
+  font-size: 24px;
+  font-weight: 700;
 }
 
-.case-details > * {
-    margin-bottom: 10px;
+#imageCounter {
+  font-size: 12px;
+  color: #fff;
+  letter-spacing: 0.4px;
 }
 
-.start-case-container {
-    display: flex;
-    background: #88abda;
-    border-radius: 5px; 
-    overflow: hidden; 
-    width: 100%; 
-}
-
-/* Start case button */
-.start-case-button {
-    flex-grow: 1; /* Take up most of the space */
-    background: transparent; /* Transparent background, show container color */
-    color: white; /* White text color */
-    border: none; /* No border */
-    padding: 8px 15px; /* Padding */
-    cursor: pointer; /* Pointer cursor */
-}
-
-.start-case-toggle {
-    padding: 8px 10px; /* Adjust padding */
-    background: transparent; /* Transparent background, show container color */
-    color: white; /* White text color */
-    cursor: pointer; /* Pointer cursor */
-}
-
-.divider {
-    width: 2px; /* Width of the line */
-    background-color: #004a99; /* Color of the line */
-    height: 100%; /* Line height matches container height */
-}
-
-.start-case-container .start-case-button:hover,
-.start-case-container .start-case-toggle:hover {
-    background-color: #90caf9 !important;  
-    opacity: 1;  
+.case-dashboard {
+  border: 2px solid var(--accent);
+  background: transparent;
+  color: #2f4351;
+  padding: 10px;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .case-info {
-    margin-top: 10px;
-}
-
-.case-info p {
-    margin: 5px 0;
-}
-
-/* Make dropdown menu fit all statuses and include a scrollbar */
-.status-dropdown {
-    width: 180px; /* Maintain reasonable width */
-    max-height: 200px; /* Limit height */
-    overflow-y: auto; /* Allow scrolling */
-    background: white;
-    border: 1px solid #ccc;
-    padding: 5px;
-    font-size: 14px;
-}
-
-.status-dropdown option {
-    padding: 10px;
-}
-
-.case-tabs {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-    position: relative;
-}
-
-#status {
-    border: 1px solid #ccc;
-    background: white;
-    font-size: 16px;
-    padding: 5px;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-#status:focus {
-    outline: none;
-    border-color: #88abda;
-}
-
-
-.case-actions {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 0; /* ✅ 保证上下间距一致 */
-  margin-bottom: 0px;  /* ✅ 新增这一行，控制和图片之间的距离 */
+  flex-direction: column;
+  gap: 12px;
+  font-size: 15px;
+  line-height: 1.35;
+  color: #2f3f49;
 }
 
-.case-name {
-  font-weight: bold;
-  font-size: 16px;
-  padding-left: 4px; /* ✅ 微调文字靠左 */
+.case-info label {
+  font-weight: 700;
 }
 
-.dropdown-toggle {
-  background-color: transparent;   /* ✅ 无背景 */
-  color: black;                    /* ✅ 黑色 ⋯ */
-  border: none;
-  padding: 0;
-  margin: 0;
-  font-size: 22px;
-  cursor: pointer;
-  line-height: 1;
+.hidden-status-select {
+  display: none;
 }
 
-.dropdown-toggle:hover {
-  background-color: transparent!important;
+.case-info p strong {
+  display: inline-block;
+  min-width: 110px;
+  font-weight: 700;
 }
 
+#web-url {
+  word-break: break-all;
+  color: #3c4952;
+}
+
+.detail-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.icon-link-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 2px solid var(--accent);
+  background: #eaf0f9;
+  color: var(--accent-dark);
+  font-size: 20px;
+}
+
+.start-case-container {
+  margin-top: auto;
+  background: var(--accent);
+  border-radius: 7px;
+}
+
+.start-case-button {
+  width: 100%;
+  background: transparent;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 12px;
+}
 
 .dropdown-menu-wrapper {
   position: relative;
 }
 
-
 .dropdown-menu {
   position: absolute;
   top: 110%;
   right: 0;
-  background-color: white;
-  border: 1px solid #ccc;
-  width: 180px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-  z-index: 100;
+  width: 210px;
+  background: #fff;
+  border: 1px solid #d2d2d2;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.1);
+  z-index: 60;
 }
 
 .dropdown-item {
-  padding: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
   cursor: pointer;
 }
 
 .dropdown-item:hover {
-  background-color: #f7f7f7;
+  background: #f0f4f5;
 }
 
 .hidden {
-  display: none;
-} 
-
-/* 图标容器：水平排布图标 */
-.action-icons {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 0px; /* 控制图标之间的间距，6px 比较紧凑 */
+  display: none !important;
 }
 
-/* 图标按钮本身 */
 .icon-button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  font-size: 16px;
-  color: #808080;
+  background: transparent;
+  border: 0;
+  color: #5d6a73;
+  font-size: 20px;
 }
 
 .icon-button:hover {
-  background: none !important;   /* ✅ 强制移除悬浮背景 */
-  color: #000 !important;        /* ✅ 仅颜色变深 */
-}
-
-td {
-  padding: 0px 8px;
-  height: 30px; /* ✅ 控制行高度 */
-  line-height: 1;
-  vertical-align: middle;
-}
-/* 限制所有行的高度 */
-.case-table td,
-.case-table th {
-  padding: 0px 8px;
-  height: 30px;         /* ✅ 控制最大行高 */
-  line-height: 1.2;     /* ✅ 避免撑开 */
-  vertical-align: middle;
-  font-size: 16px;      /* ✅ 可选：适当压缩字体也有助于紧凑 */
-}
-
-/* .shared-user-item button:hover {
-  color: red !important;
-} */
-
-.delete-user-btn {
-  position: absolute;
-  top: 0px;
-  right: 2px;
-  border: none;
-  background: transparent !important;
-  font-size: 16px;
-  color: #888;
-  cursor: pointer;
-  padding: 0;
-}
-
-.delete-user-btn:hover {
-  color: red;
-  background: transparent !important;
-}
-
-.shared-user-item {
-  position: relative; /* 确保 delete 按钮能定位到右上角 */
+  color: #263540;
 }
 
 .case-comments {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: -5px 0 8px;
-}
-
-.case-comments label {
-  font-weight: bold;
-  font-size: 16px;
-  padding-left: 0px;
 }
 
 #caseComments {
   width: 100%;
-  min-height: 80px;
-  padding: 8px 10px;
-  font-size: 14px;
-  font-family: inherit;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  min-height: 82px;
+  border: 1px solid #c7c7c7;
+  border-radius: 6px;
+  padding: 8px;
   resize: vertical;
-  background: #fafafa;
-  color: #333;   /* 与上面靠近 */
-  margin-bottom: 5px;  /* 与下面拉开 */
 }
 
-#caseComments:focus {
-  outline: none;
-  border-color: #88abda;
-  background: #fff;
+@media (max-width: 1250px) {
+  body {
+    overflow: auto;
+  }
+
+  .toolbar-row {
+    grid-template-columns: 1fr;
+  }
+
+  .refresh {
+    height: 48px;
+  }
+
+  .container {
+    flex-direction: column;
+    overflow: auto;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .case-list,
+  .case-details {
+    width: 100%;
+    flex: 0 0 auto;
+  }
+}
+
+.row-action-label {
+  display: none;
+}
+
+.case-table .col-action {
+  display: none;
+}
+
+.back-to-list {
+  display: none;
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  padding: 6px 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.back-to-list i {
+  margin-right: 6px;
+}
+
+@media (max-width: 768px) {
+  .case-list {
+    padding: 14px 12px 12px;
+  }
+
+  .toolbar-group:has(#dateFilterInput) .input-wrap,
+  .search-wrap {
+    max-width: none;
+  }
+
+  .case-table {
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  .case-table .col-date {
+    display: none;
+  }
+
+  .case-table th:nth-child(1),
+  .case-table tbody td:nth-child(1) {
+    width: 40% !important;
+  }
+
+  .case-table th:nth-child(4),
+  .case-table tbody td:nth-child(4) {
+    width: 35% !important;
+  }
+
+  .case-table th.col-action,
+  .case-table tbody td.col-action {
+    width: 25% !important;
+  }
+
+  .case-table th,
+  .case-table tbody td {
+    padding: 12px 10px;
+    font-size: 14px;
+  }
+
+  .case-table th {
+    font-size: 12px;
+    letter-spacing: 0.3px;
+    border-right: 1px solid #cfd3d6;
+  }
+
+  .case-table th:nth-last-child(2),
+  .case-table th.col-action {
+    border-right: 0;
+  }
+
+  .case-table tbody td {
+    font-weight: 500;
+  }
+
+  .case-table tbody td:first-child {
+    font-weight: 700;
+  }
+
+  .case-table .col-action {
+    display: table-cell;
+    text-align: right !important;
+    width: 1% !important;
+    white-space: nowrap;
+  }
+
+  .row-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    background: rgba(187, 13, 39, 0.08);
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .row-action-btn i {
+    font-size: 12px;
+  }
+
+  .row-action-label {
+    display: inline;
+  }
+
+  /* Mobile: list and details swap based on .show-details on body */
+  .case-details {
+    display: none;
+    border-left: 0;
+  }
+
+  body.show-details .case-list {
+    display: none;
+  }
+
+  body.show-details .case-details {
+    display: flex;
+  }
+
+  .back-to-list {
+    display: inline-flex;
+    align-items: center;
+  }
 }

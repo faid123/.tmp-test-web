@@ -226,7 +226,7 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
       return;
     }
     if (isBarComponent(selectedComponent)) {
-      setMessage(`For ${selectedComponent.label}, click a highlighted tooth next to a missing tooth.`, true);
+      setMessage(`For ${selectedComponent.label}, click a highlighted tooth near a mesh-bearing tooth.`, true);
       return;
     }
     setMessage(

@@ -364,7 +364,7 @@ export function handleDesignComponentSelect(componentId) {
   renderComponentCatalog();
   if (isBarComponent(selected)) {
     setMessage(
-      `${selected.label} selected. Click a highlighted present tooth within two positions of a missing tooth to place.`,
+      `${selected.label} selected. Click a highlighted present tooth within two positions of a mesh-bearing tooth to place.`,
       false
     );
     return;

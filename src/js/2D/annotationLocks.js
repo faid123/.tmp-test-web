@@ -9,11 +9,10 @@ import {
   isBarComponent,
   isBarPlacementSurface,
   isMajorConnectorComponent,
-  isMeshComponent,
   isPlateComponentId,
   meshSelectionContextFromState,
 } from "./components.js";
-import { forEachTooth, isAutoMeshPlacementExcludedToothId, TOOTH_ORDER } from "./constants.js";
+import { forEachTooth, TOOTH_ORDER } from "./constants.js";
 import {
   state,
   DEFAULT_COMPONENT_ID,
@@ -203,51 +202,20 @@ function clearDesignModeArch(jaw) {
   const historyBefore = getHistoryStateSignature();
   if (!state.designMode) return;
 
-  const meshId = getDefaultMeshIdForDesignMode(meshSelectionContextFromState(state), COMPONENT_BY_ID);
-  const plateId =
-    state.selectedComponentId &&
-    isPlateComponentId(state.selectedComponentId) &&
-    COMPONENT_BY_ID.has(state.selectedComponentId)
-      ? state.selectedComponentId
-      : getDefaultPlateIdForDesignMode(COMPONENT_BY_ID);
-
-  const meshDef = meshId ? COMPONENT_BY_ID.get(meshId) : null;
-  const meshValid = meshDef && isMeshComponent(meshDef);
-  const plateValid = plateId && COMPONENT_BY_ID.has(plateId) && isPlateComponentId(plateId);
-
   for (const toothId of TOOTH_ORDER[jaw]) {
     const tooth = state.teeth[toothId];
     if (!tooth) continue;
     tooth.componentPlacements = [];
-
-    if (!isAutoMeshPlacementExcludedToothId(toothId)) {
-      if (!tooth.isPresent && meshValid) {
-        tooth.componentPlacements.push({ componentId: meshId, surface: null });
-      } else if (tooth.isPresent && plateValid) {
-        tooth.componentPlacements.push({ componentId: plateId, surface: null });
-      }
-    }
-
     syncToothComponentsFromPlacements(tooth);
   }
 
   if (jaw === "upper") {
-    const majorId =
-      state.selectedComponentId &&
-      isMajorConnectorComponent(state.selectedComponentId) &&
-      COMPONENT_BY_ID.has(state.selectedComponentId)
-        ? state.selectedComponentId
-        : getDefaultMajorConnectorIdForDesignMode(COMPONENT_BY_ID);
-    ensureMajorConnectorPlacementsOnSupportedTeeth(state.teeth, majorId, COMPONENT_BY_ID);
     state.archOverlayPalatalHoleActive = false;
   }
 
   renderComponentCatalog();
   renderJaws();
-  setMessage(
-    `${titleCase(jaw)} arch cleared in design mode; default mesh/plate restored where needed.`,
-    false
-  );
+  setMessage(`${titleCase(jaw)} arch cleared.`, false);
   recordHistoryIfChanged(historyBefore);
 }
 
@@ -399,10 +367,9 @@ export function bindArchWhitespaceDismiss() {
       setMessage("Remove mode off.", false);
     }
 
-    // Clicking whitespace cancels the current placement workflow (e.g. clasp/rest suggestion mode)
-    // and returns the catalog to the default mesh tab.
-    state.selectedTab = "mesh";
-    state.selectedComponentId = DEFAULT_COMPONENT_ID;
+    // Clicking whitespace cancels the current placement workflow
+    // and clears the active component selection.
+    state.selectedComponentId = null;
     renderComponentCatalog();
 
     state.suppressArchPlacementSuggestions = true;
