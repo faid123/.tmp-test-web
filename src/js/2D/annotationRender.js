@@ -65,6 +65,25 @@ function renderArchBackground(svg, jaw) {
   const x = (baseWidth - width) / 2 + offset.x;
   const y = (baseHeight - height) / 2 + offset.y;
 
+  const filterId = `jawTint-${jaw}`;
+  const defs = svgEl("defs", {});
+  const filterEl = svgEl("filter", {
+    id: filterId,
+    "color-interpolation-filters": "sRGB",
+  });
+  filterEl.appendChild(
+    svgEl("feColorMatrix", {
+      type: "matrix",
+      values:
+        "0.085 0.286 0.029 0 0 " +
+        "0.085 0.286 0.029 0 0 " +
+        "0.085 0.286 0.029 0 0 " +
+        "0 0 0 1 0",
+    })
+  );
+  defs.appendChild(filterEl);
+  svg.appendChild(defs);
+
   svg.appendChild(
     svgEl("image", {
       href: `${TOOTH_ASSET_BASE}/${background.template}`,
@@ -74,6 +93,7 @@ function renderArchBackground(svg, jaw) {
       height: height.toFixed(2),
       preserveAspectRatio: "xMidYMid meet",
       class: "jaw-template",
+      filter: `url(#${filterId})`,
     })
   );
 
@@ -87,6 +107,7 @@ function renderArchBackground(svg, jaw) {
         height: height.toFixed(2),
         preserveAspectRatio: "xMidYMid meet",
         class: "jaw-details",
+        filter: `url(#${filterId})`,
       })
     );
   }

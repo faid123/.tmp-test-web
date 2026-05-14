@@ -1269,8 +1269,6 @@ body {
 .jaw-template,
 .jaw-details {
   pointer-events: none;
-  -webkit-filter: grayscale(100%) brightness(40%);
-  filter: grayscale(100%) brightness(40%);
 }
 
 .major-connector-visual {
@@ -2445,13 +2443,5 @@ body {
 @media (max-width: 768px) {
   .tooth.is-missing .tooth-image {
     opacity: 0.25;
-  }
-
-  .jaw-template,
-  .jaw-details {
-    -webkit-filter: none;
-    filter: none;
-    -webkit-filter: none;
-    opacity: 0.9;
   }
 }
