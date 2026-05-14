@@ -157,6 +157,7 @@ body {
   width: 26px;
   height: 26px;
   object-fit: contain;
+  -webkit-filter: brightness(0) saturate(0) opacity(0.75);
   filter: brightness(0) saturate(0) opacity(0.75);
   cursor: pointer;
   border-radius: 4px;
@@ -513,6 +514,7 @@ body {
   width: 20px;
   height: 20px;
   object-fit: contain;
+  -webkit-filter: brightness(0) saturate(0) opacity(0.8);
   filter: brightness(0) saturate(0) opacity(0.8);
   flex-shrink: 0;
 }
@@ -1033,6 +1035,7 @@ body {
   height: 100%;
   object-fit: contain;
   display: block;
+  -webkit-filter: drop-shadow(0 0 1px rgba(125, 66, 82, 0.55)) drop-shadow(0 1px 2px rgba(125, 66, 82, 0.25));
   filter: drop-shadow(0 0 1px rgba(125, 66, 82, 0.55)) drop-shadow(0 1px 2px rgba(125, 66, 82, 0.25));
 }
 
@@ -1060,6 +1063,7 @@ body {
 .tooth-image {
   pointer-events: none;
   opacity: 1;
+  -webkit-filter: brightness(0) saturate(0) drop-shadow(0 0 2px rgba(0,0,0,0.6));
   filter: brightness(0) saturate(0) drop-shadow(0 0 2px rgba(0,0,0,0.6));
 }
 
@@ -1069,6 +1073,7 @@ body {
 }
 
 .mesh-image {
+  -webkit-filter: brightness(0) saturate(100%) invert(27%) sepia(95%) saturate(1702%) hue-rotate(259deg) brightness(88%) contrast(97%);
   filter: brightness(0) saturate(100%) invert(27%) sepia(95%) saturate(1702%) hue-rotate(259deg) brightness(88%) contrast(97%);
 }
 
@@ -1079,10 +1084,12 @@ body {
 .palatal-hole-arch-image,
 .palatal-bar-arch-image,
 .palatal-plate-arch-image {
+  -webkit-filter: grayscale(1) brightness(0.72) contrast(0.95);
   filter: grayscale(1) brightness(0.72) contrast(0.95);
 }
 
 .major-connector-image.is-separated {
+  -webkit-filter: brightness(0) saturate(100%) invert(18%) sepia(89%) saturate(4019%) hue-rotate(352deg) brightness(93%) contrast(107%);
   filter: brightness(0) saturate(100%) invert(18%) sepia(89%) saturate(4019%) hue-rotate(352deg) brightness(93%) contrast(107%);
 }
 
@@ -1149,6 +1156,7 @@ body {
   pointer-events: all;
   opacity: 0.3;
   /* Dark rose pink (less violet than hue ~300deg) */
+  -webkit-filter: brightness(0) saturate(100%) invert(46%) sepia(72%) saturate(2000%) hue-rotate(336deg) brightness(95%) contrast(97%);
   filter: brightness(0) saturate(100%) invert(46%) sepia(72%) saturate(2000%) hue-rotate(336deg) brightness(95%) contrast(97%);
 }
 
@@ -1180,6 +1188,7 @@ body {
 .clasp-suggestion-image {
   pointer-events: all;
   cursor: pointer;
+  -webkit-filter: saturate(1.2) brightness(1.08) contrast(1.04);
   filter: saturate(1.2) brightness(1.08) contrast(1.04);
 }
 
@@ -1194,6 +1203,7 @@ body {
 .clasp-placement-image {
   pointer-events: all;
   cursor: pointer;
+  -webkit-filter: saturate(1.2) brightness(1.08) contrast(1.04);
   filter: saturate(1.2) brightness(1.08) contrast(1.04);
 }
 
@@ -1208,6 +1218,7 @@ body {
   pointer-events: all;
   cursor: pointer;
   opacity: 0.95;
+  -webkit-filter: brightness(0) saturate(100%) invert(46%) sepia(72%) saturate(2000%) hue-rotate(336deg) brightness(95%) contrast(97%);
   filter: brightness(0) saturate(100%) invert(46%) sepia(72%) saturate(2000%) hue-rotate(336deg) brightness(95%) contrast(97%);
 }
 
@@ -1215,6 +1226,7 @@ body {
 .rest-placement-image[data-component-id="rest-onlay"],
 .rest-placement-image.is-placed-rest-seat {
   opacity: 1;
+  -webkit-filter: brightness(0) saturate(100%) invert(22%) sepia(85%) saturate(2800%) hue-rotate(332deg) brightness(86%) contrast(118%);
   filter: brightness(0) saturate(100%) invert(22%) sepia(85%) saturate(2800%) hue-rotate(332deg) brightness(86%) contrast(118%);
 }
 
@@ -1230,10 +1242,12 @@ body {
 
 
 .tooth.status-abutment .tooth-image {
+  -webkit-filter: brightness(0) saturate(100%) invert(29%) sepia(94%) saturate(1959%) hue-rotate(210deg) brightness(93%) contrast(90%);
   filter: brightness(0) saturate(100%) invert(29%) sepia(94%) saturate(1959%) hue-rotate(210deg) brightness(93%) contrast(90%);
 }
 
 .tooth.status-compromised .tooth-image {
+  -webkit-filter: brightness(0) saturate(100%) invert(31%) sepia(35%) saturate(1068%) hue-rotate(72deg) brightness(86%) contrast(92%);
   filter: brightness(0) saturate(100%) invert(31%) sepia(35%) saturate(1068%) hue-rotate(72deg) brightness(86%) contrast(92%);
 }
 
@@ -1241,6 +1255,7 @@ body {
 .tooth.is-locked { opacity: 0.88; }
 
 .tooth.tooth-range-selected .tooth-image {
+  -webkit-filter: drop-shadow(0 0 4px rgba(35, 170, 85, 0.75));
   filter: drop-shadow(0 0 4px rgba(35, 170, 85, 0.75));
 }
 
@@ -1254,6 +1269,7 @@ body {
 .jaw-template,
 .jaw-details {
   pointer-events: none;
+  -webkit-filter: grayscale(100%) brightness(40%);
   filter: grayscale(100%) brightness(40%);
 }
 
@@ -1269,6 +1285,8 @@ body {
 .jaw-plate-frame {
   pointer-events: none;
   /* Force white source pixels into a visible cyan-blue tint. */
+  -webkit-filter: brightness(0) saturate(100%) invert(46%) sepia(85%) saturate(1714%) hue-rotate(165deg)
+    brightness(92%) contrast(101%);
   filter: brightness(0) saturate(100%) invert(46%) sepia(85%) saturate(1714%) hue-rotate(165deg)
     brightness(92%) contrast(101%);
 }
@@ -1474,12 +1492,16 @@ body {
 }
 /* Bar suggestions: light green to match retainer clasp base color. */
 .tooth.tooth-bar-suggestible .tooth-image {
+  -webkit-filter: brightness(0) saturate(100%) invert(31%) sepia(35%) saturate(1068%)
+    hue-rotate(72deg) brightness(104%) contrast(95%);
   filter: brightness(0) saturate(100%) invert(31%) sepia(35%) saturate(1068%)
     hue-rotate(72deg) brightness(104%) contrast(95%);
   opacity: 0.62;
 }
 
 .tooth.tooth-bar-suggestible:hover .tooth-image {
+  -webkit-filter: brightness(0) saturate(100%) invert(31%) sepia(35%) saturate(1068%)
+    hue-rotate(72deg) brightness(112%) contrast(98%);
   filter: brightness(0) saturate(100%) invert(31%) sepia(35%) saturate(1068%)
     hue-rotate(72deg) brightness(112%) contrast(98%);
   opacity: 0.78;
@@ -1488,6 +1510,8 @@ body {
 .bar-placement-image {
   pointer-events: none;
   /* Force visible light-green tint like retainer clasp base. */
+  -webkit-filter: brightness(0) saturate(100%) invert(82%) sepia(22%) saturate(760%)
+    hue-rotate(68deg) brightness(116%) contrast(95%);
   filter: brightness(0) saturate(100%) invert(82%) sepia(22%) saturate(760%)
     hue-rotate(68deg) brightness(116%) contrast(95%);
 }
@@ -1984,6 +2008,7 @@ body {
   width: 26px;
   height: 26px;
   object-fit: contain;
+  -webkit-filter: brightness(0) saturate(0) opacity(0.65);
   filter: brightness(0) saturate(0) opacity(0.65);
 }
 
@@ -2415,4 +2440,18 @@ body {
   outline: none;
   min-width: 80px;
   box-shadow: 0 2px 8px rgba(77, 34, 48, 0.15);
+}
+
+@media (max-width: 768px) {
+  .tooth.is-missing .tooth-image {
+    opacity: 0.25;
+  }
+
+  .jaw-template,
+  .jaw-details {
+    -webkit-filter: none;
+    filter: none;
+    -webkit-filter: none;
+    opacity: 0.9;
+  }
 }
