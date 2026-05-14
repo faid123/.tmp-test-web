@@ -889,6 +889,10 @@ function isMeshPolylineComponent(component) {
   return /^mesh$/i.test(component || "");
 }
 
+function shouldSeatPolylineComponentOnJaw(component) {
+  return /minor\s*(connector|conn)/i.test(component || "");
+}
+
 function getJawMeshForPolyline(jawType) {
   const jawText = jawType.toLowerCase();
   return parentObject.children.find((child) => {
@@ -897,7 +901,14 @@ function getJawMeshForPolyline(jawType) {
   });
 }
 
-function applyJawTransformToPolylineGroup(group, jawType) {
+function applyJawTransformToPolylineGroup(group, jawType, coordinateSpace = "jaw-local") {
+  if (coordinateSpace === "scene-world") {
+    group.position.set(0, 0, 0);
+    group.rotation.set(0, 0, 0);
+    group.scale.set(1, 1, 1);
+    return;
+  }
+
   const jawMesh = getJawMeshForPolyline(jawType);
   if (!jawMesh) return;
 
@@ -908,6 +919,120 @@ function applyJawTransformToPolylineGroup(group, jawType) {
 
 function getDistanceBetweenPoints(a, b) {
   return Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+}
+
+function getClosestJawPolylineSurfacePoint(jawType, point, coordinateSpace = "jaw-local") {
+  const jawMesh = getJawMeshForPolyline(jawType);
+  const position = jawMesh?.geometry?.attributes?.position;
+  if (!position || !isValidPoint(point)) return null;
+
+  jawMesh.updateMatrixWorld(true);
+  let bestPoint = null;
+  let bestDistanceSq = Infinity;
+  const stride = Math.max(1, Math.floor(position.count / 30000));
+  const candidateVector = new THREE.Vector3();
+
+  for (let index = 0; index < position.count; index += stride) {
+    candidateVector.set(
+      position.getX(index),
+      position.getY(index),
+      position.getZ(index)
+    );
+    if (coordinateSpace === "scene-world") {
+      jawMesh.localToWorld(candidateVector);
+    }
+    const candidate = { x: candidateVector.x, y: candidateVector.y, z: candidateVector.z };
+    const dx = point.x - candidate.x;
+    const dy = point.y - candidate.y;
+    const dz = point.z - candidate.z;
+    const distanceSq = dx * dx + dy * dy + dz * dz;
+    if (distanceSq < bestDistanceSq) {
+      bestDistanceSq = distanceSq;
+      bestPoint = candidate;
+    }
+  }
+
+  return bestPoint ? { point: bestPoint, distance: Math.sqrt(bestDistanceSq) } : null;
+}
+
+function getPolylineSamplePoints(points, limit = 24) {
+  if (points.length <= limit) return points;
+  const step = (points.length - 1) / (limit - 1);
+  return Array.from({ length: limit }, (_, index) => points[Math.round(index * step)]);
+}
+
+function getMedianDistanceToJaw(points, jawType, coordinateSpace) {
+  const distances = getPolylineSamplePoints(points)
+    .map((point) => getClosestJawPolylineSurfacePoint(jawType, point, coordinateSpace)?.distance)
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+
+  if (!distances.length) return Infinity;
+  return distances[Math.floor(distances.length / 2)];
+}
+
+function detectPolylineCoordinateSpace(points, jawType, component) {
+  if (points.length < 2 || !getJawMeshForPolyline(jawType)) {
+    return {
+      coordinateSpace: "jaw-local",
+      localMedianDistance: null,
+      worldMedianDistance: null,
+    };
+  }
+
+  const localMedianDistance = getMedianDistanceToJaw(points, jawType, "jaw-local");
+  const worldMedianDistance = getMedianDistanceToJaw(points, jawType, "scene-world");
+  const coordinateSpace =
+    worldMedianDistance + 0.35 < localMedianDistance * 0.72
+      ? "scene-world"
+      : "jaw-local";
+
+  if (coordinateSpace === "scene-world") {
+    console.log("[polyline] detected scene-world coordinates", {
+      arch: jawType,
+      component,
+      localMedianDistance: Number(localMedianDistance.toFixed(3)),
+      worldMedianDistance: Number(worldMedianDistance.toFixed(3)),
+    });
+  }
+
+  return { coordinateSpace, localMedianDistance, worldMedianDistance };
+}
+
+function seatPolylinePointsOnJaw(points, jawType, component, coordinateSpace = "jaw-local") {
+  if (!shouldSeatPolylineComponentOnJaw(component) || points.length < 2) {
+    return { points, snappedCount: 0, maxDistance: 0 };
+  }
+
+  let snappedCount = 0;
+  let maxDistance = 0;
+  const seatedPoints = points.map((point) => {
+    const closest = getClosestJawPolylineSurfacePoint(jawType, point, coordinateSpace);
+    if (!closest) return point;
+
+    maxDistance = Math.max(maxDistance, closest.distance);
+    if (closest.distance <= 0.65) return point;
+
+    snappedCount += 1;
+    const surfacePoint = closest.point;
+    const direction = {
+      x: point.x - surfacePoint.x,
+      y: point.y - surfacePoint.y,
+      z: point.z - surfacePoint.z,
+    };
+    const length = Math.max(
+      0.0001,
+      Math.hypot(direction.x, direction.y, direction.z)
+    );
+    const offset = Math.min(Math.max(POLYLINE_TUBE_RADIUS * 0.45, 0.22), 0.45);
+    return {
+      x: surfacePoint.x + (direction.x / length) * offset,
+      y: surfacePoint.y + (direction.y / length) * offset,
+      z: surfacePoint.z + (direction.z / length) * offset,
+    };
+  });
+
+  return { points: seatedPoints, snappedCount, maxDistance };
 }
 
 function getPolylineTurnCosine(previous, current, next) {
@@ -1059,8 +1184,16 @@ function syncPolylineTubeGeometries(tubeGroup) {
 }
 
 function createPolylineObjects(jawType, segment, segmentIndex) {
-  const points = getSegmentPoints(segment);
   const component = getSegmentComponent(segment);
+  const rawPoints = getSegmentPoints(segment);
+  const coordinateDetection = detectPolylineCoordinateSpace(rawPoints, jawType, component);
+  const seating = seatPolylinePointsOnJaw(
+    rawPoints,
+    jawType,
+    component,
+    coordinateDetection.coordinateSpace
+  );
+  const points = seating.points;
   const componentKey = getPolylineComponentKey(jawType, component);
   const edges = getSegmentRenderableEdges(segment, points, component);
   const positionArray = new Float32Array(points.length * 3);
@@ -1081,9 +1214,26 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
     component,
     componentKey,
     segmentIndex,
+    coordinateSpace: coordinateDetection.coordinateSpace,
+    localMedianSurfaceDistance: coordinateDetection.localMedianDistance,
+    worldMedianSurfaceDistance: coordinateDetection.worldMedianDistance,
+    surfaceSeated: seating.snappedCount > 0,
+    surfaceSeatedPointCount: seating.snappedCount,
+    maxSurfaceDistance: seating.maxDistance,
     originalPositionArray: positionArray.slice(),
     positionAttribute,
   };
+
+  if (seating.snappedCount > 0) {
+    console.log("[polyline] seated component on jaw surface", {
+      arch: jawType,
+      component,
+      segmentIndex,
+      coordinateSpace: coordinateDetection.coordinateSpace,
+      snappedPoints: seating.snappedCount,
+      maxDistance: Number(seating.maxDistance.toFixed(3)),
+    });
+  }
 
   if (points.length >= 2) {
     const tubeMaterial = new THREE.MeshStandardMaterial({
@@ -1164,7 +1314,7 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
     group.add(handles);
   }
 
-  applyJawTransformToPolylineGroup(group, jawType);
+  applyJawTransformToPolylineGroup(group, jawType, coordinateDetection.coordinateSpace);
 
   return group;
 }

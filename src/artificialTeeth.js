@@ -858,6 +858,36 @@ function getToothRotation(candidate) {
   return [x, y, z].every(Number.isFinite) ? { x, y, z } : null;
 }
 
+function getToothTransformSummary(candidate) {
+  const binaryTransform = extractBinaryTransformSummary(candidate);
+  if (binaryTransform) return binaryTransform;
+
+  if (!candidate || typeof candidate !== "object") return null;
+  const transform = {
+    buccalDirection:
+      toPointObject(candidate.buccal_direction ?? candidate.buccalDirection) ??
+      getKeyedVector(candidate, 0),
+    mesialDistalLine:
+      toPointObject(candidate.mesial_distal_line ?? candidate.mesialDistalLine) ??
+      getKeyedVector(candidate, 1),
+    buccalPoint:
+      toPointObject(candidate.buccal_point ?? candidate.buccalPoint) ??
+      getKeyedVector(candidate, 2),
+    gingivalPoint:
+      toPointObject(candidate.gingival_point ?? candidate.gingivalPoint) ??
+      getKeyedVector(candidate, 3),
+    mesialDistalSizing: Number(
+      candidate.mesial_distal_sizing ??
+        candidate.mesialDistalSizing ??
+        keyedValue(candidate, 4)
+    ),
+  };
+
+  return isValidPoint(transform.buccalDirection) && isValidPoint(transform.mesialDistalLine)
+    ? transform
+    : null;
+}
+
 function parseToothIndices(candidate, expectedLength = null, vertexCount = null) {
   if (isByteArray(candidate)) {
     const bytes = toUint8Array(candidate);
@@ -1051,6 +1081,21 @@ function getDeepToothScale(...sources) {
   return null;
 }
 
+function getDeepToothTransform(...sources) {
+  for (const source of sources) {
+    const direct = getToothTransformSummary(source);
+    if (direct) return direct;
+  }
+
+  const nested = [];
+  sources.forEach((source) => addNestedValues(source, nested));
+  for (const candidate of nested) {
+    const transform = getToothTransformSummary(candidate);
+    if (transform) return transform;
+  }
+  return null;
+}
+
 function getDeepToothGeometry(...sources) {
   for (const source of sources) {
     const direct = getToothGeometryData(source);
@@ -1064,6 +1109,24 @@ function getDeepToothGeometry(...sources) {
     if (geometry) return geometry;
   }
   return null;
+}
+
+function getTransformCrownCenter(transform) {
+  if (!isValidPoint(transform?.gingivalPoint) || !isValidPoint(transform?.buccalPoint)) return null;
+  return {
+    x: transform.gingivalPoint.x + (transform.buccalPoint.x - transform.gingivalPoint.x) * 0.48,
+    y: transform.gingivalPoint.y + (transform.buccalPoint.y - transform.gingivalPoint.y) * 0.48,
+    z: transform.gingivalPoint.z + (transform.buccalPoint.z - transform.gingivalPoint.z) * 0.48,
+  };
+}
+
+function getTransformCrownWrapPoint(transform) {
+  if (!isValidPoint(transform?.gingivalPoint) || !isValidPoint(transform?.buccalPoint)) return null;
+  return {
+    x: transform.gingivalPoint.x + (transform.buccalPoint.x - transform.gingivalPoint.x) * 0.82,
+    y: transform.gingivalPoint.y + (transform.buccalPoint.y - transform.gingivalPoint.y) * 0.82,
+    z: transform.gingivalPoint.z + (transform.buccalPoint.z - transform.gingivalPoint.z) * 0.82,
+  };
 }
 
 function createToothRecordsFromCraftMaps(craftData) {
@@ -1088,7 +1151,9 @@ function createToothRecordsFromCraftMaps(craftData) {
       craftData.toothSurfaceMeshData_?.[key] ??
       craftData.initialToothSurfaceMeshData_?.[key];
     const source = { toothData, transformData, surfaceData };
-    const position = getDeepToothPosition(transformData, toothData);
+    const transform = getDeepToothTransform(transformData, toothData);
+    const transformCenter = getTransformCrownCenter(transform);
+    const position = transformCenter ?? getDeepToothPosition(transformData, toothData);
     const geometry = getDeepToothGeometry(surfaceData);
 
     if (!position && !geometry) return [];
@@ -1096,10 +1161,13 @@ function createToothRecordsFromCraftMaps(craftData) {
     return [{
       toothIndex: getToothIndex(toothData) ?? key,
       position: position || { x: 0, y: 0, z: 0 },
+      transform,
       rotation: getDeepToothRotation(transformData, toothData),
       scale: getDeepToothScale(transformData, toothData),
       geometry,
-      source,
+      source: transformCenter
+        ? { ...source, transformCrownCenter: true }
+        : source,
     }];
   });
 }
@@ -1262,7 +1330,45 @@ function getPolylineAttributePoints(positionAttribute) {
   return points.filter(isValidPoint);
 }
 
-function getRenderedPolylineJawlinePoints(scene, arch) {
+function getPolylineRenderedEdges(polylineGroup) {
+  let edges = null;
+  polylineGroup.traverse((child) => {
+    if (edges) return;
+    if (child.userData?.overlayType !== "polyline-line") return;
+    if (!Array.isArray(child.userData?.edges)) return;
+    edges = child.userData.edges;
+  });
+  return edges || [];
+}
+
+function getPolylinePathsFromRenderedEdges(points, edges) {
+  if (!points.length || !edges.length) return [];
+
+  const paths = [];
+  let currentPath = [];
+  edges.forEach(([startIndex, endIndex]) => {
+    const start = points[startIndex];
+    const end = points[endIndex];
+    if (!isValidPoint(start) || !isValidPoint(end)) return;
+
+    const last = currentPath[currentPath.length - 1];
+    if (!last || last.index !== startIndex) {
+      if (currentPath.length >= 2) {
+        paths.push(currentPath.map((entry) => entry.point));
+      }
+      currentPath = [{ index: startIndex, point: start }];
+    }
+    currentPath.push({ index: endIndex, point: end });
+  });
+
+  if (currentPath.length >= 2) {
+    paths.push(currentPath.map((entry) => entry.point));
+  }
+
+  return paths.filter((path) => path.length >= 6 && looksLikeMeshBounds(path));
+}
+
+function getRenderedPolylineJawline(scene, arch) {
   const candidates = [];
   scene.traverse((child) => {
     if (child.userData?.overlayType !== "polyline") return;
@@ -1272,16 +1378,35 @@ function getRenderedPolylineJawlinePoints(scene, arch) {
     const points = getPolylineAttributePoints(child.userData?.positionAttribute);
     if (points.length < 6 || !looksLikeMeshBounds(points)) return;
 
+    const renderedPaths = getPolylinePathsFromRenderedEdges(
+      points,
+      getPolylineRenderedEdges(child)
+    );
+    const paths = renderedPaths.length ? renderedPaths : [points];
+
     const priority =
       /gingival/i.test(component) ? 4 :
         /reversal/i.test(component) ? 3 :
           /major/i.test(component) ? 2 :
             1;
-    candidates.push({ points, priority, length: polylineLength(points), component });
+    paths.forEach((path) => {
+      candidates.push({
+        points: path,
+        priority,
+        length: polylineLength(path),
+        component,
+        coordinateSpace: child.userData?.coordinateSpace || "jaw-local",
+        renderedEdgePath: Boolean(renderedPaths.length),
+      });
+    });
   });
 
   candidates.sort((a, b) => b.priority - a.priority || b.length - a.length);
-  return candidates[0]?.points || [];
+  return candidates[0] || null;
+}
+
+function getRenderedPolylineJawlinePoints(scene, arch) {
+  return getRenderedPolylineJawline(scene, arch)?.points || [];
 }
 
 function positionSpread(points) {
@@ -1325,10 +1450,50 @@ function sortTeethLinearly(teeth) {
   return [...teeth].sort((a, b) => toothSortValue(a, 0) - toothSortValue(b, 0));
 }
 
+function getPolylineTangent(points, t) {
+  const before = samplePolyline(points, Math.max(0, t - 0.015));
+  const after = samplePolyline(points, Math.min(1, t + 0.015));
+  if (!before || !after) return null;
+  const tangent = {
+    x: after.x - before.x,
+    y: after.y - before.y,
+    z: after.z - before.z,
+  };
+  return pointMagnitude(tangent) > 0.0001 ? tangent : null;
+}
+
+function getGuidelineToothScale(guidelinePoints, count, toothIndex, existingScale) {
+  if (existingScale || count < 2) return existingScale || null;
+  const spacing = polylineLength(guidelinePoints) / Math.max(count - 1, 1);
+  const template = getToothTemplate(toothIndex);
+  const baseScale = Math.max(0.85, Math.min(spacing / 6.6, 1.55));
+  const posteriorFullness = isAnteriorTooth(toothIndex) ? 0.84 : 0.94;
+  const size = baseScale * posteriorFullness * getToothTemplateScaleFactor(template);
+  return { x: size * 0.82, y: size, z: size * 0.78 };
+}
+
+function shouldKeepToothCraftPosition(tooth) {
+  return Boolean(
+    tooth.source?.transformCrownCenter ||
+    tooth.geometry?.vertices?.length >= 3 ||
+    (
+      isValidPoint(tooth.transform?.gingivalPoint) &&
+      isValidPoint(tooth.transform?.buccalPoint)
+    )
+  );
+}
+
 function placeTeethOnGuideline(teeth, guideData, arch, scene = null) {
-  const renderedPolylinePoints = scene ? getRenderedPolylineJawlinePoints(scene, arch) : [];
-  const guidelinePoints = renderedPolylinePoints.length
-    ? renderedPolylinePoints
+  if (teeth.some(shouldKeepToothCraftPosition)) {
+    return teeth;
+  }
+
+  const renderedPolyline = scene ? getRenderedPolylineJawline(scene, arch) : null;
+  const usableRenderedPolyline = renderedPolyline?.coordinateSpace === "scene-world"
+    ? null
+    : renderedPolyline;
+  const guidelinePoints = usableRenderedPolyline?.points?.length
+    ? usableRenderedPolyline.points
     : getGuidelinePoints(guideData);
   if (!shouldUseGuidelinePlacement(teeth, guidelinePoints)) return teeth;
 
@@ -1336,12 +1501,26 @@ function placeTeethOnGuideline(teeth, guideData, arch, scene = null) {
   const count = sorted.length;
   const placed = sorted.map((tooth, index) => {
     const t = count === 1 ? 0.5 : 0.08 + (index / (count - 1)) * 0.84;
-    const position = samplePolyline(guidelinePoints, arch === "upper" ? 1 - t : t);
+    const sampleT = arch === "upper" ? 1 - t : t;
+    const position = samplePolyline(guidelinePoints, sampleT);
+    const tangent = getPolylineTangent(guidelinePoints, sampleT);
     return position
       ? {
           ...tooth,
+          rotation: tooth.rotation || (tangent
+            ? { x: 0, y: Math.atan2(tangent.x, tangent.z) + (arch === "upper" ? Math.PI : 0), z: 0 }
+            : tooth.rotation),
+          scale: tooth.geometry?.vertices?.length
+            ? tooth.scale
+            : getGuidelineToothScale(guidelinePoints, count, tooth.toothIndex, tooth.scale),
           position,
-          source: { ...tooth.source, guidelinePlaced: true },
+          source: {
+            ...tooth.source,
+            guidelinePlaced: true,
+            guidelineSourceComponent: usableRenderedPolyline?.component || null,
+            guidelineRenderedEdgePath: Boolean(usableRenderedPolyline?.renderedEdgePath),
+            skippedSceneWorldGuideline: renderedPolyline?.coordinateSpace === "scene-world",
+          },
         }
       : tooth;
   });
@@ -1350,7 +1529,10 @@ function placeTeethOnGuideline(teeth, guideData, arch, scene = null) {
     arch,
     teeth: placed.length,
     guidelinePoints: guidelinePoints.length,
-    source: renderedPolylinePoints.length ? "rendered-polyline" : "decoded-guideline",
+    source: usableRenderedPolyline?.points?.length ? "rendered-polyline" : "decoded-guideline",
+    component: usableRenderedPolyline?.component || null,
+    renderedEdgePath: Boolean(usableRenderedPolyline?.renderedEdgePath),
+    skippedSceneWorldGuideline: renderedPolyline?.coordinateSpace === "scene-world",
   });
   return placed;
 }
@@ -1529,63 +1711,178 @@ function getToothTemplateScaleFactor(template) {
   }[template] || 1;
 }
 
-function createProceduralToothGeometry(tooth) {
-  const template = getToothTemplate(tooth.toothIndex);
+function smoothStep(edge0, edge1, value) {
+  const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+function mix(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function createToothCrownPoint(template, theta, verticalT) {
   const anterior = template.includes("incisor") || template === "canine";
   const canine = template === "canine";
   const premolar = template === "premolar";
   const molar = template === "molar";
-  const geometry = new THREE.SphereGeometry(1, 64, 40);
-  const position = geometry.attributes.position;
+  const y = mix(-1, 1, verticalT);
+  const sin = Math.sin(theta);
+  const cos = Math.cos(theta);
+  const front = Math.max(0, sin);
+  const back = Math.max(0, -sin);
+  const shoulder = Math.sin(Math.PI * verticalT);
+  const neck = smoothStep(0, 0.26, verticalT);
 
-  for (let index = 0; index < position.count; index += 1) {
-    let x = position.getX(index);
-    let y = position.getY(index);
-    let z = position.getZ(index);
-    const crownT = (y + 1) / 2;
-    const neckTaper = y < -0.22 ? 0.68 + crownT * 0.42 : 1;
+  if (anterior) {
+    const edgeTaper = smoothStep(0.74, 1, verticalT);
+    const width = mix(0.55, canine ? 0.92 : 1.02, neck) * mix(1, canine ? 0.5 : 0.86, edgeTaper);
+    const depth = mix(0.5, canine ? 0.78 : 0.62, neck) * mix(1, canine ? 0.68 : 0.34, edgeTaper);
+    const labialBulge = front * shoulder * (canine ? 0.2 : 0.16);
+    const lingualHollow = back * smoothStep(0.18, 0.86, verticalT) * (canine ? 0.12 : 0.1);
+    const ridge = canine
+      ? Math.exp(-(cos ** 2) * 24) * front * smoothStep(0.18, 1, verticalT) * 0.16
+      : Math.exp(-(cos ** 2) * 14) * front * smoothStep(0.2, 0.86, verticalT) * 0.045;
+    const incisalNotch = !canine && verticalT > 0.9
+      ? Math.cos(cos * Math.PI * 2.2) * 0.025
+      : 0;
+    const cuspLift = canine
+      ? Math.exp(-(cos ** 2) * 18) * smoothStep(0.72, 1, verticalT) * 0.28
+      : 0;
 
-    if (anterior) {
-      const pointLift = canine ? Math.exp(-(x ** 2) * 9) * Math.max(0, y) * 0.18 : 0;
-      const incisalFlatten = canine
-        ? y > 0.32 ? 0.32 + (y - 0.32) * 0.34 + pointLift : y
-        : y > 0.46 ? 0.46 + (y - 0.46) * 0.1 : y;
-      const labialBulge = 1 + (canine ? 0.28 : 0.22) * Math.max(0, z) * (1 - Math.abs(y) * 0.35);
-      const lingualHollow = z < 0 ? 1 - (canine ? 0.12 : 0.08) * Math.max(0, y + 0.2) : 1;
-      const edgeNotch = !canine && y > 0.42 ? 0.025 * Math.cos(x * Math.PI * 3) : 0;
-      const centralRidge = Math.exp(-(x ** 2) * (canine ? 18 : 12)) * Math.max(0, y + 0.2) * (canine ? 0.075 : 0.035);
-      x *= neckTaper * ((canine ? 1.02 : 1.12) - 0.08 * Math.max(0, y));
-      y = incisalFlatten - edgeNotch + centralRidge;
-      z *= neckTaper * labialBulge * lingualHollow * (canine ? 1.02 : 0.92);
-    } else {
-      const occlusal = Math.max(0, y);
-      const table = y > 0.28 ? 0.28 + (y - 0.28) * (premolar ? 0.26 : 0.2) : y;
-      const spreadX = molar ? 0.54 : 0.36;
-      const spreadZ = molar ? 0.42 : 0.28;
-      const cusp1 = Math.exp(-((x - spreadX) ** 2 + (z - spreadZ) ** 2) * (premolar ? 12 : 9));
-      const cusp2 = Math.exp(-((x + spreadX) ** 2 + (z - spreadZ) ** 2) * (premolar ? 12 : 9));
-      const cusp3 = molar ? Math.exp(-((x - 0.42) ** 2 + (z + 0.36) ** 2) * 9) : 0;
-      const cusp4 = molar ? Math.exp(-((x + 0.42) ** 2 + (z + 0.36) ** 2) * 9) : 0;
-      const centralGroove = Math.exp(-(z ** 2) * (premolar ? 36 : 24)) * Math.max(0, 1 - Math.abs(x) * 0.75);
-      const sideGroove = molar ? Math.exp(-(x ** 2) * 18) * Math.max(0, 1 - Math.abs(z) * 0.8) : 0;
-      const cuspLift = (cusp1 + cusp2 + cusp3 + cusp4) * (premolar ? 0.18 : 0.16);
-      const grooveDrop = (centralGroove + sideGroove) * (premolar ? 0.1 : 0.13);
-      x *= neckTaper * ((premolar ? 1.18 : 1.42) - 0.05 * occlusal);
-      y = table + occlusal * (cuspLift - grooveDrop);
-      z *= neckTaper * ((premolar ? 1.08 : 1.32) - 0.04 * occlusal);
-    }
-
-    position.setXYZ(index, x, y, z);
+    return {
+      x: cos * width * (1 - back * 0.08),
+      y: y + ridge + cuspLift - incisalNotch,
+      z: sin * depth * (1 + labialBulge - lingualHollow),
+    };
   }
 
+  const tableTaper = smoothStep(0.62, 1, verticalT);
+  const width = mix(0.64, molar ? 1.44 : 1.05, neck) * mix(1, molar ? 0.86 : 0.78, tableTaper);
+  const depth = mix(0.58, molar ? 1.08 : 0.82, neck) * mix(1, molar ? 0.82 : 0.76, tableTaper);
+  const tableFlatten = smoothStep(0.7, 1, verticalT);
+  const superEllipsePower = molar ? 0.82 : 0.9;
+  const boxyX = Math.sign(cos) * Math.abs(cos) ** superEllipsePower;
+  const boxyZ = Math.sign(sin) * Math.abs(sin) ** superEllipsePower;
+
+  const cuspSpreadX = molar ? 0.56 : 0.42;
+  const cuspSpreadZ = molar ? 0.44 : 0.32;
+  const cuspFrontR = Math.exp(-(((boxyX - cuspSpreadX) ** 2) + ((boxyZ - cuspSpreadZ) ** 2)) * 9);
+  const cuspFrontL = Math.exp(-(((boxyX + cuspSpreadX) ** 2) + ((boxyZ - cuspSpreadZ) ** 2)) * 9);
+  const cuspBackR = molar ? Math.exp(-(((boxyX - 0.46) ** 2) + ((boxyZ + 0.38) ** 2)) * 9) : 0;
+  const cuspBackL = molar ? Math.exp(-(((boxyX + 0.46) ** 2) + ((boxyZ + 0.38) ** 2)) * 9) : 0;
+  const centralGroove = Math.exp(-(boxyZ ** 2) * (premolar ? 42 : 28)) * (1 - Math.min(1, Math.abs(boxyX)));
+  const crossGroove = molar
+    ? Math.exp(-(boxyX ** 2) * 24) * (1 - Math.min(1, Math.abs(boxyZ)))
+    : 0;
+  const occlusalRelief = tableFlatten * (
+    (cuspFrontR + cuspFrontL + cuspBackR + cuspBackL) * (premolar ? 0.18 : 0.16) -
+    (centralGroove + crossGroove) * (premolar ? 0.12 : 0.14)
+  );
+
+  return {
+    x: boxyX * width,
+    y: mix(y, 0.58, tableFlatten * 0.72) + occlusalRelief,
+    z: boxyZ * depth,
+  };
+}
+
+function createProceduralToothGeometry(tooth) {
+  const template = getToothTemplate(tooth.toothIndex);
+  const radialSegments = 72;
+  const verticalSegments = 42;
+  const vertices = [];
+  const indices = [];
+
+  const pushPoint = (point) => {
+    vertices.push(point.x, point.y, point.z);
+    return vertices.length / 3 - 1;
+  };
+  const getRingIndex = (row, column) => row * radialSegments + (column % radialSegments);
+
+  for (let row = 0; row <= verticalSegments; row += 1) {
+    const verticalT = row / verticalSegments;
+    for (let column = 0; column < radialSegments; column += 1) {
+      const theta = (column / radialSegments) * Math.PI * 2;
+      const point = createToothCrownPoint(template, theta, verticalT);
+      pushPoint(point);
+    }
+  }
+
+  for (let row = 0; row < verticalSegments; row += 1) {
+    for (let column = 0; column < radialSegments; column += 1) {
+      const nextColumn = (column + 1) % radialSegments;
+      const a = getRingIndex(row, column);
+      const b = getRingIndex(row, nextColumn);
+      const c = getRingIndex(row + 1, column);
+      const d = getRingIndex(row + 1, nextColumn);
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+
+  const addCap = (baseRow, verticalT, inwardDirection) => {
+    const capRings = 5;
+    let previousRing = Array.from({ length: radialSegments }, (_, column) => getRingIndex(baseRow, column));
+
+    for (let ring = 1; ring <= capRings; ring += 1) {
+      const shrink = 1 - ring / (capRings + 1);
+      const lift = inwardDirection * ring * 0.018;
+      const currentRing = [];
+      for (let column = 0; column < radialSegments; column += 1) {
+        const theta = (column / radialSegments) * Math.PI * 2;
+        const outer = createToothCrownPoint(template, theta, verticalT);
+        currentRing.push(pushPoint({
+          x: outer.x * shrink,
+          y: outer.y + lift,
+          z: outer.z * shrink,
+        }));
+      }
+
+      for (let column = 0; column < radialSegments; column += 1) {
+        const nextColumn = (column + 1) % radialSegments;
+        const a = previousRing[column];
+        const b = previousRing[nextColumn];
+        const c = currentRing[column];
+        const d = currentRing[nextColumn];
+        if (inwardDirection > 0) {
+          indices.push(a, c, b, b, c, d);
+        } else {
+          indices.push(a, b, c, b, d, c);
+        }
+      }
+
+      previousRing = currentRing;
+    }
+
+    const center = pushPoint({
+      x: 0,
+      y: createToothCrownPoint(template, 0, verticalT).y + inwardDirection * (capRings + 1) * 0.018,
+      z: 0,
+    });
+    for (let column = 0; column < radialSegments; column += 1) {
+      const nextColumn = (column + 1) % radialSegments;
+      if (inwardDirection > 0) {
+        indices.push(center, previousRing[column], previousRing[nextColumn]);
+      } else {
+        indices.push(center, previousRing[nextColumn], previousRing[column]);
+      }
+    }
+  };
+
+  addCap(0, 0, -1);
+  addCap(verticalSegments, 1, 1);
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
   const scaleByTemplate = {
-    "central-incisor": [1.22, 1.5, 0.95],
-    "lateral-incisor": [1.05, 1.38, 0.88],
-    canine: [1.12, 1.58, 1.02],
-    premolar: [1.48, 1.18, 1.18],
-    molar: [2.18, 1.04, 1.58],
+    "central-incisor": [0.96, 1.5, 0.66],
+    "lateral-incisor": [0.82, 1.34, 0.61],
+    canine: [0.92, 1.56, 0.76],
+    premolar: [1.14, 1.05, 0.9],
+    molar: [1.56, 0.98, 1.12],
   }[template];
   geometry.scale(scaleByTemplate[0], scaleByTemplate[1], scaleByTemplate[2]);
+  geometry.computeBoundingBox();
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
   geometry.userData = {
@@ -1820,6 +2117,8 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
 
   const snapTeethToJawSurface = (teeth, jawType) => {
     const snapped = teeth.map((tooth) => {
+      if (tooth.source?.transformCrownCenter && tooth.transform) return tooth;
+
       const geometryCenter = getPointBoundsCenter(tooth.geometry?.vertices);
       const referencePoint = looksLikeModelPosition(tooth.position)
         ? tooth.position
@@ -2030,7 +2329,46 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       mesh.userData.transformMode = "api-mesh-centered-on-seated-position";
     }
 
-    if (tooth.rotation) {
+    const shouldUseApiBasis =
+      mesh.userData.geometrySource === "procedural-fallback" &&
+      isValidPoint(tooth.transform?.buccalDirection) &&
+      isValidPoint(tooth.transform?.mesialDistalLine) &&
+      isValidPoint(tooth.transform?.gingivalPoint) &&
+      isValidPoint(tooth.transform?.buccalPoint);
+
+    if (shouldUseApiBasis) {
+      let xAxis = new THREE.Vector3(
+        tooth.transform.mesialDistalLine.x,
+        tooth.transform.mesialDistalLine.y,
+        tooth.transform.mesialDistalLine.z
+      ).normalize();
+      let yAxis = new THREE.Vector3(
+        tooth.transform.buccalPoint.x - tooth.transform.gingivalPoint.x,
+        tooth.transform.buccalPoint.y - tooth.transform.gingivalPoint.y,
+        tooth.transform.buccalPoint.z - tooth.transform.gingivalPoint.z
+      ).normalize();
+      xAxis.addScaledVector(yAxis, -xAxis.dot(yAxis)).normalize();
+      let zAxis = new THREE.Vector3().crossVectors(xAxis, yAxis).normalize();
+      const buccalAxis = new THREE.Vector3(
+        tooth.transform.buccalDirection.x,
+        tooth.transform.buccalDirection.y,
+        tooth.transform.buccalDirection.z
+      ).normalize();
+      if (zAxis.dot(buccalAxis) < 0) {
+        zAxis.negate();
+        xAxis.negate();
+      }
+
+      const hasStableBasis =
+        xAxis.lengthSq() > 0.0001 &&
+        yAxis.lengthSq() > 0.0001 &&
+        zAxis.lengthSq() > 0.0001;
+      if (hasStableBasis) {
+        const basis = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
+        mesh.quaternion.setFromRotationMatrix(basis);
+        mesh.userData.transformMode = "api-tooth-transform-basis";
+      }
+    } else if (tooth.rotation) {
       const values = [tooth.rotation.x, tooth.rotation.y, tooth.rotation.z];
       const useDegrees = values.some((value) => Math.abs(value) > Math.PI * 2);
       mesh.rotation.set(
@@ -2040,7 +2378,25 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       );
     }
     if (tooth.scale) {
-      mesh.scale.multiply(new THREE.Vector3(tooth.scale.x, tooth.scale.y, tooth.scale.z));
+      const hasApiSizing =
+        shouldUseApiBasis &&
+        Number.isFinite(tooth.transform?.mesialDistalSizing) &&
+        tooth.transform.mesialDistalSizing > 0;
+      const template = getToothTemplate(tooth.toothIndex);
+      const clinicalWidthByTemplate = {
+        "central-incisor": 8.4,
+        "lateral-incisor": 7.2,
+        canine: 8.0,
+        premolar: 7.4,
+        molar: 10.2,
+      }[template] || 8.0;
+      const basisScale = hasApiSizing
+        ? Math.max(0.68, Math.min(1.35, tooth.transform.mesialDistalSizing / clinicalWidthByTemplate))
+        : null;
+      const scale = hasApiSizing
+        ? new THREE.Vector3(basisScale * 0.88, basisScale, basisScale * 0.8)
+        : new THREE.Vector3(tooth.scale.x * 0.82, tooth.scale.y, tooth.scale.z * 0.82);
+      mesh.scale.multiply(scale);
     }
   };
 
@@ -2180,18 +2536,61 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     return tube;
   };
 
+  const getArtificialTeethGuidelinePoints = (jawType, teeth) => {
+    const crownWrapEntries = sortTeethLinearly(teeth)
+      .map((tooth) => {
+        const wrapPoint = getTransformCrownWrapPoint(tooth.transform);
+        return {
+          point: wrapPoint ?? tooth.position,
+          hasTransformWrap: Boolean(wrapPoint),
+        };
+      })
+      .filter((entry) => isValidPoint(entry.point));
+    const crownWrapPoints = crownWrapEntries.map((entry) => entry.point);
+    const transformWrapCount = crownWrapEntries.filter((entry) => entry.hasTransformWrap).length;
+    if (crownWrapPoints.length >= 2 && transformWrapCount >= 2) {
+      return {
+        points: crownWrapPoints,
+        source: "crown-wrap",
+        component: "Tooth_Transformation_Interface",
+      };
+    }
+
+    const renderedPolyline = getRenderedPolylineJawline(scene, jawType);
+    if (
+      renderedPolyline?.points?.length >= 2 &&
+      renderedPolyline.coordinateSpace !== "scene-world" &&
+      /gingival/i.test(renderedPolyline.component || "")
+    ) {
+      return {
+        points: renderedPolyline.points,
+        source: "gingival-points",
+        component: renderedPolyline.component,
+      };
+    }
+
+    return {
+      points: sortTeethLinearly(teeth)
+        .map((tooth) => tooth.position)
+        .filter(isValidPoint),
+      source: "tooth-centers",
+      component: null,
+    };
+  };
+
   const createGuidelineGroup = (jawType, teeth) => {
-    const points = sortTeethLinearly(teeth)
-      .map((tooth) => tooth.position)
-      .filter(isValidPoint);
+    const guidelineData = getArtificialTeethGuidelinePoints(jawType, teeth);
+    const points = guidelineData.points;
     if (points.length < 2) return null;
 
     const guidelineGroup = new THREE.Group();
-    guidelineGroup.name = `${jawType}-artificial-teeth-linear-guideline`;
+    guidelineGroup.name = `${jawType}-artificial-teeth-${guidelineData.source}-guideline`;
     guidelineGroup.userData = {
       overlayType: "artificial-teeth-guideline",
       arch: jawType,
       pointCount: points.length,
+      source: guidelineData.source,
+      component: guidelineData.component,
     };
     for (let index = 1; index < points.length; index += 1) {
       const segment = createGuidelineSegment(jawType, points[index - 1], points[index], index - 1);
@@ -2279,7 +2678,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
 
     const toothCount = Math.max(1, Number(count) || 16);
     const lineLength = Math.max(polylineLength(guidelinePoints), 1);
-    const baseScale = Math.max(1.15, Math.min(lineLength / Math.max(toothCount * 5.45, 1), 2.45));
+    const baseScale = Math.max(0.9, Math.min(lineLength / Math.max(toothCount * 7.2, 1), 1.55));
     const archReverse = jawType === "upper";
 
     return Array.from({ length: toothCount }, (_, index) => {
@@ -2295,8 +2694,8 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       const toothIndex = getFallbackToothIndex(index, toothCount);
       const anterior = isAnteriorTooth(toothIndex);
       const template = getToothTemplate(toothIndex);
-      const lateralFullness = 1 + Math.abs(centered) * 0.1;
-      const size = baseScale * (anterior ? 0.98 : 1.12) * getToothTemplateScaleFactor(template) * lateralFullness;
+      const lateralFullness = 1 + Math.abs(centered) * 0.05;
+      const size = baseScale * (anterior ? 0.84 : 0.94) * getToothTemplateScaleFactor(template) * lateralFullness;
 
       return {
         arch: jawType,
@@ -2308,7 +2707,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
           y: Math.atan2(tangent.x, tangent.z) + (archReverse ? Math.PI : 0),
           z: centered * 0.12,
         },
-        scale: { x: size, y: size, z: size },
+        scale: { x: size * 0.82, y: size, z: size * 0.78 },
         source: {
           kind: source,
           guidelineFallback: true,
