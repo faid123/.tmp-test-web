@@ -12,6 +12,7 @@ console.log(THREE.REVISION);
 import { OFFLoader } from "./OFFLoader.js";
 // Import the ApiClient class
 import { ApiClient } from "./ApiClient.js";
+import { createArtificialTeethRenderer } from "./artificialTeeth.js";
 
 import { addResetButton } from "./resetButton.js";
 import { lol } from "./crypt.js";
@@ -26,6 +27,7 @@ import {
 
 let all_mesh_mat = {};
 window.finished = false;
+const viewerContainer = document.getElementById("container3D");
 
 // Get the current URL
 const url = new URL(window.location.href);
@@ -33,6 +35,63 @@ const url = new URL(window.location.href);
 // Get the value of a specific query parameter, e.g., "param"
 let paramValue = url.searchParams.get("id");
 const close = url.searchParams.get("close");
+
+function showViewerLoader(message = "Loading 3D viewer", progress = 0.08) {
+  const host = document.getElementById("loading-container");
+  if (!host) return;
+  host.className = "loading-container";
+  host.style.display = "flex";
+  host.innerHTML = "";
+
+  const label = document.createElement("div");
+  label.dataset.viewerLoaderLabel = "true";
+  label.textContent = message;
+  label.style.position = "fixed";
+  label.style.top = "calc(50% - 34px)";
+  label.style.left = "50%";
+  label.style.transform = "translateX(-50%)";
+  label.style.fontWeight = "700";
+  label.style.fontSize = "14px";
+  label.style.fontFamily = "Arial, sans-serif";
+  label.style.color = "#111827";
+
+  const bar = document.createElement("div");
+  bar.className = "loading-bar";
+
+  const fill = document.createElement("div");
+  fill.className = "loading-progress";
+  fill.dataset.viewerLoaderFill = "true";
+  fill.style.width = `${Math.max(0, Math.min(1, progress)) * 100}%`;
+  fill.style.left = "0";
+  fill.style.animation = "none";
+  fill.style.transition = "width 0.25s ease";
+  bar.appendChild(fill);
+
+  host.appendChild(label);
+  host.appendChild(bar);
+}
+
+function updateViewerLoader(message, progress) {
+  const host = document.getElementById("loading-container");
+  const label = host?.querySelector("[data-viewer-loader-label]");
+  const fill = host?.querySelector("[data-viewer-loader-fill]");
+  if (!host || !label || !fill) {
+    showViewerLoader(message, progress);
+    return;
+  }
+  host.style.display = "flex";
+  label.textContent = message;
+  fill.style.width = `${Math.max(0, Math.min(1, progress)) * 100}%`;
+}
+
+function hideViewerLoader() {
+  const host = document.getElementById("loading-container");
+  if (!host) return;
+  host.style.display = "none";
+  host.innerHTML = "";
+}
+
+showViewerLoader();
 
 //decrypts the paramvalue
 //if doing testing with test cases jus comment it out
@@ -74,25 +133,1780 @@ let objToRender = "dino";
 let mesh_geo;
 
 // Create a material
-const material = new THREE.MeshPhongMaterial({ vertexColors: true });
+const material = new THREE.MeshPhongMaterial({
+  vertexColors: true,
+  side: THREE.DoubleSide,
+  transparent: false,
+  opacity: 1,
+  depthTest: true,
+  depthWrite: true,
+});
 const materialsurface = new THREE.MeshStandardMaterial({
   color: 0xa0a0a0, // Base color
   metalness: 0.75, // Fully metallic
   roughness: 0.2, // Smooth surface
+  side: THREE.DoubleSide,
+  transparent: false,
+  opacity: 1,
+  depthTest: true,
+  depthWrite: true,
 });
 const materialsurface_non_metal = new THREE.MeshStandardMaterial({
   color: 0xa0a0a0, // Base color
   metalness: 0, // Fully metallic
   roughness: 0.2, // Smooth surface
+  side: THREE.DoubleSide,
+  transparent: false,
+  opacity: 1,
+  depthTest: true,
+  depthWrite: true,
 });
 
 // Create an instance of the ApiClient with the base URL
 const apiClient = new ApiClient("https://live.api.smartrpdai.com/api/smartrpd");
 const parentObject = new THREE.Object3D();
 scene.add(parentObject);
+const polylineOverlayGroup = new THREE.Group();
+polylineOverlayGroup.name = "polyline-overlay-group";
+scene.add(polylineOverlayGroup);
+const raycaster = new THREE.Raycaster();
+raycaster.params.Points.threshold = 5;
+const pointer = new THREE.Vector2();
+const POLYLINE_ENDPOINT = "/polylines/getall";
+const polylineDragPlane = new THREE.Plane();
+const polylineDragPoint = new THREE.Vector3();
+const polylineCameraDirection = new THREE.Vector3();
+const polylineHandleGeometry = new THREE.SphereGeometry(1.05, 24, 16);
+const polylineHandleMaterial = new THREE.MeshStandardMaterial({
+  color: 0xff8a00,
+  opacity: 1,
+  roughness: 0.3,
+  metalness: 0,
+  transparent: false,
+  depthTest: true,
+  depthWrite: false,
+});
+const POLYLINE_TUBE_RADIUS = 0.75;
+const POLYLINE_TUBE_RADIAL_SEGMENTS = 8;
+let isPolylineOverlayVisible = true;
+let activePolylineDrag = null;
+let polylineMenuButton = null;
+let polylineMenuList = null;
+let polylineDepthTestEnabled = true;
+const polylineComponentVisibility = new Map();
+const polylineJawVisibility = new Map([
+  ["upper", true],
+  ["lower", true],
+]);
+const artificialTeethRenderer = createArtificialTeethRenderer({
+  scene,
+  parentObject,
+  camera,
+  apiClient,
+  onStatus: (label, progress) => updateViewerLoader(label, 0.78 + Math.max(0, Math.min(1, progress)) * 0.2),
+});
+
+function queueArtificialTeethRender(caseIntID) {
+  const shouldAutoLoadArtificialTeeth =
+    url.searchParams.get("artificialTeeth") !== "0" &&
+    url.searchParams.get("artificialTeeth") !== "false";
+
+  if (!shouldAutoLoadArtificialTeeth) {
+    console.log("[artificial teeth] auto-load skipped; disable only with ?artificialTeeth=0/false");
+    hideViewerLoader();
+    return Promise.resolve();
+  }
+
+  updateViewerLoader("Preparing artificial teeth", 0.78);
+
+  const teethReady = new Promise((resolve) => {
+    window.setTimeout(() => {
+      updateViewerLoader("Decoding artificial teeth", 0.86);
+      artificialTeethRenderer.fetchAndRender(caseIntID)
+        .catch((error) => {
+          console.warn("[artificial teeth] deferred render failed", error);
+          artificialTeethRenderer.ensureFallbackTeeth({
+            upper: 16,
+            lower: 16,
+            source: "persistent-fallback-fetch-error",
+          });
+        })
+        .finally(() => {
+          artificialTeethRenderer.ensureFallbackTeeth({
+            upper: 16,
+            lower: 16,
+            source: "persistent-fallback-ready",
+          });
+          updateViewerLoader("Artificial teeth ready", 1);
+          window.setTimeout(hideViewerLoader, 450);
+          resolve();
+        });
+    }, 900);
+  });
+
+  [1600, 3500, 7000].forEach((delay) => {
+    window.setTimeout(() => {
+      artificialTeethRenderer.ensureFallbackTeeth({
+        upper: 16,
+        lower: 16,
+        source: `persistent-fallback-${delay}`,
+      });
+    }, delay);
+  });
+
+  return teethReady;
+}
+
+const POLYLINE_COMPONENT_COLORS = [
+  0x6f35ff,
+  0x00a6ff,
+  0xff8a00,
+  0x1fc16b,
+  0xff4f81,
+  0xffd400,
+];
+const POLYLINE_APP_COMPONENTS = [
+  "Retainer",
+  "Lingual Clasp",
+  "MajorConnector",
+  "Proximal Plate",
+  "Rest",
+  "Minor Conn",
+  "Mesh",
+  "Reversal Line",
+  "Gingival Points",
+];
+const POLYLINE_TEXT_COMPONENTS = [
+  "retentionPins",
+  "retainer",
+  "tissueStop",
+  "mesh",
+  "reversalLine",
+  "proximalPlate",
+  "proximalPlates",
+  "endingProximalPlate",
+  "startingProximalPlate",
+  "majorConnector",
+  "GingivalPoints",
+  "reciprocatingArm",
+  "rests",
+  "rest",
+  "minorConnectorTooth",
+];
+const POLYLINE_TEXT_COMPONENT_PATTERN = new RegExp(
+  `^(${POLYLINE_TEXT_COMPONENTS.join("|")})\\b`,
+  "i"
+);
+const POLYLINE_TEXT_DETECTION_PATTERN = new RegExp(
+  `nodeCount|${POLYLINE_TEXT_COMPONENTS.join("|")}`,
+  "i"
+);
+
+function disposeObject3D(object) {
+  if (!object) return;
+  object.traverse((child) => {
+    if (child.geometry) child.geometry.dispose();
+    if (Array.isArray(child.material)) {
+      child.material.forEach((materialEntry) => materialEntry?.dispose?.());
+    } else if (child.material) {
+      child.material.dispose();
+    }
+  });
+}
+
+function clearPolylineOverlay() {
+  while (polylineOverlayGroup.children.length > 0) {
+    const child = polylineOverlayGroup.children[0];
+    polylineOverlayGroup.remove(child);
+    disposeObject3D(child);
+  }
+  updatePolylineComponentMenu();
+}
+
+function enforceOpaqueJawMesh(object) {
+  object.traverse((child) => {
+    if (!child.isMesh) return;
+
+    const materials = Array.isArray(child.material)
+      ? child.material
+      : [child.material];
+
+    materials.forEach((materialEntry) => {
+      if (!materialEntry) return;
+      materialEntry.transparent = false;
+      materialEntry.opacity = 1;
+      materialEntry.depthTest = true;
+      materialEntry.depthWrite = true;
+      materialEntry.side = THREE.DoubleSide;
+      materialEntry.needsUpdate = true;
+    });
+  });
+}
+
+function syncPolylineFocusMode() {
+  parentObject.children.forEach((child) => {
+    if (!child.isMesh) return;
+    enforceOpaqueJawMesh(child);
+  });
+}
+
+function normalizeJawKey(value) {
+  const text = String(value || "").toLowerCase();
+  if (text.includes("upper_jaw") || text.includes("upper") || text === "2") {
+    return "upper";
+  }
+  if (text.includes("lower_jaw") || text.includes("lower") || text === "1") {
+    return "lower";
+  }
+  return null;
+}
+
+function isValidPoint(point) {
+  return (
+    point &&
+    Number.isFinite(point.x) &&
+    Number.isFinite(point.y) &&
+    Number.isFinite(point.z)
+  );
+}
+
+function getPolylineComponentName(candidate, fallback = "polyline") {
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    return fallback;
+  }
+
+  return String(
+    candidate.component ??
+      candidate.component_name ??
+      candidate.componentName ??
+      candidate.name ??
+      candidate.label ??
+      candidate.type ??
+      candidate.line_type ??
+      candidate.polyline_type ??
+      fallback
+  );
+}
+
+function normalizePolylineComponentName(component) {
+  const text = String(component || "polyline");
+  if (/retention\s*pins?|^retainer$/i.test(text)) return "Retainer";
+  if (/gingival/i.test(text)) return "Gingival Points";
+  if (/reciprocating\s*arm/i.test(text)) return "Lingual Clasp";
+  if (/^mesh$/i.test(text)) return "Mesh";
+  if (/tissue\s*stop|^rests?$|rest/i.test(text)) return "Rest";
+  if (/ending\s*proximal\s*plate/i.test(text)) {
+    return "Proximal Plate";
+  }
+  if (/starting\s*proximal\s*plate/i.test(text)) {
+    return "Proximal Plate";
+  }
+  if (/proximal\s*plates?/i.test(text)) return "Proximal Plate";
+  if (/minor\s*connector\s*tooth/i.test(text)) return "Minor Conn";
+  if (/major\s*connector/i.test(text)) return "MajorConnector";
+  if (/reversal/i.test(text)) return "Reversal Line";
+  return text;
+}
+
+function getPolylinePointSignature(point) {
+  return [point.x, point.y, point.z]
+    .map((value) => Number(value).toFixed(3))
+    .join(",");
+}
+
+function createPolylineSegment(points, component = "polyline") {
+  const normalizedComponent = normalizePolylineComponentName(component);
+  return {
+    component: normalizedComponent,
+    sourceComponent: component,
+    points,
+  };
+}
+
+function getSegmentPoints(segment) {
+  return Array.isArray(segment) ? segment : segment?.points || [];
+}
+
+function getSegmentComponent(segment) {
+  return normalizePolylineComponentName(
+    Array.isArray(segment) ? "polyline" : segment?.component || "polyline"
+  );
+}
+
+function getSegmentRenderableEdges(segment, points, component) {
+  return segment?.renderEdges ||
+    getPolylineRenderableEdges(points, segment?.sourceComponent || component);
+}
+
+function getPolylineComponentKey(arch, component) {
+  return component;
+}
+
+function isPolylineJawVisible(arch) {
+  return polylineJawVisibility.get(arch) ?? true;
+}
+
+function setPolylineJawVisibility(arch, isVisible) {
+  if (arch !== "upper" && arch !== "lower") return;
+  polylineJawVisibility.set(arch, Boolean(isVisible));
+  syncPolylineOverlayVisibility();
+}
+
+function getPolylineJawVisibility(arch) {
+  return isPolylineJawVisible(arch);
+}
+
+window.setPolylineJawVisibility = setPolylineJawVisibility;
+window.getPolylineJawVisibility = getPolylineJawVisibility;
+
+function formatPolylineComponentLabel(key) {
+  return key || "polyline";
+}
+
+function isPolylineComponentVisibleByDefault(key) {
+  return !/gingival\s*points/i.test(key || "");
+}
+
+function getPolylineComponentSortRank(key) {
+  const componentIndex = POLYLINE_APP_COMPONENTS.indexOf(key);
+  return componentIndex >= 0
+    ? componentIndex
+    : POLYLINE_APP_COMPONENTS.length;
+}
+
+function toPointObject(value) {
+  if (typeof value === "string") {
+    try {
+      return toPointObject(JSON.parse(value));
+    } catch {
+      return null;
+    }
+  }
+
+  if (Array.isArray(value) && value.length >= 3) {
+    const [x, y, z] = value.map(Number);
+    return { x, y, z };
+  }
+
+  if (value && typeof value === "object") {
+    const x = Number(
+      value.x ??
+        value.X ??
+        value.pos_x ??
+        value.point_x ??
+        value.position_x ??
+        value.coord_x ??
+        value[0]
+    );
+    const y = Number(
+      value.y ??
+        value.Y ??
+        value.pos_y ??
+        value.point_y ??
+        value.position_y ??
+        value.coord_y ??
+        value[1]
+    );
+    const z = Number(
+      value.z ??
+        value.Z ??
+        value.pos_z ??
+        value.point_z ??
+        value.position_z ??
+        value.coord_z ??
+        value[2]
+    );
+
+    if ([x, y, z].every(Number.isFinite)) {
+      return { x, y, z };
+    }
+  }
+
+  return null;
+}
+
+function extractPointArray(candidate) {
+  if (!candidate) return [];
+
+  if (typeof candidate === "string") {
+    try {
+      return extractPointArray(JSON.parse(candidate));
+    } catch {
+      return [];
+    }
+  }
+
+  if (Array.isArray(candidate)) {
+    return candidate.map(toPointObject).filter(isValidPoint);
+  }
+
+  const nestedArrayKeys = [
+    "points",
+    "polyline",
+    "polylines",
+    "vertices",
+    "coordinates",
+    "coords",
+    "data",
+    "json",
+  ];
+  for (const key of nestedArrayKeys) {
+    if (candidate[key]) {
+      const points = extractPointArray(candidate[key]);
+      if (points.length) return points;
+    }
+  }
+
+  return [];
+}
+
+function decodePolylineText(value) {
+  if (typeof value !== "string" || !value.trim()) return "";
+
+  try {
+    const decoded = atob(value.trim());
+    if (POLYLINE_TEXT_DETECTION_PATTERN.test(decoded)) {
+      return decoded;
+    }
+  } catch {
+    // Keep going: the value may already be plain text.
+  }
+
+  return POLYLINE_TEXT_DETECTION_PATTERN.test(value) ? value : "";
+}
+
+function parsePolylineTextSegments(value) {
+  const text = decodePolylineText(value);
+  if (!text) return [];
+
+  const lines = text.split(/\r?\n/);
+  const segments = [];
+  const numberPattern = /[-+]?\d*\.?\d+(?:e[-+]?\d+)?/gi;
+  const ignoredPointValue = -9e91;
+  let currentComponent = "polyline";
+
+  const getComponentName = (line) => {
+    return line.trim().match(POLYLINE_TEXT_COMPONENT_PATTERN)?.[1] || "";
+  };
+
+  const isComponentHeader = (line) => Boolean(getComponentName(line));
+
+  const parseCoordinateLine = (line) => {
+    if (!/^[\s+\-.0-9eE]+$/.test(line)) return null;
+
+    const numbers = line.match(numberPattern)?.map(Number) || [];
+    if (numbers.length < 3) return null;
+
+    const coords = numbers.slice(-3);
+    if (
+      coords.some(
+        (coord) =>
+          !Number.isFinite(coord) || Math.abs(coord - ignoredPointValue) < 1e80
+      )
+    ) {
+      return null;
+    }
+
+    return { x: coords[0], y: coords[1], z: coords[2] };
+  };
+
+  const collectPoints = (startIndex, nodeCount = 0) => {
+    const points = [];
+    let nextIndex = startIndex;
+
+    while (nextIndex < lines.length) {
+      const candidateLine = lines[nextIndex];
+      if (nextIndex !== startIndex && isComponentHeader(candidateLine)) break;
+
+      const point = parseCoordinateLine(candidateLine);
+      if (point) points.push(point);
+      nextIndex += 1;
+    }
+
+    return { points, nextIndex };
+  };
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim();
+    const componentMatch = line.match(POLYLINE_TEXT_COMPONENT_PATTERN);
+    if (componentMatch) {
+      currentComponent = componentMatch[1].trim();
+    }
+
+    const nodeMatch = line.match(/nodeCount\s*=\s*(\d+)/i);
+    const gingivalMatch = line.match(/^GingivalPoints\s+(\d+)/i);
+    const nodeCount = Number(nodeMatch?.[1] ?? gingivalMatch?.[1] ?? 0);
+
+    if (!componentMatch && !nodeCount) continue;
+    if ((nodeMatch || gingivalMatch) && nodeCount === 0) continue;
+
+    const startIndex = i + 1;
+    const { points, nextIndex } = collectPoints(startIndex, nodeCount);
+    if (points.length >= 2) {
+      segments.push(createPolylineSegment(points, currentComponent));
+    }
+
+    i = Math.max(i, nextIndex - 1);
+  }
+
+  return segments;
+}
+
+function extractPolylineSegments(candidate) {
+  if (!candidate) return [];
+
+  if (typeof candidate === "string") {
+    const textSegments = parsePolylineTextSegments(candidate);
+    if (textSegments.length) return textSegments;
+
+    try {
+      return extractPolylineSegments(JSON.parse(candidate));
+    } catch {
+      return [];
+    }
+  }
+
+  if (Array.isArray(candidate)) {
+    const points = candidate.map(toPointObject).filter(isValidPoint);
+    if (points.length === candidate.length && points.length) {
+      return [createPolylineSegment(points)];
+    }
+
+    return candidate.flatMap((entry) => extractPolylineSegments(entry));
+  }
+
+  if (typeof candidate === "object") {
+    const dataSegments = parsePolylineTextSegments(candidate.data);
+    if (dataSegments.length) return dataSegments;
+
+    const directPoints = extractPointArray(candidate);
+    if (directPoints.length) {
+      return [
+        createPolylineSegment(
+          directPoints,
+          getPolylineComponentName(candidate)
+        ),
+      ];
+    }
+
+    const nestedKeys = [
+      "points",
+      "polyline",
+      "polylines",
+      "vertices",
+      "coordinates",
+      "coords",
+      "data",
+      "json",
+      "upper",
+      "lower",
+      "upper_jaw",
+      "lower_jaw",
+      "upperJaw",
+      "lowerJaw",
+      "maxillary",
+      "mandibular",
+    ];
+
+    return nestedKeys.flatMap((key) => extractPolylineSegments(candidate[key]));
+  }
+
+  return [];
+}
+
+function getLoadedPolylineJawKeys() {
+  const keys = new Set();
+  parentObject.children.forEach((child) => {
+    const jawKey = normalizeJawKey(child.userData?.jaw_type ?? child.name);
+    if (jawKey) keys.add(jawKey);
+  });
+  return Array.from(keys);
+}
+
+function isPolylineJawLoaded(jawKey, loadedJawKeys) {
+  return !loadedJawKeys.length || loadedJawKeys.includes(jawKey);
+}
+
+function getPolylineSegmentSignature(segment) {
+  const component = getSegmentComponent(segment);
+  const points = getSegmentPoints(segment);
+  const pointSignature = points.map(getPolylinePointSignature).join("|");
+  return `${component}:${points.length}:${pointSignature}`;
+}
+
+function inferPolylineArrayJawKey(entry, index, total, loadedJawKeys) {
+  const explicitJawKey = normalizeJawKey(
+    entry?.jaw_type ??
+      entry?.jawType ??
+      entry?.arch ??
+      entry?.type ??
+      entry?.jaws
+  );
+  if (explicitJawKey) return explicitJawKey;
+
+  if (loadedJawKeys.length === 1) return loadedJawKeys[0];
+
+  if (total >= 2) {
+    const positionalJawKey = index === 0 ? "upper" : index === 1 ? "lower" : null;
+    if (positionalJawKey && isPolylineJawLoaded(positionalJawKey, loadedJawKeys)) {
+      return positionalJawKey;
+    }
+  }
+
+  return null;
+}
+
+function normalizePolylineResponse(rawResponse) {
+  const normalized = {
+    upper: [],
+    lower: [],
+  };
+  const loadedJawKeys = getLoadedPolylineJawKeys();
+  const seenSegmentSignatures = {
+    upper: new Set(),
+    lower: new Set(),
+  };
+
+  const assignSegments = (jawKey, candidate) => {
+    const segments = extractPolylineSegments(candidate);
+    if (!jawKey || !segments.length || !isPolylineJawLoaded(jawKey, loadedJawKeys)) {
+      return;
+    }
+    segments.forEach((segment) => {
+      const signature = getPolylineSegmentSignature(segment);
+      if (seenSegmentSignatures[jawKey].has(signature)) return;
+      seenSegmentSignatures[jawKey].add(signature);
+      normalized[jawKey].push(segment);
+    });
+  };
+
+  if (!rawResponse) {
+    return normalized;
+  }
+
+  if (Array.isArray(rawResponse)) {
+    rawResponse.forEach((entry, index) => {
+      const jawKey = inferPolylineArrayJawKey(
+        entry,
+        index,
+        rawResponse.length,
+        loadedJawKeys
+      );
+      assignSegments(jawKey, entry);
+    });
+    return normalized;
+  }
+
+  if (typeof rawResponse === "object") {
+    const upperCandidate =
+      rawResponse.upper ??
+      rawResponse.upper_jaw ??
+      rawResponse.upperJaw ??
+      rawResponse.maxillary;
+    const lowerCandidate =
+      rawResponse.lower ??
+      rawResponse.lower_jaw ??
+      rawResponse.lowerJaw ??
+      rawResponse.mandibular;
+
+    assignSegments("upper", upperCandidate);
+    assignSegments("lower", lowerCandidate);
+
+    const fallbackJawKey = normalizeJawKey(
+      rawResponse.jaw_type ??
+        rawResponse.jawType ??
+        rawResponse.arch ??
+        rawResponse.type ??
+        rawResponse.jaws
+    );
+
+    if (upperCandidate === undefined && lowerCandidate === undefined) {
+      assignSegments(fallbackJawKey, rawResponse);
+    }
+  }
+
+  return normalized;
+}
+
+function getPolylineSegmentColor(component, segmentIndex) {
+  if (/omit\s*reference/i.test(component || "")) {
+    return 0x9ca3af;
+  }
+
+  if (/gingival.*relevant/i.test(component || "")) {
+    return 0xff8a00;
+  }
+
+  if (/major\s*(connector|conn)/i.test(component || "")) {
+    return 0x8b5cf6;
+  }
+
+  if (/reversal/i.test(component || "")) {
+    return 0xff1f1f;
+  }
+
+  if (/retainer/i.test(component || "")) {
+    return 0xff4f81;
+  }
+
+  if (/tissue\s*stop/i.test(component || "")) {
+    return 0x2dd4bf;
+  }
+
+  if (/proximal\s*plate/i.test(component || "")) {
+    return 0x38bdf8;
+  }
+
+  if (/lingual\s*clasp/i.test(component || "")) {
+    return 0xf97316;
+  }
+
+  if (/minor\s*(connector|conn)/i.test(component || "")) {
+    return 0x22c55e;
+  }
+
+  if (/^mesh$/i.test(component || "")) {
+    return 0x0891b2;
+  }
+
+  if (/rest/i.test(component || "")) {
+    return 0xffd400;
+  }
+
+  const text = String(component || "");
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  }
+  return POLYLINE_COMPONENT_COLORS[hash % POLYLINE_COMPONENT_COLORS.length];
+}
+
+function isGingivalPolylineComponent(component) {
+  return /gingival/i.test(component || "");
+}
+
+function isMeshPolylineComponent(component) {
+  return /^mesh$/i.test(component || "");
+}
+
+function shouldSeatPolylineComponentOnJaw(component) {
+  return /minor\s*(connector|conn)/i.test(component || "");
+}
+
+function getJawMeshForPolyline(jawType) {
+  const jawText = jawType.toLowerCase();
+  return parentObject.children.find((child) => {
+    const type = String(child.userData?.jaw_type || child.name || "").toLowerCase();
+    return type.includes(jawText);
+  });
+}
+
+function applyJawTransformToPolylineGroup(group, jawType, coordinateSpace = "jaw-local") {
+  if (coordinateSpace === "scene-world") {
+    group.position.set(0, 0, 0);
+    group.rotation.set(0, 0, 0);
+    group.scale.set(1, 1, 1);
+    return;
+  }
+
+  const jawMesh = getJawMeshForPolyline(jawType);
+  if (!jawMesh) return;
+
+  group.position.copy(jawMesh.position);
+  group.rotation.copy(jawMesh.rotation);
+  group.scale.copy(jawMesh.scale);
+}
+
+function getDistanceBetweenPoints(a, b) {
+  return Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+}
+
+function getClosestJawPolylineSurfacePoint(jawType, point, coordinateSpace = "jaw-local") {
+  const jawMesh = getJawMeshForPolyline(jawType);
+  const position = jawMesh?.geometry?.attributes?.position;
+  if (!position || !isValidPoint(point)) return null;
+
+  jawMesh.updateMatrixWorld(true);
+  let bestPoint = null;
+  let bestDistanceSq = Infinity;
+  const stride = Math.max(1, Math.floor(position.count / 30000));
+  const candidateVector = new THREE.Vector3();
+
+  for (let index = 0; index < position.count; index += stride) {
+    candidateVector.set(
+      position.getX(index),
+      position.getY(index),
+      position.getZ(index)
+    );
+    if (coordinateSpace === "scene-world") {
+      jawMesh.localToWorld(candidateVector);
+    }
+    const candidate = { x: candidateVector.x, y: candidateVector.y, z: candidateVector.z };
+    const dx = point.x - candidate.x;
+    const dy = point.y - candidate.y;
+    const dz = point.z - candidate.z;
+    const distanceSq = dx * dx + dy * dy + dz * dz;
+    if (distanceSq < bestDistanceSq) {
+      bestDistanceSq = distanceSq;
+      bestPoint = candidate;
+    }
+  }
+
+  return bestPoint ? { point: bestPoint, distance: Math.sqrt(bestDistanceSq) } : null;
+}
+
+function getPolylineSamplePoints(points, limit = 24) {
+  if (points.length <= limit) return points;
+  const step = (points.length - 1) / (limit - 1);
+  return Array.from({ length: limit }, (_, index) => points[Math.round(index * step)]);
+}
+
+function getMedianDistanceToJaw(points, jawType, coordinateSpace) {
+  const distances = getPolylineSamplePoints(points)
+    .map((point) => getClosestJawPolylineSurfacePoint(jawType, point, coordinateSpace)?.distance)
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+
+  if (!distances.length) return Infinity;
+  return distances[Math.floor(distances.length / 2)];
+}
+
+function detectPolylineCoordinateSpace(points, jawType, component) {
+  if (points.length < 2 || !getJawMeshForPolyline(jawType)) {
+    return {
+      coordinateSpace: "jaw-local",
+      localMedianDistance: null,
+      worldMedianDistance: null,
+    };
+  }
+
+  const localMedianDistance = getMedianDistanceToJaw(points, jawType, "jaw-local");
+  const worldMedianDistance = getMedianDistanceToJaw(points, jawType, "scene-world");
+  const coordinateSpace =
+    worldMedianDistance + 0.35 < localMedianDistance * 0.72
+      ? "scene-world"
+      : "jaw-local";
+
+  if (coordinateSpace === "scene-world") {
+    console.log("[polyline] detected scene-world coordinates", {
+      arch: jawType,
+      component,
+      localMedianDistance: Number(localMedianDistance.toFixed(3)),
+      worldMedianDistance: Number(worldMedianDistance.toFixed(3)),
+    });
+  }
+
+  return { coordinateSpace, localMedianDistance, worldMedianDistance };
+}
+
+function seatPolylinePointsOnJaw(points, jawType, component, coordinateSpace = "jaw-local") {
+  if (!shouldSeatPolylineComponentOnJaw(component) || points.length < 2) {
+    return { points, snappedCount: 0, maxDistance: 0 };
+  }
+
+  let snappedCount = 0;
+  let maxDistance = 0;
+  const seatedPoints = points.map((point) => {
+    const closest = getClosestJawPolylineSurfacePoint(jawType, point, coordinateSpace);
+    if (!closest) return point;
+
+    maxDistance = Math.max(maxDistance, closest.distance);
+    if (closest.distance <= 0.65) return point;
+
+    snappedCount += 1;
+    const surfacePoint = closest.point;
+    const direction = {
+      x: point.x - surfacePoint.x,
+      y: point.y - surfacePoint.y,
+      z: point.z - surfacePoint.z,
+    };
+    const length = Math.max(
+      0.0001,
+      Math.hypot(direction.x, direction.y, direction.z)
+    );
+    const offset = Math.min(Math.max(POLYLINE_TUBE_RADIUS * 0.45, 0.22), 0.45);
+    return {
+      x: surfacePoint.x + (direction.x / length) * offset,
+      y: surfacePoint.y + (direction.y / length) * offset,
+      z: surfacePoint.z + (direction.z / length) * offset,
+    };
+  });
+
+  return { points: seatedPoints, snappedCount, maxDistance };
+}
+
+function getPolylineTurnCosine(previous, current, next) {
+  const ax = current.x - previous.x;
+  const ay = current.y - previous.y;
+  const az = current.z - previous.z;
+  const bx = next.x - current.x;
+  const by = next.y - current.y;
+  const bz = next.z - current.z;
+  const aLength = Math.hypot(ax, ay, az);
+  const bLength = Math.hypot(bx, by, bz);
+
+  if (!aLength || !bLength) return 1;
+  return (ax * bx + ay * by + az * bz) / (aLength * bLength);
+}
+
+function getPolylineRenderableEdges(points, component) {
+  if (points.length < 2) return [];
+  if (points.length < 3) return [[0, 1]];
+
+  const isGingival = isGingivalPolylineComponent(component);
+  const isMesh = isMeshPolylineComponent(component);
+  const distances = [];
+  for (let i = 1; i < points.length; i += 1) {
+    const distance = getDistanceBetweenPoints(points[i - 1], points[i]);
+    if (Number.isFinite(distance) && distance > 0) {
+      distances.push(distance);
+    }
+  }
+
+  if (!distances.length) {
+    return points.slice(1).map((_, index) => [index, index + 1]);
+  }
+
+  const sortedDistances = [...distances].sort((a, b) => a - b);
+  const medianDistance = sortedDistances[Math.floor(sortedDistances.length / 2)];
+  const highDistance = sortedDistances[Math.floor(sortedDistances.length * 0.9)];
+  const jumpThreshold = isGingival
+    ? Math.max(medianDistance * 3.5, highDistance * 0.65, 5)
+    : isMesh
+      ? Math.max(medianDistance * 2.8, highDistance * 0.7, 3)
+      : Math.max(medianDistance * 8, 12);
+  const turnThreshold = Math.max(medianDistance * (isMesh ? 1.8 : 2.2), 4);
+  const edges = [];
+
+  for (let i = 1; i < points.length; i += 1) {
+    const previous = points[i - 1];
+    const current = points[i];
+    const distance = getDistanceBetweenPoints(previous, current);
+    const previousTurnCosine =
+      (isGingival || isMesh) && i > 1
+        ? getPolylineTurnCosine(points[i - 2], previous, current)
+        : 1;
+    const nextTurnCosine =
+      (isGingival || isMesh) && i < points.length - 1
+        ? getPolylineTurnCosine(previous, current, points[i + 1])
+        : 1;
+    const isSuspiciousGingivalTurn =
+      isGingival &&
+      distance > turnThreshold &&
+      (previousTurnCosine < -0.5 || nextTurnCosine < -0.5);
+    const isSuspiciousMeshTurn =
+      isMesh &&
+      distance > turnThreshold &&
+      (previousTurnCosine < -0.25 || nextTurnCosine < -0.25);
+
+    if (
+      distance <= jumpThreshold &&
+      !isSuspiciousGingivalTurn &&
+      !isSuspiciousMeshTurn
+    ) {
+      edges.push([i - 1, i]);
+    }
+  }
+
+  return edges;
+}
+
+function getPositionAttributePoint(positionAttribute, index) {
+  return new THREE.Vector3(
+    positionAttribute.getX(index),
+    positionAttribute.getY(index),
+    positionAttribute.getZ(index)
+  );
+}
+
+function createPolylineTubeGeometryBetweenPoints(start, end) {
+  const curve = new THREE.LineCurve3(start, end);
+  return new THREE.TubeGeometry(
+    curve,
+    1,
+    POLYLINE_TUBE_RADIUS,
+    POLYLINE_TUBE_RADIAL_SEGMENTS,
+    false
+  );
+}
+
+function createPolylineTubeGeometry(positionAttribute, startIndex, endIndex) {
+  return createPolylineTubeGeometryBetweenPoints(
+    getPositionAttributePoint(positionAttribute, startIndex),
+    getPositionAttributePoint(positionAttribute, endIndex)
+  );
+}
+
+function addPolylineTube(
+  tubeGroup,
+  geometry,
+  material,
+  jawType,
+  component,
+  componentKey,
+  segmentIndex,
+  edgeIndex
+) {
+  const tube = new THREE.Mesh(geometry, material.clone());
+  tube.material.depthTest = polylineDepthTestEnabled;
+  tube.material.needsUpdate = true;
+  tube.name = `${jawType}-${component}-polyline-segment-${segmentIndex}-tube-${edgeIndex}`;
+  tube.renderOrder = 20;
+  tube.userData = {
+    overlayType: "polyline-tube",
+    arch: jawType,
+    component,
+    componentKey,
+    segmentIndex,
+    edgeIndex,
+  };
+  tubeGroup.add(tube);
+}
+
+function syncPolylineTubeGeometries(tubeGroup) {
+  const positionAttribute = tubeGroup.userData.sourcePositionAttribute;
+  const edges = tubeGroup.userData.edges || [];
+  if (!positionAttribute) return;
+
+  tubeGroup.children.forEach((tube, index) => {
+    const edge = edges[index];
+    if (!edge) return;
+
+    const nextGeometry = createPolylineTubeGeometry(
+      positionAttribute,
+      edge[0],
+      edge[1]
+    );
+    tube.geometry?.dispose?.();
+    tube.geometry = nextGeometry;
+    tube.geometry.computeBoundingSphere();
+  });
+}
+
+function createPolylineObjects(jawType, segment, segmentIndex) {
+  const component = getSegmentComponent(segment);
+  const rawPoints = getSegmentPoints(segment);
+  const coordinateDetection = detectPolylineCoordinateSpace(rawPoints, jawType, component);
+  const seating = seatPolylinePointsOnJaw(
+    rawPoints,
+    jawType,
+    component,
+    coordinateDetection.coordinateSpace
+  );
+  const points = seating.points;
+  const componentKey = getPolylineComponentKey(jawType, component);
+  const edges = getSegmentRenderableEdges(segment, points, component);
+  const positionArray = new Float32Array(points.length * 3);
+  points.forEach((point, index) => {
+    positionArray[index * 3] = point.x;
+    positionArray[index * 3 + 1] = point.y;
+    positionArray[index * 3 + 2] = point.z;
+  });
+  const positionAttribute = new THREE.BufferAttribute(positionArray, 3);
+  const group = new THREE.Group();
+  group.name = `${jawType}-${component}-polyline-segment-${segmentIndex}`;
+  group.visible = isPolylineOverlayVisible &&
+    isPolylineJawVisible(jawType) &&
+    (polylineComponentVisibility.get(componentKey) ?? true);
+  group.userData = {
+    overlayType: "polyline",
+    arch: jawType,
+    component,
+    componentKey,
+    segmentIndex,
+    coordinateSpace: coordinateDetection.coordinateSpace,
+    localMedianSurfaceDistance: coordinateDetection.localMedianDistance,
+    worldMedianSurfaceDistance: coordinateDetection.worldMedianDistance,
+    surfaceSeated: seating.snappedCount > 0,
+    surfaceSeatedPointCount: seating.snappedCount,
+    maxSurfaceDistance: seating.maxDistance,
+    originalPositionArray: positionArray.slice(),
+    positionAttribute,
+  };
+
+  if (seating.snappedCount > 0) {
+    console.log("[polyline] seated component on jaw surface", {
+      arch: jawType,
+      component,
+      segmentIndex,
+      coordinateSpace: coordinateDetection.coordinateSpace,
+      snappedPoints: seating.snappedCount,
+      maxDistance: Number(seating.maxDistance.toFixed(3)),
+    });
+  }
+
+  if (points.length >= 2) {
+    const tubeMaterial = new THREE.MeshStandardMaterial({
+      color: getPolylineSegmentColor(component, segmentIndex),
+      transparent: false,
+      opacity: 1,
+      roughness: 0.28,
+      metalness: 0,
+      depthTest: polylineDepthTestEnabled,
+      depthWrite: false,
+    });
+    const tubeGroup = new THREE.Group();
+    tubeGroup.name = `${jawType}-${component}-polyline-segment-${segmentIndex}-tubes`;
+    tubeGroup.renderOrder = 20;
+    tubeGroup.userData = {
+      overlayType: "polyline-line",
+      arch: jawType,
+      component,
+      componentKey,
+      segmentIndex,
+      edges,
+      tubeMaterial,
+      sourcePositionAttribute: positionAttribute,
+    };
+    edges.forEach(([startIndex, endIndex], edgeIndex) => {
+      addPolylineTube(
+        tubeGroup,
+        createPolylineTubeGeometry(positionAttribute, startIndex, endIndex),
+        tubeMaterial,
+        jawType,
+        component,
+        componentKey,
+        segmentIndex,
+        edgeIndex
+      );
+    });
+    group.add(tubeGroup);
+  }
+
+  if (points.length >= 1) {
+    const handles = new THREE.Group();
+    handles.name = `${jawType}-${component}-polyline-segment-${segmentIndex}-handles`;
+    handles.renderOrder = 21;
+    handles.userData = {
+      overlayType: "polyline-edit-points",
+      arch: jawType,
+      component,
+      componentKey,
+      segmentIndex,
+      positionAttribute,
+    };
+
+    points.forEach((point, index) => {
+      const handleMaterial = polylineHandleMaterial.clone();
+      handleMaterial.color.setHex(getPolylineSegmentColor(component, segmentIndex));
+      handleMaterial.depthTest = polylineDepthTestEnabled;
+      handleMaterial.needsUpdate = true;
+      const handle = new THREE.Mesh(
+        polylineHandleGeometry,
+        handleMaterial
+      );
+      handle.name = `${jawType}-${component}-polyline-segment-${segmentIndex}-point-${index}`;
+      handle.position.set(point.x, point.y, point.z);
+      handle.renderOrder = 21;
+      handle.userData = {
+        overlayType: "polyline-edit-point",
+        arch: jawType,
+        component,
+        componentKey,
+        segmentIndex,
+        index,
+        handleGroup: handles,
+        positionAttribute,
+      };
+      handles.add(handle);
+    });
+
+    group.add(handles);
+  }
+
+  applyJawTransformToPolylineGroup(group, jawType, coordinateDetection.coordinateSpace);
+
+  return group;
+}
+
+function renderPolylineData(polylineByJaw) {
+  clearPolylineOverlay();
+
+  ["upper", "lower"].forEach((jawType) => {
+    const segments = polylineByJaw[jawType] || [];
+    segments.forEach((segment, segmentIndex) => {
+      const points = getSegmentPoints(segment);
+      if (points.length < 2) return;
+      const polylineGroup = createPolylineObjects(jawType, segment, segmentIndex);
+      polylineOverlayGroup.add(polylineGroup);
+    });
+  });
+  updatePolylineComponentMenu();
+}
+
+function resetPolylineGroup(polylineGroup) {
+  const originalPositionArray = polylineGroup.userData?.originalPositionArray;
+  const positionAttribute = polylineGroup.userData?.positionAttribute;
+  if (!originalPositionArray || !positionAttribute) return;
+
+  for (let index = 0; index < positionAttribute.count; index += 1) {
+    positionAttribute.setXYZ(
+      index,
+      originalPositionArray[index * 3],
+      originalPositionArray[index * 3 + 1],
+      originalPositionArray[index * 3 + 2]
+    );
+  }
+  positionAttribute.needsUpdate = true;
+
+  polylineGroup.traverse((child) => {
+    if (child.userData?.overlayType === "polyline-edit-point") {
+      const pointIndex = child.userData.index;
+      child.position.set(
+        positionAttribute.getX(pointIndex),
+        positionAttribute.getY(pointIndex),
+        positionAttribute.getZ(pointIndex)
+      );
+    } else if (child.userData?.overlayType === "polyline-line") {
+      syncPolylineTubeGeometries(child);
+    } else {
+      child.geometry?.computeBoundingSphere?.();
+    }
+  });
+}
+
+function resetPolylineEdits() {
+  polylineOverlayGroup.children.forEach(resetPolylineGroup);
+}
+
+function countPolylinePoints(segments) {
+  return segments.reduce(
+    (total, segment) => total + getSegmentPoints(segment).length,
+    0
+  );
+}
+
+function syncPolylineOverlayVisibility() {
+  polylineOverlayGroup.visible = true;
+  polylineOverlayGroup.children.forEach((group) => {
+    const key = group.userData?.componentKey;
+    const arch = group.userData?.arch;
+    group.visible =
+      isPolylineOverlayVisible &&
+      isPolylineJawVisible(arch) &&
+      (polylineComponentVisibility.get(key) ?? true);
+  });
+
+  if (polylineMenuButton) {
+    const componentCount = getPolylineComponentSummary().length;
+    polylineMenuButton.textContent = isPolylineOverlayVisible
+      ? `Polylines (${componentCount})`
+      : `Polylines hidden (${componentCount})`;
+  }
+  syncPolylineFocusMode();
+}
+
+function syncPolylineDepthTest() {
+  polylineOverlayGroup.traverse((child) => {
+    const overlayType = child.userData?.overlayType;
+    if (
+      overlayType !== "polyline-tube" &&
+      overlayType !== "polyline-edit-point"
+    ) {
+      return;
+    }
+
+    const materials = Array.isArray(child.material)
+      ? child.material
+      : [child.material];
+    materials.forEach((materialEntry) => {
+      if (!materialEntry) return;
+      materialEntry.depthTest = polylineDepthTestEnabled;
+      materialEntry.depthWrite = false;
+      materialEntry.needsUpdate = true;
+    });
+  });
+}
+
+function getPolylineComponentSummary() {
+  const summary = new Map();
+  polylineOverlayGroup.children.forEach((group) => {
+    const key = group.userData?.componentKey;
+    if (!key) return;
+
+    const current = summary.get(key) || {
+      key,
+      color: getPolylineSegmentColor(group.userData.component, 0),
+      segments: 0,
+      points: 0,
+    };
+    current.segments += 1;
+    current.points += group.userData.positionAttribute?.count || 0;
+    summary.set(key, current);
+  });
+
+  const loadedArches = new Set();
+  polylineOverlayGroup.children.forEach((group) => {
+    const arch = group.userData?.arch;
+    if (arch) loadedArches.add(arch);
+  });
+  if (!loadedArches.size) {
+    getLoadedPolylineJawKeys().forEach((arch) => loadedArches.add(arch));
+  }
+  if (!loadedArches.size) {
+    loadedArches.add("upper");
+    loadedArches.add("lower");
+  }
+
+  loadedArches.forEach((arch) => {
+    POLYLINE_APP_COMPONENTS.forEach((component) => {
+      const key = getPolylineComponentKey(arch, component);
+      if (summary.has(key)) return;
+      summary.set(key, {
+        key,
+        color: getPolylineSegmentColor(component, 0),
+        segments: 0,
+        points: 0,
+      });
+    });
+  });
+
+  return Array.from(summary.values()).sort((a, b) => {
+    const rankDelta =
+      getPolylineComponentSortRank(a.key) - getPolylineComponentSortRank(b.key);
+    if (rankDelta) return rankDelta;
+    return formatPolylineComponentLabel(a.key).localeCompare(
+      formatPolylineComponentLabel(b.key)
+    );
+  });
+}
+
+function updatePolylineComponentMenu() {
+  const summary = getPolylineComponentSummary();
+  summary.forEach(({ key }) => {
+    if (!polylineComponentVisibility.has(key)) {
+      polylineComponentVisibility.set(
+        key,
+        isPolylineComponentVisibleByDefault(key)
+      );
+    }
+  });
+
+  if (!polylineMenuList || !polylineMenuButton) return;
+
+  polylineMenuList.replaceChildren();
+  if (!summary.length) {
+    const empty = document.createElement("div");
+    empty.textContent = "No polyline components";
+    empty.style.padding = "8px 0";
+    empty.style.color = "#6b7280";
+    polylineMenuList.appendChild(empty);
+    syncPolylineOverlayVisibility();
+    return;
+  }
+
+  summary.forEach(({ key, color, segments, points }) => {
+    const row = document.createElement("label");
+    row.style.display = "grid";
+    row.style.gridTemplateColumns = "18px 12px 1fr";
+    row.style.alignItems = "center";
+    row.style.gap = "8px";
+    row.style.padding = "6px 0";
+    row.style.cursor = "pointer";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = polylineComponentVisibility.get(key) ?? true;
+    checkbox.addEventListener("change", () => {
+      polylineComponentVisibility.set(key, checkbox.checked);
+      isPolylineOverlayVisible = Array.from(
+        polylineComponentVisibility.values()
+      ).some(Boolean);
+      syncPolylineOverlayVisibility();
+    });
+
+    const swatch = document.createElement("span");
+    swatch.style.width = "10px";
+    swatch.style.height = "10px";
+    swatch.style.borderRadius = "50%";
+    swatch.style.background = `#${color.toString(16).padStart(6, "0")}`;
+    swatch.style.display = "inline-block";
+
+    const text = document.createElement("span");
+    text.textContent = `${formatPolylineComponentLabel(key)} (${segments} seg, ${points} pts)`;
+    text.style.fontSize = "12px";
+    text.style.lineHeight = "1.25";
+
+    row.appendChild(checkbox);
+    row.appendChild(swatch);
+    row.appendChild(text);
+    polylineMenuList.appendChild(row);
+  });
+
+  syncPolylineOverlayVisibility();
+}
+
+function setPolylineMenuVisibility(filterSummaryItem, isVisible) {
+  getPolylineComponentSummary().forEach((summaryItem) => {
+    if (filterSummaryItem(summaryItem)) {
+      polylineComponentVisibility.set(summaryItem.key, isVisible);
+    }
+  });
+  isPolylineOverlayVisible = Array.from(polylineComponentVisibility.values()).some(
+    Boolean
+  );
+  updatePolylineComponentMenu();
+}
+
+function createPolylineVisibilityToggle(container, domElement) {
+  if (document.getElementById("polyline-visibility-menu")) return;
+
+  const wrapper = document.createElement("div");
+  wrapper.id = "polyline-visibility-menu";
+  wrapper.style.position = "fixed";
+  wrapper.style.right = "20px";
+  wrapper.style.bottom = "230px";
+  wrapper.style.zIndex = "1000";
+  wrapper.style.display = "flex";
+  wrapper.style.flexDirection = "column";
+  wrapper.style.alignItems = "flex-end";
+  wrapper.style.gap = "8px";
+
+  const button = document.createElement("button");
+  button.id = "polyline-visibility-toggle";
+  button.type = "button";
+  button.textContent = "Polylines (0)";
+  button.style.padding = "10px 14px";
+  button.style.border = "none";
+  button.style.borderRadius = "5px";
+  button.style.background = "#6f35ff";
+  button.style.color = "white";
+  button.style.fontWeight = "bold";
+  button.style.cursor = "pointer";
+  button.style.minWidth = "150px";
+
+  const panel = document.createElement("div");
+  panel.style.display = "none";
+  panel.style.width = "290px";
+  panel.style.maxHeight = "45vh";
+  panel.style.overflow = "auto";
+  panel.style.background = "rgba(255, 255, 255, 0.96)";
+  panel.style.color = "#111827";
+  panel.style.border = "1px solid rgba(17, 24, 39, 0.14)";
+  panel.style.borderRadius = "8px";
+  panel.style.boxShadow = "0 8px 24px rgba(0, 0, 0, 0.18)";
+  panel.style.padding = "10px";
+
+  const actions = document.createElement("div");
+  actions.style.display = "flex";
+  actions.style.flexWrap = "wrap";
+  actions.style.gap = "6px";
+  actions.style.marginBottom = "8px";
+
+  const makeActionButton = (label, onClick) => {
+    const actionButton = document.createElement("button");
+    actionButton.type = "button";
+    actionButton.textContent = label;
+    actionButton.style.flex = "1";
+    actionButton.style.padding = "6px 8px";
+    actionButton.style.border = "1px solid rgba(17, 24, 39, 0.16)";
+    actionButton.style.borderRadius = "5px";
+    actionButton.style.background = "#f9fafb";
+    actionButton.style.cursor = "pointer";
+    actionButton.style.fontSize = "12px";
+    actionButton.addEventListener("click", onClick);
+    return actionButton;
+  };
+
+  actions.appendChild(
+    makeActionButton("All", () => {
+      setPolylineMenuVisibility(() => true, true);
+    })
+  );
+  actions.appendChild(
+    makeActionButton("None", () => {
+      setPolylineMenuVisibility(() => true, false);
+    })
+  );
+  actions.appendChild(makeActionButton("Reset", resetPolylineEdits));
+
+  const list = document.createElement("div");
+  panel.appendChild(actions);
+  panel.appendChild(list);
+
+  button.addEventListener("click", () => {
+    panel.style.display = panel.style.display === "none" ? "block" : "none";
+  });
+
+  wrapper.appendChild(panel);
+  wrapper.appendChild(button);
+  container.appendChild(wrapper);
+
+  polylineMenuButton = button;
+  polylineMenuList = list;
+  updatePolylineComponentMenu();
+  attachPolylineDragHandlers(domElement);
+}
+
+async function fetchAndRenderPolylines(caseIntID) {
+  clearPolylineOverlay();
+
+  const polylinePayload = [
+    {
+      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
+      caseIntID,
+    },
+    {
+      case_id: caseIntID,
+    },
+  ];
+
+  try {
+    const response = await apiClient.post(
+      POLYLINE_ENDPOINT,
+      polylinePayload,
+      false,
+      "Polyline"
+    );
+    const normalized = normalizePolylineResponse(response);
+    const upperPointCount = countPolylinePoints(normalized.upper);
+    const lowerPointCount = countPolylinePoints(normalized.lower);
+    const hasAnyPoints = upperPointCount || lowerPointCount;
+    console.log("[polyline] points", {
+      upper: upperPointCount,
+      lower: lowerPointCount,
+    });
+
+    if (!hasAnyPoints) {
+      console.log("[polyline] No polyline data returned.");
+      return;
+    }
+
+    renderPolylineData(normalized);
+  } catch (error) {
+    console.warn("[polyline] Unable to fetch polyline data.", error);
+  }
+}
+
+function updatePointerPosition(event, domElement) {
+  const bounds = domElement.getBoundingClientRect();
+  pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+  pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+}
+
+function getPolylinePointHandles() {
+  const handles = [];
+  polylineOverlayGroup.traverse((child) => {
+    if (
+      child.userData?.overlayType === "polyline-edit-point" &&
+      child.visible &&
+      child.parent?.parent?.visible !== false
+    ) {
+      handles.push(child);
+    }
+  });
+  return handles;
+}
+
+function isSolidPolylineOccluder(child) {
+  if (!child.isMesh || !child.visible) return false;
+
+  const materials = Array.isArray(child.material) ? child.material : [child.material];
+  return materials.some((materialEntry) => {
+    if (!materialEntry) return false;
+    const opacity = materialEntry.opacity ?? 1;
+    return materialEntry.depthWrite !== false && opacity > 0.95;
+  });
+}
+
+function getPolylineOccluderMeshes() {
+  return parentObject.children.filter(isSolidPolylineOccluder);
+}
+
+function isPolylineHandleOccluded(hit) {
+  const occluders = getPolylineOccluderMeshes();
+  if (!occluders.length) return false;
+
+  const occluderHits = raycaster.intersectObjects(occluders, true);
+  const nearestOccluder = occluderHits.find((item) => item.object.visible);
+  return Boolean(nearestOccluder && nearestOccluder.distance < hit.distance - 0.05);
+}
+
+function pickPolylinePoint(event, domElement) {
+  updatePointerPosition(event, domElement);
+  raycaster.setFromCamera(pointer, camera);
+  const intersections = raycaster.intersectObjects(getPolylinePointHandles(), false);
+  const hit = intersections.find((item) =>
+    Number.isInteger(item.object?.userData?.index)
+  );
+  if (!hit || isPolylineHandleOccluded(hit)) return null;
+  return {
+    handle: hit.object,
+    index: hit.object.userData.index,
+    point: hit.point,
+  };
+}
+
+function refreshPolylineGeometryForHandle(handle) {
+  const handleGroup = handle.userData.handleGroup;
+  const polylineGroup = handleGroup?.parent;
+  polylineGroup?.children.forEach((child) => {
+    if (child.userData?.overlayType === "polyline-line") {
+      syncPolylineTubeGeometries(child);
+    } else {
+      child.geometry?.computeBoundingSphere?.();
+    }
+  });
+}
+
+function updatePolylinePointFromLocal(handle, index, localPoint, options = {}) {
+  const handleGroup = handle.userData.handleGroup;
+  const positionAttribute = handle.userData.positionAttribute;
+  if (!positionAttribute) return;
+
+  positionAttribute.setXYZ(index, localPoint.x, localPoint.y, localPoint.z);
+  positionAttribute.needsUpdate = true;
+  handle.position.copy(localPoint);
+
+  refreshPolylineGeometryForHandle(handle);
+}
+
+function updatePolylinePoint(handle, index, worldPoint, options = {}) {
+  const handleGroup = handle.userData.handleGroup;
+  const localPoint = handleGroup.worldToLocal(worldPoint.clone());
+  updatePolylinePointFromLocal(handle, index, localPoint, options);
+}
+
+function setPolylineDragging(enabled) {
+  if (controls) controls.enabled = !enabled;
+  if (orb_controls) orb_controls.enabled = !enabled;
+}
+
+function attachPolylineDragHandlers(domElement) {
+  if (!domElement || domElement.dataset.polylineDragBound === "true") return;
+  domElement.dataset.polylineDragBound = "true";
+
+  domElement.addEventListener("pointerdown", (event) => {
+    const hit = pickPolylinePoint(event, domElement);
+    if (!hit) return;
+
+    event.preventDefault();
+    domElement.setPointerCapture?.(event.pointerId);
+    camera.getWorldDirection(polylineCameraDirection);
+    polylineDragPlane.setFromNormalAndCoplanarPoint(
+      polylineCameraDirection,
+      hit.point
+    );
+    activePolylineDrag = {
+      handle: hit.handle,
+      index: hit.index,
+      pointerId: event.pointerId,
+    };
+    setPolylineDragging(true);
+  });
+
+  domElement.addEventListener("pointermove", (event) => {
+    if (!activePolylineDrag) {
+      domElement.style.cursor = pickPolylinePoint(event, domElement)
+        ? "grab"
+        : "";
+      return;
+    }
+
+    updatePointerPosition(event, domElement);
+    raycaster.setFromCamera(pointer, camera);
+
+    if (raycaster.ray.intersectPlane(polylineDragPlane, polylineDragPoint)) {
+      updatePolylinePoint(
+        activePolylineDrag.handle,
+        activePolylineDrag.index,
+        polylineDragPoint
+      );
+    }
+    domElement.style.cursor = "grabbing";
+  });
+
+  const stopDragging = (event) => {
+    if (!activePolylineDrag) return;
+    domElement.releasePointerCapture?.(activePolylineDrag.pointerId);
+    activePolylineDrag = null;
+    setPolylineDragging(false);
+    domElement.style.cursor = pickPolylinePoint(event, domElement) ? "grab" : "";
+  };
+
+  domElement.addEventListener("pointerup", stopDragging);
+  domElement.addEventListener("pointercancel", stopDragging);
+  domElement.addEventListener("pointerleave", (event) => {
+    if (activePolylineDrag) stopDragging(event);
+  });
+}
+
+function setupChatToggle() {
+  const chatWidget = document.getElementById("chat-widget");
+  const chatIcon = document.getElementById("chat-icon");
+  if (!chatWidget || !chatIcon || chatIcon.dataset.viewerChatBound === "true") {
+    return;
+  }
+
+  chatIcon.dataset.viewerChatBound = "true";
+  const isMobile =
+    /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+
+  let hideChatButton = document.getElementById("hide-chat-button");
+  if (!hideChatButton) {
+    hideChatButton = document.createElement("button");
+    hideChatButton.id = "hide-chat-button";
+    hideChatButton.type = "button";
+    hideChatButton.textContent = "Hide Chat";
+    hideChatButton.style.alignSelf = "flex-end";
+    hideChatButton.style.marginBottom = "8px";
+    hideChatButton.style.border = "none";
+    hideChatButton.style.borderRadius = "6px";
+    hideChatButton.style.background = "#1d4ed8";
+    hideChatButton.style.color = "white";
+    hideChatButton.style.padding = "6px 10px";
+    hideChatButton.style.fontSize = "12px";
+    hideChatButton.style.cursor = "pointer";
+    chatWidget.prepend(hideChatButton);
+  }
+
+  chatIcon.style.display = "block";
+  chatIcon.style.position = "fixed";
+  chatIcon.style.top = "14px";
+  chatIcon.style.right = "150px";
+  chatIcon.style.bottom = "auto";
+  chatIcon.style.width = "56px";
+  chatIcon.style.height = "56px";
+  chatIcon.style.zIndex = "1001";
+
+  chatWidget.classList.toggle("active", !isMobile);
+  chatWidget.style.display = isMobile ? "none" : "flex";
+  chatWidget.style.position = "fixed";
+  chatWidget.style.top = "84px";
+  chatWidget.style.right = "150px";
+  chatWidget.style.bottom = "auto";
+  chatWidget.style.left = "auto";
+  chatWidget.style.transform = "none";
+  chatWidget.style.width = "280px";
+  chatWidget.style.height = "280px";
+  chatWidget.style.zIndex = "1001";
+  chatIcon.style.display = isMobile ? "block" : "none";
+
+  chatIcon.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const isOpen = chatWidget.style.display === "flex";
+    chatWidget.classList.toggle("active", !isOpen);
+    chatWidget.style.display = isOpen ? "none" : "flex";
+    chatIcon.style.display = isOpen ? "block" : "none";
+  });
+
+  hideChatButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    chatWidget.classList.remove("active");
+    chatWidget.style.display = "none";
+    chatIcon.style.display = "block";
+  });
+}
 
 //The async prevents processing of data before the stuff is loaded in
 (async () => {
+  if (!viewerContainer) {
+    return;
+  }
+
   //datas :)
   // this for the undercut upper and the main json data use to retrieve stuff
   const data = {
@@ -158,9 +1972,14 @@ scene.add(parentObject);
         if (thumbnailData[thumb].slot == 0) {
           const test = thumbnailData[thumb].data;
           window.thumbnailBase64 = test;
+          const isMobile =
+            /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+              navigator.userAgent
+            );
           // Container for thumbnail + 2D buttons
           const thumbWrapper = document.createElement("div");
-          thumbWrapper.style.position = "absolute"; // allows layout inside container3D
+          thumbWrapper.dataset.twodViewerBlock = "true";
+          thumbWrapper.style.position = "fixed";
           thumbWrapper.style.left = "20px"; // left side of screen
           thumbWrapper.style.top = "20px"; // top offset
           thumbWrapper.style.zIndex = "1000";
@@ -171,17 +1990,21 @@ scene.add(parentObject);
 
           // Create thumbnail button
           const button = document.createElement("button");
+          button.dataset.twodViewerButton = "true";
           button.style.padding = "0";
           button.style.border = "none";
           button.style.background = "none";
           button.style.cursor = "pointer";
-          button.style.width = "30px";
-          button.style.height = "30px";
+          button.style.width = isMobile ? "300px" : "280px";
+          button.style.height = "auto";
 
           // Create thumbnail image
           const img = new Image();
           img.src = "data:image/png;base64," + test;
-          img.style.transform = `scale(0.3)`;
+          img.style.width = "100%";
+          img.style.height = "auto";
+          img.style.display = "block";
+          img.style.transform = "none";
           button.appendChild(img);
 
           // Create "Click me" watermark overlay
@@ -191,14 +2014,10 @@ scene.add(parentObject);
           watermark.style.top = "50%";
           watermark.style.left = "50%";
           watermark.style.transform = "translate(-50%, -50%)";
-          watermark.style.color = "white";
+          watermark.style.color = "#0078d4";
           watermark.style.fontWeight = "bold";
-          const isMobile =
-            /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-              navigator.userAgent
-            );
-          watermark.style.fontSize = isMobile ? "34px" : "16px";
-          watermark.style.textShadow = "1px 1px 4px rgba(0, 0, 0, 1.0)";
+          watermark.style.fontSize = isMobile ? "34px" : "22px";
+          watermark.style.textShadow = "1px 1px 3px rgba(255, 255, 255, 0.9)";
           watermark.style.pointerEvents = "none"; // so clicks go through to the button
           button.style.position = "relative"; // Make sure parent is positioned
           button.appendChild(watermark);
@@ -244,6 +2063,35 @@ btnContainer.appendChild(edit2DStatic); */
           // Finally, append everything to container3D so it's layout-aware
           const container3D = document.getElementById("container3D");
           container3D.appendChild(thumbWrapper);
+
+          const positionThumbWrapperAboveLegend = () => {
+            const legend = document.querySelector(".legend-container");
+            if (!legend) return false;
+            const legendRect = legend.getBoundingClientRect();
+            const wrapperRect = thumbWrapper.getBoundingClientRect();
+            thumbWrapper.style.left = `${Math.max(20, legendRect.left)}px`;
+            thumbWrapper.style.top = `${Math.max(
+              16,
+              legendRect.top - wrapperRect.height - 14
+            )}px`;
+            return true;
+          };
+          if (!positionThumbWrapperAboveLegend()) {
+            setTimeout(positionThumbWrapperAboveLegend, 500);
+            setTimeout(positionThumbWrapperAboveLegend, 1500);
+          }
+          window.addEventListener(
+            "legend-positioned",
+            positionThumbWrapperAboveLegend
+          );
+          window.addEventListener("resize", positionThumbWrapperAboveLegend);
+          if (img.complete) {
+            positionThumbWrapperAboveLegend();
+          } else {
+            img.addEventListener("load", positionThumbWrapperAboveLegend, {
+              once: true,
+            });
+          }
 
           button.addEventListener("click", function () {
             // Fullscreen overlay
@@ -389,8 +2237,8 @@ btnContainer.appendChild(edit2DStatic); */
 
                 const isGitHubPages =
                   window.location.hostname.includes("github.io");
-                const isLocal = window.location.hostname === "localhost";
-                const queryConnector = isLocal ? "/?" : "?";
+                //const isLocal = window.location.hostname === "localhost";
+                const queryConnector = "?";
                 const basePath = isGitHubPages ? "/.tmp-test-web" : "";
 
                 const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}`;
@@ -427,8 +2275,8 @@ btnContainer.appendChild(edit2DStatic); */
 
               const isGitHubPages =
                 window.location.hostname.includes("github.io");
-              const isLocal = window.location.hostname === "localhost";
-              const queryConnector = isLocal ? "/?" : "?";
+              // const isLocal = window.location.hostname === "localhost";
+              const queryConnector = "?";
               const basePath = isGitHubPages ? "/.tmp-test-web" : "";
 
               const targetURL = `${window.location.origin}${basePath}/src/pages/AnnotationHistory.html${queryConnector}id=${encryptedId}`;
@@ -495,6 +2343,7 @@ btnContainer.appendChild(edit2DStatic); */
   // to get the undercut and occulsion values
   let undercut_values = [];
 
+  updateViewerLoader("Loading jaw analysis", 0.2);
   const heatmap_urldatas = ["/undercutheatmap/get"];
   try {
     // Call the post method and wait for the response
@@ -531,6 +2380,7 @@ btnContainer.appendChild(edit2DStatic); */
 
   //Processing mesh
 
+  updateViewerLoader("Loading jaw meshes", 0.36);
   // stl will be true is fail to process parameterisation
   let stl = false;
   const urls = ["/parameterisation/mesh/getall", "/surface/getall"];
@@ -1109,6 +2959,7 @@ btnContainer.appendChild(edit2DStatic); */
             const [mesh] = stlLoader.load(binarySTL, null);
 
             mesh.name = result.filename || `Slot ${slot}`;
+            enforceOpaqueJawMesh(mesh);
             parentObject.add(mesh);
 
             console.log(`✅ Loaded STL from slot ${slot}`);
@@ -1119,6 +2970,7 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     if (!anyLoaded) {
+      hideViewerLoader();
         alert("❌ No STL files found in slots 1 to 4.");
     } else {
         alert("✅ STL loading completed.");
@@ -1141,6 +2993,8 @@ btnContainer.appendChild(edit2DStatic); */
       if (child.geometry) child.geometry.dispose();
       if (child.material) child.material.dispose();
     }
+    clearPolylineOverlay();
+    artificialTeethRenderer.clear();
 
     // Remove previous GUI controls if any
     const oldGui = document.querySelector(".dg.ac");
@@ -1208,7 +3062,10 @@ btnContainer.appendChild(edit2DStatic); */
         const slotMaterial = new THREE.MeshStandardMaterial({
           color: slotColorInfo.color,
           opacity: slotColorInfo.opacity,
-          transparent: slotColorInfo.opacity,
+          transparent: false,
+          side: THREE.DoubleSide,
+          depthTest: true,
+          depthWrite: true,
           metalness: 0.0,
           roughness: 0.7,
         });
@@ -1232,6 +3089,12 @@ btnContainer.appendChild(edit2DStatic); */
         mesh.name = result.filename || `Slot ${slot}`;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        mesh.userData = {
+          jaw_type: mesh.name.toLowerCase().includes("lower") ? "lower" : "upper",
+          archLabel: mesh.name.toLowerCase().includes("lower")
+            ? "Lower Arch"
+            : "Upper Arch",
+        };
 
         // 👇 Match logic like close.off for centering and rotation
         /*  mesh.geometry.computeBoundingBox();
@@ -1246,7 +3109,9 @@ btnContainer.appendChild(edit2DStatic); */
 			mesh.rotation.set(0, 0, 0);      // Reset rotation
 			mesh.scale.set(1, 1, 1);         // Reset scale */
 
+        enforceOpaqueJawMesh(mesh);
         parentObject.add(mesh);
+        syncPolylineFocusMode();
 
         controls.update();
         //render();
@@ -1262,6 +3127,8 @@ btnContainer.appendChild(edit2DStatic); */
       alert("❌ No STL files found in slots 1 to 4.");
     } else {
       alert("✅ STL loading completed.");
+      updateViewerLoader("Loading jaw design polylines", 0.62);
+      await fetchAndRenderPolylines(paramValue);
       removeVisibilityAndTransparencyControls();
       // 🧩 Re-enable visibility/transparency controls after loading
       addVisibilityAndTransparencyControls(
@@ -1270,6 +3137,7 @@ btnContainer.appendChild(edit2DStatic); */
         all_mesh_mat,
         undercut_type
       );
+      await queueArtificialTeethRender(paramValue);
     }
   }
 
@@ -1316,6 +3184,7 @@ btnContainer.appendChild(edit2DStatic); */
 
     mesh.userData = {
       jaw_type: offFile.type,
+      archLabel: offFile.type.includes("upper") ? "Upper Arch" : "Lower Arch",
     };
     if (all_mesh_mat != null) {
       all_mesh_mat[offFile.filename] = mesh_geo[1].slice();
@@ -1350,8 +3219,13 @@ btnContainer.appendChild(edit2DStatic); */
         changeMeshRotation(mesh,0,105,0);
       }
         */
+    enforceOpaqueJawMesh(mesh);
     parentObject.add(mesh);
+    syncPolylineFocusMode();
   }
+  updateViewerLoader("Loading jaw design polylines", 0.62);
+  await fetchAndRenderPolylines(paramValue);
+  await queueArtificialTeethRender(paramValue);
   //console.log(all_mesh_mat);
 
   function changeMeshRotation(mesh, x, y, z) {
@@ -1435,6 +3309,7 @@ btnContainer.appendChild(edit2DStatic); */
   container.style.position = "relative"; // <- Add this line
   if (container) {
     container.appendChild(renderer.domElement);
+    createPolylineVisibilityToggle(container, renderer.domElement);
 
     // After container3D and renderer are set up
     const caseTitle = document.createElement("div");
@@ -1502,9 +3377,8 @@ btnContainer.appendChild(edit2DStatic); */
   // Render the scene
   function animate() {
     requestAnimationFrame(animate);
-    // Here we could add some code to update the scene, adding some automatic movement
     controls.update();
-    // Make the eye move
+    artificialTeethRenderer.updateCameraVisibility(camera);
 
     renderer.render(scene, camera);
   }
@@ -1526,6 +3400,7 @@ btnContainer.appendChild(edit2DStatic); */
   camera.updateProjectionMatrix();
   const clonedCamera = camera.clone();
   addResetButton(camera, clonedCamera, controls);
+  setupChatToggle();
   //console.log(camera)
 
   // Start the 3D rendering
@@ -1678,6 +3553,7 @@ window.addEventListener("load", () => {
   const fixToothMapPosition = () => {
     const allButtons = document.getElementsByTagName("button");
     for (let btn of allButtons) {
+      if (btn.dataset.twodViewerButton === "true") continue;
       const img = btn.querySelector("img");
 
       if (img && img.src.startsWith("data:image/png;base64")) {
@@ -1719,6 +3595,7 @@ window.addEventListener("load", () => {
     const allButtons = document.getElementsByTagName("button");
 
     for (let btn of allButtons) {
+      if (btn.dataset.twodViewerButton === "true") continue;
       const img = btn.querySelector("img");
 
       if (img && img.src.startsWith("data:image/png")) {
@@ -1730,6 +3607,7 @@ window.addEventListener("load", () => {
               "div[style*='position: fixed']"
             );
             for (let div of overlayDivs) {
+              if (div.dataset.twodViewerBlock === "true") continue;
               const popupImg = div.querySelector("img");
               if (popupImg && popupImg.src.startsWith("data:image/png")) {
                 // ✅ 放大样式
