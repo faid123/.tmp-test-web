@@ -163,10 +163,6 @@ body {
   border-radius: 4px;
 }
 
-/* .jaw-preview-row-icon:hover {
-  background: var(--rose-050);
-} */
-
 .jaw-preview-row.is-hidden-jaw .jaw-preview-row-icon {
   opacity: 0.35;
 }
@@ -1093,21 +1089,14 @@ body {
   filter: url(#tint-separated);
 }
 
-/* Palatal arch overlays: non-interactive */
+/* Palatal arch overlays + their <image> children + strap polygon: all non-interactive.
+   SVG <image> defaults can still capture hits even when the parent <g> has none. */
 .palatal-hole-arch-overlay,
 .palatal-bar-arch-overlay,
-.palatal-plate-arch-overlay {
-  pointer-events: none;
-}
-
-/* SVG <image> defaults can still capture hits even when parent <g> has none */
+.palatal-plate-arch-overlay,
 .palatal-hole-arch-image,
 .palatal-bar-arch-image,
-.palatal-plate-arch-image {
-  pointer-events: none;
-}
-
-/* Palatal strap arch overlay: drawn as inline SVG polygon with polka-dot fill */
+.palatal-plate-arch-image,
 .palatal-strap-arch-overlay,
 .palatal-strap-arch-shape {
   pointer-events: none;
@@ -1571,16 +1560,6 @@ body {
     width: 100%;
   }
 }
-
-/* Keep jaw diagrams usable on phones: minimum drawing size + scroll if viewport is narrower */
-/* @media (max-width: 768px) {
-
-  .preview-frame {
-    min-height: min(280px, 42vh);
-  }
-
-  
-} */
 
 /* Narrow viewports: keep icon + checkbox-label + delete + survey button on one line
    by letting the label column flex and compacting the survey button. */
