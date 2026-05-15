@@ -89,8 +89,10 @@ function populateTable(cases) {
       </td>
     `;
 
+    const resolvedCaseId = caseItem.id ?? caseItem.case_int_id;
+
     row.addEventListener("click", () => {
-      handleRowClick(caseItem.id);
+      handleRowClick(resolvedCaseId);
 
       const allRows = tbody.querySelectorAll("tr");
       allRows.forEach((r) => r.classList.remove("active"));
@@ -101,7 +103,7 @@ function populateTable(cases) {
     if (detailsBtn) {
       detailsBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        handleRowClick(caseItem.id);
+        handleRowClick(resolvedCaseId);
 
         const allRows = tbody.querySelectorAll("tr");
         allRows.forEach((r) => r.classList.remove("active"));

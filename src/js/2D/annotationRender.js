@@ -51,22 +51,74 @@ import {
   showBarSuggestions,
 } from "./annotationVisuals.js";
 
-// Render jaw background templates for upper/lower arch SVG.
-function renderArchBackground(svg, jaw) {
-  const background = JAW_BACKGROUND_IMAGES[jaw];
-  if (!background) return;
+// Safari/iOS WebKit drops CSS `filter:` color chains (brightness/invert/hue-rotate/...) on SVG
+// <image> elements that load external .svg files. SVG-native <filter> defs work cross-browser,
+// so each tint color used by the stylesheet is published here as a named filter and referenced
+// from CSS via `filter: url(#tint-...)`. Tooth tints also bake the drop-shadow in so the CSS
+// `filter` declaration is a single `url(...)` (chained `url() drop-shadow()` is unreliable in
+// Safari when the target <image> sits inside a transformed <g>).
+const SVG_TINT_FILTERS = {
+  "tint-tooth-base": { color: "#1f1f1f", shadow: true },
+  "tint-tooth-abutment": { color: "#1565c0", shadow: true },
+  "tint-tooth-compromised": { color: "#558b2f", shadow: true },
+  "tint-tooth-bar-suggestible": { color: "#7cb342", shadow: true },
+  "tint-mesh": { color: "#5b21b6" },
+  "tint-rpd-gray": { color: "#8a8a8a" },
+  "tint-separated": { color: "#BB0D27" },
+  "tint-rose": { color: "#c0285f" },
+  "tint-rose-deep": { color: "#a31552" },
+  "tint-bar-placed": { color: "#a4d075" },
+  "tint-jaw-plate": { color: "#0288d1" },
+};
 
-  const baseWidth = 620;
-  const baseHeight = 380;
-  const scale = JAW_BACKGROUND_SCALE_BY_JAW[jaw] ?? 1;
-  const offset = JAW_BACKGROUND_OFFSET_BY_JAW[jaw] || { x: 0, y: 0 };
-  const width = baseWidth * scale;
-  const height = baseHeight * scale;
-  const x = (baseWidth - width) / 2 + offset.x;
-  const y = (baseHeight - height) / 2 + offset.y;
+function hexToRgbFractions(hex) {
+  const h = hex.replace(/^#/, "");
+  const expanded = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const v = parseInt(expanded, 16);
+  return [((v >> 16) & 0xff) / 255, ((v >> 8) & 0xff) / 255, (v & 0xff) / 255];
+}
 
-  const filterId = `jawTint-${jaw}`;
+function appendSvgTintFilters(defs) {
+  for (const [id, spec] of Object.entries(SVG_TINT_FILTERS)) {
+    const [r, g, b] = hexToRgbFractions(spec.color);
+    const filterEl = svgEl("filter", {
+      id,
+      "color-interpolation-filters": "sRGB",
+      x: "-20%",
+      y: "-20%",
+      width: "140%",
+      height: "140%",
+    });
+    filterEl.appendChild(
+      svgEl("feColorMatrix", {
+        type: "matrix",
+        values:
+          `0 0 0 0 ${r.toFixed(4)} ` +
+          `0 0 0 0 ${g.toFixed(4)} ` +
+          `0 0 0 0 ${b.toFixed(4)} ` +
+          `0 0 0 1 0`,
+        result: "tinted",
+      })
+    );
+    if (spec.shadow) {
+      filterEl.appendChild(
+        svgEl("feDropShadow", {
+          in: "tinted",
+          dx: "0",
+          dy: "0",
+          stdDeviation: "1",
+          "flood-color": "#000000",
+          "flood-opacity": "0.6",
+        })
+      );
+    }
+    defs.appendChild(filterEl);
+  }
+}
+
+function appendArchDefs(svg, jaw) {
   const defs = svgEl("defs", {});
+  const filterId = `jawTint-${jaw}`;
   const filterEl = svgEl("filter", {
     id: filterId,
     "color-interpolation-filters": "sRGB",
@@ -82,7 +134,26 @@ function renderArchBackground(svg, jaw) {
     })
   );
   defs.appendChild(filterEl);
+  appendSvgTintFilters(defs);
   svg.appendChild(defs);
+}
+
+// Render jaw background templates for upper/lower arch SVG.
+function renderArchBackground(svg, jaw) {
+  appendArchDefs(svg, jaw);
+  const background = JAW_BACKGROUND_IMAGES[jaw];
+  if (!background) return;
+
+  const baseWidth = 620;
+  const baseHeight = 380;
+  const scale = JAW_BACKGROUND_SCALE_BY_JAW[jaw] ?? 1;
+  const offset = JAW_BACKGROUND_OFFSET_BY_JAW[jaw] || { x: 0, y: 0 };
+  const width = baseWidth * scale;
+  const height = baseHeight * scale;
+  const x = (baseWidth - width) / 2 + offset.x;
+  const y = (baseHeight - height) / 2 + offset.y;
+
+  const filterId = `jawTint-${jaw}`;
 
   svg.appendChild(
     svgEl("image", {
