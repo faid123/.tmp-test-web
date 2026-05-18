@@ -35,52 +35,6 @@ header h1 {
   left: 0;
 }
 
-/* Default styles for the loading bar */
-.loading-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  height: 100%;
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 9999; /* Ensure the loading bar stays on top */
-}
-.loading-bar {
-  width: 200px;
-  height: 20px;
-  background-color: #e0e0e0; /* Light grey background */
-  overflow: hidden; /* Hide anything that overflows */
-  position: relative;
-  margin: 0 auto;
-  /* Center the loading bar vertically */
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-/* Default styles for the loading progress */
-.loading-progress {
-  width: 100%; /* Width of the loading bar segment */
-  height: 100%;
-  background-color: #76c7c0; /* Color of the loading bar segment */
-  position: absolute;
-  animation: loading 2s linear infinite; /* Animation name, duration, timing function, and repeat */
-}
-/* Keyframes for the loading animation */
-@keyframes loading {
-  0% {
-    left: -100%; /* Start off-screen to the left */
-  }
-  50% {
-    left: 100%; /* Move off-screen to the right */
-  }
-  100% {
-    left: 100%; /* Ensure it stays off-screen */
-  }
-}
-
 /* Styles for landscape mode prompt */
 #rotateNotice {
   display: none;

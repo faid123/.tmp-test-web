@@ -272,21 +272,6 @@ export { addVisibilityAndTransparencyControls };
      border-color: rgba(7, 133, 63, 0.55) !important;
    }
 
-   .artificial-tooth-jaw-button {
-     background-image: none !important;
-     background-color: #e5e87c !important;
-     border: 2px solid #a7aa28 !important;
-     border-radius: 6px;
-     color: #1f2937;
-     font-size: 12px;
-     font-weight: 700;
-     line-height: 1;
-   }
-
-   .artificial-tooth-jaw-button.inactive {
-     background-color: rgba(229, 232, 124, 0.25) !important;
-     border-color: rgba(167, 170, 40, 0.55) !important;
-   }
  `;
  document.head.appendChild(style);
  
@@ -458,27 +443,6 @@ export { addVisibilityAndTransparencyControls };
          };
          syncPolylineButtonState();
          meshControls.appendChild(polylineBtn);
-
-         const artificialTeethBtn = createIconBtn('', `${titlePrefix} Artificial Teeth`, () => {});
-         artificialTeethBtn.classList.add('artificial-tooth-jaw-button');
-         artificialTeethBtn.textContent = 'AT';
-         const syncArtificialTeethButtonState = () => {
-             const isVisible = window.getArtificialTeethJawVisibility?.(jawKey) ?? true;
-             setButtonState(artificialTeethBtn, isVisible);
-         };
-         artificialTeethBtn.onclick = () => {
-             const nextVisible = !(window.getArtificialTeethJawVisibility?.(jawKey) ?? true);
-             window.setArtificialTeethJawVisibility?.(jawKey, nextVisible);
-             if (nextVisible && !window.hasRenderedArtificialTeeth?.()) {
-                 window.ensureFallbackArtificialTeeth?.({ upper: 16, lower: 16, source: 'control-force-visible' });
-             }
-             if (nextVisible) {
-                 window.revealArtificialTeeth?.();
-             }
-             syncArtificialTeethButtonState();
-         };
-         syncArtificialTeethButtonState();
-         meshControls.appendChild(artificialTeethBtn);
 
          container.appendChild(meshControls);
      });

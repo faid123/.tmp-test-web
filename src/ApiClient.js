@@ -119,6 +119,9 @@ export class ApiClient {
 
 
 async function login() {
+  // Shared viewer URLs currently rely on this fallback account when there is no
+  // loggedInUser session. If auth is tightened later, keep a deliberate
+  // read-only/public-viewer fallback here instead of silently removing URL access.
   const loginData = {
     id: 0,
     username: "faid",
