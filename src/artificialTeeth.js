@@ -2227,7 +2227,12 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     return null;
   };
 
-  const applyToothTransform = (mesh, tooth) => {
+  const applyArtificialToothFlip = (mesh, jawType) => {
+    mesh.rotateX(Math.PI);
+    mesh.userData.artificialTeethOrientation = `${jawType}-inverted-default-local-x-180`;
+  };
+
+  const applyToothTransform = (mesh, tooth, jawType) => {
     const geometryCenter = mesh.geometry?.userData?.sourceCenter;
     const usesAbsoluteApiMesh = looksLikeModelPosition(geometryCenter);
     const hasSeatedPosition =
@@ -2251,6 +2256,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     );
     if (usesAbsoluteApiMesh && !hasSeatedPosition) {
       mesh.userData.transformMode = "api-mesh-vertices-in-place";
+      applyArtificialToothFlip(mesh, jawType);
       return;
     } else if (usesAbsoluteApiMesh) {
       mesh.userData.transformMode = "api-mesh-centered-on-seated-position";
@@ -2307,6 +2313,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
         useDegrees ? THREE.MathUtils.degToRad(tooth.rotation.z) : tooth.rotation.z
       );
     }
+    applyArtificialToothFlip(mesh, jawType);
     if (tooth.scale) {
       if (tooth.source?.geometryFromSurfaceMesh) {
         mesh.userData.scaleMode = "native-surface-mesh";
@@ -2357,7 +2364,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       vertexCount: geometry.userData?.vertexCount,
       indexCount: geometry.userData?.indexCount,
     };
-    applyToothTransform(mesh, tooth);
+    applyToothTransform(mesh, tooth, jawType);
     return mesh;
   };
 
@@ -2374,7 +2381,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       toothIndex: tooth.toothIndex ?? toothIndex,
       vertexCount: tooth.geometry.vertices.length,
     };
-    applyToothTransform(points, tooth);
+    applyToothTransform(points, tooth, jawType);
     return points;
   };
 
@@ -2759,6 +2766,232 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       : Array.from({ length: 16 }, (_, index) => String(index + 1));
   };
 
+  const toVector3 = (point) => isValidPoint(point)
+    ? new THREE.Vector3(point.x, point.y, point.z)
+    : null;
+
+  const getAngleDegrees = (a, b, ignoreDirection = false) => {
+    const vectorA = toVector3(a);
+    const vectorB = toVector3(b);
+    if (!vectorA || !vectorB || vectorA.lengthSq() < 0.000001 || vectorB.lengthSq() < 0.000001) {
+      return null;
+    }
+    vectorA.normalize();
+    vectorB.normalize();
+    const dot = THREE.MathUtils.clamp(vectorA.dot(vectorB), -1, 1);
+    const comparableDot = ignoreDirection ? Math.abs(dot) : dot;
+    return Number(THREE.MathUtils.radToDeg(Math.acos(comparableDot)).toFixed(2));
+  };
+
+  const getWorldAxis = (mesh, axis) => {
+    const quaternion = new THREE.Quaternion();
+    mesh.getWorldQuaternion(quaternion);
+    return axis.clone().applyQuaternion(quaternion).normalize();
+  };
+
+  const getMeshWorldAxes = (mesh) => [
+    getWorldAxis(mesh, new THREE.Vector3(1, 0, 0)),
+    getWorldAxis(mesh, new THREE.Vector3(0, 1, 0)),
+    getWorldAxis(mesh, new THREE.Vector3(0, 0, 1)),
+  ];
+
+  const getAxisAgreementAngle = (mesh, vector, ignoreDirection = true) => {
+    const target = toVector3(vector);
+    if (!target || target.lengthSq() < 0.000001) return null;
+    target.normalize();
+    const bestDot = getMeshWorldAxes(mesh).reduce((best, axis) => {
+      const dot = axis.dot(target);
+      return Math.max(best, ignoreDirection ? Math.abs(dot) : dot);
+    }, -Infinity);
+    if (!Number.isFinite(bestDot)) return null;
+    return Number(
+      THREE.MathUtils.radToDeg(
+        Math.acos(THREE.MathUtils.clamp(bestDot, -1, 1))
+      ).toFixed(2)
+    );
+  };
+
+  const getMeshWorldCenter = (mesh) => {
+    mesh.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(mesh);
+    if (box.isEmpty()) return null;
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    return center;
+  };
+
+  const getToothByIndex = (arch, toothIndex) => {
+    const key = String(toothIndex);
+    return (lastNormalizedTeeth?.[arch] || []).find(
+      (tooth) => String(tooth.toothIndex) === key
+    );
+  };
+
+  const auditToothOrientation = (arch, mesh) => {
+    const tooth = getToothByIndex(arch, mesh.userData?.toothIndex);
+    const transform = tooth?.transform;
+    if (!transform) {
+      return {
+        toothIndex: String(mesh.userData?.toothIndex),
+        hasTransform: false,
+        likelyAngleAligned: null,
+      };
+    }
+
+    const mdAxis = getWorldAxis(mesh, new THREE.Vector3(1, 0, 0));
+    const gingivalBuccalAxis = getWorldAxis(mesh, new THREE.Vector3(0, 1, 0));
+    const depthAxis = getWorldAxis(mesh, new THREE.Vector3(0, 0, 1));
+    const apiGingivalBuccal = {
+      x: transform.buccalPoint?.x - transform.gingivalPoint?.x,
+      y: transform.buccalPoint?.y - transform.gingivalPoint?.y,
+      z: transform.buccalPoint?.z - transform.gingivalPoint?.z,
+    };
+
+    const mesialDistalAxisAngle = getAngleDegrees(mdAxis, transform.mesialDistalLine, true);
+    const gingivalBuccalAxisAngle = getAngleDegrees(gingivalBuccalAxis, apiGingivalBuccal, true);
+    const buccalDirectionalAngle = getAngleDegrees(depthAxis, transform.buccalDirection, false);
+    const buccalAxisAngle = getAngleDegrees(depthAxis, transform.buccalDirection, true);
+    const likelyAngleAligned = [mesialDistalAxisAngle, gingivalBuccalAxisAngle, buccalAxisAngle]
+      .filter((value) => value !== null)
+      .every((value) => value <= 35);
+
+    return {
+      toothIndex: String(mesh.userData?.toothIndex),
+      hasTransform: true,
+      transformMode: mesh.userData?.transformMode || null,
+      mesialDistalAxisAngle,
+      gingivalBuccalAxisAngle,
+      buccalAxisAngle,
+      buccalDirectionalAngle,
+      likelyAngleAligned,
+    };
+  };
+
+  const summarizeOrientationRows = (rows) => {
+    const comparableRows = rows.filter((row) => row.hasTransform);
+    const getStatsForKey = (key) => getDistanceStats(
+      comparableRows
+        .map((row) => row[key])
+        .filter((value) => value !== null)
+    );
+    return {
+      checked: comparableRows.length,
+      likelyAligned: comparableRows.filter((row) => row.likelyAngleAligned).length,
+      likelyMisaligned: comparableRows.filter((row) => row.likelyAngleAligned === false).length,
+      mesialDistalAxisAngle: getStatsForKey("mesialDistalAxisAngle"),
+      gingivalBuccalAxisAngle: getStatsForKey("gingivalBuccalAxisAngle"),
+      buccalAxisAngle: getStatsForKey("buccalAxisAngle"),
+      worst: comparableRows
+        .map((row) => ({
+          toothIndex: row.toothIndex,
+          maxAxisAngle: Math.max(
+            row.mesialDistalAxisAngle ?? 0,
+            row.gingivalBuccalAxisAngle ?? 0,
+            row.buccalAxisAngle ?? 0
+          ),
+          buccalDirectionalAngle: row.buccalDirectionalAngle,
+          transformMode: row.transformMode,
+        }))
+        .sort((a, b) => b.maxAxisAngle - a.maxAxisAngle)
+        .slice(0, 5),
+    };
+  };
+
+  const auditPlacementAngles = (arch, archMeshes) => {
+    const byIndex = new Map(
+      archMeshes.map((mesh) => [String(mesh.userData?.toothIndex), mesh])
+    );
+    const ordered = sortToothIndices(Array.from(byIndex.keys()))
+      .map((index) => byIndex.get(index))
+      .filter(Boolean);
+
+    const centers = new Map();
+    ordered.forEach((mesh) => {
+      const center = getMeshWorldCenter(mesh);
+      if (center) centers.set(String(mesh.userData?.toothIndex), center);
+    });
+
+    const rows = ordered.map((mesh, orderedIndex) => {
+      const toothIndex = String(mesh.userData?.toothIndex);
+      const center = centers.get(toothIndex);
+      const surfacePoint = center
+        ? getClosestJawSurfacePoint(
+            arch,
+            { x: center.x, y: center.y, z: center.z },
+            "scene-world"
+          )
+        : null;
+      const surfaceOffset = surfacePoint && center
+        ? {
+            x: center.x - surfacePoint.x,
+            y: center.y - surfacePoint.y,
+            z: center.z - surfacePoint.z,
+          }
+        : null;
+
+      const previousCenter = orderedIndex > 0
+        ? centers.get(String(ordered[orderedIndex - 1].userData?.toothIndex))
+        : null;
+      const nextCenter = orderedIndex < ordered.length - 1
+        ? centers.get(String(ordered[orderedIndex + 1].userData?.toothIndex))
+        : null;
+      const tangent = previousCenter && nextCenter
+        ? {
+            x: nextCenter.x - previousCenter.x,
+            y: nextCenter.y - previousCenter.y,
+            z: nextCenter.z - previousCenter.z,
+          }
+        : nextCenter && center
+          ? {
+              x: nextCenter.x - center.x,
+              y: nextCenter.y - center.y,
+              z: nextCenter.z - center.z,
+            }
+          : previousCenter && center
+            ? {
+                x: center.x - previousCenter.x,
+                y: center.y - previousCenter.y,
+                z: center.z - previousCenter.z,
+              }
+            : null;
+
+      const surfaceNormalAxisAngle = getAxisAgreementAngle(mesh, surfaceOffset, true);
+      const archTangentAxisAngle = getAxisAgreementAngle(mesh, tangent, true);
+      const likelyPlacementAngleAligned =
+        (surfaceNormalAxisAngle === null || surfaceNormalAxisAngle <= 35) &&
+        (archTangentAxisAngle === null || archTangentAxisAngle <= 35);
+
+      return {
+        toothIndex,
+        surfaceNormalAxisAngle,
+        archTangentAxisAngle,
+        likelyPlacementAngleAligned,
+      };
+    });
+
+    return {
+      checked: rows.length,
+      likelyAligned: rows.filter((row) => row.likelyPlacementAngleAligned).length,
+      likelyMisaligned: rows.filter((row) => row.likelyPlacementAngleAligned === false).length,
+      surfaceNormalAxisAngle: getDistanceStats(
+        rows.map((row) => row.surfaceNormalAxisAngle).filter((value) => value !== null)
+      ),
+      archTangentAxisAngle: getDistanceStats(
+        rows.map((row) => row.archTangentAxisAngle).filter((value) => value !== null)
+      ),
+      worst: rows
+        .map((row) => ({
+          toothIndex: row.toothIndex,
+          maxAngle: Math.max(row.surfaceNormalAxisAngle ?? 0, row.archTangentAxisAngle ?? 0),
+          surfaceNormalAxisAngle: row.surfaceNormalAxisAngle,
+          archTangentAxisAngle: row.archTangentAxisAngle,
+        }))
+        .sort((a, b) => b.maxAngle - a.maxAngle)
+        .slice(0, 5),
+      rows,
+    };
+  };
+
   const auditJawAlignment = (arch, meshes) => {
     const jawMesh = getJawMesh(arch);
     const archMeshes = meshes.filter((mesh) => mesh.userData?.arch === arch);
@@ -2776,6 +3009,9 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     const expectedIndices = getExpectedCraftIndices(arch);
     const missingFromDecoded = expectedIndices.filter((index) => !decodedIndices.includes(index));
     const missingFromRendered = decodedIndices.filter((index) => !renderedIndices.includes(index));
+    const orientationRows = archMeshes.map((mesh) => auditToothOrientation(arch, mesh));
+    const orientation = summarizeOrientationRows(orientationRows);
+    const placementAngle = auditPlacementAngles(arch, archMeshes);
     const toothBox = new THREE.Box3();
     const jawBox = new THREE.Box3();
     const center = new THREE.Vector3();
@@ -2828,6 +3064,9 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       boundsOverlap,
       likelyAligned,
       surfaceDistance: distanceStats,
+      orientation,
+      orientationRows,
+      placementAngle,
       jawBounds: getBoxSummary(jawBox),
       toothBounds: getBoxSummary(toothBox),
     };
@@ -2847,6 +3086,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       renderedMeshCount: meshes.length,
       hasRenderedTeeth: meshes.length > 0,
       referenceMode,
+      orientationMode: "inverted-default-local-x-180",
       jaws,
     };
 
@@ -2866,6 +3106,15 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
         boundsOverlap: jaw.boundsOverlap,
         medianSurfaceDistance: jaw.surfaceDistance.median,
         maxSurfaceDistance: jaw.surfaceDistance.max,
+        angleChecked: jaw.orientation.checked,
+        angleMisaligned: jaw.orientation.likelyMisaligned,
+        medianMDAngle: jaw.orientation.mesialDistalAxisAngle.median,
+        medianGBAngle: jaw.orientation.gingivalBuccalAxisAngle.median,
+        medianBuccalAngle: jaw.orientation.buccalAxisAngle.median,
+        placementAngleChecked: jaw.placementAngle.checked,
+        placementAngleMisaligned: jaw.placementAngle.likelyMisaligned,
+        medianSurfaceNormalAngle: jaw.placementAngle.surfaceNormalAxisAngle.median,
+        medianArchTangentAngle: jaw.placementAngle.archTangentAxisAngle.median,
         likelyAligned: jaw.likelyAligned,
       }))
     );
