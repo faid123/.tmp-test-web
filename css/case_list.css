@@ -318,6 +318,10 @@ button {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .case-thumbnail {
@@ -412,6 +416,9 @@ button {
   margin-top: auto;
   background: var(--accent);
   border-radius: 7px;
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
 }
 
 .start-case-button {
@@ -502,6 +509,16 @@ button {
   .case-details {
     width: 100%;
     flex: 0 0 auto;
+  }
+
+  .case-details {
+    height: auto;
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  .start-case-container {
+    position: static;
   }
 }
 

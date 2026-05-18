@@ -600,7 +600,7 @@ function reportFieldRow(label, value) {
 
 async function generateReport() {
   const caseLabel = state.caseIntID ?? "Unknown";
-  const assetBase = `${window.location.origin}/assets/clinicalInfo`;
+  const assetBase = new URL("../../assets/clinicalInfo", window.location.href).href;
   const creationDate = new Date().toLocaleString("sv-SE").replace("T", " ").slice(0, 19);
   const caseNote = loadCaseNote(state.caseIntID);
   const ownerName = state.caseOwner || caseNote.caseOwner || "";
