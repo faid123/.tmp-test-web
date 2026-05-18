@@ -369,7 +369,8 @@ function bindOnce() {
   });
   document.getElementById("instructionEditorSaveBtn")?.addEventListener("click", () => {
     const dataUrl = exportComposedDataUrl();
-    closeEditor(dataUrl);
+    const strokes = JSON.parse(JSON.stringify(state.strokes));
+    closeEditor({ dataUrl, strokes });
   });
   document.getElementById("clearDrawingsBtn")?.addEventListener("click", clearAll);
   document.getElementById("undoDrawBtn")?.addEventListener("click", undo);
@@ -449,7 +450,9 @@ export async function openInstructionEditor(options = {}) {
   bindOnce();
   bindCanvasEvents();
 
-  state.strokes = [];
+  state.strokes = Array.isArray(options.initialStrokes)
+    ? JSON.parse(JSON.stringify(options.initialStrokes))
+    : [];
   state.redoStack = [];
   state.currentStroke = null;
   state.isDrawing = false;

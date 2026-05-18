@@ -1,7 +1,15 @@
 import { state, setMessage } from "./2DAnnotation.js";
 import { captureJawJpegDataUrl } from "./annotationLocks.js";
 import { openInstructionEditor } from "./instructionEditor.js";
-import { UPPER_TEETH, LOWER_TEETH, sourceToothFor, statusFor } from "./clinicalInfo.js";
+import {
+  UPPER_TEETH,
+  LOWER_TEETH,
+  sourceToothFor,
+  statusFor,
+  getClinicalNotesFromStorage,
+  tiltArrowFor,
+} from "./clinicalInfo.js";
+import { WORK_CATEGORY_LABELS, loadCaseNote } from "./caseNote.js";
 
 //Add constants
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
@@ -321,9 +329,15 @@ function openThumbActionMenu(anchor, items, idx, kind) {
       closeThumbActionMenu();
       const item = items[idx];
       if (!item) return;
-      const updated = await openInstructionEditor({ initialImage: item.preview });
-      if (!updated) return;
-      item.preview = updated;
+      const result = await openInstructionEditor({
+        initialImage: item.baseImage || item.preview,
+        initialStrokes: Array.isArray(item.strokes) ? item.strokes : [],
+      });
+      if (!result) return;
+      item.preview = result.dataUrl;
+      item.strokes = result.strokes;
+      // Legacy items had no separate baseImage; treat the (then-flat) preview as the base.
+      if (!item.baseImage) item.baseImage = item.preview;
       item.updatedAt = new Date().toISOString();
       saveData(cache);
       renderGrids();
@@ -388,8 +402,9 @@ async function refreshAddInstructionPreview() {
 
 async function addInstruction() {
   setMessage("Opening instruction editor…", false);
-  const dataUrl = await openInstructionEditor();
-  if (!dataUrl) {
+  const baseImage = await captureJawJpegDataUrl(0.92);
+  const result = await openInstructionEditor({ initialImage: baseImage });
+  if (!result) {
     setMessage("Instruction discarded.", false);
     return;
   }
@@ -397,7 +412,9 @@ async function addInstruction() {
   data.instructions.push({
     id: `inst_${Date.now()}`,
     title: `Instruction ${data.instructions.length + 1}`,
-    preview: dataUrl,
+    baseImage,
+    strokes: result.strokes,
+    preview: result.dataUrl,
     createdAt: new Date().toISOString(),
   });
   saveData(data);
@@ -431,34 +448,84 @@ function escapeHtml(value) {
   ));
 }
 
-function buildReportToothHtml(toothId, assetBase) {
+function buildReportToothHtml(toothId, assetBase, note) {
   const { id, mirrored } = sourceToothFor(toothId);
-  const status = statusFor(toothId);
+  const baseStatus = statusFor(toothId);
+  const isUpper = toothId >= 11 && toothId <= 28;
   const mirrorClass = mirrored ? " is-mirrored" : "";
 
+  let effectiveStatus = baseStatus;
+  if (note?.abutment) effectiveStatus = "abutment";
+
+  const hideCrown = !!note?.rootStump;
+
   let body;
-  if (status === "abutment") {
+  if (effectiveStatus === "abutment") {
     body = `<img class="cli-tooth-img cli-tooth-full${mirrorClass}" src="${assetBase}/${id}_Abutment.svg" alt="" />`;
   } else {
-    const crown = `<img class="cli-tooth-img cli-tooth-crown${mirrorClass}" src="${assetBase}/${id}_Crown.svg" alt="" />`;
-    const root = `<img class="cli-tooth-img cli-tooth-root${mirrorClass}" src="${assetBase}/${id}_Root.svg" alt="" />`;
-    const isUpper = toothId >= 11 && toothId <= 28;
+    const crownSrc = note?.cracked ? `${id}_Cracked.svg` : `${id}_Crown.svg`;
+    const rootSrc = note?.implant
+      ? `implant.svg`
+      : note?.rct
+      ? `${id}_RCT.svg`
+      : `${id}_Root.svg`;
+    const rootReplaced = !!(note?.implant || note?.rct);
+    const mobilityTint = rootReplaced
+      ? ""
+      : note?.mobility === "1"
+      ? "is-tint-green"
+      : note?.mobility === "2"
+      ? "is-tint-yellow"
+      : note?.mobility === "3"
+      ? "is-tint-red"
+      : "";
+
+    const crownExtra =
+      (!note?.cracked && note?.crown ? " is-tint-yellow" : "") +
+      (hideCrown ? " is-hidden" : "");
+    const rootExtra = mobilityTint ? ` ${mobilityTint}` : "";
+    const implantExtra = note?.implant ? " is-implant" : "";
+
+    const crown = `<img class="cli-tooth-img cli-tooth-crown${mirrorClass}${crownExtra}" src="${assetBase}/${crownSrc}" alt="" />`;
+    const root = `<img class="cli-tooth-img cli-tooth-root${mirrorClass}${rootExtra}${implantExtra}" src="${assetBase}/${rootSrc}" alt="" />`;
     const stack = isUpper
       ? `<div class="cli-tooth-stack">${root}${crown}</div>`
       : `<div class="cli-tooth-stack">${crown}${root}</div>`;
-    const cross = status === "missing" ? `<span class="cli-tooth-cross"></span>` : "";
+    const cross = effectiveStatus === "missing" ? `<span class="cli-tooth-cross"></span>` : "";
     body = `${stack}${cross}`;
   }
 
+  // Overlay markers (above the body).
+  const overlays = [];
+  if (note?.tilted) {
+    overlays.push(
+      `<span class="cli-tooth-tilt cli-tooth-tilt--${note.tilted}">${escapeHtml(
+        tiltArrowFor(note.tilted, toothId)
+      )}</span>`
+    );
+  }
+  if (note?.restoration && !note.cracked && !hideCrown) {
+    overlays.push(
+      `<span class="cli-tooth-restoration is-${String(note.restoration).toLowerCase()}"></span>`
+    );
+  }
+  if (note?.extraction) {
+    overlays.push(
+      `<span class="cli-tooth-extraction-arrow">${isUpper ? "↓↓" : "↑↑"}</span>`
+    );
+  }
+
+  const jawClass = isUpper ? " is-upper" : " is-lower";
   return `
-    <div class="cli-tooth is-${status}">
+    <div class="cli-tooth is-${effectiveStatus}${jawClass}">
       <div class="cli-tooth-number">${toothId}</div>
+      ${overlays.join("")}
       <div class="cli-tooth-img-wrap">${body}</div>
     </div>`;
 }
 
-function buildReportRowHtml(teeth, assetBase) {
-  return teeth.map((id) => buildReportToothHtml(id, assetBase)).join("");
+function buildReportRowHtml(teeth, assetBase, notes) {
+  return teeth.map((id) => buildReportToothHtml(id, assetBase, notes[id])).join("");
 }
 
 function buildReportLegendHtml(assetBase) {
@@ -535,6 +602,10 @@ async function generateReport() {
   const caseLabel = state.caseIntID ?? "Unknown";
   const assetBase = `${window.location.origin}/assets/clinicalInfo`;
   const creationDate = new Date().toLocaleString("sv-SE").replace("T", " ").slice(0, 19);
+  const caseNote = loadCaseNote(state.caseIntID);
+  const ownerName = state.caseOwner || caseNote.caseOwner || "";
+  const workCategoryLabel =
+    WORK_CATEGORY_LABELS[caseNote.workCategory] || caseNote.workCategory || "";
 
   const previewEl = document.getElementById("previewImage");
   const previewSrc = previewEl?.currentSrc || previewEl?.src || "";
@@ -546,16 +617,19 @@ async function generateReport() {
     console.warn("Failed to capture 2D jaw for report:", err);
   }
 
-  const upperRow = buildReportRowHtml(UPPER_TEETH, assetBase);
-  const lowerRow = buildReportRowHtml(LOWER_TEETH, assetBase);
+  const notes = getClinicalNotesFromStorage(state.caseIntID);
+  const upperRow = buildReportRowHtml(UPPER_TEETH, assetBase, notes);
+  const lowerRow = buildReportRowHtml(LOWER_TEETH, assetBase, notes);
   const legend = buildReportLegendHtml(assetBase);
 
   const html = `<!doctype html>
 <html><head><meta charset="utf-8" />
 <title>SmartRPD Report — Case ${escapeHtml(caseLabel)}</title>
 <style>
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body { font-family: "Segoe UI", "Montserrat", sans-serif; color: #2f3b46; margin: 0; padding: 28px; }
+  img { image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; }
   .cli-page { page-break-after: always; }
   .cli-page:last-child { page-break-after: auto; }
   .cli-meta { display: grid; grid-template-columns: 1fr 1fr; row-gap: 14px; column-gap: 32px; margin-bottom: 28px; }
@@ -568,19 +642,42 @@ async function generateReport() {
   .cli-chart-label { text-align: center; font-weight: 700; letter-spacing: 0.12em; font-size: 0.78rem; color: #2aa67c; }
   .cli-row { display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px; }
 
-  .cli-tooth { position: relative; display: flex; flex-direction: column; align-items: center; background: #fafafa; border: 1px solid #e1e4e8; border-radius: 4px; padding: 4px 1px; min-height: 130px; }
+  .cli-tooth { position: relative; display: flex; flex-direction: column; align-items: center; background: #fafafa; border: 1px solid #e1e4e8; border-radius: 4px; padding: 4px 1px; min-height: 160px; }
   .cli-tooth-number { font-size: 0.7rem; color: #2a3340; font-weight: 600; margin-bottom: 2px; }
   .cli-tooth-img-wrap { position: relative; flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .cli-tooth-stack { display: flex; flex-direction: column; align-items: center; line-height: 0; }
   .cli-tooth-img { max-width: 100%; object-fit: contain; display: block; }
-  .cli-tooth-crown { max-height: 40px; }
-  .cli-tooth-root { max-height: 75px; }
-  .cli-tooth-full { max-height: 115px; }
+  .cli-tooth-crown { max-height: 52px; }
+  .cli-tooth-root { max-height: 96px; }
+  .cli-tooth-full { max-height: 148px; }
   .cli-tooth-img.is-mirrored { transform: scaleX(-1); }
   .cli-tooth-cross { position: absolute; inset: 0; pointer-events: none; }
   .cli-tooth-cross::before, .cli-tooth-cross::after { content: ""; position: absolute; left: 50%; top: 50%; width: 260%; height: 3px; background: #b0341c; transform-origin: center; border-radius: 2px; }
   .cli-tooth-cross::before { transform: translate(-50%, -50%) rotate(72deg); }
   .cli-tooth-cross::after { transform: translate(-50%, -50%) rotate(-72deg); }
+
+  .cli-tooth-img.is-hidden { visibility: hidden; height: 0 !important; max-height: 0 !important; }
+  .cli-tooth-img.is-tint-yellow { filter: brightness(0) saturate(100%) invert(72%) sepia(85%) saturate(2200%) hue-rotate(2deg) brightness(105%) contrast(105%); }
+  .cli-tooth-img.is-tint-red { filter: brightness(0) saturate(100%) invert(22%) sepia(99%) saturate(6000%) hue-rotate(355deg) brightness(95%) contrast(105%); }
+  .cli-tooth-img.is-tint-green { filter: brightness(0) saturate(100%) invert(45%) sepia(85%) saturate(2500%) hue-rotate(105deg) brightness(95%) contrast(105%); }
+  .cli-tooth-img.cli-tooth-root.is-implant { max-height: 60px; max-width: 32px; width: auto; height: auto; }
+
+  .cli-tooth-tilt { position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.4rem; font-weight: 900; color: #1f8a6b !important; padding: 2px 6px; border-radius: 6px; z-index: 3; line-height: 1; pointer-events: none; }
+  .cli-tooth.is-upper .cli-tooth-tilt { bottom: 30px; }
+  .cli-tooth.is-lower .cli-tooth-tilt { top: 38px; }
+  .cli-tooth-tilt--SE { font-size: 0.7rem; padding: 2px 5px; }
+
+  .cli-tooth-extraction-arrow { position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.1rem; color: #b0341c !important; padding: 0 4px; border-radius: 4px; font-weight: 900; letter-spacing: -1px; z-index: 3; line-height: 1.1; pointer-events: none; }
+  .cli-tooth.is-upper .cli-tooth-extraction-arrow { bottom: -2px; }
+  .cli-tooth.is-lower .cli-tooth-extraction-arrow { top: 0px; }
+
+  .cli-tooth-restoration { position: absolute; left: 50%; transform: translateX(-50%); z-index: 2; pointer-events: none; }
+  .cli-tooth.is-upper .cli-tooth-restoration { bottom: 22%; }
+  .cli-tooth.is-lower .cli-tooth-restoration { top: 26%; }
+  .cli-tooth-restoration.is-ar { width: 10px; height: 10px; background: #888a8f; border-radius: 50%; }
+  .cli-tooth-restoration.is-tcr { width: 10px; height: 10px; background: rgba(255,255,255,0.85); border: 1.5px solid #cc0011; border-radius: 50%; }
+  .cli-tooth-restoration.is-inlay { width: 12px; height: 7px; background: #2563eb; border-radius: 2px; }
+  .cli-tooth-restoration.is-onlay { width: 12px; height: 7px; background: #b8860b; border-radius: 2px; }
 
   .cli-legend-title { color: #2aa67c; letter-spacing: 0.1em; font-weight: 700; font-size: 0.85rem; margin: 24px 0 8px; }
   .cli-legend-grid { display: flex; flex-wrap: wrap; row-gap: 14px; column-gap: 18px; align-items: flex-end; }
@@ -600,19 +697,24 @@ async function generateReport() {
   .cli-3d-page .cli-empty { color: #8895a4; font-style: italic; }
 
   @media print {
-    body { padding: 14px; }
+    body { padding: 14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .cli-row { gap: 2px; }
+    .cli-tooth, .cli-tooth-cross::before, .cli-tooth-cross::after,
+    .cli-tooth-restoration, .cli-tooth-extraction-arrow, .cli-tooth-tilt {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
   }
 </style></head>
 <body>
   <section class="cli-page">
     <div class="cli-meta">
-      ${reportFieldRow("Customer", "")}
+      ${reportFieldRow("Customer", ownerName)}
       ${reportFieldRow("Creation Date", creationDate).replace("cli-field", "cli-field cli-field-creation")}
       ${reportFieldRow("Case Number", caseLabel)}
-      ${reportFieldRow("Date Required", "")}
-      ${reportFieldRow("Tooth Shade", "")}
-      ${reportFieldRow("Work Category", "")}
+      ${reportFieldRow("Date Required", caseNote.dateRequired || "")}
+      ${reportFieldRow("Tooth Shade", caseNote.toothShade || "")}
+      ${reportFieldRow("Work Category", workCategoryLabel)}
     </div>
 
     <section class="cli-chart">
@@ -628,6 +730,7 @@ async function generateReport() {
 
     <div class="cli-field" style="margin-top:18px;">
       <span class="cli-field-label">Additional Comments :</span>
+      <span class="cli-field-value" style="white-space:pre-wrap;">${escapeHtml(caseNote.comment || "")}</span>
     </div>
   </section>
 

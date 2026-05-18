@@ -1080,18 +1080,40 @@ function appendRetainerClaspSuggestionPoints(group, tooth, toothId, jaw) {
       `clasp-suggestion-${surface}`,
     ].filter(Boolean).join(" ");
 
+    const cx = pointData.x;
+    const cy = pointData.y;
+    // Direction from tooth-local origin (tooth center) outward to the suggestion point.
+    const angleDeg = (Math.atan2(cy, cx) * 180) / Math.PI;
+
+    const wrapper = svgEl("g", {
+      class: `clasp-suggestion-group clasp-suggestion-group-${surface}`,
+    });
+
     const point = svgEl("circle", {
-      cx: String(pointData.x),
-      cy: String(pointData.y),
+      cx: String(cx),
+      cy: String(cy),
       r: String(radius),
       class: className,
       "data-surface": surface,
     });
-    point.addEventListener("click", (event) => {
+
+    // Tiny chevron pointing outward (default points along +X, rotated to face away from center).
+    const tip = (radius * 0.55).toFixed(2);
+    const back = (-radius * 0.2).toFixed(2);
+    const half = (radius * 0.4).toFixed(2);
+    const arrow = svgEl("polyline", {
+      points: `${back},${-half} ${tip},0 ${back},${half}`,
+      class: "clasp-suggestion-arrow",
+      transform: `translate(${cx} ${cy}) rotate(${angleDeg.toFixed(2)})`,
+    });
+
+    wrapper.appendChild(point);
+    wrapper.appendChild(arrow);
+    wrapper.addEventListener("click", (event) => {
       event.stopPropagation();
       handleRetainerClaspSuggestionPick(jaw, toothId, surface);
     });
-    group.appendChild(point);
+    group.appendChild(wrapper);
   }
 }
 

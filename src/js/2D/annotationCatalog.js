@@ -32,6 +32,11 @@ import {
   ensureToothPlacementState,
   syncToothComponentsFromPlacements,
 } from "./annotationTeethModel.js";
+import {
+  WORK_CATEGORY_OPTIONS,
+  loadCaseNote,
+  saveCaseNote,
+} from "./caseNote.js";
 
 // Build component tabs and initialize the first visible catalog view.
 export function initComponentCatalog() {
@@ -50,7 +55,8 @@ export function initComponentCatalog() {
     for (const tab of COMPONENT_TABS) {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = `component-tab ${state.selectedTab === tab.id ? "is-active" : ""}`;
+      const kindClass = tab.kind === "form" ? " is-form-tab" : "";
+      button.className = `component-tab${kindClass} ${state.selectedTab === tab.id ? "is-active" : ""}`;
       button.textContent = tab.label;
       button.addEventListener("click", () => {
         state.selectedTab = tab.id;
@@ -77,6 +83,13 @@ export function renderComponentCatalog() {
   const itemsEl = document.getElementById("componentItems");
   if (!itemsEl) return;
   itemsEl.innerHTML = "";
+
+  if (state.selectedTab === "case-note") {
+    itemsEl.appendChild(createCaseNoteForm());
+    const selectedEl = document.getElementById("selectedComponents");
+    if (selectedEl) selectedEl.innerHTML = "";
+    return;
+  }
 
   const tabItems = COMPONENT_CATALOG.filter(
     (entry) => entry.tab === state.selectedTab && entry.hidden !== true
@@ -464,6 +477,148 @@ export function ensureMajorCatalogPickForTooth(toothId) {
   } else if (jaw === "upper") {
     state.archOverlayPalatalHoleActive = false;
   }
+}
+
+// Build the Case Note form (renders inside the catalog area when the case-note tab is active).
+function createCaseNoteForm() {
+  const saved = loadCaseNote(state.caseIntID);
+
+  const form = document.createElement("form");
+  form.className = "case-note-form";
+  form.addEventListener("submit", (e) => e.preventDefault());
+
+  const ownerName = state.caseOwner || saved.caseOwner || "—";
+  const caseNumber = state.caseIntID ?? "—";
+
+  form.appendChild(buildReadonlyRow("Case Owner", ownerName));
+  form.appendChild(buildReadonlyRow("Case Number", String(caseNumber)));
+
+  const dateInput = buildInputRow("Date Required", "date", "case-note-date", saved.dateRequired || "");
+  form.appendChild(dateInput.row);
+
+  const shadeInput = buildInputRow("Tooth Shade", "text", "case-note-shade", saved.toothShade || "", {
+    placeholder: "e.g. A2",
+  });
+  form.appendChild(shadeInput.row);
+
+  const categorySelect = buildSelectRow(
+    "Work Category",
+    "case-note-category",
+    WORK_CATEGORY_OPTIONS,
+    saved.workCategory || ""
+  );
+  form.appendChild(categorySelect.row);
+
+  const commentField = buildTextareaRow("Comment", "case-note-comment", saved.comment || "");
+  form.appendChild(commentField.row);
+
+  const actions = document.createElement("div");
+  actions.className = "case-note-actions";
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "button";
+  saveBtn.className = "case-note-save-btn";
+  saveBtn.textContent = "Save";
+  const status = document.createElement("span");
+  status.className = "case-note-status";
+  status.setAttribute("aria-live", "polite");
+
+  saveBtn.addEventListener("click", () => {
+    const note = {
+      caseOwner: ownerName,
+      caseNumber,
+      dateRequired: dateInput.input.value,
+      toothShade: shadeInput.input.value,
+      workCategory: categorySelect.input.value,
+      comment: commentField.input.value,
+      updatedAt: new Date().toISOString(),
+    };
+    const ok = saveCaseNote(state.caseIntID, note);
+    status.textContent = ok ? "Saved." : "Save failed.";
+    status.classList.toggle("is-error", !ok);
+    if (ok) {
+      setMessage("Case note saved.", false);
+      setTimeout(() => {
+        if (status.textContent === "Saved.") status.textContent = "";
+      }, 2000);
+    }
+  });
+
+  actions.appendChild(saveBtn);
+  actions.appendChild(status);
+  form.appendChild(actions);
+
+  return form;
+}
+
+function buildReadonlyRow(labelText, value) {
+  const row = document.createElement("div");
+  row.className = "case-note-row";
+  const label = document.createElement("span");
+  label.className = "case-note-label";
+  label.textContent = labelText;
+  const display = document.createElement("span");
+  display.className = "case-note-readonly";
+  display.textContent = value;
+  row.appendChild(label);
+  row.appendChild(display);
+  return row;
+}
+
+function buildInputRow(labelText, type, id, value, opts = {}) {
+  const row = document.createElement("div");
+  row.className = "case-note-row";
+  const label = document.createElement("label");
+  label.className = "case-note-label";
+  label.textContent = labelText;
+  label.htmlFor = id;
+  const input = document.createElement("input");
+  input.type = type;
+  input.id = id;
+  input.className = "case-note-input";
+  input.value = value;
+  if (opts.placeholder) input.placeholder = opts.placeholder;
+  row.appendChild(label);
+  row.appendChild(input);
+  return { row, input };
+}
+
+function buildSelectRow(labelText, id, options, value) {
+  const row = document.createElement("div");
+  row.className = "case-note-row";
+  const label = document.createElement("label");
+  label.className = "case-note-label";
+  label.textContent = labelText;
+  label.htmlFor = id;
+  const input = document.createElement("select");
+  input.id = id;
+  input.className = "case-note-input";
+  for (const opt of options) {
+    const o = document.createElement("option");
+    o.value = opt.value;
+    o.textContent = opt.label;
+    if (opt.value === value) o.selected = true;
+    input.appendChild(o);
+  }
+  row.appendChild(label);
+  row.appendChild(input);
+  return { row, input };
+}
+
+function buildTextareaRow(labelText, id, value) {
+  const row = document.createElement("div");
+  row.className = "case-note-row case-note-row--block";
+  const label = document.createElement("label");
+  label.className = "case-note-label";
+  label.textContent = labelText;
+  label.htmlFor = id;
+  const input = document.createElement("textarea");
+  input.id = id;
+  input.className = "case-note-input case-note-textarea";
+  input.rows = 4;
+  input.value = value;
+  row.appendChild(label);
+  row.appendChild(input);
+  return { row, input };
 }
 
 // Ensure major tab has a valid default selected component.

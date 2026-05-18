@@ -7,7 +7,8 @@ export const COMPONENT_TABS = [
   { id: "clasps", label: "CLASPS" },
   { id: "bars", label: "BARS" },
   { id: "plate", label: "PLATE" },
-  { id: "major", label: "MAJOR CONNECTOR" }
+  { id: "major", label: "MAJOR CONNECTOR" },
+  { id: "case-note", label: "CASE NOTE", kind: "form" }
 ];
 
 export const ACTION_UPON_FAILURE = {

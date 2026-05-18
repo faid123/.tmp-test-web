@@ -188,7 +188,6 @@
               <div id="componentItems" class="component-items"></div>
             </div>
           </div>
-          <div class="selected-components" id="selectedComponents"></div>
         </section>
       </aside>
     </section>
@@ -593,101 +592,126 @@
         </div>
       </header>
 
+      <section class="clinical-info-note" aria-label="Case note">
+        <div class="clinical-info-note-grid">
+          <div class="clinical-info-note-field">
+            <span class="clinical-info-note-label">Case Owner</span>
+            <span id="clinicalInfoNoteOwner" class="clinical-info-note-value">—</span>
+          </div>
+          <div class="clinical-info-note-field">
+            <span class="clinical-info-note-label">Case Number</span>
+            <span id="clinicalInfoNoteNumber" class="clinical-info-note-value">—</span>
+          </div>
+          <div class="clinical-info-note-field">
+            <span class="clinical-info-note-label">Date Required</span>
+            <span id="clinicalInfoNoteDate" class="clinical-info-note-value">—</span>
+          </div>
+          <div class="clinical-info-note-field">
+            <span class="clinical-info-note-label">Tooth Shade</span>
+            <span id="clinicalInfoNoteShade" class="clinical-info-note-value">—</span>
+          </div>
+          <div class="clinical-info-note-field">
+            <span class="clinical-info-note-label">Work Category</span>
+            <span id="clinicalInfoNoteCategory" class="clinical-info-note-value">—</span>
+          </div>
+        </div>
+      </section>
+
       <section class="clinical-info-legend" aria-label="Legend">
-        <div class="clinical-info-legend-title">LEGEND</div>
+        <div id="clinicalInfoLegendTitle" class="clinical-info-legend-title">LEGEND</div>
         <div class="clinical-info-legend-grid">
-          <div class="clinical-info-legend-block">
+          <div class="clinical-info-legend-block" data-ci-group="mobility">
             <div class="clinical-info-legend-row">
               <div class="clinical-info-legend-item">
                 <span class="clinical-info-legend-label-top">Mobility</span>
                 <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/mobility.png" alt="" />
               </div>
               <div class="clinical-info-legend-item">
-                <span class="clinical-info-legend-swatch clinical-info-mobility clinical-info-mobility--1">I</span>
+                <span class="clinical-info-legend-swatch clinical-info-mobility clinical-info-mobility--1" data-ci-option="1">I</span>
               </div>
               <div class="clinical-info-legend-item">
-                <span class="clinical-info-legend-swatch clinical-info-mobility clinical-info-mobility--2">II</span>
+                <span class="clinical-info-legend-swatch clinical-info-mobility clinical-info-mobility--2" data-ci-option="2">II</span>
               </div>
               <div class="clinical-info-legend-item">
-                <span class="clinical-info-legend-swatch clinical-info-mobility clinical-info-mobility--3">III</span>
+                <span class="clinical-info-legend-swatch clinical-info-mobility clinical-info-mobility--3" data-ci-option="3">III</span>
               </div>
               <div class="clinical-info-legend-item">
-                <span class="clinical-info-legend-text">CLEAR</span>
+                <span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="clear">CLEAR</span>
               </div>
             </div>
           </div>
 
-          <div class="clinical-info-legend-block">
+          <div class="clinical-info-legend-block" data-ci-toggle="rct">
             <div class="clinical-info-legend-item">
               <span class="clinical-info-legend-label-top">ROOT CANAL THERAPY</span>
               <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/root_canal.png" alt="" />
             </div>
           </div>
 
-          <div class="clinical-info-legend-block">
+          <div class="clinical-info-legend-block" data-ci-group="restoration">
             <div class="clinical-info-legend-row">
               <div class="clinical-info-legend-item">
                 <span class="clinical-info-legend-label-top">Restoration</span>
                 <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/filling.png" alt="" />
               </div>
-              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">AR</span></div>
-              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">TCR</span></div>
-              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">INLAY</span></div>
-              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">ONLAY</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="AR">AR</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="TCR">TCR</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="INLAY">INLAY</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="ONLAY">ONLAY</span></div>
             </div>
           </div>
 
-          <div class="clinical-info-legend-block">
+          <div class="clinical-info-legend-block" data-ci-toggle="crown">
             <div class="clinical-info-legend-item">
               <span class="clinical-info-legend-label-top">CROWN</span>
               <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/crown.png" alt="" />
             </div>
           </div>
 
-          <div class="clinical-info-legend-block">
+          <div class="clinical-info-legend-block" data-ci-toggle="implant">
             <div class="clinical-info-legend-item">
               <span class="clinical-info-legend-label-top">IMPLANT</span>
               <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/implant.png" alt="" />
             </div>
           </div>
 
-          <div class="clinical-info-legend-block">
+          <div class="clinical-info-legend-block" data-ci-toggle="rootStump">
             <div class="clinical-info-legend-item">
               <span class="clinical-info-legend-label-top">ROOT STUMP</span>
               <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/root_stump.png" alt="" />
             </div>
           </div>
 
-          <div class="clinical-info-legend-block">
+          <div class="clinical-info-legend-block" data-ci-toggle="cracked">
             <div class="clinical-info-legend-item">
               <span class="clinical-info-legend-label-top">CRACKED</span>
               <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/cracked.png" alt="" />
             </div>
           </div>
 
-          <div class="clinical-info-legend-block">
+          <div class="clinical-info-legend-block" data-ci-group="tilted">
             <div class="clinical-info-legend-row">
               <div class="clinical-info-legend-item">
                 <span class="clinical-info-legend-label-top">Tilted Tooth</span>
                 <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/tilted.png" alt="" />
               </div>
-              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">M</span></div>
-              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">D</span></div>
-              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">B</span></div>
-              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">L</span></div>
-              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">A</span></div>
-              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">SE</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="M">M</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="D">D</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="B">B</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="L">L</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="A">A</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="SE">SE</span></div>
             </div>
           </div>
 
-          <div class="clinical-info-legend-block">
+          <div class="clinical-info-legend-block" data-ci-toggle="extraction">
             <div class="clinical-info-legend-item">
               <span class="clinical-info-legend-label-top">EXTRACTION</span>
               <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/extraction.png" alt="" />
             </div>
           </div>
 
-          <div class="clinical-info-legend-block">
+          <div class="clinical-info-legend-block" data-ci-toggle="abutment">
             <div class="clinical-info-legend-item">
               <span class="clinical-info-legend-label-top">ABUTMENT</span>
               <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/abutment.png" alt="" />

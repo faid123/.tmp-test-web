@@ -26,6 +26,7 @@ export const REST_CALIBRATION_COMPONENT_ID = "rest-seat";
 export const state = {
   encryptedCaseId: "",
   caseIntID: null,
+  caseOwner: "",
   activeStatus: "presence",
   locks: { upper: false, lower: false },
   /** Both arches locked — component catalog placement mode. */
@@ -649,6 +650,39 @@ function initializeCaseIds() {
   if (label) label.textContent = `Case: ${state.caseIntID ?? "Unknown"}`;
 }
 
+async function fetchCaseOwner() {
+  if (!state.caseIntID) return;
+  let loggedInUser = null;
+  try {
+    const raw = localStorage.getItem("loggedInUser");
+    loggedInUser = raw ? JSON.parse(raw) : null;
+  } catch {
+    loggedInUser = null;
+  }
+  if (!loggedInUser?.uuid) return;
+  try {
+    const response = await fetch(
+      `https://live.api.smartrpdai.com/api/smartrpd/case/get/${state.caseIntID}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([
+          {
+            machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+            uuid: loggedInUser.uuid,
+            caseIntID: state.caseIntID,
+          },
+        ]),
+      }
+    );
+    if (!response.ok) return;
+    const detail = await response.json();
+    if (detail?.username) state.caseOwner = detail.username;
+  } catch (err) {
+    console.warn("Failed to fetch case owner:", err);
+  }
+}
+
 function bindPreviewPanelToggle() {
   const shell = document.querySelector(".annotation-shell");
   const btn = document.getElementById("preview3dMaximizeBtn");
@@ -772,6 +806,11 @@ function init() {
       locks.bindRemoveComponentModeBtn();
       locks.bindActionButtons();
       catalog.initComponentCatalog();
+      fetchCaseOwner().then(() => {
+        if (state.caseOwner && state.selectedTab === "case-note") {
+          catalog.renderComponentCatalog();
+        }
+      });
       locks.loadPreviewImage();
       locks.syncDesignModeWithLocks(false);
       renderJaws();
