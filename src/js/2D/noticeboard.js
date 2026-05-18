@@ -1,6 +1,7 @@
 import { state, setMessage } from "./2DAnnotation.js";
 import { captureJawJpegDataUrl } from "./annotationLocks.js";
 import { openInstructionEditor } from "./instructionEditor.js";
+import { UPPER_TEETH, LOWER_TEETH, sourceToothFor, statusFor } from "./clinicalInfo.js";
 
 //Add constants
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
@@ -103,10 +104,7 @@ async function composeBaseAndOverlay(baseDataUrl, overlayDataUrl) {
 }
 
 function maybeStrokeJson(v) {
-  if (typeof v !== "string") return null;
-  const parsed = safeJsonParse(v, null);
-  if (!parsed) return null;
-  return parsed; // keep generic for fallback
+  return typeof v === "string" ? safeJsonParse(v, null) : null;
 }
 
 async function buildServerViewcaptures(baseRow, drawnRow, editedRow) {
@@ -433,49 +431,215 @@ function escapeHtml(value) {
   ));
 }
 
-function generateReport() {
-  const data = ensureCache();
-  const caseLabel = escapeHtml(state.caseIntID ?? "Unknown");
-  const renderItems = (items, label) => {
-    if (!items.length) {
-      return `<p class="empty">No ${escapeHtml(label.toLowerCase())} captured.</p>`;
-    }
-    return items
-      .map(
-        (item) => `
-        <figure class="report-item">
-          ${item.preview ? `<img src="${item.preview}" alt="" />` : `<div class="report-item-empty">No preview</div>`}
-          <figcaption>${escapeHtml(item.title || "")}</figcaption>
-        </figure>`
-      )
-      .join("");
-  };
+function buildReportToothHtml(toothId, assetBase) {
+  const { id, mirrored } = sourceToothFor(toothId);
+  const status = statusFor(toothId);
+  const mirrorClass = mirrored ? " is-mirrored" : "";
+
+  let body;
+  if (status === "abutment") {
+    body = `<img class="cli-tooth-img cli-tooth-full${mirrorClass}" src="${assetBase}/${id}_Abutment.svg" alt="" />`;
+  } else {
+    const crown = `<img class="cli-tooth-img cli-tooth-crown${mirrorClass}" src="${assetBase}/${id}_Crown.svg" alt="" />`;
+    const root = `<img class="cli-tooth-img cli-tooth-root${mirrorClass}" src="${assetBase}/${id}_Root.svg" alt="" />`;
+    const isUpper = toothId >= 11 && toothId <= 28;
+    const stack = isUpper
+      ? `<div class="cli-tooth-stack">${root}${crown}</div>`
+      : `<div class="cli-tooth-stack">${crown}${root}</div>`;
+    const cross = status === "missing" ? `<span class="cli-tooth-cross"></span>` : "";
+    body = `${stack}${cross}`;
+  }
+
+  return `
+    <div class="cli-tooth is-${status}">
+      <div class="cli-tooth-number">${toothId}</div>
+      <div class="cli-tooth-img-wrap">${body}</div>
+    </div>`;
+}
+
+function buildReportRowHtml(teeth, assetBase) {
+  return teeth.map((id) => buildReportToothHtml(id, assetBase)).join("");
+}
+
+function buildReportLegendHtml(assetBase) {
+  return `
+    <div class="cli-legend-grid">
+      <div class="cli-legend-item cli-legend-row-item">
+        <span class="cli-legend-text">MOBILITY</span>
+        <div class="cli-legend-cluster">
+          <img class="cli-legend-img" src="${assetBase}/mobility.png" alt="" />
+          <span class="cli-mob cli-mob-1">I</span>
+          <span class="cli-mob cli-mob-2">II</span>
+          <span class="cli-mob cli-mob-3">III</span>
+          <span class="cli-legend-text cli-legend-sub">CLEAR</span>
+        </div>
+      </div>
+      <div class="cli-legend-item">
+        <span class="cli-legend-text">ROOT CANAL THERAPY</span>
+        <img class="cli-legend-img" src="${assetBase}/root_canal.png" alt="" />
+      </div>
+      <div class="cli-legend-item cli-legend-row-item">
+        <span class="cli-legend-text">RESTORATION</span>
+        <div class="cli-legend-cluster">
+          <img class="cli-legend-img" src="${assetBase}/filling.png" alt="" />
+          <span class="cli-legend-text cli-legend-sub">AR</span>
+          <span class="cli-legend-text cli-legend-sub">TCR</span>
+          <span class="cli-legend-text cli-legend-sub">INLAY</span>
+          <span class="cli-legend-text cli-legend-sub">ONLAY</span>
+        </div>
+      </div>
+      <div class="cli-legend-item">
+        <span class="cli-legend-text">CROWN</span>
+        <img class="cli-legend-img" src="${assetBase}/crown.png" alt="" />
+      </div>
+      <div class="cli-legend-item">
+        <span class="cli-legend-text">IMPLANT</span>
+        <img class="cli-legend-img" src="${assetBase}/implant.png" alt="" />
+      </div>
+      <div class="cli-legend-item">
+        <span class="cli-legend-text">ROOT STUMP</span>
+        <img class="cli-legend-img" src="${assetBase}/root_stump.png" alt="" />
+      </div>
+      <div class="cli-legend-item">
+        <span class="cli-legend-text">CRACKED</span>
+        <img class="cli-legend-img" src="${assetBase}/cracked.png" alt="" />
+      </div>
+      <div class="cli-legend-item cli-legend-row-item">
+        <span class="cli-legend-text">TILTED TOOTH</span>
+        <div class="cli-legend-cluster">
+          <img class="cli-legend-img" src="${assetBase}/tilted.png" alt="" />
+          <span class="cli-legend-text cli-legend-sub">M</span>
+          <span class="cli-legend-text cli-legend-sub">D</span>
+          <span class="cli-legend-text cli-legend-sub">B</span>
+          <span class="cli-legend-text cli-legend-sub">L</span>
+          <span class="cli-legend-text cli-legend-sub">A</span>
+          <span class="cli-legend-text cli-legend-sub">SE</span>
+        </div>
+      </div>
+      <div class="cli-legend-item">
+        <span class="cli-legend-text">EXTRACTION</span>
+        <img class="cli-legend-img" src="${assetBase}/extraction.png" alt="" />
+      </div>
+      <div class="cli-legend-item">
+        <span class="cli-legend-text">ABUTMENT</span>
+        <img class="cli-legend-img" src="${assetBase}/abutment.png" alt="" />
+      </div>
+    </div>`;
+}
+
+function reportFieldRow(label, value) {
+  return `<div class="cli-field"><span class="cli-field-label">${escapeHtml(label)} :</span><span class="cli-field-value">${escapeHtml(value || "")}</span></div>`;
+}
+
+async function generateReport() {
+  const caseLabel = state.caseIntID ?? "Unknown";
+  const assetBase = `${window.location.origin}/assets/clinicalInfo`;
+  const creationDate = new Date().toLocaleString("sv-SE").replace("T", " ").slice(0, 19);
+
+  const previewEl = document.getElementById("previewImage");
+  const previewSrc = previewEl?.currentSrc || previewEl?.src || "";
+
+  let jaw2dSrc = "";
+  try {
+    jaw2dSrc = (await captureJawJpegDataUrl()) || "";
+  } catch (err) {
+    console.warn("Failed to capture 2D jaw for report:", err);
+  }
+
+  const upperRow = buildReportRowHtml(UPPER_TEETH, assetBase);
+  const lowerRow = buildReportRowHtml(LOWER_TEETH, assetBase);
+  const legend = buildReportLegendHtml(assetBase);
 
   const html = `<!doctype html>
 <html><head><meta charset="utf-8" />
-<title>SmartRPD Report — Case ${caseLabel}</title>
+<title>SmartRPD Report — Case ${escapeHtml(caseLabel)}</title>
 <style>
-  body { font-family: "Segoe UI", sans-serif; color: #2f3b46; padding: 28px; }
-  h1 { font-size: 1.3rem; margin: 0 0 4px; }
-  h2 { font-size: 1rem; margin: 24px 0 8px; border-bottom: 1px solid #dde3ea; padding-bottom: 4px; }
-  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
-  .report-item { margin: 0; border: 1px solid #dde3ea; border-radius: 6px; padding: 8px; background: #fff; }
-  .report-item img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-  .report-item-empty { color: #b3bcc6; text-align: center; padding: 24px; font-size: 0.85rem; }
-  figcaption { margin-top: 6px; font-size: 0.75rem; color: #6b7682; text-align: center; }
-  .empty { color: #8895a4; font-size: 0.85rem; font-style: italic; }
-  @media print { body { padding: 14px; } }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", "Montserrat", sans-serif; color: #2f3b46; margin: 0; padding: 28px; }
+  .cli-page { page-break-after: always; }
+  .cli-page:last-child { page-break-after: auto; }
+  .cli-meta { display: grid; grid-template-columns: 1fr 1fr; row-gap: 14px; column-gap: 32px; margin-bottom: 28px; }
+  .cli-field { font-size: 0.95rem; }
+  .cli-field-label { color: #4a5663; margin-right: 6px; }
+  .cli-field-value { color: #2f3b46; font-weight: 500; }
+  .cli-field.cli-field-creation .cli-field-value { color: #b0341c; font-weight: 600; }
+
+  .cli-chart { display: flex; flex-direction: column; gap: 6px; margin-top: 18px; }
+  .cli-chart-label { text-align: center; font-weight: 700; letter-spacing: 0.12em; font-size: 0.78rem; color: #2aa67c; }
+  .cli-row { display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px; }
+
+  .cli-tooth { position: relative; display: flex; flex-direction: column; align-items: center; background: #fafafa; border: 1px solid #e1e4e8; border-radius: 4px; padding: 4px 1px; min-height: 130px; }
+  .cli-tooth-number { font-size: 0.7rem; color: #2a3340; font-weight: 600; margin-bottom: 2px; }
+  .cli-tooth-img-wrap { position: relative; flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .cli-tooth-stack { display: flex; flex-direction: column; align-items: center; line-height: 0; }
+  .cli-tooth-img { max-width: 100%; object-fit: contain; display: block; }
+  .cli-tooth-crown { max-height: 40px; }
+  .cli-tooth-root { max-height: 75px; }
+  .cli-tooth-full { max-height: 115px; }
+  .cli-tooth-img.is-mirrored { transform: scaleX(-1); }
+  .cli-tooth-cross { position: absolute; inset: 0; pointer-events: none; }
+  .cli-tooth-cross::before, .cli-tooth-cross::after { content: ""; position: absolute; left: 50%; top: 50%; width: 260%; height: 3px; background: #b0341c; transform-origin: center; border-radius: 2px; }
+  .cli-tooth-cross::before { transform: translate(-50%, -50%) rotate(72deg); }
+  .cli-tooth-cross::after { transform: translate(-50%, -50%) rotate(-72deg); }
+
+  .cli-legend-title { color: #2aa67c; letter-spacing: 0.1em; font-weight: 700; font-size: 0.85rem; margin: 24px 0 8px; }
+  .cli-legend-grid { display: flex; flex-wrap: wrap; row-gap: 14px; column-gap: 18px; align-items: flex-end; }
+  .cli-legend-item { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 36px; }
+  .cli-legend-row-item { align-items: flex-start; }
+  .cli-legend-cluster { display: flex; gap: 6px; align-items: flex-end; }
+  .cli-legend-text { font-size: 0.62rem; font-weight: 700; color: #2a3340; text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; }
+  .cli-legend-sub { align-self: flex-end; padding-bottom: 4px; }
+  .cli-legend-img { height: 36px; max-width: 42px; object-fit: contain; display: block; }
+  .cli-mob { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 4px; font-size: 0.68rem; font-weight: 700; color: #fff; }
+  .cli-mob-1 { background: #4caf50; }
+  .cli-mob-2 { background: #f6c344; color: #3a2c00; }
+  .cli-mob-3 { background: #c0392b; }
+
+  .cli-3d-page { display: flex; align-items: center; justify-content: center; min-height: 90vh; }
+  .cli-3d-page img { max-width: 100%; max-height: 90vh; object-fit: contain; }
+  .cli-3d-page .cli-empty { color: #8895a4; font-style: italic; }
+
+  @media print {
+    body { padding: 14px; }
+    .cli-row { gap: 2px; }
+  }
 </style></head>
 <body>
-  <h1>SmartRPD — Case ${caseLabel}</h1>
-  <div>Generated ${escapeHtml(new Date().toLocaleString())}</div>
+  <section class="cli-page">
+    <div class="cli-meta">
+      ${reportFieldRow("Customer", "")}
+      ${reportFieldRow("Creation Date", creationDate).replace("cli-field", "cli-field cli-field-creation")}
+      ${reportFieldRow("Case Number", caseLabel)}
+      ${reportFieldRow("Date Required", "")}
+      ${reportFieldRow("Tooth Shade", "")}
+      ${reportFieldRow("Work Category", "")}
+    </div>
 
-  <h2>2D Setup &amp; Design — Instructions</h2>
-  <div class="grid">${renderItems(data.instructions, "Instructions")}</div>
+    <section class="cli-chart">
+      <div class="cli-chart-label">BUCCAL</div>
+      <div class="cli-row">${upperRow}</div>
+      <div class="cli-chart-label">LINGUAL</div>
+      <div class="cli-row">${lowerRow}</div>
+      <div class="cli-chart-label">BUCCAL</div>
+    </section>
 
-  <h2>3D Design — Viewcaptures</h2>
-  <div class="grid">${renderItems(data.viewcaptures, "Viewcaptures")}</div>
-  <script>setTimeout(() => window.print(), 300);<\/script>
+    <div class="cli-legend-title">LEGEND</div>
+    ${legend}
+
+    <div class="cli-field" style="margin-top:18px;">
+      <span class="cli-field-label">Additional Comments :</span>
+    </div>
+  </section>
+
+  <section class="cli-page cli-3d-page">
+    ${jaw2dSrc ? `<img src="${jaw2dSrc}" alt="2D design" />` : `<div class="cli-empty">No 2D design available.</div>`}
+  </section>
+
+  <section class="cli-page cli-3d-page">
+    ${previewSrc ? `<img src="${escapeHtml(previewSrc)}" alt="3D preview" />` : `<div class="cli-empty">No 3D preview available.</div>`}
+  </section>
+
+  <script>window.addEventListener("load", () => setTimeout(() => window.print(), 400));<\/script>
 </body></html>`;
 
   const win = window.open("", "_blank");

@@ -40,10 +40,19 @@
     <section class="workspace-panel">
       <section class="panel arch-panel">
         <div class="arch-topbar">
-          <a id="backToCaseListBtn" class="back-to-case-list" href="case_list.html" title="Back to case list">
+          <a id="backToCaseListBtn" class="back-to-case-list" href="case_list.html" aria-label="Back" data-tooltip="Back">
             <i class="fa fa-arrow-left"></i>
           </a>
           <div id="caseLabel" class="case-label">Case: Unknown</div>
+          <button
+            type="button"
+            id="openClinicalInfoBtn"
+            class="clinical-info-btn"
+            aria-label="Clinical Information"
+            data-tooltip="Clinical Information"
+          >
+            <img class="clinical-info-logo" src="../../assets/clinicalInfo/clinicalnote.svg" alt="Clinical Info" width="35" height="35"/>
+          </button>
         </div>
 
         <div class="arch-controls">
@@ -554,6 +563,146 @@
         <button id="backConfirmBack" type="button">Back</button>
         <button id="backConfirmSaveBack" type="button">Save and Back</button>
       </div>
+    </div>
+  </div>
+
+  <div id="clinicalInfoModal" class="clinical-info-modal is-hidden" aria-hidden="true">
+    <div class="clinical-info-backdrop" aria-hidden="true"></div>
+    <div
+      class="clinical-info-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="clinicalInfoTitle"
+    >
+      <header class="clinical-info-topbar">
+        <h2 id="clinicalInfoTitle" class="clinical-info-srtitle">Clinical Info</h2>
+        <div class="clinical-info-topbar-actions">
+          <button type="button" id="clinicalInfoCloseBtn" class="clinical-info-action-btn">
+            CLOSE
+          </button>
+          <button type="button" id="clinicalInfoClearBtn" class="clinical-info-action-btn">
+            CLEAR NOTES
+          </button>
+          <button
+            type="button"
+            id="clinicalInfoSaveBtn"
+            class="clinical-info-action-btn clinical-info-action-btn-primary"
+          >
+            SAVE NOTES
+          </button>
+        </div>
+      </header>
+
+      <section class="clinical-info-legend" aria-label="Legend">
+        <div class="clinical-info-legend-title">LEGEND</div>
+        <div class="clinical-info-legend-grid">
+          <div class="clinical-info-legend-block">
+            <div class="clinical-info-legend-row">
+              <div class="clinical-info-legend-item">
+                <span class="clinical-info-legend-label-top">Mobility</span>
+                <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/mobility.png" alt="" />
+              </div>
+              <div class="clinical-info-legend-item">
+                <span class="clinical-info-legend-swatch clinical-info-mobility clinical-info-mobility--1">I</span>
+              </div>
+              <div class="clinical-info-legend-item">
+                <span class="clinical-info-legend-swatch clinical-info-mobility clinical-info-mobility--2">II</span>
+              </div>
+              <div class="clinical-info-legend-item">
+                <span class="clinical-info-legend-swatch clinical-info-mobility clinical-info-mobility--3">III</span>
+              </div>
+              <div class="clinical-info-legend-item">
+                <span class="clinical-info-legend-text">CLEAR</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block">
+            <div class="clinical-info-legend-item">
+              <span class="clinical-info-legend-label-top">ROOT CANAL THERAPY</span>
+              <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/root_canal.png" alt="" />
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block">
+            <div class="clinical-info-legend-row">
+              <div class="clinical-info-legend-item">
+                <span class="clinical-info-legend-label-top">Restoration</span>
+                <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/filling.png" alt="" />
+              </div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">AR</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">TCR</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">INLAY</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">ONLAY</span></div>
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block">
+            <div class="clinical-info-legend-item">
+              <span class="clinical-info-legend-label-top">CROWN</span>
+              <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/crown.png" alt="" />
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block">
+            <div class="clinical-info-legend-item">
+              <span class="clinical-info-legend-label-top">IMPLANT</span>
+              <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/implant.png" alt="" />
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block">
+            <div class="clinical-info-legend-item">
+              <span class="clinical-info-legend-label-top">ROOT STUMP</span>
+              <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/root_stump.png" alt="" />
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block">
+            <div class="clinical-info-legend-item">
+              <span class="clinical-info-legend-label-top">CRACKED</span>
+              <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/cracked.png" alt="" />
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block">
+            <div class="clinical-info-legend-row">
+              <div class="clinical-info-legend-item">
+                <span class="clinical-info-legend-label-top">Tilted Tooth</span>
+                <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/tilted.png" alt="" />
+              </div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">M</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">D</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">B</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">L</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">A</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text">SE</span></div>
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block">
+            <div class="clinical-info-legend-item">
+              <span class="clinical-info-legend-label-top">EXTRACTION</span>
+              <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/extraction.png" alt="" />
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block">
+            <div class="clinical-info-legend-item">
+              <span class="clinical-info-legend-label-top">ABUTMENT</span>
+              <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/abutment.png" alt="" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="clinical-info-chart" aria-label="Teeth chart">
+        <div class="clinical-info-chart-label">BUCCAL</div>
+        <div id="clinicalInfoUpperRow" class="clinical-info-row clinical-info-row-upper"></div>
+        <div class="clinical-info-chart-label">LINGUAL</div>
+        <div id="clinicalInfoLowerRow" class="clinical-info-row clinical-info-row-lower"></div>
+        <div class="clinical-info-chart-label">BUCCAL</div>
+      </section>
     </div>
   </div>
 

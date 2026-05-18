@@ -77,15 +77,6 @@ body {
   min-height: 740px;
 }
 
-
-.panel-header h1 {
-  margin: 0 0 8px;
-  font-size: 1rem;
-  font-weight: 500;
-  text-align: center;
-  color: #4f4f4f;
-}
-
 .preview-frame {
   flex: 1 1 0;
   min-height: 0;
@@ -405,7 +396,7 @@ body {
 
 .back-to-case-list {
   position: absolute;
-  left: 0;
+  left: -63px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -888,12 +879,6 @@ body {
   font-size: 1rem;
   font-weight: 500;
   color: var(--rose-700);
-}
-
-.design-hint {
-  margin: 0 0 10px;
-  font-size: 0.5rem;
-  color: #777;
 }
 
 .catalog-wrap { display: grid; gap: 10px; }
@@ -1559,6 +1544,9 @@ body {
     grid-row: 2;
     width: 100%;
   }
+    .back-to-case-list {
+  left: 0px;
+  }
 }
 
 /* Narrow viewports: keep icon + checkbox-label + delete + survey button on one line
@@ -1653,10 +1641,6 @@ body {
     padding-top: 0;
   }
 
-  .design-hint {
-    margin-bottom: 8px;
-  }
-
   .jaw-combined-canvas {
     overflow-x: auto;
     overflow-y: visible;
@@ -1678,6 +1662,10 @@ body {
 
   .jaw-lock-strip {
     min-width: var(--arch-jaw-min-width, 340px);
+  }
+
+  .back-to-case-list {
+  left: 0px;
   }
 }
 
@@ -2415,4 +2403,336 @@ body {
   .tooth.is-missing .tooth-image {
     opacity: 0.25;
   }
+}
+
+/* ---------- Clinical Info ---------- */
+
+.arch-topbar [data-tooltip] {
+  position: relative;
+}
+
+.arch-topbar [data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  transform: translate(-50%, -2px);
+  white-space: nowrap;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #BB0D27;
+  background: #ffffff;
+  color: #222222;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.2;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.06s ease-out, transform 0.06s ease-out;
+  z-index: 50;
+}
+
+.arch-topbar [data-tooltip]:hover::after,
+.arch-topbar [data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.clinical-info-btn {
+  position: absolute;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 8px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.clinical-info-btn:hover {
+  opacity: 0.75;
+}
+
+.clinical-info-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+}
+
+.clinical-info-modal.is-hidden { display: none !important; }
+
+.clinical-info-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(77, 34, 48, 0.4);
+}
+
+.clinical-info-panel {
+  position: absolute;
+  inset: 2vh 2vw;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(77, 34, 48, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: inherit;
+}
+
+.clinical-info-srtitle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
+}
+
+.clinical-info-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #e6dadd;
+  background: #fff;
+}
+
+.clinical-info-topbar-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.clinical-info-action-btn {
+  background: #fff;
+  color: var(--rose-700);
+  border: 1px solid var(--rose-500);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.clinical-info-action-btn:hover {
+  background: var(--rose-050);
+}
+
+.clinical-info-action-btn-primary {
+  background: #1f8a6b;
+  color: #fff;
+  border-color: #1f8a6b;
+}
+
+.clinical-info-action-btn-primary:hover {
+  background: #186e55;
+  border-color: #186e55;
+}
+
+.clinical-info-legend {
+  padding: 14px 22px;
+  border: 1px solid #d7dce4;
+  border-radius: 10px;
+  margin: 14px 20px 8px;
+  background:lightgray;
+  position: relative;
+}
+
+.clinical-info-legend-title {
+  color: #2aa67c;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  font-size: 0.85rem;
+  margin-bottom: 10px;
+}
+
+.clinical-info-legend-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.clinical-info-legend-block {
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.clinical-info-legend-row {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+}
+
+.clinical-info-legend-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.clinical-info-legend-label-top,
+.clinical-info-legend-text {
+  color: #2a3340;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 2px 4px;
+  white-space: nowrap;
+}
+
+.clinical-info-legend-text { font-size: 0.58rem; }
+.clinical-info-legend-label-top { font-size: 0.68rem; }
+
+.clinical-info-legend-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 0.66rem;
+  color: #fff;
+}
+
+.clinical-info-mobility--1 { background: #4caf50; }
+.clinical-info-mobility--2 { background: #f6c344; color: #3a2c00; }
+.clinical-info-mobility--3 { background: #c0392b; }
+
+.clinical-info-legend-img {
+  width: auto;
+  height: 40px;
+  max-width: 46px;
+  object-fit: contain;
+  display: block;
+}
+
+.clinical-info-chart {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 20px 20px;
+  overflow: auto;
+  min-height: 0;
+}
+
+.clinical-info-chart-label {
+  color: #2aa67c;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.clinical-info-row {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.clinical-info-tooth {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #f4f4f6;
+  border-radius: 6px;
+  padding: 6px 2px 8px;
+  min-height: 200px;
+}
+
+.clinical-info-tooth-number {
+  font-size: 0.78rem;
+  color: #2a3340;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.clinical-info-row-lower .clinical-info-tooth {
+  flex-direction: column-reverse;
+}
+
+.clinical-info-row-lower .clinical-info-tooth-number {
+  margin-bottom: 0;
+  margin-top: 4px;
+}
+
+.clinical-info-tooth-img-wrap {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.clinical-info-tooth-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0;
+}
+
+.clinical-info-tooth-img {
+  max-width: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  display: block;
+}
+
+.clinical-info-tooth-crown {
+  max-height: 58px;
+}
+
+.clinical-info-tooth-root {
+  max-height: 110px;
+}
+
+.clinical-info-tooth-full {
+  max-height: 170px;
+}
+
+.clinical-info-tooth-img.is-mirrored { transform: scaleX(-1); }
+
+.clinical-info-tooth-cross {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.clinical-info-tooth-cross::before,
+.clinical-info-tooth-cross::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 260%;
+  height: 4px;
+  background: #b0341c;
+  transform-origin: center;
+  border-radius: 2px;
+}
+
+.clinical-info-tooth-cross::before {
+  transform: translate(-50%, -50%) rotate(72deg);
+}
+
+.clinical-info-tooth-cross::after {
+  transform: translate(-50%, -50%) rotate(-72deg);
 }

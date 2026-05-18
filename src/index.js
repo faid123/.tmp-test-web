@@ -3083,10 +3083,19 @@ btnContainer.appendChild(edit2DStatic); */
 				roughness: 0.7
 			}); */
 
-        const stlLoader = new STLMeshLoader(slotMaterial);
-        const [mesh] = stlLoader.load(binarySTL, null);
+        const slotFilename = result.filename || `Slot ${slot}`;
+        const isLower = slotFilename.toLowerCase().includes("lower");
+        const undercutForSlot =
+          (isLower ? undercut_values[0] : undercut_values[1]) ?? "stl";
 
-        mesh.name = result.filename || `Slot ${slot}`;
+        const stlLoader = new STLMeshLoader(slotMaterial);
+        const [mesh, meshMaterials] = stlLoader.load(
+          binarySTL,
+          undercutForSlot
+        );
+        all_mesh_mat[slotFilename] = meshMaterials.slice();
+
+        mesh.name = slotFilename;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.userData = {

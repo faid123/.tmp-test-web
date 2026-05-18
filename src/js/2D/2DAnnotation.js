@@ -287,7 +287,7 @@ export function renderJaws() {
   return renderJawsImpl();
 }
 
-let meshAnnotationEnvImpl = () => ({ });
+let meshAnnotationEnvImpl = () => ({});
 
 export function registerMeshAnnotationEnv(fn) {
   meshAnnotationEnvImpl = fn;
@@ -760,8 +760,9 @@ function init() {
     import("./annotationLocks.js"),
     import("./annotationCatalog.js"),
     import("./noticeboard.js"),
+    import("./clinicalInfo.js"),
   ])
-    .then(([, teethModel, locks, catalog, noticeboard]) => {
+    .then(([, teethModel, locks, catalog, noticeboard, clinicalInfo]) => {
       teethModel.initializeTeethState();
       locks.restoreAnnotationFromStorage();
       bindHistoryControls();
@@ -777,6 +778,7 @@ function init() {
       locks.updateEditModeUI();
       bindBackNavigationDialog(locks);
       noticeboard.initNoticeboard();
+      clinicalInfo.initClinicalInfo();
       history.past = [cloneStateForHistory()];
       history.future = [];
       updateUndoRedoButtons();

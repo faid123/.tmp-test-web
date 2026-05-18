@@ -5,6 +5,10 @@ let OrbitControls = null;
 let STLLoader = null;
 
 const PREVIEW_MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
+const PREVIEW_FALLBACK_UUID = "AC4gRQXZJoNz9EhhW36Q8jMJXBsf";
+const SMARTRPD_API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
+// Default RPD jaw color used as the "no undercut" base in vertex-color renders.
+const DEFAULT_TOOTH_COLOR = [208 / 255, 190 / 255, 141 / 255];
 const preview3DState = {
   renderer: null,
   scene: null,
@@ -27,13 +31,26 @@ export async function loadInteractiveJawPreview(area) {
       teardown3DPreview();
       return false;
     }
+
+    // Fetch the heatmap up front so both render paths can use it.
+    const undercutPromise = fetchUndercutForCase();
+
+    const meshFiles = await fetchParameterisedMeshForCase();
+    if (meshFiles.length) {
+      const undercut = await undercutPromise;
+      init3DPreview(area);
+      await populateJawPreviewFromOFF(meshFiles, undercut);
+      return true;
+    }
+
     const jawFiles = await fetchJawFilesForCase();
     if (!jawFiles.length) {
       teardown3DPreview();
       return false;
     }
+    const undercut = await undercutPromise;
     init3DPreview(area);
-    await populateJawPreview(jawFiles);
+    await populateJawPreview(jawFiles, undercut);
     return true;
   } finally {
     hidePreviewLoading(area);
@@ -123,8 +140,8 @@ async function fetchJawFilesForCase() {
   ];
 
   const endpoints = [
-    "https://live.api.smartrpdai.com/api/smartrpd/stl/raw/get",
-    "https://live.api.smartrpdai.com/api/smartrpd/stl/get",
+    `${SMARTRPD_API_BASE}/stl/raw/get`,
+    `${SMARTRPD_API_BASE}/stl/get`,
   ];
 
   for (const endpoint of endpoints) {
@@ -149,6 +166,119 @@ async function fetchJawFilesForCase() {
     }
   }
   return [];
+}
+
+async function fetchParameterisedMeshForCase() {
+  if (!state.caseIntID) return [];
+  const user = getLoggedInUser();
+  const uuid = user?.uuid || PREVIEW_FALLBACK_UUID;
+
+  // Match index.js payload exactly: a one-element array wrapping a single object
+  // with all fields (machine_id, uuid, case_int_id, caseIntID, jaw_type).
+  const data = {
+    machine_id: PREVIEW_MACHINE_ID,
+    uuid,
+    case_int_id: state.caseIntID,
+    caseIntID: state.caseIntID,
+    jaw_type: 2,
+  };
+
+  // Try multiple known endpoint spellings/variants because some deployments use
+  // parameterisation, others parameterization, and some expose mesh under surface.
+  const endpoints = [
+    "/parameterisation/mesh/getall",
+    "/parameterization/mesh/getall",
+    "/surface/getall",
+    "/surface/mesh/getall",
+  ];
+  const collected = [];
+
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetch(`${SMARTRPD_API_BASE}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([data]),
+      });
+      if (!res.ok) {
+        console.warn(`[preview3D] ${endpoint} HTTP ${res.status}`);
+        continue;
+      }
+      const body = await res.json();
+      const list = Array.isArray(body) ? body : [body];
+      for (const item of list) {
+        if (!item?.data) continue;
+        const type = String(item.type || item.jaw_type || "").toLowerCase();
+        const name = String(item.filename || "").toLowerCase();
+        const isJaw = type.includes("upper") || type.includes("lower") || name.includes("upper") || name.includes("lower");
+        const isClosedVariant = name.includes("closed");
+        if (isJaw && !isClosedVariant) collected.push(item);
+      }
+      if (collected.length) break;
+    } catch (err) {
+      console.warn(`[preview3D] ${endpoint} fetch failed:`, err);
+    }
+  }
+  return collected;
+}
+
+async function fetchUndercutForCase() {
+  if (!state.caseIntID) return { upper: null, lower: null };
+  const user = getLoggedInUser();
+  const uuid = user?.uuid || PREVIEW_FALLBACK_UUID;
+
+  const baseBody = {
+    machine_id: PREVIEW_MACHINE_ID,
+    uuid,
+    case_int_id: state.caseIntID,
+    caseIntID: state.caseIntID,
+  };
+
+  const requestJaw = async (jawType, label) => {
+    try {
+      const res = await fetch(`${SMARTRPD_API_BASE}/undercutheatmap/get`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...baseBody, jaw_type: jawType }),
+      });
+      if (!res.ok) {
+        console.warn(`[preview3D] undercut ${label} HTTP ${res.status}`);
+        return null;
+      }
+      return await res.json();
+    } catch (err) {
+      console.warn(`[preview3D] undercut ${label} fetch failed:`, err);
+      return null;
+    }
+  };
+
+  const normalizeJawType = (value) => {
+    if (value === 2 || value === "2") return "upper";
+    if (value === 1 || value === "1") return "lower";
+    const s = String(value || "").toLowerCase();
+    if (s.includes("upper")) return "upper";
+    if (s.includes("lower")) return "lower";
+    return null;
+  };
+
+  const [upperReq, lowerReq] = await Promise.all([
+    requestJaw(2, "upper"),
+    requestJaw(1, "lower"),
+  ]);
+
+  let upper = null;
+  let lower = null;
+  for (const item of [upperReq, lowerReq]) {
+    const key = normalizeJawType(item?.jaw_type);
+    if (key === "upper") upper = item;
+    else if (key === "lower") lower = item;
+  }
+
+  // Fallback to request-order if backend omits jaw_type.
+  if (!upper) upper = upperReq;
+  if (!lower) lower = lowerReq;
+
+  return { upper, lower };
 }
 
 function init3DPreview(area) {
@@ -339,22 +469,82 @@ function init3DPreview(area) {
   animate();
 }
 
-async function populateJawPreview(jawFiles) {
+async function populateJawPreview(jawFiles, undercut) {
   const loader = new STLLoader();
   const upperGroup = new THREE.Group();
   const lowerGroup = new THREE.Group();
-  const materialUpper = new THREE.MeshStandardMaterial({ color: 0xd7b794, metalness: 0.05, roughness: 0.6 });
-  const materialLower = new THREE.MeshStandardMaterial({ color: 0xc8a882, metalness: 0.05, roughness: 0.62 });
+  const heatmapMaterial = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    metalness: 0.05,
+    roughness: 0.6,
+    side: THREE.DoubleSide,
+  });
+  const flatUpper = new THREE.MeshStandardMaterial({ color: 0xd7b794, metalness: 0.05, roughness: 0.6 });
+  const flatLower = new THREE.MeshStandardMaterial({ color: 0xc8a882, metalness: 0.05, roughness: 0.62 });
 
   for (const file of jawFiles) {
-    const geometry = loader.parse(base64ToArrayBuffer(file.data));
-    geometry.computeVertexNormals();
-    const mesh = new THREE.Mesh(geometry, isUpper(file) ? materialUpper : materialLower);
-    if (isUpper(file)) {
-      upperGroup.add(mesh);
-    } else {
-      lowerGroup.add(mesh);
+    const upper = isUpper(file);
+    const primarySurface = upper ? undercut?.upper : undercut?.lower;
+    const secondarySurface = upper ? undercut?.lower : undercut?.upper;
+
+    const surveyingVerts = (surface) => {
+      const bytes = surface?.surveying_values?.data;
+      if (!bytes?.length) return 0;
+      return Math.floor(new Float32Array(new Uint8Array(bytes).buffer).length / 4);
+    };
+
+    let geometry = loader.parse(base64ToArrayBuffer(file.data));
+    let useHeatmap = false;
+    const merged = mergeStlVertices(geometry);
+    const mergedVerts = merged.attributes.position.count;
+
+    const candidates = [
+      { label: upper ? "upper" : "lower", surface: primarySurface },
+      { label: upper ? "lower" : "upper", surface: secondarySurface },
+    ];
+
+    let picked = null;
+    for (const c of candidates) {
+      const heatmapVerts = surveyingVerts(c.surface);
+      if (heatmapVerts > 0 && heatmapVerts === mergedVerts) {
+        picked = c;
+        break;
+      }
     }
+
+    // No exact match — fall back to the primary (same-jaw) surface if it has heatmap
+    // data. The backend's dedup threshold can differ slightly from ours (e.g. 130613 vs
+    // 127895 verts on the lower jaw); applyUndercutVertexColors clips to the shorter
+    // length so trailing verts simply keep the default tooth color.
+    if (!picked && surveyingVerts(primarySurface) > 0) {
+      picked = { label: upper ? "upper" : "lower", surface: primarySurface };
+      console.warn("[preview3D] vertex/heatmap count mismatch — applying partial heatmap", {
+        file: file?.filename || file?.type || "unknown",
+        mergedVerts,
+        primaryHeatmapVerts: surveyingVerts(primarySurface),
+        oppositeHeatmapVerts: surveyingVerts(secondarySurface),
+      });
+    }
+
+    if (picked) {
+      geometry = merged;
+      applyUndercutVertexColors(geometry, picked.surface);
+      useHeatmap = true;
+      if (picked.surface !== primarySurface) {
+        console.warn("[preview3D] used opposite-jaw heatmap due to vertex match", {
+          file: file?.filename || file?.type || "unknown",
+          expectedJaw: upper ? "upper" : "lower",
+          usedJaw: picked.label,
+          mergedVerts,
+        });
+      }
+    }
+    geometry.computeVertexNormals();
+
+    const material = useHeatmap ? heatmapMaterial.clone() : (upper ? flatUpper : flatLower);
+    const mesh = new THREE.Mesh(geometry, material);
+    if (upper) upperGroup.add(mesh);
+    else lowerGroup.add(mesh);
   }
 
   const root = preview3DState.modelRoot;
@@ -373,6 +563,154 @@ async function populateJawPreview(jawFiles) {
   }
   applyJawVisibility();
   fitPreviewCamera();
+}
+
+async function populateJawPreviewFromOFF(meshFiles, undercut) {
+  const upperGroup = new THREE.Group();
+  const lowerGroup = new THREE.Group();
+
+  // vertexColors: true makes the per-vertex undercut RGB show through. Side: DoubleSide
+  // so the inside of the jaw isn't dark when the camera tilts under the occlusal plane.
+  const meshMaterial = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    metalness: 0.05,
+    roughness: 0.6,
+    side: THREE.DoubleSide,
+  });
+
+  for (const file of meshFiles) {
+    const offText = atob(file.data);
+    const geometry = parseOFFToGeometry(offText);
+    if (!geometry) continue;
+
+    const upper = isUpper(file);
+    const surface = upper ? undercut?.upper : undercut?.lower;
+    applyUndercutVertexColors(geometry, surface);
+
+    const mesh = new THREE.Mesh(geometry, meshMaterial.clone());
+    if (upper) upperGroup.add(mesh);
+    else lowerGroup.add(mesh);
+  }
+
+  const root = preview3DState.modelRoot;
+  if (!root) return;
+  root.clear();
+  if (upperGroup.children.length) root.add(upperGroup);
+  if (lowerGroup.children.length) root.add(lowerGroup);
+
+  centerRootOnCombinedBounds(root);
+
+  preview3DState.groups.upper = upperGroup.children.length ? upperGroup : null;
+  preview3DState.groups.lower = lowerGroup.children.length ? lowerGroup : null;
+  if (preview3DState.topControls) {
+    preview3DState.topControls.rowUpper.row.style.display = preview3DState.groups.upper ? "grid" : "none";
+    preview3DState.topControls.rowLower.row.style.display = preview3DState.groups.lower ? "grid" : "none";
+  }
+  applyJawVisibility();
+  fitPreviewCamera();
+}
+
+function parseOFFToGeometry(text) {
+  const lines = text.split("\n").filter((line) => line.trim().length > 0);
+  if (!lines.length || lines[0].trim() !== "OFF") return null;
+
+  const header = lines[1].trim().split(/\s+/).map(Number);
+  const numVertices = header[0];
+  const numFaces = header[1];
+  if (!Number.isFinite(numVertices) || !Number.isFinite(numFaces)) return null;
+
+  const vertices = new Float32Array(numVertices * 3);
+  for (let i = 0; i < numVertices; i += 1) {
+    const parts = lines[2 + i].trim().split(/\s+/);
+    vertices[i * 3] = Number(parts[0]);
+    vertices[i * 3 + 1] = Number(parts[1]);
+    vertices[i * 3 + 2] = Number(parts[2]);
+  }
+
+  const indices = [];
+  const faceStart = 2 + numVertices;
+  for (let i = 0; i < numFaces; i += 1) {
+    const parts = lines[faceStart + i].trim().split(/\s+/).map(Number);
+    if (parts[0] === 3) indices.push(parts[1], parts[2], parts[3]);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
+  geometry.setIndex(indices.length > 65535
+    ? new THREE.Uint32BufferAttribute(indices, 1)
+    : new THREE.Uint16BufferAttribute(indices, 1));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+// Mirrors STLMeshLoader.mergeVertices in src/STLMeshLoader.js — the backend computes
+// the undercut heatmap against the deduplicated STL, so we must dedupe with the same
+// threshold for vertex indices to align.
+function mergeStlVertices(geometry) {
+  const threshold = 1e-4;
+  const positions = geometry.attributes.position.array;
+  const merged = [];
+  const indices = [];
+  const map = {};
+  let next = 0;
+
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i];
+    const y = positions[i + 1];
+    const z = positions[i + 2];
+    const key = `${Math.round(x / threshold)},${Math.round(y / threshold)},${Math.round(z / threshold)}`;
+    if (map[key] === undefined) {
+      merged.push(x, y, z);
+      map[key] = next;
+      indices.push(next);
+      next += 1;
+    } else {
+      indices.push(map[key]);
+    }
+  }
+
+  const out = new THREE.BufferGeometry();
+  out.setAttribute("position", new THREE.Float32BufferAttribute(merged, 3));
+  out.setIndex(indices.length > 65535
+    ? new THREE.Uint32BufferAttribute(indices, 1)
+    : new THREE.Uint16BufferAttribute(indices, 1));
+  return out;
+}
+
+function applyUndercutVertexColors(geometry, surface) {
+  const vertexCount = geometry.attributes.position.count;
+  const colors = new Float32Array(vertexCount * 3);
+
+  // Default everything to the base tooth color.
+  for (let i = 0; i < vertexCount; i += 1) {
+    colors[i * 3] = DEFAULT_TOOTH_COLOR[0];
+    colors[i * 3 + 1] = DEFAULT_TOOTH_COLOR[1];
+    colors[i * 3 + 2] = DEFAULT_TOOTH_COLOR[2];
+  }
+
+  // surveying_values is the undercut heatmap (yellow→red). Channels of (1,1,1) mark
+  // "no undercut" — the API uses that as a sentinel, so we keep the default color there.
+  const surveyingBuffer = surface?.surveying_values?.data;
+  if (surveyingBuffer) {
+    const heatmap = new Float32Array(new Uint8Array(surveyingBuffer).buffer);
+    const heatmapVerts = Math.floor(heatmap.length / 4);
+    // When counts differ (backend dedup vs frontend dedup), color the overlapping
+    // prefix and leave the rest as default — better than skipping the heatmap entirely.
+    const limit = Math.min(vertexCount, heatmapVerts);
+    for (let i = 0; i < limit; i += 1) {
+      let r = heatmap[i * 4];
+      let g = heatmap[i * 4 + 1];
+      let b = heatmap[i * 4 + 2];
+      if (r === 1) r = DEFAULT_TOOTH_COLOR[0];
+      if (g === 1) g = DEFAULT_TOOTH_COLOR[1];
+      if (b === 1) b = DEFAULT_TOOTH_COLOR[2];
+      colors[i * 3] = r;
+      colors[i * 3 + 1] = g;
+      colors[i * 3 + 2] = b;
+    }
+  }
+
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 }
 
 function centerRootOnCombinedBounds(root) {
