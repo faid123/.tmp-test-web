@@ -523,14 +523,39 @@ export function hasMissingTeethOnBothSidesForBar(toothId, jaw, teethById) {
   return false;
 }
 
+// Check whether a specific bar placement is still backed by a mesh-bearing
+// tooth at the surface's implied distance and direction. Mirrors the
+// convention used by `getBarPlacementSurfaceForTooth`:
+//   side === "distal"  ⇒ mesh sits in the same direction as the mesial
+//   side === "mesial"  ⇒ mesh sits in the opposite direction.
+function isBarPlacementBackedByMesh(toothId, jaw, surface, teethById) {
+  const match = BAR_SURFACE_RE.exec(String(surface || "").toLowerCase());
+  if (!match) return false;
+  const [, tier, side] = match;
+  const distance = tier === "d1" ? 1 : 2;
+
+  const order = TOOTH_ORDER[jaw];
+  if (!Array.isArray(order)) return false;
+  const toothIndex = order.indexOf(String(toothId));
+  if (toothIndex < 0) return false;
+
+  const rightHemisphereStartIndex = order.length / 2;
+  const mesialDirection = toothIndex < rightHemisphereStartIndex ? 1 : -1;
+  const meshDirection = side === "distal" ? mesialDirection : -mesialDirection;
+  const meshIndex = toothIndex + meshDirection * distance;
+  if (meshIndex < 0 || meshIndex >= order.length) return false;
+  const meshTooth = teethById[order[meshIndex]];
+  return Boolean(meshTooth) && toothHasAnyMeshPlacement(meshTooth);
+}
+
 // Drop any bar placements whose anchor tooth no longer has a mesh-bearing
-// neighbor within the allowed distance — i.e., the mesh they depended on
-// has since been removed. Mutates `teethById` placements in place.
+// neighbor at the exact distance + direction the bar points. Catches both
+// "all nearby mesh removed" and "mesh removed but other mesh still in
+// range, just in the wrong direction" cases. Mutates `teethById` in place.
 export function pruneInvalidBarPlacementsInJaw(teethById, jaw) {
   if (!teethById || typeof teethById !== "object") return;
   if (!Array.isArray(TOOTH_ORDER?.[jaw])) return;
 
-  const validAnchors = getBarSuggestibleToothIdSet(teethById, jaw);
   for (const toothId of TOOTH_ORDER[jaw]) {
     const tooth = teethById[toothId];
     if (!tooth || !Array.isArray(tooth.componentPlacements)) continue;
@@ -538,7 +563,7 @@ export function pruneInvalidBarPlacementsInJaw(teethById, jaw) {
     const next = original.filter((entry) => {
       if (!entry || !isBarComponent(entry.componentId)) return true;
       if (!isBarPlacementSurface(entry.surface)) return true;
-      return validAnchors.has(String(toothId));
+      return isBarPlacementBackedByMesh(toothId, jaw, entry.surface, teethById);
     });
     if (next.length !== original.length) {
       tooth.componentPlacements = next;

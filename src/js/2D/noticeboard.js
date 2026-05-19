@@ -604,7 +604,11 @@ function reportFieldRow(label, value) {
 }
 
 async function generateReport() {
-  const caseLabel = state.caseIntID ?? "Unknown";
+  // Prefer the full "UID {id}:{name}" label rendered in the topbar so the
+  // report matches what the user sees on screen.
+  const topbarLabelEl = document.getElementById("caseLabel");
+  const topbarLabel = (topbarLabelEl?.textContent || "").replace(/^Case:\s*/i, "").trim();
+  const caseLabel = topbarLabel || (state.caseIntID ?? "Unknown");
   const assetBase = new URL("../../assets/clinicalInfo", window.location.href).href;
   const creationDate = new Date().toLocaleString("sv-SE").replace("T", " ").slice(0, 19);
   const caseNote = loadCaseNote(state.caseIntID);
@@ -647,14 +651,14 @@ async function generateReport() {
   .cli-chart-label { text-align: center; font-weight: 700; letter-spacing: 0.12em; font-size: 0.78rem; color: #2aa67c; }
   .cli-row { display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px; }
 
-  .cli-tooth { position: relative; display: flex; flex-direction: column; align-items: center; background: #fafafa; border: 1px solid #e1e4e8; border-radius: 4px; padding: 4px 1px; min-height: 160px; }
-  .cli-tooth-number { font-size: 0.7rem; color: #2a3340; font-weight: 600; margin-bottom: 2px; }
+  .cli-tooth { position: relative; display: flex; flex-direction: column; align-items: center; background: #fafafa; border: 1px solid #e1e4e8; border-radius: 4px; padding: 3px 1px; min-height: 108px; }
+  .cli-tooth-number { font-size: 0.62rem; color: #2a3340; font-weight: 600; margin-bottom: 1px; }
   .cli-tooth-img-wrap { position: relative; flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .cli-tooth-stack { display: flex; flex-direction: column; align-items: center; line-height: 0; }
   .cli-tooth-img { max-width: 100%; object-fit: contain; display: block; }
-  .cli-tooth-crown { max-height: 52px; }
-  .cli-tooth-root { max-height: 96px; }
-  .cli-tooth-full { max-height: 148px; }
+  .cli-tooth-crown { max-height: 34px; }
+  .cli-tooth-root { max-height: 60px; }
+  .cli-tooth-full { max-height: 96px; }
   .cli-tooth-img.is-mirrored { transform: scaleX(-1); }
   .cli-tooth-cross { position: absolute; inset: 0; pointer-events: none; }
   .cli-tooth-cross::before, .cli-tooth-cross::after { content: ""; position: absolute; left: 50%; top: 50%; width: 260%; height: 3px; background: #b0341c; transform-origin: center; border-radius: 2px; }
@@ -665,7 +669,7 @@ async function generateReport() {
   .cli-tooth-img.is-tint-yellow { filter: brightness(0) saturate(100%) invert(72%) sepia(85%) saturate(2200%) hue-rotate(2deg) brightness(105%) contrast(105%); }
   .cli-tooth-img.is-tint-red { filter: brightness(0) saturate(100%) invert(22%) sepia(99%) saturate(6000%) hue-rotate(355deg) brightness(95%) contrast(105%); }
   .cli-tooth-img.is-tint-green { filter: brightness(0) saturate(100%) invert(45%) sepia(85%) saturate(2500%) hue-rotate(105deg) brightness(95%) contrast(105%); }
-  .cli-tooth-img.cli-tooth-root.is-implant { max-height: 60px; max-width: 32px; width: auto; height: auto; }
+  .cli-tooth-img.cli-tooth-root.is-implant { max-height: 38px; max-width: 22px; width: auto; height: auto; }
 
   .cli-tooth-tilt { position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.4rem; font-weight: 900; color: #1f8a6b !important; padding: 2px 6px; border-radius: 6px; z-index: 3; line-height: 1; pointer-events: none; }
   .cli-tooth.is-upper .cli-tooth-tilt { bottom: 30px; }
@@ -691,15 +695,16 @@ async function generateReport() {
   .cli-legend-cluster { display: flex; gap: 6px; align-items: flex-end; }
   .cli-legend-text { font-size: 0.62rem; font-weight: 700; color: #2a3340; text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; }
   .cli-legend-sub { align-self: flex-end; padding-bottom: 4px; }
-  .cli-legend-img { height: 36px; max-width: 42px; object-fit: contain; display: block; }
+  .cli-legend-img { height: 28px; max-width: 34px; object-fit: contain; display: block; }
   .cli-mob { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 4px; font-size: 0.68rem; font-weight: 700; color: #fff; }
   .cli-mob-1 { background: #4caf50; }
   .cli-mob-2 { background: #f6c344; color: #3a2c00; }
   .cli-mob-3 { background: #c0392b; }
 
-  .cli-3d-page { display: flex; align-items: center; justify-content: center; min-height: 90vh; }
-  .cli-3d-page img { max-width: 100%; max-height: 90vh; object-fit: contain; }
+  .cli-3d-page { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 90vh; gap: 12px; }
+  .cli-3d-page img { max-width: 100%; max-height: 86vh; object-fit: contain; }
   .cli-3d-page .cli-empty { color: #8895a4; font-style: italic; }
+  .cli-page-caseid { font-size: 1rem; font-weight: 700; color: #2aa67c; letter-spacing: 0.05em; }
 
   @media print {
     body { padding: 14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -740,6 +745,7 @@ async function generateReport() {
   </section>
 
   <section class="cli-page cli-3d-page">
+    <div class="cli-page-caseid">Case: ${escapeHtml(caseLabel)}</div>
     ${jaw2dSrc ? `<img src="${jaw2dSrc}" alt="2D design" />` : `<div class="cli-empty">No 2D design available.</div>`}
   </section>
 

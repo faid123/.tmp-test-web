@@ -591,18 +591,30 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
       })
     );
 
-    // Tightly-bounded hit target at the bar's tooth-side anchor so clicks
-    // on the surrounding transparent area of the bar's bounding rect fall
-    // through to whatever is underneath (e.g. a plate's hit target on a
-    // neighboring tooth). Without this, the full image rectangle catches
-    // clicks even where the bar SVG renders nothing.
+    // Hit target sized to roughly half the bar image so users can click
+    // anywhere on the visible bar to toggle it without catching too much
+    // of the surrounding transparent bounding rect (which would block
+    // clicks on neighboring teeth). Tuned to be comfortable while still
+    // letting genuinely off-bar clicks fall through.
+    //
+    // Only intercept clicks when this exact bar is the active tool —
+    // otherwise the hit target would cover adjacent teeth and prevent
+    // their tooth-level interactions (radial quick-pick, rest suggestion
+    // points, etc.) when the user isn't in bar mode.
+    const barIsActiveTool =
+      !state.removeComponentMode &&
+      state.selectedComponentId === placement.componentId;
+    const hitRadius = Math.max(5, Math.min(width, height) * 0.32);
     const barHitTarget = svgEl("circle", {
       cx: "0",
       cy: "0",
-      r: "18",
+      r: String(hitRadius.toFixed(1)),
       class: `bar-placement-hit-target bar-placement-${barSurface}`,
       "data-surface": barSurface,
       "data-component-id": placement.componentId,
+      // Use inline style so this wins against the
+      // `.bar-placement-hit-target { pointer-events: visible }` CSS rule.
+      style: barIsActiveTool ? "" : "pointer-events: none;",
     });
     barHitTarget.addEventListener("click", (event) => {
       if (state.removeComponentMode) return;
