@@ -19,39 +19,46 @@
       <!-- 左侧主列表 -->
       <div class="case-list">
         <div class="case-header">
-          <div class="top-row">
-            <button class="create-case">NEW CASE</button>
-            <button class="logout" type="button" title="Log out">
-              <i class="fa fa-right-from-bracket"></i>
+          <div class="case-toolbar">
+            <button id="notificationBtn" class="toolbar-btn toolbar-btn-notifications">
+              <i class="fa fa-bell" aria-hidden="true"></i>
+              <span>NOTIFICATIONS</span>
+              <span id="notificationDot" class="notif-dot" aria-hidden="true"></span>
+            </button>
+
+            <div class="toolbar-filter">
+              <label for="filter-status">FILTER BY STATUS</label>
+              <select id="filter-status" class="status-dropdown">
+                <option value="all">ALL</option>
+                <option value="na">N/A</option>
+                <option value="draft">Draft</option>
+                <option value="2d_design_pending">2D design pending</option>
+                <option value="2d_design_drafted">2D design drafted</option>
+                <option value="2d_design_approved">2D design approved</option>
+                <option value="3d_design_pending">3D design pending</option>
+                <option value="3d_design_drafted">3D design drafted</option>
+                <option value="3d_design_approved">3D design approved</option>
+                <option value="in_production">In production</option>
+                <option value="out_for_delivery">Out for delivery</option>
+                <option value="delivered">Delivered</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+
+            <button class="toolbar-btn toolbar-btn-primary create-case" type="button">
+              CREATE NEW CASE
+            </button>
+
+            <button id="refreshListBtn" class="toolbar-btn refresh" type="button">
+              <i class="fa fa-arrows-rotate" aria-hidden="true"></i>
+              <span>REFRESH</span>
+            </button>
+
+            <button class="toolbar-btn logout" type="button" title="Log out">
               <span>LOGOUT</span>
             </button>
           </div>
-          <div class="toolbar-row">
-            <div class="toolbar-group">
-              <label for="dateFilterInput">Filter by Date</label>
-              <div class="input-wrap">
-                <input id="dateFilterInput" type="date" />
-                <button id="clearDateBtn" class="clear-btn" type="button">x</button>
-              </div>
-            </div>
-            <div class="toolbar-group">
-              <label for="searchCaseInput">Search Case Name</label>
-              <div class="input-wrap search-wrap">
-                <button id="searchBtn" class="search-btn" type="button" aria-label="Search"><i class="fa fa-search"></i></button>
-                <input id="searchCaseInput" type="text" placeholder="Search by name…" />
-              </div>
-            </div>
-            <label class="checkbox-wrap" for="todayOnly">
-              <input id="todayOnly" type="checkbox" />
-              <span>FILTER CREATED TODAY</span>
-            </label>
-            <button id="refreshListBtn" class="refresh" type="button">REFRESH LIST</button>
-          </div>
 
-          <button id="notificationBtn" class="notifications hidden">
-            NOTIFICATIONS
-            <span id="notificationDot" class="notif-dot" aria-hidden="true"></span>
-          </button>
           <!-- 通知弹出框 -->
           <div id="notificationPopup" class="notification-popup hidden">
             <div class="notification-header">
@@ -61,24 +68,6 @@
             <div id="notificationList" class="notification-list">
               <!-- 通知列表将由 JS 动态插入 -->
             </div>
-          </div>
-          <div class="filter hidden">
-            <label for="filter-status">FILTER BY STATUS</label>
-            <select id="filter-status" class="status-dropdown">
-              <option value="all">ALL</option>
-              <option value="na">N/A</option>
-              <option value="draft">Draft</option>
-              <option value="2d_design_pending">2D design pending</option>
-              <option value="2d_design_drafted">2D design drafted</option>
-              <option value="2d_design_approved">2D design approved</option>
-              <option value="3d_design_pending">3D design pending</option>
-              <option value="3d_design_drafted">3D design drafted</option>
-              <option value="3d_design_approved">3D design approved</option>
-              <option value="in_production">In production</option>
-              <option value="out_for_delivery">Out for delivery</option>
-              <option value="delivered">Delivered</option>
-              <option value="completed">Completed</option>
-            </select>
           </div>
         </div>
 
@@ -92,19 +81,22 @@
           <table class="case-table">
             <thead>
               <tr>
-                <th class="sortable" data-sort="case_id" style="width: 30%">
+                <th class="sortable" data-sort="case_id" style="width: 22%">
                   CASE NAME
                 </th>
-                <th class="sortable col-date" data-sort="creation_date" style="width: 20%">
-                  DATE CREATED
+                <th class="sortable col-date" data-sort="creation_date" style="width: 18%">
+                  DATE REQUESTED
                 </th>
-                <th class="sortable col-date" data-sort="last_updated" style="width: 20%">
-                  LAST EDITED
+                <th class="sortable col-date" data-sort="expected_date" style="width: 14%">
+                  DUE DATE
                 </th>
-                <th class="sortable" data-sort="username" style="width: 24%">
-                  CASE OWNER
+                <th class="sortable" data-sort="new_status" style="width: 14%">
+                  STATUS
                 </th>
-                <th class="col-action" style="width: 6%"></th>
+                <th class="sortable" data-sort="assigned_to" style="width: 20%">
+                  ASSIGNED TO
+                </th>
+                <th class="col-action" style="width: 12%">ACTIONS</th>
               </tr>
             </thead>
           </table>
@@ -384,7 +376,7 @@
 
 
     <script type="module" src="../js/caseManagement.js"></script>
-    <!-- <script type="module" src="../js/createCase.js"></script> -->
+    <script type="module" src="../js/createCase.js"></script>
     <script type="module" src="../js/notifications.js"></script>
     <script type="module" src="../js/versionHistory.js"></script>
     <script>

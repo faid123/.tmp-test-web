@@ -47,6 +47,82 @@ async function fetchCases() {
   }
 }
 
+// 通用：删除指定 case
+async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
+  const user = getLoggedInUser();
+  if (!caseId || !user?.uuid) {
+    alert("⚠️ Unable to delete: missing case id or login.");
+    return false;
+  }
+
+  if (!skipConfirm) {
+    const confirmed = confirm("Are you sure you want to delete this case?");
+    if (!confirmed) return false;
+  }
+
+  const numericCaseId =
+    typeof caseId === "number" ? caseId : Number(caseId);
+  const caseIdForApi = Number.isFinite(numericCaseId) ? numericCaseId : caseId;
+
+  const requestBody = JSON.stringify([
+    {
+      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      uuid: user.uuid,
+      caseIntID: caseIdForApi,
+    },
+    { case_int_id: caseIdForApi },
+  ]);
+
+  console.log("[case/delete] →", { caseId: caseIdForApi, body: requestBody });
+
+  try {
+    const response = await fetch(
+      `https://live.api.smartrpdai.com/api/smartrpd/case/delete/${caseIdForApi}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: requestBody,
+      }
+    );
+
+    const rawText = await response.text();
+    console.log("[case/delete] ←", response.status, rawText);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${rawText.slice(0, 200)}`);
+    }
+
+    currentCases = currentCases.filter(
+      (c) =>
+        c.id !== caseId &&
+        c.case_int_id !== caseId &&
+        c.case_id !== caseId &&
+        c.id !== caseIdForApi &&
+        c.case_int_id !== caseIdForApi
+    );
+    populateTable(currentCases);
+
+    if (
+      window.selectedCaseId === caseId ||
+      window.selectedCaseId === caseIdForApi
+    ) {
+      window.selectedCaseId = null;
+      const nameDisplay = document.getElementById("caseNameDisplay");
+      if (nameDisplay) nameDisplay.textContent = "";
+      ["selected-case", "created-by", "date-created", "last-edited"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = "";
+      });
+    }
+
+    return true;
+  } catch (err) {
+    console.error("❌ Delete failed:", err);
+    alert(`❌ Failed to delete case.\n\n${err.message || err}`);
+    return false;
+  }
+}
+
 // 渲染病例表格
 function populateTable(cases) {
   const sel = document.getElementById("filter-status");
@@ -58,34 +134,46 @@ function populateTable(cases) {
 
   if (!cases || cases.length === 0) {
     tbody.innerHTML =
-      "<tr><td colspan='5' style='text-align:center;'>No cases found</td></tr>";
+      "<tr><td colspan='6' style='text-align:center;'>No cases found</td></tr>";
     return;
   }
 
   cases.forEach((caseItem) => {
     const row = document.createElement("tr");
-    row.dataset.caseId   = caseItem.id || caseItem.case_int_id;  
+    row.dataset.caseId   = caseItem.id || caseItem.case_int_id;
 
-    // 🔍 获取附加数据（包括 expected_date, new_status, assigned_to）
-    const assignedTo = caseItem.assigned_to || "N/A";
-
-    // row 开始处
-    // console.log("[row] id", caseItem.id, {
-    //   due_date: caseItem.due_date,
-    //   new_status: caseItem.new_status,
-    //   assigned_to: caseItem.assigned_to,
-    // });
+    const assignedTo = caseItem.assigned_to || caseItem.username || "N/A";
+    const dueDate = caseItem.expected_date || caseItem.due_date;
+    const statusText = caseItem.new_status || "N/A";
+    const caseIntId = caseItem.id ?? caseItem.case_int_id;
+    const caseDisplayName = caseItem.case_id
+      ? caseIntId != null
+        ? `UID ${caseIntId}:${caseItem.case_id}`
+        : caseItem.case_id
+      : "N/A";
 
     row.innerHTML = `
-      <td style="width: 30%;">${caseItem.case_id || "N/A"}</td>
-      <td class="col-date" style="width: 20%;">${formatDateTime(caseItem.creation_date)}</td>
-      <td class="col-date" style="width: 20%;">${formatDateTime(caseItem.last_updated)}</td>
-      <td style="width: 24%;">${caseItem.username || assignedTo}</td>
-      <td class="col-action" style="width: 6%; text-align: center;">
-        <button class="icon-button row-action-btn" title="Details">
-          <i class="fa fa-bars" aria-hidden="true"></i>
-          <span class="row-action-label">Details</span>
-        </button>
+      <td style="width: 22%;">${caseDisplayName}</td>
+      <td class="col-date" style="width: 18%;">${formatDateTime(caseItem.creation_date)}</td>
+      <td class="col-date" style="width: 14%;">${dueDate ? formatDateTime(dueDate) : "N/A"}</td>
+      <td style="width: 14%;">${statusText}</td>
+      <td style="width: 20%;">${assignedTo}</td>
+      <td class="col-action" style="width: 12%;">
+        <div class="row-action-icons">
+          <button class="row-action-icon" title="Attachments" aria-label="Attachments">
+            <i class="fa fa-paperclip" aria-hidden="true"></i>
+          </button>
+          <button class="row-action-icon" title="Flag" aria-label="Flag">
+            <i class="fa fa-flag" aria-hidden="true"></i>
+          </button>
+          <button class="row-action-icon row-action-delete" title="Delete case" aria-label="Delete case">
+            <i class="fa fa-trash" aria-hidden="true"></i>
+          </button>
+          <button class="icon-button row-action-btn hidden" title="Details">
+            <i class="fa fa-bars" aria-hidden="true"></i>
+            <span class="row-action-label">Details</span>
+          </button>
+        </div>
       </td>
     `;
 
@@ -110,6 +198,17 @@ function populateTable(cases) {
         row.classList.add("active");
 
         document.body.classList.add("show-details");
+      });
+    }
+
+    const deleteBtn = row.querySelector(".row-action-delete");
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const caseLabel = caseItem.case_id || "this case";
+        const confirmed = confirm(`Delete "${caseLabel}"? This cannot be undone.`);
+        if (!confirmed) return;
+        await deleteCaseById(resolvedCaseId, { skipConfirm: true });
       });
     }
 
@@ -512,55 +611,12 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
   if (deleteBtn) {
     deleteBtn.addEventListener("click", async () => {
       const caseId = window.selectedCaseId;
-      const user = getLoggedInUser();
-
-      if (!caseId || !user?.uuid) {
+      if (!caseId) {
         alert("⚠️ Please select a case first.");
         return;
       }
-
-      const confirmed = confirm("Are you sure you want to delete this case?");
-      if (!confirmed) return;
-
-      const requestBody = JSON.stringify([
-        {
-          machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
-          uuid: user.uuid,
-          caseIntID: caseId,
-        },
-      ]);
-
-      try {
-        const response = await fetch(
-          `https://live.api.smartrpdai.com/api/smartrpd/case/delete/${caseId}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: requestBody,
-          }
-        );
-
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const result = await response.json();
-
-        alert("✅ Case deleted successfully!");
-
-        // 可选：从 currentCases 中移除该项并重新渲染表格
-        currentCases = currentCases.filter(
-          (c) => c.id !== caseId && c.case_id !== caseId
-        );
-        populateTable(currentCases);
-
-        // 清空右侧显示（如果需要）
-        document.getElementById("caseNameDisplay").textContent = "";
-        document.getElementById("selected-case").textContent = "";
-        document.getElementById("created-by").textContent = "";
-        document.getElementById("date-created").textContent = "";
-        document.getElementById("last-edited").textContent = "";
-      } catch (err) {
-        console.error("❌ Delete failed:", err);
-        alert("❌ Failed to delete case.");
-      }
+      const ok = await deleteCaseById(caseId);
+      if (ok) alert("✅ Case deleted successfully!");
     });
   }
 

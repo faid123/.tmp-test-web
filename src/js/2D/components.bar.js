@@ -222,14 +222,14 @@ export const BAR_PLACEMENT_OFFSET_BY_TOOTH_SURFACE = Object.freeze({
   "12": {
     bar_d1_distal: { x: 1, y: -26, rotation: 15 },
     bar_d1_mesial: { x: -30, y: -5, rotation: -21 },
-    bar_d2_distal: { x: 21, y: -250, rotation: 3 },
+    bar_d2_distal: { x: 21, y: -25, rotation: 3 },
     bar_d2_mesial: { x: -55, y: 20, rotation: -1 },
   },
 
   "22": {
     bar_d1_distal: { x: 1, y: -26, rotation: -15 },
     bar_d1_mesial: { x: -30, y: -5, rotation: 21 },
-    bar_d2_distal: { x: 21, y: -250, rotation: -3 },
+    bar_d2_distal: { x: 21, y: -25, rotation: -3 },
     bar_d2_mesial: { x: -55, y: 20, rotation: 1 },
   },
 
@@ -521,6 +521,29 @@ export function hasMissingTeethOnBothSidesForBar(toothId, jaw, teethById) {
     if (hasLeftMesh && hasRightMesh) return true;
   }
   return false;
+}
+
+// Drop any bar placements whose anchor tooth no longer has a mesh-bearing
+// neighbor within the allowed distance — i.e., the mesh they depended on
+// has since been removed. Mutates `teethById` placements in place.
+export function pruneInvalidBarPlacementsInJaw(teethById, jaw) {
+  if (!teethById || typeof teethById !== "object") return;
+  if (!Array.isArray(TOOTH_ORDER?.[jaw])) return;
+
+  const validAnchors = getBarSuggestibleToothIdSet(teethById, jaw);
+  for (const toothId of TOOTH_ORDER[jaw]) {
+    const tooth = teethById[toothId];
+    if (!tooth || !Array.isArray(tooth.componentPlacements)) continue;
+    const original = tooth.componentPlacements;
+    const next = original.filter((entry) => {
+      if (!entry || !isBarComponent(entry.componentId)) return true;
+      if (!isBarPlacementSurface(entry.surface)) return true;
+      return validAnchors.has(String(toothId));
+    });
+    if (next.length !== original.length) {
+      tooth.componentPlacements = next;
+    }
+  }
 }
 
 // Resolve bar asset path for component/tooth/surface.

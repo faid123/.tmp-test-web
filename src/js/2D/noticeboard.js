@@ -403,7 +403,12 @@ async function refreshAddInstructionPreview() {
 async function addInstruction() {
   setMessage("Opening instruction editor…", false);
   const baseImage = await captureJawJpegDataUrl(0.92);
-  const result = await openInstructionEditor({ initialImage: baseImage });
+  const caseLabelText =
+    document.getElementById("caseLabel")?.textContent?.trim() || "";
+  const result = await openInstructionEditor({
+    initialImage: baseImage,
+    caseLabel: caseLabelText,
+  });
   if (!result) {
     setMessage("Instruction discarded.", false);
     return;

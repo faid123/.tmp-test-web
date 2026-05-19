@@ -37,6 +37,15 @@
       </div>
     </aside>
 
+    <div
+      class="panel-splitter"
+      id="panelSplitter"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize 3D panel"
+      tabindex="0"
+    ></div>
+
     <section class="workspace-panel">
       <section class="panel arch-panel">
         <div class="arch-topbar">
@@ -51,19 +60,8 @@
             aria-label="Clinical Information"
             data-tooltip="Clinical Information"
           >
-            <img class="clinical-info-logo" src="../../assets/clinicalInfo/clinicalnote.svg" alt="Clinical Info" width="35" height="35"/>
+            <img class="clinical-info-logo" src="../../assets/clinicalInfo/clinicalnote.png" alt="Clinical Info" width="35" height="35"/>
           </button>
-        </div>
-
-        <div class="arch-controls">
-          <div class="jaw-row">
-            <img class="jaw-img" src="../../assets/Icon_UpperJaw_Occlusal.png" alt="Upper jaw icon" />
-            <span class="jaw-row-name">Upper Arch (18 to 28)</span>
-          </div>
-          <div class="jaw-row">
-            <img class="jaw-img" src="../../assets/Icon_LowerJaw_Occlusal.png" alt="Lower jaw icon" />
-            <span class="jaw-row-name">Lower Arch (48 to 38)</span>
-          </div>
         </div>
 
         <div class="jaw-combined-canvas">
@@ -591,31 +589,6 @@
           </button>
         </div>
       </header>
-
-      <section class="clinical-info-note" aria-label="Case note">
-        <div class="clinical-info-note-grid">
-          <div class="clinical-info-note-field">
-            <span class="clinical-info-note-label">Case Owner</span>
-            <span id="clinicalInfoNoteOwner" class="clinical-info-note-value">—</span>
-          </div>
-          <div class="clinical-info-note-field">
-            <span class="clinical-info-note-label">Case Number</span>
-            <span id="clinicalInfoNoteNumber" class="clinical-info-note-value">—</span>
-          </div>
-          <div class="clinical-info-note-field">
-            <span class="clinical-info-note-label">Date Required</span>
-            <span id="clinicalInfoNoteDate" class="clinical-info-note-value">—</span>
-          </div>
-          <div class="clinical-info-note-field">
-            <span class="clinical-info-note-label">Tooth Shade</span>
-            <span id="clinicalInfoNoteShade" class="clinical-info-note-value">—</span>
-          </div>
-          <div class="clinical-info-note-field">
-            <span class="clinical-info-note-label">Work Category</span>
-            <span id="clinicalInfoNoteCategory" class="clinical-info-note-value">—</span>
-          </div>
-        </div>
-      </section>
 
       <section class="clinical-info-legend" aria-label="Legend">
         <div id="clinicalInfoLegendTitle" class="clinical-info-legend-title">LEGEND</div>

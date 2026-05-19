@@ -6,14 +6,14 @@
 }
 
 :root {
-  --bg: #fff5f7;
+  --bg: #f5fdfa;
   --panel: #ffffff;
-  --line: #BB0D27;
+  --line: #3BAE95;
   --head: #d8d8db;
-  --ink: #4d1922;
-  --muted: #8d525c;
-  --accent:  #BB0D27;;
-  --accent-dark: #82091c;
+  --ink: #1a4d3f;
+  --muted: #528d7f;
+  --accent: #3BAE95;
+  --accent-dark: #25735f;
 }
 
 html,
@@ -47,186 +47,124 @@ body {
   gap: 12px;
 }
 
-.top-row {
-  width: 100%;
-  display: flex;
-  align-items: stretch;
-  gap: 10px;
-}
-
-.top-row .create-case {
-  flex: 1;
-}
-
-.logout {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 18px;
-  border: 1.5px solid var(--accent);
-  background: transparent;
-  color: var(--accent);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  border-radius: 6px;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.logout:hover {
-  background: var(--accent);
-  color: #fff;
-}
-
 button {
   border: 0;
   border-radius: 6px;
   cursor: pointer;
 }
 
-.create-case {
-  width: 100%;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  font-size: 20px;
-  padding: 16px 12px;
-}
-
-.toolbar-row {
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr) auto auto;
-  gap: 18px;
-  align-items: center;
-}
-
-.toolbar-group {
+.case-toolbar {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.toolbar-group label {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  color: #2b3a45;
-  white-space: nowrap;
-}
-
-.input-wrap {
-  height: 38px;
-  border: 1.5px solid #c8ced3;
-  border-radius: 8px;
-  background: #fff;
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.toolbar-group:has(#dateFilterInput) .input-wrap {
-  max-width: 220px;
-}
-
-.search-wrap {
-  max-width: 420px;
-}
-
-.input-wrap:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(187, 13, 39, 0.12);
-}
-
-.input-wrap input {
-  border: 0;
-  outline: none;
-  flex: 1;
-  background: transparent;
-  height: 100%;
-  padding: 0 14px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #31424e;
-  letter-spacing: 0.1px;
-}
-
-.input-wrap input::placeholder {
-  color: #9aa5ad;
-  font-weight: 400;
-}
-
-.clear-btn {
-  width: 36px;
-  height: 100%;
-  border: 0;
-  border-left: 1px solid #d6dadd;
-  background: transparent;
-  font-size: 16px;
-  color: #6b7a84;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.search-wrap .search-btn {
-  width: 34px;
-  height: 100%;
-  border: 0;
-  background: transparent;
-  font-size: 14px;
-  color: #8a96a0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding-left: 6px;
-  cursor: pointer;
-}
-
-.search-wrap .search-btn:hover {
-  color: var(--accent);
-}
-
-.search-wrap input {
-  padding-left: 4px;
-}
-
-.checkbox-wrap {
-  display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  white-space: nowrap;
-  color: #2b3a45;
+  flex-wrap: wrap;
 }
 
-.checkbox-wrap input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
-}
-
-.refresh {
-  min-width: 160px;
-  height: 38px;
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 6px;
   border: 1.5px solid var(--accent);
-  background: transparent;
+  background: #fff;
   color: var(--accent);
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.5px;
-  padding: 0 16px;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.refresh:hover {
+.toolbar-btn:hover {
   background: var(--accent);
   color: #fff;
+}
+
+.toolbar-btn i {
+  font-size: 14px;
+}
+
+.toolbar-btn-notifications {
+  position: relative;
+  background: #fff8dc;
+  border-color: #e2b800;
+  color: #6b4f00;
+}
+
+.toolbar-btn-notifications:hover {
+  background: #f3d469;
+  color: #4d3a00;
+}
+
+/* .notif-dot positioning + visibility is handled in notification.css */
+
+.toolbar-btn-primary.create-case,
+.create-case {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  padding: 0 18px;
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.toolbar-btn-primary.create-case:hover,
+.create-case:hover {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+  color: #fff;
+}
+
+.toolbar-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.toolbar-filter label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.toolbar-filter .status-dropdown {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  border: 1.5px solid #c8ced3;
+  border-radius: 6px;
+  background: #fff;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.toolbar-filter .status-dropdown:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 174, 149, 0.12);
+}
+
+.refresh,
+.toolbar-btn.refresh {
+  min-width: 0;
+}
+
+.logout,
+.toolbar-btn.logout {
+  /* same look as the default toolbar-btn */
 }
 
 .case-table {
@@ -267,7 +205,7 @@ button {
 
 .case-table tbody tr:hover td,
 .case-table tbody tr.active td {
-  background: rgba(136, 171, 218, 0.12);
+  background: rgba(59, 174, 149, 0.12);
   box-shadow: inset 0 2px 0 var(--accent), inset 0 -2px 0 var(--accent);
 }
 
@@ -310,7 +248,7 @@ button {
 }
 
 .case-details {
-  width: 400px;
+  width: 300px;
   flex: 0 0 400px;
   background: var(--bg);
   border-left: 1px solid #d5d5d5;
@@ -318,8 +256,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  height: 100vh;
-  max-height: 100vh;
+  height: 100%;
+  max-height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -490,12 +428,13 @@ button {
     overflow: auto;
   }
 
-  .toolbar-row {
-    grid-template-columns: 1fr;
+  .case-toolbar {
+    gap: 8px;
   }
 
-  .refresh {
-    height: 48px;
+  .toolbar-btn {
+    padding: 0 12px;
+    font-size: 12px;
   }
 
   .container {
@@ -527,7 +466,47 @@ button {
 }
 
 .case-table .col-action {
-  display: none;
+  text-align: center;
+}
+
+.case-table th.col-action {
+  font-weight: 700;
+}
+
+.row-action-icons {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.row-action-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: #5d6a73;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.row-action-icon:hover {
+  background: rgba(59, 174, 149, 0.1);
+  color: var(--accent);
+}
+
+.row-action-icon.is-flagged {
+  color: var(--accent);
+}
+
+.row-action-icon.row-action-delete:hover {
+  background: rgba(198, 40, 40, 0.12);
+  color: #c62828;
 }
 
 .back-to-list {
@@ -551,9 +530,14 @@ button {
     padding: 14px 12px 12px;
   }
 
-  .toolbar-group:has(#dateFilterInput) .input-wrap,
-  .search-wrap {
-    max-width: none;
+  .case-toolbar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .toolbar-filter {
+    order: 1;
+    flex-basis: 100%;
   }
 
   .case-table {
@@ -567,17 +551,22 @@ button {
 
   .case-table th:nth-child(1),
   .case-table tbody td:nth-child(1) {
-    width: 40% !important;
+    width: 32% !important;
   }
 
   .case-table th:nth-child(4),
   .case-table tbody td:nth-child(4) {
-    width: 35% !important;
+    width: 22% !important;
+  }
+
+  .case-table th:nth-child(5),
+  .case-table tbody td:nth-child(5) {
+    width: 26% !important;
   }
 
   .case-table th.col-action,
   .case-table tbody td.col-action {
-    width: 25% !important;
+    width: 20% !important;
   }
 
   .case-table th,
@@ -607,8 +596,7 @@ button {
 
   .case-table .col-action {
     display: table-cell;
-    text-align: right !important;
-    width: 1% !important;
+    text-align: center;
     white-space: nowrap;
   }
 
@@ -618,7 +606,7 @@ button {
     gap: 6px;
     padding: 6px 12px;
     border-radius: 6px;
-    background: rgba(187, 13, 39, 0.08);
+    background: rgba(59, 174, 149, 0.08);
     color: var(--accent);
     font-size: 13px;
     font-weight: 600;

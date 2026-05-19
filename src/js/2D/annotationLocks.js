@@ -60,8 +60,45 @@ export function bindJawControls() {
   if (rangeBtn) {
     rangeBtn.addEventListener("click", toggleRangeMissingMode);
   }
+  bindRangeMissingShiftHotkey();
   refreshLockButtons();
   refreshRangeMissingButton();
+}
+
+// Hold Shift to temporarily enter "Remove multiple teeth" mode; release to exit.
+function bindRangeMissingShiftHotkey() {
+  let shiftHeldActivated = false;
+
+  const isTypingTarget = (target) =>
+    target instanceof HTMLElement &&
+    (target.matches("input, textarea, select") ||
+      target.isContentEditable);
+
+  const onKeyDown = (event) => {
+    if (event.key !== "Shift" || event.repeat) return;
+    if (isTypingTarget(event.target)) return;
+    if (state.designMode) return;
+    if (state.rangeMissingMode) return;
+    shiftHeldActivated = true;
+    toggleRangeMissingMode();
+  };
+
+  const onKeyUp = (event) => {
+    if (event.key !== "Shift") return;
+    if (!shiftHeldActivated) return;
+    shiftHeldActivated = false;
+    if (state.rangeMissingMode) toggleRangeMissingMode();
+  };
+
+  const onBlur = () => {
+    if (!shiftHeldActivated) return;
+    shiftHeldActivated = false;
+    if (state.rangeMissingMode) toggleRangeMissingMode();
+  };
+
+  window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("keyup", onKeyUp);
+  window.addEventListener("blur", onBlur);
 }
 
 // Update visual active state for multi-tooth removal button.
@@ -285,6 +322,17 @@ export function syncDesignModeWithLocks(notify) {
     closePresentToothRadialQuickPick();
     state.removeComponentMode = false;
     refreshRangeMissingButton();
+    // Auto-exit the bars tab/component when the jaws are unlocked.
+    // Bar suggestions only render in design mode, so leaving the user
+    // parked on a bar component after unlocking is confusing.
+    const sel = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+    if (sel && isBarComponent(sel)) {
+      state.selectedComponentId = DEFAULT_COMPONENT_ID;
+    }
+    if (state.selectedTab === "bars") {
+      state.selectedTab = "mesh";
+    }
+    state.suppressArchPlacementSuggestions = false;
   }
   if (next) {
     state.rangeMissingMode = false;
@@ -568,16 +616,29 @@ async function composeJawCanvas(scale = 1) {
 
   const parseViewBox = (svg) => {
     const parts = (svg.getAttribute("viewBox") || "0 0 620 380").trim().split(/\s+/).map(Number);
-    return { w: parts[2] || 620, h: parts[3] || 380 };
+    return {
+      x: parts[0] || 0,
+      y: parts[1] || 0,
+      w: parts[2] || 620,
+      h: parts[3] || 380,
+    };
   };
 
   const upperDims = parseViewBox(upperSvg);
   const lowerDims = parseViewBox(lowerSvg);
   const gap = 20;
-  const baseW = Math.max(upperDims.w, lowerDims.w);
-  const baseH = upperDims.h + gap + lowerDims.h;
-  const canvasW = Math.round(baseW * scale);
-  const canvasH = Math.round(baseH * scale);
+  // Outer aesthetic margin around the composed image.
+  const padX = 10;
+  const padY = 20;
+  // ViewBox expansion (in viewBox units): individual tooth images placed
+  // near the edge of each SVG extend past the original viewBox and get
+  // clipped by SVG's default overflow. Expand the cloned SVG's viewBox
+  // so those teeth render in full.
+  const vbPad = 80;
+  const baseW = Math.max(upperDims.w, lowerDims.w) + vbPad * 2;
+  const baseH = upperDims.h + lowerDims.h + vbPad * 4 + gap;
+  const canvasW = Math.round((baseW + padX * 2) * scale);
+  const canvasH = Math.round((baseH + padY * 2) * scale);
 
   const canvas = document.createElement("canvas");
   canvas.width = canvasW;
@@ -592,12 +653,33 @@ async function composeJawCanvas(scale = 1) {
     inlineImagesInSvg(upperSvg),
     inlineImagesInSvg(lowerSvg),
   ]);
+  // Expand each cloned SVG's viewBox so edge-clipped content (anterior
+  // teeth at the front of each arch) is included in the rendered image.
+  upperInlined.setAttribute(
+    "viewBox",
+    `${upperDims.x - vbPad} ${upperDims.y - vbPad} ${upperDims.w + vbPad * 2} ${upperDims.h + vbPad * 2}`
+  );
+  lowerInlined.setAttribute(
+    "viewBox",
+    `${lowerDims.x - vbPad} ${lowerDims.y - vbPad} ${lowerDims.w + vbPad * 2} ${lowerDims.h + vbPad * 2}`
+  );
+
+  const upperRenderW = upperDims.w + vbPad * 2;
+  const upperRenderH = upperDims.h + vbPad * 2;
+  const lowerRenderW = lowerDims.w + vbPad * 2;
+  const lowerRenderH = lowerDims.h + vbPad * 2;
+
   const [upperImg, lowerImg] = await Promise.all([
-    svgToImage(upperInlined, upperDims.w * scale, upperDims.h * scale),
-    svgToImage(lowerInlined, lowerDims.w * scale, lowerDims.h * scale),
+    svgToImage(upperInlined, upperRenderW * scale, upperRenderH * scale),
+    svgToImage(lowerInlined, lowerRenderW * scale, lowerRenderH * scale),
   ]);
-  ctx.drawImage(upperImg, 0, 0, upperDims.w * scale, upperDims.h * scale);
-  ctx.drawImage(lowerImg, 0, (upperDims.h + gap) * scale, lowerDims.w * scale, lowerDims.h * scale);
+  // Center each jaw horizontally within the padded canvas; pad top/bottom.
+  const upperX = (padX + (baseW - upperRenderW) / 2) * scale;
+  const upperY = padY * scale;
+  const lowerX = (padX + (baseW - lowerRenderW) / 2) * scale;
+  const lowerY = (padY + upperRenderH + gap) * scale;
+  ctx.drawImage(upperImg, upperX, upperY, upperRenderW * scale, upperRenderH * scale);
+  ctx.drawImage(lowerImg, lowerX, lowerY, lowerRenderW * scale, lowerRenderH * scale);
   return canvas;
 }
 

@@ -678,6 +678,16 @@ async function fetchCaseOwner() {
     if (!response.ok) return;
     const detail = await response.json();
     if (detail?.username) state.caseOwner = detail.username;
+    if (detail?.case_id) {
+      const label = document.getElementById("caseLabel");
+      const caseIntId = detail.id ?? state.caseIntID;
+      if (label) {
+        label.textContent =
+          caseIntId != null
+            ?  `UID ${caseIntId} : ${detail.case_id}`
+            : `Case: ${detail.case_id}`;
+      }
+    }
   } catch (err) {
     console.warn("Failed to fetch case owner:", err);
   }
@@ -723,6 +733,105 @@ function bindPreviewPanelToggle() {
 
   btn.addEventListener("click", () => {
     applyMode(shell._previewMode === "max" ? "split" : "max");
+  });
+}
+
+function bindPanelSplitter() {
+  const shell = document.querySelector(".annotation-shell");
+  const splitter = document.getElementById("panelSplitter");
+  if (!shell || !splitter) return;
+
+  const STORAGE_KEY = "previewPanelWidthPct";
+  const MIN_PCT = 25;
+  const MAX_PCT = 80;
+
+  const applyWidth = (pct) => {
+    const clamped = Math.max(MIN_PCT, Math.min(MAX_PCT, pct));
+    shell.style.setProperty("--preview-width", `${clamped}%`);
+    return clamped;
+  };
+
+  try {
+    const stored = parseFloat(localStorage.getItem(STORAGE_KEY) || "");
+    if (Number.isFinite(stored)) applyWidth(stored);
+  } catch {
+    // ignore storage failures
+  }
+
+  let dragging = false;
+
+  const onMove = (clientX) => {
+    const rect = shell.getBoundingClientRect();
+    const padding = parseFloat(getComputedStyle(shell).paddingLeft) || 0;
+    const usable = rect.width - padding * 2;
+    if (usable <= 0) return;
+    const offset = clientX - rect.left - padding;
+    const pct = (offset / usable) * 100;
+    applyWidth(pct);
+    window.dispatchEvent(new Event("resize"));
+  };
+
+  const stop = () => {
+    if (!dragging) return;
+    dragging = false;
+    splitter.classList.remove("is-dragging");
+    document.body.classList.remove("is-panel-resizing");
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+    document.removeEventListener("pointercancel", onPointerUp);
+    try {
+      const current = shell.style.getPropertyValue("--preview-width").trim();
+      const pct = parseFloat(current);
+      if (Number.isFinite(pct)) localStorage.setItem(STORAGE_KEY, String(pct));
+    } catch {
+      // ignore
+    }
+  };
+
+  const onPointerMove = (event) => {
+    if (!dragging) return;
+    event.preventDefault();
+    onMove(event.clientX);
+  };
+
+  const onPointerUp = () => stop();
+
+  splitter.addEventListener("pointerdown", (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    if (shell.classList.contains("preview-maximized")) return;
+    dragging = true;
+    splitter.classList.add("is-dragging");
+    document.body.classList.add("is-panel-resizing");
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("pointercancel", onPointerUp);
+    event.preventDefault();
+  });
+
+  splitter.addEventListener("keydown", (event) => {
+    if (shell.classList.contains("preview-maximized")) return;
+    const step = event.shiftKey ? 5 : 2;
+    const current = parseFloat(
+      shell.style.getPropertyValue("--preview-width") || "38"
+    );
+    if (event.key === "ArrowLeft") {
+      applyWidth(current - step);
+      try { localStorage.setItem(STORAGE_KEY, String(current - step)); } catch {}
+      window.dispatchEvent(new Event("resize"));
+      event.preventDefault();
+    } else if (event.key === "ArrowRight") {
+      applyWidth(current + step);
+      try { localStorage.setItem(STORAGE_KEY, String(current + step)); } catch {}
+      window.dispatchEvent(new Event("resize"));
+      event.preventDefault();
+    }
+  });
+
+  splitter.addEventListener("dblclick", () => {
+    if (shell.classList.contains("preview-maximized")) return;
+    applyWidth(38);
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    window.dispatchEvent(new Event("resize"));
   });
 }
 
@@ -785,6 +894,7 @@ function start() {
 function init() {
   initializeCaseIds();
   bindPreviewPanelToggle();
+  bindPanelSplitter();
   // Load render module early so render bridge + mesh env are registered.
   const renderLoad = import("./annotationRender.js");
 

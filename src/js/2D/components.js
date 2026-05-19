@@ -506,6 +506,7 @@ export {
   getBarUserOffset,
   isBarComponent,
   isBarPlacementSurface,
+  pruneInvalidBarPlacementsInJaw,
 } from "./components.bar.js";
 
 export {

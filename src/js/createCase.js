@@ -287,6 +287,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (startBtn) {
     startBtn.addEventListener("click", () => {
+      if (startBtn.dataset.submitting === "1") return;
+
       const caseName = caseNameInput?.value?.trim();
 
       if (!caseName) {
@@ -299,6 +301,12 @@ document.addEventListener("DOMContentLoaded", () => {
         alert("User not logged in.");
         return;
       }
+
+      startBtn.dataset.submitting = "1";
+      startBtn.disabled = true;
+      if (inviteBtn) inviteBtn.disabled = true;
+      const originalStartText = startBtn.textContent;
+      startBtn.textContent = "Creating…";
 
       const machine_id = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
       const uuid = loggedInUser.uuid;
@@ -405,12 +413,19 @@ document.addEventListener("DOMContentLoaded", () => {
         .catch((err) => {
           console.error("❌ Upload failed:", err);
           alert("Failed to create case.");
+          // Re-enable so the user can retry
+          startBtn.dataset.submitting = "";
+          startBtn.disabled = false;
+          startBtn.textContent = originalStartText;
+          if (inviteBtn) inviteBtn.disabled = false;
         });
     });
   }
 
   if (inviteBtn) {
     inviteBtn.addEventListener("click", async () => {
+      if (inviteBtn.dataset.submitting === "1") return;
+
       const caseName = caseNameInput?.value?.trim();
 
       if (!caseName) {
@@ -423,6 +438,19 @@ document.addEventListener("DOMContentLoaded", () => {
         alert("User not logged in.");
         return;
       }
+
+      inviteBtn.dataset.submitting = "1";
+      inviteBtn.disabled = true;
+      if (startBtn) startBtn.disabled = true;
+      const originalInviteText = inviteBtn.textContent;
+      inviteBtn.textContent = "Creating…";
+
+      const releaseInviteButton = () => {
+        inviteBtn.dataset.submitting = "";
+        inviteBtn.disabled = false;
+        inviteBtn.textContent = originalInviteText;
+        if (startBtn) startBtn.disabled = false;
+      };
 
       const machine_id = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
       const uuid = loggedInUser.uuid;
@@ -475,6 +503,7 @@ await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
       } catch (err) {
         console.error("❌ Failed to create case", err);
         alert("Failed to create case.");
+        releaseInviteButton();
         return;
       }
 
@@ -529,6 +558,7 @@ await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
       }
 
       // ✅ Step 3: 打开邀请弹窗
+      releaseInviteButton();
       userAccessModal.classList.remove("hidden");
       userAccessModal.classList.add("show");
       // caseNameDisplay.textContent = caseName;

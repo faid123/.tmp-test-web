@@ -11,6 +11,7 @@ const state = {
   size: 6,
   resolveSave: null,
   linePending: null,
+  caseLabel: null, // { text, point: {x,y}, color, size } — draggable case-ID label
 };
 
 let canvas = null;
@@ -18,6 +19,13 @@ let ctx = null;
 let resizeObserver = null;
 let textInputEl = null;
 let textInputPoint = null;
+const draggingText = {
+  active: false,
+  target: null, // reference to stroke OR state.caseLabel
+  offsetX: 0,
+  offsetY: 0,
+  moved: false,
+};
 
 function getModal() {
   return document.getElementById("instructionEditorModal");
@@ -64,7 +72,11 @@ function getBgRect() {
   if (!state.bgImage) return { x: 0, y: 0, w: cw, h: ch };
   const iw = state.bgImage.width;
   const ih = state.bgImage.height;
-  const scale = Math.min(cw / iw, ch / ih);
+    // Pad so the jaws don't sit flush against the canvas edges.
+  const padding = Math.min(cw, ch) * 0.01;
+  const availW = Math.max(1, cw - padding * 2);
+  const availH = Math.max(1, ch - padding * 3);
+  const scale = Math.min(availW / iw, availH / ih);
   const w = iw * scale;
   const h = ih * scale;
   return { x: (cw - w) / 2, y: (ch - h) / 2, w, h };
@@ -78,6 +90,12 @@ function redraw() {
   ctx.clearRect(0, 0, cw, ch);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
+
+  // Fill the whole canvas with white so the shrunken bg image
+  // blends seamlessly into a continuous white "page" — only the
+  // jaws appear smaller, not the whole panel.
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, cw, ch);
 
   if (state.bgImage) {
     const r = getBgRect();
@@ -95,11 +113,55 @@ function redraw() {
   for (const stroke of allStrokes) {
     drawStrokeOn(offCtx, stroke, ratio);
   }
+  if (state.caseLabel) {
+    drawStrokeOn(offCtx, { ...state.caseLabel, tool: "text" }, ratio);
+  }
   ctx.drawImage(off, 0, 0);
 
   if (state.linePending) {
     drawLinePendingMarker(state.linePending);
   }
+}
+
+// Compute approximate bounding box of a text stroke in canvas-CSS coords.
+function textBoundsForStroke(stroke) {
+  if (!ctx || !stroke || !stroke.text || !stroke.point) return null;
+  const fontSize = Math.max(10, stroke.size * 2);
+  const ratio = dpr();
+  ctx.save();
+  // Measure at the same canvas-pixel size used by drawStrokeOn so the
+  // returned width corresponds to the rendered glyphs.
+  ctx.font = `600 ${fontSize * ratio}px "Montserrat", "Segoe UI", sans-serif`;
+  const metrics = ctx.measureText(stroke.text);
+  ctx.restore();
+  const w = metrics.width / ratio;
+  const h = fontSize * 1.2;
+  return {
+    x: stroke.point.x,
+    y: stroke.point.y,
+    w,
+    h,
+  };
+}
+
+function findTextAtPoint(point) {
+  // Check case label first (drawn on top), then committed text strokes (top-most first).
+  if (state.caseLabel) {
+    const b = textBoundsForStroke(state.caseLabel);
+    if (b && point.x >= b.x && point.x <= b.x + b.w && point.y >= b.y && point.y <= b.y + b.h) {
+      return state.caseLabel;
+    }
+  }
+  for (let i = state.strokes.length - 1; i >= 0; i--) {
+    const s = state.strokes[i];
+    if (s.tool !== "text") continue;
+    const b = textBoundsForStroke(s);
+    if (!b) continue;
+    if (point.x >= b.x && point.x <= b.x + b.w && point.y >= b.y && point.y <= b.y + b.h) {
+      return s;
+    }
+  }
+  return null;
 }
 
 function drawLinePendingMarker(point) {
@@ -173,6 +235,24 @@ function isFreehandTool(t) {
 function onPointerDown(event) {
   if (event.button !== undefined && event.button !== 0) return;
   const point = pointFromEvent(event);
+
+  // Always allow dragging an existing text label (regardless of current tool) —
+  // except when erasing, since the eraser is meant to remove ink, not move text.
+  if (state.tool !== "eraser") {
+    const hit = findTextAtPoint(point);
+    if (hit) {
+      draggingText.active = true;
+      draggingText.target = hit;
+      draggingText.offsetX = point.x - hit.point.x;
+      draggingText.offsetY = point.y - hit.point.y;
+      draggingText.moved = false;
+      canvas.setPointerCapture?.(event.pointerId ?? 0);
+      canvas.style.cursor = "grabbing";
+      event.preventDefault();
+      return;
+    }
+  }
+
   if (state.tool === "text") {
     spawnTextInput(point);
     return;
@@ -196,12 +276,30 @@ function onPointerDown(event) {
 }
 
 function onPointerMove(event) {
+  if (draggingText.active && draggingText.target) {
+    const point = pointFromEvent(event);
+    draggingText.target.point = {
+      x: point.x - draggingText.offsetX,
+      y: point.y - draggingText.offsetY,
+    };
+    draggingText.moved = true;
+    redraw();
+    return;
+  }
   if (!state.isDrawing || !state.currentStroke) return;
   state.currentStroke.points.push(pointFromEvent(event));
   redraw();
 }
 
 function onPointerUp(event) {
+  if (draggingText.active) {
+    try { canvas.releasePointerCapture?.(event.pointerId ?? 0); } catch {}
+    draggingText.active = false;
+    draggingText.target = null;
+    canvas.style.cursor = state.tool === "text" ? "text" : "crosshair";
+    redraw();
+    return;
+  }
   if (!state.isDrawing) return;
   state.isDrawing = false;
   if (state.currentStroke) {
@@ -370,6 +468,11 @@ function bindOnce() {
   document.getElementById("instructionEditorSaveBtn")?.addEventListener("click", () => {
     const dataUrl = exportComposedDataUrl();
     const strokes = JSON.parse(JSON.stringify(state.strokes));
+    // Commit the draggable case label into the saved strokes so it's
+    // preserved when re-opening the editor or rendering the thumbnail.
+    if (state.caseLabel && state.caseLabel.text) {
+      strokes.push({ tool: "text", ...JSON.parse(JSON.stringify(state.caseLabel)) });
+    }
     closeEditor({ dataUrl, strokes });
   });
   document.getElementById("clearDrawingsBtn")?.addEventListener("click", clearAll);
@@ -457,6 +560,7 @@ export async function openInstructionEditor(options = {}) {
   state.currentStroke = null;
   state.isDrawing = false;
   state.linePending = null;
+  state.caseLabel = null;
   removeTextInput();
   setTool("pen");
   setColor(state.color);
@@ -474,6 +578,31 @@ export async function openInstructionEditor(options = {}) {
   // Wait for layout, then size canvas
   await new Promise((r) => requestAnimationFrame(r));
   resizeCanvas();
+
+  // Seed a draggable case-ID label between the upper and lower jaws.
+  const caseLabelText = (options.caseLabel || "").trim();
+  if (caseLabelText && canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const cssWidth = rect.width;
+    const cssHeight = rect.height;
+    const labelSize = 14;
+    const fontPx = labelSize * 2;
+    const ratio = dpr();
+    ctx.save();
+    ctx.font = `600 ${fontPx * ratio}px "Montserrat", "Segoe UI", sans-serif`;
+    const labelWidth = ctx.measureText(caseLabelText).width / ratio;
+    ctx.restore();
+    state.caseLabel = {
+      text: caseLabelText,
+      color: state.color,
+      size: labelSize,
+      point: {
+        x: Math.max(8, (cssWidth - labelWidth) / 2),
+        y: Math.max(8, cssHeight / 2 - fontPx / 2),
+      },
+    };
+    redraw();
+  }
   if (typeof ResizeObserver !== "undefined") {
     resizeObserver = new ResizeObserver(() => resizeCanvas());
     resizeObserver.observe(canvas.parentElement);

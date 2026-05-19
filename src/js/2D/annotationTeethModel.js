@@ -1,8 +1,22 @@
-import { COMPONENT_BY_ID } from "./components.js";
+import { COMPONENT_BY_ID, isMeshComponent } from "./components.js";
 import { forEachTooth, STATUS_VALUES, TOOTH_POSITION_MAP, TOOTH_SCALE_BY_UNIT, TOOTH_SCALE_OVERRIDE } from "./constants.js";
 import { state } from "./2DAnnotation.js";
 import { normalizeSurface } from "./toothUtils.js";
 export { normalizeSurface } from "./toothUtils.js";
+
+// Mesh placements only make sense on missing teeth; clear them when a
+// tooth flips back to present so the "removable list" UI stays in sync
+// with the visual (which already hides mesh on present teeth).
+function clearMeshPlacementsIfPresent(tooth) {
+  if (!tooth || !tooth.isPresent) return;
+  if (!Array.isArray(tooth.componentPlacements)) return;
+  tooth.componentPlacements = tooth.componentPlacements.filter(
+    (entry) => !isMeshComponent(entry?.componentId)
+  );
+  if (Array.isArray(tooth.components)) {
+    tooth.components = tooth.components.filter((id) => !isMeshComponent(id));
+  }
+}
 
 // Initialize default tooth records for both arches.
 export function initializeTeethState() {
@@ -38,6 +52,7 @@ export function toggleToothPresence(tooth, toothId) {
     tooth.componentPlacements = [];
   } else {
     tooth.status = "presence";
+    clearMeshPlacementsIfPresent(tooth);
   }
   return `Tooth ${toothId} is now ${tooth.isPresent ? "present" : "missing"}.`;
 }
@@ -48,6 +63,7 @@ export function toggleToothStatus(tooth, toothId, status) {
     tooth.isPresent = true;
   }
   tooth.status = tooth.status === status ? "presence" : status;
+  clearMeshPlacementsIfPresent(tooth);
   return `Tooth ${toothId} set to ${tooth.status}.`;
 }
 
