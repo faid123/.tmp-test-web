@@ -716,6 +716,32 @@ body.is-panel-resizing {
   pointer-events: none;
 }
 
+.jaw-range-hint-tooltip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  max-width: 280px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #3BAE95;
+  background: #ffffff;
+  color: #222222;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.35;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.08s ease-out;
+  z-index: 80;
+}
+
+.jaw-range-hint-tooltip.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
 .jaw-lock-eraser-btn {
   display: inline-flex;
   align-items: center;

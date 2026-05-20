@@ -40,11 +40,28 @@ async function fetchCases() {
     );
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
+    const data = await response.json();
+    return Array.isArray(data) ? dedupeCases(data) : data;
   } catch (err) {
     console.error("❌ Failed to fetch cases:", err);
     return null;
   }
+}
+
+// Server can return the same case multiple times when the logged-in user has
+// more than one role on it (owner + co-owner, etc.). Collapse to one entry.
+function dedupeCases(list) {
+  const seen = new Set();
+  const out = [];
+  for (const c of list) {
+    const key = c?.id ?? c?.case_int_id ?? c?.case_id;
+    if (key == null) { out.push(c); continue; }
+    const k = String(key);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(c);
+  }
+  return out;
 }
 
 // 通用：删除指定 case
@@ -475,6 +492,13 @@ async function fetchThumbnails(caseId) {
   const loggedInUser = getLoggedInUser();
   if (!loggedInUser) return;
 
+  // Server expects the STRING case name (e.g. "case_04") under `case_id`,
+  // not the numeric row id. Look it up from currentCases.
+  const caseObj = currentCases.find(
+    (c) => c.id === caseId || c.case_int_id === caseId
+  );
+  const caseIdStr = caseObj?.case_id ?? caseId;
+
   const requestBody = JSON.stringify([
     {
       machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
@@ -482,7 +506,7 @@ async function fetchThumbnails(caseId) {
       caseIntID: caseId,
     },
     {
-      case_id: caseId,
+      case_id: caseIdStr,
     },
   ]);
 

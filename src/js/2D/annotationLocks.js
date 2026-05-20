@@ -61,8 +61,86 @@ export function bindJawControls() {
     rangeBtn.addEventListener("click", toggleRangeMissingMode);
   }
   bindRangeMissingShiftHotkey();
+  bindRangeMissingHintTooltip();
   refreshLockButtons();
   refreshRangeMissingButton();
+}
+
+// Desktop selected-mode learning tooltip: the Remove-multiple-teeth button is
+// hidden at >=1201px, so teach users about the Shift-range shortcut by showing
+// a hint on tooth hover.
+const RANGE_HINT_TEXT =
+  "Tip: Hold Shift, select one tooth, then click another tooth to remove the entire range.";
+
+function bindRangeMissingHintTooltip() {
+  const tooltip = document.createElement("div");
+  tooltip.className = "jaw-range-hint-tooltip";
+  tooltip.textContent = RANGE_HINT_TEXT;
+  tooltip.setAttribute("role", "tooltip");
+  tooltip.setAttribute("aria-hidden", "true");
+  document.body.appendChild(tooltip);
+
+  let visible = false;
+  let currentTooth = null;
+
+  const canShow = () =>
+    window.innerWidth > 1200 && !state.designMode && !state.rangeMissingMode;
+
+  const positionTooltip = (clientX, clientY) => {
+    const margin = 12;
+    const offsetX = 14;
+    const offsetY = 18;
+    const rect = tooltip.getBoundingClientRect();
+    let left = clientX + offsetX;
+    let top = clientY + offsetY;
+    if (left + rect.width + margin > window.innerWidth) {
+      left = Math.max(margin, clientX - rect.width - offsetX);
+    }
+    if (top + rect.height + margin > window.innerHeight) {
+      top = Math.max(margin, clientY - rect.height - offsetY);
+    }
+    tooltip.style.left = `${Math.round(left)}px`;
+    tooltip.style.top = `${Math.round(top)}px`;
+  };
+
+  const showTooltip = (clientX, clientY) => {
+    if (visible) {
+      positionTooltip(clientX, clientY);
+      return;
+    }
+    if (!canShow()) return;
+    visible = true;
+    tooltip.classList.add("is-visible");
+    tooltip.setAttribute("aria-hidden", "false");
+    positionTooltip(clientX, clientY);
+  };
+
+  const hideTooltip = () => {
+    if (!visible) return;
+    visible = false;
+    tooltip.classList.remove("is-visible");
+    tooltip.setAttribute("aria-hidden", "true");
+    currentTooth = null;
+  };
+
+  const onMouseMove = (event) => {
+    const target = event.target;
+    const toothEl = target && target.closest ? target.closest(".tooth") : null;
+    if (!toothEl) {
+      if (visible) hideTooltip();
+      return;
+    }
+    if (toothEl !== currentTooth) {
+      currentTooth = toothEl;
+      showTooltip(event.clientX, event.clientY);
+    } else if (visible) {
+      positionTooltip(event.clientX, event.clientY);
+    }
+  };
+
+  document.addEventListener("mousemove", onMouseMove, true);
+  window.addEventListener("scroll", hideTooltip, true);
+  window.addEventListener("resize", hideTooltip);
 }
 
 // Hold Shift to temporarily enter "Remove multiple teeth" mode; release to exit.

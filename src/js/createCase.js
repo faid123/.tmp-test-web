@@ -35,6 +35,252 @@ document.addEventListener("DOMContentLoaded", () => {
   let activeTarget = null;
   const uploadLimit = 2;
 
+  // === Drag & drop helpers (jaw STL placeholders + reference image container) ===
+  const eventHasFiles = (e) => {
+    const types = e?.dataTransfer?.types;
+    if (!types) return false;
+    return Array.from(types).some((t) => t === "Files");
+  };
+
+  // Build a fresh jaw placeholder ("upper" | "lower") with click + drag-drop wired up.
+  const buildJawPlaceholder = (jawType) => {
+    const placeholder = document.createElement("div");
+    placeholder.className = "upload-placeholder";
+    placeholder.dataset.jaw = jawType;
+
+    const bgImg = document.createElement("img");
+    bgImg.className = "jaw-bg";
+    bgImg.alt = jawType === "upper" ? "Upper Jaw" : "Lower Jaw";
+    bgImg.src =
+      jawType === "upper" ? "../../assets/upper.svg" : "../../assets/lower.svg";
+
+    const plus = document.createElement("span");
+    plus.className = "plus-icon";
+    plus.textContent = "＋";
+
+    placeholder.appendChild(bgImg);
+    placeholder.appendChild(plus);
+
+    placeholder.addEventListener("click", () => {
+      activeTarget = placeholder;
+      jawUploadInput.click();
+    });
+    enableJawDropZone(placeholder);
+    return placeholder;
+  };
+
+  // Build the reference-image "+" placeholder with click wired up.
+  const buildRefPlaceholder = () => {
+    const placeholder = document.createElement("div");
+    placeholder.className = "upload-placeholder";
+
+    const plus = document.createElement("span");
+    plus.className = "plus-icon";
+    plus.textContent = "＋";
+    placeholder.appendChild(plus);
+
+    placeholder.addEventListener("click", () => {
+      refUploadInput.click();
+    });
+    return placeholder;
+  };
+
+  // Reset the create-case modal (clears inputs + rebuilds upload zones).
+  const resetCreateCaseForm = () => {
+    if (caseNameInput) caseNameInput.value = "";
+    if (requestDateInput) requestDateInput.value = "";
+    document.querySelectorAll(".uploaded-model").forEach((el) => {
+      delete el.file;
+    });
+    if (jawContainer) {
+      jawContainer.innerHTML = "";
+      ["upper", "lower"].forEach((jaw) => {
+        jawContainer.appendChild(buildJawPlaceholder(jaw));
+      });
+    }
+    if (refContainer) {
+      refContainer.innerHTML = "";
+      refContainer.appendChild(buildRefPlaceholder());
+    }
+    if (jawUploadInput) jawUploadInput.value = "";
+    if (refUploadInput) refUploadInput.value = "";
+  };
+
+  // Process a dropped/picked STL file. The wrapper is inserted into the DOM
+  // synchronously (with the File attached) so a fast Start-click after drop
+  // still sees `.uploaded-model[data-jaw="..."]` and uploads the STL; the
+  // rendered preview thumbnail fills in once Three.js finishes parsing.
+  const processStlFile = (file, target) => {
+    if (!file || !target) return;
+    const jaw = target.dataset.jaw;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "uploaded-model";
+    wrapper.dataset.jaw = jaw;
+    wrapper.file = file;
+
+    const img = document.createElement("img");
+    img.style.width = "100px";
+    img.alt = jaw === "upper" ? "Upper jaw STL" : "Lower jaw STL";
+
+    const remove = document.createElement("div");
+    remove.className = "remove-model";
+    remove.textContent = "×";
+    remove.onclick = () => {
+      delete wrapper.file;
+      wrapper.replaceWith(buildJawPlaceholder(wrapper.dataset.jaw));
+    };
+
+    wrapper.appendChild(img);
+    wrapper.appendChild(remove);
+    target.replaceWith(wrapper);
+    jawUploadInput.value = "";
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const loader = new STLLoader();
+        const geometry = loader.parse(e.target.result);
+        const material = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(197 / 255, 173 / 255, 137 / 255),
+          opacity: 1,
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        const scene = new THREE.Scene();
+        scene.add(new THREE.AmbientLight(0xffffff, 1));
+        const lights = [
+          new THREE.DirectionalLight(0xffffff, 1),
+          new THREE.DirectionalLight(0xffffff, 1),
+          new THREE.DirectionalLight(0xffffff, 1),
+          new THREE.DirectionalLight(0xffffff, 1),
+        ];
+        lights[0].position.set(0, 0, 1);
+        lights[1].position.set(0, 0, -1);
+        lights[2].position.set(-1, 0, 0);
+        lights[3].position.set(1, 0, 0);
+        lights.forEach((light) => scene.add(light));
+        scene.add(mesh);
+
+        geometry.computeBoundingBox();
+        const center = geometry.boundingBox.getCenter(new THREE.Vector3());
+        mesh.position.sub(center);
+
+        const width = 100;
+        const height = 100;
+        const camera = new THREE.PerspectiveCamera(70, width / height, 0.1, 1000);
+        camera.position.z = 100;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(width, height);
+        renderer.setClearColor(0xffffff);
+        renderer.render(scene, camera);
+        img.src = renderer.domElement.toDataURL();
+      } catch (err) {
+        console.error("STL 解析失败：", err);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  // Insert ref image wrapper synchronously (with File attached) so Start-click
+  // immediately after drop still sees it; fill the preview when FileReader finishes.
+  const addRefImageFromFile = (file) => {
+    if (!file || !file.type.startsWith("image/")) return;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "uploaded-model";
+    wrapper.file = file;
+
+    const img = document.createElement("img");
+
+    const remove = document.createElement("div");
+    remove.className = "remove-model";
+    remove.textContent = "×";
+    remove.onclick = () => {
+      delete wrapper.file;
+      wrapper.remove();
+      refUploadInput.value = "";
+    };
+
+    wrapper.appendChild(img);
+    wrapper.appendChild(remove);
+    refContainer.insertBefore(wrapper, refUploadBtn.nextSibling);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const enableJawDropZone = (placeholder) => {
+    if (!placeholder || placeholder.dataset.dropBound === "1") return;
+    placeholder.dataset.dropBound = "1";
+    placeholder.addEventListener("dragenter", (e) => {
+      if (!eventHasFiles(e)) return;
+      e.preventDefault();
+      placeholder.classList.add("is-dragover");
+    });
+    placeholder.addEventListener("dragover", (e) => {
+      if (!eventHasFiles(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      placeholder.classList.add("is-dragover");
+    });
+    placeholder.addEventListener("dragleave", (e) => {
+      if (placeholder.contains(e.relatedTarget)) return;
+      placeholder.classList.remove("is-dragover");
+    });
+    placeholder.addEventListener("drop", (e) => {
+      placeholder.classList.remove("is-dragover");
+      if (!eventHasFiles(e)) return;
+      e.preventDefault();
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+      if (!/\.stl$/i.test(file.name)) {
+        alert("Please drop a .stl file.");
+        return;
+      }
+      activeTarget = placeholder;
+      processStlFile(file, placeholder);
+    });
+  };
+
+  const enableRefDropZone = (container) => {
+    if (!container || container.dataset.dropBound === "1") return;
+    container.dataset.dropBound = "1";
+    container.addEventListener("dragenter", (e) => {
+      if (!eventHasFiles(e)) return;
+      e.preventDefault();
+      container.classList.add("is-dragover");
+    });
+    container.addEventListener("dragover", (e) => {
+      if (!eventHasFiles(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      container.classList.add("is-dragover");
+    });
+    container.addEventListener("dragleave", (e) => {
+      if (container.contains(e.relatedTarget)) return;
+      container.classList.remove("is-dragover");
+    });
+    container.addEventListener("drop", (e) => {
+      container.classList.remove("is-dragover");
+      if (!eventHasFiles(e)) return;
+      e.preventDefault();
+      const imageFiles = Array.from(e.dataTransfer.files).filter((f) =>
+        f.type.startsWith("image/")
+      );
+      if (!imageFiles.length) {
+        alert("Please drop image files (PNG or JPEG).");
+        return;
+      }
+      for (const file of imageFiles) {
+        addRefImageFromFile(file);
+      }
+    });
+  };
+
   // 打开弹窗
   if (openBtn && modal) {
     openBtn.addEventListener("click", () => {
@@ -66,118 +312,12 @@ document.addEventListener("DOMContentLoaded", () => {
         activeTarget = btn;
         jawUploadInput.click();
       });
+      enableJawDropZone(btn);
     });
 
     jawUploadInput.addEventListener("change", (event) => {
       const file = event.target.files[0];
-      if (!file || !activeTarget) return;
-
-      const reader = new FileReader();
-      reader.onload = function (e) {
-        try {
-          const loader = new STLLoader();
-          const geometry = loader.parse(e.target.result);
-          const material = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(197 / 255, 173 / 255, 137 / 255),
-            opacity: 1,
-          });
-
-          const mesh = new THREE.Mesh(geometry, material);
-
-          const scene = new THREE.Scene();
-          const ambientLight = new THREE.AmbientLight(0xffffff, 1);
-          scene.add(ambientLight);
-
-          const lights = [
-            new THREE.DirectionalLight(0xffffff, 1),
-            new THREE.DirectionalLight(0xffffff, 1),
-            new THREE.DirectionalLight(0xffffff, 1),
-            new THREE.DirectionalLight(0xffffff, 1),
-          ];
-
-          lights[0].position.set(0, 0, 1);
-          lights[1].position.set(0, 0, -1);
-          lights[2].position.set(-1, 0, 0);
-          lights[3].position.set(1, 0, 0);
-
-          lights.forEach((light) => scene.add(light));
-          scene.add(mesh);
-
-          geometry.computeBoundingBox();
-          const center = geometry.boundingBox.getCenter(new THREE.Vector3());
-          mesh.position.sub(center);
-
-          const width = 100;
-          const height = 100;
-          const camera = new THREE.PerspectiveCamera(
-            70,
-            width / height,
-            0.1,
-            1000
-          );
-          camera.position.z = 100;
-
-          const renderer = new THREE.WebGLRenderer({ antialias: true });
-          renderer.setSize(width, height);
-          renderer.setClearColor(0xffffff);
-          renderer.render(scene, camera);
-
-          const imgData = renderer.domElement.toDataURL();
-
-          const wrapper = document.createElement("div");
-          wrapper.className = "uploaded-model";
-          wrapper.dataset.jaw = activeTarget.dataset.jaw;
-
-          const img = document.createElement("img");
-          img.src = imgData;
-          img.style.width = "100px";
-
-          const remove = document.createElement("div");
-          remove.className = "remove-model";
-          remove.textContent = "×";
-          remove.onclick = () => {
-            delete wrapper.file; // ✅ 关键：彻底删除 file 引用，避免上传残留
-
-            const placeholder = document.createElement("div");
-            placeholder.className = "upload-placeholder";
-            placeholder.dataset.jaw = wrapper.dataset.jaw;
-
-            const bgImg = document.createElement("img");
-            bgImg.className = "jaw-bg";
-            bgImg.alt =
-              placeholder.dataset.jaw === "upper" ? "Upper Jaw" : "Lower Jaw";
-            bgImg.src =
-              placeholder.dataset.jaw === "upper"
-                ? "../../assets/upper.svg"
-                : "../../assets/lower.svg";
-
-            const plus = document.createElement("span");
-            plus.className = "plus-icon";
-            plus.textContent = "＋";
-
-            placeholder.appendChild(bgImg);
-            placeholder.appendChild(plus);
-
-            placeholder.addEventListener("click", () => {
-              activeTarget = placeholder;
-              jawUploadInput.click();
-            });
-
-            wrapper.replaceWith(placeholder);
-          };
-
-          wrapper.appendChild(img);
-          wrapper.appendChild(remove);
-          wrapper.file = file;
-          activeTarget.replaceWith(wrapper);
-
-          jawUploadInput.value = "";
-        } catch (err) {
-          console.error("STL 解析失败：", err);
-        }
-      };
-
-      reader.readAsArrayBuffer(file);
+      processStlFile(file, activeTarget);
     });
   }
 
@@ -186,103 +326,17 @@ document.addEventListener("DOMContentLoaded", () => {
     refUploadBtn.addEventListener("click", () => {
       refUploadInput.click();
     });
+    enableRefDropZone(refContainer);
 
     refUploadInput.addEventListener("change", (event) => {
       const file = event.target.files[0];
-      if (!file || !file.type.startsWith("image/")) return;
-
-      const reader = new FileReader();
-      reader.onload = function (e) {
-        const wrapper = document.createElement("div");
-        wrapper.className = "uploaded-model";
-        wrapper.file = file; // ✅ 保留 File 引用（用于后续上传逻辑）
-
-        const img = document.createElement("img");
-        img.src = e.target.result;
-
-        const remove = document.createElement("div");
-        remove.className = "remove-model";
-        remove.textContent = "×";
-        remove.onclick = () => {
-          delete wrapper.file; // ✅ 彻底清除 File 引用
-          wrapper.remove(); // ✅ 移除视图
-          refUploadInput.value = ""; // ✅ 解决“再次选择相同图片不会触发”问题
-        };
-
-        wrapper.appendChild(img);
-        wrapper.appendChild(remove);
-
-        refContainer.insertBefore(wrapper, refUploadBtn.nextSibling);
-      };
-
-      reader.readAsDataURL(file);
+      addRefImageFromFile(file);
     });
   }
 
   /*** 👇 取消按钮清空状态逻辑 ***/
   if (cancelBtn) {
-    cancelBtn.addEventListener("click", () => {
-      // 清空输入框
-      caseNameInput.value = "";
-      requestDateInput.value = "";
-
-      // 删除所有文件引用（防止上传）
-      document.querySelectorAll(".uploaded-model").forEach((el) => {
-        delete el.file;
-      });
-
-      // 重置 STL 上传区（上下颌）
-      jawContainer.innerHTML = "";
-      ["upper", "lower"].forEach((jawType) => {
-        const placeholder = document.createElement("div");
-        placeholder.className = "upload-placeholder";
-        placeholder.dataset.jaw = jawType;
-
-        // ✅ 插入 SVG 背景图
-        const bgImg = document.createElement("img");
-        bgImg.className = "jaw-bg";
-        bgImg.alt = jawType === "upper" ? "Upper Jaw" : "Lower Jaw";
-        bgImg.src =
-          jawType === "upper"
-            ? "../../assets/upper.svg"
-            : "../../assets/lower.svg";
-
-        // ✅ 插入加号图标
-        const jawPlus = document.createElement("span");
-        jawPlus.className = "plus-icon";
-        jawPlus.textContent = "＋";
-
-        placeholder.appendChild(bgImg);
-        placeholder.appendChild(jawPlus);
-
-        // ✅ 绑定上传点击事件
-        placeholder.addEventListener("click", () => {
-          activeTarget = placeholder;
-          jawUploadInput.click();
-        });
-
-        jawContainer.appendChild(placeholder);
-      });
-
-      // 重置参考图上传区
-      refContainer.innerHTML = "";
-      const refPlaceholder = document.createElement("div");
-      refPlaceholder.className = "upload-placeholder";
-
-      const refPlus = document.createElement("span"); // ✅ 改名避免变量覆盖
-      refPlus.className = "plus-icon";
-      refPlus.textContent = "＋";
-      refPlaceholder.appendChild(refPlus);
-
-      refPlaceholder.addEventListener("click", () => {
-        refUploadInput.click();
-      });
-      refContainer.appendChild(refPlaceholder);
-
-      // 清空上传 input 的值
-      jawUploadInput.value = "";
-      refUploadInput.value = "";
-    });
+    cancelBtn.addEventListener("click", resetCreateCaseForm);
   }
 
   if (startBtn) {
@@ -736,68 +790,10 @@ try {
     });
   }
 
-  // ⛔ CANCEL 按钮：只清空搜索框，不关闭弹窗，不清空列表
-  if (cancelBtn) {
-    cancelBtn.addEventListener("click", () => {
-      // ✅ 清空输入框
-      caseNameInput.value = "";
-      requestDateInput.value = "";
-
-      // ✅ 清空已上传的文件引用（防止上传残留）
-      document.querySelectorAll(".uploaded-model").forEach((el) => {
-        delete el.file;
-      });
-
-      // ✅ 重建 Jaw 模型上传区（包含牙模背景 + 加号）
-      jawContainer.innerHTML = "";
-      ["upper", "lower"].forEach((jaw) => {
-        const placeholder = document.createElement("div");
-        placeholder.className = "upload-placeholder";
-        placeholder.dataset.jaw = jaw;
-
-        // ✅ 添加牙模背景图
-        const bgImg = document.createElement("img");
-        bgImg.className = "jaw-bg";
-        bgImg.alt = jaw === "upper" ? "Upper Jaw" : "Lower Jaw";
-        bgImg.src =
-          jaw === "upper" ? "../../assets/upper.svg" : "../../assets/lower.svg";
-
-        // ✅ 加号图标
-        const plus = document.createElement("span");
-        plus.className = "plus-icon";
-        plus.textContent = "＋";
-
-        placeholder.appendChild(bgImg);
-        placeholder.appendChild(plus);
-
-        // ✅ 点击上传事件
-        placeholder.addEventListener("click", () => {
-          activeTarget = placeholder;
-          jawUploadInput.click();
-        });
-
-        jawContainer.appendChild(placeholder);
-      });
-
-      // ✅ 重建 Reference Image 上传入口
-      refContainer.innerHTML = "";
-      const refPlaceholder = document.createElement("div");
-      refPlaceholder.className = "upload-placeholder";
-
-      const refPlus = document.createElement("span");
-      refPlus.className = "plus-icon";
-      refPlus.textContent = "＋";
-
-      refPlaceholder.appendChild(refPlus);
-      refPlaceholder.addEventListener("click", () => {
-        refUploadInput.click();
-      });
-
-      refContainer.appendChild(refPlaceholder);
-
-      // ✅ 重置上传输入框
-      jawUploadInput.value = "";
-      refUploadInput.value = "";
+  // Invite modal Cancel: clear the search input only (keep modal + user list).
+  if (cancelInviteBtn && userSearchInput) {
+    cancelInviteBtn.addEventListener("click", () => {
+      userSearchInput.value = "";
     });
   }
 });

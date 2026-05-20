@@ -101,6 +101,18 @@
   background-color: #e0e0e0;
 }
 
+.upload-placeholder.is-dragover {
+  background-color: #d6e4f5;
+  outline: 2px dashed #88abda;
+  outline-offset: -3px;
+}
+
+.uploaded-models.is-dragover {
+  outline: 2px dashed #88abda;
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
 .plus-icon {
   font-size: 30px;
   color: #333;
