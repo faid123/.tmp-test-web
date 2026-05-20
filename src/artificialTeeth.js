@@ -2129,17 +2129,22 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     ["lower", true],
   ]);
   const material = new THREE.MeshStandardMaterial({
-    color: 0xe5e87c,
-    roughness: 0.38,
+    color: 0xeef36a,
+    emissive: 0x5a6100,
+    emissiveIntensity: 0.28,
+    roughness: 0.26,
     metalness: 0,
+    side: THREE.DoubleSide,
     transparent: false,
     opacity: 1,
     depthTest: true,
     depthWrite: true,
-    polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1,
+    polygonOffset: false,
+    polygonOffsetFactor: 0,
+    polygonOffsetUnits: 0,
   });
+  const ARTIFICIAL_GUIDELINE_SURFACE_CLEARANCE = 1.25;
+  const ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE = 42;
   const vertexDebugMaterial = new THREE.PointsMaterial({
     color: 0xff2d55,
     size: 1.8,
@@ -2149,15 +2154,17 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
   });
   const guidelineMaterial = new THREE.MeshStandardMaterial({
     color: 0xff9f1c,
-    roughness: 0.25,
+    emissive: 0x553000,
+    emissiveIntensity: 0.42,
+    roughness: 0.12,
     metalness: 0,
     transparent: false,
     opacity: 1,
     depthTest: true,
     depthWrite: false,
     polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -2,
+    polygonOffsetFactor: -8,
+    polygonOffsetUnits: -8,
   });
   const setStatus = (label, progress = 0.1, autoHide = false) => {
     if (typeof onStatus === "function") {
@@ -2482,6 +2489,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
         fromSurface.z * fromSurface.z
       ));
       const offset = Math.max(1.2, getGeometryRadius(tooth) * 0.35);
+      const displayOffset = Math.max(offset, Math.min(2.2, getGeometryRadius(tooth) * 0.44));
       const surfaceOffset = length < 0.0002
         ? { x: 0, y: jawType === "upper" ? -1 : 1, z: 0 }
         : {
@@ -2490,9 +2498,9 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
             z: fromSurface.z / length,
           };
       const position = {
-        x: surfacePoint.x + surfaceOffset.x * offset,
-        y: surfacePoint.y + surfaceOffset.y * offset,
-        z: surfacePoint.z + surfaceOffset.z * offset,
+        x: surfacePoint.x + surfaceOffset.x * displayOffset,
+        y: surfacePoint.y + surfaceOffset.y * displayOffset,
+        z: surfacePoint.z + surfaceOffset.z * displayOffset,
       };
 
       return {
@@ -2503,6 +2511,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
           jawSurfaceSnapped: true,
           jawSurfaceSnapSource: tooth.source?.placementSource || "current",
           jawSurfaceDistanceBeforeSnap: Number(length.toFixed(3)),
+          jawSurfaceDisplayClearance: Number(displayOffset.toFixed(3)),
         },
       };
     });
@@ -3001,9 +3010,15 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
   const createMesh = (jawType, tooth, toothIndex) => {
     const geometry = createGeometry(tooth);
     if (!geometry) return null;
-    const mesh = new THREE.Mesh(geometry, material.clone());
+    const meshMaterial = material.clone();
+    meshMaterial.transparent = false;
+    meshMaterial.opacity = 1;
+    meshMaterial.depthTest = true;
+    meshMaterial.depthWrite = true;
+    meshMaterial.needsUpdate = true;
+    const mesh = new THREE.Mesh(geometry, meshMaterial);
     mesh.name = `${jawType}-artificial-tooth-${tooth.toothIndex ?? toothIndex}`;
-    mesh.renderOrder = 12;
+    mesh.renderOrder = 30;
     mesh.userData = {
       overlayType: "artificial-tooth",
       selectable: true,
@@ -3039,10 +3054,12 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
   const createGuidelineMaterial = (color = 0xff9f1c) => {
     const materialClone = guidelineMaterial.clone();
     materialClone.color.setHex(color);
+    materialClone.emissive.setHex(color);
     materialClone.transparent = false;
     materialClone.opacity = 1;
     materialClone.depthTest = true;
     materialClone.depthWrite = false;
+    materialClone.emissiveIntensity = 0.42;
     materialClone.needsUpdate = true;
     return materialClone;
   };
@@ -3062,7 +3079,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     );
     const tube = new THREE.Mesh(geometry, createGuidelineMaterial(options.color));
     tube.name = `${jawType}-artificial-teeth-guideline-${edgeIndex}`;
-    tube.renderOrder = options.renderOrder ?? 10;
+    tube.renderOrder = options.renderOrder ?? ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE;
     tube.userData = {
       overlayType: "artificial-teeth-guideline",
       arch: jawType,
@@ -3098,10 +3115,128 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     };
   };
 
+  const buildArtificialToothSurfaceSamples = (jawType, teeth) => {
+    const samples = [];
+    teeth.forEach((tooth, toothIndex) => {
+      const geometry = createGeometry(tooth);
+      const position = geometry?.attributes?.position;
+      if (!geometry || !position?.count) {
+        geometry?.dispose?.();
+        return;
+      }
+
+      const probe = new THREE.Mesh(geometry);
+      applyToothTransform(probe, tooth, jawType);
+      probe.updateMatrix();
+      const center = new THREE.Vector3();
+      geometry.computeBoundingBox();
+      geometry.boundingBox?.getCenter(center);
+      center.applyMatrix4(probe.matrix);
+
+      const stride = Math.max(1, Math.floor(position.count / 1400));
+      const vertex = new THREE.Vector3();
+      for (let index = 0; index < position.count; index += stride) {
+        vertex.fromBufferAttribute(position, index).applyMatrix4(probe.matrix);
+        samples.push({
+          x: vertex.x,
+          y: vertex.y,
+          z: vertex.z,
+          centerX: center.x,
+          centerY: center.y,
+          centerZ: center.z,
+          toothIndex: tooth.toothIndex ?? toothIndex,
+        });
+      }
+      geometry.dispose?.();
+    });
+    return samples;
+  };
+
+  const seatGuidelinePointOnArtificialToothEdge = (jawType, point, samples, clearance = 0.72) => {
+    if (!samples?.length || !isValidPoint(point)) return seatGuidelinePointOnJaw(jawType, point);
+
+    let closest = null;
+    let closestDistanceSq = Infinity;
+    samples.forEach((sample) => {
+      const dx = point.x - sample.x;
+      const dy = point.y - sample.y;
+      const dz = point.z - sample.z;
+      const distanceSq = dx * dx + dy * dy + dz * dz;
+      if (distanceSq < closestDistanceSq) {
+        closestDistanceSq = distanceSq;
+        closest = sample;
+      }
+    });
+
+    if (!closest || Math.sqrt(closestDistanceSq) > 8) {
+      return seatGuidelinePointOnJaw(jawType, point);
+    }
+
+    const outward = {
+      x: closest.x - closest.centerX,
+      y: closest.y - closest.centerY,
+      z: closest.z - closest.centerZ,
+    };
+    const length = Math.hypot(outward.x, outward.y, outward.z);
+    if (!Number.isFinite(length) || length < 0.001) {
+      return {
+        x: closest.x,
+        y: closest.y + (jawType === "upper" ? -clearance : clearance),
+        z: closest.z,
+      };
+    }
+
+    return {
+      x: closest.x + (outward.x / length) * clearance,
+      y: closest.y + (outward.y / length) * clearance,
+      z: closest.z + (outward.z / length) * clearance,
+    };
+  };
+
+  const liftGuidelinePointFromJaw = (jawType, point, clearance = 0.78) => {
+    const surfacePoint = getClosestJawSurfacePoint(jawType, point);
+    if (!surfacePoint) return point;
+
+    const direction = {
+      x: point.x - surfacePoint.x,
+      y: point.y - surfacePoint.y,
+      z: point.z - surfacePoint.z,
+    };
+    const length = Math.hypot(direction.x, direction.y, direction.z);
+    if (!Number.isFinite(length) || length < 0.001) {
+      return {
+        x: surfacePoint.x,
+        y: surfacePoint.y + (jawType === "upper" ? -clearance : clearance),
+        z: surfacePoint.z,
+      };
+    }
+    if (length >= clearance) return point;
+
+    return {
+      x: surfacePoint.x + (direction.x / length) * clearance,
+      y: surfacePoint.y + (direction.y / length) * clearance,
+      z: surfacePoint.z + (direction.z / length) * clearance,
+    };
+  };
+
   const getSmoothedGuidelinePoints = (jawType, points, options = {}) => {
     const seatOnJaw = options.seatOnJaw !== false;
+    const clearance = Number.isFinite(options.clearance) ? options.clearance : null;
+    const fitPoint = (point) => {
+      const fittedPoint = options.seatOnArtificialToothEdge
+        ? seatGuidelinePointOnArtificialToothEdge(
+            jawType,
+            point,
+            options.toothSurfaceSamples,
+            clearance ?? ARTIFICIAL_GUIDELINE_SURFACE_CLEARANCE
+          )
+        : seatOnJaw
+          ? seatGuidelinePointOnJaw(jawType, point)
+          : point;
+      return clearance ? liftGuidelinePointFromJaw(jawType, fittedPoint, clearance) : fittedPoint;
+    };
     if (points.length < 3) {
-      return points.map((point) => seatOnJaw ? seatGuidelinePointOnJaw(jawType, point) : point);
+      return points.map(fitPoint);
     }
 
     const curve = new THREE.CatmullRomCurve3(
@@ -3111,9 +3246,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       0.35
     );
     const divisions = Math.max(18, points.length * 8);
-    return curve.getPoints(divisions).map((point) =>
-      seatOnJaw ? seatGuidelinePointOnJaw(jawType, point) : point
-    );
+    return curve.getPoints(divisions).map(fitPoint);
   };
 
   const getGuidelineJumpThreshold = (points) => {
@@ -3156,7 +3289,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
 
     const tubeGroup = new THREE.Group();
     tubeGroup.name = `${jawType}-artificial-teeth-guideline-surface-wrap`;
-    tubeGroup.renderOrder = 13;
+    tubeGroup.renderOrder = options.renderOrder ?? ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE;
     tubeGroup.userData = {
       overlayType: "artificial-teeth-guideline",
       arch: jawType,
@@ -3284,21 +3417,25 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     return report;
   };
 
-  const createDecodedGuidelineGroup = (jawType, guideData) => {
+  const createDecodedGuidelineGroup = (jawType, guideData, teeth = []) => {
+    const toothSurfaceSamples = buildArtificialToothSurfaceSamples(jawType, teeth);
     const lineConfigs = [
       {
         key: "gingivalLineEditorData_",
         source: "gingival-line-editor",
         color: 0x6f45d8,
-        renderOrder: 9,
-        radius: 0.34,
+        renderOrder: ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE,
+        radius: 0.56,
+        seatOnJaw: true,
       },
       {
         key: "buccalLineEditorData_",
         source: "buccal-line-editor",
         color: 0xff9f1c,
-        renderOrder: 10,
-        radius: 0.38,
+        renderOrder: ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE + 1,
+        radius: 0.62,
+        seatOnJaw: true,
+        seatOnArtificialToothEdge: true,
       },
     ];
     const guidelineGroup = new THREE.Group();
@@ -3326,7 +3463,10 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
           renderOrder: config.renderOrder,
           radius: config.radius,
           source: config.source,
-          seatOnJaw: false,
+          seatOnJaw: config.seatOnJaw,
+          seatOnArtificialToothEdge: config.seatOnArtificialToothEdge,
+          toothSurfaceSamples,
+          clearance: ARTIFICIAL_GUIDELINE_SURFACE_CLEARANCE,
         };
         const tube = createGuidelineTube(jawType, points, options);
         if (tube) {
@@ -3413,15 +3553,15 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       {
         source: "transform-gingival-line",
         color: 0x6f45d8,
-        renderOrder: 9,
-        radius: 0.34,
+        renderOrder: ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE,
+        radius: 0.56,
         getPoint: (tooth) => tooth.transform?.gingivalPoint,
       },
       {
         source: "transform-buccal-line",
         color: 0xff9f1c,
-        renderOrder: 10,
-        radius: 0.38,
+        renderOrder: ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE + 1,
+        radius: 0.62,
         getPoint: (tooth) => getTransformCrownWrapPoint(tooth.transform) ?? tooth.transform?.buccalPoint,
       },
     ];
@@ -3448,6 +3588,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
         renderOrder: config.renderOrder,
         radius: config.radius,
         source: config.source,
+        clearance: ARTIFICIAL_GUIDELINE_SURFACE_CLEARANCE,
       });
       if (!tube) return;
 
@@ -3484,8 +3625,9 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
 
     const tube = createGuidelineTube(jawType, points, {
       color: 0xff9f1c,
-      renderOrder: 10,
+      renderOrder: ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE + 1,
       source: guidelineData.source,
+      clearance: ARTIFICIAL_GUIDELINE_SURFACE_CLEARANCE,
     });
     if (tube) {
       guidelineGroup.add(tube);
@@ -3496,7 +3638,12 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
           points[index - 1],
           points[index],
           index - 1,
-          { color: 0xff9f1c, renderOrder: 10, source: guidelineData.source }
+          {
+            color: 0xff9f1c,
+            renderOrder: ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE + 1,
+            source: guidelineData.source,
+            clearance: ARTIFICIAL_GUIDELINE_SURFACE_CLEARANCE,
+          }
         );
         if (segment) guidelineGroup.add(segment);
       }
@@ -3530,7 +3677,8 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       try {
         decodedGuideline = createDecodedGuidelineGroup(
           jawType,
-          toothByJaw.guidelines?.[jawType]
+          toothByJaw.guidelines?.[jawType],
+          seatedTeeth
         );
       } catch (error) {
         console.warn("[artificial teeth] decoded guideline render skipped", {

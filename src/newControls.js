@@ -288,6 +288,22 @@ export { addVisibilityAndTransparencyControls };
      border-color: rgba(167, 170, 40, 0.55) !important;
    }
 
+   .jaw-view-button {
+     background-image: none !important;
+     background-color: #0ea5e9 !important;
+     border: 2px solid #0369a1 !important;
+     border-radius: 6px;
+     color: #ffffff;
+     font-size: 11px;
+     font-weight: 800;
+     line-height: 1;
+   }
+
+   .jaw-view-button.inactive {
+     background-color: rgba(14, 165, 233, 0.25) !important;
+     border-color: rgba(3, 105, 161, 0.55) !important;
+   }
+
  `;
  document.head.appendChild(style);
  
@@ -355,6 +371,15 @@ export { addVisibilityAndTransparencyControls };
      const setMeshGroupVisible = (meshes, isVisible) => {
          meshes.forEach(mesh => {
              mesh.visible = isVisible;
+             const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+             materials.forEach(material => {
+                 if (!material) return;
+                 material.transparent = false;
+                 material.opacity = 1;
+                 material.depthTest = true;
+                 material.depthWrite = true;
+                 material.needsUpdate = true;
+             });
          });
      };
 
@@ -370,11 +395,14 @@ export { addVisibilityAndTransparencyControls };
          });
      };
 
-     const makeGroupVisibilityButton = (iconPath, tooltip, meshes) => {
+     const makeGroupVisibilityButton = (iconPath, tooltip, meshes, onVisibilityChange = null) => {
          const button = createIconBtn(iconPath, tooltip, () => {
              const nextVisible = !areAnyVisible(meshes);
              setMeshGroupVisible(meshes, nextVisible);
              setButtonState(button, nextVisible);
+             if (typeof onVisibilityChange === 'function') {
+                 onVisibilityChange(nextVisible);
+             }
          });
          if (!meshes.length) {
              button.disabled = true;
@@ -390,6 +418,7 @@ export { addVisibilityAndTransparencyControls };
      ['upper', 'lower'].forEach(jawKey => {
          const jawMeshes = meshesByJaw[jawKey].jaw;
          const surfaceMeshes = meshesByJaw[jawKey].surface;
+         const archMeshes = [...jawMeshes, ...surfaceMeshes];
          if (!jawMeshes.length && !surfaceMeshes.length) return;
 
          const meshControls = document.createElement('div');
@@ -400,17 +429,30 @@ export { addVisibilityAndTransparencyControls };
          const titlePrefix = jawKey === 'upper' ? 'Upper' : 'Lower';
          const jawIcon = `${basePath}/assets/Icon_${titlePrefix}Jaw_Occlusal.png`;
          const surfaceIcon = `${basePath}/assets/Icon_${titlePrefix}Jaw.png`;
+         let syncJawViewButtonState = () => {};
+         let syncJawButtonState = () => {};
+         let syncSurfaceButtonState = () => {};
 
-         meshControls.appendChild(
-             makeGroupVisibilityButton(jawIcon, `${titlePrefix} Jaw`, jawMeshes)
+         const jawBtn = makeGroupVisibilityButton(jawIcon, `${titlePrefix} Jaw`, jawMeshes, () => {
+             syncJawButtonState();
+             syncJawViewButtonState();
+             window.syncArtificialTeethToJaw?.();
+         });
+         syncJawButtonState = () => setButtonState(jawBtn, areAnyVisible(jawMeshes));
+         meshControls.appendChild(jawBtn);
+
+         const surfaceBtn = makeGroupVisibilityButton(
+             surfaceIcon,
+             `${titlePrefix} Jaw Surface`,
+             surfaceMeshes,
+             () => {
+                 syncSurfaceButtonState();
+                 syncJawViewButtonState();
+                 window.syncArtificialTeethToJaw?.();
+             }
          );
-         meshControls.appendChild(
-             makeGroupVisibilityButton(
-                 surfaceIcon,
-                 `${titlePrefix} Jaw Surface`,
-                 surfaceMeshes
-             )
-         );
+         syncSurfaceButtonState = () => setButtonState(surfaceBtn, areAnyVisible(surfaceMeshes));
+         meshControls.appendChild(surfaceBtn);
 
          let currentMode = 'normal';
          const undercutBtn = createIconBtn(`${basePath}/assets/Undercut.png`, `${titlePrefix} Undercut`, () => {});
@@ -474,6 +516,27 @@ export { addVisibilityAndTransparencyControls };
          };
          syncArtificialTeethButtonState();
          meshControls.appendChild(artificialTeethBtn);
+
+         const jawViewBtn = createIconBtn('', `${titlePrefix} Jaw View`, () => {});
+         jawViewBtn.classList.add('jaw-view-button');
+         jawViewBtn.textContent = jawKey === 'upper' ? 'TOP' : 'BOT';
+         syncJawViewButtonState = () => {
+             setButtonState(jawViewBtn, areAnyVisible(archMeshes));
+         };
+         jawViewBtn.onclick = () => {
+             const nextVisible = !areAnyVisible(archMeshes);
+             setMeshGroupVisible(archMeshes, nextVisible);
+             window.setPolylineJawVisibility?.(jawKey, nextVisible);
+             window.setArtificialTeethJawVisibility?.(jawKey, nextVisible);
+             syncJawButtonState();
+             syncSurfaceButtonState();
+             syncJawViewButtonState();
+             syncPolylineButtonState();
+             syncArtificialTeethButtonState();
+             window.syncArtificialTeethToJaw?.();
+         };
+         syncJawViewButtonState();
+         meshControls.appendChild(jawViewBtn);
 
          container.appendChild(meshControls);
      });
