@@ -3482,7 +3482,7 @@ btnContainer.appendChild(edit2DStatic); */
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
-    artificialTeethRenderer.updateCameraVisibility(camera);
+    artificialTeethRenderer.syncToJawMeshes();
 
     renderer.render(scene, camera);
   }
