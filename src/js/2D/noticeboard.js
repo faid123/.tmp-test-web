@@ -59,25 +59,42 @@ async function postNoticeboardEndpoint(path, payload){
   return res.json();
 }
 
-async function fetchNoticeboardBase(caseIntID, uuid) {
-  return postNoticeboardEndpoint("/noticeboard/get", noticeboardPayload(caseIntID, uuid));
-}
-
-async function fetchNoticeboardDrawn(caseIntID, uuid) {
-  return postNoticeboardEndpoint("/noticeboard/drawnview/get", noticeboardPayload(caseIntID, uuid));
-}
-
 async function fetchNoticeboardEdited(caseIntID, uuid) {
   return postNoticeboardEndpoint("/noticeboard/editedview/get", noticeboardPayload(caseIntID, uuid));
 }
 
+async function saveNoticeboardEdited(caseIntID, uuid, filenames, data) {
+  const payload = [
+    { machine_id: MACHINE_ID, uuid, caseIntID },
+    {
+      case_id: caseIntID,
+      filenames: JSON.stringify(Array.isArray(filenames) ? filenames : []),
+      data: JSON.stringify(Array.isArray(data) ? data : []),
+    },
+  ];
+  const res = await fetch(`${API_BASE}/noticeboard/editedview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`noticeboard editedview save failed: ${res.status}`);
+  return res.json().catch(() => null);
+}
+
+function coerceArray(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = safeJsonParse(value, null);
+    return Array.isArray(parsed) ? parsed : [];
+  }
+  return [];
+}
+
 function parseRowToArrays(row) {
   if (!row) return { filenames: [], data: [] };
-  const filenames = safeJsonParse(row.filenames || "[]", []);
-  const data = safeJsonParse(row.data || "[]", []);
   return {
-    filenames: Array.isArray(filenames) ? filenames : [],
-    data: Array.isArray(data) ? data : []
+    filenames: coerceArray(row.filenames),
+    data: coerceArray(row.data),
   };
 }
 
@@ -85,119 +102,211 @@ function isDataUrlImage(v) {
   return typeof v === "string" && v.startsWith("data:image/");
 }
 
-function loadImage(src) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
-    img.src = src;
-  });
+// Decode base64 (tolerant of URL-safe variants and missing padding) into a
+// binary string where each character represents one byte.
+function safeAtob(b64) {
+  if (typeof b64 !== "string") return null;
+  try {
+    const cleaned = b64.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+    const padded = cleaned + "=".repeat((4 - (cleaned.length % 4)) % 4);
+    return atob(padded);
+  } catch {
+    return null;
+  }
 }
 
-async function composeBaseAndOverlay(baseDataUrl, overlayDataUrl) {
-  if (!baseDataUrl && !overlayDataUrl) return "";
-  const [base, overlay] = await Promise.all([
-    baseDataUrl ? loadImage(baseDataUrl) : Promise.resolve(null),
-    overlayDataUrl ? loadImage(overlayDataUrl) : Promise.resolve(null),
-  ]);
-  const ref = base || overlay;
-  if (!ref) return "";
-  const canvas = document.createElement("canvas");
-  canvas.width = ref.naturalWidth || ref.width;
-  canvas.height = ref.naturalHeight || ref.height;
-  const ctx = canvas.getContext("2d");
-  if (base) ctx.drawImage(base, 0, 0);
-  if (overlay) ctx.drawImage(overlay, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", 0.85);
-}
-
-function maybeStrokeJson(v) {
-  return typeof v === "string" ? safeJsonParse(v, null) : null;
-}
-
-async function buildServerViewcaptures(baseRow, drawnRow, editedRow) {
-  const base = parseRowToArrays(baseRow);
-  const drawn = parseRowToArrays(drawnRow);
-  const edited = parseRowToArrays(editedRow);
-
-  // Prefer edited if present, else composed base+drawn
-  const maxLen = Math.max(base.data.length, drawn.data.length, edited.data.length, base.filenames.length);
+// The desktop client stores noticeboard captures by serializing a list of
+// images with .NET BinaryFormatter, then base64-encoding the whole blob. The
+// result isn't JSON, so JSON.parse silently fails. This scans the decoded
+// bytes for embedded PNG signatures (or base64-encoded PNG strings as a
+// fallback) and rebuilds usable data URLs.
+function extractPngsFromBinaryFormatter(outerBase64) {
+  const decoded = safeAtob(outerBase64);
+  if (!decoded) return [];
 
   const out = [];
-  for (let i = 0; i < maxLen; i += 1) {
-    const filename = edited.filenames[i] || base.filenames[i] || `Viewcapture ${i + 1}`;
-    const editedItem = edited.data[i];
-    const baseItem = base.data[i];
-    const drawnItem = drawn.data[i];
-
-    let preview = "";
-    let strokes = null;
-
-    if (isDataUrlImage(editedItem)) {
-      preview = editedItem;
-    } else {
-      const baseImage = isDataUrlImage(baseItem) ? baseItem : "";
-      const drawnImage = isDataUrlImage(drawnItem) ? drawnItem : "";
-      preview = await composeBaseAndOverlay(baseImage, drawnImage);
-    }
-
-    if (!preview) {
-      const s1 = maybeStrokeJson(drawnItem);
-      const s2 = maybeStrokeJson(baseItem);
-      const s3 = maybeStrokeJson(editedItem);
-      strokes = s1 || s2 || s3 || null;
-    }
-
-    if (!preview && !strokes) continue;
-
-    out.push({
-      id: `vc_srv_${i}_${filename}`,
-      title: filename,
-      preview: preview || "",
-      strokes: strokes || undefined,
-      createdAt: new Date().toISOString(),
-      source: "server"
-    });
+  const PNG_SIG = "\x89PNG\r\n\x1a\n";
+  const PNG_END = "IEND\xae\x42\x60\x82";
+  let i = 0;
+  while (true) {
+    const start = decoded.indexOf(PNG_SIG, i);
+    if (start === -1) break;
+    const endMarker = decoded.indexOf(PNG_END, start);
+    if (endMarker === -1) break;
+    const end = endMarker + PNG_END.length;
+    out.push("data:image/png;base64," + btoa(decoded.slice(start, end)));
+    i = end;
   }
+  if (out.length) return out;
 
+  // Fallback: the blob may contain base64-encoded PNG *strings* rather than
+  // raw PNG bytes. Scan for the canonical base64-PNG header.
+  const B64_PNG_HEAD = "iVBORw0KGgo";
+  let j = 0;
+  while (true) {
+    const idx = decoded.indexOf(B64_PNG_HEAD, j);
+    if (idx === -1) break;
+    let k = idx;
+    while (k < decoded.length && /[A-Za-z0-9+/=]/.test(decoded[k])) k += 1;
+    const b64 = decoded.slice(idx, k).replace(/=+$/, "");
+    const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+    out.push("data:image/png;base64," + b64 + pad);
+    j = k;
+  }
   return out;
 }
 
-function mergeViewcaptures(localItems, serverItems) {
-  const map = new Map();
+function extractFilenamesFromBinaryFormatter(outerBase64) {
+  const decoded = safeAtob(outerBase64);
+  if (!decoded) return [];
+  const out = [];
+  const RE = /[A-Za-z0-9_\-\. ]{1,80}\.(?:png|jpe?g|gif|bmp)/gi;
+  let m;
+  while ((m = RE.exec(decoded)) !== null) out.push(m[0]);
+  return out;
+}
 
+// Desktop client filenames are prefixed `2D_*` for instructions and `3D_*`
+// (or no prefix) for viewcaptures. Anything else routes to viewcaptures by
+// default so nothing gets dropped silently.
+function isInstructionFilename(name) {
+  return /^\s*2d[_\-\.\s]/i.test(String(name || ""));
+}
+
+function buildServerEntries(editedRow) {
+  if (!editedRow) return { instructions: [], viewcaptures: [] };
+
+  // Preferred path: the field is a JSON-serialized array of data URLs (what
+  // the web app itself writes). Use it whenever it parses cleanly.
+  const edited = parseRowToArrays(editedRow);
+  let previews = edited.data.filter(isDataUrlImage);
+  let names = edited.filenames.filter((n) => typeof n === "string" && n);
+
+  // Fallback path: the field is a .NET BinaryFormatter blob from the desktop
+  // client. Dig PNG bytes and filenames out of it heuristically.
+  if (!previews.length && typeof editedRow.data === "string") {
+    previews = extractPngsFromBinaryFormatter(editedRow.data);
+  }
+  if (!names.length && typeof editedRow.filenames === "string") {
+    names = extractFilenamesFromBinaryFormatter(editedRow.filenames);
+  }
+
+  const instructions = [];
+  const viewcaptures = [];
+  for (let i = 0; i < previews.length; i += 1) {
+    const preview = previews[i];
+    const title = names[i] || `Item ${i + 1}`;
+    const item = {
+      id: `srv_${i}_${title}`,
+      title,
+      preview,
+      baseImage: preview,
+      createdAt: new Date().toISOString(),
+      source: "server",
+    };
+    if (isInstructionFilename(title)) instructions.push(item);
+    else viewcaptures.push(item);
+  }
+  return { instructions, viewcaptures };
+}
+
+function mergeInstructions(localItems, serverItems) {
+  const map = new Map();
   const keyOf = (item) => {
     if (item.title) return `title:${item.title}`;
     if (item.id) return `id:${item.id}`;
     return `preview:${item.preview || ""}`;
   };
-
   for (const it of localItems || []) map.set(keyOf(it), it);
   for (const it of serverItems || []) map.set(keyOf(it), { ...(map.get(keyOf(it)) || {}), ...it });
-
   return Array.from(map.values());
 }
 
-async function hydrateNoticeboardFromServer() {
+// Ensure the persisted title carries a 2D_/3D_ prefix so the next hydrate
+// can route it back to the correct bucket. We don't double-prefix if one is
+// already present.
+function ensureKindPrefix(title, kind) {
+  const t = String(title || "").trim();
+  if (/^\s*(2d|3d)[_\-\.\s]/i.test(t)) return t;
+  const prefix = kind === "instruction" ? "2D_" : "3D_";
+  return `${prefix}${t || (kind === "instruction" ? "Instruction" : "Viewcapture")}`;
+}
+
+function serializeForEditedView(instructions, viewcaptures) {
+  const filenames = [];
+  const data = [];
+  const push = (item, kind, fallbackIdx) => {
+    const obj = item || {};
+    const rawTitle = typeof obj.title === "string" && obj.title.trim()
+      ? obj.title.trim()
+      : `${kind === "instruction" ? "Instruction" : "Viewcapture"} ${fallbackIdx + 1}`;
+    filenames.push(ensureKindPrefix(rawTitle, kind));
+    data.push(typeof obj.preview === "string" ? obj.preview : "");
+  };
+  (Array.isArray(instructions) ? instructions : []).forEach((it, i) => push(it, "instruction", i));
+  (Array.isArray(viewcaptures) ? viewcaptures : []).forEach((it, i) => push(it, "viewcapture", i));
+  return { filenames, data };
+}
+
+let editedViewSaveInFlight = false;
+async function syncInstructionsToEditedView() {
+  if (editedViewSaveInFlight) return false;
   const user = getLoggedInUser();
   if (!user?.uuid || !state.caseIntID) return false;
 
   try {
-    const [baseRaw, drawnRaw, editedRaw] = await Promise.all([
-      fetchNoticeboardBase(state.caseIntID, user.uuid),
-      fetchNoticeboardDrawn(state.caseIntID, user.uuid),
-      fetchNoticeboardEdited(state.caseIntID, user.uuid)
-    ]);
+    editedViewSaveInFlight = true;
+    const dataModel = ensureCache();
+    // Persist both buckets so an edit in one doesn't wipe the other on the server.
+    const serialized = serializeForEditedView(
+      dataModel.instructions || [],
+      dataModel.viewcaptures || []
+    );
+    await saveNoticeboardEdited(
+      state.caseIntID,
+      user.uuid,
+      serialized.filenames,
+      serialized.data
+    );
+    setMessage("Noticeboard saved to server.", false);
+    return true;
+  } catch (err) {
+    console.error("Noticeboard server save failed", err);
+    setMessage("Saved locally. Server save failed.", true);
+    return false;
+  } finally {
+    editedViewSaveInFlight = false;
+  }
+}
 
-    const baseRow = normalizeApiRow(baseRaw);
-    const drawnRow = normalizeApiRow(drawnRaw);
+async function hydrateNoticeboardFromServer() {
+  const user = getLoggedInUser();
+  console.log("[noticeboard] hydrate start", { hasUser: !!user?.uuid, caseIntID: state.caseIntID });
+  if (!user?.uuid || !state.caseIntID) {
+    console.warn("[noticeboard] hydrate skipped — missing user.uuid or state.caseIntID");
+    return false;
+  }
+
+  try {
+    const editedRaw = await fetchNoticeboardEdited(state.caseIntID, user.uuid);
+    console.log("[noticeboard] editedview/get raw response:", editedRaw);
     const editedRow = normalizeApiRow(editedRaw);
+    console.log("[noticeboard] normalized row:", editedRow);
 
-    const serverViewcaptures = await buildServerViewcaptures(baseRow, drawnRow, editedRow);
-    if (!serverViewcaptures.length) return false;
+    const { instructions: srvInst, viewcaptures: srvVc } = buildServerEntries(editedRow);
+    console.log(
+      `[noticeboard] from server blob: ${srvInst.length} instruction(s), ${srvVc.length} viewcapture(s)`,
+      { instructions: srvInst, viewcaptures: srvVc }
+    );
+    if (!srvInst.length && !srvVc.length) return false;
 
     const data = ensureCache();
-    data.viewcaptures = mergeViewcaptures(data.viewcaptures || [], serverViewcaptures);
+    // Drop previously-hydrated server items from both buckets before merging
+    // the fresh split, so re-routing (e.g. an item that used to land in
+    // instructions but now belongs in viewcaptures) doesn't leave a duplicate.
+    const keepLocal = (it) => it && it.source !== "server";
+    data.instructions = mergeInstructions((data.instructions || []).filter(keepLocal), srvInst);
+    data.viewcaptures = mergeInstructions((data.viewcaptures || []).filter(keepLocal), srvVc);
 
     saveData(data);
     renderGrids();
@@ -317,34 +426,40 @@ function openThumbActionMenu(anchor, items, idx, kind) {
   menu.className = "noticeboard-thumb-menu";
   menu.setAttribute("role", "menu");
 
-  const canEdit = kind === "instruction";
-
-  if (canEdit) {
-    const editBtn = document.createElement("button");
-    editBtn.type = "button";
-    editBtn.className = "noticeboard-thumb-menu-item";
-    editBtn.textContent = "Edit";
-    editBtn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      closeThumbActionMenu();
-      const item = items[idx];
-      if (!item) return;
-      const result = await openInstructionEditor({
-        initialImage: item.baseImage || item.preview,
-        initialStrokes: Array.isArray(item.strokes) ? item.strokes : [],
-      });
-      if (!result) return;
-      item.preview = result.dataUrl;
-      item.strokes = result.strokes;
-      // Legacy items had no separate baseImage; treat the (then-flat) preview as the base.
-      if (!item.baseImage) item.baseImage = item.preview;
-      item.updatedAt = new Date().toISOString();
-      saveData(cache);
-      renderGrids();
-      setMessage("Instruction updated.", false);
+  const editBtn = document.createElement("button");
+  editBtn.type = "button";
+  editBtn.className = "noticeboard-thumb-menu-item";
+  editBtn.textContent = "Edit";
+  editBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    closeThumbActionMenu();
+    const item = items[idx];
+    if (!item) return;
+    const result = await openInstructionEditor({
+      initialImage: item.baseImage || item.preview,
+      initialStrokes: Array.isArray(item.strokes) ? item.strokes : [],
     });
-    menu.appendChild(editBtn);
-  }
+    if (!result) return;
+    item.preview = result.dataUrl;
+    item.strokes = result.strokes;
+    // Legacy/server items had no separate baseImage; treat the (then-flat)
+    // preview as the base so re-edits keep the original behind any new strokes.
+    if (!item.baseImage) item.baseImage = item.preview;
+    item.updatedAt = new Date().toISOString();
+    // Once a server item is edited locally, it's no longer a pure server
+    // mirror — clear the marker so the next hydrate doesn't wipe it out.
+    if (item.source === "server") delete item.source;
+    saveData(cache);
+    const synced = await syncInstructionsToEditedView();
+    renderGrids();
+    if (!synced) {
+      setMessage(
+        kind === "instruction" ? "Instruction updated locally." : "Viewcapture updated locally.",
+        false
+      );
+    }
+  });
+  menu.appendChild(editBtn);
 
   const deleteBtn = document.createElement("button");
   deleteBtn.type = "button";
@@ -423,8 +538,9 @@ async function addInstruction() {
     createdAt: new Date().toISOString(),
   });
   saveData(data);
+  const synced = await syncInstructionsToEditedView();
   renderGrids();
-  setMessage("Instruction added to noticeboard.", false);
+  if (!synced) setMessage("Instruction added locally.", false);
 }
 
 function addViewcapture() {
@@ -773,6 +889,9 @@ export function openNoticeboard() {
   renderGrids();
   modal.classList.remove("is-hidden");
   modal.setAttribute("aria-hidden", "false");
+  // Re-fetch from server every time the panel opens so newly saved
+  // instructions from other sessions/devices show up without a reload.
+  hydrateNoticeboardFromServer();
 }
 
 export function closeNoticeboard() {

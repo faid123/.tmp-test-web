@@ -4,26 +4,60 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login</title>
+    <link
+      rel="preconnect"
+      href="https://fonts.googleapis.com"
+    />
+    <link
+      rel="preconnect"
+      href="https://fonts.gstatic.com"
+      crossorigin
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./css/login.css" />
     <link rel="icon" href="./assets/favicon.ico" type="image/x-icon" />
   </head>
   <body>
-    <div class="login_face">
-      <div class="login_box">
-        <div class="img_box"></div>
-        <!-- Profile image box -->
+    <div class="login-page">
+      <div class="dot-grid dot-grid-left" aria-hidden="true"></div>
+      <div class="dot-grid dot-grid-right" aria-hidden="true"></div>
+      <div class="blob blob-left" aria-hidden="true"></div>
+      <div class="blob blob-right" aria-hidden="true"></div>
 
-        <div class="login_msg">
-          <input type="text" id="username" placeholder="Enter your username" />
-          <input
-            type="password"
-            id="password"
-            placeholder="Enter your password"
-          />
+      <div class="login-box">
+        <div class="brand-badge" aria-hidden="true">
+          <img src="./assets/profile.png" alt="" />
+        </div>
 
-          <button id="btn" onclick="login()">Log In</button>
+        <div class="login-content">
+          <h1>Welcome Back!</h1>
+
+          <label class="field">
+            <span class="icon" aria-hidden="true"><img src="./assets/user.png" alt="" /></span>
+            <input type="text" id="username" placeholder="Enter your username" />
+          </label>
+
+          <label class="field">
+            <span class="icon" aria-hidden="true"><img src="./assets/padlock.png" alt="" /></span>
+            <input
+              type="password"
+              id="password"
+              placeholder="Enter your password"
+            />
+            <span class="toggle-eye" aria-hidden="true"><img src="./assets/visible.png" alt="" /></span>
+          </label>
+
+          <button id="btn" onclick="login()">
+            <span>Log In</span>
+            <span class="arrow" aria-hidden="true">&#8594;</span>
+          </button>
 
           <p id="error-message"></p>
+
+          <p class="forgot-text">Forgot your password?</p>
         </div>
       </div>
     </div>

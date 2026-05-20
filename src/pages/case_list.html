@@ -3,211 +3,253 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Case List</title>
+    <title>Case Management</title>
     <link rel="stylesheet" href="../../css/case_list.css" />
     <link rel="stylesheet" href="../../css/createCase.css" />
     <link rel="stylesheet" href="../../css/notification.css" />
     <link rel="stylesheet" href="../../css/versionHistory.css" />
-    <link rel="icon" href="/assets/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/assets/favicon.ico" type="image/x-icon" />
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
     />
   </head>
   <body>
-    <div class="container">
-      <!-- 左侧主列表 -->
-      <div class="case-list">
-        <div class="case-header">
-          <div class="case-toolbar">
-            <button id="notificationBtn" class="toolbar-btn toolbar-btn-notifications">
+    <div class="cm-page container">
+      <main class="cm-main case-list">
+        <header class="cm-header">
+          <div class="cm-titles">
+            <h1>Case Management</h1>
+            <p>Manage and track all your cases in one place</p>
+          </div>
+          <div class="cm-header-right">
+            <button
+              id="notificationBtn"
+              class="cm-bell"
+              type="button"
+              aria-label="Notifications"
+            >
               <i class="fa fa-bell" aria-hidden="true"></i>
-              <span>NOTIFICATIONS</span>
-              <span id="notificationDot" class="notif-dot" aria-hidden="true"></span>
+              <span id="notificationDot" class="cm-bell-badge" hidden>0</span>
             </button>
-
-            <div class="toolbar-filter">
-              <label for="filter-status">FILTER BY STATUS</label>
-              <select id="filter-status" class="status-dropdown">
-                <option value="all">ALL</option>
-                <option value="na">N/A</option>
-                <option value="draft">Draft</option>
-                <option value="2d_design_pending">2D design pending</option>
-                <option value="2d_design_drafted">2D design drafted</option>
-                <option value="2d_design_approved">2D design approved</option>
-                <option value="3d_design_pending">3D design pending</option>
-                <option value="3d_design_drafted">3D design drafted</option>
-                <option value="3d_design_approved">3D design approved</option>
-                <option value="in_production">In production</option>
-                <option value="out_for_delivery">Out for delivery</option>
-                <option value="delivered">Delivered</option>
-                <option value="completed">Completed</option>
-              </select>
-            </div>
-
-            <button class="toolbar-btn toolbar-btn-primary create-case" type="button">
-              CREATE NEW CASE
+            <button class="cm-user-avatar logout" type="button" title="Log out" aria-label="Log out">
+              <i class="fa fa-right-from-bracket" aria-hidden="true"></i>
             </button>
+          </div>
+        </header>
 
-            <button id="refreshListBtn" class="toolbar-btn refresh" type="button">
-              <i class="fa fa-arrows-rotate" aria-hidden="true"></i>
-              <span>REFRESH</span>
-            </button>
+        <div class="cm-toolbar case-header">
+          <div class="cm-chip cm-chip-dark">
+            <i class="fa fa-table-cells" aria-hidden="true"></i>
+            <span>All Cases</span>
+            <span class="cm-count" id="caseCountBadge">0</span>
+          </div>
 
-            <button class="toolbar-btn logout" type="button" title="Log out">
-              <span>LOGOUT</span>
+          <div class="cm-chip cm-chip-filter">
+            <i class="fa-regular fa-calendar" aria-hidden="true"></i>
+            <label for="dateFilterInput">Search by Date</label>
+            <input
+              type="date"
+              id="dateFilterInput"
+              class="cm-date-input"
+            />
+            <button
+              id="clearDateBtn"
+              type="button"
+              class="cm-date-clear"
+              title="Clear date"
+              aria-label="Clear date filter"
+            >
+              <i class="fa fa-xmark" aria-hidden="true"></i>
             </button>
           </div>
 
-          <!-- 通知弹出框 -->
-          <div id="notificationPopup" class="notification-popup hidden">
-            <div class="notification-header">
-              <span>NOTIFICATIONS</span>
-              <button id="markAllBtn">MARK ALL AS READ</button>
-            </div>
-            <div id="notificationList" class="notification-list">
-              <!-- 通知列表将由 JS 动态插入 -->
-            </div>
+          <div class="cm-chip cm-chip-filter">
+            <i class="fa fa-filter" aria-hidden="true"></i>
+            <label for="filter-status">Filter by Status</label>
+            <select id="filter-status" class="cm-filter-select">
+              <option value="all">All</option>
+              <option value="na">N/A</option>
+              <option value="draft">Draft</option>
+              <option value="2d_design_pending">2D design pending</option>
+              <option value="2d_design_drafted">2D design drafted</option>
+              <option value="2d_design_approved">2D design approved</option>
+              <option value="3d_design_pending">3D design pending</option>
+              <option value="3d_design_drafted">3D design drafted</option>
+              <option value="3d_design_approved">3D design approved</option>
+              <option value="in_production">In production</option>
+              <option value="out_for_delivery">Out for delivery</option>
+              <option value="delivered">Delivered</option>
+              <option value="completed">Completed</option>
+            </select>
           </div>
+
+          <button
+            class="cm-btn cm-btn-primary create-case"
+            type="button"
+            id="createCaseBtn"
+          >
+            <i class="fa fa-plus" aria-hidden="true"></i>
+            <span>Create New Case</span>
+          </button>
+
+          <button
+            id="refreshListBtn"
+            class="cm-icon-btn refresh"
+            type="button"
+            aria-label="Refresh list"
+            title="Refresh list"
+          >
+            <i class="fa fa-arrows-rotate" aria-hidden="true"></i>
+          </button>
         </div>
 
-        <!-- <div class="case-tabs">
-                <button class="active">FOR CLINICIAN</button>
-                <button>FOR LAB</button>
-            </div> -->
+        <div
+          id="notificationPopup"
+          class="notification-popup hidden"
+        >
+          <div class="notification-header">
+            <span>NOTIFICATIONS</span>
+            <button id="markAllBtn">MARK ALL AS READ</button>
+          </div>
+          <div id="notificationList" class="notification-list"></div>
+        </div>
 
-        <!-- 表头独立 -->
-        <div class="table-head-wrapper">
+        <div class="cm-list" id="caseList">
+          <!-- JS-rendered cards land here -->
+        </div>
+
+        <!-- Hidden legacy table so existing JS selectors don't error out -->
+        <div class="table-head-wrapper" hidden></div>
+        <div class="table-body-wrapper" hidden>
           <table class="case-table">
-            <thead>
-              <tr>
-                <th class="sortable" data-sort="case_id" style="width: 22%">
-                  CASE NAME
-                </th>
-                <th class="sortable col-date" data-sort="creation_date" style="width: 18%">
-                  DATE REQUESTED
-                </th>
-                <th class="sortable col-date" data-sort="expected_date" style="width: 14%">
-                  DUE DATE
-                </th>
-                <th class="sortable" data-sort="new_status" style="width: 14%">
-                  STATUS
-                </th>
-                <th class="sortable" data-sort="assigned_to" style="width: 20%">
-                  ASSIGNED TO
-                </th>
-                <th class="col-action" style="width: 12%">ACTIONS</th>
-              </tr>
-            </thead>
+            <tbody></tbody>
           </table>
         </div>
+      </main>
 
-        <!-- 滚动区域只包含 tbody -->
-        <div class="table-body-wrapper">
-          <table class="case-table">
-            <tbody>
-              <!-- JS 动态填充 -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 右侧详情区域 -->
-      <div class="case-details">
-        <button id="backToListBtn" class="back-to-list" type="button" aria-label="Back to list">
+      <aside class="cm-detail case-details">
+        <button
+          id="backToListBtn"
+          class="back-to-list"
+          type="button"
+          aria-label="Back to list"
+        >
           <i class="fa fa-arrow-left"></i> Back to list
         </button>
-        <!-- <div class="case-actions">
-                <button class="mark-important">⭐ MARK AS IMPORTANT</button>
-                <button class="mark-unread">🟢 UNREAD</button>
-            </div> -->
-        <div class="case-actions hidden">
-          <div class="case-name" id="caseNameDisplay"></div>
-          <div class="dropdown-menu-wrapper">
-            <button class="dropdown-toggle">⋯</button>
-            <div class="dropdown-menu hidden" id="caseDropdown">
-              <div class="dropdown-item" id="renameBtn">Rename</div>
-              <div class="dropdown-item" id="upload3dBtn">Upload 3D File</div>
-              <div class="dropdown-item" id="editUserAccessBtn">
-                Edit User Access
+
+        <div class="cm-image-area case-thumbnail">
+          <div class="cm-image-placeholder" id="caseImagePlaceholder">
+            <i class="fa-regular fa-image" aria-hidden="true"></i>
+            <span>No images available</span>
+          </div>
+          <img id="caseImage" alt="" />
+        </div>
+
+        <div class="cm-image-nav image-navigation">
+          <button id="prevBtn" type="button" aria-label="Previous image">
+            <i class="fa fa-chevron-left"></i>
+          </button>
+          <span id="imageCounter">IMAGE 0 OF 0</span>
+          <button id="nextBtn" type="button" aria-label="Next image">
+            <i class="fa fa-chevron-right"></i>
+          </button>
+        </div>
+
+        <section class="cm-detail-body">
+          <div class="cm-detail-head">
+            <h2 id="caseNameDisplay">Case Details</h2>
+            <div class="dropdown-menu-wrapper">
+              <button class="dropdown-toggle" type="button" aria-label="More actions">
+                <i class="fa fa-ellipsis"></i>
+              </button>
+              <div class="dropdown-menu hidden" id="caseDropdown">
+                <div class="dropdown-item" id="renameBtn">Rename</div>
+                <div class="dropdown-item" id="upload3dBtn">Upload 3D File</div>
+                <div class="dropdown-item" id="editUserAccessBtn">Edit User Access</div>
+                <div class="dropdown-item" id="viewVersionBtn">View Version History</div>
+                <div class="dropdown-item" id="duplicateBtn">Duplicate</div>
+                <div class="dropdown-item" id="deleteBtn">Delete</div>
               </div>
-              <div class="dropdown-item" id="viewVersionBtn">
-                View Version History
-              </div>
-              <div class="dropdown-item" id="duplicateBtn">Duplicate</div>
-              <div class="dropdown-item" id="deleteBtn">Delete</div>
             </div>
           </div>
-        </div>
 
-        <div class="case-thumbnail">
-          <img id="caseImage" />
-        </div>
-        <div class="image-navigation">
-          <button id="prevBtn">◀</button>
-          <span id="imageCounter">IMAGE 0 OF 0</span>
-          <button id="nextBtn">▶</button>
-        </div>
-
-        <button class="case-dashboard" type="button">CASE DASHBOARD</button>
-
-        <div class="case-info">
-          <label for="status">Status:</label>
-          <select id="status" class="hidden-status-select">
-            <option value="na">N/A</option>
-            <option value="draft">Draft</option>
-            <option value="2d_design_pending">2D design pending</option>
-            <option value="2d_design_drafted">2D design drafted</option>
-            <option value="2d_design_approved">2D design approved</option>
-            <option value="3d_design_pending">3D design pending</option>
-            <option value="3d_design_drafted">3D design drafted</option>
-            <option value="3d_design_approved">3D design approved</option>
-            <option value="in_production">In production</option>
-            <option value="out_for_delivery">Out for delivery</option>
-            <option value="delivered">Delivered</option>
-            <option value="completed">Completed</option>
-          </select>
-
-          <p><strong>Case Name:</strong> <span id="selected-case"></span></p>
-          <p><strong>Created by:</strong> <span id="created-by"></span></p>
-          <p><strong>Date Created:</strong> <span id="date-created"></span></p>
-          <p><strong>Last Edited:</strong> <span id="last-edited"></span></p>
-          <p><strong>Status:</strong> <span id="status-text">-</span></p>
-          <p><strong>Web URL:</strong> <span id="web-url">-</span></p>
-          <div class="detail-actions">
-            <button class="icon-link-btn" id="openWebUrl" type="button" title="Open URL"><i class="fa fa-up-right-from-square"></i></button>
-            <button class="icon-link-btn" id="copyWebUrl" type="button" title="Copy URL"><i class="fa fa-copy"></i></button>
+          <div class="cm-field">
+            <div class="cm-field-label">STATUS</div>
+            <div class="cm-field-value">
+              <span class="cm-pill cm-pill-na" id="statusPill">N/A</span>
+            </div>
+            <select id="status" class="hidden-status-select" hidden>
+              <option value="na">N/A</option>
+              <option value="draft">Draft</option>
+              <option value="2d_design_pending">2D design pending</option>
+              <option value="2d_design_drafted">2D design drafted</option>
+              <option value="2d_design_approved">2D design approved</option>
+              <option value="3d_design_pending">3D design pending</option>
+              <option value="3d_design_drafted">3D design drafted</option>
+              <option value="3d_design_approved">3D design approved</option>
+              <option value="in_production">In production</option>
+              <option value="out_for_delivery">Out for delivery</option>
+              <option value="delivered">Delivered</option>
+              <option value="completed">Completed</option>
+            </select>
+            <span id="status-text" hidden></span>
           </div>
-        </div>
 
-        <div class="case-comments hidden">
-          <label for="caseComments">Comments:</label>
-          <textarea
-            id="caseComments"
-            placeholder="Add case comments if any here"
-          ></textarea>
+          <div class="cm-field">
+            <div class="cm-field-label">CASE NAME</div>
+            <div class="cm-field-value" id="selected-case">—</div>
+          </div>
+
+          <div class="cm-field">
+            <div class="cm-field-label">ASSIGNED TO</div>
+            <div class="cm-field-value cm-assignee">
+              <span class="cm-avatar-sm" id="assigneeAvatar">·</span>
+              <span id="created-by">—</span>
+            </div>
+          </div>
+
+          <div class="cm-field">
+            <div class="cm-field-label">DATE CREATED</div>
+            <div class="cm-field-value" id="date-created">—</div>
+          </div>
+
+          <div class="cm-field cm-field-hidden">
+            <span id="last-edited"></span>
+            <span id="web-url"></span>
+            <button id="openWebUrl" hidden></button>
+            <button id="copyWebUrl" hidden></button>
+          </div>
+        </section>
+
+        <div class="cm-detail-cta start-case-container">
+          <button
+            class="cm-btn cm-btn-primary cm-btn-large start-case-button"
+            type="button"
+          >
+            Start Case
+          </button>
+          <button
+            class="cm-btn cm-btn-secondary case-dashboard"
+            type="button"
+            id="viewDashboardBtn"
+          >
+            View Dashboard
+          </button>
         </div>
-        
-        <div class="start-case-container">
-          <button class="start-case-button">START CASE</button>
-          <!-- <div class="divider"></div> -->
-          <!-- 这是新增的直线元素 -->
-          <!-- <button class="start-case-toggle">☰</button> -->
-        </div>
-      </div>
+      </aside>
     </div>
 
+    <button class="cm-help-fab" type="button" aria-label="Help">
+      <i class="fa fa-question"></i>
+    </button>
+
+    <!-- ==================== existing modals preserved ==================== -->
     <div id="caseModal" class="modal hidden">
       <div class="modal-content">
-        <!-- 关闭按钮 -->
         <span id="closeCaseModal" class="close-btn">&times;</span>
-
-        <!-- 标题 -->
         <h2 class="modal-title">Create a New Case</h2>
-
-        <!-- 表单 -->
         <form id="newCaseForm" class="modal-form">
-          <!-- Case Name -->
           <label for="caseName" class="input-label"
             >Case Name <span style="color: red">*</span></label
           >
@@ -219,35 +261,22 @@
             required
           />
 
-          <!-- Request Date -->
           <label for="requestDate" class="input-label">Request Date</label>
           <div class="input-with-icon">
             <input type="date" id="requestDate" class="modal-input" />
             <span class="calendar-icon">📅</span>
           </div>
 
-          <!-- Uploaded Jaw Models -->
-          <!-- 包裹两个上传区的外层容器 -->
           <div class="upload-sections-row">
-            <!-- 左侧 Jaw -->
             <div class="upload-section">
               <label class="input-label">Uploaded Jaw Models</label>
               <div id="uploadedJawModels" class="uploaded-models">
                 <div class="upload-placeholder" data-jaw="upper">
-                  <img
-                    src="../../assets/upper.svg"
-                    class="jaw-bg"
-                    alt="Upper Jaw"
-                  />
+                  <img src="../../assets/upper.svg" class="jaw-bg" alt="Upper Jaw" />
                   <span class="plus-icon">＋</span>
                 </div>
-
                 <div class="upload-placeholder" data-jaw="lower">
-                  <img
-                    src="../../assets/lower.svg"
-                    class="jaw-bg"
-                    alt="Upper Jaw"
-                  />
+                  <img src="../../assets/lower.svg" class="jaw-bg" alt="Lower Jaw" />
                   <span class="plus-icon">＋</span>
                 </div>
               </div>
@@ -259,7 +288,6 @@
               />
             </div>
 
-            <!-- 右侧 Reference -->
             <div class="upload-section">
               <label class="input-label">Upload Reference Images</label>
               <div id="uploadedReferenceImages" class="uploaded-models">
@@ -276,18 +304,9 @@
             </div>
           </div>
 
-          <!-- Upload buttons -->
-          <!-- <div class="upload-buttons">
-                <button type="button" class="upload-btn upload-ref">⬆ UPLOAD REFERENCE IMAGES</button>
-                <button type="button" class="upload-btn upload-jaw">⬆ UPLOAD JAW MODELS</button>
-            </div> -->
-
-          <!-- Footer buttons -->
           <div class="modal-footer">
             <button type="button" class="cancel-btn">CANCEL</button>
-            <button type="button" class="invite-btn">
-              CREATE AND INVITE USERS
-            </button>
+            <button type="button" class="invite-btn">CREATE AND INVITE USERS</button>
             <button type="button" class="start-btn">START</button>
           </div>
         </form>
@@ -298,24 +317,16 @@
       <div class="modal-content">
         <span id="closeUserAccessModal" class="close-btn">&times;</span>
         <h3>User Access</h3>
-
         <p>
           <strong>Case Name:</strong>
           <span class="case-name-display">—</span>
         </p>
-
         <div class="input-with-button">
-          <input
-            id="userSearchInput"
-            type="text"
-            placeholder="Search user to add to case"
-          />
+          <input id="userSearchInput" type="text" placeholder="Search user to add to case" />
           <button id="addUserBtn">ADD</button>
         </div>
-
         <p><strong>Shared with:</strong></p>
         <ul id="sharedUserList" class="shared-user-list"></ul>
-
         <div class="modal-actions">
           <button id="cancelInviteBtn" class="cancel-btn">CANCEL</button>
           <button id="saveInviteBtn" class="save-btn">SAVE AND RETURN</button>
@@ -323,57 +334,15 @@
       </div>
     </div>
 
-        <!-- 版本历史模态框 -->
     <div id="versionHistoryModal" class="modal hidden">
       <div class="modal-content version-modal">
-        <!-- 关闭按钮 -->
         <span class="close-btn" id="closeVersionModal">&times;</span>
-
-        <!-- 标题 -->
-        <div class="vh-header">
-          <h3 class="modal-title">Version History</h3>
-        </div>
-
-        <!-- 列表 -->
+        <div class="vh-header"><h3 class="modal-title">Version History</h3></div>
         <div class="vh-body">
-          <ul id="versionList" class="vh-list">
-            <!-- 示例一项（JS 会动态生成更多） -->
-            <li class="vh-item is-green"
-                data-id="rec_006"
-                data-op="printing"
-                data-user-id="labA"
-                data-ts="2025-04-10T18:10:00+08:00">
-              
-              <div class="vh-row">
-                <!-- 时间轴小图标 -->
-                <div class="vh-op" aria-hidden="true">●</div>
-
-                <!-- 内容列 -->
-                <div class="vh-col">
-                  <!-- 第一行：操作名 + 更多按钮 -->
-                  <!-- <div class="vh-line1">
-                    <span class="vh-op-label">Printing in Progress</span>
-                    <button class="vh-more" title="More actions" aria-label="More actions">⋯</button>
-                  </div> -->
-
-                  <!-- 第二行：用户 + 时间戳 -->
-                  <div class="vh-line2">
-                    <span class="vh-user">
-                      <span class="vh-avatar" style="background:#2ecc71" title="Lab A">LA</span>
-                      <span class="vh-user-name">Lab A</span>
-                    </span>
-                    <time class="vh-timestamp" datetime="2025-04-10T18:10:00+08:00">
-                      10/04/2025 6:10pm
-                    </time>
-                  </div>
-                </div>
-              </div>
-            </li>
-          </ul>
+          <ul id="versionList" class="vh-list"></ul>
         </div>
       </div>
     </div>
-
 
     <script type="module" src="../js/caseManagement.js"></script>
     <script type="module" src="../js/createCase.js"></script>
@@ -381,10 +350,11 @@
     <script type="module" src="../js/versionHistory.js"></script>
     <script>
       const logoutBtn = document.querySelector(".logout");
-      if (logoutBtn) logoutBtn.addEventListener("click", () => {
-        localStorage.removeItem("loggedInUser"); // 清除登录信息
-        window.location.href = "../../index.html";
-      });
+      if (logoutBtn)
+        logoutBtn.addEventListener("click", () => {
+          localStorage.removeItem("loggedInUser");
+          window.location.href = "../../index.html";
+        });
     </script>
   </body>
 </html>

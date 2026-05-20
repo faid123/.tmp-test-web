@@ -11,16 +11,30 @@
   const USERNAME = user.username || (user.email ? user.email.split("@")[0] : "");
 
   /* ====== 红点工具 & 统计函数（新增） ====== */
-  function setDotVisible(on) {
+  function applyUnreadCount(count) {
     const dot = document.getElementById("notificationDot");
-    if (!dot) return;                // 页面里没放红点元素就直接跳过
-    dot.classList.toggle("show", !!on);
+    if (dot) {
+      dot.classList.toggle("show", count > 0);
+      // The new bell badge uses [hidden]; only show the numeric count when > 0.
+      if (count > 0) {
+        dot.hidden = false;
+        dot.textContent = String(count > 99 ? "99+" : count);
+      } else {
+        dot.hidden = true;
+        dot.textContent = "";
+      }
+    }
+    const toolbarBadge = document.getElementById("notificationBadge");
+    if (toolbarBadge) toolbarBadge.textContent = String(count > 99 ? "99+" : count);
   }
 
-  // 从后端统计是否存在未读（任一 case 有一条未读就点亮红点）
+  function setDotVisible(on) {
+    applyUnreadCount(on ? 1 : 0);
+  }
+
+  // Count unread alerts across all of the user's cases. Returns 0 on any failure.
   async function refreshNotifDotFromAPI() {
     try {
-      // 1) 取 case 列表
       const caseRes2 = await fetch(
         "https://live.api.smartrpdai.com/api/smartrpd/case/user/findall/get",
         {
@@ -36,8 +50,7 @@
       const caseArr2 = await caseRes2.json();
       const caseIDs2 = Array.isArray(caseArr2) ? [...new Set(caseArr2.map(c => c.id))] : [];
 
-      // 2) 遍历 case 取 alerts，只要发现一条未读就早停
-      let foundUnread = false;
+      let unreadCount = 0;
       for (const cid of caseIDs2) {
         const aRes2 = await fetch(
           "https://live.api.smartrpdai.com/api/smartrpd/alerts/getallbytouser",
@@ -54,16 +67,14 @@
         const list2 = await aRes2.json();
         if (Array.isArray(list2)) {
           for (const a of list2) {
-            if (Number(a.read_status) !== 1) { foundUnread = true; break; }
+            if (Number(a.read_status) !== 1) unreadCount += 1;
           }
         }
-        if (foundUnread) break;
       }
 
-      setDotVisible(foundUnread);
+      applyUnreadCount(unreadCount);
     } catch (err) {
       console.error("[refreshNotifDotFromAPI] failed:", err);
-      // 失败时保持当前红点状态
     }
   }
 

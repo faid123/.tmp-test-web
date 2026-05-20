@@ -107,12 +107,20 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
       window.selectedCaseId === caseIdForApi
     ) {
       window.selectedCaseId = null;
-      const nameDisplay = document.getElementById("caseNameDisplay");
-      if (nameDisplay) nameDisplay.textContent = "";
       ["selected-case", "created-by", "date-created", "last-edited"].forEach((id) => {
         const el = document.getElementById(id);
-        if (el) el.textContent = "";
+        if (el) el.textContent = "—";
       });
+      const pill = document.getElementById("statusPill");
+      if (pill) {
+        pill.className = "cm-pill cm-pill-na";
+        pill.textContent = "N/A";
+      }
+      const avatar = document.getElementById("assigneeAvatar");
+      if (avatar) avatar.textContent = "·";
+      currentThumbnails = [];
+      currentImageIndex = 0;
+      updateThumbnail();
     }
 
     return true;
@@ -123,96 +131,139 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
   }
 }
 
-// 渲染病例表格
+// Map an API status string to a CSS modifier so card/detail pills get the
+// right color (yellow/blue/green/grey). Keep the keys broad — anything we
+// don't recognise falls back to a neutral "na" pill.
+function statusPillClass(apiStatus) {
+  const v = apiStatusToValue(apiStatus);
+  if (!v || v === "na") return "cm-pill-na";
+  if (v === "completed" || v === "delivered") return "cm-pill-completed";
+  if (v === "draft") return "cm-pill-draft";
+  if (
+    v === "in_production" ||
+    v === "out_for_delivery" ||
+    v.endsWith("_drafted") ||
+    v.endsWith("_approved")
+  ) return "cm-pill-progress";
+  if (v.endsWith("_pending") || v === "pending") return "cm-pill-pending";
+  return "cm-pill-progress";
+}
+
+function statusDisplayText(apiStatus) {
+  const v = apiStatusToValue(apiStatus);
+  if (!v || v === "na") return "N/A";
+  if (v === "draft") return "draft";
+  if (v.endsWith("_pending")) return "pending";
+  if (v.endsWith("_drafted") || v.endsWith("_approved")) return "in-progress";
+  if (v === "in_production" || v === "out_for_delivery") return "in-progress";
+  if (v === "completed" || v === "delivered") return "completed";
+  return v.replace(/_/g, " ");
+}
+
+function initialsFor(name) {
+  const s = String(name || "").trim();
+  if (!s) return "·";
+  const parts = s.split(/\s+/).slice(0, 2);
+  return parts.map((p) => p.charAt(0).toUpperCase()).join("");
+}
+
+function escapeAttr(value) {
+  return String(value || "").replace(/[&<>"']/g, (ch) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
+  ));
+}
+
+// 渲染病例卡片列表（取代旧表格）
 function populateTable(cases) {
   const sel = document.getElementById("filter-status");
   if (sel && sel.value !== "all") {
-    cases = cases.filter(c => apiStatusToValue(c.new_status) === sel.value);
+    cases = cases.filter((c) => apiStatusToValue(c.new_status) === sel.value);
   }
-  const tbody = document.querySelector(".table-body-wrapper .case-table tbody");
-  tbody.innerHTML = "";
+
+  const list = document.getElementById("caseList");
+  const countBadge = document.getElementById("caseCountBadge");
+  if (countBadge) countBadge.textContent = String(cases?.length || 0);
+  if (!list) return;
+  list.innerHTML = "";
 
   if (!cases || cases.length === 0) {
-    tbody.innerHTML =
-      "<tr><td colspan='6' style='text-align:center;'>No cases found</td></tr>";
+    const empty = document.createElement("div");
+    empty.className = "cm-list-empty";
+    empty.textContent = "No cases found.";
+    list.appendChild(empty);
     return;
   }
 
   cases.forEach((caseItem) => {
-    const row = document.createElement("tr");
-    row.dataset.caseId   = caseItem.id || caseItem.case_int_id;
-
+    const resolvedCaseId = caseItem.id ?? caseItem.case_int_id;
     const assignedTo = caseItem.assigned_to || caseItem.username || "N/A";
     const dueDate = caseItem.expected_date || caseItem.due_date;
-    const statusText = caseItem.new_status || "N/A";
     const caseIntId = caseItem.id ?? caseItem.case_int_id;
     const caseDisplayName = caseItem.case_id
       ? caseIntId != null
-        ? `UID ${caseIntId}:${caseItem.case_id}`
+        ? `UID ${caseIntId}-${caseItem.case_id}`
         : caseItem.case_id
       : "N/A";
 
-    row.innerHTML = `
-      <td style="width: 22%;">${caseDisplayName}</td>
-      <td class="col-date" style="width: 18%;">${formatDateTime(caseItem.creation_date)}</td>
-      <td class="col-date" style="width: 14%;">${dueDate ? formatDateTime(dueDate) : "N/A"}</td>
-      <td style="width: 14%;">${statusText}</td>
-      <td style="width: 20%;">${assignedTo}</td>
-      <td class="col-action" style="width: 12%;">
-        <div class="row-action-icons">
-          <button class="row-action-icon" title="Attachments" aria-label="Attachments">
-            <i class="fa fa-paperclip" aria-hidden="true"></i>
-          </button>
-          <button class="row-action-icon" title="Flag" aria-label="Flag">
-            <i class="fa fa-flag" aria-hidden="true"></i>
-          </button>
-          <button class="row-action-icon row-action-delete" title="Delete case" aria-label="Delete case">
-            <i class="fa fa-trash" aria-hidden="true"></i>
-          </button>
-          <button class="icon-button row-action-btn hidden" title="Details">
-            <i class="fa fa-bars" aria-hidden="true"></i>
-            <span class="row-action-label">Details</span>
-          </button>
+    const card = document.createElement("div");
+    card.className = "cm-card";
+    card.dataset.caseId = resolvedCaseId;
+    card.setAttribute("role", "button");
+    card.tabIndex = 0;
+
+    card.innerHTML = `
+      <div class="cm-card-main">
+        <div class="cm-card-title">
+          <span class="cm-card-name">${escapeAttr(caseDisplayName)}</span>
+          <span class="cm-pill ${statusPillClass(caseItem.new_status)}">${escapeAttr(statusDisplayText(caseItem.new_status))}</span>
         </div>
-      </td>
+        <div class="cm-card-meta">
+          <span class="cm-meta-item"><i class="fa-regular fa-calendar"></i>${formatDateTime(caseItem.creation_date)}</span>
+          <span class="cm-meta-item"><i class="fa-regular fa-clock"></i>Due: ${dueDate ? formatDateTime(dueDate) : "N/A"}</span>
+          <span class="cm-meta-item"><i class="fa-regular fa-circle-user"></i>${escapeAttr(assignedTo)}</span>
+        </div>
+      </div>
+      <div class="cm-card-actions">
+        <button class="cm-card-icon" type="button" title="Rename" aria-label="Rename" data-action="rename">
+          <i class="fa-regular fa-pen-to-square"></i>
+        </button>
+        <button class="cm-card-icon" type="button" title="Flag" aria-label="Flag" data-action="flag">
+          <i class="fa-regular fa-flag"></i>
+        </button>
+        <button class="cm-card-icon cm-card-icon-danger" type="button" title="Delete" aria-label="Delete" data-action="delete">
+          <i class="fa-regular fa-trash-can"></i>
+        </button>
+      </div>
     `;
 
-    const resolvedCaseId = caseItem.id ?? caseItem.case_int_id;
-
-    row.addEventListener("click", () => {
+    const selectCard = () => {
       handleRowClick(resolvedCaseId);
+      list.querySelectorAll(".cm-card").forEach((c) => c.classList.remove("is-active"));
+      card.classList.add("is-active");
+    };
 
-      const allRows = tbody.querySelectorAll("tr");
-      allRows.forEach((r) => r.classList.remove("active"));
-      row.classList.add("active");
+    card.addEventListener("click", selectCard);
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        selectCard();
+      }
     });
 
-    const detailsBtn = row.querySelector(".row-action-btn");
-    if (detailsBtn) {
-      detailsBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        handleRowClick(resolvedCaseId);
+    card.querySelector('[data-action="delete"]').addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const label = caseItem.case_id || "this case";
+      if (!confirm(`Delete "${label}"? This cannot be undone.`)) return;
+      await deleteCaseById(resolvedCaseId, { skipConfirm: true });
+    });
 
-        const allRows = tbody.querySelectorAll("tr");
-        allRows.forEach((r) => r.classList.remove("active"));
-        row.classList.add("active");
+    card.querySelector('[data-action="rename"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      selectCard();
+      document.getElementById("renameBtn")?.click();
+    });
 
-        document.body.classList.add("show-details");
-      });
-    }
-
-    const deleteBtn = row.querySelector(".row-action-delete");
-    if (deleteBtn) {
-      deleteBtn.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        const caseLabel = caseItem.case_id || "this case";
-        const confirmed = confirm(`Delete "${caseLabel}"? This cannot be undone.`);
-        if (!confirmed) return;
-        await deleteCaseById(resolvedCaseId, { skipConfirm: true });
-      });
-    }
-
-    tbody.appendChild(row);
+    list.appendChild(card);
   });
 }
 
@@ -257,10 +308,7 @@ if (extra) {
 console.log("extra →", extra);                 // ⭐ 调试 1
 console.log("detail after merge →", detail);   // ⭐ 调试 2
 
-displayCaseDetails(detail);
-    displayCaseDetails(detail); // 更新下方基本信息
-    document.getElementById("caseNameDisplay").textContent =
-      detail.case_id || "N/A"; // ✅ 展示你要的 case_id
+    displayCaseDetails(detail);
 
     console.log("🟢 Selected case info:", detail);
     await fetchThumbnails(caseId);
@@ -276,18 +324,34 @@ displayCaseDetails(detail);
 
 // 显示基本信息
 function displayCaseDetails(data) {
-  document.getElementById("selected-case").textContent = data.case_id || "N/A";
-  document.getElementById("created-by").textContent = data.username || "N/A";
-  document.getElementById("date-created").textContent = formatDateTime(
-    data.creation_date
-  );
-  document.getElementById("last-edited").textContent = formatDateTime(
-    data.last_updated
-  );
+  const caseIntId = data.id ?? data.case_int_id;
+  const displayName = data.case_id
+    ? caseIntId != null
+      ? `UID ${caseIntId}-${data.case_id}`
+      : data.case_id
+    : "N/A";
+  const nameHeader = document.getElementById("caseNameDisplay");
+  if (nameHeader) nameHeader.textContent = "Case Details";
+
+  document.getElementById("selected-case").textContent = displayName;
+  const assignee = data.assigned_to || data.username || "N/A";
+  document.getElementById("created-by").textContent = assignee;
+  const avatar = document.getElementById("assigneeAvatar");
+  if (avatar) avatar.textContent = initialsFor(assignee);
+
+  document.getElementById("date-created").textContent = formatDateTime(data.creation_date);
+  document.getElementById("last-edited").textContent = formatDateTime(data.last_updated);
+
   const statusSel = document.getElementById("status");
   if (statusSel) statusSel.value = apiStatusToValue(data.new_status);
   const statusText = document.getElementById("status-text");
   if (statusText) statusText.textContent = data.new_status || "-";
+
+  const pill = document.getElementById("statusPill");
+  if (pill) {
+    pill.className = `cm-pill ${statusPillClass(data.new_status)}`;
+    pill.textContent = statusDisplayText(data.new_status);
+  }
 
   const webUrl = data.web_url || data.weburl || data.url || "-";
   const webUrlEl = document.getElementById("web-url");
@@ -363,21 +427,22 @@ function sortCases(cases, key, order = "asc") {
 function updateThumbnail() {
   const image = document.getElementById("caseImage");
   const counter = document.getElementById("imageCounter");
+  const area = image?.closest(".cm-image-area");
+
+  if (!image || !counter) return;
 
   if (currentThumbnails.length === 0) {
-    image.src = "../../assets/default.png";
+    image.removeAttribute("src");
     image.alt = "No images available";
-    image.style.backgroundColor = "#ccc";
     counter.textContent = "IMAGE 0 OF 0";
+    area?.classList.remove("has-image");
     return;
   }
 
   image.src = "data:image/png;base64," + currentThumbnails[currentImageIndex];
-  image.alt = `Case Thumbnail ${currentImageIndex + 1}`;
-  counter.textContent = `IMAGE ${currentImageIndex + 1} OF ${
-    currentThumbnails.length
-  }`;
-  image.style.backgroundColor = "";
+  image.alt = `Case thumbnail ${currentImageIndex + 1}`;
+  counter.textContent = `IMAGE ${currentImageIndex + 1} OF ${currentThumbnails.length}`;
+  area?.classList.add("has-image");
 }
 
 // 判断2D图像逻辑（白底 + 宽高比）
@@ -508,6 +573,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     document.getElementById("backToListBtn")?.addEventListener("click", () => {
+      document.querySelector(".cm-page")?.classList.remove("show-details");
       document.body.classList.remove("show-details");
     });
 

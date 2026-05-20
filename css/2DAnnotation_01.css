@@ -1695,6 +1695,9 @@ body.is-panel-resizing {
     position: relative;
     z-index: 2;
   }
+   .jaw-range-missing-btn {
+  display: none;
+  }
 }
 
 @media (max-width: 1200px) {
@@ -1720,8 +1723,11 @@ body.is-panel-resizing {
   .arch-panel {
     grid-template-rows: auto auto auto auto;
   }
-
+  .jaw-range-missing-btn {
+  display: none;
+  }
 }
+
 
 /* iPad-range (above phone breakpoint, below desktop): place lower arch on the
    left and upper arch on the right so each jaw fills half the row instead of
@@ -1761,11 +1767,17 @@ body.is-panel-resizing {
     .back-to-case-list {
   left: 0px;
   }
+   .jaw-range-missing-btn {
+  display: inline-flex;
+  }
 }
 
 /* Narrow viewports: keep icon + checkbox-label + delete + survey button on one line
    by letting the label column flex and compacting the survey button. */
 @media (max-width: 720px) {
+   .jaw-range-missing-btn {
+  display: inline-flex;
+  }
     .preview-frame {
     min-height: min(480px, 82vh);
   }
