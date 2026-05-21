@@ -248,6 +248,26 @@ function serializeForEditedView(instructions, viewcaptures) {
   return { filenames, data };
 }
 
+// Read the server's current filenames+data arrays for the edited view, then
+// fall back to the BinaryFormatter parser if the server response is the
+// desktop client's blob format rather than JSON.
+function readEditedViewArrays(row) {
+  if (!row) return { filenames: [], data: [] };
+  let names = safeJsonParse(row.filenames || "[]", null);
+  let data = safeJsonParse(row.data || "[]", null);
+  if (!Array.isArray(names) || !names.length) {
+    names = typeof row.filenames === "string"
+      ? extractFilenamesFromBinaryFormatter(row.filenames)
+      : [];
+  }
+  if (!Array.isArray(data) || !data.length) {
+    data = typeof row.data === "string"
+      ? extractPngsFromBinaryFormatter(row.data)
+      : [];
+  }
+  return { filenames: names, data };
+}
+
 let editedViewSaveInFlight = false;
 async function syncInstructionsToEditedView() {
   if (editedViewSaveInFlight) return false;
@@ -256,18 +276,37 @@ async function syncInstructionsToEditedView() {
 
   try {
     editedViewSaveInFlight = true;
+
+    // 1) Fetch the current server arrays so we don't blow away entries that
+    // were saved by another session or by the desktop client.
+    const existing = await fetchNoticeboardEdited(state.caseIntID, user.uuid);
+    const row = normalizeApiRow(existing);
+    const server = readEditedViewArrays(row);
+
+    // 2) Serialize our local buckets (instructions + viewcaptures) with the
+    // 2D_/3D_ prefix convention so they round-trip back into the right panel.
     const dataModel = ensureCache();
-    // Persist both buckets so an edit in one doesn't wipe the other on the server.
-    const serialized = serializeForEditedView(
+    const local = serializeForEditedView(
       dataModel.instructions || [],
       dataModel.viewcaptures || []
     );
-    await saveNoticeboardEdited(
-      state.caseIntID,
-      user.uuid,
-      serialized.filenames,
-      serialized.data
-    );
+
+    // 3) Merge: local entries win (by filename); server-only entries are
+    // preserved so a save here can't delete something only the desktop client
+    // knows about.
+    const filenames = [...local.filenames];
+    const data = [...local.data];
+    const seen = new Set(filenames);
+    for (let i = 0; i < server.filenames.length; i += 1) {
+      const name = server.filenames[i];
+      if (!name || seen.has(name)) continue;
+      filenames.push(name);
+      data.push(server.data[i] || "");
+      seen.add(name);
+    }
+
+    // 4) POST the merged arrays back to /editedview.
+    await saveNoticeboardEdited(state.caseIntID, user.uuid, filenames, data);
     setMessage("Noticeboard saved to server.", false);
     return true;
   } catch (err) {
@@ -347,7 +386,16 @@ function loadData() {
 
 function saveData(data) {
   try {
-    localStorage.setItem(getStorageKey(), JSON.stringify(data));
+    // Server-mirrored items are re-fetched on every page load by
+    // hydrateNoticeboardFromServer, so persisting their (large, base64)
+    // preview/baseImage blobs only wastes the ~5 MB localStorage quota.
+    const stripServerMirrors = (items) =>
+      (items || []).filter((it) => it && it.source !== "server");
+    const slim = {
+      instructions: stripServerMirrors(data?.instructions),
+      viewcaptures: stripServerMirrors(data?.viewcaptures),
+    };
+    localStorage.setItem(getStorageKey(), JSON.stringify(slim));
   } catch (e) {
     console.error("Noticeboard save failed", e);
     setMessage("Could not save noticeboard entry — storage may be full.", true);
@@ -386,6 +434,21 @@ function renderGrid(elId, items, kind) {
       card.appendChild(placeholder);
     }
 
+    // Dedicated preview (eye) icon — only when the item actually has an image.
+    if (item.preview) {
+      const previewBtn = document.createElement("button");
+      previewBtn.type = "button";
+      previewBtn.className = "noticeboard-thumb-preview";
+      previewBtn.setAttribute("aria-label", "Preview");
+      previewBtn.title = "Preview";
+      previewBtn.innerHTML = '<i class="fa-regular fa-eye" aria-hidden="true"></i>';
+      previewBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openPreview(items, idx);
+      });
+      card.appendChild(previewBtn);
+    }
+
     const editBtn = document.createElement("button");
     editBtn.type = "button";
     editBtn.className = "noticeboard-thumb-edit";
@@ -398,6 +461,91 @@ function renderGrid(elId, items, kind) {
     card.appendChild(editBtn);
     grid.appendChild(card);
   });
+}
+
+// ============ preview lightbox ============
+let previewState = null;
+
+function ensurePreviewModal() {
+  let modal = document.getElementById("noticeboardPreviewModal");
+  if (modal) return modal;
+  modal = document.createElement("div");
+  modal.id = "noticeboardPreviewModal";
+  modal.className = "noticeboard-preview-modal is-hidden";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.innerHTML = `
+    <div class="noticeboard-preview-backdrop" data-preview-close></div>
+    <div class="noticeboard-preview-frame">
+      <button class="noticeboard-preview-close" type="button" aria-label="Close preview" data-preview-close>&times;</button>
+      <button class="noticeboard-preview-nav noticeboard-preview-prev" type="button" aria-label="Previous">&#8249;</button>
+      <img class="noticeboard-preview-img" alt="" />
+      <button class="noticeboard-preview-nav noticeboard-preview-next" type="button" aria-label="Next">&#8250;</button>
+      <div class="noticeboard-preview-caption"></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.querySelectorAll("[data-preview-close]").forEach((el) =>
+    el.addEventListener("click", closePreview)
+  );
+  modal.querySelector(".noticeboard-preview-prev").addEventListener("click", () => navigatePreview(-1));
+  modal.querySelector(".noticeboard-preview-next").addEventListener("click", () => navigatePreview(1));
+  return modal;
+}
+
+function openPreview(items, startIdx) {
+  const previewable = (Array.isArray(items) ? items : [])
+    .map((item, i) => ({ item, originalIdx: i }))
+    .filter(({ item }) => item && typeof item.preview === "string" && item.preview);
+  if (!previewable.length) return;
+
+  let cur = previewable.findIndex(({ originalIdx }) => originalIdx === startIdx);
+  if (cur === -1) cur = 0;
+
+  previewState = { items: previewable, idx: cur };
+  const modal = ensurePreviewModal();
+  modal.classList.remove("is-hidden");
+  document.addEventListener("keydown", onPreviewKeydown);
+  renderCurrentPreview();
+}
+
+function navigatePreview(delta) {
+  if (!previewState) return;
+  const n = previewState.items.length;
+  previewState.idx = (previewState.idx + delta + n) % n;
+  renderCurrentPreview();
+}
+
+function renderCurrentPreview() {
+  if (!previewState) return;
+  const modal = document.getElementById("noticeboardPreviewModal");
+  if (!modal) return;
+  const { item } = previewState.items[previewState.idx];
+  const img = modal.querySelector(".noticeboard-preview-img");
+  const cap = modal.querySelector(".noticeboard-preview-caption");
+  img.src = item.preview;
+  img.alt = item.title || "";
+  const total = previewState.items.length;
+  cap.textContent = total > 1
+    ? `${item.title || ""} · ${previewState.idx + 1} / ${total}`
+    : item.title || "";
+  const showNav = total > 1;
+  modal.querySelector(".noticeboard-preview-prev").style.visibility = showNav ? "" : "hidden";
+  modal.querySelector(".noticeboard-preview-next").style.visibility = showNav ? "" : "hidden";
+}
+
+function closePreview() {
+  const modal = document.getElementById("noticeboardPreviewModal");
+  if (modal) modal.classList.add("is-hidden");
+  document.removeEventListener("keydown", onPreviewKeydown);
+  previewState = null;
+}
+
+function onPreviewKeydown(e) {
+  if (e.key === "Escape") { e.preventDefault(); closePreview(); }
+  else if (e.key === "ArrowLeft") { e.preventDefault(); navigatePreview(-1); }
+  else if (e.key === "ArrowRight") { e.preventDefault(); navigatePreview(1); }
 }
 
 let openMenu = null;
@@ -465,13 +613,16 @@ function openThumbActionMenu(anchor, items, idx, kind) {
   deleteBtn.type = "button";
   deleteBtn.className = "noticeboard-thumb-menu-item noticeboard-thumb-menu-item-danger";
   deleteBtn.textContent = "Delete";
-  deleteBtn.addEventListener("click", (e) => {
+  deleteBtn.addEventListener("click", async (e) => {
     e.stopPropagation();
     closeThumbActionMenu();
     items.splice(idx, 1);
     saveData(cache);
     renderGrids();
     setMessage(`${kind === "instruction" ? "Instruction" : "Viewcapture"} deleted.`, false);
+    // Without syncing, the server's editedview blob still contains the item
+    // and the next hydrate will resurrect it.
+    await syncInstructionsToEditedView();
   });
   menu.appendChild(deleteBtn);
 

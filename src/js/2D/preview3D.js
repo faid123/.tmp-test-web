@@ -21,6 +21,7 @@ const preview3DState = {
   groups: { upper: null, lower: null },
   activeView: "both",
   topControls: null,
+  caseData: null,
 };
 
 export async function loadInteractiveJawPreview(area) {
@@ -34,6 +35,11 @@ export async function loadInteractiveJawPreview(area) {
 
     // Fetch the heatmap up front so both render paths can use it.
     const undercutPromise = fetchUndercutForCase();
+    // Prefetch case data so SET SURVEY ANGLE can preserve the unmodified jaw's
+    // angles without an extra round-trip when the button is clicked.
+    fetchCaseData().then((data) => {
+      if (data) preview3DState.caseData = data;
+    });
 
     const meshFiles = await fetchParameterisedMeshForCase();
     if (meshFiles.length) {
@@ -118,6 +124,7 @@ export function teardown3DPreview() {
   preview3DState.modelRoot = null;
   preview3DState.groups = { upper: null, lower: null };
   preview3DState.topControls = null;
+  preview3DState.caseData = null;
 }
 
 function getLoggedInUser() {
@@ -170,14 +177,13 @@ async function fetchJawFilesForCase() {
 
 async function fetchParameterisedMeshForCase() {
   if (!state.caseIntID) return [];
-  const user = getLoggedInUser();
-  const uuid = user?.uuid || PREVIEW_FALLBACK_UUID;
 
-  // Match index.js payload exactly: a one-element array wrapping a single object
-  // with all fields (machine_id, uuid, case_int_id, caseIntID, jaw_type).
+  // Use the hardcoded service uuid (same as src/index.js) — the parameterisation
+  // endpoint scopes by uuid and the logged-in user's uuid 404s here even though
+  // the heatmap endpoint accepts it.
   const data = {
     machine_id: PREVIEW_MACHINE_ID,
-    uuid,
+    uuid: PREVIEW_FALLBACK_UUID,
     case_int_id: state.caseIntID,
     caseIntID: state.caseIntID,
     jaw_type: 2,
@@ -279,6 +285,133 @@ async function fetchUndercutForCase() {
   if (!lower) lower = lowerReq;
 
   return { upper, lower };
+}
+
+async function fetchCaseData() {
+  if (!state.caseIntID) return null;
+  const user = getLoggedInUser();
+  const uuid = user?.uuid || PREVIEW_FALLBACK_UUID;
+  try {
+    const res = await fetch(`${SMARTRPD_API_BASE}/case/get/${state.caseIntID}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        { machine_id: PREVIEW_MACHINE_ID, uuid, caseIntID: state.caseIntID },
+      ]),
+    });
+    if (!res.ok) {
+      console.warn(`[preview3D] case/get HTTP ${res.status}`);
+      return null;
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn("[preview3D] case/get failed:", err);
+    return null;
+  }
+}
+
+// Capture the OrbitControls camera position as an XYZ Euler. X = pitch from the
+// horizontal plane (asin of the y component), Y = azimuth around the world up
+// axis, Z = 0 since orbit cameras have no roll. Stored in radians to match the
+// DECIMAL(9,8) range in the cases table.
+function eulerFromCameraOrbit(camera, controls) {
+  const offset = camera.position.clone().sub(controls.target);
+  if (offset.lengthSq() < 1e-9) return { x: 0, y: 0, z: 0 };
+  const dir = offset.normalize();
+  const clampedY = Math.max(-1, Math.min(1, dir.y));
+  return {
+    x: Math.asin(clampedY),
+    y: Math.atan2(dir.x, dir.z),
+    z: 0,
+  };
+}
+
+function reapplyHeatmap(undercut) {
+  const repaint = (group, surface) => {
+    if (!group) return;
+    group.traverse((obj) => {
+      if (obj.isMesh && obj.geometry) {
+        applyUndercutVertexColors(obj.geometry, surface);
+      }
+    });
+  };
+  repaint(preview3DState.groups.upper, undercut?.upper);
+  repaint(preview3DState.groups.lower, undercut?.lower);
+}
+
+async function saveSurveyAngle(jaw, btn) {
+  const camera = preview3DState.camera;
+  const controls = preview3DState.controls;
+  if (!camera || !controls || !state.caseIntID) return;
+
+  if (!preview3DState.caseData) {
+    preview3DState.caseData = await fetchCaseData();
+  }
+  if (!preview3DState.caseData) {
+    console.warn("[preview3D] cannot save survey angle: case data unavailable");
+    return;
+  }
+
+  const { x, y, z } = eulerFromCameraOrbit(camera, controls);
+  const current = preview3DState.caseData;
+  const updated = { ...current };
+  if (jaw === "upper") {
+    updated.upper_insertion_angle_x = x;
+    updated.upper_insertion_angle_y = y;
+    updated.upper_insertion_angle_z = z;
+  } else {
+    updated.lower_insertion_angle_x = x;
+    updated.lower_insertion_angle_y = y;
+    updated.lower_insertion_angle_z = z;
+  }
+
+  const user = getLoggedInUser();
+  const uuid = user?.uuid || PREVIEW_FALLBACK_UUID;
+  const auth = {
+    machine_id: PREVIEW_MACHINE_ID,
+    uuid,
+    caseIntID: state.caseIntID,
+  };
+  const caseBody = {
+    case_id: updated.case_id || "",
+    upper_insertion_angle_x: Number(updated.upper_insertion_angle_x) || 0,
+    upper_insertion_angle_y: Number(updated.upper_insertion_angle_y) || 0,
+    upper_insertion_angle_z: Number(updated.upper_insertion_angle_z) || 0,
+    lower_insertion_angle_x: Number(updated.lower_insertion_angle_x) || 0,
+    lower_insertion_angle_y: Number(updated.lower_insertion_angle_y) || 0,
+    lower_insertion_angle_z: Number(updated.lower_insertion_angle_z) || 0,
+    process_upper: Number(updated.process_upper) || 0,
+    process_lower: Number(updated.process_lower) || 0,
+  };
+
+  const originalLabel = btn?.textContent;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "SAVING…";
+  }
+
+  try {
+    const res = await fetch(`${SMARTRPD_API_BASE}/case/${state.caseIntID}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([auth, caseBody]),
+    });
+    if (!res.ok) {
+      console.error(`[preview3D] PUT /case HTTP ${res.status}`);
+      return;
+    }
+    preview3DState.caseData = updated;
+
+    const newUndercut = await fetchUndercutForCase();
+    reapplyHeatmap(newUndercut);
+  } catch (err) {
+    console.error("[preview3D] PUT /case failed:", err);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalLabel || "SET SURVEY ANGLE";
+    }
+  }
 }
 
 function init3DPreview(area) {
@@ -393,8 +526,12 @@ function init3DPreview(area) {
   controls.maxPolarAngle = Math.PI - 0.08;
   controls.target.set(0, 0, 0);
 
-  rowUpper.surveyBtn.addEventListener("click", () => controls.reset());
-  rowLower.surveyBtn.addEventListener("click", () => controls.reset());
+  rowUpper.surveyBtn.addEventListener("click", () =>
+    saveSurveyAngle("upper", rowUpper.surveyBtn)
+  );
+  rowLower.surveyBtn.addEventListener("click", () =>
+    saveSurveyAngle("lower", rowLower.surveyBtn)
+  );
 
   // Intentionally keep ALLOW PROCESSING checkboxes as display-only (no jaw visibility behavior).
 

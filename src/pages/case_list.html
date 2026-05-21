@@ -119,6 +119,35 @@
           <!-- JS-rendered cards land here -->
         </div>
 
+        <div class="cc-form-pane hidden" id="createCaseForm">
+          <div class="cc-form-grid">
+            <div class="cc-field">
+              <label class="input-label" for="caseName">Case Name <span style="color:red">*</span></label>
+              <input type="text" id="caseName" class="modal-input" placeholder="New case name" required />
+            </div>
+            <div class="cc-field">
+              <label class="input-label">Case Owner</label>
+              <div class="cc-display" id="ccCaseOwner">—</div>
+            </div>
+            <div class="cc-field">
+              <label class="input-label">Case Create Date</label>
+              <div class="cc-display" id="ccCreateDate">—</div>
+            </div>
+            <div class="cc-field">
+              <label class="input-label" for="requestDate">Case Request Date</label>
+              <input type="date" id="requestDate" class="modal-input" />
+            </div>
+            <div class="cc-field cc-field-full">
+              <label class="input-label" for="ccInviteInput">Invite Users</label>
+              <div class="cc-invite-row">
+                <input type="text" id="ccInviteInput" class="modal-input" placeholder="Type username and press Enter" />
+                <button id="ccInviteAdd" type="button" class="cm-btn cm-btn-secondary">Add</button>
+              </div>
+              <ul id="ccInviteList" class="cc-invite-list"></ul>
+            </div>
+          </div>
+        </div>
+
         <!-- Hidden legacy table so existing JS selectors don't error out -->
         <div class="table-head-wrapper" hidden></div>
         <div class="table-body-wrapper" hidden>
@@ -237,80 +266,37 @@
             View Dashboard
           </button>
         </div>
+
+        <div class="cc-upload-pane hidden" id="createCaseUpload">
+          <div class="cc-jaw-row">
+            <div id="uploadedJawModels" class="uploaded-models cc-jaw-models">
+              <div class="upload-placeholder cc-jaw-tile" data-jaw="upper">
+                <img src="../../assets/upper.svg" class="jaw-bg" alt="Upper Jaw" />
+                <span class="cc-jaw-label">Upper Jaw</span>
+              </div>
+              <div class="upload-placeholder cc-jaw-tile" data-jaw="lower">
+                <img src="../../assets/lower.svg" class="jaw-bg" alt="Lower Jaw" />
+                <span class="cc-jaw-label">Lower Jaw</span>
+              </div>
+            </div>
+            <input type="file" id="jawUploadInput" accept=".stl" style="display: none" />
+          </div>
+
+          <div class="cc-ref-section">
+            <button type="button" class="upload-placeholder cc-ref-tile" id="addRefImageBtn">
+              <span class="cc-ref-label">Upload Reference Image</span>
+            </button>
+            <div id="uploadedReferenceImages" class="cc-ref-grid"></div>
+            <input type="file" id="refImageInput" accept="image/png,image/jpeg" style="display: none" />
+          </div>
+
+          <div class="cc-actions">
+            <button type="button" class="cm-btn cm-btn-secondary cancel-btn">Cancel</button>
+            <button type="button" class="cm-btn cm-btn-primary save-btn">Save</button>
+            <button type="button" class="cm-btn cm-btn-primary save-start-btn">Save &amp; Start</button>
+          </div>
+        </div>
       </aside>
-    </div>
-
-    <button class="cm-help-fab" type="button" aria-label="Help">
-      <i class="fa fa-question"></i>
-    </button>
-
-    <!-- ==================== existing modals preserved ==================== -->
-    <div id="caseModal" class="modal hidden">
-      <div class="modal-content">
-        <span id="closeCaseModal" class="close-btn">&times;</span>
-        <h2 class="modal-title">Create a New Case</h2>
-        <form id="newCaseForm" class="modal-form">
-          <label for="caseName" class="input-label"
-            >Case Name <span style="color: red">*</span></label
-          >
-          <input
-            type="text"
-            id="caseName"
-            class="modal-input"
-            placeholder="New Case Name"
-            required
-          />
-
-          <label for="requestDate" class="input-label">Request Date</label>
-          <div class="input-with-icon">
-            <input type="date" id="requestDate" class="modal-input" />
-            <span class="calendar-icon">📅</span>
-          </div>
-
-          <div class="upload-sections-row">
-            <div class="upload-section">
-              <label class="input-label">Uploaded Jaw Models</label>
-              <div id="uploadedJawModels" class="uploaded-models">
-                <div class="upload-placeholder" data-jaw="upper">
-                  <img src="../../assets/upper.svg" class="jaw-bg" alt="Upper Jaw" />
-                  <span class="plus-icon">＋</span>
-                </div>
-                <div class="upload-placeholder" data-jaw="lower">
-                  <img src="../../assets/lower.svg" class="jaw-bg" alt="Lower Jaw" />
-                  <span class="plus-icon">＋</span>
-                </div>
-              </div>
-              <input
-                type="file"
-                id="jawUploadInput"
-                accept=".stl"
-                style="display: none"
-              />
-            </div>
-
-            <div class="upload-section">
-              <label class="input-label">Upload Reference Images</label>
-              <div id="uploadedReferenceImages" class="uploaded-models">
-                <div class="upload-placeholder" id="addRefImageBtn">
-                  <span class="plus-icon">＋</span>
-                </div>
-              </div>
-              <input
-                type="file"
-                id="refImageInput"
-                accept="image/png,image/jpeg"
-                style="display: none"
-              />
-            </div>
-          </div>
-
-          <div class="modal-footer">
-            <button type="button" class="cancel-btn">CANCEL</button>
-            <button type="button" class="invite-btn">CREATE AND INVITE USERS</button>
-            <button type="button" class="start-btn">START</button>
-          </div>
-        </form>
-      </div>
     </div>
 
     <div id="userAccessModal" class="modal hidden">

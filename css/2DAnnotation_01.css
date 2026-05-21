@@ -1755,8 +1755,8 @@ body.is-panel-resizing {
 }
 
 
-/* iPad-range (above phone breakpoint, below desktop): place lower arch on the
-   left and upper arch on the right so each jaw fills half the row instead of
+/* iPad-range (above phone breakpoint, below desktop): place upper arch on the
+   left and lower arch on the right so each jaw fills half the row instead of
    being letterboxed in a centered single column. */
 @media (min-width: 720px) and (max-width: 1200px) {
   .jaw-combined-canvas {
@@ -1769,7 +1769,7 @@ body.is-panel-resizing {
     justify-items: center;
   }
 
-  .jaw-combined-canvas > #lowerArchSvg {
+  .jaw-combined-canvas > #upperArchSvg {
     grid-column: 1;
     grid-row: 1;
     width: 100%;
@@ -1777,7 +1777,7 @@ body.is-panel-resizing {
     flex: none;
   }
 
-  .jaw-combined-canvas > #upperArchSvg {
+  .jaw-combined-canvas > #lowerArchSvg {
     grid-column: 2;
     grid-row: 1;
     width: 100%;
@@ -2637,9 +2637,11 @@ body.is-panel-resizing {
   transform: scale(1.04);
 }
 
+.instruction-editor-text-wrap {
+  display: inline-block;
+}
+
 .instruction-editor-text-input {
-  position: absolute;
-  z-index: 10;
   background: rgba(255, 255, 255, 0.95);
   border: 1px dashed var(--rose-500);
   border-radius: 4px;
@@ -2647,8 +2649,46 @@ body.is-panel-resizing {
   font-family: "Montserrat", "Segoe UI", sans-serif;
   font-weight: 600;
   outline: none;
-  min-width: 80px;
+  min-width: 60px;
   box-shadow: 0 2px 8px rgba(26, 77, 63, 0.15);
+  cursor: text;
+  /* Resize handle is drawn at the bottom-right by `resize: both`; the dashed
+     border + light background acts as the visible "text box" the user drags. */
+  line-height: 1.1;
+}
+
+.instruction-editor-text-remove {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid #b48daa;
+  background: #fff;
+  color: #b48daa;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 11;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.instruction-editor-text-remove:hover {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #ef4444;
+}
+
+/* Empty-box placeholder so the user knows to type before resizing */
+.instruction-editor-text-input:empty::before {
+  content: attr(data-placeholder);
+  color: #b48daa;
+  pointer-events: none;
 }
 
 @media (max-width: 768px) {
@@ -3107,6 +3147,77 @@ body.is-panel-resizing {
   color: #fff;
 }
 
+/* Mobile: keep all clinical-info-modal action buttons + legend visible without
+   horizontal clipping. The default topbar/legend layouts are tuned for desktop. */
+@media (max-width: 720px) {
+  .clinical-info-panel {
+    inset: 0;
+    border-radius: 0;
+  }
+
+  .clinical-info-topbar {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    gap: 6px;
+  }
+
+  .clinical-info-topbar-actions {
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .clinical-info-action-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 8px 10px;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    text-align: center;
+  }
+
+  .clinical-info-legend {
+    margin: 6px 10px;
+    padding: 6px 8px;
+    max-height: 38vh;
+    overflow-y: auto;
+  }
+
+  .clinical-info-legend-title {
+    font-size: 0.7rem;
+    margin-bottom: 4px;
+  }
+
+  .clinical-info-legend-grid {
+    column-gap: 6px;
+    row-gap: 4px;
+  }
+
+  .clinical-info-legend-row {
+    flex-wrap: wrap;
+    row-gap: 2px;
+    gap: 2px;
+  }
+
+  .clinical-info-legend-item {
+    min-width: 36px;
+    gap: 2px;
+  }
+
+  .clinical-info-legend-swatch {
+    width: 22px;
+    height: 22px;
+    font-size: 0.6rem;
+  }
+
+  .clinical-info-legend-label-top,
+  .clinical-info-legend-text {
+    font-size: 0.56rem;
+    padding: 1px 2px;
+  }
+}
+
 .clinical-info-mobility--1 { background: #4caf50; }
 .clinical-info-mobility--2 { background: #f6c344; color: #3a2c00; }
 .clinical-info-mobility--3 { background: red; }
@@ -3126,6 +3237,22 @@ body.is-panel-resizing {
   position: relative;
   top: 0px;
   margin-bottom: -6px;
+}
+
+/* Mobile: cap legend icon size. Must come after the global .clinical-info-legend-img
+   rule above (which sets height: 70px) so it actually wins. */
+@media (max-width: 720px) {
+  .clinical-info-legend-img {
+    height: 24px;
+    max-width: 24px;
+    max-height: 24px;
+    width: auto;
+  }
+
+  .clinical-info-legend-block[data-ci-toggle="rct"] .clinical-info-legend-img,
+  .clinical-info-legend-block[data-ci-toggle="cracked"] .clinical-info-legend-img {
+    margin-bottom: 0;
+  }
 }
 
 /* ----- Interactive legend (when a tooth is selected) ----- */
@@ -3441,4 +3568,128 @@ body.is-panel-resizing {
 
 .clinical-info-tooth-cross::after {
   transform: translate(-50%, -50%) rotate(-72deg);
+}
+
+/* ============ noticeboard thumbnail preview lightbox ============ */
+.noticeboard-thumb-preview {
+  position: absolute;
+  bottom: 6px;
+  right: 36px;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  color: var(--ink-soft, #475569);
+  padding: 0;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.noticeboard-thumb-preview:hover {
+  background: #eef6f3;
+  border-color: #3BAE95;
+  color: #25735f;
+}
+.noticeboard-thumb-preview i { font-size: inherit; line-height: 1; }
+
+.noticeboard-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.noticeboard-preview-modal.is-hidden { display: none !important; }
+
+.noticeboard-preview-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.78);
+  backdrop-filter: blur(2px);
+}
+
+.noticeboard-preview-frame {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: min(92vw, 1100px);
+  height: min(88vh, 800px);
+}
+
+.noticeboard-preview-img {
+  max-width: 88%;
+  max-height: 100%;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+}
+
+.noticeboard-preview-nav {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.noticeboard-preview-nav:hover {
+  background: rgba(255, 255, 255, 0.32);
+  transform: scale(1.05);
+}
+
+.noticeboard-preview-close {
+  position: absolute;
+  top: -42px;
+  right: -4px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.noticeboard-preview-close:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.noticeboard-preview-caption {
+  position: absolute;
+  bottom: -36px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .noticeboard-preview-frame {
+    gap: 6px;
+  }
+  .noticeboard-preview-nav {
+    width: 36px;
+    height: 36px;
+    font-size: 22px;
+  }
 }

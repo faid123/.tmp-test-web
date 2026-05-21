@@ -84,3 +84,18 @@ async function login() {
         errorMessage.textContent = "An error occurred. Please try again later.";
     }
 }
+
+document.addEventListener("DOMContentLoaded", () => {
+    const toggleBtn = document.getElementById("togglePassword");
+    const pwInput = document.getElementById("password");
+    if (!toggleBtn || !pwInput) return;
+    toggleBtn.addEventListener("click", () => {
+        const shown = pwInput.type === "text";
+        pwInput.type = shown ? "password" : "text";
+        toggleBtn.setAttribute("aria-pressed", String(!shown));
+        toggleBtn.setAttribute(
+            "aria-label",
+            shown ? "Show password" : "Hide password"
+        );
+    });
+});

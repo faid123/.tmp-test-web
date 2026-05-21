@@ -708,6 +708,9 @@ async function composeJawCanvas(scale = 1) {
   // Outer aesthetic margin around the composed image.
   const padX = 10;
   const padY = 20;
+  // Header band height (in viewBox units) reserved at the top of the canvas
+  // for the case ID label.
+  const headerH = 36;
   // ViewBox expansion (in viewBox units): individual tooth images placed
   // near the edge of each SVG extend past the original viewBox and get
   // clipped by SVG's default overflow. Expand the cloned SVG's viewBox
@@ -716,7 +719,7 @@ async function composeJawCanvas(scale = 1) {
   const baseW = Math.max(upperDims.w, lowerDims.w) + vbPad * 2;
   const baseH = upperDims.h + lowerDims.h + vbPad * 4 + gap;
   const canvasW = Math.round((baseW + padX * 2) * scale);
-  const canvasH = Math.round((baseH + padY * 2) * scale);
+  const canvasH = Math.round((baseH + padY * 2 + headerH) * scale);
 
   const canvas = document.createElement("canvas");
   canvas.width = canvasW;
@@ -726,6 +729,17 @@ async function composeJawCanvas(scale = 1) {
   ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvasW, canvasH);
+
+  // Header: case ID text centered at the top.
+  const caseLabelText = getCaseLabelTextForExport();
+  if (caseLabelText) {
+    const fontPx = Math.round(18 * scale);
+    ctx.fillStyle = "#1f2937";
+    ctx.font = `600 ${fontPx}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(caseLabelText, canvasW / 2, (headerH / 2 + padY / 2) * scale);
+  }
 
   const [upperInlined, lowerInlined] = await Promise.all([
     inlineImagesInSvg(upperSvg),
@@ -751,14 +765,31 @@ async function composeJawCanvas(scale = 1) {
     svgToImage(upperInlined, upperRenderW * scale, upperRenderH * scale),
     svgToImage(lowerInlined, lowerRenderW * scale, lowerRenderH * scale),
   ]);
-  // Center each jaw horizontally within the padded canvas; pad top/bottom.
+  // Center each jaw horizontally within the padded canvas; reserve headerH
+  // at the top for the case ID label, then pad/draw both jaws below it.
   const upperX = (padX + (baseW - upperRenderW) / 2) * scale;
-  const upperY = padY * scale;
+  const upperY = (padY + headerH) * scale;
   const lowerX = (padX + (baseW - lowerRenderW) / 2) * scale;
-  const lowerY = (padY + upperRenderH + gap) * scale;
+  const lowerY = (padY + headerH + upperRenderH + gap) * scale;
   ctx.drawImage(upperImg, upperX, upperY, upperRenderW * scale, upperRenderH * scale);
   ctx.drawImage(lowerImg, lowerX, lowerY, lowerRenderW * scale, lowerRenderH * scale);
   return canvas;
+}
+
+// Resolve the case-id text to render on the exported JPEG. Prefer the on-screen
+// label so the file matches what the user sees; fall back to state.
+function getCaseLabelTextForExport() {
+  const labelEl = document.getElementById("caseLabel");
+  const labelText = (labelEl?.textContent || "").trim();
+  if (labelText && labelText !== "Case: Unknown") {
+    return labelText.replace(/^Case:\s*/i, "");
+  }
+  if (state.caseIntID != null && state.caseName) {
+    return `UID ${state.caseIntID} : ${state.caseName}`;
+  }
+  if (state.caseName) return state.caseName;
+  if (state.caseIntID != null) return `UID ${state.caseIntID}`;
+  return "";
 }
 
 export async function captureJawJpegDataUrl(quality = 0.92, scale = 3) {
@@ -776,16 +807,94 @@ export async function saveAsJpeg() {
       return;
     }
     const jpegUrl = canvas.toDataURL("image/jpeg", 0.92);
+    const fileName = `case_${state.caseIntID ?? "unknown"}_arch_annotation.jpg`;
+
     const a = document.createElement("a");
     a.href = jpegUrl;
-    a.download = `case_${state.caseIntID ?? "unknown"}_arch_annotation.jpg`;
+    a.download = fileName;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setMessage("Arch annotation saved as JPEG.", false);
+
+    const uploaded = await uploadAnnotationJpegToCase(jpegUrl, fileName);
+    if (uploaded) {
+      setMessage("Arch annotation saved as JPEG and uploaded to case.", false);
+    } else {
+      setMessage("Arch annotation saved as JPEG (upload skipped).", false);
+    }
   } catch (err) {
     console.error("JPEG export failed", err);
     setMessage("Failed to export as JPEG.", true);
+  }
+}
+
+// Parse the case_id string out of the topbar label (e.g. "UID 2014 : case_04").
+function deriveCaseNameFromLabel() {
+  const label = document.getElementById("caseLabel");
+  if (!label) return "";
+  const text = label.textContent || "";
+  const colonMatch = text.match(/:\s*(.+)$/);
+  if (colonMatch) return colonMatch[1].trim();
+  const caseMatch = text.match(/^Case:\s*(.+)$/i);
+  if (caseMatch) return caseMatch[1].trim();
+  return "";
+}
+
+// Upload the JPEG export as a reference image on the current case so it shows
+// up in the case-detail thumbnail panel and is preserved server-side.
+async function uploadAnnotationJpegToCase(dataUrl, fileName) {
+  if (!state.caseIntID) {
+    console.warn("[saveAsJpeg] Skipped upload: no caseIntID");
+    return false;
+  }
+  const caseName = state.caseName || deriveCaseNameFromLabel();
+  if (!caseName) {
+    console.warn("[saveAsJpeg] Skipped upload: case name unknown");
+    return false;
+  }
+
+  let loggedInUser = null;
+  try {
+    const raw = localStorage.getItem("loggedInUser");
+    loggedInUser = raw ? JSON.parse(raw) : null;
+  } catch {
+    console.warn("[saveAsJpeg] Skipped upload: bad loggedInUser");
+    return false;
+  }
+  if (!loggedInUser?.uuid) {
+    console.warn("[saveAsJpeg] Skipped upload: not logged in");
+    return false;
+  }
+
+  const payload = [
+    {
+      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      uuid: loggedInUser.uuid,
+      caseIntID: state.caseIntID,
+    },
+    {
+      case_id: caseName,
+      image_name: fileName,
+      image_data: dataUrl,
+    },
+  ];
+
+  try {
+    const res = await fetch(
+      "https://live.api.smartrpdai.com/api/smartrpd/referenceimages",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
+    const bodyText = await res.text().catch(() => "");
+    console.log("[saveAsJpeg] referenceimages POST", res.status, bodyText.slice(0, 300));
+    if (!res.ok) return false;
+    return true;
+  } catch (err) {
+    console.warn("[saveAsJpeg] referenceimages POST error", err);
+    return false;
   }
 }
 

@@ -26,6 +26,7 @@ export const REST_CALIBRATION_COMPONENT_ID = "rest-seat";
 export const state = {
   encryptedCaseId: "",
   caseIntID: null,
+  caseName: "",
   caseOwner: "",
   activeStatus: "presence",
   locks: { upper: false, lower: false },
@@ -679,6 +680,7 @@ async function fetchCaseOwner() {
     const detail = await response.json();
     if (detail?.username) state.caseOwner = detail.username;
     if (detail?.case_id) {
+      state.caseName = detail.case_id;
       const label = document.getElementById("caseLabel");
       const caseIntId = detail.id ?? state.caseIntID;
       if (label) {

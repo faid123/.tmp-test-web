@@ -126,7 +126,9 @@ function redraw() {
 // Compute approximate bounding box of a text stroke in canvas-CSS coords.
 function textBoundsForStroke(stroke) {
   if (!ctx || !stroke || !stroke.text || !stroke.point) return null;
-  const fontSize = Math.max(10, stroke.size * 2);
+  const fontSize = stroke.fontSize
+    ? Math.max(8, stroke.fontSize)
+    : Math.max(10, stroke.size * 2);
   const ratio = dpr();
   ctx.save();
   // Measure at the same canvas-pixel size used by drawStrokeOn so the
@@ -185,7 +187,11 @@ function drawStrokeOn(c, stroke, ratio) {
     if (!stroke.text || !stroke.point) return;
     c.save();
     c.globalCompositeOperation = "source-over";
-    const fontSize = Math.max(10, stroke.size * 2);
+    // Prefer an explicit pixel `fontSize` (set by the resizable text box)
+    // and fall back to the legacy `size * 2` derivation for older strokes.
+    const fontSize = stroke.fontSize
+      ? Math.max(8, stroke.fontSize)
+      : Math.max(10, stroke.size * 2);
     c.font = `600 ${fontSize * ratio}px "Montserrat", "Segoe UI", sans-serif`;
     c.fillStyle = stroke.color;
     c.textBaseline = "top";
@@ -236,8 +242,19 @@ function onPointerDown(event) {
   if (event.button !== undefined && event.button !== 0) return;
   const point = pointFromEvent(event);
 
-  // Always allow dragging an existing text label (regardless of current tool) —
-  // except when erasing, since the eraser is meant to remove ink, not move text.
+  // Text tool: click on existing text → edit it; click empty → new text.
+  if (state.tool === "text") {
+    const hit = findTextAtPoint(point);
+    if (hit) {
+      editExistingText(hit);
+      event.preventDefault();
+      return;
+    }
+    spawnTextInput(point);
+    return;
+  }
+
+  // Other tools (except eraser): click on existing text → drag to move.
   if (state.tool !== "eraser") {
     const hit = findTextAtPoint(point);
     if (hit) {
@@ -251,11 +268,6 @@ function onPointerDown(event) {
       event.preventDefault();
       return;
     }
-  }
-
-  if (state.tool === "text") {
-    spawnTextInput(point);
-    return;
   }
   if (state.tool === "line") {
     handleLineClick(point);
@@ -329,62 +341,220 @@ function handleLineClick(point) {
   updateUndoRedoButtons();
 }
 
+// Snapshot of the stroke being edited so Escape can restore the original.
+// Shape: { stroke, idx } | { caseLabel: true, value }
+let editingOriginal = null;
+
 function removeTextInput() {
   if (textInputEl) {
-    textInputEl.remove();
+    textInputEl._resizeObserver?.disconnect();
+    (textInputEl._wrap || textInputEl).remove();
     textInputEl = null;
   }
   textInputPoint = null;
 }
 
+// Re-add the original (used by Escape).
+function restoreEditingOriginal() {
+  if (!editingOriginal) return;
+  if (editingOriginal.caseLabel) {
+    state.caseLabel = editingOriginal.value;
+  } else {
+    state.strokes.splice(editingOriginal.idx, 0, editingOriginal.stroke);
+  }
+  editingOriginal = null;
+}
+
+function cancelTextInput() {
+  removeTextInput();
+  restoreEditingOriginal();
+  redraw();
+}
+
+// × button: throw away both the live box AND the original (if editing).
+function deleteTextInput() {
+  removeTextInput();
+  editingOriginal = null;
+  redraw();
+  updateUndoRedoButtons();
+}
+
 function commitTextInput() {
   if (!textInputEl || !textInputPoint) {
     removeTextInput();
+    editingOriginal = null;
     return;
   }
-  const value = textInputEl.value.trim();
+  const value = (textInputEl.textContent || "").trim();
   const point = textInputPoint;
   const color = textInputEl.dataset.color || state.color;
-  const size = Number(textInputEl.dataset.size) || state.size;
+  const fontSize = Number(textInputEl.dataset.fontSize) || INITIAL_TEXT_FONT_PX;
+
   removeTextInput();
-  if (!value) return;
-  state.strokes.push({ tool: "text", color, size, text: value, point });
+  const wasEditing = editingOriginal;
+  editingOriginal = null;
+
+  if (!value) {
+    // Empty commit = delete. If we were editing an existing stroke, it stays
+    // removed; if it was a fresh box, nothing was added in the first place.
+    redraw();
+    updateUndoRedoButtons();
+    return;
+  }
+
+  const newStroke = {
+    tool: "text",
+    color,
+    size: fontSize / 2,
+    fontSize,
+    text: value,
+    point,
+  };
+
+  if (wasEditing?.caseLabel) {
+    state.caseLabel = newStroke;
+  } else {
+    state.strokes.push(newStroke);
+  }
   state.redoStack = [];
   redraw();
   updateUndoRedoButtons();
 }
 
-function spawnTextInput(point) {
+const INITIAL_TEXT_FONT_PX = 22;
+
+function spawnTextInput(point, prefill = null) {
   if (textInputEl) commitTextInput();
-  const wrap = canvas.parentElement;
-  if (!wrap) return;
-  const input = document.createElement("input");
-  input.type = "text";
-  input.className = "instruction-editor-text-input";
-  input.placeholder = "Type…";
-  const fontSize = Math.max(12, state.size * 2);
-  input.style.left = `${point.x}px`;
-  input.style.top = `${point.y}px`;
-  input.style.color = state.color;
-  input.style.fontSize = `${fontSize}px`;
-  input.dataset.color = state.color;
-  input.dataset.size = String(state.size);
-  wrap.appendChild(input);
-  textInputEl = input;
+  const parent = canvas.parentElement;
+  if (!parent) return;
+
+  const initialFontPx = prefill?.fontSize || INITIAL_TEXT_FONT_PX;
+  const initialWidth = Math.max(120, Math.round(initialFontPx * 6));
+  const color = prefill?.color || state.color;
+
+  // Wrap holds the contenteditable + the × remove button so positioning the
+  // remove button doesn't fight with the resize handle on the editor itself.
+  const wrap = document.createElement("div");
+  wrap.className = "instruction-editor-text-wrap";
+  wrap.style.position = "absolute";
+  wrap.style.left = `${point.x}px`;
+  wrap.style.top = `${point.y}px`;
+  wrap.style.zIndex = "10";
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "instruction-editor-text-remove";
+  removeBtn.setAttribute("aria-label", "Remove text box");
+  removeBtn.title = "Remove";
+  removeBtn.innerHTML = "&times;";
+  // Stop blur on mousedown so the editor doesn't commit before our click fires.
+  removeBtn.addEventListener("mousedown", (e) => e.preventDefault());
+  removeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    deleteTextInput();
+  });
+
+  const div = document.createElement("div");
+  div.className = "instruction-editor-text-input";
+  div.contentEditable = "true";
+  div.setAttribute("role", "textbox");
+  div.setAttribute("aria-label", "Type text — drag corner to resize");
+  div.dataset.placeholder = "Type…";
+  div.style.color = color;
+  div.style.fontSize = `${initialFontPx}px`;
+  div.style.width = `${initialWidth}px`;
+  div.style.minHeight = `${initialFontPx + 8}px`;
+  div.style.resize = "both";
+  div.style.overflow = "hidden";
+  div.style.whiteSpace = "pre-wrap";
+  div.style.wordBreak = "break-word";
+  div.dataset.color = color;
+  div.dataset.fontSize = String(initialFontPx);
+
+  if (prefill?.text) div.textContent = prefill.text;
+
+  // Scale font-size proportionally with WIDTH (not height) — width is set by
+  // the corner-drag and isn't affected by typing line-wraps, so the font
+  // only changes when the user explicitly resizes the box.
+  if (typeof ResizeObserver !== "undefined") {
+    let lastFontPx = initialFontPx;
+    const ro = new ResizeObserver(() => {
+      const w = div.clientWidth;
+      if (!w) return;
+      const ratio = w / initialWidth;
+      const newSize = Math.max(8, Math.round(initialFontPx * ratio));
+      if (newSize === lastFontPx) return;
+      lastFontPx = newSize;
+      div.style.fontSize = `${newSize}px`;
+      div.dataset.fontSize = String(newSize);
+    });
+    ro.observe(div);
+    div._resizeObserver = ro;
+  }
+
+  wrap.appendChild(removeBtn);
+  wrap.appendChild(div);
+  parent.appendChild(wrap);
+
+  textInputEl = div;
+  textInputEl._wrap = wrap;
   textInputPoint = point;
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
+
+  div.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       commitTextInput();
     } else if (e.key === "Escape") {
       e.preventDefault();
-      removeTextInput();
-      redraw();
+      cancelTextInput();
     }
     e.stopPropagation();
   });
-  input.addEventListener("blur", () => commitTextInput());
-  setTimeout(() => input.focus(), 0);
+
+  div.addEventListener("blur", () => {
+    setTimeout(() => {
+      if (textInputEl === div && document.activeElement !== div) {
+        commitTextInput();
+      }
+    }, 50);
+  });
+
+  setTimeout(() => {
+    div.focus();
+    if (prefill?.text) {
+      // Put cursor at end so the user can keep typing immediately.
+      const range = document.createRange();
+      range.selectNodeContents(div);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+  }, 0);
+}
+
+// Replace an existing committed text stroke (or the case label) with a fresh
+// editable text box prefilled with its content.
+function editExistingText(target) {
+  if (textInputEl) commitTextInput();
+
+  if (target === state.caseLabel) {
+    editingOriginal = { caseLabel: true, value: { ...state.caseLabel } };
+    state.caseLabel = null;
+  } else {
+    const idx = state.strokes.indexOf(target);
+    if (idx < 0) return;
+    editingOriginal = { stroke: target, idx };
+    state.strokes.splice(idx, 1);
+  }
+
+  const fontPx = target.fontSize || Math.max(10, target.size * 2);
+  spawnTextInput({ x: target.point.x, y: target.point.y }, {
+    text: target.text,
+    fontSize: fontPx,
+    color: target.color,
+  });
+  redraw();
 }
 
 function undo() {

@@ -599,23 +599,6 @@ button {
   margin-top: auto;
 }
 
-/* ============ floating help ============ */
-.cm-help-fab {
-  position: fixed;
-  right: 22px;
-  bottom: 22px;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: #0f172a;
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-md);
-  z-index: 60;
-}
-
 /* ============ back-to-list (mobile only) ============ */
 .back-to-list {
   display: none;

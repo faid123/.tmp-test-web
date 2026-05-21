@@ -1,16 +1,19 @@
 // 顶部引入模块
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
+import { lol } from "../crypt.js";
 
 // ✅ 全局状态变量（必须提前声明）
 let existingUsers = []; // 当前案例已有的共享用户
 let addedUsers = []; // 用户后续添加的新用户
 let selectedUser = null; // 当前选中的待添加用户（搜索结果）
+let pendingInvites = []; // 待邀请用户名列表（内联视图中收集）
 
 document.addEventListener("DOMContentLoaded", () => {
   const openBtn = document.querySelector(".create-case");
-  const modal = document.getElementById("caseModal");
-  const closeBtn = document.getElementById("closeCaseModal");
+  const formPane = document.getElementById("createCaseForm");
+  const uploadPane = document.getElementById("createCaseUpload");
+  const pageEl = document.querySelector(".cm-page");
 
   const jawUploadInput = document.getElementById("jawUploadInput");
   const jawContainer = document.getElementById("uploadedJawModels");
@@ -21,19 +24,89 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const caseNameInput = document.getElementById("caseName");
   const requestDateInput = document.getElementById("requestDate");
-  const cancelBtn = document.querySelector(".cancel-btn");
-  const startBtn = document.querySelector(".start-btn");
-  const inviteBtn = document.querySelector(".invite-btn");
+  const caseOwnerDisplay = document.getElementById("ccCaseOwner");
+  const caseCreateDateDisplay = document.getElementById("ccCreateDate");
+  const inviteInput = document.getElementById("ccInviteInput");
+  const inviteAddBtn = document.getElementById("ccInviteAdd");
+  const inviteListEl = document.getElementById("ccInviteList");
+
+  const cancelBtn = uploadPane?.querySelector(".cancel-btn");
+  const saveBtn = uploadPane?.querySelector(".save-btn");
+  const saveStartBtn = uploadPane?.querySelector(".save-start-btn");
+
   const userAccessModal = document.getElementById("userAccessModal");
   const closeUserAccessModal = document.getElementById("closeUserAccessModal");
   const cancelInviteBtn = document.getElementById("cancelInviteBtn");
   const userSearchInput = document.getElementById("userSearchInput");
   const addUserBtn = document.getElementById("addUserBtn");
-  const caseNameDisplay = document.getElementById("caseNameDisplay");
   const saveInviteBtn = document.getElementById("saveInviteBtn");
 
   let activeTarget = null;
   const uploadLimit = 2;
+
+  const formatToday = () => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const showInlineView = () => {
+    if (!formPane || !uploadPane || !pageEl) return;
+    resetCreateCaseForm();
+    const loggedInUser = getLoggedInUser();
+    if (caseOwnerDisplay) {
+      caseOwnerDisplay.textContent = loggedInUser?.username || "—";
+    }
+    if (caseCreateDateDisplay) {
+      caseCreateDateDisplay.textContent = formatToday();
+    }
+    pageEl.classList.add("creating");
+    document.body.classList.add("creating-case");
+    formPane.classList.remove("hidden");
+    uploadPane.classList.remove("hidden");
+  };
+
+  const hideInlineView = () => {
+    if (!formPane || !uploadPane || !pageEl) return;
+    pageEl.classList.remove("creating");
+    document.body.classList.remove("creating-case");
+    formPane.classList.add("hidden");
+    uploadPane.classList.add("hidden");
+  };
+
+  const renderInviteList = () => {
+    if (!inviteListEl) return;
+    inviteListEl.innerHTML = "";
+    pendingInvites.forEach((username, idx) => {
+      const li = document.createElement("li");
+      li.textContent = username;
+      const x = document.createElement("button");
+      x.type = "button";
+      x.textContent = "×";
+      x.setAttribute("aria-label", `Remove ${username}`);
+      x.addEventListener("click", () => {
+        pendingInvites.splice(idx, 1);
+        renderInviteList();
+      });
+      li.appendChild(x);
+      inviteListEl.appendChild(li);
+    });
+  };
+
+  const addInvite = () => {
+    if (!inviteInput) return;
+    const name = inviteInput.value.trim();
+    if (!name) return;
+    if (pendingInvites.includes(name)) {
+      inviteInput.value = "";
+      return;
+    }
+    pendingInvites.push(name);
+    inviteInput.value = "";
+    renderInviteList();
+  };
 
   // === Drag & drop helpers (jaw STL placeholders + reference image container) ===
   const eventHasFiles = (e) => {
@@ -45,7 +118,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Build a fresh jaw placeholder ("upper" | "lower") with click + drag-drop wired up.
   const buildJawPlaceholder = (jawType) => {
     const placeholder = document.createElement("div");
-    placeholder.className = "upload-placeholder";
+    placeholder.className = "upload-placeholder cc-jaw-tile";
     placeholder.dataset.jaw = jawType;
 
     const bgImg = document.createElement("img");
@@ -54,12 +127,12 @@ document.addEventListener("DOMContentLoaded", () => {
     bgImg.src =
       jawType === "upper" ? "../../assets/upper.svg" : "../../assets/lower.svg";
 
-    const plus = document.createElement("span");
-    plus.className = "plus-icon";
-    plus.textContent = "＋";
+    const label = document.createElement("span");
+    label.className = "cc-jaw-label";
+    label.textContent = jawType === "upper" ? "Upper Jaw" : "Lower Jaw";
 
     placeholder.appendChild(bgImg);
-    placeholder.appendChild(plus);
+    placeholder.appendChild(label);
 
     placeholder.addEventListener("click", () => {
       activeTarget = placeholder;
@@ -69,26 +142,13 @@ document.addEventListener("DOMContentLoaded", () => {
     return placeholder;
   };
 
-  // Build the reference-image "+" placeholder with click wired up.
-  const buildRefPlaceholder = () => {
-    const placeholder = document.createElement("div");
-    placeholder.className = "upload-placeholder";
-
-    const plus = document.createElement("span");
-    plus.className = "plus-icon";
-    plus.textContent = "＋";
-    placeholder.appendChild(plus);
-
-    placeholder.addEventListener("click", () => {
-      refUploadInput.click();
-    });
-    return placeholder;
-  };
-
-  // Reset the create-case modal (clears inputs + rebuilds upload zones).
+  // Reset the create-case form (clears inputs + rebuilds upload zones).
   const resetCreateCaseForm = () => {
     if (caseNameInput) caseNameInput.value = "";
     if (requestDateInput) requestDateInput.value = "";
+    if (inviteInput) inviteInput.value = "";
+    pendingInvites = [];
+    renderInviteList();
     document.querySelectorAll(".uploaded-model").forEach((el) => {
       delete el.file;
     });
@@ -100,7 +160,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (refContainer) {
       refContainer.innerHTML = "";
-      refContainer.appendChild(buildRefPlaceholder());
     }
     if (jawUploadInput) jawUploadInput.value = "";
     if (refUploadInput) refUploadInput.value = "";
@@ -204,7 +263,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     wrapper.appendChild(img);
     wrapper.appendChild(remove);
-    refContainer.insertBefore(wrapper, refUploadBtn.nextSibling);
+    refContainer.appendChild(wrapper);
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -281,31 +340,14 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
-  // 打开弹窗
-  if (openBtn && modal) {
+  // 打开内联创建视图（取代弹窗）
+  if (openBtn && formPane && uploadPane) {
     openBtn.addEventListener("click", () => {
-      modal.classList.add("show");
-      modal.classList.remove("hidden");
+      showInlineView();
     });
   }
 
-  // 关闭弹窗
-  if (closeBtn && modal) {
-    closeBtn.addEventListener("click", () => {
-      modal.classList.remove("show");
-      modal.classList.add("hidden");
-    });
-  }
-
-  // 点击遮罩关闭
-  window.addEventListener("click", (e) => {
-    if (e.target === modal) {
-      modal.classList.remove("show");
-      modal.classList.add("hidden");
-    }
-  });
-
-  /*** 👇 STL 上传逻辑（左边，最多两个） ***/
+  /*** 👇 STL 上传逻辑（最多两个） ***/
   if (jawUploadInput && jawContainer) {
     jawContainer.querySelectorAll(".upload-placeholder").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -321,12 +363,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  /*** 👇 PNG/JPG 图片上传逻辑（右边，无限上传） ***/
+  /*** 👇 PNG/JPG 图片上传逻辑（无限上传） ***/
   if (refUploadBtn && refUploadInput && refContainer) {
     refUploadBtn.addEventListener("click", () => {
       refUploadInput.click();
     });
     enableRefDropZone(refContainer);
+    enableRefDropZone(refUploadBtn);
 
     refUploadInput.addEventListener("change", (event) => {
       const file = event.target.files[0];
@@ -334,330 +377,200 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  /*** 👇 取消按钮清空状态逻辑 ***/
-  if (cancelBtn) {
-    cancelBtn.addEventListener("click", resetCreateCaseForm);
+  /*** 👇 Invite Users 内联列表 ***/
+  if (inviteAddBtn) {
+    inviteAddBtn.addEventListener("click", addInvite);
   }
-
-  if (startBtn) {
-    startBtn.addEventListener("click", () => {
-      if (startBtn.dataset.submitting === "1") return;
-
-      const caseName = caseNameInput?.value?.trim();
-
-      if (!caseName) {
-        alert("Please enter case name.");
-        return;
+  if (inviteInput) {
+    inviteInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        addInvite();
       }
-
-      const loggedInUser = getLoggedInUser();
-      if (!loggedInUser || !loggedInUser.uuid) {
-        alert("User not logged in.");
-        return;
-      }
-
-      startBtn.dataset.submitting = "1";
-      startBtn.disabled = true;
-      if (inviteBtn) inviteBtn.disabled = true;
-      const originalStartText = startBtn.textContent;
-      startBtn.textContent = "Creating…";
-
-      const machine_id = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
-      const uuid = loggedInUser.uuid;
-      const hasUpper = !!jawContainer.querySelector(
-        '.uploaded-model[data-jaw="upper"]'
-      );
-      const hasLower = !!jawContainer.querySelector(
-        '.uploaded-model[data-jaw="lower"]'
-      );
-
-      const payload = [
-        {
-          machine_id,
-          uuid,
-        },
-        {
-          case_id: caseName,
-          upper_insertion_angle_x: 0,
-          upper_insertion_angle_y: 0,
-          upper_insertion_angle_z: 0,
-          lower_insertion_angle_x: 0,
-          lower_insertion_angle_y: 0,
-          lower_insertion_angle_z: 0,
-          process_upper: hasUpper ? 1 : 0,
-          process_lower: hasLower ? 1 : 0,
-        },
-      ];
-
-      fetch("https://live.api.smartrpdai.com/api/smartrpd/case", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-          return res.json();
-        })
-        .then(async (data) => {
-          console.log("✅ Case uploaded successfully:", data);
-
-          const case_id = caseName;
-          const caseIntID = data.id;
-            const user_id = getLoggedInUser()?.username || "";
-  await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
-
-          // 📤 上传 Upper STL（如有）
-          if (hasUpper) {
-            const upperEl = jawContainer.querySelector(
-              '.uploaded-model[data-jaw="upper"]'
-            );
-            await uploadSTL(
-              "upper_jaw",
-              upperEl,
-              machine_id,
-              uuid,
-              case_id,
-              caseIntID
-            );
-          }
-
-          // 📤 上传 Lower STL（如有）
-          if (hasLower) {
-            const lowerEl = jawContainer.querySelector(
-              '.uploaded-model[data-jaw="lower"]'
-            );
-            await uploadSTL(
-              "lower_jaw",
-              lowerEl,
-              machine_id,
-              uuid,
-              case_id,
-              caseIntID
-            );
-          }
-
-          // ✅ ✅ ✅ 上传 Reference Image（多张）
-          const refWrappers = refContainer.querySelectorAll(".uploaded-model");
-          for (let i = 0; i < refWrappers.length; i++) {
-            const wrapperEl = refWrappers[i];
-            try {
-              await uploadReferenceImage(
-                wrapperEl,
-                machine_id,
-                uuid,
-                case_id,
-                caseIntID,
-                i + 1
-              );
-            } catch (err) {
-              const fallbackName = `ref_image_${i + 1}.png`;
-              console.warn(
-                `❌ Failed to upload reference image ${fallbackName}:`,
-                err
-              );
-            }
-          }
-
-          alert("Case created, STL and reference images uploaded!");
-          window.location.reload();
-        })
-
-        .catch((err) => {
-          console.error("❌ Upload failed:", err);
-          alert("Failed to create case.");
-          // Re-enable so the user can retry
-          startBtn.dataset.submitting = "";
-          startBtn.disabled = false;
-          startBtn.textContent = originalStartText;
-          if (inviteBtn) inviteBtn.disabled = false;
-        });
     });
   }
 
-  if (inviteBtn) {
-    inviteBtn.addEventListener("click", async () => {
-      if (inviteBtn.dataset.submitting === "1") return;
+  /*** 👇 取消按钮：清空状态并关闭内联视图 ***/
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", () => {
+      resetCreateCaseForm();
+      hideInlineView();
+    });
+  }
 
-      const caseName = caseNameInput?.value?.trim();
+  /*** 👇 Save / Save & Start 提交流程 ***/
+  const submitCase = async (mode, triggerBtn) => {
+    if (triggerBtn.dataset.submitting === "1") return;
 
-      if (!caseName) {
-        alert("Please enter case name.");
-        return;
-      }
+    const caseName = caseNameInput?.value?.trim();
+    if (!caseName) {
+      alert("Please enter case name.");
+      return;
+    }
 
-      const loggedInUser = getLoggedInUser();
-      if (!loggedInUser || !loggedInUser.uuid) {
-        alert("User not logged in.");
-        return;
-      }
+    const loggedInUser = getLoggedInUser();
+    if (!loggedInUser || !loggedInUser.uuid) {
+      alert("User not logged in.");
+      return;
+    }
 
-      inviteBtn.dataset.submitting = "1";
-      inviteBtn.disabled = true;
-      if (startBtn) startBtn.disabled = true;
-      const originalInviteText = inviteBtn.textContent;
-      inviteBtn.textContent = "Creating…";
+    triggerBtn.dataset.submitting = "1";
+    triggerBtn.disabled = true;
+    if (saveBtn) saveBtn.disabled = true;
+    if (saveStartBtn) saveStartBtn.disabled = true;
+    const originalText = triggerBtn.textContent;
+    triggerBtn.textContent = "Creating…";
 
-      const releaseInviteButton = () => {
-        inviteBtn.dataset.submitting = "";
-        inviteBtn.disabled = false;
-        inviteBtn.textContent = originalInviteText;
-        if (startBtn) startBtn.disabled = false;
-      };
+    const release = () => {
+      triggerBtn.dataset.submitting = "";
+      triggerBtn.disabled = false;
+      triggerBtn.textContent = originalText;
+      if (saveBtn) saveBtn.disabled = false;
+      if (saveStartBtn) saveStartBtn.disabled = false;
+    };
 
-      const machine_id = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
-      const uuid = loggedInUser.uuid;
-      const hasUpper = !!jawContainer.querySelector(
-        '.uploaded-model[data-jaw="upper"]'
-      );
-      const hasLower = !!jawContainer.querySelector(
-        '.uploaded-model[data-jaw="lower"]'
-      );
+    const machine_id = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
+    const uuid = loggedInUser.uuid;
+    const hasUpper = !!jawContainer.querySelector(
+      '.uploaded-model[data-jaw="upper"]'
+    );
+    const hasLower = !!jawContainer.querySelector(
+      '.uploaded-model[data-jaw="lower"]'
+    );
 
-      // ✅ Step 1: 创建 Case
-      const payload = [
+    const payload = [
+      { machine_id, uuid },
+      {
+        case_id: caseName,
+        upper_insertion_angle_x: 0,
+        upper_insertion_angle_y: 0,
+        upper_insertion_angle_z: 0,
+        lower_insertion_angle_x: 0,
+        lower_insertion_angle_y: 0,
+        lower_insertion_angle_z: 0,
+        process_upper: hasUpper ? 1 : 0,
+        process_lower: hasLower ? 1 : 0,
+      },
+    ];
+
+    let caseIntID = null;
+    try {
+      const res = await fetch(
+        "https://live.api.smartrpdai.com/api/smartrpd/case",
         {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      const data = await res.json();
+      caseIntID = data.id;
+      const user_id = loggedInUser.username || "";
+      await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
+    } catch (err) {
+      console.error("❌ Failed to create case", err);
+      alert("Failed to create case.");
+      release();
+      return;
+    }
+
+    try {
+      if (hasUpper) {
+        const upperEl = jawContainer.querySelector(
+          '.uploaded-model[data-jaw="upper"]'
+        );
+        await uploadSTL("upper_jaw", upperEl, machine_id, uuid, caseName, caseIntID);
+      }
+      if (hasLower) {
+        const lowerEl = jawContainer.querySelector(
+          '.uploaded-model[data-jaw="lower"]'
+        );
+        await uploadSTL("lower_jaw", lowerEl, machine_id, uuid, caseName, caseIntID);
+      }
+    } catch (err) {
+      console.error("❌ STL Upload failed", err);
+    }
+
+    try {
+      const refWrappers = refContainer.querySelectorAll(".uploaded-model");
+      for (let i = 0; i < refWrappers.length; i++) {
+        await uploadReferenceImage(
+          refWrappers[i],
           machine_id,
           uuid,
-        },
-        {
-          case_id: caseName,
-          upper_insertion_angle_x: 0,
-          upper_insertion_angle_y: 0,
-          upper_insertion_angle_z: 0,
-          lower_insertion_angle_x: 0,
-          lower_insertion_angle_y: 0,
-          lower_insertion_angle_z: 0,
-          process_upper: hasUpper ? 1 : 0,
-          process_lower: hasLower ? 1 : 0,
-        },
-      ];
-
-      let caseIntID = null;
-
-      try {
-        const res = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/case",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
-          }
+          caseName,
+          caseIntID,
+          i + 1
         );
-
-        if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-        const data = await res.json();
-        caseIntID = data.id;
-        console.log("✅ Case created:", caseIntID);
-        const user_id = getLoggedInUser()?.username || "";
-await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
-      } catch (err) {
-        console.error("❌ Failed to create case", err);
-        alert("Failed to create case.");
-        releaseInviteButton();
-        return;
       }
+    } catch (err) {
+      console.warn("❌ Reference Image Upload failed", err);
+    }
 
-      // ✅ Step 2: 上传 STL（如有）
-      try {
-        if (hasUpper) {
-          const upperEl = jawContainer.querySelector(
-            '.uploaded-model[data-jaw="upper"]'
+    if (pendingInvites.length) {
+      const from_user = loggedInUser.username || "";
+      for (const username of pendingInvites) {
+        try {
+          const checkRes = await fetch(
+            "https://live.api.smartrpdai.com/api/smartrpd/user/checkIfUsernameExists/get",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify([{ machine_id }, { username }]),
+            }
           );
-          await uploadSTL(
-            "upper_jaw",
-            upperEl,
-            machine_id,
-            uuid,
-            caseName,
-            caseIntID
-          );
-        }
-        if (hasLower) {
-          const lowerEl = jawContainer.querySelector(
-            '.uploaded-model[data-jaw="lower"]'
-          );
-          await uploadSTL(
-            "lower_jaw",
-            lowerEl,
-            machine_id,
-            uuid,
-            caseName,
-            caseIntID
-          );
-        }
-      } catch (err) {
-        console.error("❌ STL Upload failed", err);
-      }
-
-      // ✅ Step 3: 上传 Reference Image（多张）
-      try {
-        const refWrappers = refContainer.querySelectorAll(".uploaded-model");
-        for (let i = 0; i < refWrappers.length; i++) {
-          const wrapperEl = refWrappers[i];
-          await uploadReferenceImage(
-            wrapperEl,
-            machine_id,
-            uuid,
-            caseName,
-            caseIntID,
-            i + 1
-          );
-        }
-      } catch (err) {
-        console.warn("❌ Reference Image Upload failed", err);
-      }
-
-      // ✅ Step 3: 打开邀请弹窗
-      releaseInviteButton();
-      userAccessModal.classList.remove("hidden");
-      userAccessModal.classList.add("show");
-      // caseNameDisplay.textContent = caseName;
-      const nameSpan = userAccessModal.querySelector(".case-name-display");
-      if (nameSpan) nameSpan.textContent = caseName;
-
-      window._inviteContext = {
-        caseName,
-        caseIntID,
-        uuid,
-        machine_id,
-      };
-
-      // ✅ Step 4: 获取当前 Case 所有成员（用正确字段 caseIntID + case_int_id）
-      try {
-        const rolePayload = [
-          { machine_id, uuid, caseIntID },
-          { case_int_id: caseIntID },
-        ];
-
-        console.log("📤 Role request payload:", rolePayload);
-
-        const roleRes = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/role/all/get",
-          {
+          const checkData = await checkRes.json();
+          if (!checkData || !checkData.uuid) {
+            console.warn(`User "${username}" not found — skipping.`);
+            continue;
+          }
+          const targetUUID = checkData.uuid;
+          await fetch("https://live.api.smartrpdai.com/api/smartrpd/role", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(rolePayload),
-          }
-        );
-
-        const text = await roleRes.text();
-        console.log("📥 Role API response:", text);
-
-        if (!roleRes.ok)
-          throw new Error(`Role fetch failed: ${roleRes.status}`);
-        const roleData = JSON.parse(text);
-        existingUsers = roleData;
-        renderSharedUserList();
-      } catch (err) {
-        console.error("❌ Failed to fetch roles", err);
-        sharedUserList.innerHTML = "<li>Failed to load users.</li>";
+            body: JSON.stringify([
+              { machine_id, uuid, caseIntID },
+              { role: 3, uuid: targetUUID, case_int_id: caseIntID },
+            ]),
+          });
+          await fetch("https://live.api.smartrpdai.com/api/smartrpd/alerts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify([
+              { machine_id, uuid, caseIntID },
+              {
+                case_int_id: caseIntID,
+                to_user: username,
+                from_user,
+                alert_message: `You have been added to case "${caseName}" by ${from_user}.`,
+                read_status: 0,
+                deleted: 0,
+              },
+            ]),
+          });
+        } catch (e) {
+          console.warn(`❌ Failed to invite ${username}:`, e);
+        }
       }
-    });
-    console.log("caseNameDisplay = ", caseNameDisplay);
+    }
+
+    if (mode === "start") {
+      const encryptedId = lol(caseIntID);
+      const isGitHubPages = window.location.hostname.includes("github.io");
+      const basePath = isGitHubPages ? "/.tmp-test-web" : "";
+      window.location.href = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html?id=${encryptedId}`;
+    } else {
+      alert("Case created.");
+      window.location.reload();
+    }
+  };
+
+  if (saveBtn) {
+    saveBtn.addEventListener("click", () => submitCase("save", saveBtn));
+  }
+  if (saveStartBtn) {
+    saveStartBtn.addEventListener("click", () => submitCase("start", saveStartBtn));
   }
 
   // ✅ 绑定 ADD 按钮点击逻辑（确保可以多次添加）

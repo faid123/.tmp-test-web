@@ -117,7 +117,19 @@ h1 {
 
 .toggle-eye {
   background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: #4a8a78;
 }
+
+.toggle-eye:hover { color: #2f6856; }
+.toggle-eye:focus-visible { outline: 2px solid #4a8a78; outline-offset: 2px; }
+
+.toggle-eye .eye-icon { display: none; }
+.toggle-eye .eye-show { display: block; }
+.toggle-eye[aria-pressed="true"] .eye-show { display: none; }
+.toggle-eye[aria-pressed="true"] .eye-hide { display: block; }
 
 .field input {
   flex: 1;
