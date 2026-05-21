@@ -35,6 +35,14 @@
             <button class="cm-user-avatar logout" type="button" title="Log out" aria-label="Log out">
               <i class="fa fa-right-from-bracket" aria-hidden="true"></i>
             </button>
+
+            <div id="notificationPopup" class="notification-popup hidden">
+              <div class="notification-header">
+                <span>Notifications</span>
+                <button id="markAllBtn" type="button">Mark all as read</button>
+              </div>
+              <div id="notificationList" class="notification-list"></div>
+            </div>
           </div>
         </header>
 
@@ -104,16 +112,6 @@
           </button>
         </div>
 
-        <div
-          id="notificationPopup"
-          class="notification-popup hidden"
-        >
-          <div class="notification-header">
-            <span>NOTIFICATIONS</span>
-            <button id="markAllBtn">MARK ALL AS READ</button>
-          </div>
-          <div id="notificationList" class="notification-list"></div>
-        </div>
 
         <div class="cm-list" id="caseList">
           <!-- JS-rendered cards land here -->
@@ -205,23 +203,23 @@
 
           <div class="cm-field">
             <div class="cm-field-label">STATUS</div>
-            <div class="cm-field-value">
-              <span class="cm-pill cm-pill-na" id="statusPill">N/A</span>
+            <div class="cm-status-control">
+              <select id="status" class="cm-status-select cm-pill cm-pill-na" aria-label="Change status">
+                <option value="na">N/A</option>
+                <option value="draft">Draft</option>
+                <option value="2d_design_pending">2D design pending</option>
+                <option value="2d_design_drafted">2D design drafted</option>
+                <option value="2d_design_approved">2D design approved</option>
+                <option value="3d_design_pending">3D design pending</option>
+                <option value="3d_design_drafted">3D design drafted</option>
+                <option value="3d_design_approved">3D design approved</option>
+                <option value="in_production">In production</option>
+                <option value="out_for_delivery">Out for delivery</option>
+                <option value="delivered">Delivered</option>
+                <option value="completed">Completed</option>
+              </select>
+              <i class="fa fa-chevron-down cm-status-chevron" aria-hidden="true"></i>
             </div>
-            <select id="status" class="hidden-status-select" hidden>
-              <option value="na">N/A</option>
-              <option value="draft">Draft</option>
-              <option value="2d_design_pending">2D design pending</option>
-              <option value="2d_design_drafted">2D design drafted</option>
-              <option value="2d_design_approved">2D design approved</option>
-              <option value="3d_design_pending">3D design pending</option>
-              <option value="3d_design_drafted">3D design drafted</option>
-              <option value="3d_design_approved">3D design approved</option>
-              <option value="in_production">In production</option>
-              <option value="out_for_delivery">Out for delivery</option>
-              <option value="delivered">Delivered</option>
-              <option value="completed">Completed</option>
-            </select>
             <span id="status-text" hidden></span>
           </div>
 

@@ -1796,8 +1796,12 @@ body.is-panel-resizing {
    .jaw-range-missing-btn {
   display: inline-flex;
   }
-}
 
+  .noticeboard-thumb-card {
+    max-height: 100%;
+    max-width: 100%;
+  }
+}
 /* Narrow viewports: keep icon + checkbox-label + delete + survey button on one line
    by letting the label column flex and compacting the survey button. */
 @media (max-width: 720px) {
@@ -2331,6 +2335,9 @@ body.is-panel-resizing {
   border: 1px solid var(--line);
   border-radius: 10px;
   overflow: hidden;
+  /* Match the captured jaw image's portrait aspect ratio so it fills the
+     card without grey letterbox on the sides. Landscape 3D screenshots will
+     get a slim top/bottom letterbox here, which we accept as the trade-off. */
   aspect-ratio: 4 / 3;
   display: grid;
   place-items: center;
@@ -2339,7 +2346,22 @@ body.is-panel-resizing {
 .noticeboard-thumb-card img {
   max-width: 100%;
   max-height: 100%;
+  width: auto;
+  height: auto;
   object-fit: contain;
+}
+
+/* Mobile: single column → cards span the full panel width. Cap the height
+   so a single portrait card doesn't dominate the scroll, and keep the
+   aspect-ratio so taller content stays readable. */
+@media (max-width: 720px) {
+  .noticeboard-grid {
+    grid-template-columns: 1fr;
+  }
+  .noticeboard-thumb-card {
+    aspect-ratio: 2 / 1;
+    max-height: 60vh;
+  }
 }
 
 .noticeboard-thumb-edit {

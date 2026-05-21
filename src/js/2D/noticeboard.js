@@ -50,12 +50,18 @@ function normalizeApiRow(apiResult){
 
 //Add endpoint fetchers
 async function postNoticeboardEndpoint(path, payload){
+  const t0 = performance.now();
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify(payload)
   });
-  if (!res.ok) return null;
+  const dt = Math.round(performance.now() - t0);
+  if (!res.ok) {
+    console.warn(`[noticeboard] ✕ POST ${path} FAILED  status=${res.status}  ${dt}ms`);
+    return null;
+  }
+  console.log(`[noticeboard] ✓ POST ${path} OK  status=${res.status}  ${dt}ms`);
   return res.json();
 }
 
@@ -64,20 +70,38 @@ async function fetchNoticeboardEdited(caseIntID, uuid) {
 }
 
 async function saveNoticeboardEdited(caseIntID, uuid, filenames, data) {
+  const names = Array.isArray(filenames) ? filenames : [];
+  const datas = Array.isArray(data) ? data : [];
   const payload = [
     { machine_id: MACHINE_ID, uuid, caseIntID },
     {
       case_id: caseIntID,
-      filenames: JSON.stringify(Array.isArray(filenames) ? filenames : []),
-      data: JSON.stringify(Array.isArray(data) ? data : []),
+      filenames: JSON.stringify(names),
+      data: JSON.stringify(datas),
     },
   ];
+  console.log(
+    `[noticeboard] → POST /noticeboard/editedview  caseIntID=${caseIntID}  items=${names.length}`,
+    { filenames: names }
+  );
+  const t0 = performance.now();
   const res = await fetch(`${API_BASE}/noticeboard/editedview`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`noticeboard editedview save failed: ${res.status}`);
+  const dt = Math.round(performance.now() - t0);
+  if (!res.ok) {
+    let body = "";
+    try { body = await res.text(); } catch {}
+    console.error(
+      `[noticeboard] ✕ POST /noticeboard/editedview FAILED  status=${res.status}  ${dt}ms  ${body.slice(0, 200)}`
+    );
+    throw new Error(`noticeboard editedview save failed: ${res.status}`);
+  }
+  console.log(
+    `[noticeboard] ✓ POST /noticeboard/editedview OK  status=${res.status}  ${dt}ms`
+  );
   return res.json().catch(() => null);
 }
 
@@ -359,47 +383,19 @@ async function hydrateNoticeboardFromServer() {
 }
 
 
-const STORAGE_PREFIX = "noticeboard";
-
-function getStorageKey() {
-  const id = state.encryptedCaseId || "draft";
-  return `${STORAGE_PREFIX}_${id}`;
-}
-
+// In-memory only — matching the legacy 2Dannotation.js approach. The server
+// (/noticeboard/editedview) is the sole source of truth; nothing is persisted
+// to localStorage, so we never have to worry about the ~5 MB quota.
 function emptyData() {
   return { instructions: [], viewcaptures: [] };
 }
 
-function loadData() {
-  try {
-    const raw = localStorage.getItem(getStorageKey());
-    if (!raw) return emptyData();
-    const parsed = JSON.parse(raw);
-    return {
-      instructions: Array.isArray(parsed.instructions) ? parsed.instructions : [],
-      viewcaptures: Array.isArray(parsed.viewcaptures) ? parsed.viewcaptures : [],
-    };
-  } catch {
-    return emptyData();
-  }
-}
-
-function saveData(data) {
-  try {
-    // Server-mirrored items are re-fetched on every page load by
-    // hydrateNoticeboardFromServer, so persisting their (large, base64)
-    // preview/baseImage blobs only wastes the ~5 MB localStorage quota.
-    const stripServerMirrors = (items) =>
-      (items || []).filter((it) => it && it.source !== "server");
-    const slim = {
-      instructions: stripServerMirrors(data?.instructions),
-      viewcaptures: stripServerMirrors(data?.viewcaptures),
-    };
-    localStorage.setItem(getStorageKey(), JSON.stringify(slim));
-  } catch (e) {
-    console.error("Noticeboard save failed", e);
-    setMessage("Could not save noticeboard entry — storage may be full.", true);
-  }
+// `saveData` is kept as a no-op so existing call sites don't have to be
+// rewritten. The cache is a live object — mutations to it already persist
+// for the rest of the session, and the server is updated via
+// syncInstructionsToEditedView when items are added or edited.
+function saveData(_data) {
+  /* intentionally empty — see emptyData() comment above */
 }
 
 let cache = null;
@@ -409,7 +405,7 @@ function getModal() {
 }
 
 function ensureCache() {
-  if (!cache) cache = loadData();
+  if (!cache) cache = emptyData();
   return cache;
 }
 
@@ -1036,7 +1032,7 @@ async function generateReport() {
 export function openNoticeboard() {
   const modal = getModal();
   if (!modal) return;
-  cache = loadData();
+  ensureCache();
   renderGrids();
   modal.classList.remove("is-hidden");
   modal.setAttribute("aria-hidden", "false");
@@ -1062,7 +1058,7 @@ function bindTabSwitching() {
 }
 
 export function initNoticeboard() {
-  cache = loadData();
+  ensureCache();
   renderGrids();
   document.getElementById("openNoticeboardBtn")?.addEventListener("click", openNoticeboard);
   document.getElementById("noticeboardCloseBtn")?.addEventListener("click", closeNoticeboard);

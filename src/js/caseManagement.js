@@ -177,6 +177,19 @@ function statusDisplayText(apiStatus) {
   return v.replace(/_/g, " ");
 }
 
+function applyStatusPillToSelect(apiStatus) {
+  const sel = document.getElementById("status");
+  if (!sel) return;
+  sel.classList.remove(
+    "cm-pill-pending",
+    "cm-pill-progress",
+    "cm-pill-completed",
+    "cm-pill-na",
+    "cm-pill-draft"
+  );
+  sel.classList.add(statusPillClass(apiStatus));
+}
+
 function initialsFor(name) {
   const s = String(name || "").trim();
   if (!s) return "·";
@@ -360,7 +373,10 @@ function displayCaseDetails(data) {
   document.getElementById("last-edited").textContent = formatDateTime(data.last_updated);
 
   const statusSel = document.getElementById("status");
-  if (statusSel) statusSel.value = apiStatusToValue(data.new_status);
+  if (statusSel) {
+    statusSel.value = apiStatusToValue(data.new_status);
+    applyStatusPillToSelect(data.new_status);
+  }
   const statusText = document.getElementById("status-text");
   if (statusText) statusText.textContent = data.new_status || "-";
 
@@ -888,11 +904,13 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
     try {
       await postNewStatus(caseObj, apiValue);   // ← 发送空格写法
       caseObj.new_status = apiValue;            // 本地同步
+      applyStatusPillToSelect(apiValue);        // recolor the select pill
       applyClientFilters();
     } catch (err) {
       console.error("❌ Status update failed:", err);
       alert("❌ Failed to update status.");
       e.target.value = apiStatusToValue(caseObj.new_status);
+      applyStatusPillToSelect(caseObj.new_status);
     }
   });
 }
