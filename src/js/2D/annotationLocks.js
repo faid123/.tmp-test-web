@@ -708,9 +708,6 @@ async function composeJawCanvas(scale = 1) {
   // Outer aesthetic margin around the composed image.
   const padX = 10;
   const padY = 20;
-  // Header band height (in viewBox units) reserved at the top of the canvas
-  // for the case ID label.
-  const headerH = 36;
   // ViewBox expansion (in viewBox units): individual tooth images placed
   // near the edge of each SVG extend past the original viewBox and get
   // clipped by SVG's default overflow. Expand the cloned SVG's viewBox
@@ -719,7 +716,7 @@ async function composeJawCanvas(scale = 1) {
   const baseW = Math.max(upperDims.w, lowerDims.w) + vbPad * 2;
   const baseH = upperDims.h + lowerDims.h + vbPad * 4 + gap;
   const canvasW = Math.round((baseW + padX * 2) * scale);
-  const canvasH = Math.round((baseH + padY * 2 + headerH) * scale);
+  const canvasH = Math.round((baseH + padY * 2) * scale);
 
   const canvas = document.createElement("canvas");
   canvas.width = canvasW;
@@ -729,17 +726,6 @@ async function composeJawCanvas(scale = 1) {
   ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvasW, canvasH);
-
-  // Header: case ID text centered at the top.
-  const caseLabelText = getCaseLabelTextForExport();
-  if (caseLabelText) {
-    const fontPx = Math.round(18 * scale);
-    ctx.fillStyle = "#1f2937";
-    ctx.font = `600 ${fontPx}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(caseLabelText, canvasW / 2, (headerH / 2 + padY / 2) * scale);
-  }
 
   const [upperInlined, lowerInlined] = await Promise.all([
     inlineImagesInSvg(upperSvg),
@@ -765,14 +751,39 @@ async function composeJawCanvas(scale = 1) {
     svgToImage(upperInlined, upperRenderW * scale, upperRenderH * scale),
     svgToImage(lowerInlined, lowerRenderW * scale, lowerRenderH * scale),
   ]);
-  // Center each jaw horizontally within the padded canvas; reserve headerH
-  // at the top for the case ID label, then pad/draw both jaws below it.
+  // Center each jaw horizontally within the padded canvas; the canvas has
+  // no header band now, so the upper jaw starts at the top padding and the
+  // lower jaw sits a `gap` below it.
   const upperX = (padX + (baseW - upperRenderW) / 2) * scale;
-  const upperY = (padY + headerH) * scale;
+  const upperY = padY * scale;
   const lowerX = (padX + (baseW - lowerRenderW) / 2) * scale;
-  const lowerY = (padY + headerH + upperRenderH + gap) * scale;
+  const lowerY = (padY + upperRenderH + gap) * scale;
   ctx.drawImage(upperImg, upperX, upperY, upperRenderW * scale, upperRenderH * scale);
   ctx.drawImage(lowerImg, lowerX, lowerY, lowerRenderW * scale, lowerRenderH * scale);
+
+  // Case-ID watermark — sit in the *visible* gap between jaws (between the
+  // bottom of the upper jaw's content and the top of the lower jaw's
+  // content). Computing it from the actual jaw positions keeps it visually
+  // centered even when one jaw is taller than the other.
+  const labelText = getCaseLabelTextForExport();
+  if (labelText) {
+    const watermarkText = labelText.startsWith("🦷") ? labelText : `🦷 ${labelText}`;
+    const visibleUpperBottom = upperY + (vbPad + upperDims.h) * scale;
+    const visibleLowerTop = lowerY + vbPad * scale;
+    const watermarkY = (visibleUpperBottom + visibleLowerTop) / 2;
+    const watermarkX = canvasW / 2;
+    const fontPx = Math.round(28 * scale);
+    ctx.save();
+    ctx.font = `700 ${fontPx}px "Montserrat", "Segoe UI", sans-serif`;
+    ctx.fillStyle = "rgba(40, 60, 80, 0.55)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "rgba(255, 255, 255, 0.85)";
+    ctx.shadowBlur = 4 * scale;
+    ctx.fillText(watermarkText, watermarkX, watermarkY);
+    ctx.restore();
+  }
+
   return canvas;
 }
 

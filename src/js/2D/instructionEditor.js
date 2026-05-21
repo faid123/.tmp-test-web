@@ -113,9 +113,6 @@ function redraw() {
   for (const stroke of allStrokes) {
     drawStrokeOn(offCtx, stroke, ratio);
   }
-  if (state.caseLabel) {
-    drawStrokeOn(offCtx, { ...state.caseLabel, tool: "text" }, ratio);
-  }
   ctx.drawImage(off, 0, 0);
 
   if (state.linePending) {
@@ -147,13 +144,9 @@ function textBoundsForStroke(stroke) {
 }
 
 function findTextAtPoint(point) {
-  // Check case label first (drawn on top), then committed text strokes (top-most first).
-  if (state.caseLabel) {
-    const b = textBoundsForStroke(state.caseLabel);
-    if (b && point.x >= b.x && point.x <= b.x + b.w && point.y >= b.y && point.y <= b.y + b.h) {
-      return state.caseLabel;
-    }
-  }
+  // The case-ID watermark is intentionally non-interactive — skip it so the
+  // user can draw / drag in the area it occupies. Hit-test committed text
+  // strokes only (top-most first).
   for (let i = state.strokes.length - 1; i >= 0; i--) {
     const s = state.strokes[i];
     if (s.tool !== "text") continue;
@@ -180,6 +173,22 @@ function drawLinePendingMarker(point) {
   ctx.strokeStyle = "#ffffff";
   ctx.stroke();
   ctx.restore();
+}
+
+// Draws the case-ID watermark centered between the jaws. Non-interactive —
+// just a visual stamp baked into the exported image.
+function drawWatermark(c, stroke, ratio) {
+  if (!stroke?.text || !stroke?.point) return;
+  c.save();
+  c.globalCompositeOperation = "source-over";
+  const fontSize = stroke.fontSize || Math.max(18, (stroke.size || 16) * 2);
+  c.font = `700 ${fontSize * ratio}px "Montserrat", "Segoe UI", sans-serif`;
+  c.fillStyle = "rgba(40, 60, 80, 0.55)";
+  c.textBaseline = "top";
+  c.shadowColor = "rgba(255, 255, 255, 0.85)";
+  c.shadowBlur = 4 * ratio;
+  c.fillText(stroke.text, stroke.point.x * ratio, stroke.point.y * ratio);
+  c.restore();
 }
 
 function drawStrokeOn(c, stroke, ratio) {
@@ -637,12 +646,10 @@ function bindOnce() {
   });
   document.getElementById("instructionEditorSaveBtn")?.addEventListener("click", () => {
     const dataUrl = exportComposedDataUrl();
+    // The watermark is auto-regenerated every time the editor opens, so we
+    // don't commit it into the saved strokes — otherwise it would render
+    // twice on re-open (once as the live watermark, once as a baked stroke).
     const strokes = JSON.parse(JSON.stringify(state.strokes));
-    // Commit the draggable case label into the saved strokes so it's
-    // preserved when re-opening the editor or rendering the thumbnail.
-    if (state.caseLabel && state.caseLabel.text) {
-      strokes.push({ tool: "text", ...JSON.parse(JSON.stringify(state.caseLabel)) });
-    }
     closeEditor({ dataUrl, strokes });
   });
   document.getElementById("clearDrawingsBtn")?.addEventListener("click", clearAll);
@@ -749,30 +756,9 @@ export async function openInstructionEditor(options = {}) {
   await new Promise((r) => requestAnimationFrame(r));
   resizeCanvas();
 
-  // Seed a draggable case-ID label between the upper and lower jaws.
-  const caseLabelText = (options.caseLabel || "").trim();
-  if (caseLabelText && canvas) {
-    const rect = canvas.getBoundingClientRect();
-    const cssWidth = rect.width;
-    const cssHeight = rect.height;
-    const labelSize = 14;
-    const fontPx = labelSize * 2;
-    const ratio = dpr();
-    ctx.save();
-    ctx.font = `600 ${fontPx * ratio}px "Montserrat", "Segoe UI", sans-serif`;
-    const labelWidth = ctx.measureText(caseLabelText).width / ratio;
-    ctx.restore();
-    state.caseLabel = {
-      text: caseLabelText,
-      color: state.color,
-      size: labelSize,
-      point: {
-        x: Math.max(8, (cssWidth - labelWidth) / 2),
-        y: Math.max(8, cssHeight / 2 - fontPx / 2),
-      },
-    };
-    redraw();
-  }
+  // The case-ID watermark is now baked into the background image by
+  // composeJawCanvas (so it sits between the jaws even when one is taller),
+  // so we don't draw a second watermark on top.
   if (typeof ResizeObserver !== "undefined") {
     resizeObserver = new ResizeObserver(() => resizeCanvas());
     resizeObserver.observe(canvas.parentElement);
