@@ -584,8 +584,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (mode === "start") {
       const encryptedId = lol(caseIntID);
       const isGitHubPages = window.location.hostname.includes("github.io");
-      const basePath = isGitHubPages ? "/.tmp-test-web" : "";
-      window.location.href = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html?id=${encryptedId}`;
+      const repoBase = isGitHubPages
+        ? `/${window.location.pathname.split("/").filter(Boolean)[0] || ""}`
+        : "";
+      window.location.href = `${window.location.origin}${repoBase}/src/pages/2DAnnotation.html?id=${encryptedId}`;
     } else {
       alert("Case created.");
       window.location.reload();

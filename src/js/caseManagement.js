@@ -849,11 +849,10 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
 
       const encryptedId = lol(caseId);
       const isGitHubPages = window.location.hostname.includes("github.io");
-      // const isLocal = window.location.hostname === "localhost";
-
-      // 本地要用 .html/?id=xxx，GitHub 要用 .html?id=xxx
       const queryConnector = "?";
-      const basePath = isGitHubPages ? "/.tmp-test-web" : "";
+      const basePath = isGitHubPages
+        ? `/${window.location.pathname.split("/").filter(Boolean)[0] || ""}`
+        : "";
 
       const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}`;
       window.location.href = targetURL;
