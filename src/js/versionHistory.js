@@ -1,4 +1,6 @@
 // ../js/versionHistory.js
+import { toast } from "./toast.js";
+
 (function () {
   const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
@@ -196,7 +198,7 @@ const TYPE_ICON = {
       const user   = getLoggedInUser();
 
       if (!caseId || !user?.uuid) {
-        alert("⚠️ Please select a case first.");
+        toast.warning("Please select a case first.");
         return;
       }
 

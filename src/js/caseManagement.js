@@ -1,4 +1,5 @@
 import { lol } from "../crypt.js";
+import { toast } from "./toast.js";
 
 function getLoggedInUser() {
   const user = localStorage.getItem("loggedInUser");
@@ -68,7 +69,7 @@ function dedupeCases(list) {
 async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
   const user = getLoggedInUser();
   if (!caseId || !user?.uuid) {
-    alert("⚠️ Unable to delete: missing case id or login.");
+    toast.warning("Unable to delete: missing case id or login.");
     return false;
   }
 
@@ -143,7 +144,7 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
     return true;
   } catch (err) {
     console.error("❌ Delete failed:", err);
-    alert(`❌ Failed to delete case.\n\n${err.message || err}`);
+    toast.error(`Failed to delete case. ${err.message || err}`);
     return false;
   }
 }
@@ -197,7 +198,7 @@ function triggerBlobDownload(bytes, filename) {
 async function downloadCaseFiles(caseIntId, caseLabel) {
   const user = getLoggedInUser();
   if (!user?.uuid || caseIntId == null) {
-    alert("⚠️ Unable to download: missing case info or login.");
+    toast.warning("Unable to download: missing case info or login.");
     return;
   }
 
@@ -234,12 +235,12 @@ async function downloadCaseFiles(caseIntId, caseLabel) {
   }
 
   if (!files.length) {
-    alert("No uploaded files found for this case.");
+    toast.info("No uploaded files found for this case.");
     return;
   }
 
   if (typeof window.JSZip !== "function") {
-    alert("Zip library failed to load. Please refresh and try again.");
+    toast.error("Zip library failed to load. Please refresh and try again.");
     return;
   }
 
@@ -270,7 +271,7 @@ async function downloadCaseFiles(caseIntId, caseLabel) {
     triggerBlobDownload(blob, `${base}.zip`);
   } catch (err) {
     console.error("❌ Failed to generate zip:", err);
-    alert(`❌ Failed to generate zip: ${err.message || err}`);
+    toast.error(`Failed to generate zip: ${err.message || err}`);
   }
 }
 
@@ -338,6 +339,16 @@ function escapeAttr(value) {
   ));
 }
 
+// Format a co-owner list for the case card. Caps the visible names so a
+// case shared with many users doesn't blow out the row width.
+function formatCoOwners(names) {
+  if (!names?.length) return "";
+  const MAX_VISIBLE = 2;
+  const visible = names.slice(0, MAX_VISIBLE).map(escapeAttr).join(", ");
+  const extra = names.length - MAX_VISIBLE;
+  return extra > 0 ? `${visible} +${extra} more` : visible;
+}
+
 // 渲染病例卡片列表（取代旧表格）
 function populateTable(cases) {
   const sel = document.getElementById("filter-status");
@@ -398,6 +409,7 @@ function populateTable(cases) {
           <span class="cm-meta-item"><i class="fa-regular fa-calendar"></i>${formatDateTime(caseItem.creation_date)}</span>
           <span class="cm-meta-item"><i class="fa-regular fa-clock"></i>Due: ${dueDate ? formatDateTime(dueDate) : "N/A"}</span>
           <span class="cm-meta-item"><i class="fa-regular fa-circle-user"></i>${escapeAttr(assignedTo)}</span>
+          ${caseItem.co_owners?.length ? `<span class="cm-meta-item cm-meta-coowners" title="Shared with ${escapeAttr(caseItem.co_owners.join(", "))}"><i class="fa-solid fa-user-group"></i>${formatCoOwners(caseItem.co_owners)}</span>` : ""}
         </div>
       </div>
       <div class="cm-card-actions">
@@ -733,18 +745,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   const cases = await fetchCases();
 
   if (cases) {
-    // ① 拉扩展字段
-    const extraMap = (await fetchAdditionalCaseDetails(cases)) || {};
-    console.log("[extraMap]", extraMap);
-    // ② 合并到每个 case 上（找得到就塞进去）
-    cases.forEach((c) =>
-      Object.assign(
-        c,
-        extraMap[String(c.id)] || extraMap[String(c.case_int_id)] || {}
-      )
-    );
-    console.log("[after merge]", cases[0]);
-    currentCases = cases; // 放到 merge 之后
+    // Pull additional per-case data and the co-owner list in parallel.
+    const [extraMap, coOwnerMap] = await Promise.all([
+      fetchAdditionalCaseDetails(cases),
+      fetchCoOwners(cases),
+    ]);
+    cases.forEach((c) => {
+      const key = String(c.id ?? c.case_int_id);
+      Object.assign(c, extraMap?.[key] || {});
+      c.co_owners = coOwnerMap?.[key] || [];
+    });
+    currentCases = cases;
     populateTable(currentCases);
     applyClientFilters();
 
@@ -843,7 +854,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
       console.log("🔹 Selected case ID:", caseId);
 
       if (!caseId) {
-        alert("⚠️ Please select a case first.");
+        toast.warning("Please select a case first.");
         return;
       }
 
@@ -887,11 +898,11 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
     deleteBtn.addEventListener("click", async () => {
       const caseId = window.selectedCaseId;
       if (!caseId) {
-        alert("⚠️ Please select a case first.");
+        toast.warning("Please select a case first.");
         return;
       }
       const ok = await deleteCaseById(caseId);
-      if (ok) alert("✅ Case deleted successfully!");
+      if (ok) toast.success("Case deleted successfully.");
     });
   }
 
@@ -903,7 +914,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
       const user = getLoggedInUser();
 
       if (!caseId || !user?.uuid) {
-        alert("⚠️ Please select a case first.");
+        toast.warning("Please select a case first.");
         return;
       }
 
@@ -911,7 +922,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         (c) => c.id === caseId || c.case_id === caseId
       );
       if (!caseObj) {
-        alert("⚠️ Case not found in current list.");
+        toast.warning("Case not found in current list.");
         return;
       }
 
@@ -1056,7 +1067,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
       closeRenameModal();
     } catch (error) {
       console.error("❌ Failed to rename case:", error);
-      alert(`❌ Failed to rename case: ${error.message}`);
+      toast.error(`Failed to rename case: ${error.message}`);
     } finally {
       confirmRenameBtn.disabled = false;
     }
@@ -1068,7 +1079,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
       const user = getLoggedInUser();
 
       if (!caseId || !user?.uuid) {
-        alert("⚠️ Please select a case first.");
+        toast.warning("Please select a case first.");
         return;
       }
 
@@ -1076,7 +1087,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         (c) => c.id === caseId || c.case_id === caseId
       );
       if (!caseObj) {
-        alert("⚠️ Case not found in current list.");
+        toast.warning("Case not found in current list.");
         return;
       }
 
@@ -1112,7 +1123,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
     const caseId = window.selectedCaseId;
     const user   = getLoggedInUser();
     if (!caseId || !user?.uuid) {
-      alert("⚠️ Please select a case first.");
+      toast.warning("Please select a case first.");
       e.target.value = "na";
       return;
     }
@@ -1128,8 +1139,8 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
       applyStatusPillToSelect(apiValue);        // recolor the select pill
       applyClientFilters();
     } catch (err) {
-      console.error("❌ Status update failed:", err);
-      alert("❌ Failed to update status.");
+      console.error("Status update failed:", err);
+      toast.error("Failed to update status.");
       e.target.value = apiStatusToValue(caseObj.new_status);
       applyStatusPillToSelect(caseObj.new_status);
     }
@@ -1228,14 +1239,13 @@ function renderSharedUserList() {
         );
 
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        alert(`✅ User ${user.username} removed.`);
+        toast.success(`User ${user.username} removed.`);
 
-        // 移除本地并刷新
         existingUsers = existingUsers.filter((u) => u.uuid !== user.uuid);
         renderSharedUserList();
       } catch (err) {
-        console.error("❌ Failed to remove user:", err);
-        alert("❌ Failed to remove user.");
+        console.error("Failed to remove user:", err);
+        toast.error("Failed to remove user.");
       }
     });
 
@@ -1290,6 +1300,43 @@ async function fetchAdditionalCaseDetails(caseList) {
   });
 
   return map; // 只包含真的有附加数据的那些病例
+}
+
+// Fetch co-owner usernames per case in parallel. Mirrors the shape of
+// fetchAdditionalCaseDetails — returns { [case_int_id]: string[] }.
+// A case absent from the map (or with an empty array) has no co-owners.
+async function fetchCoOwners(caseList) {
+  const logged = getLoggedInUser();
+  if (!logged || !caseList?.length) return {};
+
+  const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
+  const url = "https://live.api.smartrpdai.com/api/smartrpd/role/all/get";
+
+  const reqs = caseList.map((c) => {
+    const caseIntID = c.case_int_id ?? c.id;
+    return fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        { machine_id: MACHINE_ID, uuid: logged.uuid, caseIntID },
+        { case_int_id: caseIntID },
+      ]),
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((arr) => ({ id: caseIntID, rows: Array.isArray(arr) ? arr : [] }))
+      .catch(() => ({ id: caseIntID, rows: [] }));
+  });
+
+  const results = await Promise.all(reqs);
+  const map = {};
+  results.forEach(({ id, rows }) => {
+    if (!id) return;
+    const names = rows
+      .filter((r) => r && r.role === "coowner" && r.username)
+      .map((r) => r.username);
+    if (names.length) map[String(id)] = names;
+  });
+  return map;
 }
 
 async function postNewStatus(caseObj, newStatus) {

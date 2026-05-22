@@ -1,45 +1,26 @@
 // 顶部引入模块
 import { lol } from "../crypt.js";
+import { toast, flashToast } from "./toast.js";
 
 let THREE;
 let STLLoader;
 
+// Lazy-load Three.js + STLLoader. Bare specifiers let the bundler (webpack in
+// prod, Vite in dev) resolve both through a single module identity — using
+// explicit URLs splits them into two instances and trips Three's
+// "Multiple instances of Three.js being imported" warning.
 async function loadThreeDeps() {
   if (THREE && STLLoader) return;
-
-  const threeCandidates = [
-    "../../node_modules/three/build/three.module.js",
-    "https://unpkg.com/three@0.164.1/build/three.module.js",
-  ];
-  const loaderCandidates = [
-    "../../node_modules/three/examples/jsm/loaders/STLLoader.js",
-    "https://unpkg.com/three@0.164.1/examples/jsm/loaders/STLLoader.js",
-  ];
-
-  for (const url of threeCandidates) {
-    try {
-      THREE = await import(url);
-      break;
-    } catch (_) {}
-  }
-
-  for (const url of loaderCandidates) {
-    try {
-      ({ STLLoader } = await import(url));
-      break;
-    } catch (_) {}
-  }
-
-  if (!THREE || !STLLoader) {
-    throw new Error("Failed to load Three.js dependencies");
-  }
+  const [threeMod, loaderMod] = await Promise.all([
+    import("three"),
+    import("three/examples/jsm/loaders/STLLoader.js"),
+  ]);
+  THREE = threeMod;
+  STLLoader = loaderMod.STLLoader;
 }
 
-// ✅ 全局状态变量（必须提前声明）
-let existingUsers = []; // 当前案例已有的共享用户
-let addedUsers = []; // 用户后续添加的新用户
-let selectedUser = null; // 当前选中的待添加用户（搜索结果）
-let pendingInvites = []; // 待邀请用户名列表（内联视图中收集）
+let existingUsers = []; // shared users currently on the case (loaded via role/all/get)
+let pendingInvites = []; // usernames queued in the inline create-case view
 
 document.addEventListener("DOMContentLoaded", async () => {
   try {
@@ -48,7 +29,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.error("createCase: dependency load failed", err);
   }
 
-  const openBtn = document.querySelector("#createCaseBtn.create-case");
+  const openBtn = document.getElementById("createCaseBtn");
   const formPane = document.getElementById("createCaseForm");
   const uploadPane = document.getElementById("createCaseUpload");
   const pageEl = document.querySelector(".cm-page");
@@ -82,13 +63,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   let activeTarget = null;
   const uploadLimit = 2;
 
-  const formatToday = () => {
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  };
+  const formatToday = () => new Date().toISOString().slice(0, 10);
 
   const showInlineView = () => {
     if (!formPane || !uploadPane || !pageEl) return;
@@ -272,7 +247,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(width, height);
-        renderer.setClearColor(0xffffff);
+        // Matches the .cm-image-area backdrop so the thumbnail blends into
+        // the detail-pane image box instead of standing out as a white tile.
+        renderer.setClearColor(0xeef2f7);
         renderer.render(scene, camera);
         const dataUrl = renderer.domElement.toDataURL("image/png");
         img.src = dataUrl;
@@ -340,7 +317,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const file = e.dataTransfer.files[0];
       if (!file) return;
       if (!/\.stl$/i.test(file.name)) {
-        alert("Please drop a .stl file.");
+        toast.warning("Please drop a .stl file.");
         return;
       }
       activeTarget = placeholder;
@@ -374,7 +351,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         f.type.startsWith("image/")
       );
       if (!imageFiles.length) {
-        alert("Please drop image files (PNG or JPEG).");
+        toast.warning("Please drop image files (PNG or JPEG).");
         return;
       }
       for (const file of imageFiles) {
@@ -447,13 +424,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const caseName = caseNameInput?.value?.trim();
     if (!caseName) {
-      alert("Please enter case name.");
+      toast.warning("Please enter case name.");
       return;
     }
 
     const loggedInUser = getLoggedInUser();
     if (!loggedInUser || !loggedInUser.uuid) {
-      alert("User not logged in.");
+      toast.error("User not logged in.");
       return;
     }
 
@@ -528,7 +505,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         ? `\n${err.body.slice(0, 400)}`
         : "";
       const statusPart = err?.status ? ` (HTTP ${err.status})` : "";
-      alert(`Failed to create case${statusPart}.${detail}`);
+      toast.error(`Failed to create case${statusPart}.${detail}`);
       release();
       return;
     }
@@ -627,7 +604,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         : "";
       window.location.href = `${window.location.origin}${repoBase}/src/pages/2DAnnotation.html?id=${encryptedId}`;
     } else {
-      alert("Case created.");
+      flashToast("Case created.", "success");
       window.location.reload();
     }
   };
@@ -639,35 +616,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     saveStartBtn.addEventListener("click", () => submitCase("start", saveStartBtn));
   }
 
-  // ✅ 绑定 ADD 按钮点击逻辑（确保可以多次添加）
+  // Bind ADD button click in the userAccessModal (shared-user invite flow).
   if (addUserBtn && userSearchInput) {
-    const updateBtnState = () => {
-      const hasText = userSearchInput.value.trim().length > 0;
-      addUserBtn.disabled = false;
-      addUserBtn.style.pointerEvents = "auto";
-      addUserBtn.style.cursor = "pointer";
-      addUserBtn.style.backgroundColor = "#88abda";
-    };
-
-    updateBtnState(); // 初始化状态
-    userSearchInput.addEventListener("input", updateBtnState);
-
     addUserBtn.addEventListener("click", async () => {
-      console.log("✅ ADD 按钮被点击");
-
       const username = userSearchInput.value.trim();
       if (!username) return;
 
       const ctx = window._inviteContext;
       if (!ctx || !ctx.caseIntID || !ctx.uuid || !ctx.machine_id) {
-        alert("❌ 无法获取 case 上下文，请刷新页面重试！");
+        toast.error("Unable to load case context — please refresh and try again.");
         return;
       }
 
       const { caseIntID, machine_id, uuid: ownerUUID } = ctx;
 
       if (existingUsers.some((u) => u.username === username)) {
-        alert(`User "${username}" is already added.`);
+        toast.info(`User "${username}" is already added.`);
         return;
       }
 
@@ -703,33 +667,30 @@ document.addEventListener("DOMContentLoaded", async () => {
         );
 
         if (!roleRes.ok) throw new Error("Add role failed");
-        // 2.5️⃣ 发送通知（忽略 new_status）
-try {
-  const from_user = getLoggedInUser()?.username || "";
-  const alertPayload = [
-    { machine_id, uuid: ownerUUID, caseIntID },
-    {
-      case_int_id: caseIntID,
-      to_user: username,                // 被邀请的人
-      from_user,                        // 当前登录的人
-      alert_message: `You have been added to case "${ctx.caseName}" by ${from_user}.`,
-      read_status: 0,
-      deleted: 0
-    }
-  ];
 
-  await fetch("https://live.api.smartrpdai.com/api/smartrpd/alerts", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(alertPayload)
-  });
+        // Send an in-app notification to the invitee. Failures are non-fatal.
+        try {
+          const from_user = getLoggedInUser()?.username || "";
+          await fetch("https://live.api.smartrpdai.com/api/smartrpd/alerts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify([
+              { machine_id, uuid: ownerUUID, caseIntID },
+              {
+                case_int_id: caseIntID,
+                to_user: username,
+                from_user,
+                alert_message: `You have been added to case "${ctx.caseName}" by ${from_user}.`,
+                read_status: 0,
+                deleted: 0,
+              },
+            ]),
+          });
+        } catch (e) {
+          console.warn("Failed to send invite alert:", e);
+        }
 
-  console.log("✅ Alert sent to", username);
-} catch (e) {
-  console.warn("⚠️ Failed to send alert:", e);
-}
-
-        // 3️⃣ 刷新共享用户
+        // Refresh the shared-user list from the server.
         const refreshed = await fetch(
           "https://live.api.smartrpdai.com/api/smartrpd/role/all/get",
           {
@@ -742,24 +703,20 @@ try {
           }
         );
 
-        const refreshedData = await refreshed.json();
-        existingUsers = refreshedData;
+        existingUsers = await refreshed.json();
         renderSharedUserList();
 
-        // ✅ 清空输入框
         userSearchInput.value = "";
-        updateBtnState();
       } catch (err) {
-        console.error("❌ Failed to add user:", err);
-        alert("Failed to add user: " + err.message);
+        console.error("Failed to add user:", err);
+        toast.error("Failed to add user: " + err.message);
       }
     });
   }
 
   if (saveInviteBtn) {
     saveInviteBtn.addEventListener("click", () => {
-      console.log("🔁 SAVE AND RETURN clicked → refreshing page");
-      location.reload(); // ✅ 重新加载页面
+      location.reload();
     });
   }
   if (closeUserAccessModal) {
@@ -856,87 +813,102 @@ async function uploadSTL(
 
 function renderSharedUserList() {
   const container = document.getElementById("sharedUserList");
-
   if (!container) {
-    console.warn("⚠️ Missing element: #sharedUserList");
+    console.warn("Missing element: #sharedUserList");
     return;
   }
 
-  // 清空旧内容
   container.innerHTML = "";
 
-  // 如果没有用户，显示提示
   if (!existingUsers || existingUsers.length === 0) {
-    const emptyItem = document.createElement("li");
-    emptyItem.textContent = "No users found.";
-    emptyItem.style.color = "#888";
-    emptyItem.style.fontStyle = "italic";
-    container.appendChild(emptyItem);
+    const empty = document.createElement("li");
+    empty.className = "uam-empty";
+    empty.innerHTML = `
+      <i class="fa fa-user-group" aria-hidden="true"></i>
+      <span>No one else has access yet</span>
+      <span style="font-size: 12px; opacity: 0.75;">Invite a user above to share this case.</span>
+    `;
+    container.appendChild(empty);
     return;
   }
 
-  // 遍历用户并渲染每个条目
   existingUsers.forEach((user) => {
     const li = document.createElement("li");
     li.className = "shared-user-item";
-    li.style.position = "relative"; // 为右上角 × 做定位
+
+    const avatar = document.createElement("span");
+    avatar.className = "user-avatar";
+    avatar.textContent = initialsFor(user.username);
+
+    const body = document.createElement("div");
+    body.className = "user-body";
 
     const nameSpan = document.createElement("span");
     nameSpan.className = "user-name";
-    nameSpan.textContent = `👤 ${user.username}`;
+    nameSpan.textContent = user.username;
 
     const roleSpan = document.createElement("span");
     roleSpan.className = "user-role";
-    roleSpan.textContent = user.role;
-
-    // ✅ 添加右上角删除按钮
-    // ✅ 删除按钮（右上角 ×）
-    const deleteBtn = document.createElement("button");
-    deleteBtn.textContent = "×";
-    deleteBtn.title = "Remove user";
-    deleteBtn.className = "delete-user-btn";
-
-    // 隐藏删除按钮的条件：无 uuid 或为 owner
-    if (!user.uuid || user.role === "owner") {
-      deleteBtn.style.display = "none";
+    roleSpan.textContent = user.role || "Member";
+    if ((user.role || "").toLowerCase() === "owner") {
+      roleSpan.classList.add("is-owner");
     }
 
-    deleteBtn.addEventListener("click", async () => {
-      const confirmed = confirm(`Remove user ${user.username}?`);
-      if (!confirmed) return;
+    body.appendChild(nameSpan);
+    body.appendChild(roleSpan);
 
-      try {
-        const { caseIntID, uuid, machine_id } = window._inviteContext;
-        const payload = [
-          { machine_id, uuid, caseIntID },
-          { case_id: caseIntID, uuid: user.uuid }
-        ];
+    li.appendChild(avatar);
+    li.appendChild(body);
 
-        const res = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/role/delete",
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          }
-        );
+    // Owner row + rows without a uuid aren't removable.
+    if (user.uuid && user.role !== "owner") {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.title = "Remove user";
+      deleteBtn.setAttribute("aria-label", `Remove ${user.username}`);
+      deleteBtn.className = "delete-user-btn";
+      deleteBtn.innerHTML = '<i class="fa fa-xmark" aria-hidden="true"></i>';
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        alert(`✅ User ${user.username} removed.`);
+      deleteBtn.addEventListener("click", async () => {
+        const confirmed = confirm(`Remove user ${user.username}?`);
+        if (!confirmed) return;
 
-        existingUsers = existingUsers.filter((u) => u.uuid !== user.uuid);
-        renderSharedUserList();
-      } catch (err) {
-        console.error("❌ Failed to remove user:", err);
-        alert("❌ Failed to remove user.");
-      }
-    });
+        try {
+          const { caseIntID, uuid, machine_id } = window._inviteContext;
+          const res = await fetch(
+            "https://live.api.smartrpdai.com/api/smartrpd/role/delete",
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify([
+                { machine_id, uuid, caseIntID },
+                { case_id: caseIntID, uuid: user.uuid },
+              ]),
+            }
+          );
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    li.appendChild(nameSpan);
-    li.appendChild(roleSpan);
-    li.appendChild(deleteBtn); // ✅ 添加小 ×
+          existingUsers = existingUsers.filter((u) => u.uuid !== user.uuid);
+          renderSharedUserList();
+        } catch (err) {
+          console.error("Failed to remove user:", err);
+          toast.error("Failed to remove user.");
+        }
+      });
+
+      li.appendChild(deleteBtn);
+    }
+
     container.appendChild(li);
   });
+}
+
+function initialsFor(name) {
+  if (!name) return "?";
+  const parts = String(name).trim().split(/[\s._-]+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 
