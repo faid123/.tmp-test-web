@@ -468,14 +468,29 @@ document.addEventListener("DOMContentLoaded", () => {
           body: JSON.stringify(payload),
         }
       );
-      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      if (!res.ok) {
+        let errorText = "";
+        try {
+          errorText = await res.text();
+        } catch {
+          errorText = "";
+        }
+        const err = new Error(`Create case failed: HTTP ${res.status}`);
+        err.status = res.status;
+        err.body = errorText;
+        throw err;
+      }
       const data = await res.json();
       caseIntID = data.id;
       const user_id = loggedInUser.username || "";
       await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
     } catch (err) {
       console.error("❌ Failed to create case", err);
-      alert("Failed to create case.");
+      const detail = typeof err?.body === "string" && err.body.trim()
+        ? `\n${err.body.slice(0, 400)}`
+        : "";
+      const statusPart = err?.status ? ` (HTTP ${err.status})` : "";
+      alert(`Failed to create case${statusPart}.${detail}`);
       release();
       return;
     }
