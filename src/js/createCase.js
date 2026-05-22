@@ -1,7 +1,39 @@
 // 顶部引入模块
-import * as THREE from "three";
-import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { lol } from "../crypt.js";
+
+let THREE;
+let STLLoader;
+
+async function loadThreeDeps() {
+  if (THREE && STLLoader) return;
+
+  const threeCandidates = [
+    "../../node_modules/three/build/three.module.js",
+    "https://unpkg.com/three@0.164.1/build/three.module.js",
+  ];
+  const loaderCandidates = [
+    "../../node_modules/three/examples/jsm/loaders/STLLoader.js",
+    "https://unpkg.com/three@0.164.1/examples/jsm/loaders/STLLoader.js",
+  ];
+
+  for (const url of threeCandidates) {
+    try {
+      THREE = await import(url);
+      break;
+    } catch (_) {}
+  }
+
+  for (const url of loaderCandidates) {
+    try {
+      ({ STLLoader } = await import(url));
+      break;
+    } catch (_) {}
+  }
+
+  if (!THREE || !STLLoader) {
+    throw new Error("Failed to load Three.js dependencies");
+  }
+}
 
 // ✅ 全局状态变量（必须提前声明）
 let existingUsers = []; // 当前案例已有的共享用户
@@ -9,8 +41,14 @@ let addedUsers = []; // 用户后续添加的新用户
 let selectedUser = null; // 当前选中的待添加用户（搜索结果）
 let pendingInvites = []; // 待邀请用户名列表（内联视图中收集）
 
-document.addEventListener("DOMContentLoaded", () => {
-  const openBtn = document.querySelector(".create-case");
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    await loadThreeDeps();
+  } catch (err) {
+    console.error("createCase: dependency load failed", err);
+  }
+
+  const openBtn = document.querySelector("#createCaseBtn.create-case");
   const formPane = document.getElementById("createCaseForm");
   const uploadPane = document.getElementById("createCaseUpload");
   const pageEl = document.querySelector(".cm-page");
