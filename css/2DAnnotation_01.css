@@ -1780,6 +1780,13 @@ body.is-panel-resizing {
     grid-column: 1;
     grid-row: 2;
     min-height: 0;
+    /* Clip horizontally only: the scaled arch SVGs would otherwise bleed
+       into the tools-panel column and intercept clicks on the left edge
+       of buttons there (MAJOR CONNECTOR, Clear upper, etc.). The lower
+       arch is translateY(100px) + scale(1.32), so its content needs to
+       extend below the layout box — that's why we use clip-path with a
+       large negative bottom inset instead of plain `overflow: hidden`. */
+    clip-path: inset(0 0 -9999px 0);
   }
 
   .tools-panel {
