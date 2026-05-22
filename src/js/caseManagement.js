@@ -148,6 +148,132 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
   }
 }
 
+function pinnedStorageKey() {
+  const user = getLoggedInUser();
+  return `pinnedCases:${user?.uuid || "anon"}`;
+}
+
+function getPinnedSet() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(pinnedStorageKey()) || "[]");
+    return new Set(arr.map(String));
+  } catch {
+    return new Set();
+  }
+}
+
+function setPinnedSet(set) {
+  localStorage.setItem(pinnedStorageKey(), JSON.stringify([...set]));
+}
+
+function togglePinned(caseId) {
+  const set = getPinnedSet();
+  const id = String(caseId);
+  if (set.has(id)) set.delete(id);
+  else set.add(id);
+  setPinnedSet(set);
+  return set.has(id);
+}
+
+function base64ToBytes(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function triggerBlobDownload(bytes, filename) {
+  const blob = new Blob([bytes], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function downloadCaseFiles(caseIntId, caseLabel) {
+  const user = getLoggedInUser();
+  if (!user?.uuid || caseIntId == null) {
+    alert("⚠️ Unable to download: missing case info or login.");
+    return;
+  }
+
+  const payload = [
+    {
+      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      uuid: user.uuid,
+      caseIntID: caseIntId,
+    },
+    { case_int_id: caseIntId },
+  ];
+
+  const endpoints = [
+    "https://live.api.smartrpdai.com/api/smartrpd/stl/raw/get",
+    "https://live.api.smartrpdai.com/api/smartrpd/stl/get",
+  ];
+
+  let files = [];
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : [data];
+      files = list.filter((item) => item && item.data);
+      if (files.length) break;
+    } catch (err) {
+      console.warn("[case/download] endpoint failed", endpoint, err);
+    }
+  }
+
+  if (!files.length) {
+    alert("No uploaded files found for this case.");
+    return;
+  }
+
+  if (typeof window.JSZip !== "function") {
+    alert("Zip library failed to load. Please refresh and try again.");
+    return;
+  }
+
+  const base = String(caseLabel || `case_${caseIntId}`).replace(/[^a-z0-9_\-]+/gi, "_");
+  const zip = new window.JSZip();
+  const usedNames = new Set();
+
+  files.forEach((file, idx) => {
+    const type = String(file.type || file.jaw_type || "").toLowerCase();
+    const suffix = type || `file_${idx + 1}`;
+    let name = file.filename || `${base}_${suffix}.stl`;
+    if (usedNames.has(name)) {
+      const dot = name.lastIndexOf(".");
+      const stem = dot > 0 ? name.slice(0, dot) : name;
+      const ext = dot > 0 ? name.slice(dot) : "";
+      name = `${stem}_${idx + 1}${ext}`;
+    }
+    usedNames.add(name);
+    try {
+      zip.file(name, base64ToBytes(file.data));
+    } catch (err) {
+      console.error("❌ Failed to add file to zip:", name, err);
+    }
+  });
+
+  try {
+    const blob = await zip.generateAsync({ type: "uint8array" });
+    triggerBlobDownload(blob, `${base}.zip`);
+  } catch (err) {
+    console.error("❌ Failed to generate zip:", err);
+    alert(`❌ Failed to generate zip: ${err.message || err}`);
+  }
+}
+
 // Map an API status string to a CSS modifier so card/detail pills get the
 // right color (yellow/blue/green/grey). Keep the keys broad — anything we
 // don't recognise falls back to a neutral "na" pill.
@@ -170,10 +296,19 @@ function statusDisplayText(apiStatus) {
   const v = apiStatusToValue(apiStatus);
   if (!v || v === "na") return "N/A";
   if (v === "draft") return "draft";
-  if (v.endsWith("_pending")) return "pending";
-  if (v.endsWith("_drafted") || v.endsWith("_approved")) return "in-progress";
-  if (v === "in_production" || v === "out_for_delivery") return "in-progress";
-  if (v === "completed" || v === "delivered") return "completed";
+  if (v.endsWith("_pending")) 
+    if (v.startsWith("2d_")) return "pending (2D)";
+    if (v.startsWith("3d_")) return "pending (3D)";
+    return "pending";
+  if (v.endsWith("_drafted") || v.endsWith("_approved")) {
+    if (v.startsWith("2d_")) return "in-progress (2D)";
+    if (v.startsWith("3d_")) return "in-progress (3D)";
+    return "in-progress";
+  }
+  if (v === "in_production") return "in-progress";
+  if (v === "out_for_delivery") return "out for delivery";
+  if (v === "delivered") return "delivered";
+  if (v === "completed") return "completed";
   return v.replace(/_/g, " ");
 }
 
@@ -210,6 +345,13 @@ function populateTable(cases) {
     cases = cases.filter((c) => apiStatusToValue(c.new_status) === sel.value);
   }
 
+  const pinnedSet = getPinnedSet();
+  cases = [...(cases || [])].sort((a, b) => {
+    const aId = String(a.id ?? a.case_int_id ?? "");
+    const bId = String(b.id ?? b.case_int_id ?? "");
+    return Number(pinnedSet.has(bId)) - Number(pinnedSet.has(aId));
+  });
+
   const list = document.getElementById("caseList");
   const countBadge = document.getElementById("caseCountBadge");
   if (countBadge) countBadge.textContent = String(cases?.length || 0);
@@ -227,16 +369,21 @@ function populateTable(cases) {
   cases.forEach((caseItem) => {
     const resolvedCaseId = caseItem.id ?? caseItem.case_int_id;
     const assignedTo = caseItem.assigned_to || caseItem.username || "N/A";
-    const dueDate = caseItem.expected_date || caseItem.due_date;
+    const dueDate =
+      caseItem.expected_date ||
+      caseItem.due_date ||
+      computeDefaultDueDate(caseItem.creation_date);
     const caseIntId = caseItem.id ?? caseItem.case_int_id;
     const caseDisplayName = caseItem.case_id
       ? caseIntId != null
-        ? `UID ${caseIntId}-${caseItem.case_id}`
+        ? `UID_${caseIntId} : ${caseItem.case_id}`
         : caseItem.case_id
       : "N/A";
 
+    const pinned = pinnedSet.has(String(resolvedCaseId));
+
     const card = document.createElement("div");
-    card.className = "cm-card";
+    card.className = pinned ? "cm-card is-pinned" : "cm-card";
     card.dataset.caseId = resolvedCaseId;
     card.setAttribute("role", "button");
     card.tabIndex = 0;
@@ -257,11 +404,11 @@ function populateTable(cases) {
         <button class="cm-card-icon" type="button" title="Rename" aria-label="Rename" data-action="rename">
           <i class="fa-regular fa-pen-to-square"></i>
         </button>
-        <button class="cm-card-icon" type="button" title="Flag" aria-label="Flag" data-action="flag">
-          <i class="fa-regular fa-flag"></i>
+        <button class="cm-card-icon ${pinned ? "is-pinned" : ""}" type="button" title="${pinned ? "Unpin" : "Pin to top"}" aria-label="${pinned ? "Unpin" : "Pin to top"}" aria-pressed="${pinned}" data-action="flag">
+          <i class="${pinned ? "fa-solid" : "fa-regular"} fa-flag"></i>
         </button>
-        <button class="cm-card-icon cm-card-icon-danger" type="button" title="Delete" aria-label="Delete" data-action="delete">
-          <i class="fa-regular fa-trash-can"></i>
+        <button class="cm-card-icon" type="button" title="Download files" aria-label="Download files" data-action="download">
+          <i class="fa-regular fa-circle-down"></i>
         </button>
       </div>
     `;
@@ -280,17 +427,21 @@ function populateTable(cases) {
       }
     });
 
-    card.querySelector('[data-action="delete"]').addEventListener("click", async (e) => {
+    card.querySelector('[data-action="download"]').addEventListener("click", async (e) => {
       e.stopPropagation();
-      const label = caseItem.case_id || "this case";
-      if (!confirm(`Delete "${label}"? This cannot be undone.`)) return;
-      await deleteCaseById(resolvedCaseId, { skipConfirm: true });
+      await downloadCaseFiles(resolvedCaseId, caseItem.case_id);
     });
 
     card.querySelector('[data-action="rename"]').addEventListener("click", (e) => {
       e.stopPropagation();
       selectCard();
       document.getElementById("renameBtn")?.click();
+    });
+
+    card.querySelector('[data-action="flag"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      togglePinned(resolvedCaseId);
+      applyClientFilters();
     });
 
     list.appendChild(card);
@@ -325,22 +476,19 @@ async function handleRowClick(caseId) {
     const detail = await response.json();
 
     // 把 currentCases 中对应行取出来
-const extra = currentCases.find(c => c.id === caseId || c.case_int_id === caseId);
-if (extra) {
-  Object.assign(detail, {
-    new_status   : extra.new_status,
-    expected_date: extra.expected_date,
-    assigned_to  : extra.assigned_to,
-    comments     : extra.comments,
-  });
-}
-
-console.log("extra →", extra);                 // ⭐ 调试 1
-console.log("detail after merge →", detail);   // ⭐ 调试 2
+    const extra = currentCases.find(
+      (c) => c.id === caseId || c.case_int_id === caseId
+    );
+    if (extra) {
+      Object.assign(detail, {
+        new_status: extra.new_status,
+        expected_date: extra.expected_date,
+        assigned_to: extra.assigned_to,
+        comments: extra.comments,
+      });
+    }
 
     displayCaseDetails(detail);
-
-    console.log("🟢 Selected case info:", detail);
     await fetchThumbnails(caseId);
   } catch (err) {
     console.error("❌ Failed to get case detail:", err);
@@ -427,10 +575,32 @@ function applyClientFilters() {
   populateTable(base);
 }
 
+// Compute a default due-date timestamp (ms) that's 14 days after the
+// creation timestamp. Returns null when creation is missing/invalid.
+function computeDefaultDueDate(creationTs) {
+  if (creationTs == null || creationTs === "" || creationTs === 0 || creationTs === "0") return null;
+  const n = Number(creationTs);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const ms = String(n).length >= 13 ? n : n * 1000;
+  return ms + 14 * 24 * 60 * 60 * 1000;
+}
+
 // 日期格式化
 function formatDateTime(ts) {
-  if (!ts) return "N/A";
-  const ms = ts.toString().length === 13 ? Number(ts) : Number(ts) * 1000; // 13 位说明已是毫秒
+  if (ts == null || ts === "" || ts === 0 || ts === "0") return "N/A";
+  const n = Number(ts);
+  let ms;
+  if (Number.isFinite(n)) {
+    if (n <= 0) return "N/A";
+    ms = String(n).length >= 13 ? n : n * 1000;
+  } else {
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return "N/A";
+    ms = d.getTime();
+  }
+  // Anything before 2000-01-01 is almost certainly an unset/epoch value
+  // (e.g. API returning "0" for missing due_date).
+  if (ms < 946684800000) return "N/A";
   return new Date(ms).toLocaleString();
 }
 
@@ -800,9 +970,101 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
   }
 
   const renameBtn = document.getElementById("renameBtn");
+  const renameCaseModal = document.getElementById("renameCaseModal");
+  const renameCaseInput = document.getElementById("renameCaseInput");
+  const closeRenameModalBtn = document.getElementById("closeRenameModal");
+  const cancelRenameBtn = document.getElementById("cancelRenameBtn");
+  const confirmRenameBtn = document.getElementById("confirmRenameBtn");
+
+  const closeRenameModal = () => {
+    if (!renameCaseModal) return;
+    renameCaseModal.classList.add("hidden");
+    renameCaseModal.classList.remove("show");
+    window._renameContext = null;
+  };
+
+  const openRenameModal = (caseObj, user) => {
+    if (!renameCaseModal || !renameCaseInput) return;
+    window._renameContext = { caseObj, user };
+    renameCaseInput.value = caseObj.case_id || "";
+    renameCaseModal.classList.remove("hidden");
+    renameCaseModal.classList.add("show");
+    setTimeout(() => {
+      renameCaseInput.focus();
+      renameCaseInput.select();
+    }, 0);
+  };
+
+  const submitRename = async () => {
+    const ctx = window._renameContext;
+    if (!ctx || !renameCaseInput) return;
+    const { caseObj, user } = ctx;
+    const newCaseName = renameCaseInput.value.trim();
+    if (!newCaseName) {
+      renameCaseInput.focus();
+      return;
+    }
+    if (newCaseName === caseObj.case_id) {
+      closeRenameModal();
+      return;
+    }
+
+    const requestData = [
+      {
+        machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+        uuid: user.uuid,
+        caseIntID: caseObj.id,
+      },
+      { case_id: newCaseName },
+    ];
+
+    confirmRenameBtn.disabled = true;
+    try {
+      const response = await fetch(
+        `https://live.api.smartrpdai.com/api/smartrpd/case/rename/${caseObj.id}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestData),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      caseObj.case_id = newCaseName;
+      populateTable(currentCases);
+      document.getElementById("caseNameDisplay").textContent = newCaseName;
+
+      const caseListItems = document.querySelectorAll(".case-list-item");
+      caseListItems.forEach((item) => {
+        if (item.dataset.caseId === caseObj.id) {
+          const nameElement = item.querySelector(".case-name");
+          if (nameElement) nameElement.textContent = newCaseName;
+        }
+      });
+
+      document.querySelectorAll(".case-name-display").forEach((el) => {
+        el.textContent = newCaseName;
+      });
+
+      if (typeof renderCaseTable === "function") {
+        renderCaseTable(currentCases);
+      }
+
+      console.log("✅ Case renamed successfully:", newCaseName);
+      closeRenameModal();
+    } catch (error) {
+      console.error("❌ Failed to rename case:", error);
+      alert(`❌ Failed to rename case: ${error.message}`);
+    } finally {
+      confirmRenameBtn.disabled = false;
+    }
+  };
 
   if (renameBtn) {
-    renameBtn.addEventListener("click", async () => {
+    renameBtn.addEventListener("click", () => {
       const caseId = window.selectedCaseId;
       const user = getLoggedInUser();
 
@@ -819,67 +1081,27 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         return;
       }
 
-      const newCaseName = prompt("Enter new case name:", caseObj.case_id);
-      if (!newCaseName || newCaseName.trim() === "") return;
-
-      const requestData = [
-        {
-          machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
-          uuid: user.uuid,
-          caseIntID: caseObj.id,
-        },
-        {
-          case_id: newCaseName.trim(),
-        },
-      ];
-
-      try {
-        const response = await fetch(
-          `https://live.api.smartrpdai.com/api/smartrpd/case/rename/${caseObj.id}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(requestData),
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        // ✅ 更新本地对象
-        caseObj.case_id = newCaseName.trim();
-        populateTable(currentCases);
-        // ✅ 更新顶部显示
-        document.getElementById("caseNameDisplay").textContent =
-          newCaseName.trim();
-
-        // ✅ 更新左侧列表中的对应项
-        const caseListItems = document.querySelectorAll(".case-list-item");
-        caseListItems.forEach((item) => {
-          if (item.dataset.caseId === caseId) {
-            const nameElement = item.querySelector(".case-name");
-            if (nameElement) nameElement.textContent = newCaseName.trim();
-          }
-        });
-
-        // ✅ 更新所有上下文显示项
-        document.querySelectorAll(".case-name-display").forEach((el) => {
-          el.textContent = newCaseName.trim();
-        });
-
-        // ✅ 关键：刷新表格
-        if (typeof renderCaseTable === "function") {
-          renderCaseTable(currentCases);
-        }
-
-        alert("✅ Case renamed successfully!");
-      } catch (error) {
-        console.error("❌ Failed to rename case:", error);
-        alert(`❌ Failed to rename case: ${error.message}`);
-      }
+      openRenameModal(caseObj, user);
     });
   }
+
+  closeRenameModalBtn?.addEventListener("click", closeRenameModal);
+  cancelRenameBtn?.addEventListener("click", closeRenameModal);
+  confirmRenameBtn?.addEventListener("click", submitRename);
+
+  renameCaseModal?.addEventListener("click", (e) => {
+    if (e.target === renameCaseModal) closeRenameModal();
+  });
+
+  renameCaseInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submitRename();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      closeRenameModal();
+    }
+  });
 
     /* ===== 状态下拉框保存 ===== */
   const statusSel = document.getElementById("status");

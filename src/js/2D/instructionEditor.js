@@ -317,7 +317,7 @@ function onPointerUp(event) {
     try { canvas.releasePointerCapture?.(event.pointerId ?? 0); } catch {}
     draggingText.active = false;
     draggingText.target = null;
-    canvas.style.cursor = state.tool === "text" ? "text" : "crosshair";
+    applyCanvasCursor();
     redraw();
     return;
   }
@@ -599,6 +599,26 @@ function updateUndoRedoButtons() {
   if (redoBtn) redoBtn.disabled = state.redoStack.length === 0;
 }
 
+function eraserCursor(size) {
+  // Clamp because browsers cap custom cursor sizes around 128px.
+  const d = Math.max(6, Math.min(96, Math.round(size * 2)));
+  const r = d / 2;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${d + 2}" height="${d + 2}" viewBox="0 0 ${d + 2} ${d + 2}">` +
+    `<circle cx="${r + 1}" cy="${r + 1}" r="${r}" fill="rgba(255,255,255,0.35)" stroke="#1a1a1a" stroke-width="1"/>` +
+    `</svg>`;
+  const url = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  const hot = Math.round(r + 1);
+  return `url("${url}") ${hot} ${hot}, cell`;
+}
+
+function applyCanvasCursor() {
+  if (!canvas) return;
+  if (state.tool === "eraser") canvas.style.cursor = eraserCursor(state.size);
+  else if (state.tool === "text") canvas.style.cursor = "text";
+  else canvas.style.cursor = "crosshair";
+}
+
 function setTool(tool) {
   if (state.tool !== tool) {
     state.linePending = null;
@@ -608,12 +628,8 @@ function setTool(tool) {
   document.querySelectorAll("[data-instruction-tool]").forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.instructionTool === tool);
   });
-  if (canvas) {
-    if (tool === "eraser") canvas.style.cursor = "cell";
-    else if (tool === "text") canvas.style.cursor = "text";
-    else canvas.style.cursor = "crosshair";
-  }
   if (tool === "brush") setSize(12);
+  applyCanvasCursor();
   redraw();
 }
 
@@ -622,6 +638,12 @@ function setColor(color) {
   document.querySelectorAll("[data-instruction-color]").forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.instructionColor === color);
   });
+  const swatch = document.getElementById("colorPickerSwatch");
+  if (swatch) swatch.style.background = color;
+  const picker = document.getElementById("colorPickerInput");
+  if (picker && picker.value.toLowerCase() !== color.toLowerCase()) {
+    picker.value = color;
+  }
 }
 
 function setSize(size) {
@@ -630,6 +652,7 @@ function setSize(size) {
   if (valEl) valEl.textContent = state.size.toFixed(1);
   const input = document.getElementById("strokeSizeInput");
   if (input && Number(input.value) !== state.size) input.value = String(state.size);
+  if (state.tool === "eraser") applyCanvasCursor();
 }
 
 function exportComposedDataUrl() {
@@ -665,6 +688,11 @@ function bindOnce() {
   document.querySelectorAll("[data-instruction-color]").forEach((btn) => {
     btn.addEventListener("click", () => setColor(btn.dataset.instructionColor));
   });
+  const colorPicker = document.getElementById("colorPickerInput");
+  if (colorPicker) {
+    colorPicker.addEventListener("input", (e) => setColor(e.target.value));
+    colorPicker.addEventListener("change", (e) => setColor(e.target.value));
+  }
 
   document
     .getElementById("instructionEditorModal")

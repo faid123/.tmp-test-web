@@ -695,6 +695,123 @@ async function fetchCaseOwner() {
   }
 }
 
+// Fetch the jaw struct (L2) for this case and apply the parts whose meaning is
+// known. v1 only applies Tooth Presence; richer fields (rests, retainers,
+// meshes, connectors) are stashed on window.__jawStruct for inspection until
+// the integer-code mapping is documented.
+async function fetchJawStruct() {
+  if (!state.caseIntID) return;
+  let loggedInUser = null;
+  try {
+    const raw = localStorage.getItem("loggedInUser");
+    loggedInUser = raw ? JSON.parse(raw) : null;
+  } catch {
+    loggedInUser = null;
+  }
+  if (!loggedInUser?.uuid) return;
+
+  try {
+    const response = await fetch(
+      "https://live.api.smartrpdai.com/api/smartrpd/jawstruct_l2/getall",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([
+          {
+            machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+            uuid: loggedInUser.uuid,
+            caseIntID: state.caseIntID,
+          },
+          { case_id: state.caseIntID },
+        ]),
+      }
+    );
+    if (!response.ok) {
+      console.warn("jawstruct_l2/getall returned", response.status);
+      return;
+    }
+    const records = await response.json();
+    if (!Array.isArray(records) || !records.length) return;
+
+    window.__jawStruct = {};
+    for (const record of records) {
+      if (!record?.data) continue;
+      let text;
+      try {
+        text = atob(record.data);
+      } catch (decodeErr) {
+        console.warn("jawstruct base64 decode failed:", decodeErr);
+        continue;
+      }
+      const parsed = parseJawStructText(text);
+      applyJawStructPresence(parsed);
+      window.__jawStruct[record.type || "unknown"] = parsed;
+    }
+    renderJaws();
+  } catch (err) {
+    console.warn("Failed to fetch jawstruct:", err);
+  }
+}
+
+// Parse the flat "Tooth N: Group.Sub.Field: value" text body into:
+//   { teeth: { 0: { fields: {...} }, ... }, meshes: [{...}], other: {...} }
+function parseJawStructText(text) {
+  const teeth = {};
+  const meshes = [];
+  const other = {};
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (line === "End of Jaw Struct") continue;
+    if (line.startsWith("Start of Jaw Struct")) continue;
+
+    const meshMatch = line.match(/^Tooth Mesh (\d+): (.+?): (.+)$/);
+    if (meshMatch) {
+      const idx = Number(meshMatch[1]);
+      meshes[idx] = meshes[idx] || {};
+      meshes[idx][meshMatch[2]] = meshMatch[3];
+      continue;
+    }
+
+    const toothMatch = line.match(/^Tooth (\d+): (.+?): (.+)$/);
+    if (toothMatch) {
+      const idx = Number(toothMatch[1]);
+      teeth[idx] = teeth[idx] || { fields: {} };
+      teeth[idx].fields[toothMatch[2]] = toothMatch[3];
+      continue;
+    }
+
+    const colon = line.indexOf(":");
+    if (colon > 0) {
+      other[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
+    }
+  }
+  return { teeth, meshes, other };
+}
+
+// Apply only the unambiguous Tooth Presence field. Mapping: Major*10 + Minor
+// gives the FDI tooth id (e.g. Major=1, Minor=8 -> "18"; Major=4, Minor=7 -> "47").
+function applyJawStructPresence(parsed) {
+  for (const tooth of Object.values(parsed.teeth)) {
+    const major = Number(tooth.fields["Tooth Main.Tooth Index.Major Index"]);
+    const minor = Number(tooth.fields["Tooth Main.Tooth Index.Minor Index"]);
+    if (!Number.isFinite(major) || !Number.isFinite(minor)) continue;
+    const fdi = `${major}${minor}`;
+    const rec = state.teeth[fdi];
+    if (!rec) continue;
+    const presence = tooth.fields["Tooth Main.Tooth Index.Tooth Presence"];
+    if (presence === "1") {
+      rec.isPresent = true;
+      if (rec.status === "missing") rec.status = "presence";
+    } else if (presence === "0") {
+      rec.isPresent = false;
+      rec.status = "missing";
+      rec.components = [];
+      rec.componentPlacements = [];
+    }
+  }
+}
+
 function bindPreviewPanelToggle() {
   const shell = document.querySelector(".annotation-shell");
   const btn = document.getElementById("preview3dMaximizeBtn");
@@ -867,11 +984,19 @@ function bindBackNavigationDialog(locks) {
   backBtn.addEventListener("click", () => {
     window.location.href = targetHref;
   });
-  saveBackBtn.addEventListener("click", () => {
+  saveBackBtn.addEventListener("click", async () => {
+    saveBackBtn.disabled = true;
     try {
       localStorage.setItem(locks.getStorageKey(), JSON.stringify(locks.buildPayload()));
     } catch {
       setMessage("Could not save locally. Going back anyway.", true);
+    }
+    try {
+      setMessage("Uploading thumbnail…", false);
+      const ok = await locks.uploadJawPngThumbnail();
+      if (!ok) setMessage("Thumbnail upload failed (see console). Going back anyway.", true);
+    } catch (err) {
+      console.warn("[saveBack] thumbnail upload failed", err);
     }
     window.location.href = targetHref;
   });
@@ -923,6 +1048,7 @@ function init() {
           catalog.renderComponentCatalog();
         }
       });
+      fetchJawStruct();
       locks.loadPreviewImage();
       locks.syncDesignModeWithLocks(false);
       renderJaws();

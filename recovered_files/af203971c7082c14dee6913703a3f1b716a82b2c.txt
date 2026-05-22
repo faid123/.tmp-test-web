@@ -1,7 +1,0 @@
-import { COMPONENT_CATALOG, COMPONENT_BY_ID } from "./components.js";
-
-export const COMPONENTS = COMPONENT_CATALOG;
-
-export function getComponentById(componentId) {
-  return COMPONENT_BY_ID.get(componentId) || null;
-}

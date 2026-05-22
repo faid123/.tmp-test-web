@@ -1,0 +1,18 @@
+[
+  {
+    "id": 2001,
+    "case_id": "case_03",
+    "creation_date": 1776845314,
+    "last_updated": 1779331635,
+    "upper_insertion_angle_x": "0.92962475",
+    "upper_insertion_angle_y": "0.43913326",
+    "upper_insertion_angle_z": "0.00000000",
+    "lower_insertion_angle_x": "-1.30367003",
+    "lower_insertion_angle_y": "0.18377347",
+    "lower_insertion_angle_z": "0.00000000",
+    "deleted": 0,
+    "username": "shafik",
+    "process_upper": 1,
+    "process_lower": 1
+  }
+]

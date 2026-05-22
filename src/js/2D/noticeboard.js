@@ -1,6 +1,7 @@
 import { state, setMessage } from "./2DAnnotation.js";
 import { captureJawJpegDataUrl } from "./annotationLocks.js";
 import { openInstructionEditor } from "./instructionEditor.js";
+import { capture3DPreviewDataUrl } from "./preview3D.js";
 import {
   UPPER_TEETH,
   LOWER_TEETH,
@@ -645,6 +646,7 @@ function renderGrids() {
   renderGrid("instructionGrid", data.instructions, "instruction");
   renderGrid("viewcaptureGrid", data.viewcaptures, "viewcapture");
   refreshAddInstructionPreview();
+  refreshAddViewcapturePreview();
 }
 
 async function refreshAddInstructionPreview() {
@@ -660,6 +662,22 @@ async function refreshAddInstructionPreview() {
   } catch {
     previewImg.removeAttribute("src");
   }
+}
+
+function refreshAddViewcapturePreview() {
+  const previewImg = document.getElementById("addViewcapturePreview");
+  if (!previewImg) return;
+  // The 3D panel is usually a WebGL canvas (preview3D.js) — capture it. If
+  // that's not active, fall back to the static <img id="previewImage">.
+  let src = capture3DPreviewDataUrl();
+  if (!src) {
+    const fallback = document.getElementById("previewImage");
+    if (fallback && fallback.style.display !== "none") {
+      src = fallback.currentSrc || fallback.src || "";
+    }
+  }
+  if (src) previewImg.src = src;
+  else previewImg.removeAttribute("src");
 }
 
 async function addInstruction() {
@@ -690,24 +708,56 @@ async function addInstruction() {
   if (!synced) setMessage("Instruction added locally.", false);
 }
 
-function addViewcapture() {
-  const previewImg = document.getElementById("previewImage");
-  const preview = previewImg && previewImg.src && previewImg.style.display !== "none"
-    ? previewImg.src
-    : "";
+async function addViewcapture() {
+  setMessage("Opening instruction editor…", false);
+  let baseImage = capture3DPreviewDataUrl();
+  if (!baseImage) {
+    const fallback = document.getElementById("previewImage");
+    if (fallback && fallback.style.display !== "none") {
+      baseImage = fallback.currentSrc || fallback.src || "";
+    }
+  }
+  const caseLabelText =
+    document.getElementById("caseLabel")?.textContent?.trim() || "";
+  const result = await openInstructionEditor({
+    initialImage: baseImage,
+    caseLabel: caseLabelText,
+  });
+  if (!result) {
+    setMessage("Instruction discarded.", false);
+    return;
+  }
+  const data = ensureCache();
+  data.viewcaptures.push({
+    id: `vc_${Date.now()}`,
+    title: `Instruction ${data.viewcaptures.length + 1}`,
+    baseImage,
+    strokes: result.strokes,
+    preview: result.dataUrl,
+    createdAt: new Date().toISOString(),
+  });
+  saveData(data);
+  const synced = await syncInstructionsToEditedView();
+  renderGrids();
+  if (!synced) setMessage("Instruction added locally.", false);
+}
+
+export function addViewcaptureFromImage(dataUrl) {
+  if (!dataUrl) {
+    setMessage("Capture failed: empty image.", true);
+    return false;
+  }
   const data = ensureCache();
   data.viewcaptures.push({
     id: `vc_${Date.now()}`,
     title: `Viewcapture ${data.viewcaptures.length + 1}`,
-    preview,
+    preview: dataUrl,
     createdAt: new Date().toISOString(),
   });
   saveData(data);
   renderGrids();
-  setMessage(
-    preview ? "Viewcapture added from 3D preview." : "Empty viewcapture slot added.",
-    false
-  );
+  setMessage("3D screenshot added to noticeboard.", false);
+  return true;
 }
 
 function escapeHtml(value) {
@@ -733,7 +783,7 @@ function buildReportToothHtml(toothId, assetBase, note) {
   } else {
     const crownSrc = note?.cracked ? `${id}_Cracked.svg` : `${id}_Crown.svg`;
     const rootSrc = note?.implant
-      ? `implant.svg`
+      ? `${id}_Implant.svg`
       : note?.rct
       ? `${id}_RCT.svg`
       : `${id}_Root.svg`;
@@ -752,10 +802,9 @@ function buildReportToothHtml(toothId, assetBase, note) {
       (!note?.cracked && note?.crown ? " is-tint-yellow" : "") +
       (hideCrown ? " is-hidden" : "");
     const rootExtra = mobilityTint ? ` ${mobilityTint}` : "";
-    const implantExtra = note?.implant ? " is-implant" : "";
 
     const crown = `<img class="cli-tooth-img cli-tooth-crown${mirrorClass}${crownExtra}" src="${assetBase}/${crownSrc}" alt="" />`;
-    const root = `<img class="cli-tooth-img cli-tooth-root${mirrorClass}${rootExtra}${implantExtra}" src="${assetBase}/${rootSrc}" alt="" />`;
+    const root = `<img class="cli-tooth-img cli-tooth-root${mirrorClass}${rootExtra}" src="${assetBase}/${rootSrc}" alt="" />`;
     const stack = isUpper
       ? `<div class="cli-tooth-stack">${root}${crown}</div>`
       : `<div class="cli-tooth-stack">${crown}${root}</div>`;
@@ -932,7 +981,6 @@ async function generateReport() {
   .cli-tooth-img.is-tint-yellow { filter: brightness(0) saturate(100%) invert(72%) sepia(85%) saturate(2200%) hue-rotate(2deg) brightness(105%) contrast(105%); }
   .cli-tooth-img.is-tint-red { filter: brightness(0) saturate(100%) invert(22%) sepia(99%) saturate(6000%) hue-rotate(355deg) brightness(95%) contrast(105%); }
   .cli-tooth-img.is-tint-green { filter: brightness(0) saturate(100%) invert(45%) sepia(85%) saturate(2500%) hue-rotate(105deg) brightness(95%) contrast(105%); }
-  .cli-tooth-img.cli-tooth-root.is-implant { max-height: 38px; max-width: 22px; width: auto; height: auto; }
 
   .cli-tooth-tilt { position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.4rem; font-weight: 900; color: #1f8a6b !important; padding: 2px 6px; border-radius: 6px; z-index: 3; line-height: 1; pointer-events: none; }
   .cli-tooth.is-upper .cli-tooth-tilt { bottom: 30px; }
@@ -964,9 +1012,9 @@ async function generateReport() {
   .cli-mob-2 { background: #f6c344; color: #3a2c00; }
   .cli-mob-3 { background: #c0392b; }
 
-  .cli-3d-page { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 90vh; gap: 12px; }
-  .cli-3d-page img { max-width: 100%; max-height: 86vh; object-fit: contain; }
-  .cli-3d-page .cli-empty { color: #8895a4; font-style: italic; }
+  .cli-3d-page { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; min-height: 95vh; gap: 12px; }
+  .cli-3d-page > img { max-width: 100%; max-height: 78vh; object-fit: contain; align-self: center; margin: auto 0; }
+  .cli-3d-page .cli-empty { color: #8895a4; font-style: italic; align-self: center; margin: auto 0; }
   .cli-page-caseid { font-size: 1rem; font-weight: 700; color: #2aa67c; letter-spacing: 0.05em; }
 
   @media print {
@@ -980,7 +1028,8 @@ async function generateReport() {
   }
 </style></head>
 <body>
-  <section class="cli-page">
+  ${(() => {
+    const metaHtml = `
     <div class="cli-meta">
       ${reportFieldRow("Customer", ownerName)}
       ${reportFieldRow("Creation Date", creationDate).replace("cli-field", "cli-field cli-field-creation")}
@@ -988,7 +1037,10 @@ async function generateReport() {
       ${reportFieldRow("Date Required", caseNote.dateRequired || "")}
       ${reportFieldRow("Tooth Shade", caseNote.toothShade || "")}
       ${reportFieldRow("Work Category", workCategoryLabel)}
-    </div>
+    </div>`;
+    return `
+  <section class="cli-page">
+    ${metaHtml}
 
     <section class="cli-chart">
       <div class="cli-chart-label">BUCCAL</div>
@@ -1008,13 +1060,15 @@ async function generateReport() {
   </section>
 
   <section class="cli-page cli-3d-page">
-    <div class="cli-page-caseid">Case: ${escapeHtml(caseLabel)}</div>
+    ${metaHtml}
     ${jaw2dSrc ? `<img src="${jaw2dSrc}" alt="2D design" />` : `<div class="cli-empty">No 2D design available.</div>`}
   </section>
 
   <section class="cli-page cli-3d-page">
+    ${metaHtml}
     ${previewSrc ? `<img src="${escapeHtml(previewSrc)}" alt="3D preview" />` : `<div class="cli-empty">No 3D preview available.</div>`}
-  </section>
+  </section>`;
+  })()}
 
   <script>window.addEventListener("load", () => setTimeout(() => window.print(), 400));<\/script>
 </body></html>`;

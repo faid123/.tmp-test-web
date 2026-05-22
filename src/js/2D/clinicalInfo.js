@@ -125,7 +125,7 @@ function buildToothCell(toothId) {
     const crownSrc = note?.cracked ? `${id}_Cracked.svg` : `${id}_Crown.svg`;
     // Pick the root source: Implant > RCT > default.
     const rootSrc = note?.implant
-      ? `implant.svg`
+      ? `${id}_Implant.svg`
       : note?.rct
       ? `${id}_RCT.svg`
       : `${id}_Root.svg`;
@@ -152,7 +152,6 @@ function buildToothCell(toothId) {
       "clinical-info-tooth-root",
       mirrored ? "is-mirrored" : "",
       mobilityTint,
-      note?.implant ? "is-implant" : "",
     ].filter(Boolean).join(" ");
 
     const crownImg = buildToothImg(crownSrc, crownClasses);

@@ -809,6 +809,27 @@ export async function captureJawJpegDataUrl(quality = 0.92, scale = 3) {
   return canvas.toDataURL("image/jpeg", quality);
 }
 
+export async function captureJawPngDataUrl(scale = 3) {
+  const canvas = await composeJawCanvas(scale);
+  if (!canvas) return null;
+  return canvas.toDataURL("image/png");
+}
+
+// Thumbnail slot index for the composite 2D arch render. The case-detail
+// panel (and legacy 2D viewer in index.js) treats slot 0 as the primary 2D
+// thumbnail.
+const THUMBNAIL_SLOT_2D = 0;
+
+// Capture jaws as PNG and upload to the case's 2D thumbnail slot. Returns
+// true on success, false if anything in the capture/upload chain failed.
+// Uses scale=2 so the payload stays comfortably under server body limits
+// (scale=3 PNGs frequently push past 5 MB for two-arch composites).
+export async function uploadJawPngThumbnail() {
+  const pngUrl = await captureJawPngDataUrl(2);
+  if (!pngUrl) return false;
+  return await uploadCaseThumbnail(pngUrl, THUMBNAIL_SLOT_2D);
+}
+
 export async function saveAsJpeg() {
   try {
     setMessage("Exporting JPEG…", false);
@@ -827,7 +848,10 @@ export async function saveAsJpeg() {
     a.click();
     a.remove();
 
-    const uploaded = await uploadAnnotationJpegToCase(jpegUrl, fileName);
+    // Upload PNG (not JPEG) to the 2D thumbnail slot so the case-detail
+    // panel gets a lossless render of the arches.
+    const pngUrl = canvas.toDataURL("image/png");
+    const uploaded = await uploadCaseThumbnail(pngUrl, THUMBNAIL_SLOT_2D);
     if (uploaded) {
       setMessage("Arch annotation saved as JPEG and uploaded to case.", false);
     } else {
@@ -839,28 +863,12 @@ export async function saveAsJpeg() {
   }
 }
 
-// Parse the case_id string out of the topbar label (e.g. "UID 2014 : case_04").
-function deriveCaseNameFromLabel() {
-  const label = document.getElementById("caseLabel");
-  if (!label) return "";
-  const text = label.textContent || "";
-  const colonMatch = text.match(/:\s*(.+)$/);
-  if (colonMatch) return colonMatch[1].trim();
-  const caseMatch = text.match(/^Case:\s*(.+)$/i);
-  if (caseMatch) return caseMatch[1].trim();
-  return "";
-}
-
-// Upload the JPEG export as a reference image on the current case so it shows
-// up in the case-detail thumbnail panel and is preserved server-side.
-async function uploadAnnotationJpegToCase(dataUrl, fileName) {
+// POST /thumbnails — save a thumbnail into a specific slot for the current
+// case. Per the API spec the body is a 2-element array of {authData, caseData}
+// and `data` is the raw base64 payload (no `data:image/png;base64,` prefix).
+async function uploadCaseThumbnail(dataUrl, slot) {
   if (!state.caseIntID) {
-    console.warn("[saveAsJpeg] Skipped upload: no caseIntID");
-    return false;
-  }
-  const caseName = state.caseName || deriveCaseNameFromLabel();
-  if (!caseName) {
-    console.warn("[saveAsJpeg] Skipped upload: case name unknown");
+    console.warn("[uploadCaseThumbnail] Skipped: no caseIntID");
     return false;
   }
 
@@ -869,13 +877,17 @@ async function uploadAnnotationJpegToCase(dataUrl, fileName) {
     const raw = localStorage.getItem("loggedInUser");
     loggedInUser = raw ? JSON.parse(raw) : null;
   } catch {
-    console.warn("[saveAsJpeg] Skipped upload: bad loggedInUser");
+    console.warn("[uploadCaseThumbnail] Skipped: bad loggedInUser");
     return false;
   }
   if (!loggedInUser?.uuid) {
-    console.warn("[saveAsJpeg] Skipped upload: not logged in");
+    console.warn("[uploadCaseThumbnail] Skipped: not logged in");
     return false;
   }
+
+  // Server stores base64 only; the receiver re-adds the data URL prefix.
+  const commaIdx = dataUrl.indexOf(",");
+  const base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
 
   const payload = [
     {
@@ -884,27 +896,29 @@ async function uploadAnnotationJpegToCase(dataUrl, fileName) {
       caseIntID: state.caseIntID,
     },
     {
-      case_id: caseName,
-      image_name: fileName,
-      image_data: dataUrl,
+      case_id: state.caseIntID,
+      slot,
+      data: base64,
     },
   ];
 
   try {
     const res = await fetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/referenceimages",
+      "https://live.api.smartrpdai.com/api/smartrpd/thumbnails",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }
     );
-    const bodyText = await res.text().catch(() => "");
-    console.log("[saveAsJpeg] referenceimages POST", res.status, bodyText.slice(0, 300));
-    if (!res.ok) return false;
+    if (!res.ok) {
+      const bodyText = await res.text().catch(() => "");
+      console.warn("[uploadCaseThumbnail] POST", res.status, bodyText.slice(0, 300));
+      return false;
+    }
     return true;
   } catch (err) {
-    console.warn("[saveAsJpeg] referenceimages POST error", err);
+    console.warn("[uploadCaseThumbnail] POST error", err);
     return false;
   }
 }

@@ -304,9 +304,10 @@
           <div class="noticeboard-add-row">
             <button type="button" id="addViewcaptureBtn" class="noticeboard-add-card">
               <div class="noticeboard-add-card-preview">
+                <img id="addViewcapturePreview" alt="" />
                 <span class="noticeboard-add-card-placeholder">No preview</span>
               </div>
-              <span class="noticeboard-add-card-label">+ ADD NEW VIEWCAPTURE</span>
+              <span class="noticeboard-add-card-label">+ ADD NEW INSTRUCTION</span>
             </button>
           </div>
 
@@ -446,6 +447,25 @@
                 />
               </svg>
             </button>
+            <label
+              id="colorPickerBtn"
+              class="instruction-editor-icon-btn instruction-editor-color-picker-btn"
+              aria-label="Pick colour"
+              data-tooltip="Pick colour"
+            >
+              <span
+                id="colorPickerSwatch"
+                class="instruction-editor-color-picker-swatch"
+                aria-hidden="true"
+              ></span>
+              <input
+                type="color"
+                id="colorPickerInput"
+                class="instruction-editor-color-picker-input"
+                value="#7B3FF2"
+                aria-label="Choose drawing colour"
+              />
+            </label>
           </div>
 
           <div class="instruction-editor-tool-row">
@@ -514,39 +534,6 @@
           </div>
         </section>
 
-        <section class="instruction-editor-section">
-          <h3 class="instruction-editor-section-title">Colours</h3>
-          <div class="instruction-editor-color-grid">
-            <button
-              type="button"
-              class="instruction-editor-color-swatch"
-              data-instruction-color="#3CB043"
-              style="background:#3CB043"
-              aria-label="Green"
-            ></button>
-            <button
-              type="button"
-              class="instruction-editor-color-swatch is-active"
-              data-instruction-color="#7B3FF2"
-              style="background:#7B3FF2"
-              aria-label="Purple"
-            ></button>
-            <button
-              type="button"
-              class="instruction-editor-color-swatch"
-              data-instruction-color="#E91E63"
-              style="background:#E91E63"
-              aria-label="Pink"
-            ></button>
-            <button
-              type="button"
-              class="instruction-editor-color-swatch"
-              data-instruction-color="#3DD8E8"
-              style="background:#3DD8E8"
-              aria-label="Cyan"
-            ></button>
-          </div>
-        </section>
       </aside>
     </div>
   </div>

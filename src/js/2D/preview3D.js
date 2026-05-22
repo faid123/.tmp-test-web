@@ -1,4 +1,46 @@
-import { state } from "./2DAnnotation.js";
+import { state, setMessage } from "./2DAnnotation.js";
+import { addViewcaptureFromImage } from "./noticeboard.js";
+
+function showConfirmModal({ title = "Confirm", message = "", confirmLabel = "Confirm", cancelLabel = "Cancel", danger = false } = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "jp-confirm-overlay";
+    overlay.innerHTML = `
+      <div class="jp-confirm-card" role="dialog" aria-modal="true">
+        <h3 class="jp-confirm-title"></h3>
+        <p class="jp-confirm-message"></p>
+        <div class="jp-confirm-actions">
+          <button type="button" class="jp-confirm-cancel"></button>
+          <button type="button" class="jp-confirm-ok ${danger ? "is-danger" : ""}"></button>
+        </div>
+      </div>
+    `;
+    overlay.querySelector(".jp-confirm-title").textContent = title;
+    overlay.querySelector(".jp-confirm-message").textContent = message;
+    const cancelBtn = overlay.querySelector(".jp-confirm-cancel");
+    const okBtn = overlay.querySelector(".jp-confirm-ok");
+    cancelBtn.textContent = cancelLabel;
+    okBtn.textContent = confirmLabel;
+
+    const close = (result) => {
+      document.removeEventListener("keydown", onKey);
+      overlay.remove();
+      resolve(result);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); close(false); }
+      else if (e.key === "Enter") { e.preventDefault(); close(true); }
+    };
+
+    cancelBtn.addEventListener("click", () => close(false));
+    okBtn.addEventListener("click", () => close(true));
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(false); });
+    document.addEventListener("keydown", onKey);
+
+    document.body.appendChild(overlay);
+    setTimeout(() => okBtn.focus(), 0);
+  });
+}
 
 let THREE = null;
 let OrbitControls = null;
@@ -81,6 +123,21 @@ async function ensureThreeDeps() {
   }
 }
 
+// Snapshot the current 3D view as a data URL. We re-render immediately before
+// reading the canvas because WebGL's drawing buffer is cleared after the swap
+// unless `preserveDrawingBuffer: true` (we don't set that, for perf).
+export function capture3DPreviewDataUrl() {
+  const { renderer, scene, camera } = preview3DState;
+  if (!renderer || !scene || !camera) return "";
+  try {
+    renderer.render(scene, camera);
+    return renderer.domElement.toDataURL("image/png");
+  } catch (err) {
+    console.warn("capture3DPreviewDataUrl failed", err);
+    return "";
+  }
+}
+
 export function teardown3DPreview() {
   if (preview3DState.frameId) {
     cancelAnimationFrame(preview3DState.frameId);
@@ -134,6 +191,74 @@ function getLoggedInUser() {
   } catch {
     return null;
   }
+}
+
+function disposeJawGroup(jaw) {
+  const group = preview3DState.groups[jaw];
+  if (!group) return;
+  group.traverse((obj) => {
+    if (obj.isMesh) {
+      obj.geometry?.dispose?.();
+      if (Array.isArray(obj.material)) obj.material.forEach((m) => m?.dispose?.());
+      else obj.material?.dispose?.();
+    }
+  });
+  group.parent?.remove(group);
+  preview3DState.groups[jaw] = null;
+}
+
+async function deleteJawStl(jaw) {
+  if (!state.caseIntID) {
+    alert("⚠️ Missing case info.");
+    return false;
+  }
+  const user = getLoggedInUser();
+  if (!user?.uuid) {
+    alert("⚠️ You must be logged in to delete files.");
+    return false;
+  }
+
+  if (!preview3DState.caseData) {
+    preview3DState.caseData = await fetchCaseData();
+  }
+  const caseIdStr = preview3DState.caseData?.case_id || "";
+  const jawType = jaw === "upper" ? "upper_jaw" : "lower_jaw";
+
+  const payload = [
+    {
+      machine_id: PREVIEW_MACHINE_ID,
+      uuid: user.uuid,
+      caseIntID: state.caseIntID,
+    },
+    {
+      case_id: caseIdStr,
+      type: jawType,
+    },
+  ];
+
+  const endpoints = [
+    `${SMARTRPD_API_BASE}/stl/raw/delete`,
+    `${SMARTRPD_API_BASE}/stl/delete`,
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const text = await res.text();
+      console.log(`[stl/delete] ${url} ←`, res.status, text.slice(0, 200));
+      if (res.ok) return true;
+      if (res.status !== 404 && res.status !== 405) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+    } catch (err) {
+      console.warn(`[stl/delete] ${url} failed`, err);
+    }
+  }
+  return false;
 }
 
 async function fetchJawFilesForCase() {
@@ -470,13 +595,25 @@ function init3DPreview(area) {
     <button type="button" class="jaw-preview-footer-btn">Download Jaw Profile</button>
   `;
 
+  const cameraBtn = document.createElement("button");
+  cameraBtn.type = "button";
+  cameraBtn.className = "jaw-preview-camera";
+  cameraBtn.title = "Save screenshot to noticeboard";
+  cameraBtn.setAttribute("aria-label", "Save screenshot to noticeboard");
+  cameraBtn.innerHTML = `<i class="fa-solid fa-camera" aria-hidden="true"></i>`;
+
   shell.appendChild(toolbar);
   shell.appendChild(mount);
   mount.appendChild(undercut);
+  mount.appendChild(cameraBtn);
   shell.appendChild(footer);
   area.appendChild(shell);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: false,
+    preserveDrawingBuffer: true,
+  });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setClearColor(0xffffff, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -533,6 +670,24 @@ function init3DPreview(area) {
     saveSurveyAngle("lower", rowLower.surveyBtn)
   );
 
+  cameraBtn.addEventListener("click", async () => {
+    if (cameraBtn.disabled) return;
+    cameraBtn.disabled = true;
+    cameraBtn.classList.add("is-flash");
+    try {
+      renderer.render(scene, camera);
+      const dataUrl = renderer.domElement.toDataURL("image/png");
+      await addViewcaptureFromImage(dataUrl);
+    } catch (err) {
+      console.error("Failed to capture 3D preview screenshot:", err);
+    } finally {
+      setTimeout(() => {
+        cameraBtn.classList.remove("is-flash");
+        cameraBtn.disabled = false;
+      }, 400);
+    }
+  });
+
   // Intentionally keep ALLOW PROCESSING checkboxes as display-only (no jaw visibility behavior).
 
   const onIconToggleUpper = () => {
@@ -562,18 +717,37 @@ function init3DPreview(area) {
     }
   });
 
-  rowUpper.deleteBtn.addEventListener("click", () => {
-    if (preview3DState.groups.upper) {
-      preview3DState.groups.upper.visible = false;
-      rowUpper.row.classList.add("is-hidden-jaw");
+  const handleJawDelete = async (jaw, row, btn) => {
+    if (btn.disabled) return;
+    const label = jaw === "upper" ? "upper" : "lower";
+    const confirmed = await showConfirmModal({
+      title: `Delete ${label} jaw`,
+      message: `Delete the ${label} jaw STL file? This cannot be undone.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      danger: true,
+    });
+    if (!confirmed) return;
+    btn.disabled = true;
+    try {
+      const ok = await deleteJawStl(jaw);
+      if (!ok) {
+        setMessage(`Failed to delete ${label} jaw STL. Please try again.`, true);
+        return;
+      }
+      disposeJawGroup(jaw);
+      row.classList.add("is-hidden-jaw");
+      setMessage(`${label.charAt(0).toUpperCase() + label.slice(1)} jaw STL deleted.`, false);
+    } finally {
+      btn.disabled = false;
     }
-  });
-  rowLower.deleteBtn.addEventListener("click", () => {
-    if (preview3DState.groups.lower) {
-      preview3DState.groups.lower.visible = false;
-      rowLower.row.classList.add("is-hidden-jaw");
-    }
-  });
+  };
+  rowUpper.deleteBtn.addEventListener("click", () =>
+    handleJawDelete("upper", rowUpper.row, rowUpper.deleteBtn)
+  );
+  rowLower.deleteBtn.addEventListener("click", () =>
+    handleJawDelete("lower", rowLower.row, rowLower.deleteBtn)
+  );
 
   preview3DState.renderer = renderer;
   preview3DState.scene = scene;

@@ -13,6 +13,7 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
     />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   </head>
   <body>
     <div class="cm-page container">
@@ -314,6 +315,25 @@
         <div class="modal-actions">
           <button id="cancelInviteBtn" class="cancel-btn">CANCEL</button>
           <button id="saveInviteBtn" class="save-btn">SAVE AND RETURN</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="renameCaseModal" class="modal hidden">
+      <div class="modal-content rename-modal-content">
+        <span class="close-btn" id="closeRenameModal">&times;</span>
+        <h3 class="modal-title">Rename Case</h3>
+        <label class="input-label" for="renameCaseInput">Case Name</label>
+        <input
+          type="text"
+          id="renameCaseInput"
+          class="modal-input"
+          placeholder="Enter new case name"
+          autocomplete="off"
+        />
+        <div class="modal-actions rename-modal-actions">
+          <button id="cancelRenameBtn" type="button" class="cm-btn cm-btn-secondary">Cancel</button>
+          <button id="confirmRenameBtn" type="button" class="cm-btn cm-btn-primary">Save</button>
         </div>
       </div>
     </div>

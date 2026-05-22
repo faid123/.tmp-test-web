@@ -224,8 +224,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const center = geometry.boundingBox.getCenter(new THREE.Vector3());
         mesh.position.sub(center);
 
-        const width = 100;
-        const height = 100;
+        // Render at thumbnail-friendly resolution so the PNG we upload to the
+        // case thumbnail slot is crisp. The on-screen preview img is sized via
+        // CSS (width: 100px), so a 512² source still displays correctly.
+        const width = 512;
+        const height = 512;
         const camera = new THREE.PerspectiveCamera(70, width / height, 0.1, 1000);
         camera.position.z = 100;
 
@@ -233,7 +236,9 @@ document.addEventListener("DOMContentLoaded", () => {
         renderer.setSize(width, height);
         renderer.setClearColor(0xffffff);
         renderer.render(scene, camera);
-        img.src = renderer.domElement.toDataURL();
+        const dataUrl = renderer.domElement.toDataURL("image/png");
+        img.src = dataUrl;
+        wrapper.thumbnailDataUrl = dataUrl;
       } catch (err) {
         console.error("STL 解析失败：", err);
       }
@@ -481,12 +486,18 @@ document.addEventListener("DOMContentLoaded", () => {
           '.uploaded-model[data-jaw="upper"]'
         );
         await uploadSTL("upper_jaw", upperEl, machine_id, uuid, caseName, caseIntID);
+        if (upperEl?.thumbnailDataUrl) {
+          await uploadCaseThumbnail(machine_id, uuid, caseIntID, 1, upperEl.thumbnailDataUrl);
+        }
       }
       if (hasLower) {
         const lowerEl = jawContainer.querySelector(
           '.uploaded-model[data-jaw="lower"]'
         );
         await uploadSTL("lower_jaw", lowerEl, machine_id, uuid, caseName, caseIntID);
+        if (lowerEl?.thumbnailDataUrl) {
+          await uploadCaseThumbnail(machine_id, uuid, caseIntID, 2, lowerEl.thumbnailDataUrl);
+        }
       }
     } catch (err) {
       console.error("❌ STL Upload failed", err);
@@ -788,46 +799,6 @@ async function uploadSTL(
   });
 }
 
-// function renderSharedUserList() {
-//   const container = document.getElementById("sharedUserList");
-
-//   if (!container) {
-//     console.warn("⚠️ Missing element: #sharedUserList");
-//     return;
-//   }
-
-//   // 清空旧内容
-//   container.innerHTML = "";
-
-//   // 如果没有用户，显示提示
-//   if (!existingUsers || existingUsers.length === 0) {
-//     const emptyItem = document.createElement("li");
-//     emptyItem.textContent = "No users found.";
-//     emptyItem.style.color = "#888";
-//     emptyItem.style.fontStyle = "italic";
-//     container.appendChild(emptyItem);
-//     return;
-//   }
-
-//   // 遍历用户并渲染每个条目
-//   existingUsers.forEach((user) => {
-//     const li = document.createElement("li");
-//     li.className = "shared-user-item";
-
-//     const nameSpan = document.createElement("span");
-//     nameSpan.className = "user-name";
-//     nameSpan.textContent = `👤 ${user.username}`;
-
-//     const roleSpan = document.createElement("span");
-//     roleSpan.className = "user-role";
-//     roleSpan.textContent = user.role;
-
-//     li.appendChild(nameSpan);
-//     li.appendChild(roleSpan);
-//     container.appendChild(li);
-//   });
-// }
-
 function renderSharedUserList() {
   const container = document.getElementById("sharedUserList");
 
@@ -975,6 +946,38 @@ async function uploadReferenceImage(
 
     reader.readAsDataURL(file); // ✅ 读取为 Base64
   });
+}
+
+// POST /thumbnails — save a thumbnail PNG into a specific slot for a case.
+// Body shape per API spec: [authData, caseData] where caseData carries the
+// integer case id, the slot index, and the base64 image payload (no data URL
+// prefix). slot 0 = composite 2D annotation, 1 = upper STL render,
+// 2 = lower STL render.
+async function uploadCaseThumbnail(machine_id, uuid, caseIntID, slot, dataUrl) {
+  if (!caseIntID || !dataUrl) return;
+  const commaIdx = dataUrl.indexOf(",");
+  const base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+  const payload = [
+    { machine_id, uuid, caseIntID },
+    { case_id: caseIntID, slot, data: base64 },
+  ];
+  try {
+    const res = await fetch(
+      "https://live.api.smartrpdai.com/api/smartrpd/thumbnails",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
+    if (!res.ok) {
+      console.error(`❌ Failed to upload thumbnail slot ${slot}:`, res.status);
+    } else {
+      console.log(`✅ Uploaded thumbnail slot ${slot}`);
+    }
+  } catch (err) {
+    console.error(`❌ Error uploading thumbnail slot ${slot}:`, err);
+  }
 }
 
 // === 写入 Case History：Created case ===

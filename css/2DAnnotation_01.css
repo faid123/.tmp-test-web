@@ -331,6 +331,113 @@ body.is-panel-resizing {
   display: block;
 }
 
+.jp-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.jp-confirm-card {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+  padding: 24px 24px 20px;
+  width: 420px;
+  max-width: calc(100% - 32px);
+  font-family: inherit;
+}
+.jp-confirm-title {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+.jp-confirm-message {
+  margin: 0 0 20px;
+  font-size: 0.92rem;
+  color: #475569;
+  line-height: 1.45;
+}
+.jp-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.jp-confirm-cancel,
+.jp-confirm-ok {
+  padding: 9px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+}
+.jp-confirm-cancel {
+  background: #fff;
+  color: #0f172a;
+  border-color: #e2e8f0;
+}
+.jp-confirm-cancel:hover { background: #f1f5f9; }
+.jp-confirm-ok {
+  background: var(--rose-500, #3BAE95);
+  color: #fff;
+}
+.jp-confirm-ok:hover {
+  background: var(--rose-700, #25735f);
+  transform: translateY(-1px);
+}
+.jp-confirm-ok.is-danger {
+  background: var(--rose-500);
+}
+.jp-confirm-ok.is-danger:hover {
+  background: #b91c1c;
+}
+
+.jaw-preview-camera {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(26, 77, 63, 0.14);
+  transition: transform 0.12s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  z-index: 9;
+}
+.jaw-preview-camera:hover {
+  background: #fff;
+  color: var(--rose-700, #25735f);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(26, 77, 63, 0.2);
+}
+.jaw-preview-camera:active {
+  transform: translateY(0);
+}
+.jaw-preview-camera:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+.jaw-preview-camera.is-flash {
+  background: var(--rose-700, #25735f);
+  color: #fff;
+  border-color: var(--rose-700, #25735f);
+}
+
 .jaw-preview-undercut {
   position: absolute;
   left: 22px;
@@ -2581,8 +2688,11 @@ body.is-panel-resizing {
 }
 
 .instruction-editor-tool-row {
-  display: flex;
-  justify-content: center;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  justify-items: center;
+  align-items: center;
   gap: 12px;
 }
 
@@ -2630,12 +2740,45 @@ body.is-panel-resizing {
   align-items: center;
   font-size: 0.78rem;
   color: var(--muted);
-  padding: 4px 2px;
+  padding: 10px 12px;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
 }
 
 .instruction-editor-size-row input[type="range"] {
   width: 100%;
   accent-color: var(--rose-500);
+}
+
+.instruction-editor-color-picker-btn {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  padding: 0;
+}
+
+.instruction-editor-color-picker-swatch {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #7B3FF2;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+}
+
+.instruction-editor-color-picker-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  background: transparent;
 }
 
 .instruction-editor-color-grid {
@@ -3350,12 +3493,6 @@ body.is-panel-resizing {
   filter: brightness(0) saturate(100%) invert(45%) sepia(85%) saturate(2500%) hue-rotate(105deg) brightness(95%) contrast(105%);
 }
 
-.clinical-info-tooth-img.clinical-info-tooth-root.is-implant {
-  max-height: 75px;
-  max-width: 42px;
-  width: auto;
-  height: auto;
-}
 
 .clinical-info-tooth-img.is-hidden {
   visibility: hidden;
