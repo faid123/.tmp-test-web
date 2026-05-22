@@ -7,7 +7,7 @@ import {
   LOWER_TEETH,
   sourceToothFor,
   statusFor,
-  getClinicalNotesFromStorage,
+  getClinicalNotesForCase,
   tiltArrowFor,
 } from "./clinicalInfo.js";
 import { WORK_CATEGORY_LABELS, loadCaseNote } from "./caseNote.js";
@@ -938,7 +938,7 @@ async function generateReport() {
     console.warn("Failed to capture 2D jaw for report:", err);
   }
 
-  const notes = getClinicalNotesFromStorage(state.caseIntID);
+  const notes = await getClinicalNotesForCase(state.caseIntID);
   const upperRow = buildReportRowHtml(UPPER_TEETH, assetBase, notes);
   const lowerRow = buildReportRowHtml(LOWER_TEETH, assetBase, notes);
   const legend = buildReportLegendHtml(assetBase);

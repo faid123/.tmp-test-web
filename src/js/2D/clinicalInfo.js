@@ -2,6 +2,10 @@ import { state, setMessage } from "./2DAnnotation.js";
 import { loadCaseNote, WORK_CATEGORY_LABELS } from "./caseNote.js";
 
 const ASSET_BASE = "../../assets/clinicalInfo";
+const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
+const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
+const CLINICAL_WRAPPER_HEADER = [0, 1, 0, 0, 255, 255, 127, 1];
+const CLINICAL_WRAPPER_TAIL = 0;
 
 export const UPPER_TEETH = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
 export const LOWER_TEETH = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
@@ -32,8 +36,41 @@ let selectedToothId = null;
 /** Snapshot of clinicalNotes at modal-open, used to revert when CLOSE is pressed without SAVE. */
 let savedSnapshot = "{}";
 
-function storageKey() {
-  return `clinicalNotes_${state.caseIntID ?? "draft"}`;
+function buildClinicalPayload(caseIntID, uuid) {
+  return [{ machine_id: MACHINE_ID, uuid, caseIntID }, { case_id: caseIntID }];
+}
+
+async function postClinical(path, payload) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  let body = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
+  }
+  if (!res.ok) {
+    const err = new Error(`clinical API failed: ${res.status}`);
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
+  return body;
+}
+
+async function fetchClinicalInfoRow(caseIntID, uuid) {
+  return postClinical(`/clinicalinfo/get/${caseIntID}`, buildClinicalPayload(caseIntID, uuid));
+}
+
+async function saveClinicalInfoRow(caseIntID, uuid, encodedData) {
+  const payload = [
+    { machine_id: MACHINE_ID, uuid, caseIntID },
+    { case_id: caseIntID, data: encodedData },
+  ];
+  return postClinical("/clinicalinfo", payload);
 }
 
 function emptyToothNote() {
@@ -56,24 +93,106 @@ function noteFor(toothId) {
   return clinicalNotes[toothId];
 }
 
-function loadFromStorage() {
+function safeAtob(b64) {
+  if (typeof b64 !== "string") return null;
   try {
-    const raw = localStorage.getItem(storageKey());
-    clinicalNotes = raw ? JSON.parse(raw) : {};
-  } catch (err) {
-    console.warn("Failed to load clinical notes:", err);
-    clinicalNotes = {};
+    const cleaned = b64.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+    const padded = cleaned + "=".repeat((4 - (cleaned.length % 4)) % 4);
+    return atob(padded);
+  } catch {
+    return null;
   }
-  savedSnapshot = JSON.stringify(clinicalNotes);
 }
 
-function writeToStorage() {
+function decodeClinicalInfoData(dataB64) {
+  const decoded = safeAtob(dataB64);
+  if (!decoded) return [];
+  const start = decoded.indexOf("[");
+  const end = decoded.lastIndexOf("]");
+  if (start === -1 || end === -1 || end < start) return [];
   try {
-    localStorage.setItem(storageKey(), JSON.stringify(clinicalNotes));
-    savedSnapshot = JSON.stringify(clinicalNotes);
-  } catch (err) {
-    console.warn("Failed to save clinical notes:", err);
+    const parsed = JSON.parse(decoded.slice(start, end + 1));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
   }
+}
+
+function encodeClinicalInfoData(rows) {
+  const json = JSON.stringify(Array.isArray(rows) ? rows : []);
+  const head = String.fromCharCode(...CLINICAL_WRAPPER_HEADER);
+  const tail = String.fromCharCode(CLINICAL_WRAPPER_TAIL);
+  return btoa(`${head}${json}${tail}`);
+}
+
+function normalizeApiResult(apiResult) {
+  if (!apiResult) return null;
+  if (Array.isArray(apiResult)) return apiResult[0] || null;
+  return apiResult;
+}
+
+function toUiRestoration(value) {
+  return ["AR", "TCR", "INLAY", "ONLAY"].includes(value) ? value : null;
+}
+
+function toUiTilt(value) {
+  return ["M", "D", "B", "L", "A", "SE"].includes(value) ? value : null;
+}
+
+function toUiMobility(value) {
+  return ["1", "2", "3"].includes(value) ? value : null;
+}
+
+function apiRowsToClinicalNotes(rows) {
+  const notes = {};
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const toothId = Number(row?.ToothNo);
+    if (!ALL_TEETH.includes(toothId)) return;
+    notes[toothId] = {
+      mobility: toUiMobility(row?.ToothNote_Mobility),
+      rct: !!row?.rct,
+      restoration: toUiRestoration(row?.ToothRestoration),
+      crown: !!row?.crown,
+      implant: !!row?.implant,
+      rootStump: !!row?.rootStump,
+      cracked: !!row?.cracked,
+      tilted: toUiTilt(row?.ToothNote_Tilt),
+      extraction: !!row?.extraction,
+      abutment: !!row?.abutment,
+    };
+  });
+  return notes;
+}
+
+function clinicalNotesToApiRows(notes) {
+  const ordered = [...UPPER_TEETH, ...LOWER_TEETH];
+  return ordered.map((toothId) => {
+    const note = notes?.[toothId] || emptyToothNote();
+    return {
+      ToothNo: toothId,
+      ToothNote_Mobility: toUiMobility(note.mobility),
+      ToothRestoration: toUiRestoration(note.restoration),
+      ToothNote_Tilt: toUiTilt(note.tilted),
+      rct: !!note.rct,
+      crown: !!note.crown,
+      implant: !!note.implant,
+      rootStump: !!note.rootStump,
+      cracked: !!note.cracked,
+      extraction: !!note.extraction,
+      abutment: !!note.abutment,
+    };
+  });
+}
+
+export async function loadClinicalNotesFromServer(caseIntID, uuid) {
+  const raw = await fetchClinicalInfoRow(caseIntID, uuid);
+  const row = normalizeApiResult(raw);
+  if (!row || !row.data) {
+    const err = new Error("no clinical record");
+    err.code = "not_found";
+    throw err;
+  }
+  return apiRowsToClinicalNotes(decodeClinicalInfoData(row.data));
 }
 
 function buildToothImg(srcFile, extraClass = "") {
@@ -201,10 +320,14 @@ function buildToothCell(toothId) {
   return cell;
 }
 
-export function getClinicalNotesFromStorage(caseIntID) {
+export async function getClinicalNotesForCase(caseIntID) {
+  if (state.caseIntID === caseIntID && clinicalNotes && Object.keys(clinicalNotes).length) {
+    return clinicalNotes;
+  }
+  const user = getLoggedInUser();
+  if (!user?.uuid || !caseIntID) return {};
   try {
-    const raw = localStorage.getItem(`clinicalNotes_${caseIntID ?? "draft"}`);
-    return raw ? JSON.parse(raw) : {};
+    return await loadClinicalNotesFromServer(caseIntID, user.uuid);
   } catch {
     return {};
   }
@@ -353,10 +476,28 @@ function bindChartInteractions() {
   });
 }
 
-function openClinicalInfo() {
+async function openClinicalInfo() {
   const modal = getModal();
   if (!modal) return;
-  loadFromStorage();
+  clinicalNotes = {};
+  const user = getLoggedInUser();
+  if (!state.caseIntID) {
+    setMessage("Missing case ID. Opened empty clinical info.", true);
+  } else if (!user?.uuid) {
+    setMessage("Missing session UUID. Opened empty clinical info.", true);
+  } else {
+    try {
+      clinicalNotes = await loadClinicalNotesFromServer(state.caseIntID, user.uuid);
+    } catch (err) {
+      if (err?.code === "not_found") {
+        setMessage("No saved clinical info on server yet.", false);
+      } else {
+        setMessage("Failed to fetch clinical info. Opened empty state.", true);
+      }
+      clinicalNotes = {};
+    }
+  }
+  savedSnapshot = JSON.stringify(clinicalNotes);
   renderRow("clinicalInfoUpperRow", UPPER_TEETH);
   renderRow("clinicalInfoLowerRow", LOWER_TEETH);
   setSelected(null);
@@ -412,10 +553,21 @@ function closeClinicalInfo() {
   modal.setAttribute("aria-hidden", "true");
 }
 
-function saveNotes() {
-  writeToStorage();
-  if (typeof setMessage === "function") {
+async function saveNotes() {
+  const user = getLoggedInUser();
+  if (!state.caseIntID || !user?.uuid) {
+    setMessage("Missing session UUID or case ID. Save failed.", true);
+    return;
+  }
+  try {
+    const rows = clinicalNotesToApiRows(clinicalNotes);
+    const encodedData = encodeClinicalInfoData(rows);
+    await saveClinicalInfoRow(state.caseIntID, user.uuid, encodedData);
+    savedSnapshot = JSON.stringify(clinicalNotes);
     setMessage("Clinical info saved.", false);
+  } catch (err) {
+    console.error("Failed to save clinical info:", err);
+    setMessage("Failed to save clinical info to server.", true);
   }
 }
 
