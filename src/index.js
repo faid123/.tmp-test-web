@@ -26,6 +26,8 @@ const LOG_VIEWER_LOAD_TIMINGS_TO_CONSOLE = false;
 const LOG_VIEWER_OBJECT_COUNTS_TO_CONSOLE = false;
 const LOG_VIEWER_REVISION_TO_CONSOLE = true;
 const LOG_POLYLINE_AUTO_AUDITS_TO_CONSOLE = false;
+const LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE = false;
+const LOG_ARTIFICIAL_TEETH_STATUS_TO_CONSOLE = false;
 
 function startViewerLoadTimer(label) {
   if (LOG_VIEWER_LOAD_TIMINGS_TO_CONSOLE) {
@@ -139,7 +141,9 @@ const artificialTeethRenderer = createArtificialTeethRenderer({
   },
   onStatus: (label, progress = 0, autoHide = false) => {
     window.lastArtificialTeethStatus = { label, progress, autoHide };
-    console.log("[artificial teeth]", label, progress);
+    if (LOG_ARTIFICIAL_TEETH_STATUS_TO_CONSOLE) {
+      console.log("[artificial teeth]", label, progress);
+    }
   },
 });
 const polylineOverlayGroup = new THREE.Group();
@@ -188,6 +192,8 @@ let viewerRotationBoundsRadius = 40;
 let hasViewerRotationOrigin = false;
 const VIEWER_TARGET_DRIFT_FACTOR = 1.6;
 const VIEWER_TARGET_MIN_DRIFT_LIMIT = 45;
+let isViewerLeftButtonRotating = false;
+const viewerRotationTargetAnchor = new THREE.Vector3();
 
 const POLYLINE_COMPONENT_COLORS = [
   0x6f35ff,
@@ -242,18 +248,20 @@ function resetPolylineDiagnostics() {
 }
 
 function logPolylineDiagnostics() {
-  console.log("[viewer: polyline diagnostics]", {
-    base64Decodes: polylineDiagnostics.base64DecodeCount,
-    base64DecodeMs: Number(polylineDiagnostics.base64DecodeMs.toFixed(2)),
-    textParses: polylineDiagnostics.textParseCount,
-    textParseMs: Number(polylineDiagnostics.textParseMs.toFixed(2)),
-  });
-  console.log(
-    `viewer: decode polylines: ${polylineDiagnostics.base64DecodeMs.toFixed(2)} ms`
-  );
-  console.log(
-    `viewer: parse polylines: ${polylineDiagnostics.textParseMs.toFixed(2)} ms`
-  );
+  if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE) {
+    console.log("[viewer: polyline diagnostics]", {
+      base64Decodes: polylineDiagnostics.base64DecodeCount,
+      base64DecodeMs: Number(polylineDiagnostics.base64DecodeMs.toFixed(2)),
+      textParses: polylineDiagnostics.textParseCount,
+      textParseMs: Number(polylineDiagnostics.textParseMs.toFixed(2)),
+    });
+    console.log(
+      `viewer: decode polylines: ${polylineDiagnostics.base64DecodeMs.toFixed(2)} ms`
+    );
+    console.log(
+      `viewer: parse polylines: ${polylineDiagnostics.textParseMs.toFixed(2)} ms`
+    );
+  }
   addViewerLoadTiming(
     "decode polylines",
     polylineDiagnostics.base64DecodeMs,
@@ -437,6 +445,39 @@ function clampViewerControlTarget(control = controls) {
     },
   };
   return true;
+}
+
+function anchorViewerRotationTarget(control = controls) {
+  if (!control?.target || !isViewerLeftButtonRotating) return false;
+  const drift = control.target.distanceTo(viewerRotationTargetAnchor);
+  if (!Number.isFinite(drift) || drift < 0.0001) return false;
+
+  const correction = viewerRotationTargetAnchor.clone().sub(control.target);
+  control.target.copy(viewerRotationTargetAnchor);
+  camera.position.add(correction);
+  if (orb_controls?.target) {
+    orb_controls.target.copy(viewerRotationTargetAnchor);
+  }
+  camera.updateProjectionMatrix();
+  return true;
+}
+
+function bindViewerRotationTargetAnchor(domElement) {
+  if (!domElement) return;
+
+  domElement.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || !controls?.target) return;
+    isViewerLeftButtonRotating = true;
+    viewerRotationTargetAnchor.copy(controls.target);
+  });
+
+  const releaseRotationAnchor = () => {
+    isViewerLeftButtonRotating = false;
+  };
+  domElement.addEventListener("pointerup", releaseRotationAnchor);
+  domElement.addEventListener("pointercancel", releaseRotationAnchor);
+  domElement.addEventListener("pointerleave", releaseRotationAnchor);
+  window.addEventListener("blur", releaseRotationAnchor);
 }
 
 function disposeObject3D(object) {
@@ -1048,7 +1089,7 @@ function getJawMeshForPolyline(jawType) {
 }
 
 function applyJawTransformToPolylineGroup(group, jawType, coordinateSpace = "jaw-local") {
-  if (coordinateSpace === "scene-world") {
+  if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE && coordinateSpace === "scene-world") {
     group.position.set(0, 0, 0);
     group.rotation.set(0, 0, 0);
     group.scale.set(1, 1, 1);
@@ -1449,7 +1490,7 @@ function createPolylineObjects(jawType, segment, segmentIndex) {
     positionAttribute,
   };
 
-  if (seating.snappedCount > 0) {
+  if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE && seating.snappedCount > 0) {
     console.log("[polyline] seated component on jaw surface", {
       arch: jawType,
       component,
@@ -1993,9 +2034,9 @@ function createPolylineVisibilityToggle(container, domElement) {
 
 async function fetchAndRenderPolylines(caseIntID) {
   const totalStartedAt = performance.now();
-  console.time("viewer: total polyline load");
+  if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE) console.time("viewer: total polyline load");
   const fetchStartedAt = performance.now();
-  console.time("viewer: fetch polylines");
+  if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE) console.time("viewer: fetch polylines");
   let isPolylineFetchTimerActive = true;
   let isPolylineNormalizeTimerActive = false;
   let isPolylineRenderTimerActive = false;
@@ -2022,15 +2063,15 @@ async function fetchAndRenderPolylines(caseIntID) {
       false,
       "Polyline"
     );
-    console.timeEnd("viewer: fetch polylines");
+    if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE) console.timeEnd("viewer: fetch polylines");
     addViewerLoadTiming("fetch polylines", performance.now() - fetchStartedAt);
     isPolylineFetchTimerActive = false;
     resetPolylineDiagnostics();
     const normalizeStartedAt = performance.now();
-    console.time("viewer: normalize polyline response");
+    if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE) console.time("viewer: normalize polyline response");
     isPolylineNormalizeTimerActive = true;
     const normalized = normalizePolylineResponse(response);
-    console.timeEnd("viewer: normalize polyline response");
+    if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE) console.timeEnd("viewer: normalize polyline response");
     addViewerLoadTiming(
       "normalize polyline response",
       performance.now() - normalizeStartedAt
@@ -2040,48 +2081,52 @@ async function fetchAndRenderPolylines(caseIntID) {
     const upperPointCount = countPolylinePoints(normalized.upper);
     const lowerPointCount = countPolylinePoints(normalized.lower);
     const hasAnyPoints = upperPointCount || lowerPointCount;
-    console.log("[polyline] points", {
-      upper: upperPointCount,
-      lower: lowerPointCount,
-    });
+    if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE) {
+      console.log("[polyline] points", {
+        upper: upperPointCount,
+        lower: lowerPointCount,
+      });
+    }
 
     if (!hasAnyPoints) {
-      console.log("[polyline] No polyline data returned.");
-      console.timeEnd("viewer: total polyline load");
+      if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE) {
+        console.log("[polyline] No polyline data returned.");
+        console.timeEnd("viewer: total polyline load");
+      }
       addViewerLoadTiming("total polyline load", performance.now() - totalStartedAt);
       isPolylineTotalTimerActive = false;
       return;
     }
 
     const renderStartedAt = performance.now();
-    console.time("viewer: render polylines");
+    if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE) console.time("viewer: render polylines");
     isPolylineRenderTimerActive = true;
     renderPolylineData(normalized);
-    console.timeEnd("viewer: render polylines");
+    if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE) console.timeEnd("viewer: render polylines");
     addViewerLoadTiming("render polylines", performance.now() - renderStartedAt, {
       upperPoints: upperPointCount,
       lowerPoints: lowerPointCount,
     });
     isPolylineRenderTimerActive = false;
     logViewerObjectCounts("after polyline render");
-    console.timeEnd("viewer: total polyline load");
+    if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE) console.timeEnd("viewer: total polyline load");
     addViewerLoadTiming("total polyline load", performance.now() - totalStartedAt);
     isPolylineTotalTimerActive = false;
   } catch (error) {
     if (isPolylineFetchTimerActive) {
-      console.timeEnd("viewer: fetch polylines");
+      if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE) console.timeEnd("viewer: fetch polylines");
       addViewerLoadTiming("fetch polylines", performance.now() - fetchStartedAt, {
         status: "failed",
       });
     }
     if (isPolylineNormalizeTimerActive) {
-      console.timeEnd("viewer: normalize polyline response");
+      if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE) console.timeEnd("viewer: normalize polyline response");
     }
     if (isPolylineRenderTimerActive) {
-      console.timeEnd("viewer: render polylines");
+      if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE) console.timeEnd("viewer: render polylines");
     }
     if (isPolylineTotalTimerActive) {
-      console.timeEnd("viewer: total polyline load");
+      if (LOG_POLYLINE_LOAD_DETAILS_TO_CONSOLE) console.timeEnd("viewer: total polyline load");
       addViewerLoadTiming("total polyline load", performance.now() - totalStartedAt, {
         status: "failed",
       });
@@ -3933,6 +3978,7 @@ btnContainer.appendChild(edit2DStatic); */
     controls.staticMoving = true;
     controls.dynamicDampingFactor = 0.3;
     applyViewerRotationOrigin();
+    bindViewerRotationTargetAnchor(renderer.domElement);
 
     //console.log('changed2');
   }
@@ -3941,6 +3987,7 @@ btnContainer.appendChild(edit2DStatic); */
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
+    anchorViewerRotationTarget(controls);
     clampViewerControlTarget(controls);
     artificialTeethRenderer.syncToJawMeshes();
 
