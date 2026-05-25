@@ -783,8 +783,6 @@ function getToothIndex(candidate) {
 
 function getToothPosition(candidate) {
   if (!candidate || typeof candidate !== "object") return null;
-  const interfacePosition = getToothInterfacePosition(candidate);
-  if (isValidPoint(interfacePosition)) return interfacePosition;
 
   const direct = toPointObject(candidate);
   if (looksLikeModelPosition(direct)) return direct;
@@ -794,17 +792,7 @@ function getToothPosition(candidate) {
     if (looksLikeModelPosition(point)) return point;
   }
 
-  for (const key of [10, 7, 3, 2, 5]) {
-    const point = getKeyedVector(candidate, key);
-    if (looksLikeModelPosition(point)) return point;
-  }
-
-  const transform =
-    candidate.transform ??
-    candidate.localTransform ??
-    candidate.toothTransform ??
-    candidate.toothTransformInterfaceData_;
-  return transform && typeof transform === "object" ? getToothPosition(transform) : null;
+  return null;
 }
 
 function getToothScale(candidate) {
@@ -1189,22 +1177,21 @@ function getDeepToothGeometry(...sources) {
   return null;
 }
 
-function getTransformCrownCenter(transform) {
-  if (!isValidPoint(transform?.gingivalPoint) || !isValidPoint(transform?.buccalPoint)) return null;
-  return {
-    x: transform.gingivalPoint.x + (transform.buccalPoint.x - transform.gingivalPoint.x) * 0.58,
-    y: transform.gingivalPoint.y + (transform.buccalPoint.y - transform.gingivalPoint.y) * 0.58,
-    z: transform.gingivalPoint.z + (transform.buccalPoint.z - transform.gingivalPoint.z) * 0.58,
-  };
-}
+function getUnityToothDataPosition(toothData) {
+  if (!toothData || typeof toothData !== "object" || looksLikeByteArray(toothData)) {
+    return null;
+  }
 
-function getTransformCrownWrapPoint(transform) {
-  if (!isValidPoint(transform?.gingivalPoint) || !isValidPoint(transform?.buccalPoint)) return null;
-  return {
-    x: transform.gingivalPoint.x + (transform.buccalPoint.x - transform.gingivalPoint.x) * 0.9,
-    y: transform.gingivalPoint.y + (transform.buccalPoint.y - transform.gingivalPoint.y) * 0.9,
-    z: transform.gingivalPoint.z + (transform.buccalPoint.z - transform.gingivalPoint.z) * 0.9,
-  };
+  // Unity ToothData layout: fields 7 and 10 are the saved tooth placement.
+  // Fields 9 and 12 are scale/direction-like vectors and must not be used as positions.
+  for (const key of [7, 10]) {
+    const point = getKeyedVector(toothData, key);
+    if (looksLikeModelPosition(point)) {
+      return point;
+    }
+  }
+
+  return getToothPosition(toothData);
 }
 
 function createToothRecordsFromCraftMaps(craftData) {
@@ -1221,6 +1208,7 @@ function createToothRecordsFromCraftMaps(craftData) {
   });
 
   return Array.from(keys).flatMap((key) => {
+    const canonicalToothIndex = String(key);
     const toothData = craftData.toothData_?.[key];
     const transformData =
       craftData.toothTransformInterfaceData_?.[key] ??
@@ -1231,11 +1219,7 @@ function createToothRecordsFromCraftMaps(craftData) {
     const toothGeometry = getDeepToothGeometry(toothData);
     const surfaceGeometry = getDeepToothGeometry(surfaceData);
     const shouldPreferSurfaceGeometry = Boolean(
-      surfaceGeometry?.indices?.length >= 3 &&
-        (
-          !toothGeometry?.indices?.length ||
-          (surfaceGeometry.vertices?.length ?? 0) > (toothGeometry.vertices?.length ?? 0) * 10
-        )
+      surfaceGeometry?.indices?.length >= 3
     );
     const geometry = shouldPreferSurfaceGeometry
       ? surfaceGeometry
@@ -1243,34 +1227,38 @@ function createToothRecordsFromCraftMaps(craftData) {
     if (!geometry) return [];
 
     const transform = getDeepToothTransform(transformData, toothData);
-    const transformCenter = getTransformCrownCenter(transform);
-    const toothDataPosition = toothGeometry ? getDeepToothPosition(toothData) : null;
-    const geometryCenter = getPointBoundsCenter(geometry.vertices);
-    const position = shouldPreferSurfaceGeometry
-      ? transformCenter ??
-        toothDataPosition ??
-        getDeepToothPosition(transformData, toothData) ??
-        (looksLikeModelPosition(geometryCenter) ? geometryCenter : null)
-      : toothDataPosition ??
-        transformCenter ??
-        getDeepToothPosition(transformData, toothData) ??
-        (looksLikeModelPosition(geometryCenter) ? geometryCenter : null);
+    const toothDataPosition = shouldPreferSurfaceGeometry
+      ? null
+      : toothGeometry
+        ? getUnityToothDataPosition(toothData)
+        : null;
+    const apiMeshCenter = getPointBoundsCenter(geometry.vertices);
+    const position = toothDataPosition ??
+      (looksLikeModelPosition(apiMeshCenter) ? apiMeshCenter : null);
     const source = {
       toothData,
       transformData,
       surfaceData,
+      craftKey: canonicalToothIndex,
+      toothDataIndex: getToothIndex(toothData),
+      databaseMappedDirect: true,
       geometryFromToothData: Boolean(toothGeometry) && !shouldPreferSurfaceGeometry,
       geometryFromSurfaceMesh: Boolean(surfaceGeometry) && (!toothGeometry || shouldPreferSurfaceGeometry),
       preferredSurfaceGeometry: shouldPreferSurfaceGeometry,
       positionFromToothDataWorld: Boolean(toothDataPosition) && position === toothDataPosition,
-      positionFromSurfaceMeshCenter: !toothDataPosition && !transformCenter && Boolean(position),
+      positionFromUnityToothDataField: Boolean(toothDataPosition) && position === toothDataPosition
+        ? 7
+        : null,
+      positionFromApiMeshCenter: Boolean(apiMeshCenter) && position === apiMeshCenter,
       positionSpace: position === toothDataPosition ? "unity-world" : "jaw-local",
+      transformLandmarksUsedForPlacement: false,
+      guidelineUsedForPlacement: false,
     };
 
     if (!position) return [];
 
     return [{
-      toothIndex: getToothIndex(toothData) ?? key,
+      toothIndex: canonicalToothIndex,
       position: position || { x: 0, y: 0, z: 0 },
       transform,
       rotation: toothGeometry
@@ -1282,9 +1270,7 @@ function createToothRecordsFromCraftMaps(craftData) {
           ? null
           : getDeepToothScale(transformData, toothData),
       geometry,
-      source: transformCenter
-        ? { ...source, transformCrownCenter: true }
-        : source,
+      source,
     }];
   });
 }
@@ -1566,312 +1552,6 @@ function polylineLength(points) {
   return length;
 }
 
-function samplePolyline(points, t) {
-  if (!points?.length) return null;
-  if (points.length === 1) return points[0];
-  const total = polylineLength(points);
-  if (!total) return points[Math.floor(t * (points.length - 1))];
-
-  let target = total * Math.max(0, Math.min(1, t));
-  for (let index = 1; index < points.length; index += 1) {
-    const start = points[index - 1];
-    const end = points[index];
-    const segment = distanceBetweenPoints(start, end);
-    if (target <= segment || index === points.length - 1) {
-      const ratio = segment ? target / segment : 0;
-      return {
-        x: start.x + (end.x - start.x) * ratio,
-        y: start.y + (end.y - start.y) * ratio,
-        z: start.z + (end.z - start.z) * ratio,
-      };
-    }
-    target -= segment;
-  }
-  return points[points.length - 1];
-}
-
-function getGuidelinePoints(guideData) {
-  if (!guideData) return [];
-  const pointSets = extractPointSets(guideData)
-    .filter((points) => points.length >= 6)
-    .sort((a, b) => polylineLength(b) - polylineLength(a));
-  return pointSets[0] || [];
-}
-
-function getPolylineAttributePoints(positionAttribute) {
-  if (!positionAttribute?.count) return [];
-  const points = [];
-  for (let index = 0; index < positionAttribute.count; index += 1) {
-    points.push({
-      x: positionAttribute.getX(index),
-      y: positionAttribute.getY(index),
-      z: positionAttribute.getZ(index),
-    });
-  }
-  return points.filter(isValidPoint);
-}
-
-function getPolylineRenderedEdges(polylineGroup) {
-  let edges = null;
-  polylineGroup.traverse((child) => {
-    if (edges) return;
-    if (child.userData?.overlayType !== "polyline-line") return;
-    if (!Array.isArray(child.userData?.edges)) return;
-    edges = child.userData.edges;
-  });
-  return edges || [];
-}
-
-function getPolylinePathsFromRenderedEdges(points, edges) {
-  if (!points.length || !edges.length) return [];
-
-  const paths = [];
-  let currentPath = [];
-  edges.forEach(([startIndex, endIndex]) => {
-    const start = points[startIndex];
-    const end = points[endIndex];
-    if (!isValidPoint(start) || !isValidPoint(end)) return;
-
-    const last = currentPath[currentPath.length - 1];
-    if (!last || last.index !== startIndex) {
-      if (currentPath.length >= 2) {
-        paths.push(currentPath.map((entry) => entry.point));
-      }
-      currentPath = [{ index: startIndex, point: start }];
-    }
-    currentPath.push({ index: endIndex, point: end });
-  });
-
-  if (currentPath.length >= 2) {
-    paths.push(currentPath.map((entry) => entry.point));
-  }
-
-  return paths.filter((path) => path.length >= 6 && looksLikeMeshBounds(path));
-}
-
-function getRenderedPolylineJawline(scene, arch) {
-  const candidates = [];
-  scene.traverse((child) => {
-    if (child.userData?.overlayType !== "polyline") return;
-    if (child.userData?.arch !== arch) return;
-
-    const component = String(child.userData?.component || "");
-    const points = getPolylineAttributePoints(child.userData?.positionAttribute);
-    if (points.length < 6 || !looksLikeMeshBounds(points)) return;
-
-    const renderedPaths = getPolylinePathsFromRenderedEdges(
-      points,
-      getPolylineRenderedEdges(child)
-    );
-    const paths = renderedPaths.length ? renderedPaths : [points];
-
-    const priority =
-      /gingival/i.test(component) ? 4 :
-        /reversal/i.test(component) ? 3 :
-          /major/i.test(component) ? 2 :
-            1;
-    paths.forEach((path) => {
-      candidates.push({
-        points: path,
-        priority,
-        length: polylineLength(path),
-        component,
-        coordinateSpace: child.userData?.coordinateSpace || "jaw-local",
-        renderedEdgePath: Boolean(renderedPaths.length),
-      });
-    });
-  });
-
-  candidates.sort((a, b) => b.priority - a.priority || b.length - a.length);
-  return candidates[0] || null;
-}
-
-function getRenderedPolylineJawlinePoints(scene, arch) {
-  return getRenderedPolylineJawline(scene, arch)?.points || [];
-}
-
-function positionSpread(points) {
-  if (!points.length) return 0;
-  const box = points.reduce(
-    (acc, point) => ({
-      minX: Math.min(acc.minX, point.x),
-      minY: Math.min(acc.minY, point.y),
-      minZ: Math.min(acc.minZ, point.z),
-      maxX: Math.max(acc.maxX, point.x),
-      maxY: Math.max(acc.maxY, point.y),
-      maxZ: Math.max(acc.maxZ, point.z),
-    }),
-    {
-      minX: Infinity,
-      minY: Infinity,
-      minZ: Infinity,
-      maxX: -Infinity,
-      maxY: -Infinity,
-      maxZ: -Infinity,
-    }
-  );
-  return Math.max(box.maxX - box.minX, box.maxY - box.minY, box.maxZ - box.minZ);
-}
-
-function shouldUseGuidelinePlacement(teeth, guidelinePoints) {
-  if (!teeth.length || guidelinePoints.length < 6) return false;
-  const positions = teeth.map((tooth) => tooth.position).filter(isValidPoint);
-  if (positions.length !== teeth.length) return true;
-  const toothSpread = positionSpread(positions);
-  const lineSpread = positionSpread(guidelinePoints);
-  return toothSpread < Math.max(3, lineSpread * 0.12);
-}
-
-function toothSortValue(tooth, index) {
-  const numeric = Number(String(tooth.toothIndex ?? "").match(/\d+/)?.[0]);
-  return Number.isFinite(numeric) ? numeric : index;
-}
-
-function sortTeethLinearly(teeth) {
-  return [...teeth].sort((a, b) => toothSortValue(a, 0) - toothSortValue(b, 0));
-}
-
-function getPolylineTangent(points, t) {
-  const before = samplePolyline(points, Math.max(0, t - 0.015));
-  const after = samplePolyline(points, Math.min(1, t + 0.015));
-  if (!before || !after) return null;
-  const tangent = {
-    x: after.x - before.x,
-    y: after.y - before.y,
-    z: after.z - before.z,
-  };
-  return pointMagnitude(tangent) > 0.0001 ? tangent : null;
-}
-
-function getClosestPolylineSample(points, referencePoint, samples = 140) {
-  if (!points?.length || !isValidPoint(referencePoint)) return null;
-  let best = null;
-  const steps = Math.max(2, samples);
-  for (let index = 0; index <= steps; index += 1) {
-    const t = index / steps;
-    const point = samplePolyline(points, t);
-    if (!point) continue;
-    const distance = distanceBetweenPoints(point, referencePoint);
-    if (!best || distance < best.distance) {
-      best = { point, t, distance };
-    }
-  }
-  return best;
-}
-
-function getPrimaryGuidelinePoints(guideData, key) {
-  return extractPointSets(guideData?.[key])
-    .filter((points) => points.length >= 2 && looksLikeMeshBounds(points))
-    .sort((a, b) => polylineLength(b) - polylineLength(a))[0] || [];
-}
-
-function getGuidelineDrivenAxes(guideData, referencePoint) {
-  const buccalPoints = getPrimaryGuidelinePoints(guideData, "buccalLineEditorData_");
-  const gingivalPoints = getPrimaryGuidelinePoints(guideData, "gingivalLineEditorData_");
-  if (buccalPoints.length < 2 || gingivalPoints.length < 2 || !isValidPoint(referencePoint)) {
-    return null;
-  }
-
-  const buccalSample = getClosestPolylineSample(buccalPoints, referencePoint);
-  if (!buccalSample) return null;
-  const gingivalPoint =
-    samplePolyline(gingivalPoints, buccalSample.t) ||
-    getClosestPolylineSample(gingivalPoints, referencePoint)?.point;
-  const tangent = getPolylineTangent(buccalPoints, buccalSample.t);
-  if (!isValidPoint(gingivalPoint) || !isValidPoint(tangent)) return null;
-
-  const crownAxis = {
-    x: buccalSample.point.x - gingivalPoint.x,
-    y: buccalSample.point.y - gingivalPoint.y,
-    z: buccalSample.point.z - gingivalPoint.z,
-  };
-  if (pointMagnitude(crownAxis) < 0.001 || pointMagnitude(tangent) < 0.001) return null;
-
-  return {
-    buccalPoint: buccalSample.point,
-    gingivalPoint,
-    t: buccalSample.t,
-    distanceToBuccal: Number(buccalSample.distance.toFixed(3)),
-    tangent,
-    crownAxis,
-  };
-}
-
-function getGuidelineToothScale(guidelinePoints, count, toothIndex, existingScale) {
-  if (existingScale || count < 2) return existingScale || null;
-  const spacing = polylineLength(guidelinePoints) / Math.max(count - 1, 1);
-  const template = getToothTemplate(toothIndex);
-  const baseScale = Math.max(0.85, Math.min(spacing / 6.6, 1.55));
-  const posteriorFullness = isAnteriorTooth(toothIndex) ? 0.84 : 0.94;
-  const size = baseScale * posteriorFullness * getToothTemplateScaleFactor(template);
-  return { x: size * 0.82, y: size, z: size * 0.78 };
-}
-
-function shouldKeepToothCraftPosition(tooth) {
-  return Boolean(
-    tooth.source?.transformCrownCenter ||
-    tooth.geometry?.vertices?.length >= 3 ||
-    (
-      isValidPoint(tooth.transform?.gingivalPoint) &&
-      isValidPoint(tooth.transform?.buccalPoint)
-    )
-  );
-}
-
-function placeTeethOnGuideline(teeth, guideData, arch, scene = null) {
-  if (teeth.some(shouldKeepToothCraftPosition)) {
-    return teeth;
-  }
-
-  const renderedPolyline = scene ? getRenderedPolylineJawline(scene, arch) : null;
-  const usableRenderedPolyline = renderedPolyline?.coordinateSpace === "scene-world"
-    ? null
-    : renderedPolyline;
-  const guidelinePoints = usableRenderedPolyline?.points?.length
-    ? usableRenderedPolyline.points
-    : getGuidelinePoints(guideData);
-  if (!shouldUseGuidelinePlacement(teeth, guidelinePoints)) return teeth;
-
-  const sorted = sortTeethLinearly(teeth);
-  const count = sorted.length;
-  const placed = sorted.map((tooth, index) => {
-    const t = count === 1 ? 0.5 : 0.08 + (index / (count - 1)) * 0.84;
-    const sampleT = arch === "upper" ? 1 - t : t;
-    const position = samplePolyline(guidelinePoints, sampleT);
-    const tangent = getPolylineTangent(guidelinePoints, sampleT);
-    return position
-      ? {
-          ...tooth,
-          rotation: tooth.rotation || (tangent
-            ? { x: 0, y: Math.atan2(tangent.x, tangent.z) + (arch === "upper" ? Math.PI : 0), z: 0 }
-            : tooth.rotation),
-          scale: tooth.geometry?.vertices?.length
-            ? tooth.scale
-            : getGuidelineToothScale(guidelinePoints, count, tooth.toothIndex, tooth.scale),
-          position,
-          source: {
-            ...tooth.source,
-            guidelinePlaced: true,
-            guidelineSourceComponent: usableRenderedPolyline?.component || null,
-            guidelineRenderedEdgePath: Boolean(usableRenderedPolyline?.renderedEdgePath),
-            skippedSceneWorldGuideline: renderedPolyline?.coordinateSpace === "scene-world",
-          },
-        }
-      : tooth;
-  });
-
-  console.log("[artificial teeth] placed teeth along API guideline", {
-    arch,
-    teeth: placed.length,
-    guidelinePoints: guidelinePoints.length,
-    source: usableRenderedPolyline?.points?.length ? "rendered-polyline" : "decoded-guideline",
-    component: usableRenderedPolyline?.component || null,
-    renderedEdgePath: Boolean(usableRenderedPolyline?.renderedEdgePath),
-    skippedSceneWorldGuideline: renderedPolyline?.coordinateSpace === "scene-world",
-  });
-  return placed;
-}
-
 function createToothRecord(candidate, jawHint = null) {
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
 
@@ -2103,17 +1783,25 @@ function getStableProceduralScale(rawScale, template) {
   );
 }
 
-const TARGETED_ARTIFICIAL_TOOTH_ORIENTATION_OVERRIDES = {
-  // Case 1230 / swift_3_dualjaw: one far-end upper tooth still faces the
-  // inverse direction after API-axis orientation. Keep position fixed.
-  "upper:0": { x: 0, y: 180, z: 0, reason: "upper-end-tooth-mesial-distal-180-flip" },
+const ARTIFICIAL_TEETH_DATABASE_PLACEMENT_ONLY = true;
+const ARTIFICIAL_TEETH_APPLY_AUTO_ORIENTATION = false;
+const ARTIFICIAL_TEETH_APPLY_SURFACE_CORRECTION = false;
+const ARTIFICIAL_TOOTH_SHADER_DEPTH_BIAS = 0.00018;
+const ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE = 32;
+const ARTIFICIAL_TOOTH_FLOATING_CLEARANCE_THRESHOLD = 2.5;
+const ARTIFICIAL_TOOTH_TARGET_SURFACE_CLEARANCE = 0.65;
+const ARTIFICIAL_TOOTH_MAX_SURFACE_CORRECTION = 4.5;
+const LOG_ARTIFICIAL_TEETH_AUTO_AUDIT_TO_CONSOLE = false;
+const ARTIFICIAL_TEETH_RENDER_RULE_VERSION = "surfaceMesh-apiMeshCenter-v2";
 
-  // Lower tooth 2 is the standing/elevated tooth in the marked screenshot; apply a local downward tilt
-  // rather than moving it away from its resolved jaw placement.
-  "lower:2": { x: -45, y: 0, z: 0, reason: "lower-resting-tilt" },
-};
-
-export function createArtificialTeethRenderer({ scene, parentObject, camera = null, apiClient, onStatus = null }) {
+export function createArtificialTeethRenderer({
+  scene,
+  parentObject,
+  camera = null,
+  apiClient,
+  onStatus = null,
+  onPerformance = null,
+}) {
   const group = new THREE.Group();
   group.name = "artificial-tooth-overlay-group";
   scene.add(group);
@@ -2143,8 +1831,6 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     polygonOffsetFactor: 0,
     polygonOffsetUnits: 0,
   });
-  const ARTIFICIAL_GUIDELINE_SURFACE_CLEARANCE = 1.25;
-  const ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE = 42;
   const vertexDebugMaterial = new THREE.PointsMaterial({
     color: 0xff2d55,
     size: 1.8,
@@ -2152,23 +1838,48 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     depthTest: true,
     depthWrite: false,
   });
-  const guidelineMaterial = new THREE.MeshStandardMaterial({
-    color: 0xff9f1c,
-    emissive: 0x553000,
-    emissiveIntensity: 0.42,
-    roughness: 0.12,
-    metalness: 0,
-    transparent: false,
-    opacity: 1,
-    depthTest: true,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -8,
-    polygonOffsetUnits: -8,
-  });
+  const guidelineVisualMaterials = {
+    upper: {
+      buccal: new THREE.MeshBasicMaterial({
+        color: 0xff9f1c,
+        transparent: true,
+        opacity: 0.72,
+        depthTest: true,
+        depthWrite: false,
+      }),
+      gingival: new THREE.MeshBasicMaterial({
+        color: 0x38d6ff,
+        transparent: true,
+        opacity: 0.78,
+        depthTest: true,
+        depthWrite: false,
+      }),
+    },
+    lower: {
+      buccal: new THREE.MeshBasicMaterial({
+        color: 0xff9f1c,
+        transparent: true,
+        opacity: 0.72,
+        depthTest: true,
+        depthWrite: false,
+      }),
+      gingival: new THREE.MeshBasicMaterial({
+        color: 0x38d6ff,
+        transparent: true,
+        opacity: 0.78,
+        depthTest: true,
+        depthWrite: false,
+      }),
+    },
+  };
   const setStatus = (label, progress = 0.1, autoHide = false) => {
     if (typeof onStatus === "function") {
       onStatus(label, progress, autoHide);
+    }
+  };
+  const recordPerformance = (stage, durationMs, details = {}) => {
+    if (typeof onPerformance === "function") {
+      onPerformance(stage, durationMs, details);
     }
   };
 
@@ -2294,50 +2005,6 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     return bestPoint;
   };
 
-  const getTransformRevealOffset = (transform, fraction = 0.12, maxDistance = 1.15) => {
-    if (!isValidPoint(transform?.gingivalPoint) || !isValidPoint(transform?.buccalPoint)) return null;
-    const axis = {
-      x: transform.buccalPoint.x - transform.gingivalPoint.x,
-      y: transform.buccalPoint.y - transform.gingivalPoint.y,
-      z: transform.buccalPoint.z - transform.gingivalPoint.z,
-    };
-    const length = Math.hypot(axis.x, axis.y, axis.z);
-    if (!Number.isFinite(length) || length < 0.001) return null;
-    const distance = Math.min(maxDistance, length * fraction);
-    return {
-      x: (axis.x / length) * distance,
-      y: (axis.y / length) * distance,
-      z: (axis.z / length) * distance,
-    };
-  };
-
-  const getGeometryRadius = (tooth) => {
-    if (tooth.geometry?.vertices?.length) {
-      const center = tooth.geometry.vertices.reduce(
-        (acc, point) => ({
-          x: acc.x + point.x,
-          y: acc.y + point.y,
-          z: acc.z + point.z,
-        }),
-        { x: 0, y: 0, z: 0 }
-      );
-      center.x /= tooth.geometry.vertices.length;
-      center.y /= tooth.geometry.vertices.length;
-      center.z /= tooth.geometry.vertices.length;
-      return Math.max(
-        1,
-        Math.min(
-          8,
-          tooth.geometry.vertices.reduce(
-            (maxDistance, point) => Math.max(maxDistance, distanceBetweenPoints(center, point)),
-            0
-          )
-        )
-      );
-    }
-    return isAnteriorTooth(tooth.toothIndex) ? 2.5 : 3.2;
-  };
-
   const getJawSurfaceDistance = (jawType, point) => {
     const surfacePoint = getClosestJawSurfacePoint(jawType, point);
     return surfacePoint ? distanceBetweenPoints(point, surfacePoint) : Infinity;
@@ -2370,159 +2037,30 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     return coordinateSpace;
   };
 
-  const normalizePlacementCandidatePoint = (jawType, point, isWorldPosition = false) => {
-    if (!isValidPoint(point)) return null;
-    if (referenceMode !== "scene-world" && isWorldPosition) {
-      return worldToJawLocalPoint(jawType, point);
-    }
-    return point;
-  };
-
-  const pushPlacementCandidate = (candidates, jawType, label, point, isWorldPosition = false) => {
-    const normalizedPoint = normalizePlacementCandidatePoint(jawType, point, isWorldPosition);
-    if (!isValidPoint(normalizedPoint)) return;
-    const signature = `${normalizedPoint.x.toFixed(3)},${normalizedPoint.y.toFixed(3)},${normalizedPoint.z.toFixed(3)}`;
-    if (candidates.some((candidate) => candidate.signature === signature)) return;
-    candidates.push({
-      label,
-      point: normalizedPoint,
-      distance: getJawSurfaceDistance(jawType, normalizedPoint),
-      signature,
-    });
-  };
-
-  const resolveArtificialToothPlacement = (tooth, jawType) => {
-    const candidates = [];
-    const transformCenter = getTransformCrownCenter(tooth.transform);
-    const toothDataPosition = getDeepToothPosition(tooth.source?.toothData);
-    const transformDataPosition = getDeepToothPosition(
-      tooth.source?.transformData,
-      tooth.source?.toothData
-    );
-    const geometryCenter = getPointBoundsCenter(tooth.geometry?.vertices);
-
-    const toothPositionSpace = detectArtificialToothCoordinateSpace(tooth, jawType);
-
-    pushPlacementCandidate(
-      candidates,
-      jawType,
-      "current",
-      tooth.position,
-      toothPositionSpace === "scene-world"
-    );
-    pushPlacementCandidate(candidates, jawType, "transform-crown-center", transformCenter);
-    pushPlacementCandidate(candidates, jawType, "tooth-data-position", toothDataPosition, true);
-    pushPlacementCandidate(candidates, jawType, "transform-data-position", transformDataPosition);
-    pushPlacementCandidate(candidates, jawType, "surface-mesh-center", geometryCenter);
-
-    const finiteCandidates = candidates.filter((candidate) => Number.isFinite(candidate.distance));
-    if (!finiteCandidates.length) return tooth;
-
-    const current = finiteCandidates.find((candidate) => candidate.label === "current");
-    const best = [...finiteCandidates].sort((a, b) => a.distance - b.distance)[0];
-    const selected =
-      current && current.distance <= 8
-        ? current
-        : best;
-
-    const changed =
-      !current ||
-      selected.label !== current.label ||
-      Math.abs(selected.distance - current.distance) > 0.001;
-
-    if (changed || selected.distance > 8) {
-      console.log("[artificial teeth] resolved tooth placement", {
-        arch: jawType,
-        toothIndex: tooth.toothIndex,
-        from: current?.label ?? null,
-        fromDistance: Number.isFinite(current?.distance) ? Number(current.distance.toFixed(3)) : null,
-        to: selected.label,
-        toDistance: Number(selected.distance.toFixed(3)),
-        candidates: finiteCandidates.map((candidate) => ({
-          label: candidate.label,
-          distance: Number(candidate.distance.toFixed(3)),
-        })),
-      });
+  const normalizeDatabaseToothReferenceSpace = (tooth, jawType) => {
+    if (!isValidPoint(tooth.position)) return tooth;
+    const detectedPositionSpace = detectArtificialToothCoordinateSpace(tooth, jawType);
+    if (detectedPositionSpace !== "scene-world") {
+      return {
+        ...tooth,
+        source: {
+          ...tooth.source,
+          positionSpace: tooth.source?.positionSpace || "jaw-local",
+          detectedPositionSpace,
+        },
+      };
     }
 
     return {
       ...tooth,
-      position: selected.point,
+      position: worldToJawLocalPoint(jawType, tooth.position),
       source: {
         ...tooth.source,
-        placementResolved: true,
-        placementSource: selected.label,
-        placementSurfaceDistance: Number(selected.distance.toFixed(3)),
-        placementCandidates: finiteCandidates.map((candidate) => ({
-          label: candidate.label,
-          distance: Number(candidate.distance.toFixed(3)),
-        })),
-        transformCrownCenter: selected.label === "transform-crown-center",
-        positionFromToothDataWorld: selected.label === "tooth-data-position",
-        positionFromSurfaceMeshCenter: selected.label === "surface-mesh-center",
-        positionSpace: referenceMode === "scene-world" ? "scene-world" : "jaw-local",
-        detectedPositionSpace: toothPositionSpace,
+        positionSpace: "jaw-local",
+        detectedPositionSpace,
+        toothDataWorldToJawLocal: true,
       },
     };
-  };
-
-  const snapTeethToJawSurface = (teeth, jawType) => {
-    const snapped = teeth.map((tooth) => {
-      if (tooth.source?.geometryFromToothData) return tooth;
-
-      const geometryCenter = getPointBoundsCenter(tooth.geometry?.vertices);
-      const referencePoint = looksLikeModelPosition(tooth.position)
-        ? tooth.position
-        : geometryCenter;
-
-      const surfacePoint = getClosestJawSurfacePoint(jawType, referencePoint);
-      if (!surfacePoint) return tooth;
-
-      const fromSurface = {
-        x: referencePoint.x - surfacePoint.x,
-        y: referencePoint.y - surfacePoint.y,
-        z: referencePoint.z - surfacePoint.z,
-      };
-      const length = Math.max(0.0001, Math.sqrt(
-        fromSurface.x * fromSurface.x +
-        fromSurface.y * fromSurface.y +
-        fromSurface.z * fromSurface.z
-      ));
-      const offset = Math.max(1.2, getGeometryRadius(tooth) * 0.35);
-      const displayOffset = Math.max(offset, Math.min(2.2, getGeometryRadius(tooth) * 0.44));
-      const surfaceOffset = length < 0.0002
-        ? { x: 0, y: jawType === "upper" ? -1 : 1, z: 0 }
-        : {
-            x: fromSurface.x / length,
-            y: fromSurface.y / length,
-            z: fromSurface.z / length,
-          };
-      const position = {
-        x: surfacePoint.x + surfaceOffset.x * displayOffset,
-        y: surfacePoint.y + surfaceOffset.y * displayOffset,
-        z: surfacePoint.z + surfaceOffset.z * displayOffset,
-      };
-
-      return {
-        ...tooth,
-        position,
-        source: {
-          ...tooth.source,
-          jawSurfaceSnapped: true,
-          jawSurfaceSnapSource: tooth.source?.placementSource || "current",
-          jawSurfaceDistanceBeforeSnap: Number(length.toFixed(3)),
-          jawSurfaceDisplayClearance: Number(displayOffset.toFixed(3)),
-        },
-      };
-    });
-
-    if (snapped.length) {
-      console.log("[artificial teeth] snapped teeth to jaw surface", {
-        arch: jawType,
-        teeth: snapped.length,
-      });
-    }
-    return snapped;
   };
 
   const isJawVisible = (arch) => jawVisibility.get(arch) ?? true;
@@ -2571,12 +2109,10 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     const normalized = { upper: [], lower: [] };
     const decodedStageData = decodeToothPlacementData(rawResponse);
     const records = extractToothRecords(decodedStageData || rawResponse);
-    const loadedJawKeys = getLoadedJawKeys();
-    const fallbackJaw = loadedJawKeys.length === 1 ? loadedJawKeys[0] : null;
     let skippedUnknownJaw = 0;
 
     records.forEach((record) => {
-      const arch = record.arch || fallbackJaw;
+      const arch = record.arch;
       if (arch !== "upper" && arch !== "lower") {
         skippedUnknownJaw += 1;
         return;
@@ -2586,22 +2122,9 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       normalized[arch].push({ ...record, arch });
     });
 
-    ["upper", "lower"].forEach((arch) => {
-      normalized[arch] = normalized[arch].map((tooth) => {
-        if (looksLikeModelPosition(tooth.position)) return tooth;
-        const meshCenter = getPointBoundsCenter(tooth.geometry?.vertices);
-        if (!looksLikeModelPosition(meshCenter)) return tooth;
-        return {
-          ...tooth,
-          position: meshCenter,
-          source: { ...tooth.source, meshCenterPosition: true },
-        };
-      });
-    });
-
     if (skippedUnknownJaw) {
       console.warn(
-        `[artificial teeth] Skipped ${skippedUnknownJaw} tooth record(s) without an upper/lower jaw.`
+        `[artificial teeth] Skipped ${skippedUnknownJaw} tooth record(s) without database upper/lower jaw.`
       );
     }
 
@@ -2610,18 +2133,6 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
         upper: decodedStageData.guideLinesDataUpperJaw_,
         lower: decodedStageData.guideLinesDataLowerJaw_,
       };
-      normalized.upper = placeTeethOnGuideline(
-        normalized.upper,
-        decodedStageData.guideLinesDataUpperJaw_,
-        "upper",
-        scene
-      );
-      normalized.lower = placeTeethOnGuideline(
-        normalized.lower,
-        decodedStageData.guideLinesDataLowerJaw_,
-        "lower",
-        scene
-      );
       window.lastDecodedToothPlacementData = decodedStageData;
       window.lastDecodedToothPlacementSummary = summarizeDecodedStageData(decodedStageData);
       console.log("[artificial teeth] decoded ToothPlacementData", {
@@ -2685,24 +2196,6 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     return null;
   };
 
-  const applyTargetedArtificialToothOrientationOverride = (mesh, jawType) => {
-    const toothKey = `${jawType}:${mesh.userData?.toothIndex}`;
-    const targetedOverride = TARGETED_ARTIFICIAL_TOOTH_ORIENTATION_OVERRIDES[toothKey] || {
-      x: 0,
-      y: 0,
-      z: 0,
-      reason: null,
-    };
-    if (targetedOverride.reason) {
-      mesh.rotateX(THREE.MathUtils.degToRad(targetedOverride.x));
-      mesh.rotateY(THREE.MathUtils.degToRad(targetedOverride.y));
-      mesh.rotateZ(THREE.MathUtils.degToRad(targetedOverride.z));
-    }
-    mesh.userData.targetedArtificialToothOrientationOverride = targetedOverride.reason
-      ? { ...targetedOverride }
-      : null;
-  };
-
   const applyArtificialToothFlip = (mesh, jawType, options = {}) => {
     const includeBaseOrientation = options.includeBaseOrientation !== false;
     if (includeBaseOrientation) {
@@ -2723,9 +2216,6 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     mesh.userData.artificialTeethOrientation = includeBaseOrientation
       ? `${jawType}-${orientationMode}-${jawType}-rotate-z-180-invert-up-down-180`
       : `${jawType}-api-surface-native`;
-    if (!options.deferTargetedOverride) {
-      applyTargetedArtificialToothOrientationOverride(mesh, jawType);
-    }
   };
 
   const getToothTransformAxes = (transform) => {
@@ -2821,6 +2311,15 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
   };
 
   const resolveArtificialToothOrientation = (mesh, tooth, jawType, options = {}) => {
+    if (!ARTIFICIAL_TEETH_APPLY_AUTO_ORIENTATION) {
+      mesh.userData.autoOrientationFlip = {
+        applied: false,
+        disabled: true,
+        reason: "api-orientation-preserved",
+      };
+      return;
+    }
+
     const axes = getToothTransformAxes(tooth.transform);
     if (!axes) return;
 
@@ -2878,38 +2377,26 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     const geometryCenter = mesh.geometry?.userData?.sourceCenter;
     const usesAbsoluteApiMesh = looksLikeModelPosition(geometryCenter);
     const hasExplicitPlacement =
-      tooth.source?.guidelinePlaced ||
-      tooth.source?.jawSurfaceSnapped ||
-      tooth.source?.linearGuidelinePlaced ||
-      tooth.source?.placementResolved ||
-      tooth.source?.transformCrownCenter ||
       tooth.source?.positionFromToothDataWorld ||
+      tooth.source?.positionFromApiMeshCenter ||
       tooth.source?.toothDataWorldToJawLocal;
-    const position = usesAbsoluteApiMesh && !hasExplicitPlacement
-      ? geometryCenter
-      : tooth.position;
-    const revealOffset = tooth.source?.geometryFromToothData
-      ? null
-      : getTransformRevealOffset(
-          tooth.transform,
-          usesAbsoluteApiMesh ? 0.1 : 0.06,
-          usesAbsoluteApiMesh ? 0.95 : 0.55
-        );
+    const position =
+      ARTIFICIAL_TEETH_DATABASE_PLACEMENT_ONLY
+        ? tooth.position
+        : usesAbsoluteApiMesh && !hasExplicitPlacement
+          ? geometryCenter
+          : tooth.position;
     mesh.position.set(
-      position.x + (revealOffset?.x ?? 0),
-      position.y + (revealOffset?.y ?? 0),
-      position.z + (revealOffset?.z ?? 0)
+      position.x,
+      position.y,
+      position.z
     );
     if (tooth.source?.geometryFromSurfaceMesh) {
       mesh.userData.transformMode = "api-surface-mesh-native-orientation";
       applyArtificialToothFlip(mesh, jawType, {
         includeBaseOrientation: false,
-        deferTargetedOverride: true,
       });
-      resolveArtificialToothOrientation(mesh, tooth, jawType, {
-        forceBest: jawType === "upper",
-      });
-      applyTargetedArtificialToothOrientationOverride(mesh, jawType);
+      resolveArtificialToothOrientation(mesh, tooth, jawType);
       return;
     }
     if (usesAbsoluteApiMesh && !hasExplicitPlacement) {
@@ -2921,41 +2408,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       mesh.userData.transformMode = "api-mesh-centered-on-seated-position";
     }
 
-    const shouldUseApiBasis = false;
-
-    if (shouldUseApiBasis) {
-      let xAxis = new THREE.Vector3(
-        tooth.transform.mesialDistalLine.x,
-        tooth.transform.mesialDistalLine.y,
-        tooth.transform.mesialDistalLine.z
-      ).normalize();
-      let yAxis = new THREE.Vector3(
-        tooth.transform.buccalPoint.x - tooth.transform.gingivalPoint.x,
-        tooth.transform.buccalPoint.y - tooth.transform.gingivalPoint.y,
-        tooth.transform.buccalPoint.z - tooth.transform.gingivalPoint.z
-      ).normalize();
-      xAxis.addScaledVector(yAxis, -xAxis.dot(yAxis)).normalize();
-      let zAxis = new THREE.Vector3().crossVectors(xAxis, yAxis).normalize();
-      const buccalAxis = new THREE.Vector3(
-        tooth.transform.buccalDirection.x,
-        tooth.transform.buccalDirection.y,
-        tooth.transform.buccalDirection.z
-      ).normalize();
-      if (zAxis.dot(buccalAxis) < 0) {
-        zAxis.negate();
-        xAxis.negate();
-      }
-
-      const hasStableBasis =
-        xAxis.lengthSq() > 0.0001 &&
-        yAxis.lengthSq() > 0.0001 &&
-        zAxis.lengthSq() > 0.0001;
-      if (hasStableBasis) {
-        const basis = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
-        mesh.quaternion.setFromRotationMatrix(basis);
-        mesh.userData.transformMode = "api-tooth-transform-basis";
-      }
-    } else if (tooth.rotation?.w !== undefined) {
+    if (tooth.rotation?.w !== undefined) {
       mesh.quaternion.set(
         tooth.rotation.x,
         tooth.rotation.y,
@@ -2981,7 +2434,6 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       }
 
       const hasApiSizing =
-        shouldUseApiBasis &&
         Number.isFinite(tooth.transform?.mesialDistalSizing) &&
         tooth.transform.mesialDistalSizing > 0;
       const template = getToothTemplate(tooth.toothIndex);
@@ -3007,6 +2459,24 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     }
   };
 
+  const applyArtificialToothDepthShader = (meshMaterial) => {
+    meshMaterial.polygonOffset = true;
+    meshMaterial.polygonOffsetFactor = -2;
+    meshMaterial.polygonOffsetUnits = -2;
+    meshMaterial.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader.replace(
+        "#include <project_vertex>",
+        `#include <project_vertex>
+        gl_Position.z -= ${ARTIFICIAL_TOOTH_SHADER_DEPTH_BIAS.toFixed(8)} * gl_Position.w;`
+      );
+    };
+    meshMaterial.userData = {
+      ...meshMaterial.userData,
+      artificialToothDepthShader: true,
+      artificialToothShaderDepthBias: ARTIFICIAL_TOOTH_SHADER_DEPTH_BIAS,
+    };
+  };
+
   const createMesh = (jawType, tooth, toothIndex) => {
     const geometry = createGeometry(tooth);
     if (!geometry) return null;
@@ -3015,6 +2485,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     meshMaterial.opacity = 1;
     meshMaterial.depthTest = true;
     meshMaterial.depthWrite = true;
+    applyArtificialToothDepthShader(meshMaterial);
     meshMaterial.needsUpdate = true;
     const mesh = new THREE.Mesh(geometry, meshMaterial);
     mesh.name = `${jawType}-artificial-tooth-${tooth.toothIndex ?? toothIndex}`;
@@ -3051,321 +2522,198 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     return points;
   };
 
-  const createGuidelineMaterial = (color = 0xff9f1c) => {
-    const materialClone = guidelineMaterial.clone();
-    materialClone.color.setHex(color);
-    materialClone.emissive.setHex(color);
-    materialClone.transparent = false;
-    materialClone.opacity = 1;
-    materialClone.depthTest = true;
-    materialClone.depthWrite = false;
-    materialClone.emissiveIntensity = 0.42;
-    materialClone.needsUpdate = true;
-    return materialClone;
-  };
+  const getClosestRenderedToothSurfaceSample = (mesh, jawType) => {
+    const position = mesh.geometry?.attributes?.position;
+    if (!position?.count) return null;
 
-  const createGuidelineSegment = (jawType, start, end, edgeIndex, options = {}) => {
-    const startVector = new THREE.Vector3(start.x, start.y, start.z);
-    const endVector = new THREE.Vector3(end.x, end.y, end.z);
-    const length = startVector.distanceTo(endVector);
-    if (!Number.isFinite(length) || length <= 0.001) return null;
-
-    const geometry = new THREE.TubeGeometry(
-      new THREE.LineCurve3(startVector, endVector),
-      1,
-      options.radius ?? 0.38,
-      8,
-      false
-    );
-    const tube = new THREE.Mesh(geometry, createGuidelineMaterial(options.color));
-    tube.name = `${jawType}-artificial-teeth-guideline-${edgeIndex}`;
-    tube.renderOrder = options.renderOrder ?? ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE;
-    tube.userData = {
-      overlayType: "artificial-teeth-guideline",
-      arch: jawType,
-      edgeIndex,
-      source: options.source || null,
-    };
-    return tube;
-  };
-
-  const seatGuidelinePointOnJaw = (jawType, point) => {
-    const surfacePoint = getClosestJawSurfacePoint(jawType, point);
-    if (!surfacePoint) return point;
-
-    const direction = {
-      x: point.x - surfacePoint.x,
-      y: point.y - surfacePoint.y,
-      z: point.z - surfacePoint.z,
-    };
-    const length = Math.hypot(direction.x, direction.y, direction.z);
-    if (!Number.isFinite(length) || length < 0.001) {
-      return {
-        x: surfacePoint.x,
-        y: surfacePoint.y + (jawType === "upper" ? -0.35 : 0.35),
-        z: surfacePoint.z,
-      };
-    }
-
-    const offset = Math.min(0.72, Math.max(0.3, length * 0.18));
-    return {
-      x: surfacePoint.x + (direction.x / length) * offset,
-      y: surfacePoint.y + (direction.y / length) * offset,
-      z: surfacePoint.z + (direction.z / length) * offset,
-    };
-  };
-
-  const buildArtificialToothSurfaceSamples = (jawType, teeth) => {
-    const samples = [];
-    teeth.forEach((tooth, toothIndex) => {
-      const geometry = createGeometry(tooth);
-      const position = geometry?.attributes?.position;
-      if (!geometry || !position?.count) {
-        geometry?.dispose?.();
-        return;
-      }
-
-      const probe = new THREE.Mesh(geometry);
-      applyToothTransform(probe, tooth, jawType);
-      probe.updateMatrix();
-      const center = new THREE.Vector3();
-      geometry.computeBoundingBox();
-      geometry.boundingBox?.getCenter(center);
-      center.applyMatrix4(probe.matrix);
-
-      const stride = Math.max(1, Math.floor(position.count / 1400));
-      const vertex = new THREE.Vector3();
-      for (let index = 0; index < position.count; index += stride) {
-        vertex.fromBufferAttribute(position, index).applyMatrix4(probe.matrix);
-        samples.push({
-          x: vertex.x,
-          y: vertex.y,
-          z: vertex.z,
-          centerX: center.x,
-          centerY: center.y,
-          centerZ: center.z,
-          toothIndex: tooth.toothIndex ?? toothIndex,
-        });
-      }
-      geometry.dispose?.();
-    });
-    return samples;
-  };
-
-  const seatGuidelinePointOnArtificialToothEdge = (jawType, point, samples, clearance = 0.72) => {
-    if (!samples?.length || !isValidPoint(point)) return seatGuidelinePointOnJaw(jawType, point);
-
+    mesh.updateMatrixWorld(true);
     let closest = null;
-    let closestDistanceSq = Infinity;
-    samples.forEach((sample) => {
-      const dx = point.x - sample.x;
-      const dy = point.y - sample.y;
-      const dz = point.z - sample.z;
-      const distanceSq = dx * dx + dy * dy + dz * dz;
-      if (distanceSq < closestDistanceSq) {
-        closestDistanceSq = distanceSq;
-        closest = sample;
+    const vertex = new THREE.Vector3();
+    const stride = Math.max(1, Math.floor(position.count / 96));
+
+    for (let index = 0; index < position.count; index += stride) {
+      vertex.fromBufferAttribute(position, index).applyMatrix4(mesh.matrixWorld);
+      const surfacePoint = getClosestJawSurfacePoint(
+        jawType,
+        { x: vertex.x, y: vertex.y, z: vertex.z },
+        "scene-world"
+      );
+      if (!surfacePoint) continue;
+
+      const surfaceVector = new THREE.Vector3(surfacePoint.x, surfacePoint.y, surfacePoint.z);
+      const distance = vertex.distanceTo(surfaceVector);
+      if (!closest || distance < closest.distance) {
+        closest = {
+          distance,
+          vertex: vertex.clone(),
+          surface: surfaceVector,
+        };
       }
-    });
-
-    if (!closest || Math.sqrt(closestDistanceSq) > 8) {
-      return seatGuidelinePointOnJaw(jawType, point);
     }
 
-    const outward = {
-      x: closest.x - closest.centerX,
-      y: closest.y - closest.centerY,
-      z: closest.z - closest.centerZ,
-    };
-    const length = Math.hypot(outward.x, outward.y, outward.z);
-    if (!Number.isFinite(length) || length < 0.001) {
-      return {
-        x: closest.x,
-        y: closest.y + (jawType === "upper" ? -clearance : clearance),
-        z: closest.z,
-      };
-    }
-
-    return {
-      x: closest.x + (outward.x / length) * clearance,
-      y: closest.y + (outward.y / length) * clearance,
-      z: closest.z + (outward.z / length) * clearance,
-    };
+    return closest;
   };
 
-  const liftGuidelinePointFromJaw = (jawType, point, clearance = 0.78) => {
-    const surfacePoint = getClosestJawSurfacePoint(jawType, point);
-    if (!surfacePoint) return point;
-
-    const direction = {
-      x: point.x - surfacePoint.x,
-      y: point.y - surfacePoint.y,
-      z: point.z - surfacePoint.z,
-    };
-    const length = Math.hypot(direction.x, direction.y, direction.z);
-    if (!Number.isFinite(length) || length < 0.001) {
-      return {
-        x: surfacePoint.x,
-        y: surfacePoint.y + (jawType === "upper" ? -clearance : clearance),
-        z: surfacePoint.z,
-      };
-    }
-    if (length >= clearance) return point;
-
-    return {
-      x: surfacePoint.x + (direction.x / length) * clearance,
-      y: surfacePoint.y + (direction.y / length) * clearance,
-      z: surfacePoint.z + (direction.z / length) * clearance,
-    };
-  };
-
-  const getSmoothedGuidelinePoints = (jawType, points, options = {}) => {
-    const seatOnJaw = options.seatOnJaw !== false;
-    const clearance = Number.isFinite(options.clearance) ? options.clearance : null;
-    const fitPoint = (point) => {
-      const fittedPoint = options.seatOnArtificialToothEdge
-        ? seatGuidelinePointOnArtificialToothEdge(
-            jawType,
-            point,
-            options.toothSurfaceSamples,
-            clearance ?? ARTIFICIAL_GUIDELINE_SURFACE_CLEARANCE
-          )
-        : seatOnJaw
-          ? seatGuidelinePointOnJaw(jawType, point)
-          : point;
-      return clearance ? liftGuidelinePointFromJaw(jawType, fittedPoint, clearance) : fittedPoint;
-    };
-    if (points.length < 3) {
-      return points.map(fitPoint);
+  const applyFloatingToothSurfaceCorrection = (mesh, jawType) => {
+    const closest = getClosestRenderedToothSurfaceSample(mesh, jawType);
+    if (
+      !closest ||
+      closest.distance <= ARTIFICIAL_TOOTH_FLOATING_CLEARANCE_THRESHOLD ||
+      !mesh.parent
+    ) {
+      return false;
     }
 
-    const curve = new THREE.CatmullRomCurve3(
-      points.map((point) => new THREE.Vector3(point.x, point.y, point.z)),
-      false,
-      "centripetal",
-      0.35
+    const correctionDistance = Math.min(
+      closest.distance - ARTIFICIAL_TOOTH_TARGET_SURFACE_CLEARANCE,
+      ARTIFICIAL_TOOTH_MAX_SURFACE_CORRECTION
     );
-    const divisions = Math.max(18, points.length * 8);
-    return curve.getPoints(divisions).map(fitPoint);
-  };
+    if (!Number.isFinite(correctionDistance) || correctionDistance <= 0) return false;
 
-  const getGuidelineJumpThreshold = (points) => {
-    const distances = [];
-    for (let index = 1; index < points.length; index += 1) {
-      const distance = distanceBetweenPoints(points[index - 1], points[index]);
-      if (Number.isFinite(distance) && distance > 0.001) distances.push(distance);
-    }
-    if (!distances.length) return Infinity;
+    const direction = closest.surface.clone().sub(closest.vertex);
+    if (direction.lengthSq() < 0.000001) return false;
+    direction.normalize();
 
-    const sorted = [...distances].sort((a, b) => a - b);
-    const median = sorted[Math.floor(sorted.length / 2)];
-    return Math.max(median * 3, 14);
-  };
+    const worldCorrection = direction.multiplyScalar(correctionDistance);
+    const meshWorldPosition = new THREE.Vector3();
+    mesh.getWorldPosition(meshWorldPosition);
+    const correctedWorldPosition = meshWorldPosition.clone().add(worldCorrection);
 
-  const splitGuidelinePointRuns = (points) => {
-    if (points.length < 2) return [];
+    const parent = mesh.parent;
+    const currentLocal = parent.worldToLocal(meshWorldPosition.clone());
+    const correctedLocal = parent.worldToLocal(correctedWorldPosition);
+    mesh.position.add(correctedLocal.sub(currentLocal));
+    mesh.updateMatrixWorld(true);
 
-    const jumpThreshold = getGuidelineJumpThreshold(points);
-    const runs = [];
-    let currentRun = [points[0]];
-    for (let index = 1; index < points.length; index += 1) {
-      const distance = distanceBetweenPoints(points[index - 1], points[index]);
-      if (distance > jumpThreshold) {
-        if (currentRun.length >= 2) runs.push(currentRun);
-        currentRun = [points[index]];
-      } else {
-        currentRun.push(points[index]);
-      }
-    }
-    if (currentRun.length >= 2) runs.push(currentRun);
-    return runs;
-  };
-
-  const createGuidelineTube = (jawType, points, options = {}) => {
-    const runs = splitGuidelinePointRuns(points);
-    if (!runs.length) return null;
-    const length = polylineLength(points);
-    if (!Number.isFinite(length) || length <= 0.001) return null;
-
-    const tubeGroup = new THREE.Group();
-    tubeGroup.name = `${jawType}-artificial-teeth-guideline-surface-wrap`;
-    tubeGroup.renderOrder = options.renderOrder ?? ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE;
-    tubeGroup.userData = {
-      overlayType: "artificial-teeth-guideline",
+    const after = getClosestRenderedToothSurfaceSample(mesh, jawType);
+    mesh.userData.surfaceClearanceCorrection = {
+      applied: true,
+      beforeMinClearance: Number(closest.distance.toFixed(3)),
+      afterMinClearance: after ? Number(after.distance.toFixed(3)) : null,
+      correctionDistance: Number(correctionDistance.toFixed(3)),
+      targetClearance: ARTIFICIAL_TOOTH_TARGET_SURFACE_CLEARANCE,
+    };
+    console.log("[artificial teeth] surface clearance corrected", {
       arch: jawType,
-      edgeIndex: "surface-wrap",
-      surfaceSeated: true,
-      skippedConnectorCount: Math.max(0, runs.length - 1),
-      source: options.source || "surface-wrap",
-      surfaceSeated: options.seatOnJaw !== false,
-    };
-
-    runs.forEach((run, runIndex) => {
-      const smoothedRun = getSmoothedGuidelinePoints(jawType, run, options);
-      for (let index = 1; index < smoothedRun.length; index += 1) {
-        const segment = createGuidelineSegment(
-          jawType,
-          smoothedRun[index - 1],
-          smoothedRun[index],
-          `${runIndex}-${index - 1}`,
-          options
-        );
-        if (segment) {
-          segment.userData = {
-            ...segment.userData,
-            edgeIndex: `${runIndex}-${index - 1}`,
-            source: options.source || "surface-wrap",
-            runIndex,
-          };
-          tubeGroup.add(segment);
-        }
-      }
+      toothIndex: mesh.userData?.toothIndex,
+      ...mesh.userData.surfaceClearanceCorrection,
     });
-
-    return tubeGroup.children.length ? tubeGroup : null;
+    return true;
   };
 
-  const movePointToward = (from, to, distance) => {
-    const vector = {
-      x: to.x - from.x,
-      y: to.y - from.y,
-      z: to.z - from.z,
-    };
-    const length = Math.hypot(vector.x, vector.y, vector.z);
-    if (!Number.isFinite(length) || length <= 0.001) return from;
-    const ratio = Math.min(0.48, Math.max(0, distance / length));
-    return {
-      x: from.x + vector.x * ratio,
-      y: from.y + vector.y * ratio,
-      z: from.z + vector.z * ratio,
-    };
-  };
+  const correctFloatingTeethInJawGroup = (jawGroup, jawType) => {
+    if (!ARTIFICIAL_TEETH_APPLY_SURFACE_CORRECTION) return 0;
 
-  const trimTerminalGuidelinePoints = (points, teeth) => {
-    if (points.length < 3 || teeth.length < 2) return points;
-    const sortedTeeth = sortTeethLinearly(teeth);
-    if (sortedTeeth.length !== points.length) return points;
-
-    const trimmed = [...points];
-    const firstTrim = Math.min(
-      distanceBetweenPoints(points[0], points[1]) * 0.45,
-      getGeometryRadius(sortedTeeth[0]) * 0.72
-    );
-    const lastIndex = points.length - 1;
-    const lastTrim = Math.min(
-      distanceBetweenPoints(points[lastIndex], points[lastIndex - 1]) * 0.45,
-      getGeometryRadius(sortedTeeth[lastIndex]) * 0.72
-    );
-
-    trimmed[0] = movePointToward(points[0], points[1], firstTrim);
-    trimmed[lastIndex] = movePointToward(points[lastIndex], points[lastIndex - 1], lastTrim);
-    return trimmed;
+    let corrected = 0;
+    jawGroup.traverse((child) => {
+      if (child.userData?.overlayType !== "artificial-tooth" || !child.isMesh) return;
+      if (applyFloatingToothSurfaceCorrection(child, jawType)) corrected += 1;
+    });
+    return corrected;
   };
 
   const getGuidelineEditorPointSets = (lineData) =>
     extractGuidelinePointSets(lineData)
       .filter((points) => points.length >= 2 && looksLikeMeshBounds(points))
       .sort((a, b) => polylineLength(b) - polylineLength(a));
+
+  const getMedianFiniteValue = (values) => {
+    const finiteValues = values.filter(Number.isFinite).sort((a, b) => a - b);
+    if (!finiteValues.length) return Infinity;
+    return finiteValues[Math.floor(finiteValues.length / 2)];
+  };
+
+  const detectGuidelinePointSetCoordinateSpace = (jawType, points) => {
+    if (!points?.length) return "jaw-local";
+    const stride = Math.max(1, Math.floor(points.length / 24));
+    const sampledPoints = points.filter((_, index) => index % stride === 0).slice(0, 32);
+    const localDistances = sampledPoints.map((point) =>
+      getJawSurfaceDistanceInSpace(jawType, point, "jaw-local")
+    );
+    const worldDistances = sampledPoints.map((point) =>
+      getJawSurfaceDistanceInSpace(jawType, point, "scene-world")
+    );
+    const localMedian = getMedianFiniteValue(localDistances);
+    const worldMedian = getMedianFiniteValue(worldDistances);
+    return Number.isFinite(worldMedian) && worldMedian + 0.35 < localMedian * 0.72
+      ? "scene-world"
+      : "jaw-local";
+  };
+
+  const normalizeGuidelineVisualPoints = (jawType, points) => {
+    const coordinateSpace = detectGuidelinePointSetCoordinateSpace(jawType, points);
+    if (coordinateSpace !== "scene-world") {
+      return { points, coordinateSpace };
+    }
+    return {
+      points: points.map((point) => worldToJawLocalPoint(jawType, point)),
+      coordinateSpace,
+    };
+  };
+
+  const createGuidelineVisualLine = (jawType, lineType, points, index) => {
+    if (!points?.length || points.length < 2) return null;
+    const normalized = normalizeGuidelineVisualPoints(jawType, points);
+    const vectors = normalized.points.map((point) => new THREE.Vector3(point.x, point.y, point.z));
+    const curve = vectors.length > 2
+      ? new THREE.CatmullRomCurve3(vectors, false, "centripetal", 0.25)
+      : new THREE.LineCurve3(vectors[0], vectors[1]);
+    const geometry = new THREE.TubeGeometry(
+      curve,
+      Math.max(1, points.length * 2),
+      lineType === "buccal" ? 0.34 : 0.28,
+      8,
+      false
+    );
+    const line = new THREE.Mesh(
+      geometry,
+      guidelineVisualMaterials[jawType][lineType].clone()
+    );
+    line.name = `${jawType}-artificial-teeth-${lineType}-guideline-${index}`;
+    line.renderOrder = ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE + index;
+    line.userData = {
+      overlayType: "artificial-teeth-guideline",
+      arch: jawType,
+      source: lineType,
+      visualAidOnly: true,
+      pointCount: points.length,
+      pointSetIndex: index,
+      coordinateSpace: normalized.coordinateSpace,
+    };
+    return line;
+  };
+
+  const getGuidelineDistanceSummary = (jawType, points, coordinateSpace) => {
+    const distances = (points || [])
+      .filter(isValidPoint)
+      .map((point) => getJawSurfaceDistanceInSpace(jawType, point, coordinateSpace))
+      .filter(Number.isFinite);
+    return getDistanceStats(distances);
+  };
+
+  const createGuidelineVisualGroup = (jawType, guideData) => {
+    if (!guideData) return null;
+    const guidelineGroup = new THREE.Group();
+    guidelineGroup.name = `${jawType}-artificial-teeth-guidelines`;
+    guidelineGroup.userData = {
+      overlayType: "artificial-teeth-guideline",
+      arch: jawType,
+      source: "toothPlacementData",
+      visualAidOnly: true,
+    };
+
+    [
+      ["buccalLineEditorData_", "buccal"],
+      ["gingivalLineEditorData_", "gingival"],
+    ].forEach(([key, lineType]) => {
+      getGuidelineEditorPointSets(guideData[key]).forEach((points, index) => {
+        const line = createGuidelineVisualLine(jawType, lineType, points, index);
+        if (line) guidelineGroup.add(line);
+      });
+    });
+
+    return guidelineGroup.children.length ? guidelineGroup : null;
+  };
 
   const summarizeGuidelinePointSets = (arch, guideData) => {
     const fields = [
@@ -3404,7 +2752,9 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
           name: child.name,
           arch: child.userData.arch,
           source: child.userData.source,
+          coordinateSpace: child.userData.coordinateSpace || null,
           pointCount: child.userData.pointCount ?? null,
+          pointSetIndex: child.userData.pointSetIndex ?? null,
           children: child.children?.length ?? 0,
           visible: child.visible,
         });
@@ -3417,241 +2767,87 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     return report;
   };
 
-  const createDecodedGuidelineGroup = (jawType, guideData, teeth = []) => {
-    const toothSurfaceSamples = buildArtificialToothSurfaceSamples(jawType, teeth);
-    const lineConfigs = [
-      {
-        key: "gingivalLineEditorData_",
-        source: "gingival-line-editor",
-        color: 0x6f45d8,
-        renderOrder: ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE,
-        radius: 0.56,
-        seatOnJaw: true,
-      },
-      {
-        key: "buccalLineEditorData_",
-        source: "buccal-line-editor",
-        color: 0xff9f1c,
-        renderOrder: ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE + 1,
-        radius: 0.62,
-        seatOnJaw: true,
-        seatOnArtificialToothEdge: true,
-      },
-    ];
-    const guidelineGroup = new THREE.Group();
-    guidelineGroup.name = `${jawType}-artificial-teeth-decoded-guidelines`;
-    guidelineGroup.userData = {
-      overlayType: "artificial-teeth-guideline",
-      arch: jawType,
-      source: "decoded-stage-guidelines",
-      pointSetCount: 0,
-      hasBuccalLine: false,
-      hasGingivalLine: false,
+  const auditArtificialTeethGuidelineAlignment = () => {
+    const startedAt = performance.now();
+    group.updateMatrixWorld(true);
+    parentObject.updateMatrixWorld(true);
+    const decoded = window.lastDecodedToothPlacementData;
+    const rows = [];
+
+    const jawLocalPointsToWorld = (jawType, points) => {
+      const jawMesh = getJawMesh(jawType);
+      if (!jawMesh) return [];
+      jawMesh.updateMatrixWorld(true);
+      return (points || []).filter(isValidPoint).map((point) => {
+        const vector = new THREE.Vector3(point.x, point.y, point.z);
+        jawMesh.localToWorld(vector);
+        return { x: vector.x, y: vector.y, z: vector.z };
+      });
     };
 
-    lineConfigs.forEach((config) => {
-      const pointSets = getGuidelineEditorPointSets(guideData?.[config.key]).slice(0, 1);
-      if (pointSets.length) {
-        guidelineGroup.userData.pointSetCount += pointSets.length;
-        if (config.key === "buccalLineEditorData_") guidelineGroup.userData.hasBuccalLine = true;
-        if (config.key === "gingivalLineEditorData_") guidelineGroup.userData.hasGingivalLine = true;
-      }
-
-      pointSets.forEach((points, pointSetIndex) => {
-        const options = {
-          color: config.color,
-          renderOrder: config.renderOrder,
-          radius: config.radius,
-          source: config.source,
-          seatOnJaw: config.seatOnJaw,
-          seatOnArtificialToothEdge: config.seatOnArtificialToothEdge,
-          toothSurfaceSamples,
-          clearance: ARTIFICIAL_GUIDELINE_SURFACE_CLEARANCE,
-        };
-        const tube = createGuidelineTube(jawType, points, options);
-        if (tube) {
-          tube.name = `${jawType}-artificial-teeth-${config.source}-${pointSetIndex}`;
-          tube.userData = {
-            ...tube.userData,
-            source: config.source,
+    [
+      ["upper", decoded?.guideLinesDataUpperJaw_],
+      ["lower", decoded?.guideLinesDataLowerJaw_],
+    ].forEach(([arch, guideData]) => {
+      [
+        ["buccalLineEditorData_", "buccal"],
+        ["gingivalLineEditorData_", "gingival"],
+      ].forEach(([key, line]) => {
+        getGuidelineEditorPointSets(guideData?.[key]).forEach((rawPoints, pointSetIndex) => {
+          const chosenCoordinateSpace = detectGuidelinePointSetCoordinateSpace(arch, rawPoints);
+          const jawLocalPoints = chosenCoordinateSpace === "scene-world"
+            ? rawPoints.map((point) => worldToJawLocalPoint(arch, point))
+            : rawPoints;
+          const renderedWorldPoints = jawLocalPointsToWorld(arch, jawLocalPoints);
+          const renderedWorldStats = getGuidelineDistanceSummary(
+            arch,
+            renderedWorldPoints,
+            "scene-world"
+          );
+          rows.push({
+            arch,
+            line,
             pointSetIndex,
-            pointCount: points.length,
-          };
-          guidelineGroup.add(tube);
-        } else {
-          const smoothedPoints = getSmoothedGuidelinePoints(jawType, points, options);
-          for (let index = 1; index < smoothedPoints.length; index += 1) {
-            const segment = createGuidelineSegment(
-              jawType,
-              smoothedPoints[index - 1],
-              smoothedPoints[index],
-              `${config.source}-${pointSetIndex}-${index - 1}`,
-              options
-            );
-            if (segment) {
-              segment.userData = {
-                ...segment.userData,
-                source: config.source,
-                pointSetIndex,
-                pointCount: points.length,
-              };
-              guidelineGroup.add(segment);
-            }
-          }
-        }
+            pointCount: rawPoints.length,
+            chosenCoordinateSpace,
+            rawAsJawLocalMedian: getGuidelineDistanceSummary(arch, rawPoints, "jaw-local").median,
+            rawAsSceneWorldMedian: getGuidelineDistanceSummary(arch, rawPoints, "scene-world").median,
+            renderedWorldMedian: renderedWorldStats.median,
+            renderedWorldMin: renderedWorldStats.min,
+            renderedWorldMax: renderedWorldStats.max,
+            tubeRadius: line === "buccal" ? 0.34 : 0.28,
+            visualColor: line === "buccal" ? "orange" : "blue",
+            visualAidOnly: true,
+            affectsTeeth: false,
+          });
+        });
       });
     });
 
-    return guidelineGroup.children.length ? guidelineGroup : null;
-  };
-
-  const getArtificialTeethGuidelinePoints = (jawType, teeth) => {
-    const crownWrapEntries = sortTeethLinearly(teeth)
-      .map((tooth) => {
-        const wrapPoint = getTransformCrownWrapPoint(tooth.transform);
-        return {
-          point: wrapPoint ?? tooth.position,
-          hasTransformWrap: Boolean(wrapPoint),
-        };
-      })
-      .filter((entry) => isValidPoint(entry.point));
-    const crownWrapPoints = crownWrapEntries.map((entry) => entry.point);
-    const transformWrapCount = crownWrapEntries.filter((entry) => entry.hasTransformWrap).length;
-    if (crownWrapPoints.length >= 2 && transformWrapCount >= 2) {
-      return {
-        points: crownWrapPoints,
-        source: "crown-wrap",
-        component: "Tooth_Transformation_Interface",
-      };
-    }
-
-    const renderedPolyline = getRenderedPolylineJawline(scene, jawType);
-    if (
-      renderedPolyline?.points?.length >= 2 &&
-      renderedPolyline.coordinateSpace !== "scene-world" &&
-      /gingival/i.test(renderedPolyline.component || "")
-    ) {
-      return {
-        points: renderedPolyline.points,
-        source: "gingival-points",
-        component: renderedPolyline.component,
-      };
-    }
-
-    return {
-      points: sortTeethLinearly(teeth)
-        .map((tooth) => tooth.position)
-        .filter(isValidPoint),
-      source: "tooth-centers",
-      component: null,
-    };
-  };
-
-  const createTransformGuidelineGroup = (jawType, teeth) => {
-    const sortedTeeth = sortTeethLinearly(teeth);
-    const lineConfigs = [
-      {
-        source: "transform-gingival-line",
-        color: 0x6f45d8,
-        renderOrder: ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE,
-        radius: 0.56,
-        getPoint: (tooth) => tooth.transform?.gingivalPoint,
-      },
-      {
-        source: "transform-buccal-line",
-        color: 0xff9f1c,
-        renderOrder: ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE + 1,
-        radius: 0.62,
-        getPoint: (tooth) => getTransformCrownWrapPoint(tooth.transform) ?? tooth.transform?.buccalPoint,
-      },
-    ];
-
-    const guidelineGroup = new THREE.Group();
-    guidelineGroup.name = `${jawType}-artificial-teeth-transform-guidelines`;
-    guidelineGroup.userData = {
-      overlayType: "artificial-teeth-guideline",
-      arch: jawType,
-      source: "tooth-transform-guidelines",
-      pointSetCount: 0,
-      hasBuccalLine: false,
-      hasGingivalLine: false,
-    };
-
-    lineConfigs.forEach((config) => {
-      const points = sortedTeeth
-        .map(config.getPoint)
-        .filter((point) => isValidPoint(point) && looksLikeModelPosition(point));
-      if (points.length < 2 || !looksLikeMeshBounds(points)) return;
-
-      const tube = createGuidelineTube(jawType, points, {
-        color: config.color,
-        renderOrder: config.renderOrder,
-        radius: config.radius,
-        source: config.source,
-        clearance: ARTIFICIAL_GUIDELINE_SURFACE_CLEARANCE,
-      });
-      if (!tube) return;
-
-      tube.name = `${jawType}-artificial-teeth-${config.source}`;
-      tube.userData = {
-        ...tube.userData,
-        source: config.source,
-        pointCount: points.length,
-      };
-      guidelineGroup.add(tube);
-      guidelineGroup.userData.pointSetCount += 1;
-      if (config.source.includes("buccal")) guidelineGroup.userData.hasBuccalLine = true;
-      if (config.source.includes("gingival")) guidelineGroup.userData.hasGingivalLine = true;
+    rows.sort((a, b) =>
+      `${a.arch}-${a.line}-${a.pointSetIndex}`.localeCompare(
+        `${b.arch}-${b.line}-${b.pointSetIndex}`
+      )
+    );
+    const auditMs = Number((performance.now() - startedAt).toFixed(2));
+    window.lastArtificialTeethGuidelineAlignmentAudit = rows;
+    window.lastArtificialTeethGuidelineAlignmentAuditMs = auditMs;
+    console.table(rows);
+    console.log("[artificial teeth] guideline alignment audit", {
+      auditMs,
+      rows: rows.length,
+      loadTimeImpact: "manual audit only",
     });
-
-    return guidelineGroup.children.length ? guidelineGroup : null;
+    return rows;
   };
 
-  const createGuidelineGroup = (jawType, teeth) => {
-    const guidelineData = getArtificialTeethGuidelinePoints(jawType, teeth);
-    const points = guidelineData.points;
-    if (points.length < 2) return null;
-
-    const guidelineGroup = new THREE.Group();
-    guidelineGroup.name = `${jawType}-artificial-teeth-${guidelineData.source}-guideline`;
-    guidelineGroup.userData = {
-      overlayType: "artificial-teeth-guideline",
-      arch: jawType,
-      pointCount: points.length,
-      source: guidelineData.source,
-      component: guidelineData.component,
-      surfaceSeated: true,
-    };
-
-    const tube = createGuidelineTube(jawType, points, {
-      color: 0xff9f1c,
-      renderOrder: ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE + 1,
-      source: guidelineData.source,
-      clearance: ARTIFICIAL_GUIDELINE_SURFACE_CLEARANCE,
-    });
-    if (tube) {
-      guidelineGroup.add(tube);
-    } else {
-      for (let index = 1; index < points.length; index += 1) {
-        const segment = createGuidelineSegment(
-          jawType,
-          points[index - 1],
-          points[index],
-          index - 1,
-          {
-            color: 0xff9f1c,
-            renderOrder: ARTIFICIAL_GUIDELINE_RENDER_ORDER_BASE + 1,
-            source: guidelineData.source,
-            clearance: ARTIFICIAL_GUIDELINE_SURFACE_CLEARANCE,
-          }
-        );
-        if (segment) guidelineGroup.add(segment);
-      }
-    }
-    return guidelineGroup.children.length ? guidelineGroup : null;
-  };
+  let artificialTeethRenderTimerActive = false;
+  let artificialTeethRenderStartedAt = 0;
 
   const renderData = (toothByJaw) => {
+    artificialTeethRenderStartedAt = performance.now();
+    console.time("viewer: artificial teeth loading/rendering");
+    artificialTeethRenderTimerActive = true;
     lastNormalizedTeeth = toothByJaw;
     attachRootGroup();
     clear();
@@ -3663,41 +2859,21 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     for (const jawType of ["upper", "lower"]) {
       const teeth = toothByJaw[jawType] || [];
       if (!teeth.length) continue;
-      const referenceTeeth = teeth.map((tooth) => normalizeToothReferenceSpace(tooth, jawType));
-      const resolvedTeeth = referenceTeeth.map((tooth) =>
-        resolveArtificialToothPlacement(tooth, jawType)
+      const renderTeeth = teeth.map((tooth) =>
+        normalizeDatabaseToothReferenceSpace(tooth, jawType)
       );
-      const seatedTeeth = snapTeethToJawSurface(resolvedTeeth, jawType);
 
       const jawGroup = new THREE.Group();
       jawGroup.name = `${jawType}-artificial-teeth`;
       jawGroup.userData = { overlayType: "artificial-teeth", arch: jawType };
       jawGroup.visible = isJawVisible(jawType);
-      let decodedGuideline = null;
-      try {
-        decodedGuideline = createDecodedGuidelineGroup(
-          jawType,
-          toothByJaw.guidelines?.[jawType],
-          seatedTeeth
-        );
-      } catch (error) {
-        console.warn("[artificial teeth] decoded guideline render skipped", {
-          arch: jawType,
-          error: error?.message || String(error),
-        });
-      }
-      if (decodedGuideline) jawGroup.add(decodedGuideline);
-      const transformGuideline = decodedGuideline
-        ? null
-        : createTransformGuidelineGroup(jawType, seatedTeeth);
-      if (transformGuideline) jawGroup.add(transformGuideline);
-      const guideline = decodedGuideline?.userData?.hasBuccalLine
-        || transformGuideline?.userData?.hasBuccalLine
-        ? null
-        : createGuidelineGroup(jawType, seatedTeeth);
-      if (guideline) jawGroup.add(guideline);
-      for (let index = 0; index < seatedTeeth.length; index += 1) {
-        const tooth = seatedTeeth[index];
+      const guidelineVisualGroup = createGuidelineVisualGroup(
+        jawType,
+        toothByJaw.guidelines?.[jawType]
+      );
+      if (guidelineVisualGroup) jawGroup.add(guidelineVisualGroup);
+      for (let index = 0; index < renderTeeth.length; index += 1) {
+        const tooth = renderTeeth[index];
         const mesh = createMesh(jawType, tooth, index);
         if (mesh) {
           jawGroup.add(mesh);
@@ -3710,11 +2886,32 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
         applyJawTransform(jawGroup, jawType);
       }
       group.add(jawGroup);
+      const correctionStartedAt = performance.now();
+      const corrected = correctFloatingTeethInJawGroup(jawGroup, jawType);
+      const correctionMs = performance.now() - correctionStartedAt;
+      recordPerformance("artificial teeth surface correction", correctionMs, {
+        arch: jawType,
+        corrected,
+      });
+      if (corrected || correctionMs > 25) {
+        console.log("[artificial teeth] surface correction timing", {
+          arch: jawType,
+          corrected,
+          durationMs: Number(correctionMs.toFixed(1)),
+        });
+      }
     }
     console.log("[artificial teeth] rendered meshes", createdCounts);
     reveal();
     window.lastArtificialTeethRenderCounts = createdCounts;
-    auditArtificialTeeth();
+    auditArtificialTeeth({ logToConsole: LOG_ARTIFICIAL_TEETH_AUTO_AUDIT_TO_CONSOLE });
+    console.timeEnd("viewer: artificial teeth loading/rendering");
+    recordPerformance(
+      "artificial teeth loading/rendering",
+      performance.now() - artificialTeethRenderStartedAt,
+      { upper: createdCounts.upper, lower: createdCounts.lower }
+    );
+    artificialTeethRenderTimerActive = false;
   };
 
   const setReferenceMode = (mode) => {
@@ -3988,6 +3185,144 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     );
   };
 
+  const getCraftKeys = (arch) => {
+    const craftData = arch === "upper"
+      ? window.lastDecodedToothPlacementData?.toothCraftDataUpperJaw_
+      : window.lastDecodedToothPlacementData?.toothCraftDataLowerJaw_;
+    const keys = new Set();
+    (craftData?.teeth || []).forEach((tooth) => {
+      if (tooth.toothIndex !== undefined && tooth.toothIndex !== null) {
+        keys.add(String(tooth.toothIndex));
+      }
+    });
+    [
+      craftData?.toothData_,
+      craftData?.toothSurfaceMeshData_,
+      craftData?.toothTransformInterfaceData_,
+      craftData?.initialToothSurfaceMeshData_,
+      craftData?.initialToothTransformInterfaceData_,
+    ].forEach((dict) => {
+      Object.keys(dict || {}).forEach((key) => keys.add(String(key)));
+    });
+    return sortToothIndices(Array.from(keys));
+  };
+
+  const auditArtificialTeethApiMapping = () => {
+    const startedAt = performance.now();
+    group.updateMatrixWorld(true);
+    const meshesByArchAndIndex = new Map();
+    getArtificialToothMeshes().forEach((mesh) => {
+      meshesByArchAndIndex.set(`${mesh.userData?.arch}:${mesh.userData?.toothIndex}`, mesh);
+    });
+
+    const rows = ["upper", "lower"].flatMap((arch) =>
+      getCraftKeys(arch).map((toothIndex) => {
+        const tooth = getToothByIndex(arch, toothIndex);
+        const mesh = meshesByArchAndIndex.get(`${arch}:${toothIndex}`);
+        const source = tooth?.source || {};
+        const positionSource = source.positionFromToothDataWorld
+          ? "toothData"
+          : source.positionFromApiMeshCenter
+            ? "apiMeshCenter"
+              : null;
+        const geometrySource = source.geometryFromSurfaceMesh
+          ? "surfaceMesh"
+          : source.geometryFromToothData
+            ? "toothData"
+            : null;
+        const fallbackFlags = [
+          "positionFromSurfaceMeshCenter",
+          "meshCenterPosition",
+        ].filter((key) => source[key]);
+
+        return {
+          arch,
+          apiKey: toothIndex,
+          normalized: Boolean(tooth),
+          rendered: Boolean(mesh),
+          renderedIndex: mesh?.userData?.toothIndex ?? null,
+          toothDataIndex: source.toothDataIndex ?? null,
+          geometrySource,
+          positionSource,
+          positionField: source.positionFromUnityToothDataField ?? null,
+          directApiMapping: Boolean(source.databaseMappedDirect),
+          transformLandmarksUsedForPlacement: Boolean(source.transformLandmarksUsedForPlacement),
+          guidelineUsedForPlacement: Boolean(source.guidelineUsedForPlacement),
+          fallbackPositionUsed: fallbackFlags.length > 0,
+          fallbackFlags: fallbackFlags.join(","),
+          surfaceCorrection: Boolean(mesh?.userData?.surfaceClearanceCorrection?.applied),
+          autoFlip: mesh?.userData?.autoOrientationFlip?.applied
+            ? mesh.userData.autoOrientationFlip.flip
+            : null,
+        };
+      })
+    );
+
+    const auditMs = Number((performance.now() - startedAt).toFixed(2));
+    window.lastArtificialTeethApiMappingAudit = rows;
+    window.lastArtificialTeethApiMappingAuditMs = auditMs;
+    console.table(rows);
+    console.log("[artificial teeth] API mapping audit", {
+      auditMs,
+      rows: rows.length,
+      missingNormalized: rows.filter((row) => !row.normalized).length,
+      missingRendered: rows.filter((row) => row.normalized && !row.rendered).length,
+      fallbackPositionRows: rows.filter((row) => row.fallbackPositionUsed).length,
+      loadTimeImpact: "manual audit only",
+    });
+    return rows;
+  };
+
+  const auditArtificialTeethToothDataLayout = (arch = "upper") => {
+    const craftData = arch === "upper"
+      ? window.lastDecodedToothPlacementData?.toothCraftDataUpperJaw_
+      : window.lastDecodedToothPlacementData?.toothCraftDataLowerJaw_;
+    const rows = getCraftKeys(arch).flatMap((toothIndex) => {
+      const toothData = craftData?.toothData_?.[toothIndex];
+      const tooth = getToothByIndex(arch, toothIndex);
+      if (!toothData || !tooth) return [];
+      const meshCenter = getPointBoundsCenter(tooth.geometry?.vertices);
+      const candidateKeys = [7, 9, 10, 12];
+      return candidateKeys.flatMap((key) => {
+        const point = toPointObject(toothData[key]);
+        if (!isValidPoint(point)) return [];
+        return [{
+          arch,
+          toothIndex,
+          toothName: toothData[2] ?? null,
+          field: key,
+          value: {
+            x: Number(point.x.toFixed(3)),
+            y: Number(point.y.toFixed(3)),
+            z: Number(point.z.toFixed(3)),
+          },
+          distanceToApiMeshCenter: isValidPoint(meshCenter)
+            ? Number(distanceBetweenPoints(point, meshCenter).toFixed(3))
+            : null,
+          jawLocalSurfaceDistance: Number.isFinite(getJawSurfaceDistanceInSpace(arch, point, "jaw-local"))
+            ? Number(getJawSurfaceDistanceInSpace(arch, point, "jaw-local").toFixed(3))
+            : null,
+          currentPositionSource: tooth.source?.positionFromToothDataWorld
+            ? "toothData"
+            : tooth.source?.positionFromApiMeshCenter
+              ? "apiMeshCenter"
+              : null,
+          currentPositionDistance: isValidPoint(tooth.position)
+            ? Number(distanceBetweenPoints(point, tooth.position).toFixed(3))
+            : null,
+        }];
+      });
+    });
+
+    rows.sort((a, b) =>
+      Number(a.toothIndex) - Number(b.toothIndex) ||
+      a.field - b.field
+    );
+    window.lastArtificialTeethToothDataLayoutAudit = rows;
+    console.table(rows);
+    return rows;
+  };
+
   const auditToothOrientation = (arch, mesh) => {
     const tooth = getToothByIndex(arch, mesh.userData?.toothIndex);
     const transform = tooth?.transform;
@@ -4021,8 +3356,6 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       hasTransform: true,
       transformMode: mesh.userData?.transformMode || null,
       autoOrientationFlip: mesh.userData?.autoOrientationFlip || null,
-      targetedOrientationOverride:
-        mesh.userData?.targetedArtificialToothOrientationOverride || null,
       mesialDistalAxisAngle,
       gingivalBuccalAxisAngle,
       buccalAxisAngle,
@@ -4254,7 +3587,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     };
   };
 
-  const auditArtificialTeeth = () => {
+  const auditArtificialTeeth = ({ logToConsole = true } = {}) => {
     group.updateMatrixWorld(true);
     parentObject.updateMatrixWorld(true);
     const meshes = getArtificialToothMeshes();
@@ -4273,6 +3606,7 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     };
 
     window.lastArtificialTeethAudit = report;
+    if (!logToConsole) return report;
     console.log("[artificial teeth] strict audit", report);
     console.table(
       jaws.map((jaw) => ({
@@ -4303,6 +3637,378 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       }))
     );
     return report;
+  };
+
+  const auditArtificialTeethDatabasePlacement = () => {
+    const rows = [];
+    ["upper", "lower"].forEach((arch) => {
+      const teeth = lastNormalizedTeeth?.[arch] || [];
+      teeth.forEach((tooth) => {
+        if (!isValidPoint(tooth.position)) return;
+        const localDistance = getJawSurfaceDistanceInSpace(arch, tooth.position, "jaw-local");
+        const worldDistance = getJawSurfaceDistanceInSpace(arch, tooth.position, "scene-world");
+        const normalized = normalizeDatabaseToothReferenceSpace(tooth, arch);
+        const normalizedDistance = isValidPoint(normalized.position)
+          ? getJawSurfaceDistanceInSpace(arch, normalized.position, "jaw-local")
+          : Infinity;
+        rows.push({
+          arch,
+          toothIndex: String(tooth.toothIndex),
+          detectedPositionSpace: normalized.source?.detectedPositionSpace || null,
+          dbAsJawLocalDistance: Number.isFinite(localDistance)
+            ? Number(localDistance.toFixed(3))
+            : null,
+          dbAsSceneWorldDistance: Number.isFinite(worldDistance)
+            ? Number(worldDistance.toFixed(3))
+            : null,
+          renderedJawLocalDistance: Number.isFinite(normalizedDistance)
+            ? Number(normalizedDistance.toFixed(3))
+            : null,
+          dbPosition: {
+            x: Number(tooth.position.x.toFixed(3)),
+            y: Number(tooth.position.y.toFixed(3)),
+            z: Number(tooth.position.z.toFixed(3)),
+          },
+          renderedJawLocalPosition: isValidPoint(normalized.position)
+            ? {
+                x: Number(normalized.position.x.toFixed(3)),
+                y: Number(normalized.position.y.toFixed(3)),
+                z: Number(normalized.position.z.toFixed(3)),
+              }
+            : null,
+          geometryCenter: isValidPoint(getPointBoundsCenter(tooth.geometry?.vertices))
+            ? {
+                x: Number(getPointBoundsCenter(tooth.geometry.vertices).x.toFixed(3)),
+                y: Number(getPointBoundsCenter(tooth.geometry.vertices).y.toFixed(3)),
+                z: Number(getPointBoundsCenter(tooth.geometry.vertices).z.toFixed(3)),
+              }
+            : null,
+          sourceFlags: Object.keys(tooth.source || {})
+            .filter((key) => tooth.source?.[key] === true)
+            .join(","),
+        });
+      });
+    });
+
+    rows.sort(
+      (a, b) =>
+        (b.renderedJawLocalDistance ?? -1) - (a.renderedJawLocalDistance ?? -1)
+    );
+    window.lastArtificialTeethDatabasePlacementAudit = rows;
+    console.table(rows);
+    return rows;
+  };
+
+  const auditArtificialTeethSurfaceClearance = () => {
+    group.updateMatrixWorld(true);
+    parentObject.updateMatrixWorld(true);
+    const rows = [];
+    const vertex = new THREE.Vector3();
+
+    getArtificialToothMeshes().forEach((mesh) => {
+      const arch = mesh.userData?.arch;
+      const position = mesh.geometry?.attributes?.position;
+      if ((arch !== "upper" && arch !== "lower") || !position?.count) return;
+
+      const distances = [];
+      const stride = Math.max(1, Math.floor(position.count / 80));
+      for (let index = 0; index < position.count; index += stride) {
+        vertex.fromBufferAttribute(position, index).applyMatrix4(mesh.matrixWorld);
+        const surfacePoint = getClosestJawSurfacePoint(
+          arch,
+          { x: vertex.x, y: vertex.y, z: vertex.z },
+          "scene-world"
+        );
+        if (!surfacePoint) continue;
+        distances.push(distanceBetweenPoints(vertex, surfacePoint));
+      }
+
+      const stats = getDistanceStats(distances);
+      rows.push({
+        arch,
+        toothIndex: String(mesh.userData?.toothIndex),
+        transformMode: mesh.userData?.transformMode || null,
+        geometrySource: mesh.userData?.geometrySource || null,
+        sampledVertices: distances.length,
+        minSurfaceClearance: stats.min,
+        medianSurfaceClearance: stats.median,
+        p90SurfaceClearance: stats.p90,
+        maxSurfaceClearance: stats.max,
+        likelyFloating: stats.min !== null && stats.min > 2.5,
+      });
+    });
+
+    rows.sort(
+      (a, b) =>
+        (b.minSurfaceClearance ?? -1) - (a.minSurfaceClearance ?? -1)
+    );
+    window.lastArtificialTeethSurfaceClearanceAudit = rows;
+    console.table(rows);
+    return rows;
+  };
+
+  const auditArtificialTeethSegment = (arch = "upper", toothIndices = ["0", "1", "2"]) => {
+    group.updateMatrixWorld(true);
+    parentObject.updateMatrixWorld(true);
+    const requested = new Set(toothIndices.map(String));
+    const rows = getArtificialToothMeshes()
+      .filter((mesh) => mesh.userData?.arch === arch && requested.has(String(mesh.userData?.toothIndex)))
+      .map((mesh) => {
+        const toothIndex = String(mesh.userData?.toothIndex);
+        const tooth = getToothByIndex(arch, toothIndex);
+        const center = getMeshWorldCenter(mesh);
+        const closest = getClosestRenderedToothSurfaceSample(mesh, arch);
+        return {
+          arch,
+          toothIndex,
+          transformMode: mesh.userData?.transformMode || null,
+          geometryFromSurfaceMesh: Boolean(mesh.userData?.source?.geometryFromSurfaceMesh),
+          geometryFromToothData: Boolean(mesh.userData?.source?.geometryFromToothData),
+          autoFlip: mesh.userData?.autoOrientationFlip?.applied
+            ? mesh.userData.autoOrientationFlip.flip
+            : null,
+          correctionBefore: mesh.userData?.surfaceClearanceCorrection?.beforeMinClearance ?? null,
+          correctionAfter: mesh.userData?.surfaceClearanceCorrection?.afterMinClearance ?? null,
+          correctionDistance: mesh.userData?.surfaceClearanceCorrection?.correctionDistance ?? null,
+          currentMinClearance: closest ? Number(closest.distance.toFixed(3)) : null,
+          center: center
+            ? {
+                x: Number(center.x.toFixed(3)),
+                y: Number(center.y.toFixed(3)),
+                z: Number(center.z.toFixed(3)),
+              }
+            : null,
+          apiPosition: isValidPoint(tooth?.position)
+            ? {
+                x: Number(tooth.position.x.toFixed(3)),
+                y: Number(tooth.position.y.toFixed(3)),
+                z: Number(tooth.position.z.toFixed(3)),
+              }
+            : null,
+          geometryCenter: isValidPoint(getPointBoundsCenter(tooth?.geometry?.vertices))
+            ? {
+                x: Number(getPointBoundsCenter(tooth.geometry.vertices).x.toFixed(3)),
+                y: Number(getPointBoundsCenter(tooth.geometry.vertices).y.toFixed(3)),
+                z: Number(getPointBoundsCenter(tooth.geometry.vertices).z.toFixed(3)),
+              }
+            : null,
+        };
+      })
+      .sort((a, b) => Number(a.toothIndex) - Number(b.toothIndex));
+
+    const spacingRows = rows.slice(1).map((row, index) => {
+      const previous = rows[index];
+      const from = previous.center;
+      const to = row.center;
+      return {
+        from: previous.toothIndex,
+        to: row.toothIndex,
+        centerDistance: from && to
+          ? Number(Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z).toFixed(3))
+          : null,
+        delta: from && to
+          ? {
+              x: Number((to.x - from.x).toFixed(3)),
+              y: Number((to.y - from.y).toFixed(3)),
+              z: Number((to.z - from.z).toFixed(3)),
+            }
+          : null,
+      };
+    });
+
+    const report = { rows, spacingRows };
+    window.lastArtificialTeethSegmentAudit = report;
+    console.table(rows);
+    console.table(spacingRows);
+    return report;
+  };
+
+  const distancePointToSegment = (point, start, end) => {
+    const segment = end.clone().sub(start);
+    const lengthSq = segment.lengthSq();
+    if (lengthSq < 0.000001) return point.distanceTo(start);
+    const t = THREE.MathUtils.clamp(point.clone().sub(start).dot(segment) / lengthSq, 0, 1);
+    return point.distanceTo(start.clone().add(segment.multiplyScalar(t)));
+  };
+
+  const getGuidelineWorldSegments = (arch, lineType) => {
+    const guideData = lastNormalizedTeeth?.guidelines?.[arch];
+    if (!guideData) return [];
+    const key = lineType === "buccal" ? "buccalLineEditorData_" : "gingivalLineEditorData_";
+    const jawMesh = getJawMesh(arch);
+    if (!jawMesh) return [];
+    jawMesh.updateMatrixWorld(true);
+
+    return getGuidelineEditorPointSets(guideData[key]).flatMap((rawPoints) => {
+      const normalized = normalizeGuidelineVisualPoints(arch, rawPoints);
+      const worldPoints = normalized.points
+        .filter(isValidPoint)
+        .map((point) =>
+          jawMesh.localToWorld(new THREE.Vector3(point.x, point.y, point.z))
+        );
+      return worldPoints.slice(1).map((point, index) => ({
+        start: worldPoints[index],
+        end: point,
+        coordinateSpace: normalized.coordinateSpace,
+      }));
+    });
+  };
+
+  const getNearestGuidelineDistance = (center, segments) => {
+    if (!center || !segments.length) return null;
+    const distances = segments.map(({ start, end }) =>
+      distancePointToSegment(center, start, end)
+    );
+    return Number(Math.min(...distances).toFixed(3));
+  };
+
+  const auditArtificialTeethOutliers = (arch = "upper", toothIndices = null) => {
+    group.updateMatrixWorld(true);
+    parentObject.updateMatrixWorld(true);
+    const requested = toothIndices
+      ? new Set(toothIndices.map(String))
+      : null;
+    const buccalSegments = getGuidelineWorldSegments(arch, "buccal");
+    const gingivalSegments = getGuidelineWorldSegments(arch, "gingival");
+    const meshes = getArtificialToothMeshes()
+      .filter((mesh) =>
+        mesh.userData?.arch === arch &&
+        (!requested || requested.has(String(mesh.userData?.toothIndex)))
+      )
+      .sort((a, b) => Number(a.userData?.toothIndex) - Number(b.userData?.toothIndex));
+
+    const centers = new Map();
+    meshes.forEach((mesh) => {
+      centers.set(String(mesh.userData?.toothIndex), getMeshWorldCenter(mesh));
+    });
+
+    const rows = meshes.map((mesh, index) => {
+      const toothIndex = String(mesh.userData?.toothIndex);
+      const tooth = getToothByIndex(arch, toothIndex);
+      const source = tooth?.source || {};
+      const geometryCenter = getPointBoundsCenter(tooth?.geometry?.vertices);
+      const center = centers.get(toothIndex);
+      const previousCenter = index > 0 ? centers.get(String(meshes[index - 1].userData?.toothIndex)) : null;
+      const nextCenter = index < meshes.length - 1 ? centers.get(String(meshes[index + 1].userData?.toothIndex)) : null;
+      const closest = getClosestRenderedToothSurfaceSample(mesh, arch);
+      const centerJawDistance = center
+        ? getJawSurfaceDistanceInSpace(arch, { x: center.x, y: center.y, z: center.z }, "scene-world")
+        : Infinity;
+      const positionSource = source.positionFromToothDataWorld
+        ? "toothData"
+        : source.positionFromApiMeshCenter
+          ? "apiMeshCenter"
+          : null;
+
+      return {
+        arch,
+        toothIndex,
+        geometrySource: source.geometryFromSurfaceMesh
+          ? "surfaceMesh"
+          : source.geometryFromToothData
+            ? "toothData"
+            : null,
+        positionSource,
+        positionField: source.positionFromUnityToothDataField ?? null,
+        transformMode: mesh.userData?.transformMode || null,
+        autoOrientationDisabled: Boolean(mesh.userData?.autoOrientationFlip?.disabled),
+        surfaceCorrectionApplied: Boolean(mesh.userData?.surfaceClearanceCorrection?.applied),
+        minSurfaceClearance: closest ? Number(closest.distance.toFixed(3)) : null,
+        centerJawDistance: Number.isFinite(centerJawDistance)
+          ? Number(centerJawDistance.toFixed(3))
+          : null,
+        centerToBuccalGuideline: getNearestGuidelineDistance(center, buccalSegments),
+        centerToGingivalGuideline: getNearestGuidelineDistance(center, gingivalSegments),
+        previousCenterDistance: center && previousCenter
+          ? Number(center.distanceTo(previousCenter).toFixed(3))
+          : null,
+        nextCenterDistance: center && nextCenter
+          ? Number(center.distanceTo(nextCenter).toFixed(3))
+          : null,
+        apiPositionToGeometryCenter: isValidPoint(tooth?.position) && isValidPoint(geometryCenter)
+          ? Number(distanceBetweenPoints(tooth.position, geometryCenter).toFixed(3))
+          : null,
+        meshLocalPosition: isValidPoint(mesh.position)
+          ? {
+              x: Number(mesh.position.x.toFixed(3)),
+              y: Number(mesh.position.y.toFixed(3)),
+              z: Number(mesh.position.z.toFixed(3)),
+            }
+          : null,
+      };
+    });
+
+    window.lastArtificialTeethOutlierAudit = rows;
+    console.table(rows);
+    return rows;
+  };
+
+  const auditArtificialTeethJawOverlap = (arch = "lower", toothIndices = null) => {
+    group.updateMatrixWorld(true);
+    parentObject.updateMatrixWorld(true);
+    const requested = toothIndices
+      ? new Set(toothIndices.map(String))
+      : null;
+    const vertex = new THREE.Vector3();
+    const rows = getArtificialToothMeshes()
+      .filter((mesh) =>
+        mesh.userData?.arch === arch &&
+        (!requested || requested.has(String(mesh.userData?.toothIndex)))
+      )
+      .map((mesh) => {
+        const position = mesh.geometry?.attributes?.position;
+        if (!position?.count) return null;
+
+        const distances = [];
+        const stride = Math.max(1, Math.floor(position.count / 160));
+        for (let index = 0; index < position.count; index += stride) {
+          vertex.fromBufferAttribute(position, index).applyMatrix4(mesh.matrixWorld);
+          const surfacePoint = getClosestJawSurfacePoint(
+            arch,
+            { x: vertex.x, y: vertex.y, z: vertex.z },
+            "scene-world"
+          );
+          if (!surfacePoint) continue;
+          distances.push(distanceBetweenPoints(vertex, surfacePoint));
+        }
+
+        const stats = getDistanceStats(distances);
+        const closeSamples = distances.filter((distance) => distance <= 0.35).length;
+        const nearSamples = distances.filter((distance) => distance <= 0.8).length;
+        const sampled = distances.length || 1;
+        const source = mesh.userData?.source || {};
+        return {
+          arch,
+          toothIndex: String(mesh.userData?.toothIndex),
+          geometrySource: source.geometryFromSurfaceMesh
+            ? "surfaceMesh"
+            : source.geometryFromToothData
+              ? "toothData"
+              : null,
+          positionSource: source.positionFromToothDataWorld
+            ? "toothData"
+            : source.positionFromApiMeshCenter
+              ? "apiMeshCenter"
+              : null,
+          transformMode: mesh.userData?.transformMode || null,
+          sampledVertices: distances.length,
+          minSurfaceDistance: stats.min,
+          medianSurfaceDistance: stats.median,
+          closeToJawPercent: Number(((closeSamples / sampled) * 100).toFixed(1)),
+          nearJawPercent: Number(((nearSamples / sampled) * 100).toFixed(1)),
+          likelyOverlappingScanTooth: closeSamples / sampled > 0.18 || nearSamples / sampled > 0.42,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) =>
+        Number(b.likelyOverlappingScanTooth) - Number(a.likelyOverlappingScanTooth) ||
+        b.closeToJawPercent - a.closeToJawPercent ||
+        b.nearJawPercent - a.nearJawPercent
+      );
+
+    window.lastArtificialTeethJawOverlapAudit = rows;
+    console.table(rows);
+    return rows;
   };
 
   const postArtificialTeethJson = async (endpoint, payload) => {
@@ -4361,6 +4067,69 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     return postArtificialTeethJson("/toothPlacementData/get", authPayload);
   };
 
+  let pendingArtificialTeethFetch = null;
+
+  const getArtificialTeethPayload = (caseIntID, endpoint) => {
+    const authPayload = [createAuthData(caseIntID)];
+    const alternatePayload = [
+      authPayload[0],
+      { case_id: caseIntID, caseIntID },
+    ];
+    return /toothPlacementData\/get$/i.test(endpoint)
+      ? authPayload
+      : alternatePayload;
+  };
+
+  const startArtificialTeethFetch = (caseIntID) => {
+    if (
+      pendingArtificialTeethFetch &&
+      pendingArtificialTeethFetch.caseIntID === caseIntID
+    ) {
+      return pendingArtificialTeethFetch.promise;
+    }
+
+    const promise = (async () => {
+      for (const endpoint of ARTIFICIAL_TOOTH_ENDPOINTS) {
+        const payload = getArtificialTeethPayload(caseIntID, endpoint);
+        const startedAt = performance.now();
+        console.time("viewer: artificial teeth API fetching");
+        try {
+          const response = await postArtificialTeethJson(endpoint, payload);
+          console.timeEnd("viewer: artificial teeth API fetching");
+          recordPerformance(
+            "artificial teeth API fetching",
+            performance.now() - startedAt,
+            { endpoint, prefetched: true }
+          );
+          if (!response || response === "stl") continue;
+          return { endpoint, response };
+        } catch (error) {
+          console.timeEnd("viewer: artificial teeth API fetching");
+          recordPerformance(
+            "artificial teeth API fetching",
+            performance.now() - startedAt,
+            { endpoint, status: "failed", prefetched: true }
+          );
+          console.warn("[artificial teeth] fetch failed", {
+            endpoint,
+            payloadShape: /toothPlacementData\/get$/i.test(endpoint)
+              ? "auth-only"
+              : "auth-with-case",
+            error,
+          });
+        }
+      }
+      return null;
+    })();
+
+    pendingArtificialTeethFetch = { caseIntID, promise };
+    return promise;
+  };
+
+  const prefetch = (caseIntID) => {
+    startArtificialTeethFetch(caseIntID);
+  };
+
   const debugToothPlacementData = async (caseIntID) => {
     const auth = createAuthData(caseIntID);
     const payloads = [
@@ -4410,30 +4179,59 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
       startedAt: new Date().toISOString(),
       endpoint: null,
       responseFetched: false,
+      prefetched: Boolean(
+        pendingArtificialTeethFetch &&
+        pendingArtificialTeethFetch.caseIntID === caseIntID
+      ),
       decoded: false,
       normalizedUpper: 0,
       normalizedLower: 0,
       rendered: false,
       error: null,
     };
-    const authPayload = [createAuthData(caseIntID)];
-    const alternatePayload = [
-      authPayload[0],
-      { case_id: caseIntID, caseIntID },
-    ];
+    const prefetchedResult = pendingArtificialTeethFetch?.caseIntID === caseIntID
+      ? await pendingArtificialTeethFetch.promise
+      : null;
 
     for (const endpoint of ARTIFICIAL_TOOTH_ENDPOINTS) {
+      let isArtificialTeethApiTimerActive = false;
+      let isArtificialTeethNormalizeTimerActive = false;
+      let artificialTeethApiStartedAt = 0;
+      let artificialTeethNormalizeStartedAt = 0;
       try {
         setStatus(`Checking ${endpoint.replaceAll("/", " ")}`, 0.28);
         window.lastArtificialTeethFetchAudit.endpoint = endpoint;
-        const payload = /toothPlacementData\/get$/i.test(endpoint)
-          ? authPayload
-          : alternatePayload;
-        const response = await postArtificialTeethJson(endpoint, payload);
+        let response;
+        if (prefetchedResult?.endpoint === endpoint) {
+          response = prefetchedResult.response;
+        } else {
+          const payload = getArtificialTeethPayload(caseIntID, endpoint);
+          artificialTeethApiStartedAt = performance.now();
+          console.time("viewer: artificial teeth API fetching");
+          isArtificialTeethApiTimerActive = true;
+          response = await postArtificialTeethJson(endpoint, payload);
+          console.timeEnd("viewer: artificial teeth API fetching");
+          recordPerformance(
+            "artificial teeth API fetching",
+            performance.now() - artificialTeethApiStartedAt,
+            { endpoint }
+          );
+          isArtificialTeethApiTimerActive = false;
+        }
         if (!response || response === "stl") continue;
         window.lastArtificialTeethFetchAudit.responseFetched = true;
 
+        artificialTeethNormalizeStartedAt = performance.now();
+        console.time("viewer: artificial teeth data normalization");
+        isArtificialTeethNormalizeTimerActive = true;
         const normalized = normalizeResponse(response);
+        console.timeEnd("viewer: artificial teeth data normalization");
+        recordPerformance(
+          "artificial teeth data normalization",
+          performance.now() - artificialTeethNormalizeStartedAt,
+          { endpoint }
+        );
+        isArtificialTeethNormalizeTimerActive = false;
         const upperCount = normalized.upper.length;
         const lowerCount = normalized.lower.length;
         const totalCount = upperCount + lowerCount;
@@ -4449,10 +4247,19 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
         try {
           renderData(normalized);
         } catch (error) {
+          if (artificialTeethRenderTimerActive) {
+            console.timeEnd("viewer: artificial teeth loading/rendering");
+            recordPerformance(
+              "artificial teeth loading/rendering",
+              performance.now() - artificialTeethRenderStartedAt,
+              { status: "failed" }
+            );
+            artificialTeethRenderTimerActive = false;
+          }
           window.lastArtificialTeethFetchAudit.error = error.message || String(error);
           console.error("[artificial teeth] render failed after successful fetch", error);
           clear();
-          auditArtificialTeeth();
+          auditArtificialTeeth({ logToConsole: LOG_ARTIFICIAL_TEETH_AUTO_AUDIT_TO_CONSOLE });
           setStatus("Artificial teeth render failed", 1, true);
           return;
         }
@@ -4460,6 +4267,31 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
         setStatus(`Artificial teeth ready (${totalCount})`, 1, true);
         return;
       } catch (error) {
+        if (isArtificialTeethApiTimerActive) {
+          console.timeEnd("viewer: artificial teeth API fetching");
+          recordPerformance(
+            "artificial teeth API fetching",
+            performance.now() - artificialTeethApiStartedAt,
+            { endpoint, status: "failed" }
+          );
+        }
+        if (isArtificialTeethNormalizeTimerActive) {
+          console.timeEnd("viewer: artificial teeth data normalization");
+          recordPerformance(
+            "artificial teeth data normalization",
+            performance.now() - artificialTeethNormalizeStartedAt,
+            { endpoint, status: "failed" }
+          );
+        }
+        if (artificialTeethRenderTimerActive) {
+          console.timeEnd("viewer: artificial teeth loading/rendering");
+          recordPerformance(
+            "artificial teeth loading/rendering",
+            performance.now() - artificialTeethRenderStartedAt,
+            { status: "failed" }
+          );
+          artificialTeethRenderTimerActive = false;
+        }
         window.lastArtificialTeethFetchAudit.error = error.message || String(error);
         console.warn("[artificial teeth] fetch failed", {
           endpoint,
@@ -4474,12 +4306,13 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
     clear();
     window.lastArtificialTeethNormalized = { upper: [], lower: [] };
     console.log("[artificial teeth] No processed artificial tooth mesh data returned; skipping tooth render.");
-    auditArtificialTeeth();
+    auditArtificialTeeth({ logToConsole: LOG_ARTIFICIAL_TEETH_AUTO_AUDIT_TO_CONSOLE });
     setStatus("No processed artificial teeth", 1, true);
   };
 
   window.getToothPlacementData = getToothPlacementData;
   window.debugToothPlacementData = debugToothPlacementData;
+  window.prefetchArtificialTeeth = prefetch;
   window.fetchAndRenderArtificialTeeth = fetchAndRender;
   window.revealArtificialTeeth = reveal;
   window.updateArtificialTeethCameraVisibility = updateCameraVisibility;
@@ -4521,7 +4354,16 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
   };
   window.auditArtificialTeeth = auditArtificialTeeth;
   window.auditArtificialTeethGuidelines = auditArtificialTeethGuidelines;
+  window.auditArtificialTeethGuidelineAlignment = auditArtificialTeethGuidelineAlignment;
+  window.auditArtificialTeethDatabasePlacement = auditArtificialTeethDatabasePlacement;
+  window.auditArtificialTeethSurfaceClearance = auditArtificialTeethSurfaceClearance;
+  window.auditArtificialTeethSegment = auditArtificialTeethSegment;
+  window.auditArtificialTeethOutliers = auditArtificialTeethOutliers;
+  window.auditArtificialTeethJawOverlap = auditArtificialTeethJawOverlap;
+  window.auditArtificialTeethApiMapping = auditArtificialTeethApiMapping;
+  window.auditArtificialTeethToothDataLayout = auditArtificialTeethToothDataLayout;
   window.auditArtificialTeethJawSources = auditJawSourceMapping;
+  window.artificialTeethRenderRuleVersion = ARTIFICIAL_TEETH_RENDER_RULE_VERSION;
   window.hasRenderedArtificialTeeth = hasRenderedTeeth;
   window.clearArtificialTeeth = clear;
   window.setArtificialTeethJawVisibility = setJawVisibility;
@@ -4529,11 +4371,20 @@ export function createArtificialTeethRenderer({ scene, parentObject, camera = nu
 
   return {
     clear,
+    prefetch,
     fetchAndRender,
     getToothPlacementData,
     debugToothPlacementData,
     auditArtificialTeeth,
     auditArtificialTeethGuidelines,
+    auditArtificialTeethGuidelineAlignment,
+    auditArtificialTeethDatabasePlacement,
+    auditArtificialTeethSurfaceClearance,
+    auditArtificialTeethSegment,
+    auditArtificialTeethOutliers,
+    auditArtificialTeethJawOverlap,
+    auditArtificialTeethApiMapping,
+    auditArtificialTeethToothDataLayout,
     auditJawSourceMapping,
     reveal,
     hasRenderedTeeth,

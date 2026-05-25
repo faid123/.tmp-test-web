@@ -1,4 +1,4 @@
-export function addResetButton(camera, clone, controls) {
+export function addResetButton(camera, clone, controls, getResetTarget = null) {
     let rotationLocked = true; // Initial state of rotation lock
 
     // Create and append styles
@@ -109,7 +109,12 @@ export function addResetButton(camera, clone, controls) {
         camera.zoom = 7;
         camera.updateProjectionMatrix();
         // Reset controls target and update controls
-        controls.target.set(0, 0, 0);
+        const resetTarget = typeof getResetTarget === 'function' ? getResetTarget() : null;
+        if (resetTarget) {
+            controls.target.copy(resetTarget);
+        } else {
+            controls.target.set(0, 0, 0);
+        }
         controls.update();
         //console.log('Camera reset:');
         //console.log('Position:', camera.position);

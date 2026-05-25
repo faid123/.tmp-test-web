@@ -7,7 +7,6 @@ import { TrackballControls } from "three/examples/jsm/controls/TrackballControls
 
 import { STLMeshLoader } from "./STLMeshLoader.js";
 
-console.log(THREE.REVISION);
 // Import the OFFLoader class
 import { OFFLoader } from "./OFFLoader.js";
 // Import the ApiClient class
@@ -22,6 +21,27 @@ import {
   removeVisibilityAndTransparencyControls,
 } from "./newControls.js";
 import { createArtificialTeethRenderer } from "./artificialTeeth.js";
+
+const LOG_VIEWER_LOAD_TIMINGS_TO_CONSOLE = false;
+const LOG_VIEWER_OBJECT_COUNTS_TO_CONSOLE = false;
+const LOG_VIEWER_REVISION_TO_CONSOLE = true;
+const LOG_POLYLINE_AUTO_AUDITS_TO_CONSOLE = false;
+
+function startViewerLoadTimer(label) {
+  if (LOG_VIEWER_LOAD_TIMINGS_TO_CONSOLE) {
+    console.time(label);
+  }
+}
+
+function endViewerLoadTimer(label) {
+  if (LOG_VIEWER_LOAD_TIMINGS_TO_CONSOLE) {
+    console.timeEnd(label);
+  }
+}
+
+if (LOG_VIEWER_REVISION_TO_CONSOLE) {
+  console.log(THREE.REVISION);
+}
 
 //initialise everything
 
@@ -114,6 +134,9 @@ const artificialTeethRenderer = createArtificialTeethRenderer({
   parentObject,
   camera,
   apiClient,
+  onPerformance: (stage, durationMs, details = {}) => {
+    addViewerLoadTiming(stage, durationMs, details);
+  },
   onStatus: (label, progress = 0, autoHide = false) => {
     window.lastArtificialTeethStatus = { label, progress, autoHide };
     console.log("[artificial teeth]", label, progress);
@@ -151,6 +174,20 @@ const polylineJawVisibility = new Map([
   ["upper", true],
   ["lower", true],
 ]);
+const polylineDiagnostics = {
+  base64DecodeMs: 0,
+  base64DecodeCount: 0,
+  textParseMs: 0,
+  textParseCount: 0,
+};
+const viewerLoadTimings = [];
+const viewerMeshTimings = [];
+let hasLoggedFirstSceneRender = false;
+const viewerRotationOrigin = new THREE.Vector3(0, 0, 0);
+let viewerRotationBoundsRadius = 40;
+let hasViewerRotationOrigin = false;
+const VIEWER_TARGET_DRIFT_FACTOR = 1.6;
+const VIEWER_TARGET_MIN_DRIFT_LIMIT = 45;
 
 const POLYLINE_COMPONENT_COLORS = [
   0x6f35ff,
@@ -196,6 +233,211 @@ const POLYLINE_TEXT_DETECTION_PATTERN = new RegExp(
   `nodeCount|${POLYLINE_TEXT_COMPONENTS.join("|")}`,
   "i"
 );
+
+function resetPolylineDiagnostics() {
+  polylineDiagnostics.base64DecodeMs = 0;
+  polylineDiagnostics.base64DecodeCount = 0;
+  polylineDiagnostics.textParseMs = 0;
+  polylineDiagnostics.textParseCount = 0;
+}
+
+function logPolylineDiagnostics() {
+  console.log("[viewer: polyline diagnostics]", {
+    base64Decodes: polylineDiagnostics.base64DecodeCount,
+    base64DecodeMs: Number(polylineDiagnostics.base64DecodeMs.toFixed(2)),
+    textParses: polylineDiagnostics.textParseCount,
+    textParseMs: Number(polylineDiagnostics.textParseMs.toFixed(2)),
+  });
+  console.log(
+    `viewer: decode polylines: ${polylineDiagnostics.base64DecodeMs.toFixed(2)} ms`
+  );
+  console.log(
+    `viewer: parse polylines: ${polylineDiagnostics.textParseMs.toFixed(2)} ms`
+  );
+  addViewerLoadTiming(
+    "decode polylines",
+    polylineDiagnostics.base64DecodeMs,
+    { count: polylineDiagnostics.base64DecodeCount }
+  );
+  addViewerLoadTiming(
+    "parse polylines",
+    polylineDiagnostics.textParseMs,
+    { count: polylineDiagnostics.textParseCount }
+  );
+}
+
+function addViewerLoadTiming(stage, durationMs, details = {}) {
+  const entry = {
+    stage,
+    durationMs: Number(durationMs.toFixed(2)),
+    ...details,
+  };
+  viewerLoadTimings.push(entry);
+  window.viewerLoadTimings = viewerLoadTimings;
+  return entry;
+}
+
+function addViewerMeshTiming(entry) {
+  viewerMeshTimings.push({
+    ...entry,
+    decodeMs: Number((entry.decodeMs || 0).toFixed(2)),
+    parseMs: Number((entry.parseMs || 0).toFixed(2)),
+    addMs: Number((entry.addMs || 0).toFixed(2)),
+    totalMs: Number((entry.totalMs || 0).toFixed(2)),
+  });
+  window.viewerMeshTimings = viewerMeshTimings;
+}
+
+function logViewerPerformanceSummary() {
+  if (!LOG_VIEWER_LOAD_TIMINGS_TO_CONSOLE) return;
+  const sortedStages = [...viewerLoadTimings].sort(
+    (a, b) => b.durationMs - a.durationMs
+  );
+  console.groupCollapsed("[viewer: performance summary]");
+  console.table(sortedStages);
+  if (viewerMeshTimings.length) {
+    console.table(
+      [...viewerMeshTimings].sort((a, b) => b.totalMs - a.totalMs)
+    );
+  }
+  console.groupEnd();
+}
+
+function getViewerObjectCounts() {
+  let jawMeshes = 0;
+  let polylineGroups = 0;
+  let polylineSegments = 0;
+  let draggablePointObjects = 0;
+  let artificialTeeth = 0;
+
+  parentObject.traverse((child) => {
+    if (child.isMesh && child.userData?.jaw_type) {
+      jawMeshes += 1;
+    }
+  });
+
+  polylineOverlayGroup.children.forEach((group) => {
+    if (group.userData?.overlayType !== "polyline") return;
+    polylineGroups += 1;
+    group.traverse((child) => {
+      if (child.userData?.overlayType === "polyline-tube") {
+        polylineSegments += 1;
+      } else if (child.userData?.overlayType === "polyline-edit-point") {
+        draggablePointObjects += 1;
+      }
+    });
+  });
+
+  scene.traverse((child) => {
+    if (child.userData?.overlayType === "artificial-tooth") {
+      artificialTeeth += 1;
+    }
+  });
+
+  return {
+    jawMeshes,
+    polylineGroups,
+    polylineSegments,
+    draggablePointObjects,
+    artificialTeeth,
+    sceneChildren: scene.children.length,
+  };
+}
+
+function logViewerObjectCounts(stage = "rendered") {
+  if (!LOG_VIEWER_OBJECT_COUNTS_TO_CONSOLE) return;
+  console.log(`[viewer: object counts] ${stage}`, getViewerObjectCounts());
+}
+
+function getJawMeshBoundingBox() {
+  const box = new THREE.Box3();
+  let hasJawMesh = false;
+  parentObject.updateMatrixWorld(true);
+  parentObject.traverse((child) => {
+    if (!child.isMesh || !child.userData?.jaw_type) return;
+    child.updateMatrixWorld(true);
+    box.expandByObject(child);
+    hasJawMesh = true;
+  });
+  return hasJawMesh && !box.isEmpty() ? box : null;
+}
+
+function updateViewerRotationOrigin() {
+  const box = getJawMeshBoundingBox();
+  if (!box) return viewerRotationOrigin;
+
+  box.getCenter(viewerRotationOrigin);
+  viewerRotationBoundsRadius = Math.max(
+    VIEWER_TARGET_MIN_DRIFT_LIMIT,
+    box.getSize(new THREE.Vector3()).length() * 0.5
+  );
+  hasViewerRotationOrigin = true;
+  window.viewerRotationOrigin = {
+    x: Number(viewerRotationOrigin.x.toFixed(3)),
+    y: Number(viewerRotationOrigin.y.toFixed(3)),
+    z: Number(viewerRotationOrigin.z.toFixed(3)),
+  };
+  window.viewerRotationGuard = {
+    origin: window.viewerRotationOrigin,
+    boundsRadius: Number(viewerRotationBoundsRadius.toFixed(3)),
+    targetDriftLimit: Number((viewerRotationBoundsRadius * VIEWER_TARGET_DRIFT_FACTOR).toFixed(3)),
+  };
+  if (LOG_VIEWER_OBJECT_COUNTS_TO_CONSOLE) {
+    console.log("[viewer] rotation origin", window.viewerRotationGuard);
+  }
+  return viewerRotationOrigin;
+}
+
+function applyViewerRotationOrigin() {
+  const target = hasViewerRotationOrigin
+    ? viewerRotationOrigin
+    : updateViewerRotationOrigin();
+  if (!target) return;
+
+  if (controls?.target) {
+    controls.target.copy(target);
+    controls.update();
+  }
+  if (orb_controls?.target) {
+    orb_controls.target.copy(target);
+    orb_controls.update();
+  }
+}
+
+function clampViewerControlTarget(control = controls) {
+  if (!control?.target || !hasViewerRotationOrigin) return false;
+  const driftLimit = Math.max(
+    VIEWER_TARGET_MIN_DRIFT_LIMIT,
+    viewerRotationBoundsRadius * VIEWER_TARGET_DRIFT_FACTOR
+  );
+  const targetOffset = control.target.clone().sub(viewerRotationOrigin);
+  const driftDistance = targetOffset.length();
+  if (!Number.isFinite(driftDistance) || driftDistance <= driftLimit) return false;
+
+  targetOffset.setLength(driftLimit);
+  const clampedTarget = viewerRotationOrigin.clone().add(targetOffset);
+  const correction = clampedTarget.clone().sub(control.target);
+  control.target.copy(clampedTarget);
+  camera.position.add(correction);
+  if (orb_controls?.target) {
+    orb_controls.target.copy(clampedTarget);
+  }
+  camera.updateProjectionMatrix();
+
+  window.viewerRotationGuard = {
+    ...(window.viewerRotationGuard || {}),
+    lastClamp: {
+      driftDistance: Number(driftDistance.toFixed(3)),
+      driftLimit: Number(driftLimit.toFixed(3)),
+      correction: {
+        x: Number(correction.x.toFixed(3)),
+        y: Number(correction.y.toFixed(3)),
+        z: Number(correction.z.toFixed(3)),
+      },
+    },
+  };
+  return true;
+}
 
 function disposeObject3D(object) {
   if (!object) return;
@@ -458,12 +700,16 @@ function extractPointArray(candidate) {
 function decodePolylineText(value) {
   if (typeof value !== "string" || !value.trim()) return "";
 
+  const decodeStartedAt = performance.now();
   try {
     const decoded = atob(value.trim());
+    polylineDiagnostics.base64DecodeMs += performance.now() - decodeStartedAt;
+    polylineDiagnostics.base64DecodeCount += 1;
     if (POLYLINE_TEXT_DETECTION_PATTERN.test(decoded)) {
       return decoded;
     }
   } catch {
+    polylineDiagnostics.base64DecodeMs += performance.now() - decodeStartedAt;
     // Keep going: the value may already be plain text.
   }
 
@@ -472,7 +718,10 @@ function decodePolylineText(value) {
 
 function parsePolylineTextSegments(value) {
   const text = decodePolylineText(value);
-  if (!text) return [];
+  if (!text) {
+    return [];
+  }
+  const textParseStartedAt = performance.now();
 
   const lines = text.split(/\r?\n/);
   const segments = [];
@@ -544,6 +793,8 @@ function parsePolylineTextSegments(value) {
     i = Math.max(i, nextIndex - 1);
   }
 
+  polylineDiagnostics.textParseMs += performance.now() - textParseStartedAt;
+  polylineDiagnostics.textParseCount += 1;
   return segments;
 }
 
@@ -1306,7 +1557,7 @@ function renderPolylineData(polylineByJaw) {
     });
   });
   updatePolylineComponentMenu();
-  auditRenderedPolylines();
+  auditRenderedPolylines({ logToConsole: LOG_POLYLINE_AUTO_AUDITS_TO_CONSOLE });
 }
 
 function resetPolylineGroup(polylineGroup) {
@@ -1342,7 +1593,7 @@ function resetPolylineGroup(polylineGroup) {
 
 function resetPolylineEdits() {
   polylineOverlayGroup.children.forEach(resetPolylineGroup);
-  auditRenderedPolylines();
+  auditRenderedPolylines({ logToConsole: LOG_POLYLINE_AUTO_AUDITS_TO_CONSOLE });
 }
 
 function countPolylinePoints(segments) {
@@ -1424,7 +1675,7 @@ function getPolylineAuditIssues(group, apiSummary, renderedSummary) {
   return issues;
 }
 
-function auditRenderedPolylines() {
+function auditRenderedPolylines({ logToConsole = true } = {}) {
   const rows = [];
   polylineOverlayGroup.children.forEach((group) => {
     if (group.userData?.overlayType !== "polyline") return;
@@ -1465,6 +1716,7 @@ function auditRenderedPolylines() {
 
   rows.sort((a, b) => b.issueCount - a.issueCount || a.arch.localeCompare(b.arch));
   window.lastPolylineAudit = rows;
+  if (!logToConsole) return rows;
   if (rows.length) {
     console.table(
       rows.map(({ apiSummary, renderedSummary, ...row }) => row)
@@ -1740,6 +1992,14 @@ function createPolylineVisibilityToggle(container, domElement) {
 }
 
 async function fetchAndRenderPolylines(caseIntID) {
+  const totalStartedAt = performance.now();
+  console.time("viewer: total polyline load");
+  const fetchStartedAt = performance.now();
+  console.time("viewer: fetch polylines");
+  let isPolylineFetchTimerActive = true;
+  let isPolylineNormalizeTimerActive = false;
+  let isPolylineRenderTimerActive = false;
+  let isPolylineTotalTimerActive = true;
   clearPolylineOverlay();
 
   const polylinePayload = [
@@ -1762,7 +2022,21 @@ async function fetchAndRenderPolylines(caseIntID) {
       false,
       "Polyline"
     );
+    console.timeEnd("viewer: fetch polylines");
+    addViewerLoadTiming("fetch polylines", performance.now() - fetchStartedAt);
+    isPolylineFetchTimerActive = false;
+    resetPolylineDiagnostics();
+    const normalizeStartedAt = performance.now();
+    console.time("viewer: normalize polyline response");
+    isPolylineNormalizeTimerActive = true;
     const normalized = normalizePolylineResponse(response);
+    console.timeEnd("viewer: normalize polyline response");
+    addViewerLoadTiming(
+      "normalize polyline response",
+      performance.now() - normalizeStartedAt
+    );
+    isPolylineNormalizeTimerActive = false;
+    logPolylineDiagnostics();
     const upperPointCount = countPolylinePoints(normalized.upper);
     const lowerPointCount = countPolylinePoints(normalized.lower);
     const hasAnyPoints = upperPointCount || lowerPointCount;
@@ -1773,18 +2047,57 @@ async function fetchAndRenderPolylines(caseIntID) {
 
     if (!hasAnyPoints) {
       console.log("[polyline] No polyline data returned.");
+      console.timeEnd("viewer: total polyline load");
+      addViewerLoadTiming("total polyline load", performance.now() - totalStartedAt);
+      isPolylineTotalTimerActive = false;
       return;
     }
 
+    const renderStartedAt = performance.now();
+    console.time("viewer: render polylines");
+    isPolylineRenderTimerActive = true;
     renderPolylineData(normalized);
+    console.timeEnd("viewer: render polylines");
+    addViewerLoadTiming("render polylines", performance.now() - renderStartedAt, {
+      upperPoints: upperPointCount,
+      lowerPoints: lowerPointCount,
+    });
+    isPolylineRenderTimerActive = false;
+    logViewerObjectCounts("after polyline render");
+    console.timeEnd("viewer: total polyline load");
+    addViewerLoadTiming("total polyline load", performance.now() - totalStartedAt);
+    isPolylineTotalTimerActive = false;
   } catch (error) {
+    if (isPolylineFetchTimerActive) {
+      console.timeEnd("viewer: fetch polylines");
+      addViewerLoadTiming("fetch polylines", performance.now() - fetchStartedAt, {
+        status: "failed",
+      });
+    }
+    if (isPolylineNormalizeTimerActive) {
+      console.timeEnd("viewer: normalize polyline response");
+    }
+    if (isPolylineRenderTimerActive) {
+      console.timeEnd("viewer: render polylines");
+    }
+    if (isPolylineTotalTimerActive) {
+      console.timeEnd("viewer: total polyline load");
+      addViewerLoadTiming("total polyline load", performance.now() - totalStartedAt, {
+        status: "failed",
+      });
+    }
     console.warn("[polyline] Unable to fetch polyline data.", error);
   }
 }
 
 async function fetchAndRenderCaseOverlays(caseIntID) {
+  const overlaysStartedAt = performance.now();
+  startViewerLoadTimer("viewer: case overlays");
   await fetchAndRenderPolylines(caseIntID);
   await artificialTeethRenderer.fetchAndRender(caseIntID);
+  endViewerLoadTimer("viewer: case overlays");
+  addViewerLoadTiming("case overlays", performance.now() - overlaysStartedAt);
+  logViewerObjectCounts("after case overlays");
 }
 
 function updatePointerPosition(event, domElement) {
@@ -2014,6 +2327,9 @@ function setupChatToggle() {
   if (!viewerContainer) {
     return;
   }
+  const viewerTotalStartedAt = performance.now();
+  const pageInitializationStartedAt = performance.now();
+  startViewerLoadTimer("viewer: page/viewer initialization");
 
   //datas :)
   // this for the undercut upper and the main json data use to retrieve stuff
@@ -2038,15 +2354,114 @@ function setupChatToggle() {
     jaw_type: 1,
     caseIntID: paramValue,
   };
+  const captureInitialLoadPromise = (label, startedAt, promise) =>
+    promise
+      .then((result) => {
+        endViewerLoadTimer(label);
+        addViewerLoadTiming(
+          label.replace(/^viewer: /, ""),
+          performance.now() - startedAt
+        );
+        return result;
+      })
+      .catch((error) => {
+        endViewerLoadTimer(label);
+        addViewerLoadTiming(
+          label.replace(/^viewer: /, ""),
+          performance.now() - startedAt,
+          { status: "failed" }
+        );
+        return { __viewerLoadError: error };
+      });
+  const unwrapInitialLoadResult = (result) => {
+    if (result?.__viewerLoadError) {
+      throw result.__viewerLoadError;
+    }
+    return result;
+  };
+
+  const urldatas = ["/case/get/" + paramValue];
+  const thumbnail_url = ["/thumbnails/get"];
+  const heatmap_urldatas = ["/undercutheatmap/get"];
+
+  const caseDataStartedAt = performance.now();
+  startViewerLoadTimer("viewer: case data loading");
+  const caseDataPromise = captureInitialLoadPromise(
+    "viewer: case data loading",
+    caseDataStartedAt,
+    apiClient.post(urldatas[0], [data], false, "Case Info")
+  );
+
+  const thumbnailStartedAt = performance.now();
+  startViewerLoadTimer("viewer: thumbnail loading");
+  const thumbnailDataPromise = captureInitialLoadPromise(
+    "viewer: thumbnail loading",
+    thumbnailStartedAt,
+    apiClient.post(thumbnail_url[0], [data], false, "2D image")
+  );
+
+  const heatmapStartedAt = performance.now();
+  startViewerLoadTimer("viewer: heatmap data loading");
+  const heatmapDataPromise = captureInitialLoadPromise(
+    "viewer: heatmap data loading",
+    heatmapStartedAt,
+    Promise.all([
+      apiClient.post(heatmap_urldatas, data, false, "Heatmap upper"),
+      apiClient.post(heatmap_urldatas, data2, false, "Heatmap lower"),
+    ])
+  );
+
+  const meshDataStartedAt = performance.now();
+  startViewerLoadTimer("viewer: jaw mesh data loading");
+  const parameterisationMeshTimerLabel = "viewer: mesh API /parameterisation/mesh/getall";
+  const surfaceMeshTimerLabel = "viewer: mesh API /surface/getall";
+  const closedMeshAvailabilityTimerLabel =
+    "viewer: mesh API /stl/get availability check";
+  const closedMeshTimerLabel = "viewer: mesh API /stl/get";
+  if (!close) {
+    startViewerLoadTimer(parameterisationMeshTimerLabel);
+    startViewerLoadTimer(surfaceMeshTimerLabel);
+    startViewerLoadTimer(closedMeshAvailabilityTimerLabel);
+  } else {
+    startViewerLoadTimer(closedMeshTimerLabel);
+  }
+  const parameterisationMeshPromise = !close
+    ? captureInitialLoadPromise(
+        parameterisationMeshTimerLabel,
+        performance.now(),
+        apiClient.post("/parameterisation/mesh/getall", [data], false, "Jaw mesh")
+      )
+    : Promise.resolve("stl");
+  const surfaceMeshPromise = !close
+    ? captureInitialLoadPromise(
+        surfaceMeshTimerLabel,
+        performance.now(),
+        apiClient.post("/surface/getall", [data], false, "Denture mesh")
+      )
+    : Promise.resolve("stl");
+  const closedMeshAvailabilityPromise = !close
+    ? captureInitialLoadPromise(
+        closedMeshAvailabilityTimerLabel,
+        performance.now(),
+        apiClient.post("/stl/get", [data], "test", "Jaw mesh")
+      )
+    : Promise.resolve("stl");
+  const closedMeshPromise = close
+    ? captureInitialLoadPromise(
+        closedMeshTimerLabel,
+        performance.now(),
+        apiClient.post("/stl/get", [data], false, "Jaw mesh")
+      )
+    : Promise.resolve("stl");
+  artificialTeethRenderer.prefetch(paramValue);
   let positionDatas = [];
   let positionData;
 
   //This section is for the processing of creation date, case id and last updated
-  const urldatas = ["/case/get/" + paramValue];
   try {
     // Call the post method and wait for the response
     for (const urldata of urldatas) {
-      positionData = await apiClient.post(urldata, [data], false, "Case Info");
+      positionData = unwrapInitialLoadResult(await caseDataPromise);
       //console.log('Success:', positionData)
       positionDatas = positionDatas.concat(positionData);
       window.caseID = positionData.case_id;
@@ -2069,16 +2484,10 @@ function setupChatToggle() {
     "bottom-left2"
   );
 
-  const thumbnail_url = ["/thumbnails/get"];
   try {
     // Call the post method and wait for the response
     for (const urldata of thumbnail_url) {
-      const thumbnailData = await apiClient.post(
-        urldata,
-        [data],
-        false,
-        "2D image"
-      );
+      const thumbnailData = unwrapInitialLoadResult(await thumbnailDataPromise);
       //console.log('Success thumb:', thumbnailData)
       for (const thumb in thumbnailData) {
         if (thumbnailData[thumb].slot == 0) {
@@ -2451,19 +2860,14 @@ btnContainer.appendChild(edit2DStatic); */
   } catch (error) {
     console.error("Error:", error);
   }
-
   // to get the undercut and occulsion values
   let undercut_values = [];
 
-  const heatmap_urldatas = ["/undercutheatmap/get"];
   try {
     // Call the post method and wait for the response
 
-    const undercut_value = await apiClient.post(
-      heatmap_urldatas,
-      data,
-      false,
-      "Heatmap upper"
+    const [undercut_value, undercut_value1] = unwrapInitialLoadResult(
+      await heatmapDataPromise
     );
     undercut_values = undercut_values.concat(undercut_value);
     //console.log('Success:', undercut_value)
@@ -2473,12 +2877,6 @@ btnContainer.appendChild(edit2DStatic); */
       Boolean(undercut_value.occlusion_values),
     ];
 
-    const undercut_value1 = await apiClient.post(
-      heatmap_urldatas,
-      data2,
-      false,
-      "Heatmap lower"
-    );
     undercut_values = undercut_values.concat(undercut_value1);
 
     undercut_type[undercut_value1.jaw_type] = [
@@ -2511,7 +2909,11 @@ btnContainer.appendChild(edit2DStatic); */
         } else if (url == "/surface/getall") {
           name_of_mesh = "Denture mesh";
         }
-        responseData = await apiClient.post(url, [data], false, name_of_mesh);
+        responseData = unwrapInitialLoadResult(
+          await (url == "/parameterisation/mesh/getall"
+            ? parameterisationMeshPromise
+            : surfaceMeshPromise)
+        );
         //console.log(responseData);
         if (isObject(responseData)) {
           responseDatas = responseDatas.concat(responseData);
@@ -2519,11 +2921,8 @@ btnContainer.appendChild(edit2DStatic); */
         //loop to prevent repeated check
         if (loop == 1) {
           //check for closed.off
-          const test = await apiClient.post(
-            "/stl/get",
-            [data],
-            "test",
-            "Jaw mesh"
+          const test = unwrapInitialLoadResult(
+            await closedMeshAvailabilityPromise
           );
 
           if (test != "stl") {
@@ -2728,21 +3127,18 @@ btnContainer.appendChild(edit2DStatic); */
         !close
       ) {
         responseData = "stl";
+        const rawStlStartedAt = performance.now();
         responseData = await apiClient.post(
           "/stl/raw/get",
           [data],
           false,
           "Jaw mesh"
         );
+        addViewerLoadTiming("mesh API /stl/raw/get", performance.now() - rawStlStartedAt);
         stl = true;
       } else if (close && url == "/parameterisation/mesh/getall") {
         responseData = "stl";
-        responseData = await apiClient.post(
-          "/stl/get",
-          [data],
-          false,
-          "Jaw mesh"
-        );
+        responseData = unwrapInitialLoadResult(await closedMeshPromise);
         //console.log(responseData);
         stl = false;
         const button = document.createElement("button");
@@ -2785,6 +3181,10 @@ btnContainer.appendChild(edit2DStatic); */
   } catch (error) {
     console.error("Error:", error);
   }
+  endViewerLoadTimer("viewer: jaw mesh data loading");
+  addViewerLoadTiming("mesh API data loading", performance.now() - meshDataStartedAt, {
+    files: responseDatas.length,
+  });
 
   // Function to style buttons
   function styleButton(button, color) {
@@ -3087,6 +3487,8 @@ btnContainer.appendChild(edit2DStatic); */
 } */
 
   async function loadAllSTLSlots() {
+    const slotLoadStartedAt = performance.now();
+    startViewerLoadTimer("viewer: framework/denture mesh loading");
     const apiUrl = "/stl/slot/get";
 
     const authPayload = {
@@ -3126,6 +3528,7 @@ btnContainer.appendChild(edit2DStatic); */
 
     for (let slot = 1; slot <= 4; slot++) {
       //for (let slot = 4; slot>0; slot--){
+      const slotStartedAt = performance.now();
       const payload = [authPayload, { slotNumber: slot }];
 
       try {
@@ -3230,6 +3633,11 @@ btnContainer.appendChild(edit2DStatic); */
         console.warn(`⚠️ Slot ${slot} failed:`, error.message || error);
       }
     }
+    endViewerLoadTimer("viewer: framework/denture mesh loading");
+    addViewerLoadTiming(
+      "framework/denture mesh loading",
+      performance.now() - slotLoadStartedAt
+    );
 
     if (!anyLoaded) {
       alert("❌ No STL files found in slots 1 to 4.");
@@ -3248,7 +3656,18 @@ btnContainer.appendChild(edit2DStatic); */
   }
 
   //console.log(responseDatas);
+  const meshCpuStartedAt = performance.now();
+  let jawMeshCpuMs = 0;
+  let frameworkMeshCpuMs = 0;
+  startViewerLoadTimer("viewer: mesh decode/parse/render");
   for (const offFile of responseDatas) {
+    const meshFileStartedAt = performance.now();
+    let meshDecodeMs = 0;
+    let meshParseMs = 0;
+    let meshAddMs = 0;
+    const meshCategory = offFile.filename.includes("surface")
+      ? "framework/denture"
+      : "jaw";
     let loader;
     //console.log(offFile)
     if (offFile.filename.includes("surface")) {
@@ -3262,7 +3681,9 @@ btnContainer.appendChild(edit2DStatic); */
 
     // Fetch the OFF file data
     //const offData = await apiClient.get(offFile); // Assuming the ApiClient has a get method for fetching data
+    const meshDecodeStartedAt = performance.now();
     const offdata = atob(offFile.data);
+    meshDecodeMs = performance.now() - meshDecodeStartedAt;
     let x;
     if (
       offFile.filename.includes("ParameterisationMesh") ||
@@ -3272,6 +3693,7 @@ btnContainer.appendChild(edit2DStatic); */
     }
     // Load the OFF file
     //console.log('check stl:' + stl)
+    const meshParseStartedAt = performance.now();
     if (stl) {
       const stlMeshLoader = new STLMeshLoader(material);
       if (offFile.type.includes("upper")) {
@@ -3284,7 +3706,9 @@ btnContainer.appendChild(edit2DStatic); */
     } else if (offFile.type.includes("lower")) {
       mesh_geo = loader.parse(offdata, undercut_values[0], x);
     }
+    meshParseMs = performance.now() - meshParseStartedAt;
 
+    const meshAddStartedAt = performance.now();
     const mesh = mesh_geo[0];
     mesh.name = offFile.filename;
 
@@ -3328,8 +3752,42 @@ btnContainer.appendChild(edit2DStatic); */
     enforceOpaqueJawMesh(mesh);
     parentObject.add(mesh);
     syncPolylineFocusMode();
+    meshAddMs = performance.now() - meshAddStartedAt;
+
+    const meshTotalMs = performance.now() - meshFileStartedAt;
+    if (meshCategory === "jaw") {
+      jawMeshCpuMs += meshTotalMs;
+    } else {
+      frameworkMeshCpuMs += meshTotalMs;
+    }
+    addViewerMeshTiming({
+      file: offFile.filename,
+      type: offFile.type,
+      category: meshCategory,
+      decodeMs: meshDecodeMs,
+      parseMs: meshParseMs,
+      addMs: meshAddMs,
+      totalMs: meshTotalMs,
+      vertices: mesh.geometry?.attributes?.position?.count ?? null,
+      children: mesh.children?.length ?? 0,
+    });
   }
-  await fetchAndRenderCaseOverlays(paramValue);
+  endViewerLoadTimer("viewer: mesh decode/parse/render");
+  addViewerLoadTiming(
+    "mesh decode/parse/render",
+    performance.now() - meshCpuStartedAt,
+    { files: responseDatas.length }
+  );
+  if (LOG_VIEWER_LOAD_TIMINGS_TO_CONSOLE) {
+    console.log(`viewer: load jaw mesh: ${jawMeshCpuMs.toFixed(2)} ms`);
+    console.log(
+      `viewer: load framework/denture mesh: ${frameworkMeshCpuMs.toFixed(2)} ms`
+    );
+  }
+  addViewerLoadTiming("load jaw mesh", jawMeshCpuMs);
+  addViewerLoadTiming("load framework/denture mesh", frameworkMeshCpuMs);
+  logViewerObjectCounts("after jaw/framework mesh load");
+  updateViewerRotationOrigin();
   //console.log(all_mesh_mat);
 
   function changeMeshRotation(mesh, x, y, z) {
@@ -3467,13 +3925,14 @@ btnContainer.appendChild(edit2DStatic); */
     controls.rotateSpeed = 4.0;
     orb_controls.zoomSpeed = 2;
     orb_controls.enableRotate = false;
-    orb_controls.enabelePan = true;
+    orb_controls.enablePan = true;
 
     controls.panSpeed = 30;
     controls.noZoom = true;
     controls.noPan = false;
     controls.staticMoving = true;
     controls.dynamicDampingFactor = 0.3;
+    applyViewerRotationOrigin();
 
     //console.log('changed2');
   }
@@ -3482,9 +3941,19 @@ btnContainer.appendChild(edit2DStatic); */
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
+    clampViewerControlTarget(controls);
     artificialTeethRenderer.syncToJawMeshes();
 
     renderer.render(scene, camera);
+    if (!hasLoggedFirstSceneRender) {
+      hasLoggedFirstSceneRender = true;
+      endViewerLoadTimer("viewer: final scene render/update");
+      addViewerLoadTiming(
+        "final scene render/update",
+        performance.now() - finalSceneRenderStartedAt
+      );
+      logViewerObjectCounts("after first scene render");
+    }
   }
 
   // Add a listener to the window, so we can resize the window and the camera
@@ -3503,14 +3972,23 @@ btnContainer.appendChild(edit2DStatic); */
   camera.zoom = 7;
   camera.updateProjectionMatrix();
   const clonedCamera = camera.clone();
-  addResetButton(camera, clonedCamera, controls);
+  addResetButton(camera, clonedCamera, controls, () => viewerRotationOrigin.clone());
   setupChatToggle();
   //console.log(camera)
 
   // Start the 3D rendering
+  const finalSceneRenderStartedAt = performance.now();
+  startViewerLoadTimer("viewer: final scene render/update");
   animate();
+  endViewerLoadTimer("viewer: page/viewer initialization");
+  addViewerLoadTiming(
+    "page/viewer initialization",
+    performance.now() - pageInitializationStartedAt
+  );
   //console.log(parentObject);
   //console.log(undercut_type);
+  const controlsStartedAt = performance.now();
+  startViewerLoadTimer("viewer: controls setup");
   removeVisibilityAndTransparencyControls();
   addVisibilityAndTransparencyControls(
     parentObject,
@@ -3518,17 +3996,40 @@ btnContainer.appendChild(edit2DStatic); */
     all_mesh_mat,
     undercut_type
   );
+  endViewerLoadTimer("viewer: controls setup");
+  addViewerLoadTiming("controls setup", performance.now() - controlsStartedAt);
+  addViewerLoadTiming(
+    "initial viewer usable",
+    performance.now() - viewerTotalStartedAt
+  );
+  logViewerObjectCounts("initial viewer usable");
+  logViewerPerformanceSummary();
 
-  const urlLogout = ["/user/logout"];
-  try {
-    // Call the post method and wait for the response
-    for (const urldata of urlLogout) {
-      const check = await apiClient.post(urldata, [data]);
-      //console.log('Success logout:', check)
+  const logoutAfterBackgroundLoad = async () => {
+    const urlLogout = ["/user/logout"];
+    try {
+      // Call the post method and wait for the response
+      for (const urldata of urlLogout) {
+        const check = await apiClient.post(urldata, [data]);
+        //console.log('Success logout:', check)
+      }
+    } catch (error) {
+      console.error("Error:", error);
     }
-  } catch (error) {
-    console.error("Error:", error);
-  }
+  };
+
+  fetchAndRenderCaseOverlays(paramValue)
+    .catch((error) => {
+      console.error("[viewer] Background overlays failed", error);
+    })
+    .finally(() => {
+      addViewerLoadTiming(
+        "total viewer load",
+        performance.now() - viewerTotalStartedAt
+      );
+      logViewerPerformanceSummary();
+      logoutAfterBackgroundLoad();
+    });
 })();
 
 function isMobileDevice() {

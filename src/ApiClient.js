@@ -5,7 +5,9 @@ export class ApiClient {
 
   async post(endpoint, data, test,what) {
     const url = `${this.baseUrl}${endpoint}`;
-    console.log(what)
+    if (what !== undefined) {
+      console.log(what);
+    }
     let that = '';
     if(what == undefined)
     {
