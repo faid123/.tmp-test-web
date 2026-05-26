@@ -45,6 +45,7 @@ function showConfirmModal({ title = "Confirm", message = "", confirmLabel = "Con
 let THREE = null;
 let OrbitControls = null;
 let STLLoader = null;
+let threeMergeVertices = null;
 
 const PREVIEW_MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 const PREVIEW_FALLBACK_UUID = "AC4gRQXZJoNz9EhhW36Q8jMJXBsf";
@@ -108,14 +109,16 @@ export async function loadInteractiveJawPreview(area) {
 async function ensureThreeDeps() {
   if (THREE && OrbitControls && STLLoader) return true;
   try {
-    const [threeMod, orbitMod, stlMod] = await Promise.all([
+    const [threeMod, orbitMod, stlMod, utilsMod] = await Promise.all([
       import("https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"),
       import("https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js"),
       import("https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/STLLoader.js"),
+      import("https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/utils/BufferGeometryUtils.js"),
     ]);
     THREE = threeMod;
     OrbitControls = orbitMod.OrbitControls;
     STLLoader = stlMod.STLLoader;
+    threeMergeVertices = utilsMod.mergeVertices;
     return true;
   } catch (err) {
     console.error("Failed loading three.js dependencies", err);
@@ -242,20 +245,23 @@ async function deleteJawStl(jaw) {
   ];
 
   for (const url of endpoints) {
+    const path = url.replace(SMARTRPD_API_BASE, "");
+    const t0 = performance.now();
     try {
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const text = await res.text();
-      console.log(`[stl/delete] ${url} ←`, res.status, text.slice(0, 200));
+      const dt = Math.round(performance.now() - t0);
+      const tag = res.ok ? "✓" : "✕";
+      console.log(`[preview3D] ${tag} POST ${path} status=${res.status} ${dt}ms`);
       if (res.ok) return true;
       if (res.status !== 404 && res.status !== 405) {
         throw new Error(`HTTP ${res.status}`);
       }
     } catch (err) {
-      console.warn(`[stl/delete] ${url} failed`, err);
+      console.warn(`[preview3D] ✕ POST ${path} failed`, err);
     }
   }
   return false;
@@ -277,12 +283,17 @@ async function fetchJawFilesForCase() {
   ];
 
   for (const endpoint of endpoints) {
+    const path = endpoint.replace(SMARTRPD_API_BASE, "");
+    const t0 = performance.now();
     try {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      const dt = Math.round(performance.now() - t0);
+      const tag = res.ok ? "✓" : "✕";
+      console.log(`[preview3D] ${tag} POST ${path} status=${res.status} ${dt}ms`);
       if (!res.ok) continue;
       const data = await res.json();
       const list = Array.isArray(data) ? data : [data];
@@ -293,64 +304,20 @@ async function fetchJawFilesForCase() {
         return type.includes("upper") || type.includes("lower") || name.includes("upper") || name.includes("lower");
       });
       if (filtered.length) return filtered;
-    } catch {
-      // Try fallback endpoint.
+    } catch (err) {
+      console.warn(`[preview3D] ✕ POST ${path} failed`, err);
     }
   }
   return [];
 }
 
 async function fetchParameterisedMeshForCase() {
-  if (!state.caseIntID) return [];
-
-  // Use the hardcoded service uuid (same as src/index.js) — the parameterisation
-  // endpoint scopes by uuid and the logged-in user's uuid 404s here even though
-  // the heatmap endpoint accepts it.
-  const data = {
-    machine_id: PREVIEW_MACHINE_ID,
-    uuid: PREVIEW_FALLBACK_UUID,
-    case_int_id: state.caseIntID,
-    caseIntID: state.caseIntID,
-    jaw_type: 2,
-  };
-
-  // Try multiple known endpoint spellings/variants because some deployments use
-  // parameterisation, others parameterization, and some expose mesh under surface.
-  const endpoints = [
-    "/parameterisation/mesh/getall",
-    "/parameterization/mesh/getall",
-    "/surface/getall",
-    "/surface/mesh/getall",
-  ];
-  const collected = [];
-
-  for (const endpoint of endpoints) {
-    try {
-      const res = await fetch(`${SMARTRPD_API_BASE}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([data]),
-      });
-      if (!res.ok) {
-        console.warn(`[preview3D] ${endpoint} HTTP ${res.status}`);
-        continue;
-      }
-      const body = await res.json();
-      const list = Array.isArray(body) ? body : [body];
-      for (const item of list) {
-        if (!item?.data) continue;
-        const type = String(item.type || item.jaw_type || "").toLowerCase();
-        const name = String(item.filename || "").toLowerCase();
-        const isJaw = type.includes("upper") || type.includes("lower") || name.includes("upper") || name.includes("lower");
-        const isClosedVariant = name.includes("closed");
-        if (isJaw && !isClosedVariant) collected.push(item);
-      }
-      if (collected.length) break;
-    } catch (err) {
-      console.warn(`[preview3D] ${endpoint} fetch failed:`, err);
-    }
-  }
-  return collected;
+  // The /parameterisation/mesh/getall, /parameterization/mesh/getall,
+  // /surface/getall, and /surface/mesh/getall variants all 404 on the live
+  // backend, so we skip them and let the caller fall through to
+  // fetchJawFilesForCase. Restore the endpoint loop here if any of those
+  // come online.
+  return [];
 }
 
 async function fetchUndercutForCase() {
@@ -366,19 +333,20 @@ async function fetchUndercutForCase() {
   };
 
   const requestJaw = async (jawType, label) => {
+    const t0 = performance.now();
     try {
       const res = await fetch(`${SMARTRPD_API_BASE}/undercutheatmap/get`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...baseBody, jaw_type: jawType }),
       });
-      if (!res.ok) {
-        console.warn(`[preview3D] undercut ${label} HTTP ${res.status}`);
-        return null;
-      }
+      const dt = Math.round(performance.now() - t0);
+      const tag = res.ok ? "✓" : "✕";
+      console.log(`[preview3D] ${tag} POST /undercutheatmap/get (${label}) status=${res.status} ${dt}ms`);
+      if (!res.ok) return null;
       return await res.json();
     } catch (err) {
-      console.warn(`[preview3D] undercut ${label} fetch failed:`, err);
+      console.warn(`[preview3D] ✕ POST /undercutheatmap/get (${label}) failed`, err);
       return null;
     }
   };
@@ -416,21 +384,23 @@ async function fetchCaseData() {
   if (!state.caseIntID) return null;
   const user = getLoggedInUser();
   const uuid = user?.uuid || PREVIEW_FALLBACK_UUID;
+  const path = `/case/get/${state.caseIntID}`;
+  const t0 = performance.now();
   try {
-    const res = await fetch(`${SMARTRPD_API_BASE}/case/get/${state.caseIntID}`, {
+    const res = await fetch(`${SMARTRPD_API_BASE}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify([
         { machine_id: PREVIEW_MACHINE_ID, uuid, caseIntID: state.caseIntID },
       ]),
     });
-    if (!res.ok) {
-      console.warn(`[preview3D] case/get HTTP ${res.status}`);
-      return null;
-    }
+    const dt = Math.round(performance.now() - t0);
+    const tag = res.ok ? "✓" : "✕";
+    console.log(`[preview3D] ${tag} POST ${path} status=${res.status} ${dt}ms`);
+    if (!res.ok) return null;
     return await res.json();
   } catch (err) {
-    console.warn("[preview3D] case/get failed:", err);
+    console.warn(`[preview3D] ✕ POST ${path} failed`, err);
     return null;
   }
 }
@@ -457,6 +427,7 @@ function reapplyHeatmap(undercut) {
     group.traverse((obj) => {
       if (obj.isMesh && obj.geometry) {
         applyUndercutVertexColors(obj.geometry, surface);
+        smoothVertexColors(obj.geometry, 5);
       }
     });
   };
@@ -515,22 +486,24 @@ async function saveSurveyAngle(jaw, btn) {
     btn.textContent = "SAVING…";
   }
 
+  const path = `/case/${state.caseIntID}`;
+  const t0 = performance.now();
   try {
-    const res = await fetch(`${SMARTRPD_API_BASE}/case/${state.caseIntID}`, {
+    const res = await fetch(`${SMARTRPD_API_BASE}${path}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify([auth, caseBody]),
     });
-    if (!res.ok) {
-      console.error(`[preview3D] PUT /case HTTP ${res.status}`);
-      return;
-    }
+    const dt = Math.round(performance.now() - t0);
+    const tag = res.ok ? "✓" : "✕";
+    console.log(`[preview3D] ${tag} PUT ${path} status=${res.status} ${dt}ms`);
+    if (!res.ok) return;
     preview3DState.caseData = updated;
 
     const newUndercut = await fetchUndercutForCase();
     reapplyHeatmap(newUndercut);
   } catch (err) {
-    console.error("[preview3D] PUT /case failed:", err);
+    console.error(`[preview3D] ✕ PUT ${path} failed`, err);
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -659,8 +632,11 @@ function init3DPreview(area) {
   controls.screenSpacePanning = true;
   controls.minDistance = 35;
   controls.maxDistance = 700;
-  controls.minPolarAngle = 0.08;
-  controls.maxPolarAngle = Math.PI - 0.08;
+  // Allow full vertical rotation — user can flip the jaw all the way over
+  // to see the occlusal/palatal surfaces from any angle. Horizontal rotation
+  // is unrestricted by default in OrbitControls.
+  controls.minPolarAngle = 0;
+  controls.maxPolarAngle = Math.PI;
   controls.target.set(0, 0, 0);
 
   rowUpper.surveyBtn.addEventListener("click", () =>
@@ -806,49 +782,45 @@ async function populateJawPreview(jawFiles, undercut) {
 
     let geometry = loader.parse(base64ToArrayBuffer(file.data));
     let useHeatmap = false;
-    const merged = mergeStlVertices(geometry);
-    const mergedVerts = merged.attributes.position.count;
 
-    const candidates = [
-      { label: upper ? "upper" : "lower", surface: primarySurface },
-      { label: upper ? "lower" : "upper", surface: secondarySurface },
-    ];
+    // Determine which heatmap surface to use, then dedup the mesh to match
+    // its vertex count so the backend's first-occurrence vertex indices align
+    // with ours. Prefer the same-jaw surface; only fall back to the opposite
+    // if the same-jaw one is empty.
+    const primaryVerts = surveyingVerts(primarySurface);
+    const secondaryVerts = surveyingVerts(secondarySurface);
 
-    let picked = null;
-    for (const c of candidates) {
-      const heatmapVerts = surveyingVerts(c.surface);
-      if (heatmapVerts > 0 && heatmapVerts === mergedVerts) {
-        picked = c;
-        break;
-      }
+    let target = null;
+    if (primaryVerts > 0) {
+      target = { label: upper ? "upper" : "lower", surface: primarySurface, verts: primaryVerts };
+    } else if (secondaryVerts > 0) {
+      target = { label: upper ? "lower" : "upper", surface: secondarySurface, verts: secondaryVerts };
     }
 
-    // No exact match — fall back to the primary (same-jaw) surface if it has heatmap
-    // data. The backend's dedup threshold can differ slightly from ours (e.g. 130613 vs
-    // 127895 verts on the lower jaw); applyUndercutVertexColors clips to the shorter
-    // length so trailing verts simply keep the default tooth color.
-    if (!picked && surveyingVerts(primarySurface) > 0) {
-      picked = { label: upper ? "upper" : "lower", surface: primarySurface };
-      console.warn("[preview3D] vertex/heatmap count mismatch — applying partial heatmap", {
-        file: file?.filename || file?.type || "unknown",
-        mergedVerts,
-        primaryHeatmapVerts: surveyingVerts(primarySurface),
-        oppositeHeatmapVerts: surveyingVerts(secondarySurface),
-      });
-    }
-
-    if (picked) {
-      geometry = merged;
-      applyUndercutVertexColors(geometry, picked.surface);
+    if (target) {
+      // Dual-dedup: walk raw STL corners once, building our dedup AND a
+      // surrogate of the backend's. Each of our verts records the backend
+      // vert it first co-occurs with in the raw stream — colors come from
+      // spatial co-occurrence, not blind index alignment.
+      const dual = buildDualDedupGeometry(geometry, target.surface, target.verts);
+      geometry = dual.geometry;
       useHeatmap = true;
-      if (picked.surface !== primarySurface) {
-        console.warn("[preview3D] used opposite-jaw heatmap due to vertex match", {
+      const diff = Math.abs(dual.backendVertCount - target.verts);
+      console.log(`[preview3D] dual-dedup heatmap applied for ${file?.filename || "unknown"}`, {
+        ourVerts: geometry.attributes.position.count,
+        heatmapVerts: target.verts,
+        surrogateBackendVerts: dual.backendVertCount,
+        countDiff: diff,
+      });
+      if (target.surface !== primarySurface) {
+        console.warn("[preview3D] used opposite-jaw heatmap (same-jaw empty)", {
           file: file?.filename || file?.type || "unknown",
           expectedJaw: upper ? "upper" : "lower",
-          usedJaw: picked.label,
-          mergedVerts,
+          usedJaw: target.label,
         });
       }
+    } else {
+      geometry = mergeStlVertices(geometry);
     }
     geometry.computeVertexNormals();
 
@@ -957,8 +929,7 @@ function parseOFFToGeometry(text) {
 // Mirrors STLMeshLoader.mergeVertices in src/STLMeshLoader.js — the backend computes
 // the undercut heatmap against the deduplicated STL, so we must dedupe with the same
 // threshold for vertex indices to align.
-function mergeStlVertices(geometry) {
-  const threshold = 1e-4;
+function mergeStlVerticesWithThreshold(geometry, threshold) {
   const positions = geometry.attributes.position.array;
   const merged = [];
   const indices = [];
@@ -988,7 +959,295 @@ function mergeStlVertices(geometry) {
   return out;
 }
 
-function applyUndercutVertexColors(geometry, surface) {
+function mergeStlVertices(geometry) {
+  return mergeStlVerticesWithThreshold(geometry, 1e-4);
+}
+
+function countUniquePositionsAtThreshold(positions, threshold) {
+  const seen = new Set();
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i];
+    const y = positions[i + 1];
+    const z = positions[i + 2];
+    seen.add(`${Math.round(x / threshold)},${Math.round(y / threshold)},${Math.round(z / threshold)}`);
+  }
+  return seen.size;
+}
+
+function estimateBackendThreshold(positions, targetCount) {
+  let lo = 1e-6;
+  let hi = 1e-1;
+  let bestThreshold = 1e-4;
+  let bestDiff = Infinity;
+  for (let iter = 0; iter < 28; iter += 1) {
+    const mid = Math.sqrt(lo * hi);
+    const count = countUniquePositionsAtThreshold(positions, mid);
+    const diff = Math.abs(count - targetCount);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestThreshold = mid;
+    }
+    if (count > targetCount) lo = mid;
+    else hi = mid;
+    if (hi / lo < 1.0001) break;
+  }
+  for (const factor of [0.95, 0.97, 0.99, 1.01, 1.03, 1.05, 0.9, 1.1]) {
+    const t = bestThreshold * factor;
+    const count = countUniquePositionsAtThreshold(positions, t);
+    const diff = Math.abs(count - targetCount);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestThreshold = t;
+    }
+  }
+  return bestThreshold;
+}
+
+function buildDualDedupGeometry(rawGeometry, surface, targetBackendCount) {
+  const positions = rawGeometry.attributes.position.array;
+  const ourThreshold = 1e-4;
+  const backendThreshold = estimateBackendThreshold(positions, targetBackendCount);
+
+  const ourMap = new Map();
+  const backendMap = new Map();
+  const ourVertPositions = [];
+  const ourVertToBackendIdx = [];
+  const indices = [];
+  let nextOur = 0;
+  let nextBackend = 0;
+
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i];
+    const y = positions[i + 1];
+    const z = positions[i + 2];
+
+    const ourKey = `${Math.round(x / ourThreshold)},${Math.round(y / ourThreshold)},${Math.round(z / ourThreshold)}`;
+    const backendKey = `${Math.round(x / backendThreshold)},${Math.round(y / backendThreshold)},${Math.round(z / backendThreshold)}`;
+
+    let ourIdx = ourMap.get(ourKey);
+    if (ourIdx === undefined) {
+      ourIdx = nextOur++;
+      ourMap.set(ourKey, ourIdx);
+      ourVertPositions.push(x, y, z);
+      ourVertToBackendIdx.push(-1);
+    }
+    indices.push(ourIdx);
+
+    let backendIdx = backendMap.get(backendKey);
+    if (backendIdx === undefined) {
+      backendIdx = nextBackend++;
+      backendMap.set(backendKey, backendIdx);
+    }
+
+    if (ourVertToBackendIdx[ourIdx] === -1) {
+      ourVertToBackendIdx[ourIdx] = backendIdx;
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(ourVertPositions, 3));
+  geometry.setIndex(indices.length > 65535
+    ? new THREE.Uint32BufferAttribute(indices, 1)
+    : new THREE.Uint16BufferAttribute(indices, 1));
+
+  const surveyingBuffer = surface?.surveying_values?.data;
+  const heatmap = surveyingBuffer ? new Float32Array(new Uint8Array(surveyingBuffer).buffer) : null;
+  const heatmapVerts = heatmap ? Math.floor(heatmap.length / 4) : 0;
+
+  const colors = new Float32Array(nextOur * 3);
+  for (let i = 0; i < nextOur; i += 1) {
+    let r = DEFAULT_TOOTH_COLOR[0];
+    let g = DEFAULT_TOOTH_COLOR[1];
+    let b = DEFAULT_TOOTH_COLOR[2];
+    const bIdx = ourVertToBackendIdx[i];
+    if (heatmap && bIdx >= 0 && bIdx < heatmapVerts) {
+      let rr = heatmap[bIdx * 4];
+      let gg = heatmap[bIdx * 4 + 1];
+      let bb = heatmap[bIdx * 4 + 2];
+      if (rr !== 1) r = rr;
+      if (gg !== 1) g = gg;
+      if (bb !== 1) b = bb;
+    }
+    colors[i * 3] = r;
+    colors[i * 3 + 1] = g;
+    colors[i * 3 + 2] = b;
+  }
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+  // Laplacian smoothing: average each vert's color with its mesh neighbors
+  // several times. Without backend positions we can't get exact per-vert
+  // alignment with the heatmap, so the raw colors are noisy. Heavy smoothing
+  // collapses the misaligned-vert streaks into soft red→yellow zones that
+  // look closer to the desktop app's render. Strong undercut regions stay
+  // visible; the speckle from dedup divergence is washed out.
+  smoothVertexColors(geometry, 5);
+
+  return { geometry, backendVertCount: nextBackend };
+}
+
+/**
+ * Laplacian smoothing of an indexed BufferGeometry's color attribute. Each
+ * iteration replaces every vertex color with the average of itself and its
+ * direct mesh neighbors. 2 iterations is enough to kill speckle while keeping
+ * the heatmap's gross structure (red bands stay red, just less spiky).
+ */
+function smoothVertexColors(geometry, iterations = 2) {
+  const colorAttr = geometry.getAttribute("color");
+  const indexAttr = geometry.getIndex();
+  if (!colorAttr || !indexAttr) return;
+
+  const vertexCount = colorAttr.count;
+  const indices = indexAttr.array;
+
+  // Build adjacency once. For each triangle the three corners are mutual
+  // neighbors. Stored as flat parallel arrays (offsets + neighbors) so the
+  // hot loop doesn't iterate a Set per vert.
+  const neighborSets = new Array(vertexCount);
+  for (let v = 0; v < vertexCount; v += 1) neighborSets[v] = new Set();
+  for (let i = 0; i < indices.length; i += 3) {
+    const a = indices[i];
+    const b = indices[i + 1];
+    const c = indices[i + 2];
+    neighborSets[a].add(b); neighborSets[a].add(c);
+    neighborSets[b].add(a); neighborSets[b].add(c);
+    neighborSets[c].add(a); neighborSets[c].add(b);
+  }
+  const offsets = new Uint32Array(vertexCount + 1);
+  let total = 0;
+  for (let v = 0; v < vertexCount; v += 1) {
+    offsets[v] = total;
+    total += neighborSets[v].size;
+  }
+  offsets[vertexCount] = total;
+  const flatNeighbors = new Uint32Array(total);
+  let cursor = 0;
+  for (let v = 0; v < vertexCount; v += 1) {
+    for (const n of neighborSets[v]) flatNeighbors[cursor++] = n;
+  }
+
+  let current = new Float32Array(colorAttr.array);
+  let next = new Float32Array(current.length);
+
+  for (let iter = 0; iter < iterations; iter += 1) {
+    for (let v = 0; v < vertexCount; v += 1) {
+      const start = offsets[v];
+      const end = offsets[v + 1];
+      let r = current[v * 3];
+      let g = current[v * 3 + 1];
+      let b = current[v * 3 + 2];
+      let count = 1;
+      for (let k = start; k < end; k += 1) {
+        const n = flatNeighbors[k];
+        r += current[n * 3];
+        g += current[n * 3 + 1];
+        b += current[n * 3 + 2];
+        count += 1;
+      }
+      next[v * 3] = r / count;
+      next[v * 3 + 1] = g / count;
+      next[v * 3 + 2] = b / count;
+    }
+    const tmp = current;
+    current = next;
+    next = tmp;
+  }
+
+  colorAttr.array.set(current);
+  colorAttr.needsUpdate = true;
+}
+
+/**
+ * Strip non-position attributes so Three.js's mergeVertices dedupes by position
+ * alone — STL geometries carry per-face normals that would otherwise prevent
+ * the merge from collapsing coincident corners.
+ */
+function dedupViaThreeJs(geometry, tolerance) {
+  if (!threeMergeVertices || !THREE) return null;
+  const positionsOnly = new THREE.BufferGeometry();
+  positionsOnly.setAttribute("position", geometry.getAttribute("position").clone());
+  return threeMergeVertices(positionsOnly, tolerance);
+}
+
+/**
+ * Binary-search a single dedup algorithm for the threshold that yields the
+ * count closest to targetCount. Returns { geometry, diff, threshold }.
+ */
+function searchAlgorithmToTarget(geometry, targetCount, dedupFn) {
+  let lo = 1e-6;
+  let hi = 1e-1;
+  let bestGeom = null;
+  let bestDiff = Infinity;
+  let bestThreshold = null;
+
+  const tryThreshold = (t) => {
+    const m = dedupFn(geometry, t);
+    if (!m) return Infinity;
+    const count = m.attributes.position.count;
+    const diff = Math.abs(count - targetCount);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestGeom = m;
+      bestThreshold = t;
+    }
+    return count;
+  };
+
+  // Phase 1: binary search for the crossing.
+  for (let iter = 0; iter < 28; iter += 1) {
+    const mid = Math.sqrt(lo * hi);
+    const count = tryThreshold(mid);
+    if (bestDiff === 0) return { geometry: bestGeom, diff: 0, threshold: bestThreshold };
+    if (count > targetCount) lo = mid;
+    else hi = mid;
+    if (hi / lo < 1.0001) break;
+  }
+
+  // Phase 2: nudge around the best to escape count plateaus.
+  if (bestDiff > 0 && bestThreshold != null) {
+    for (const factor of [0.95, 0.97, 0.99, 1.01, 1.03, 1.05, 0.9, 1.1]) {
+      tryThreshold(bestThreshold * factor);
+      if (bestDiff === 0) break;
+    }
+  }
+
+  return { geometry: bestGeom, diff: bestDiff, threshold: bestThreshold };
+}
+
+/**
+ * Dedup geometry to hit a target vertex count, trying both our grid-rounding
+ * algorithm and Three.js's hash-based mergeVertices — they bucket differently,
+ * so different targets fall on each one's reachable count curve.
+ *
+ * Returns { geometry, matched, diff, algorithm } where algorithm is "grid" or
+ * "three" indicating which one won.
+ */
+function mergeStlVerticesToTarget(geometry, targetCount) {
+  if (!Number.isFinite(targetCount) || targetCount <= 0) {
+    const m = mergeStlVertices(geometry);
+    return { geometry: m, matched: false, diff: Infinity, algorithm: "grid" };
+  }
+
+  const ours = searchAlgorithmToTarget(geometry, targetCount, mergeStlVerticesWithThreshold);
+
+  // Skip Three's algorithm if it isn't loaded yet.
+  if (!threeMergeVertices) {
+    return { geometry: ours.geometry, matched: ours.diff === 0, diff: ours.diff, algorithm: "grid" };
+  }
+
+  const theirs = searchAlgorithmToTarget(geometry, targetCount, dedupViaThreeJs);
+  const winner = ours.diff <= theirs.diff
+    ? { ...ours, algorithm: "grid" }
+    : { ...theirs, algorithm: "three" };
+
+  return {
+    geometry: winner.geometry,
+    matched: winner.diff === 0,
+    diff: winner.diff,
+    algorithm: winner.algorithm,
+  };
+}
+
+function applyUndercutVertexColors(geometry, surface, options = {}) {
   const vertexCount = geometry.attributes.position.count;
   const colors = new Float32Array(vertexCount * 3);
 
@@ -1005,9 +1264,10 @@ function applyUndercutVertexColors(geometry, surface) {
   if (surveyingBuffer) {
     const heatmap = new Float32Array(new Uint8Array(surveyingBuffer).buffer);
     const heatmapVerts = Math.floor(heatmap.length / 4);
+    const trimTail = Math.max(0, Number(options?.trimTailVertices) || 0);
     // When counts differ (backend dedup vs frontend dedup), color the overlapping
     // prefix and leave the rest as default — better than skipping the heatmap entirely.
-    const limit = Math.min(vertexCount, heatmapVerts);
+    const limit = Math.max(0, Math.min(vertexCount, heatmapVerts) - trimTail);
     for (let i = 0; i < limit; i += 1) {
       let r = heatmap[i * 4];
       let g = heatmap[i * 4 + 1];

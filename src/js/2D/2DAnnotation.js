@@ -13,6 +13,14 @@ import {
   COMPONENT_CATALOG,
   isPlateComponentId,
 } from "./components.js";
+import { fetchJawStruct as apiFetchJawStruct, saveJawStructFromState } from "./jawStructApi.js";
+import { decodeJawStructResponse, applyJawStructToState } from "./jawStructCodec.js";
+
+/**
+ * Autosave to /jawstruct_l2 is off until the save endpoint's name + payload
+ * shape are confirmed with the backend. Flip to true once verified.
+ */
+const ENABLE_JAW_STRUCT_AUTOSAVE = false;
 
 /** Calibrated tooth-image scale (SVG tooth-local units). */
 export const TOOTH_SCALE_BASE = 0.24;
@@ -100,9 +108,16 @@ export function getHistoryStateSignature() {
   return JSON.stringify(cloneStateForHistory());
 }
 
-let _autosaveHook = null;
+const _autosaveHooks = [];
 export function registerAutosaveHook(fn) {
-  _autosaveHook = fn;
+  if (typeof fn === "function" && !_autosaveHooks.includes(fn)) {
+    _autosaveHooks.push(fn);
+  }
+}
+function runAutosaveHooks() {
+  for (const fn of _autosaveHooks) {
+    try { fn(); } catch (err) { console.warn("autosave hook failed:", err); }
+  }
 }
 
 function pushHistorySnapshot(snapshot) {
@@ -135,7 +150,7 @@ export function recordHistoryIfChanged(beforeSignature) {
   }
   const changed = pushHistorySnapshot(afterSnapshot);
   updateUndoRedoButtons();
-  if (changed) _autosaveHook?.();
+  if (changed) runAutosaveHooks();
   return changed;
 }
 
@@ -695,10 +710,10 @@ async function fetchCaseOwner() {
   }
 }
 
-// Fetch the jaw struct (L2) for this case and apply the parts whose meaning is
-// known. v1 only applies Tooth Presence; richer fields (rests, retainers,
-// meshes, connectors) are stashed on window.__jawStruct for inspection until
-// the integer-code mapping is documented.
+// Fetch the jaw struct (L2) for this case and apply it to state.
+// Parsing / state-merging / encoding live in ./jawStructCodec.js;
+// HTTP transport lives in ./jawStructApi.js. window.__jawStruct is preserved
+// for inspection in the browser console.
 async function fetchJawStruct() {
   if (!state.caseIntID) return;
   let loggedInUser = null;
@@ -711,106 +726,38 @@ async function fetchJawStruct() {
   if (!loggedInUser?.uuid) return;
 
   try {
-    const response = await fetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/jawstruct_l2/getall",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([
-          {
-            machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
-            uuid: loggedInUser.uuid,
-            caseIntID: state.caseIntID,
-          },
-          { case_id: state.caseIntID },
-        ]),
-      }
-    );
-    if (!response.ok) {
-      console.warn("jawstruct_l2/getall returned", response.status);
-      return;
-    }
-    const records = await response.json();
+    const records = await apiFetchJawStruct(state.caseIntID, loggedInUser.uuid);
     if (!Array.isArray(records) || !records.length) return;
-
-    window.__jawStruct = {};
-    for (const record of records) {
-      if (!record?.data) continue;
-      let text;
-      try {
-        text = atob(record.data);
-      } catch (decodeErr) {
-        console.warn("jawstruct base64 decode failed:", decodeErr);
-        continue;
-      }
-      const parsed = parseJawStructText(text);
-      applyJawStructPresence(parsed);
-      window.__jawStruct[record.type || "unknown"] = parsed;
-    }
+    const decoded = decodeJawStructResponse(records);
+    window.__jawStruct = decoded.raw;
+    if (decoded.upper) applyJawStructToState(decoded.upper, state);
+    if (decoded.lower) applyJawStructToState(decoded.lower, state);
     renderJaws();
   } catch (err) {
     console.warn("Failed to fetch jawstruct:", err);
   }
 }
 
-// Parse the flat "Tooth N: Group.Sub.Field: value" text body into:
-//   { teeth: { 0: { fields: {...} }, ... }, meshes: [{...}], other: {...} }
-function parseJawStructText(text) {
-  const teeth = {};
-  const meshes = [];
-  const other = {};
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    if (line === "End of Jaw Struct") continue;
-    if (line.startsWith("Start of Jaw Struct")) continue;
-
-    const meshMatch = line.match(/^Tooth Mesh (\d+): (.+?): (.+)$/);
-    if (meshMatch) {
-      const idx = Number(meshMatch[1]);
-      meshes[idx] = meshes[idx] || {};
-      meshes[idx][meshMatch[2]] = meshMatch[3];
-      continue;
-    }
-
-    const toothMatch = line.match(/^Tooth (\d+): (.+?): (.+)$/);
-    if (toothMatch) {
-      const idx = Number(toothMatch[1]);
-      teeth[idx] = teeth[idx] || { fields: {} };
-      teeth[idx].fields[toothMatch[2]] = toothMatch[3];
-      continue;
-    }
-
-    const colon = line.indexOf(":");
-    if (colon > 0) {
-      other[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
-    }
+// Save current state back to the backend. Off by default — see
+// ENABLE_JAW_STRUCT_AUTOSAVE at the top of this file.
+async function saveJawStructAutosave() {
+  if (!ENABLE_JAW_STRUCT_AUTOSAVE) return;
+  if (!state.caseIntID) return;
+  let loggedInUser = null;
+  try {
+    const raw = localStorage.getItem("loggedInUser");
+    loggedInUser = raw ? JSON.parse(raw) : null;
+  } catch {
+    loggedInUser = null;
   }
-  return { teeth, meshes, other };
-}
-
-// Apply only the unambiguous Tooth Presence field. Mapping: Major*10 + Minor
-// gives the FDI tooth id (e.g. Major=1, Minor=8 -> "18"; Major=4, Minor=7 -> "47").
-function applyJawStructPresence(parsed) {
-  for (const tooth of Object.values(parsed.teeth)) {
-    const major = Number(tooth.fields["Tooth Main.Tooth Index.Major Index"]);
-    const minor = Number(tooth.fields["Tooth Main.Tooth Index.Minor Index"]);
-    if (!Number.isFinite(major) || !Number.isFinite(minor)) continue;
-    const fdi = `${major}${minor}`;
-    const rec = state.teeth[fdi];
-    if (!rec) continue;
-    const presence = tooth.fields["Tooth Main.Tooth Index.Tooth Presence"];
-    if (presence === "1") {
-      rec.isPresent = true;
-      if (rec.status === "missing") rec.status = "presence";
-    } else if (presence === "0") {
-      rec.isPresent = false;
-      rec.status = "missing";
-      rec.components = [];
-      rec.componentPlacements = [];
-    }
+  if (!loggedInUser?.uuid) return;
+  try {
+    await saveJawStructFromState(state.caseIntID, loggedInUser.uuid, state);
+  } catch (err) {
+    console.warn("Failed to save jawstruct:", err);
   }
 }
+registerAutosaveHook(saveJawStructAutosave);
 
 function bindPreviewPanelToggle() {
   const shell = document.querySelector(".annotation-shell");

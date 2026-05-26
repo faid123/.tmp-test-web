@@ -1,5 +1,6 @@
 import { lol } from "../crypt.js";
 import { toast } from "./toast.js";
+import { confirmModal } from "./confirmModal.js";
 
 function getLoggedInUser() {
   const user = localStorage.getItem("loggedInUser");
@@ -74,7 +75,13 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
   }
 
   if (!skipConfirm) {
-    const confirmed = confirm("Are you sure you want to delete this case?");
+    const confirmed = await confirmModal({
+      title: "Delete case?",
+      message: "This will permanently remove the case and its files. This action cannot be undone.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger",
+    });
     if (!confirmed) return false;
   }
 
@@ -149,6 +156,83 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
   }
 }
 
+// Duplicate a case by id. Mirrors the C# RestAPI.DuplicateCase flow: POST
+// [authData, {case_id: caseIntID}] to /case/duplicate/{id}; the server creates
+// a new case and returns an InsertID payload. We reload the list so the new
+// case shows up with fresh thumbnails/details.
+async function duplicateCaseById(caseId, { skipConfirm = false } = {}) {
+  const user = getLoggedInUser();
+  if (!caseId || !user?.uuid) {
+    toast.warning("Unable to duplicate: missing case id or login.");
+    return false;
+  }
+
+  if (!skipConfirm) {
+    const confirmed = await confirmModal({
+      title: "Duplicate case?",
+      message: "A new case will be created with the same files and details.",
+      confirmText: "Duplicate",
+      cancelText: "Cancel",
+      variant: "info",
+    });
+    if (!confirmed) return false;
+  }
+
+  const numericCaseId =
+    typeof caseId === "number" ? caseId : Number(caseId);
+  const caseIdForApi = Number.isFinite(numericCaseId) ? numericCaseId : caseId;
+
+  const requestBody = JSON.stringify([
+    {
+      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      uuid: user.uuid,
+      caseIntID: caseIdForApi,
+    },
+    { case_id: String(caseIdForApi) },
+  ]);
+
+  try {
+    const response = await fetch(
+      "https://live.api.smartrpdai.com/api/smartrpd/case",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: requestBody,
+      }
+    );
+
+    const rawText = await response.text();
+    console.log("[case/duplicate] ←", response.status, rawText);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${rawText.slice(0, 200)}`);
+    }
+
+    let newId;
+    try {
+      const data = JSON.parse(rawText);
+      newId = data?.id ?? data?.case_int_id ?? data?.insert_id;
+    } catch {
+      // server returned a non-JSON success body — that's fine, we'll just reload
+    }
+
+    toast.success(
+      newId != null
+        ? `Case duplicated (new id: ${newId}).`
+        : "Case duplicated successfully."
+    );
+
+    // Mirror SessionManager.RefreshCaseList — reload so the new case appears
+    // with its full server-side detail/thumbnail set, same as refreshListBtn.
+    setTimeout(() => window.location.reload(), 400);
+    return true;
+  } catch (err) {
+    console.error("❌ Duplicate failed:", err);
+    toast.error(`Failed to duplicate case. ${err.message || err}`);
+    return false;
+  }
+}
+
 function pinnedStorageKey() {
   const user = getLoggedInUser();
   return `pinnedCases:${user?.uuid || "anon"}`;
@@ -175,6 +259,7 @@ function togglePinned(caseId) {
   setPinnedSet(set);
   return set.has(id);
 }
+
 
 function base64ToBytes(base64) {
   const binary = atob(base64);
@@ -360,7 +445,15 @@ function populateTable(cases) {
   cases = [...(cases || [])].sort((a, b) => {
     const aId = String(a.id ?? a.case_int_id ?? "");
     const bId = String(b.id ?? b.case_int_id ?? "");
-    return Number(pinnedSet.has(bId)) - Number(pinnedSet.has(aId));
+    // Pinned cases group above unpinned (existing behavior).
+    const pinDiff = Number(pinnedSet.has(bId)) - Number(pinnedSet.has(aId));
+    if (pinDiff !== 0) return pinDiff;
+    // Within each group, the most recently edited case (server-side
+    // last_updated) sits at the top — so the case you just opened/edited
+    // bubbles up automatically, and the position is shared across devices.
+    const aTime = Number(a.last_updated) || 0;
+    const bTime = Number(b.last_updated) || 0;
+    return bTime - aTime;
   });
 
   const list = document.getElementById("caseList");
@@ -502,6 +595,16 @@ async function handleRowClick(caseId) {
 
     displayCaseDetails(detail);
     await fetchThumbnails(caseId);
+
+    // Bump server-side last_updated so this case sits at the top on the next
+    // list load (and across devices). Optimistically update the local timestamp
+    // first so the UI moves the case immediately, then fire the PUT in the
+    // background — if it fails, the next page load will fall back to whatever
+    // the server has.
+    bumpLocalLastUpdated(caseId);
+    fireLastOpenedBump(caseId, detail, loggedInUser).catch((err) => {
+      console.warn("[caseManagement] last-opened bump failed:", err);
+    });
   } catch (err) {
     console.error("❌ Failed to get case detail:", err);
   }
@@ -509,7 +612,54 @@ async function handleRowClick(caseId) {
   if (window.innerWidth <= 768) {
     document.querySelector(".container")?.classList.add("show-details");
   }
-  
+
+}
+
+// Optimistically update the local case's last_updated so the sort moves it
+// immediately, without waiting for the server PUT to round-trip.
+function bumpLocalLastUpdated(caseId) {
+  const id = String(caseId);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  for (const c of currentCases) {
+    if (String(c.id ?? c.case_int_id) === id) {
+      c.last_updated = nowSeconds;
+      break;
+    }
+  }
+  applyClientFilters();
+}
+
+// Fire a no-op PUT to /case/{id} re-sending the case's current fields. The
+// payload doesn't change any meaningful data, but the backend bumps the row's
+// last_updated as a side effect of the write — which is what the sort keys on.
+async function fireLastOpenedBump(caseId, detail, user) {
+  const auth = {
+    machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+    uuid: user.uuid,
+    caseIntID: caseId,
+  };
+  const caseBody = {
+    case_id: detail?.case_id || "",
+    upper_insertion_angle_x: Number(detail?.upper_insertion_angle_x) || 0,
+    upper_insertion_angle_y: Number(detail?.upper_insertion_angle_y) || 0,
+    upper_insertion_angle_z: Number(detail?.upper_insertion_angle_z) || 0,
+    lower_insertion_angle_x: Number(detail?.lower_insertion_angle_x) || 0,
+    lower_insertion_angle_y: Number(detail?.lower_insertion_angle_y) || 0,
+    lower_insertion_angle_z: Number(detail?.lower_insertion_angle_z) || 0,
+    process_upper: Number(detail?.process_upper) || 0,
+    process_lower: Number(detail?.process_lower) || 0,
+  };
+  const res = await fetch(
+    `https://live.api.smartrpdai.com/api/smartrpd/case/${caseId}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([auth, caseBody]),
+    }
+  );
+  if (!res.ok) {
+    throw new Error(`PUT /case/${caseId} status=${res.status}`);
+  }
 }
 
 // 显示基本信息
@@ -906,6 +1056,24 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
     });
   }
 
+  const duplicateBtn = document.getElementById("duplicateBtn");
+
+  if (duplicateBtn) {
+    duplicateBtn.addEventListener("click", async () => {
+      const caseId = window.selectedCaseId;
+      if (!caseId) {
+        toast.warning("Please select a case first.");
+        return;
+      }
+      duplicateBtn.classList.add("is-disabled");
+      try {
+        await duplicateCaseById(caseId);
+      } finally {
+        duplicateBtn.classList.remove("is-disabled");
+      }
+    });
+  }
+
   const editUserAccessBtn = document.getElementById("editUserAccessBtn");
 
   if (editUserAccessBtn) {
@@ -1219,7 +1387,13 @@ function renderSharedUserList() {
     }
 
     deleteBtn.addEventListener("click", async () => {
-      const confirmed = confirm(`Remove user ${user.username}?`);
+      const confirmed = await confirmModal({
+        title: "Remove user?",
+        message: `Remove ${user.username} from this case? They'll lose access immediately.`,
+        confirmText: "Remove",
+        cancelText: "Cancel",
+        variant: "danger",
+      });
       if (!confirmed) return;
 
       try {

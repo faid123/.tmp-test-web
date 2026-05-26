@@ -1,19 +1,20 @@
 // 顶部引入模块
 import { lol } from "../crypt.js";
 import { toast, flashToast } from "./toast.js";
+import { confirmModal } from "./confirmModal.js";
 
 let THREE;
 let STLLoader;
 
-// Lazy-load Three.js + STLLoader. Bare specifiers let the bundler (webpack in
-// prod, Vite in dev) resolve both through a single module identity — using
-// explicit URLs splits them into two instances and trips Three's
-// "Multiple instances of Three.js being imported" warning.
+// Lazy-load Three.js + STLLoader from a CDN. Bare specifiers ("three") only
+// resolve behind a bundler; the GitHub Pages deployment serves raw src/ files,
+// where the browser sees "three" as a relative URL and 404s. Matching the
+// version + CDN preview3D.js uses keeps both modules on a single instance.
 async function loadThreeDeps() {
   if (THREE && STLLoader) return;
   const [threeMod, loaderMod] = await Promise.all([
-    import("three"),
-    import("three/examples/jsm/loaders/STLLoader.js"),
+    import("https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"),
+    import("https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/STLLoader.js"),
   ]);
   THREE = threeMod;
   STLLoader = loaderMod.STLLoader;
@@ -769,35 +770,64 @@ async function uploadSTL(
           ""
         );
         const base64 = btoa(binaryStr);
+        const filename = file.name || `${jawType}.stl`;
 
-        const payload = [
-          {
-            machine_id,
-            uuid,
-            caseIntID,
-          },
+        const rawPayload = [
+          { machine_id, uuid, caseIntID },
           {
             case_id,
             type: jawType, // "upper_jaw" or "lower_jaw"
             data: base64,
-            filename: file.name || `${jawType}.stl`,
+            filename,
           },
         ];
 
-        // ✅ 使用 /stl/raw 替代 /stl
-        const res = await fetch(
+        // 1) Raw STL bucket — what the web 3D preview pulls from.
+        const rawRes = await fetch(
           "https://live.api.smartrpdai.com/api/smartrpd/stl/raw",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(rawPayload),
           }
         );
-
-        if (!res.ok) {
-          console.error(`❌ Failed to upload ${jawType}`, res.status);
+        if (!rawRes.ok) {
+          console.error(`❌ Failed to upload ${jawType} (raw)`, rawRes.status);
         } else {
-          console.log(`✅ Uploaded ${jawType} STL`);
+          console.log(`✅ Uploaded ${jawType} STL (raw)`);
+        }
+
+        // 2) Processed STL bucket — what the SmartRPD desktop client loads via
+        // RestAPI.CreateSTL. C# enum: Upper=0, Lower=1; DB column is 1-based,
+        // so we send the integer (jawType "upper_jaw" → 1, "lower_jaw" → 2).
+        const dbType = jawType === "upper_jaw" ? 1 : jawType === "lower_jaw" ? 2 : 0;
+        const stlPayload = [
+          { machine_id, uuid, caseIntID },
+          {
+            case_id: caseIntID,
+            type: dbType,
+            data: base64,
+            filename,
+          },
+        ];
+        const stlRes = await fetch(
+          "https://live.api.smartrpdai.com/api/smartrpd/stl",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(stlPayload),
+          }
+        );
+        if (!stlRes.ok) {
+          let body = "";
+          try { body = await stlRes.text(); } catch {}
+          console.error(
+            `❌ Failed to upload ${jawType} (processed)`,
+            stlRes.status,
+            body.slice(0, 200)
+          );
+        } else {
+          console.log(`✅ Uploaded ${jawType} STL (processed)`);
         }
 
         resolve();
@@ -870,7 +900,13 @@ function renderSharedUserList() {
       deleteBtn.innerHTML = '<i class="fa fa-xmark" aria-hidden="true"></i>';
 
       deleteBtn.addEventListener("click", async () => {
-        const confirmed = confirm(`Remove user ${user.username}?`);
+        const confirmed = await confirmModal({
+          title: "Remove user?",
+          message: `Remove ${user.username} from this case? They'll lose access immediately.`,
+          confirmText: "Remove",
+          cancelText: "Cancel",
+          variant: "danger",
+        });
         if (!confirmed) return;
 
         try {
