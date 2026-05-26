@@ -193,7 +193,7 @@ async function duplicateCaseById(caseId, { skipConfirm = false } = {}) {
 
   try {
     const response = await fetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/case",
+      "https://live.api.smartrpdai.com/api/smartrpd/case/duplicate",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

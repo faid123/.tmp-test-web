@@ -43,7 +43,7 @@ function showConfirmModal({ title = "Confirm", message = "", confirmLabel = "Con
 }
 
 let THREE = null;
-let OrbitControls = null;
+let TrackballControls = null;
 let STLLoader = null;
 let threeMergeVertices = null;
 
@@ -65,6 +65,9 @@ const preview3DState = {
   activeView: "both",
   topControls: null,
   caseData: null,
+  heatmapEnabled: false,
+  heatmapToggleBtn: null,
+  heatmapBoard: null,
 };
 
 export async function loadInteractiveJawPreview(area) {
@@ -107,16 +110,16 @@ export async function loadInteractiveJawPreview(area) {
 }
 
 async function ensureThreeDeps() {
-  if (THREE && OrbitControls && STLLoader) return true;
+  if (THREE && TrackballControls && STLLoader) return true;
   try {
-    const [threeMod, orbitMod, stlMod, utilsMod] = await Promise.all([
+    const [threeMod, trackballMod, stlMod, utilsMod] = await Promise.all([
       import("https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"),
-      import("https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js"),
+      import("https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/TrackballControls.js"),
       import("https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/STLLoader.js"),
       import("https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/utils/BufferGeometryUtils.js"),
     ]);
     THREE = threeMod;
-    OrbitControls = orbitMod.OrbitControls;
+    TrackballControls = trackballMod.TrackballControls;
     STLLoader = stlMod.STLLoader;
     threeMergeVertices = utilsMod.mergeVertices;
     return true;
@@ -163,6 +166,8 @@ export function teardown3DPreview() {
         } else {
           obj.material?.dispose?.();
         }
+        obj.userData?.heatmapMaterial?.dispose?.();
+        obj.userData?.flatMaterial?.dispose?.();
       }
     });
   }
@@ -185,6 +190,9 @@ export function teardown3DPreview() {
   preview3DState.groups = { upper: null, lower: null };
   preview3DState.topControls = null;
   preview3DState.caseData = null;
+  preview3DState.heatmapEnabled = false;
+  preview3DState.heatmapToggleBtn = null;
+  preview3DState.heatmapBoard = null;
 }
 
 function getLoggedInUser() {
@@ -204,6 +212,8 @@ function disposeJawGroup(jaw) {
       obj.geometry?.dispose?.();
       if (Array.isArray(obj.material)) obj.material.forEach((m) => m?.dispose?.());
       else obj.material?.dispose?.();
+      obj.userData?.heatmapMaterial?.dispose?.();
+      obj.userData?.flatMaterial?.dispose?.();
     }
   });
   group.parent?.remove(group);
@@ -405,10 +415,10 @@ async function fetchCaseData() {
   }
 }
 
-// Capture the OrbitControls camera position as an XYZ Euler. X = pitch from the
-// horizontal plane (asin of the y component), Y = azimuth around the world up
-// axis, Z = 0 since orbit cameras have no roll. Stored in radians to match the
-// DECIMAL(9,8) range in the cases table.
+// Capture the camera position as an XYZ Euler. X = pitch from the horizontal
+// plane (asin of the y component), Y = azimuth around the world up axis,
+// Z = 0 since we only store position-derived angles (no camera roll). Stored
+// in radians to match the DECIMAL(9,8) range in the cases table.
 function eulerFromCameraOrbit(camera, controls) {
   const offset = camera.position.clone().sub(controls.target);
   if (offset.lengthSq() < 1e-9) return { x: 0, y: 0, z: 0 };
@@ -419,6 +429,29 @@ function eulerFromCameraOrbit(camera, controls) {
     y: Math.atan2(dir.x, dir.z),
     z: 0,
   };
+}
+
+function setHeatmapEnabled(enabled) {
+  preview3DState.heatmapEnabled = !!enabled;
+  const swap = (group) => {
+    if (!group) return;
+    group.traverse((obj) => {
+      if (!obj.isMesh) return;
+      const heat = obj.userData?.heatmapMaterial;
+      const flat = obj.userData?.flatMaterial;
+      if (!heat || !flat) return;
+      obj.material = enabled ? heat : flat;
+    });
+  };
+  swap(preview3DState.groups.upper);
+  swap(preview3DState.groups.lower);
+  const btn = preview3DState.heatmapToggleBtn;
+  if (btn) {
+    btn.setAttribute("aria-pressed", enabled ? "true" : "false");
+    const icon = btn.querySelector("i");
+    if (icon) icon.className = enabled ? "fa-solid fa-eye" : "fa-solid fa-eye-slash";
+  }
+  preview3DState.heatmapBoard?.classList.toggle("is-off", !enabled);
 }
 
 function reapplyHeatmap(undercut) {
@@ -545,9 +578,14 @@ function init3DPreview(area) {
   toolbar.appendChild(rows);
 
   const undercut = document.createElement("div");
-  undercut.className = "jaw-preview-undercut";
+  undercut.className = "jaw-preview-undercut is-off";
   undercut.innerHTML = `
-    <div class="jaw-preview-undercut-title">Undercut (mm)</div>
+    <div class="jaw-preview-undercut-header">
+      <span class="jaw-preview-undercut-title">Undercut (mm)</span>
+      <button type="button" class="jaw-preview-undercut-toggle" aria-pressed="false" title="Toggle heatmap" aria-label="Toggle heatmap">
+        <i class="fa-solid fa-eye-slash" aria-hidden="true"></i>
+      </button>
+    </div>
     <div class="jaw-preview-undercut-body">
       <div class="jaw-preview-undercut-scale">
         <span style="background:#fff3bf"></span>
@@ -560,6 +598,10 @@ function init3DPreview(area) {
       </div>
     </div>
   `;
+  const heatmapToggleBtn = undercut.querySelector(".jaw-preview-undercut-toggle");
+  heatmapToggleBtn.addEventListener("click", () => {
+    setHeatmapEnabled(!preview3DState.heatmapEnabled);
+  });
 
   const footer = document.createElement("div");
   footer.className = "jaw-preview-footer";
@@ -622,21 +664,20 @@ function init3DPreview(area) {
   modelRoot.rotation.x = -Math.PI / 2;
   scene.add(modelRoot);
 
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.12;
-  controls.rotateSpeed = 0.42;
-  controls.zoomSpeed = 0.7;
-  controls.panSpeed = 0.55;
-  controls.enablePan = true;
-  controls.screenSpacePanning = true;
+  // TrackballControls (arcball-style): true free 360° rotation in any
+  // direction, no up-vector lock and no polar limits. Switched from
+  // OrbitControls so users can spin the jaw freely to inspect every surface.
+  const controls = new TrackballControls(camera, renderer.domElement);
+  controls.rotateSpeed = 3.2;
+  controls.zoomSpeed = 1.2;
+  controls.panSpeed = 0.8;
+  controls.noRotate = false;
+  controls.noZoom = false;
+  controls.noPan = false;
+  controls.staticMoving = false;
+  controls.dynamicDampingFactor = 0.18;
   controls.minDistance = 35;
   controls.maxDistance = 700;
-  // Allow full vertical rotation — user can flip the jaw all the way over
-  // to see the occlusal/palatal surfaces from any angle. Horizontal rotation
-  // is unrestricted by default in OrbitControls.
-  controls.minPolarAngle = 0;
-  controls.maxPolarAngle = Math.PI;
   controls.target.set(0, 0, 0);
 
   rowUpper.surveyBtn.addEventListener("click", () =>
@@ -734,6 +775,9 @@ function init3DPreview(area) {
   preview3DState.groups = { upper: null, lower: null };
   preview3DState.activeView = "both";
   preview3DState.topControls = { rowUpper, rowLower };
+  preview3DState.heatmapEnabled = false;
+  preview3DState.heatmapToggleBtn = heatmapToggleBtn;
+  preview3DState.heatmapBoard = undercut;
 
   const resize = () => {
     const rect = mount.getBoundingClientRect();
@@ -742,6 +786,10 @@ function init3DPreview(area) {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    // TrackballControls maps screen coords to arcball math, so it needs to be
+    // re-anchored whenever the canvas size changes — otherwise rotation feels
+    // off after a layout change.
+    controls.handleResize?.();
   };
 
   preview3DState.resizeObserver = new ResizeObserver(resize);
@@ -824,8 +872,12 @@ async function populateJawPreview(jawFiles, undercut) {
     }
     geometry.computeVertexNormals();
 
-    const material = useHeatmap ? heatmapMaterial.clone() : (upper ? flatUpper : flatLower);
-    const mesh = new THREE.Mesh(geometry, material);
+    const heatMat = heatmapMaterial.clone();
+    const flatMat = (upper ? flatUpper : flatLower).clone();
+    const activeMat = (useHeatmap && preview3DState.heatmapEnabled) ? heatMat : flatMat;
+    const mesh = new THREE.Mesh(geometry, activeMat);
+    mesh.userData.heatmapMaterial = heatMat;
+    mesh.userData.flatMaterial = flatMat;
     if (upper) upperGroup.add(mesh);
     else lowerGroup.add(mesh);
   }
@@ -860,6 +912,17 @@ async function populateJawPreviewFromOFF(meshFiles, undercut) {
     roughness: 0.6,
     side: THREE.DoubleSide,
   });
+  const flatColor = new THREE.Color(
+    DEFAULT_TOOTH_COLOR[0],
+    DEFAULT_TOOTH_COLOR[1],
+    DEFAULT_TOOTH_COLOR[2]
+  );
+  const flatBase = new THREE.MeshStandardMaterial({
+    color: flatColor,
+    metalness: 0.05,
+    roughness: 0.6,
+    side: THREE.DoubleSide,
+  });
 
   for (const file of meshFiles) {
     const offText = atob(file.data);
@@ -870,7 +933,11 @@ async function populateJawPreviewFromOFF(meshFiles, undercut) {
     const surface = upper ? undercut?.upper : undercut?.lower;
     applyUndercutVertexColors(geometry, surface);
 
-    const mesh = new THREE.Mesh(geometry, meshMaterial.clone());
+    const heatMat = meshMaterial.clone();
+    const flatMat = flatBase.clone();
+    const mesh = new THREE.Mesh(geometry, preview3DState.heatmapEnabled ? heatMat : flatMat);
+    mesh.userData.heatmapMaterial = heatMat;
+    mesh.userData.flatMaterial = flatMat;
     if (upper) upperGroup.add(mesh);
     else lowerGroup.add(mesh);
   }
@@ -1315,7 +1382,9 @@ function fitPreviewCamera() {
   camera.position.set(center.x, center.y + fitDist * 0.35, center.z + fitDist * 1.25);
   controls.target.copy(center);
   controls.update();
-  controls.saveState();
+  // OrbitControls had saveState(); TrackballControls doesn't. Call it only if
+  // present so we stay compatible if controls ever get swapped again.
+  controls.saveState?.();
 }
 
 function base64ToArrayBuffer(base64) {

@@ -440,34 +440,67 @@ body.is-panel-resizing {
 
 .jaw-preview-undercut {
   position: absolute;
-  left: 22px;
-  top: 22px;
+  left: 16px;
+  top: 16px;
   background: rgba(255, 255, 255, 0.94);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px 12px;
+  border-radius: 6px;
+  padding: 6px 8px;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   box-shadow: 0 2px 8px rgba(26, 77, 63, 0.08);
 }
 
+.jaw-preview-undercut-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
 .jaw-preview-undercut-title {
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   font-weight: 700;
   color: var(--rose-700);
-  margin-bottom: 8px;
   letter-spacing: 0.02em;
+}
+
+.jaw-preview-undercut-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.jaw-preview-undercut-toggle:hover {
+  color: var(--rose-700, #25735f);
+  border-color: var(--rose-700, #25735f);
+}
+.jaw-preview-undercut.is-off .jaw-preview-undercut-toggle {
+  color: var(--muted);
+}
+.jaw-preview-undercut.is-off .jaw-preview-undercut-body {
+  opacity: 0.4;
 }
 
 .jaw-preview-undercut-body {
   display: grid;
-  grid-template-columns: 22px auto;
-  gap: 8px;
+  grid-template-columns: 16px auto;
+  gap: 6px;
   align-items: stretch;
 }
 
 .jaw-preview-undercut-scale {
-  height: 88px;
+  height: 56px;
   display: grid;
   grid-template-rows: repeat(4, 1fr);
   border: 1px solid var(--line);
@@ -478,7 +511,7 @@ body.is-panel-resizing {
 .jaw-preview-undercut-labels {
   display: grid;
   grid-template-rows: repeat(4, 1fr);
-  font-size: 0.62rem;
+  font-size: 0.54rem;
   color: var(--muted);
   font-weight: 600;
 }
@@ -1972,28 +2005,37 @@ body.is-panel-resizing {
   }
 
   .jaw-preview-undercut {
-    left: 12px;
-    top: 12px;
-    padding: 6px 8px;
-    border-radius: 6px;
+    left: 10px;
+    top: 10px;
+    padding: 5px 6px;
   }
 
-  .jaw-preview-undercut-title {
-    font-size: 0.6rem;
-    margin-bottom: 5px;
-  }
-
-  .jaw-preview-undercut-body {
-    grid-template-columns: 16px auto;
+  .jaw-preview-undercut-header {
+    margin-bottom: 4px;
     gap: 6px;
   }
 
+  .jaw-preview-undercut-title {
+    font-size: 0.56rem;
+  }
+
+  .jaw-preview-undercut-toggle {
+    width: 16px;
+    height: 16px;
+    font-size: 9px;
+  }
+
+  .jaw-preview-undercut-body {
+    grid-template-columns: 14px auto;
+    gap: 5px;
+  }
+
   .jaw-preview-undercut-scale {
-    height: 60px;
+    height: 48px;
   }
 
   .jaw-preview-undercut-labels {
-    font-size: 0.54rem;
+    font-size: 0.5rem;
   }
   .tools-panel {
     gap: 10px;
