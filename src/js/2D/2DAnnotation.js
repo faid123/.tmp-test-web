@@ -15,6 +15,7 @@ import {
 } from "./components.js";
 import { fetchJawStruct as apiFetchJawStruct, saveJawStructFromState } from "./jawStructApi.js";
 import { decodeJawStructResponse, applyJawStructToState } from "./jawStructCodec.js";
+import { logApi } from "../apiLog.js";
 
 /**
  * Autosave to /jawstruct_l2 is off until the save endpoint's name + payload
@@ -691,6 +692,7 @@ async function fetchCaseOwner() {
         ]),
       }
     );
+    logApi(response, 'POST /case/get/:id');
     if (!response.ok) return;
     const detail = await response.json();
     if (detail?.username) state.caseOwner = detail.username;
@@ -995,7 +997,9 @@ function init() {
           catalog.renderComponentCatalog();
         }
       });
-      fetchJawStruct();
+      // Jaw-struct API fetch paused — 2D annotation state is loaded from
+      // localStorage via locks.restoreAnnotationFromStorage() above.
+      // fetchJawStruct();
       locks.loadPreviewImage();
       locks.syncDesignModeWithLocks(false);
       renderJaws();

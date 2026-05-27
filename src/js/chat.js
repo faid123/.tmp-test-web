@@ -1,5 +1,6 @@
 // 引入加密解密函数
 import { lol } from '../crypt.js';
+import { logApi } from "./apiLog.js";
 
 
 // 获取 DOM 元素
@@ -43,7 +44,7 @@ async function fetchNotes() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({})
         });
-
+        logApi(response, 'POST /notes/get/:id');
         if (response.ok) {
             const notes = await response.json();
             notes.reverse();
@@ -120,7 +121,7 @@ async function createNote(content, imageBase64 = null) {
                 image_base64: imageBase64 || null,
             })
         });
-
+        logApi(response, 'POST /notes/create');
         if (!response.ok) {
             console.error('❌ Failed to create note:', response.status);
         }

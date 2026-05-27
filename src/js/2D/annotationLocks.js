@@ -35,6 +35,7 @@ import {
   syncToothComponentsFromPlacements,
 } from "./annotationTeethModel.js";
 import { loadInteractiveJawPreview, teardown3DPreview } from "./preview3D.js";
+import { logApi } from "../apiLog.js";
 
 // Bind tooth status picker buttons (presence/abutment/compromised).
 export function bindStatusPicker() {
@@ -208,9 +209,29 @@ function toggleRangeMissingMode() {
 
 // Bind clear/reset/save action buttons.
 function silentSaveToStorage() {
+  const key = getStorageKey();
+  const payload = buildPayload();
+  const serialized = JSON.stringify(payload);
   try {
-    localStorage.setItem(getStorageKey(), JSON.stringify(buildPayload()));
-  } catch { /* storage full — ignore */ }
+    localStorage.setItem(key, serialized);
+  } catch (err) {
+    if (err?.name !== "QuotaExceededError") {
+      console.warn("[2DAnnotation] autosave failed for", key, err);
+      return;
+    }
+    // Free space by dropping autosaves for other cases, then retry once.
+    const stale = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("dentalAnnotation_") && k !== key) stale.push(k);
+    }
+    stale.forEach((k) => localStorage.removeItem(k));
+    try {
+      localStorage.setItem(key, serialized);
+    } catch (retryErr) {
+      console.warn("[2DAnnotation] autosave dropped (over quota even after cleanup)", key, retryErr?.name || retryErr);
+    }
+  }
 }
 
 export function bindActionButtons() {
@@ -226,6 +247,9 @@ export function bindActionButtons() {
   if (saveJpeg) saveJpeg.addEventListener("click", saveAsJpeg);
 
   registerAutosaveHook(silentSaveToStorage);
+  // Seed localStorage immediately so the key exists even if the user reloads
+  // before making any change.
+  silentSaveToStorage();
   window.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") silentSaveToStorage();
   });
@@ -543,11 +567,29 @@ export function restoreAnnotationFromStorage() {
   const storageKey = getStorageKey();
   try {
     const raw = localStorage.getItem(storageKey);
-    if (!raw) return false;
+    if (!raw) {
+      console.log("[2DAnnotation] restore: no data at", storageKey);
+      return false;
+    }
     const payload = JSON.parse(raw);
-    if (payload?.schema !== "smartrpd.2d-arch.v1") return false;
+    if (payload?.schema !== "smartrpd.2d-arch.v1") {
+      console.warn("[2DAnnotation] restore: schema mismatch at", storageKey, payload?.schema);
+      return false;
+    }
     // Guard: don't restore a different case's data.
-    if (payload.caseIntID != null && payload.caseIntID !== state.caseIntID) return false;
+    if (payload.caseIntID != null && payload.caseIntID !== state.caseIntID) {
+      console.warn("[2DAnnotation] restore: caseIntID mismatch", {
+        saved: payload.caseIntID,
+        current: state.caseIntID,
+        key: storageKey,
+      });
+      return false;
+    }
+    console.log("[2DAnnotation] restore ←", storageKey, {
+      caseIntID: payload.caseIntID,
+      teethCount: payload.teeth?.length,
+      componentsCount: payload.components?.length,
+    });
 
     if (payload.locks) {
       state.locks.upper = Boolean(payload.locks.upper);
@@ -911,6 +953,7 @@ async function uploadCaseThumbnail(dataUrl, slot) {
         body: JSON.stringify(payload),
       }
     );
+    logApi(res, 'POST /thumbnails');
     if (!res.ok) {
       const bodyText = await res.text().catch(() => "");
       console.warn("[uploadCaseThumbnail] POST", res.status, bodyText.slice(0, 300));

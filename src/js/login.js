@@ -1,3 +1,16 @@
+// Inline copy of apiLog.js — login.js is loaded as a plain script (not a module)
+// so it can't import. Same dedup contract: log success once per label.
+const _apiLoggedLogin = new Set();
+function logApi(res, label) {
+  if (!res.ok) {
+    console.warn(`[API] ✗ ${label} status=${res.status}`);
+    return;
+  }
+  if (_apiLoggedLogin.has(label)) return;
+  _apiLoggedLogin.add(label);
+  console.log(`[API] ✓ ${label} status=${res.status}`);
+}
+
 async function login() {
     const username = document.getElementById("username").value.trim();
     const password = document.getElementById("password").value.trim();
@@ -21,7 +34,7 @@ async function login() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(requestBody)
         });
-
+        logApi(response, 'POST /user/login');
         const data = await response.json();
 
         if (response.ok && data.successful) {
@@ -64,7 +77,7 @@ async function login() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(requestBody)
         });
-
+        logApi(response, 'POST /user/login');
         const data = await response.json();
 
         if (response.ok && data.successful) {

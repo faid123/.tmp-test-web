@@ -384,13 +384,5 @@
     <script type="module" src="../js/createCase.js"></script>
     <script type="module" src="../js/notifications.js"></script>
     <script type="module" src="../js/versionHistory.js"></script>
-    <script>
-      const logoutBtn = document.querySelector(".logout");
-      if (logoutBtn)
-        logoutBtn.addEventListener("click", () => {
-          localStorage.removeItem("loggedInUser");
-          window.location.href = "../../index.html";
-        });
-    </script>
   </body>
 </html>

@@ -1,3 +1,4 @@
+import { logApi } from "./js/apiLog.js";
 export class ApiClient {
   constructor(baseUrl) {
     this.baseUrl = baseUrl;
@@ -25,7 +26,7 @@ export class ApiClient {
       },
       body: JSON.stringify(data)
     });
-
+    logApi(response, `POST ${endpoint}`);
     if (!response.ok) {
       if (response.status == 500 || response.status == 404) {
         return 'stl';
@@ -147,7 +148,7 @@ async function login() {
       },
       body: JSON.stringify([dataish,loginData])
     });
-
+    logApi(response, 'POST /user/login');
     if (!response.ok) {
       throw new Error(`Login failed with status: ${response.status}`);
     }

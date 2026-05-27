@@ -1,6 +1,7 @@
 import { lol } from "../crypt.js";
 import { toast } from "./toast.js";
 import { confirmModal } from "./confirmModal.js";
+import { logApi } from "./apiLog.js";
 
 function getLoggedInUser() {
   const user = localStorage.getItem("loggedInUser");
@@ -40,12 +41,23 @@ async function fetchCases() {
         body: requestBody,
       }
     );
-
+    logApi(response, 'POST /case/user/findall/get');
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     return Array.isArray(data) ? dedupeCases(data) : data;
   } catch (err) {
     console.error("❌ Failed to fetch cases:", err);
+    // TypeError: Failed to fetch is what the browser throws when CORS blocks
+    // the response or the network call itself fails — surface it to the user
+    // instead of leaving the case list silently empty.
+    const isNetwork = err instanceof TypeError;
+    if (typeof toast !== "undefined") {
+      toast.error(
+        isNetwork
+          ? "Couldn't reach the server. Please wait a moment and try again."
+          : `Failed to load cases (${err.message || err}).`
+      );
+    }
     return null;
   }
 }
@@ -109,7 +121,7 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
         body: requestBody,
       }
     );
-
+    logApi(response, 'POST /case/delete/:id');
     const rawText = await response.text();
     console.log("[case/delete] ←", response.status, rawText);
 
@@ -200,7 +212,7 @@ async function duplicateCaseById(caseId, { skipConfirm = false } = {}) {
         body: requestBody,
       }
     );
-
+    logApi(response, 'POST /case/duplicate');
     const rawText = await response.text();
     console.log("[case/duplicate] ←", response.status, rawText);
 
@@ -309,6 +321,7 @@ async function downloadCaseFiles(caseIntId, caseLabel) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      logApi(res, `POST ${endpoint.replace('https://live.api.smartrpdai.com/api/smartrpd', '')}`);
       if (!res.ok) continue;
       const data = await res.json();
       const list = Array.isArray(data) ? data : [data];
@@ -576,7 +589,7 @@ async function handleRowClick(caseId) {
         body: requestBody,
       }
     );
-
+    logApi(response, 'POST /case/get/:id');
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const detail = await response.json();
 
@@ -657,6 +670,7 @@ async function fireLastOpenedBump(caseId, detail, user) {
       body: JSON.stringify([auth, caseBody]),
     }
   );
+  logApi(res, 'PUT /case/:id');
   if (!res.ok) {
     throw new Error(`PUT /case/${caseId} status=${res.status}`);
   }
@@ -867,7 +881,7 @@ async function fetchThumbnails(caseId) {
         body: requestBody,
       }
     );
-
+    logApi(res, 'POST /thumbnails/get');
     if (!res.ok) {
       console.warn("⚠️ No images found or request failed:", res.status);
       currentThumbnails = [];
@@ -925,8 +939,34 @@ document.addEventListener("DOMContentLoaded", async () => {
       dateInput.value = "";
       applyClientFilters();
     });
+    // Guard against rapid-fire refresh clicks: each reload kicks off ~30
+    // parallel API calls (cases + per-case roles/details/alerts), and the
+    // backend rate-limits aggressive bursts by responding 403 without CORS
+    // headers — which the browser then surfaces as a confusing CORS error.
+    // Disable the button while the reload is in flight so successive clicks
+    // are absorbed locally instead of hammering the API.
+    let refreshInFlight = false;
     refreshListBtn?.addEventListener("click", () => {
+      if (refreshInFlight) return;
+      refreshInFlight = true;
+      refreshListBtn.disabled = true;
+      refreshListBtn.style.opacity = "0.5";
+      refreshListBtn.style.cursor = "wait";
       window.location.reload();
+    });
+
+    const logoutBtn = document.querySelector(".logout");
+    logoutBtn?.addEventListener("click", async () => {
+      const confirmed = await confirmModal({
+        title: "Log out?",
+        message: "You'll need to sign in again to access your cases.",
+        confirmText: "Log out",
+        cancelText: "Cancel",
+        variant: "warning",
+      });
+      if (!confirmed) return;
+      localStorage.removeItem("loggedInUser");
+      window.location.href = "../../index.html";
     });
 
     const headWrap = document.querySelector(".table-head-wrapper");
@@ -1131,7 +1171,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
             body: JSON.stringify(rolePayload),
           }
         );
-
+        logApi(roleRes, 'POST /role/all/get');
         const text = await roleRes.text();
         if (!roleRes.ok)
           throw new Error(`Role fetch failed: ${roleRes.status}`);
@@ -1206,7 +1246,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
           body: JSON.stringify(requestData),
         }
       );
-
+      logApi(response, 'POST /case/rename/:id');
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -1411,7 +1451,7 @@ function renderSharedUserList() {
             body: JSON.stringify(payload),
           }
         );
-
+        logApi(res, 'PUT /role/delete');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         toast.success(`User ${user.username} removed.`);
 
@@ -1452,7 +1492,7 @@ async function fetchAdditionalCaseDetails(caseList) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     })
-      .then((r) => (r.ok ? r.json() : [])) // 失败就当没数据
+      .then((r) => { logApi(r, 'POST /additionalcasedetails/getall'); return r.ok ? r.json() : []; })
       .then((arr) => arr.at(-1)) // 接口返回 [ {...} ]
       .catch(() => undefined);
   });
@@ -1496,7 +1536,7 @@ async function fetchCoOwners(caseList) {
         { case_int_id: caseIntID },
       ]),
     })
-      .then((r) => (r.ok ? r.json() : []))
+      .then((r) => { logApi(r, 'POST /role/all/get'); return r.ok ? r.json() : []; })
       .then((arr) => ({ id: caseIntID, rows: Array.isArray(arr) ? arr : [] }))
       .catch(() => ({ id: caseIntID, rows: [] }));
   });
@@ -1536,7 +1576,7 @@ async function postNewStatus(caseObj, newStatus) {
       body: JSON.stringify(body),
     }
   );
-
+  logApi(res, 'POST /additionalcasedetails');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   /* ★★★ 这三行是新加的 ★★★ */
 await createStatusAlerts(
@@ -1569,6 +1609,7 @@ async function createStatusAlerts(caseObj, fromUser, newStatus) {
         ])
       }
     );
+    logApi(res, 'POST /role/all/get');
     if (res.ok) {
       const arr = await res.json();
       recipients = arr
@@ -1611,7 +1652,7 @@ async function createStatusAlerts(caseObj, fromUser, newStatus) {
       console.log("[alerts] push to", toName, body);  // 调试用
 
       try {
-        await fetch(
+        const alertRes = await fetch(
           "https://live.api.smartrpdai.com/api/smartrpd/alerts",
           {
             method : "POST",
@@ -1619,6 +1660,7 @@ async function createStatusAlerts(caseObj, fromUser, newStatus) {
             body   : JSON.stringify(body)
           }
         );
+        logApi(alertRes, 'POST /alerts');
       } catch (e) {
         console.error("[alerts] create failed:", e);
       }

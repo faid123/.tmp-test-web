@@ -1,4 +1,5 @@
 import { lol } from "../crypt.js";
+import { logApi } from "./apiLog.js";
 
 document.addEventListener("DOMContentLoaded", () => loadHistory());
 
@@ -33,6 +34,7 @@ async function loadHistory() {
       { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload) }
     );
+    logApi(res, 'POST /noticeboard/editedview/get');
     rows = await res.json();
   } catch (err) {
     console.error("❌ Fetch error:", err);

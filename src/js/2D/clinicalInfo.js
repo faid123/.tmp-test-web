@@ -1,5 +1,6 @@
 import { state, setMessage } from "./2DAnnotation.js";
 import { loadCaseNote, WORK_CATEGORY_LABELS } from "./caseNote.js";
+import { logApi } from "../apiLog.js";
 
 const ASSET_BASE = "../../assets/clinicalInfo";
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
@@ -46,6 +47,7 @@ async function postClinical(path, payload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+  logApi(res, `POST ${path}`);
   let body = null;
   try {
     body = await res.json();

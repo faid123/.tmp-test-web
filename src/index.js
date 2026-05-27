@@ -18,6 +18,7 @@ import { addResetButton } from "./resetButton.js";
 import { lol } from "./crypt.js";
 import "./js/sidebar.js";
 import "./js/createCase";
+import { logApi } from "./js/apiLog.js";
 import {
   addVisibilityAndTransparencyControls,
   removeVisibilityAndTransparencyControls,
@@ -2558,7 +2559,7 @@ btnContainer.appendChild(edit2DStatic); */
                   body: JSON.stringify(payload),
                 }
               );
-
+              logApi(response, 'POST /mailinglist/add');
               const result = await response.json();
               if (response.ok) {
                 alert("✅ Email added to mailing list.");
@@ -2886,6 +2887,7 @@ btnContainer.appendChild(edit2DStatic); */
       body: JSON.stringify(emailData),
     })
       .then(async (response) => {
+        logApi(response, 'POST /sendEmail');
         const contentType = response.headers.get("content-type");
         const isJson =
           contentType && contentType.indexOf("application/json") !== -1;
@@ -2927,7 +2929,7 @@ btnContainer.appendChild(edit2DStatic); */
       },
       body: JSON.stringify(emailData),
     })
-      .then((response) => response.json())
+      .then((response) => { logApi(response, 'POST /sendCustomEmail'); return response.json(); })
       .then((data) => console.log("Custom email sent successfully:", data))
       .catch((error) => console.error("Error sending custom email:", error));
   }

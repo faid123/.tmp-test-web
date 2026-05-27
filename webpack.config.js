@@ -10,7 +10,10 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: 'bundle.js',
-    libraryTarget: 'umd'  // 让 bundle.js 适用于所有环境
+    libraryTarget: 'umd',  // 让 bundle.js 适用于所有环境
+    environment: {
+      dynamicImport: true,  // allow native import() for the CDN ESM modules in createCase.js
+    },
   },
   module: {
     rules: [

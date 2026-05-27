@@ -80,18 +80,6 @@
 .app-toast-error   { border-left-color: #ef4444; }
 .app-toast-error   .app-toast-icon { color: #b91c1c; }
 
-@media (max-width: 480px) {
-  .app-toast-container {
-    top: 12px;
-    right: 12px;
-    left: 12px;
-  }
-  .app-toast {
-    min-width: 0;
-    max-width: 100%;
-  }
-}
-
 /* ==================== Confirmation modal ==================== */
 .app-confirm-overlay {
   position: fixed;
@@ -226,6 +214,15 @@
 }
 
 @media (max-width: 480px) {
+  .app-toast-container {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+  }
+  .app-toast {
+    min-width: 0;
+    max-width: 100%;
+  }
   .app-confirm-box {
     padding: 18px 16px 14px;
     border-radius: 12px;
