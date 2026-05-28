@@ -775,7 +775,9 @@ function buildReportToothHtml(toothId, assetBase, note) {
   let effectiveStatus = baseStatus;
   if (note?.abutment) effectiveStatus = "abutment";
 
-  const hideCrown = !!note?.rootStump;
+  // Root stump: keep the crown but render it solid black with a white "RS"
+  // label over it (mirrors the clinical-info chart behavior).
+  const isRootStump = !!note?.rootStump;
 
   let body;
   if (effectiveStatus === "abutment") {
@@ -800,7 +802,7 @@ function buildReportToothHtml(toothId, assetBase, note) {
 
     const crownExtra =
       (!note?.cracked && note?.crown ? " is-tint-yellow" : "") +
-      (hideCrown ? " is-hidden" : "");
+      (isRootStump ? " is-tint-black" : "");
     const rootExtra = mobilityTint ? ` ${mobilityTint}` : "";
 
     const crown = `<img class="cli-tooth-img cli-tooth-crown${mirrorClass}${crownExtra}" src="${assetBase}/${crownSrc}" alt="" />`;
@@ -821,10 +823,13 @@ function buildReportToothHtml(toothId, assetBase, note) {
       )}</span>`
     );
   }
-  if (note?.restoration && !note.cracked && !hideCrown) {
+  if (note?.restoration && !note.cracked && !isRootStump) {
     overlays.push(
       `<span class="cli-tooth-restoration is-${String(note.restoration).toLowerCase()}"></span>`
     );
+  }
+  if (isRootStump && effectiveStatus !== "abutment") {
+    overlays.push(`<span class="cli-tooth-rootstump-label">RS</span>`);
   }
   if (note?.extraction) {
     overlays.push(
@@ -981,6 +986,10 @@ async function generateReport() {
   .cli-tooth-img.is-tint-yellow { filter: brightness(0) saturate(100%) invert(72%) sepia(85%) saturate(2200%) hue-rotate(2deg) brightness(105%) contrast(105%); }
   .cli-tooth-img.is-tint-red { filter: brightness(0) saturate(100%) invert(22%) sepia(99%) saturate(6000%) hue-rotate(355deg) brightness(95%) contrast(105%); }
   .cli-tooth-img.is-tint-green { filter: brightness(0) saturate(100%) invert(45%) sepia(85%) saturate(2500%) hue-rotate(105deg) brightness(95%) contrast(105%); }
+  .cli-tooth-img.is-tint-black { filter: brightness(0); }
+  .cli-tooth-rootstump-label { position: absolute; left: 50%; transform: translateX(-50%); color: #fff; font-weight: 800; font-size: 0.7rem; line-height: 1; letter-spacing: 0.5px; z-index: 3; pointer-events: none; }
+  .cli-tooth.is-upper .cli-tooth-rootstump-label { bottom: 22%; }
+  .cli-tooth.is-lower .cli-tooth-rootstump-label { top: 26%; }
 
   .cli-tooth-tilt { position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.4rem; font-weight: 900; color: #1f8a6b !important; padding: 2px 6px; border-radius: 6px; z-index: 3; line-height: 1; pointer-events: none; }
   .cli-tooth.is-upper .cli-tooth-tilt { bottom: 30px; }
@@ -1021,7 +1030,8 @@ async function generateReport() {
     body { padding: 14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .cli-row { gap: 2px; }
     .cli-tooth, .cli-tooth-cross::before, .cli-tooth-cross::after,
-    .cli-tooth-restoration, .cli-tooth-extraction-arrow, .cli-tooth-tilt {
+    .cli-tooth-restoration, .cli-tooth-extraction-arrow, .cli-tooth-tilt,
+    .cli-tooth-rootstump-label {
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }

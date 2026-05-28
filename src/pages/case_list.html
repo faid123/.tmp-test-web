@@ -94,6 +94,28 @@
             </select>
           </div>
 
+          <!-- Phone-only sort picker. Tablet/desktop sort via clickable table
+               headers; on phone the thead is hidden, so this dropdown is the
+               only sort affordance. Each option encodes both column and
+               direction so it's a single "overall" picker. -->
+          <div class="cm-chip cm-chip-filter cm-sort-chip">
+            <i class="fa fa-arrow-down-wide-short" aria-hidden="true"></i>
+            <label for="sortFieldMobile">Sort by</label>
+            <select id="sortFieldMobile" class="cm-filter-select">
+              <option value="recent|desc">Recent activity</option>
+              <option value="name|asc">Name (A → Z)</option>
+              <option value="name|desc">Name (Z → A)</option>
+              <option value="status|asc">Status (A → Z)</option>
+              <option value="status|desc">Status (Z → A)</option>
+              <option value="owner|asc">Owner (A → Z)</option>
+              <option value="owner|desc">Owner (Z → A)</option>
+              <option value="created|desc">Date created (newest)</option>
+              <option value="created|asc">Date created (oldest)</option>
+              <option value="due|asc">Due date (soonest)</option>
+              <option value="due|desc">Due date (latest)</option>
+            </select>
+          </div>
+
           <button
             id="createCaseBtn"
             class="cm-btn cm-btn-primary"
@@ -115,8 +137,32 @@
         </div>
 
 
-        <div class="cm-list" id="caseList">
-          <!-- JS-rendered cards land here -->
+        <div class="cm-table-wrap" id="caseList">
+          <table class="cm-table">
+            <thead>
+              <tr>
+                <th class="cm-th-sort" data-sort="name" scope="col">
+                  <span>Case Name</span><i class="fa cm-sort-caret" aria-hidden="true"></i>
+                </th>
+                <th class="cm-th-sort" data-sort="status" scope="col">
+                  <span>Status</span><i class="fa cm-sort-caret" aria-hidden="true"></i>
+                </th>
+                <th class="cm-th-sort" data-sort="created" scope="col">
+                  <span>Date Created</span><i class="fa cm-sort-caret" aria-hidden="true"></i>
+                </th>
+                <th class="cm-th-sort" data-sort="due" scope="col">
+                  <span>Due Date</span><i class="fa cm-sort-caret" aria-hidden="true"></i>
+                </th>
+                <th class="cm-th-sort" data-sort="owner" scope="col">
+                  <span>Owner</span><i class="fa cm-sort-caret" aria-hidden="true"></i>
+                </th>
+                <th class="cm-th-actions" scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="caseTableBody">
+              <!-- JS-rendered rows land here -->
+            </tbody>
+          </table>
         </div>
 
         <div class="cc-form-pane hidden" id="createCaseForm">
@@ -239,6 +285,13 @@
           </div>
 
           <div class="cm-field">
+            <div class="cm-field-label">SHARED WITH</div>
+            <div class="cm-shared-list" id="shared-with-list">
+              <span class="cm-shared-empty">—</span>
+            </div>
+          </div>
+
+          <div class="cm-field">
             <div class="cm-field-label">DATE CREATED</div>
             <div class="cm-field-value" id="date-created">—</div>
           </div>
@@ -294,6 +347,18 @@
             <button type="button" class="cm-btn cm-btn-secondary cancel-btn">Cancel</button>
             <button type="button" class="cm-btn cm-btn-primary save-btn">Save</button>
             <button type="button" class="cm-btn cm-btn-primary save-start-btn">Save &amp; Start</button>
+          </div>
+
+          <div class="cc-loading-overlay hidden" id="ccLoadingOverlay" role="status" aria-live="polite">
+            <div class="cc-loading-card">
+              <div class="cc-loading-header">
+                <span class="cc-loading-label" id="ccLoadingLabel">Creating case…</span>
+                <span class="cc-loading-percent" id="ccLoadingPercent">0%</span>
+              </div>
+              <div class="cc-loading-bar" aria-hidden="true">
+                <div class="cc-loading-bar-fill" id="ccLoadingBarFill"></div>
+              </div>
+            </div>
           </div>
         </div>
       </aside>

@@ -8,8 +8,8 @@ function getLoggedInUser() {
   return user ? JSON.parse(user) : null;
 }
 
-let currentSortColumn = null;
-let currentSortOrder = "asc";
+let currentSortColumn = "recent";
+let currentSortOrder = "desc";
 let currentCases = [];
 let existingUsers = [];
 
@@ -155,6 +155,7 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
       }
       const avatar = document.getElementById("assigneeAvatar");
       if (avatar) avatar.textContent = "·";
+      renderSharedWith([]);
       currentThumbnails = [];
       currentImageIndex = 0;
       updateThumbnail();
@@ -395,10 +396,11 @@ function statusDisplayText(apiStatus) {
   const v = apiStatusToValue(apiStatus);
   if (!v || v === "na") return "N/A";
   if (v === "draft") return "draft";
-  if (v.endsWith("_pending")) 
+  if (v.endsWith("_pending")) {
     if (v.startsWith("2d_")) return "pending (2D)";
     if (v.startsWith("3d_")) return "pending (3D)";
     return "pending";
+  }
   if (v.endsWith("_drafted") || v.endsWith("_approved")) {
     if (v.startsWith("2d_")) return "in-progress (2D)";
     if (v.startsWith("3d_")) return "in-progress (3D)";
@@ -437,17 +439,30 @@ function escapeAttr(value) {
   ));
 }
 
-// Format a co-owner list for the case card. Caps the visible names so a
-// case shared with many users doesn't blow out the row width.
-function formatCoOwners(names) {
-  if (!names?.length) return "";
-  const MAX_VISIBLE = 2;
-  const visible = names.slice(0, MAX_VISIBLE).map(escapeAttr).join(", ");
-  const extra = names.length - MAX_VISIBLE;
-  return extra > 0 ? `${visible} +${extra} more` : visible;
+// Render the co-owner list into the detail pane's SHARED WITH field. Each
+// co-owner is a small avatar chip with initials and a name tooltip; empty
+// arrays render an em-dash so the field never sits blank.
+function renderSharedWith(coOwners) {
+  const container = document.getElementById("shared-with-list");
+  if (!container) return;
+  const names = Array.isArray(coOwners) ? coOwners.filter(Boolean) : [];
+  if (!names.length) {
+    container.innerHTML = '<span class="cm-shared-empty">—</span>';
+    return;
+  }
+  container.innerHTML = names
+    .map(
+      (name) => `
+        <span class="cm-shared-chip" title="${escapeAttr(name)}">
+          <span class="cm-avatar-sm cm-avatar-coowner">${escapeAttr(initialsFor(name))}</span>
+          <span class="cm-shared-name">${escapeAttr(name)}</span>
+        </span>`
+    )
+    .join("");
 }
 
-// 渲染病例卡片列表（取代旧表格）
+// Render the case list as a sortable table. The owner cell shows a "+N"
+// badge (titled with the full list) when a case has co-owners.
 function populateTable(cases) {
   const sel = document.getElementById("filter-status");
   if (sel && sel.value !== "all") {
@@ -455,31 +470,33 @@ function populateTable(cases) {
   }
 
   const pinnedSet = getPinnedSet();
+  const dir = currentSortOrder === "asc" ? 1 : -1;
   cases = [...(cases || [])].sort((a, b) => {
     const aId = String(a.id ?? a.case_int_id ?? "");
     const bId = String(b.id ?? b.case_int_id ?? "");
-    // Pinned cases group above unpinned (existing behavior).
+    // Pinned cases always group above unpinned, regardless of the active sort.
     const pinDiff = Number(pinnedSet.has(bId)) - Number(pinnedSet.has(aId));
     if (pinDiff !== 0) return pinDiff;
-    // Within each group, the most recently edited case (server-side
-    // last_updated) sits at the top — so the case you just opened/edited
-    // bubbles up automatically, and the position is shared across devices.
-    const aTime = Number(a.last_updated) || 0;
-    const bTime = Number(b.last_updated) || 0;
-    return bTime - aTime;
+    // Within each pin group, order by the user's chosen column. "recent"
+    // (the default) keeps the most recently edited case on top — so the case
+    // you just opened/edited bubbles up automatically, shared across devices.
+    const av = sortValue(a, currentSortColumn);
+    const bv = sortValue(b, currentSortColumn);
+    const cmp =
+      typeof av === "number" ? av - bv : String(av).localeCompare(String(bv));
+    return cmp * dir;
   });
 
-  const list = document.getElementById("caseList");
+  const body = document.getElementById("caseTableBody");
   const countBadge = document.getElementById("caseCountBadge");
   if (countBadge) countBadge.textContent = String(cases?.length || 0);
-  if (!list) return;
-  list.innerHTML = "";
+  if (!body) return;
+  body.innerHTML = "";
 
   if (!cases || cases.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "cm-list-empty";
-    empty.textContent = "No cases found.";
-    list.appendChild(empty);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td class="cm-list-empty" colspan="6">No cases found.</td>`;
+    body.appendChild(tr);
     return;
   }
 
@@ -499,70 +516,81 @@ function populateTable(cases) {
 
     const pinned = pinnedSet.has(String(resolvedCaseId));
 
-    const card = document.createElement("div");
-    card.className = pinned ? "cm-card is-pinned" : "cm-card";
-    card.dataset.caseId = resolvedCaseId;
-    card.setAttribute("role", "button");
-    card.tabIndex = 0;
+    const row = document.createElement("tr");
+    row.className = "cm-row";
+    if (pinned) row.classList.add("is-pinned");
+    // Re-apply the selected highlight after a re-render (filter/refresh/sort/
+    // pin), since the table body is rebuilt but window.selectedCaseId persists.
+    if (
+      window.selectedCaseId != null &&
+      String(resolvedCaseId) === String(window.selectedCaseId)
+    ) {
+      row.classList.add("is-active");
+    }
+    row.dataset.caseId = resolvedCaseId;
+    row.setAttribute("role", "button");
+    row.tabIndex = 0;
 
-    card.innerHTML = `
-      <div class="cm-card-main">
-        <div class="cm-card-title">
-          <span class="cm-card-name">${escapeAttr(caseDisplayName)}</span>
-          <span class="cm-pill ${statusPillClass(caseItem.new_status)}">${escapeAttr(statusDisplayText(caseItem.new_status))}</span>
-        </div>
-        <div class="cm-card-meta">
-          <span class="cm-meta-item"><i class="fa-regular fa-calendar"></i>${formatDateTime(caseItem.creation_date)}</span>
-          <span class="cm-meta-item"><i class="fa-regular fa-clock"></i>Due: ${dueDate ? formatDateTime(dueDate) : "N/A"}</span>
-          <span class="cm-meta-item"><i class="fa-regular fa-circle-user"></i>${escapeAttr(assignedTo)}</span>
-          ${caseItem.co_owners?.length ? `<span class="cm-meta-item cm-meta-coowners" title="Shared with ${escapeAttr(caseItem.co_owners.join(", "))}"><i class="fa-solid fa-user-group"></i>${formatCoOwners(caseItem.co_owners)}</span>` : ""}
-        </div>
-      </div>
-      <div class="cm-card-actions">
-        <button class="cm-card-icon" type="button" title="Rename" aria-label="Rename" data-action="rename">
-          <i class="fa-regular fa-pen-to-square"></i>
-        </button>
-        <button class="cm-card-icon ${pinned ? "is-pinned" : ""}" type="button" title="${pinned ? "Unpin" : "Pin to top"}" aria-label="${pinned ? "Unpin" : "Pin to top"}" aria-pressed="${pinned}" data-action="flag">
-          <i class="${pinned ? "fa-solid" : "fa-regular"} fa-flag"></i>
-        </button>
-        <button class="cm-card-icon" type="button" title="Download files" aria-label="Download files" data-action="download">
-          <i class="fa-regular fa-circle-down"></i>
-        </button>
-      </div>
+    const coOwnersHtml = caseItem.co_owners?.length
+      ? `<span class="cm-row-coowners" title="Shared with ${escapeAttr(caseItem.co_owners.join(", "))}"><i class="fa-solid fa-user-group"></i>+${caseItem.co_owners.length}</span>`
+      : "";
+
+    row.innerHTML = `
+      <td class="cm-td-name">
+        <span class="cm-row-name">${escapeAttr(caseDisplayName)}</span>${pinned ? '<i class="fa-solid fa-flag cm-row-pin" title="Pinned"></i>' : ""}
+      </td>
+      <td class="cm-td-status"><span class="cm-pill ${statusPillClass(caseItem.new_status)}">${escapeAttr(statusDisplayText(caseItem.new_status))}</span></td>
+      <td class="cm-td-date" data-label="Created">${formatDateTime(caseItem.creation_date)}</td>
+      <td class="cm-td-date" data-label="Due">${dueDate ? formatDateTime(dueDate) : "N/A"}</td>
+      <td class="cm-td-owner" data-label="Owner">
+        <i class="fa-regular fa-circle-user"></i><span class="cm-owner-name">${escapeAttr(assignedTo)}</span>${coOwnersHtml}
+      </td>
+      <td class="cm-td-actions">
+        <button class="cm-row-icon" type="button" title="Rename" aria-label="Rename" data-action="rename"><i class="fa-regular fa-pen-to-square"></i></button>
+        <button class="cm-row-icon" type="button" title="Download files" aria-label="Download files" data-action="download"><i class="fa-regular fa-circle-down"></i></button>
+        <button class="cm-row-icon ${pinned ? "is-pinned" : ""}" type="button" title="${pinned ? "Unpin" : "Pin to top"}" aria-label="${pinned ? "Unpin" : "Pin to top"}" aria-pressed="${pinned}" data-action="flag"><i class="${pinned ? "fa-solid" : "fa-regular"} fa-star"></i></button>
+        <button class="cm-row-icon cm-row-icon-danger" type="button" title="Delete" aria-label="Delete" data-action="delete"><i class="fa-regular fa-trash-can"></i></button>
+      </td>
     `;
 
-    const selectCard = () => {
+    const selectRow = () => {
       handleRowClick(resolvedCaseId);
-      list.querySelectorAll(".cm-card").forEach((c) => c.classList.remove("is-active"));
-      card.classList.add("is-active");
+      body.querySelectorAll(".cm-row").forEach((r) => r.classList.remove("is-active"));
+      row.classList.add("is-active");
     };
 
-    card.addEventListener("click", selectCard);
-    card.addEventListener("keydown", (e) => {
+    row.addEventListener("click", selectRow);
+    row.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") {
         e.preventDefault();
-        selectCard();
+        selectRow();
       }
     });
 
-    card.querySelector('[data-action="download"]').addEventListener("click", async (e) => {
+    row.querySelector('[data-action="download"]').addEventListener("click", async (e) => {
       e.stopPropagation();
       await downloadCaseFiles(resolvedCaseId, caseItem.case_id);
     });
 
-    card.querySelector('[data-action="rename"]').addEventListener("click", (e) => {
+    row.querySelector('[data-action="rename"]').addEventListener("click", (e) => {
       e.stopPropagation();
-      selectCard();
+      selectRow();
       document.getElementById("renameBtn")?.click();
     });
 
-    card.querySelector('[data-action="flag"]').addEventListener("click", (e) => {
+    row.querySelector('[data-action="flag"]').addEventListener("click", (e) => {
       e.stopPropagation();
       togglePinned(resolvedCaseId);
       applyClientFilters();
     });
 
-    list.appendChild(card);
+    row.querySelector('[data-action="delete"]').addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const ok = await deleteCaseById(resolvedCaseId);
+      if (ok) toast.success("Case deleted successfully.");
+    });
+
+    body.appendChild(row);
   });
 }
 
@@ -603,6 +631,7 @@ async function handleRowClick(caseId) {
         expected_date: extra.expected_date,
         assigned_to: extra.assigned_to,
         comments: extra.comments,
+        co_owners: extra.co_owners,
       });
     }
 
@@ -622,8 +651,11 @@ async function handleRowClick(caseId) {
     console.error("❌ Failed to get case detail:", err);
   }
 
-  if (window.innerWidth <= 768) {
-    document.querySelector(".container")?.classList.add("show-details");
+  // Match the CSS breakpoint that switches the detail pane to its off-canvas
+  // slide-in (case_list.css @media max-width: 860px). At in-between widths the
+  // pane is hidden until .show-details is added; keep both numbers in sync.
+  if (window.innerWidth <= 860) {
+    document.querySelector(".cm-page")?.classList.add("show-details");
   }
 
 }
@@ -692,6 +724,8 @@ function displayCaseDetails(data) {
   document.getElementById("created-by").textContent = assignee;
   const avatar = document.getElementById("assigneeAvatar");
   if (avatar) avatar.textContent = initialsFor(assignee);
+
+  renderSharedWith(data.co_owners);
 
   document.getElementById("date-created").textContent = formatDateTime(data.creation_date);
   document.getElementById("last-edited").textContent = formatDateTime(data.last_updated);
@@ -780,26 +814,31 @@ function formatDateTime(ts) {
   return new Date(ms).toLocaleString();
 }
 
-// 排序逻辑
-function sortCases(cases, key, order = "asc") {
-  return [...cases].sort((a, b) => {
-    let valA = a[key] || "",
-      valB = b[key] || "";
-    if (key.includes("date")) {
-      valA = new Date(+valA);
-      valB = new Date(+valB);
-
-      if (isNaN(valA)) return 1;
-      if (isNaN(valB)) return -1;
-    } else {
-      valA = valA.toString().toLowerCase();
-      valB = valB.toString().toLowerCase();
+// Map a case + sort column to a comparable value. Numeric columns (dates,
+// recency) return a number for numeric ordering; text columns return a
+// lowercased string compared via localeCompare. The caller applies the
+// asc/desc direction. Keep these keyed off the same fields the card renders.
+function sortValue(caseItem, column) {
+  switch (column) {
+    case "name":
+      return (caseItem.case_id || "").toLowerCase();
+    case "status":
+      return statusDisplayText(caseItem.new_status).toLowerCase();
+    case "owner":
+      return (caseItem.assigned_to || caseItem.username || "").toLowerCase();
+    case "created":
+      return Number(caseItem.creation_date) || 0;
+    case "due": {
+      const due =
+        caseItem.expected_date ||
+        caseItem.due_date ||
+        computeDefaultDueDate(caseItem.creation_date);
+      return Number(due) || 0;
     }
-
-    return (
-      (valA < valB ? -1 : valA > valB ? 1 : 0) * (order === "asc" ? 1 : -1)
-    );
-  });
+    case "recent":
+    default:
+      return Number(caseItem.last_updated) || 0;
+  }
 }
 
 // 缩略图切换
@@ -962,7 +1001,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         message: "You'll need to sign in again to access your cases.",
         confirmText: "Log out",
         cancelText: "Cancel",
-        variant: "warning",
+        variant: "info",
       });
       if (!confirmed) return;
       localStorage.removeItem("loggedInUser");
@@ -992,31 +1031,71 @@ document.addEventListener("DOMContentLoaded", async () => {
 if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
 
 
-    // 排序逻辑绑定
-    document.querySelectorAll(".sortable").forEach((th) => {
-      th.addEventListener("click", () => {
-        const sortKey = th.dataset.sort;
-        console.log("🔍 正在排序字段：", sortKey);
+    // Sortable column headers. Clicking a header sorts by that column; clicking
+    // the active header again flips direction. Re-renders go through
+    // applyClientFilters so the active search/date/status filters stay applied
+    // while only the ordering changes. populateTable reads the module sort
+    // state (currentSortColumn / currentSortOrder), with pinned cases always
+    // floating above their group.
+    const sortableHeaders = document.querySelectorAll(".cm-th-sort");
 
-        currentSortOrder =
-          currentSortColumn === sortKey && currentSortOrder === "asc"
-            ? "desc"
-            : "asc";
-        currentSortColumn = sortKey;
+    // Default direction per column: names/owners/status read best A→Z, while
+    // date columns default to newest-first.
+    const defaultOrderFor = (col) =>
+      col === "name" || col === "owner" || col === "status" ? "asc" : "desc";
 
-        const sorted = sortCases(currentCases, sortKey, currentSortOrder);
-        currentCases = sorted; // ✅ 保证下一轮点击时用的是更新后的顺序
-        applyClientFilters();
+    const sortSelectMobile = document.getElementById("sortFieldMobile");
 
-        // 箭头样式更新（你原来就有）
-        document
-          .querySelectorAll(".sortable")
-          .forEach((el) => el.classList.remove("active-asc", "active-desc"));
-        th.classList.add(
-          currentSortOrder === "asc" ? "active-asc" : "active-desc"
+    // Keep both sort UIs in lockstep: clicking a table header updates the
+    // mobile select's value, picking a mobile option updates the table carets.
+    const syncSortUi = () => {
+      sortableHeaders.forEach((th) => {
+        const active = th.dataset.sort === currentSortColumn;
+        th.classList.toggle("is-sorted", active);
+        const caret = th.querySelector(".cm-sort-caret");
+        if (!caret) return;
+        caret.classList.remove("fa-sort", "fa-sort-up", "fa-sort-down");
+        caret.classList.add(
+          !active
+            ? "fa-sort"
+            : currentSortOrder === "asc"
+            ? "fa-sort-up"
+            : "fa-sort-down"
         );
       });
+      if (sortSelectMobile) {
+        const want = `${currentSortColumn}|${currentSortOrder}`;
+        // Only set if the option exists — header clicks can produce
+        // combinations the mobile picker doesn't expose (e.g. recent|asc).
+        const hasOption = [...sortSelectMobile.options].some((o) => o.value === want);
+        if (hasOption) sortSelectMobile.value = want;
+      }
+    };
+
+    sortableHeaders.forEach((th) => {
+      th.addEventListener("click", () => {
+        const col = th.dataset.sort;
+        if (currentSortColumn === col) {
+          currentSortOrder = currentSortOrder === "asc" ? "desc" : "asc";
+        } else {
+          currentSortColumn = col;
+          currentSortOrder = defaultOrderFor(col);
+        }
+        syncSortUi();
+        applyClientFilters();
+      });
     });
+
+    sortSelectMobile?.addEventListener("change", () => {
+      const [col, dir] = sortSelectMobile.value.split("|");
+      if (!col || !dir) return;
+      currentSortColumn = col;
+      currentSortOrder = dir;
+      syncSortUi();
+      applyClientFilters();
+    });
+
+    syncSortUi();
 
     // 缩略图切换按钮绑定
     document.getElementById("prevBtn").addEventListener("click", () => {
@@ -1457,6 +1536,23 @@ function renderSharedUserList() {
 
         existingUsers = existingUsers.filter((u) => u.uuid !== user.uuid);
         renderSharedUserList();
+
+        // Keep the detail pane's SHARED WITH in sync: drop this user from the
+        // case's cached co_owners and re-render if it's the active case. Only
+        // co-owners appear there (owner shows in ASSIGNED TO).
+        if (user.role === "coowner") {
+          const caseObj = currentCases.find(
+            (c) => (c.id ?? c.case_int_id) === window._inviteContext?.caseIntID
+          );
+          if (caseObj) {
+            caseObj.co_owners = (caseObj.co_owners || []).filter(
+              (n) => n !== user.username
+            );
+            if (String(window.selectedCaseId) === String(window._inviteContext?.caseIntID)) {
+              renderSharedWith(caseObj.co_owners);
+            }
+          }
+        }
       } catch (err) {
         console.error("Failed to remove user:", err);
         toast.error("Failed to remove user.");

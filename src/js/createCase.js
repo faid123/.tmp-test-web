@@ -55,6 +55,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   const saveBtn = uploadPane?.querySelector(".save-btn");
   const saveStartBtn = uploadPane?.querySelector(".save-start-btn");
 
+  const loadingOverlay = document.getElementById("ccLoadingOverlay");
+  const loadingLabel = document.getElementById("ccLoadingLabel");
+  const loadingBarFill = document.getElementById("ccLoadingBarFill");
+  const loadingPercent = document.getElementById("ccLoadingPercent");
+
   const userAccessModal = document.getElementById("userAccessModal");
   const closeUserAccessModal = document.getElementById("closeUserAccessModal");
   const cancelInviteBtn = document.getElementById("cancelInviteBtn");
@@ -443,12 +448,51 @@ document.addEventListener("DOMContentLoaded", async () => {
     const originalText = triggerBtn.textContent;
     triggerBtn.textContent = "Creating…";
 
+    const hasUpperPre = !!jawContainer.querySelector(
+      '.uploaded-model[data-jaw="upper"]'
+    );
+    const hasLowerPre = !!jawContainer.querySelector(
+      '.uploaded-model[data-jaw="lower"]'
+    );
+    const refCountPre = refContainer
+      ? refContainer.querySelectorAll(".uploaded-model").length
+      : 0;
+    const inviteCountPre = pendingInvites.length;
+    // Steps: create case + (upper STL + thumb) + (lower STL + thumb) + each ref + each invite + finalize
+    const totalSteps =
+      1 +
+      (hasUpperPre ? 2 : 0) +
+      (hasLowerPre ? 2 : 0) +
+      refCountPre +
+      inviteCountPre +
+      1;
+    let completedSteps = 0;
+    const setProgress = (label) => {
+      if (!loadingOverlay) return;
+      const pct = Math.min(100, Math.round((completedSteps / totalSteps) * 100));
+      if (loadingBarFill) loadingBarFill.style.width = `${pct}%`;
+      if (loadingPercent) loadingPercent.textContent = `${pct}%`;
+      if (label && loadingLabel) loadingLabel.textContent = label;
+    };
+    const advance = (label) => {
+      completedSteps += 1;
+      setProgress(label);
+    };
+    if (loadingOverlay) {
+      completedSteps = 0;
+      if (loadingBarFill) loadingBarFill.style.width = "0%";
+      if (loadingPercent) loadingPercent.textContent = "0%";
+      if (loadingLabel) loadingLabel.textContent = "Creating case…";
+      loadingOverlay.classList.remove("hidden");
+    }
+
     const release = () => {
       triggerBtn.dataset.submitting = "";
       triggerBtn.disabled = false;
       triggerBtn.textContent = originalText;
       if (saveBtn) saveBtn.disabled = false;
       if (saveStartBtn) saveStartBtn.disabled = false;
+      if (loadingOverlay) loadingOverlay.classList.add("hidden");
     };
 
     const machine_id = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
@@ -502,6 +546,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       caseIntID = data.id;
       const user_id = loggedInUser.username || "";
       await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
+      advance(hasUpperPre ? "Uploading upper jaw…" : hasLowerPre ? "Uploading lower jaw…" : "Saving…");
     } catch (err) {
       console.error("❌ Failed to create case", err);
       const detail = typeof err?.body === "string" && err.body.trim()
@@ -519,18 +564,22 @@ document.addEventListener("DOMContentLoaded", async () => {
           '.uploaded-model[data-jaw="upper"]'
         );
         await uploadSTL("upper_jaw", upperEl, machine_id, uuid, caseName, caseIntID);
+        advance("Saving upper jaw thumbnail…");
         if (upperEl?.thumbnailDataUrl) {
           await uploadCaseThumbnail(machine_id, uuid, caseIntID, 1, upperEl.thumbnailDataUrl);
         }
+        advance(hasLower ? "Uploading lower jaw…" : "Saving…");
       }
       if (hasLower) {
         const lowerEl = jawContainer.querySelector(
           '.uploaded-model[data-jaw="lower"]'
         );
         await uploadSTL("lower_jaw", lowerEl, machine_id, uuid, caseName, caseIntID);
+        advance("Saving lower jaw thumbnail…");
         if (lowerEl?.thumbnailDataUrl) {
           await uploadCaseThumbnail(machine_id, uuid, caseIntID, 2, lowerEl.thumbnailDataUrl);
         }
+        advance(refCountPre ? "Uploading reference images…" : "Saving…");
       }
     } catch (err) {
       console.error("❌ STL Upload failed", err);
@@ -547,12 +596,14 @@ document.addEventListener("DOMContentLoaded", async () => {
           caseIntID,
           i + 1
         );
+        advance(`Uploading reference image ${i + 1} of ${refWrappers.length}…`);
       }
     } catch (err) {
       console.warn("❌ Reference Image Upload failed", err);
     }
 
     if (pendingInvites.length) {
+      setProgress("Sending invites…");
       const from_user = loggedInUser.username || "";
       for (const username of pendingInvites) {
         try {
@@ -599,8 +650,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         } catch (e) {
           console.warn(`❌ Failed to invite ${username}:`, e);
         }
+        advance(`Invited ${username}`);
       }
     }
+
+    advance(mode === "start" ? "Opening case…" : "Finalizing…");
 
     if (mode === "start") {
       const encryptedId = lol(caseIntID);

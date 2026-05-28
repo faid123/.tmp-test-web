@@ -2219,6 +2219,166 @@ body.is-panel-resizing {
   box-shadow: 0 0 0 2px rgba(82, 141, 127, 0.55);
 }
 
+/* ============ tooth quick-pick popup (touch / mobile) ============ */
+/* Replaces the radial wheel on touch devices — labels next to icons in a 2×2
+   grid, full-size tap targets, centered modal-style sheet. Triggered by
+   `(pointer: coarse)` in showPresentToothRadialQuickPick. */
+.tooth-quickpick-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.48);
+  /* iOS Safari renders backdrop-filter only when prefixed. */
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+.tooth-quickpick-sheet {
+  width: min(360px, 100%);
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.28);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.tooth-quickpick-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.tooth-quickpick-id {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--rose-500, #c75c81);
+  letter-spacing: 0.02em;
+}
+
+.tooth-quickpick-close,
+.tooth-quickpick-back {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  color: #475569;
+  cursor: pointer;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.tooth-quickpick-close { font-size: 24px; }
+.tooth-quickpick-close:hover,
+.tooth-quickpick-back:hover { background: rgba(15, 23, 42, 0.06); }
+.tooth-quickpick-close:focus-visible,
+.tooth-quickpick-back:focus-visible { outline: 2px solid rgba(82, 141, 127, 0.55); }
+/* Push the heading to be centered between the back/close buttons. The back
+   button only appears in the items view, so reserve space for it via the
+   flex order rather than collapsing the layout on each transition. */
+.tooth-quickpick-header { gap: 8px; }
+.tooth-quickpick-id { flex: 1 1 auto; min-width: 0; }
+.tooth-quickpick-back.is-hidden { visibility: hidden; }
+
+.tooth-quickpick-grid {
+  display: grid;
+  /* 3 columns lays the 7 categories out as 3-3-1; the trailing lone tile
+     spans the full row so it never looks orphaned. The items view (some
+     categories have 8+ entries) keeps the same column count for a
+     predictable scan pattern; the sheet body itself scrolls when needed. */
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 14px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.tooth-quickpick-grid > .tooth-quickpick-tile:last-child:nth-child(3n - 2) {
+  grid-column: 1 / -1;
+}
+/* In the items view (after drilling into a category), drop the
+   "lone-trailing-tile spans full row" rule — for variable-length item lists
+   we want every tile the same width so users can scan the catalog cleanly. */
+.tooth-quickpick-grid.is-items-view > .tooth-quickpick-tile:last-child:nth-child(3n - 2) {
+  grid-column: auto;
+}
+
+.tooth-quickpick-empty {
+  grid-column: 1 / -1;
+  padding: 24px 12px;
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.tooth-quickpick-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* Tap target — 88px each axis still covers Apple's 44pt minimum with
+     breathing room even at the narrower 3-column width. */
+  min-height: 88px;
+  padding: 10px 6px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #3e7a6d;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+}
+
+.tooth-quickpick-tile:hover,
+.tooth-quickpick-tile:focus-visible {
+  background: #eef9f5;
+  border-color: rgba(59, 174, 149, 0.55);
+  outline: none;
+}
+.tooth-quickpick-tile:active { transform: translateY(1px); }
+.tooth-quickpick-tile.is-back {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.tooth-quickpick-tile-icon {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  display: block;
+}
+
+.tooth-quickpick-tile-label {
+  text-align: center;
+  line-height: 1.15;
+  /* Two-word labels like "MAJOR CONNECTOR" wrap onto two lines instead of
+     forcing the column wider. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* On touch devices the popup IS the category + item picker, so the entire
+   bottom Components panel (#editModePanel: heading, tab strip, catalog
+   list, plus the major-connector Upper/Lower columns) is redundant. Hide
+   it so users don't have to scroll past it to reach the canvas controls.
+   The DOM stays intact for renderComponentCatalog() to keep mutating
+   state-tracked nodes; only the visual is suppressed. */
+@media (pointer: coarse) {
+  #editModePanel { display: none !important; }
+}
+
 .tooth-radial-option[data-tooltip]::after {
   content: attr(data-tooltip);
   position: absolute;

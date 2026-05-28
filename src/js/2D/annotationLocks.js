@@ -505,7 +505,7 @@ export function bindArchWhitespaceDismiss() {
     // All chrome controls (lock, eraser, catalog, actions, tabs, …).
     if (t.closest("button, a[href], input, select, textarea, label")) return;
 
-    if (t.closest(".tooth-radial-backdrop")) return;
+    if (t.closest(".tooth-radial-backdrop, .tooth-quickpick-backdrop")) return;
 
     if (state.removeComponentMode) {
       state.removeComponentMode = false;

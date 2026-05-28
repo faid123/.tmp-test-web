@@ -50,6 +50,17 @@ let threeMergeVertices = null;
 const PREVIEW_MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 const PREVIEW_FALLBACK_UUID = "AC4gRQXZJoNz9EhhW36Q8jMJXBsf";
 const SMARTRPD_API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
+// Case thumbnail slots on POST /thumbnails. The case-list detail carousel
+// pulls all slots via /thumbnails/get, so a fresh capture from here lands in
+// the case detail preview on the next case open. Slot 0 is the composite 2D
+// annotation; slots 1/2 are the upper/lower jaw renders that create-case
+// seeds at case-creation time. Camera captures here overwrite the upper or
+// lower slot based on which jaw is currently visible — so isolating one jaw
+// and capturing it refreshes only that jaw's thumbnail, leaving the other
+// untouched. If both jaws are visible we write to both slots so neither one
+// goes stale.
+const JAW_UPPER_THUMBNAIL_SLOT = 1;
+const JAW_LOWER_THUMBNAIL_SLOT = 2;
 // Default RPD jaw color used as the "no undercut" base in vertex-color renders.
 const DEFAULT_TOOTH_COLOR = [208 / 255, 190 / 255, 141 / 255];
 const preview3DState = {
@@ -202,6 +213,62 @@ function getLoggedInUser() {
   } catch {
     return null;
   }
+}
+
+// Save the latest 3D preview snapshot to the case's upper/lower thumbnail
+// slot based on which jaw is currently visible. POST /thumbnails upserts by
+// (case_int_id, slot), so the upper slot keeps only the latest upper capture
+// and the lower slot keeps only the latest lower capture — they don't stomp
+// each other. Best-effort: failure here doesn't block the noticeboard save.
+async function uploadLatest3DCapture(dataUrl) {
+  const caseIntID = state.caseIntID;
+  const user = getLoggedInUser();
+  if (!caseIntID || !user?.uuid || !dataUrl) return;
+
+  // Visibility is the user's intent: hidden jaws aren't in the captured pixels,
+  // so writing the capture into their slot would replace a good render with a
+  // misleading one. Skip slots whose jaw is hidden right now.
+  const upperVisible = !!preview3DState.groups?.upper?.visible;
+  const lowerVisible = !!preview3DState.groups?.lower?.visible;
+  const slots = [];
+  if (upperVisible) slots.push(JAW_UPPER_THUMBNAIL_SLOT);
+  if (lowerVisible) slots.push(JAW_LOWER_THUMBNAIL_SLOT);
+  if (!slots.length) return;
+
+  const commaIdx = dataUrl.indexOf(",");
+  const base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+
+  const results = await Promise.all(
+    slots.map((slot) =>
+      fetch(`${SMARTRPD_API_BASE}/thumbnails`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([
+          { machine_id: PREVIEW_MACHINE_ID, uuid: user.uuid, caseIntID },
+          { case_id: caseIntID, slot, data: base64 },
+        ]),
+      })
+        .then((res) => ({ slot, ok: res.ok, status: res.status }))
+        .catch((err) => {
+          console.error(`[preview3D] thumbnail slot ${slot} fetch failed:`, err);
+          return { slot, ok: false, status: 0 };
+        })
+    )
+  );
+
+  const failed = results.filter((r) => !r.ok);
+  if (failed.length) {
+    console.error("[preview3D] failed thumbnail slots:", failed);
+    setMessage(
+      `3D capture saved to noticeboard, but case thumbnail update failed for slot${failed.length > 1 ? "s" : ""} ${failed.map((r) => r.slot).join(", ")}.`,
+      true
+    );
+    return;
+  }
+  const labels = slots
+    .map((s) => (s === JAW_UPPER_THUMBNAIL_SLOT ? "upper" : "lower"))
+    .join(" + ");
+  setMessage(`3D capture saved (noticeboard + ${labels} thumbnail).`, false);
 }
 
 function disposeJawGroup(jaw) {
@@ -694,7 +761,11 @@ function init3DPreview(area) {
     try {
       renderer.render(scene, camera);
       const dataUrl = renderer.domElement.toDataURL("image/png");
-      await addViewcaptureFromImage(dataUrl);
+      // Noticeboard save (local cache) + case-thumbnail upload (server) run in
+      // parallel — both keyed off the same dataUrl, neither depends on the
+      // other completing first.
+      addViewcaptureFromImage(dataUrl);
+      await uploadLatest3DCapture(dataUrl);
     } catch (err) {
       console.error("Failed to capture 3D preview screenshot:", err);
     } finally {

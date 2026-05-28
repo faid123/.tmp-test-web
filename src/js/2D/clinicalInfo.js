@@ -232,7 +232,9 @@ function buildToothCell(toothId) {
   imgWrap.className = "clinical-info-tooth-img-wrap";
 
   const mirrorClass = mirrored ? " is-mirrored" : "";
-  const hideCrown = note?.rootStump;
+  // Root stump: keep the crown visible but render it solid black with a white
+  // "RS" label over it (instead of hiding the crown).
+  const isRootStump = !!note?.rootStump;
 
   if (effectiveStatus === "abutment") {
     imgWrap.appendChild(
@@ -267,7 +269,7 @@ function buildToothCell(toothId) {
       mirrored ? "is-mirrored" : "",
       // Don't tint Cracked.svg yellow even if crown is toggled.
       !note?.cracked && note?.crown ? "is-tint-yellow" : "",
-      hideCrown ? "is-hidden" : "",
+      isRootStump ? "is-tint-black" : "",
     ].filter(Boolean).join(" ");
     const rootClasses = [
       "clinical-info-tooth-root",
@@ -286,6 +288,14 @@ function buildToothCell(toothId) {
     }
     imgWrap.appendChild(stack);
 
+    if (isRootStump) {
+      const rsLabel = document.createElement("span");
+      rsLabel.className = "clinical-info-tooth-rootstump-label";
+      rsLabel.textContent = "RS";
+      rsLabel.setAttribute("aria-hidden", "true");
+      cell.appendChild(rsLabel);
+    }
+
     if (effectiveStatus === "missing") {
       const cross = document.createElement("span");
       cross.className = "clinical-info-tooth-cross";
@@ -303,7 +313,7 @@ function buildToothCell(toothId) {
   }
 
   // Restoration marker (small shape sitting on the crown portion).
-  if (note?.restoration && !note.cracked && !hideCrown) {
+  if (note?.restoration && !note.cracked && !isRootStump) {
     const rest = document.createElement("span");
     rest.className = `clinical-info-tooth-restoration is-${note.restoration.toLowerCase()}`;
     cell.appendChild(rest);

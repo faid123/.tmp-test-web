@@ -11,6 +11,7 @@ import { SVG_NS } from "./constants.js";
 import {
   COMPONENT_BY_ID,
   COMPONENT_CATALOG,
+  COMPONENT_TABS,
   isPlateComponentId,
 } from "./components.js";
 import { fetchJawStruct as apiFetchJawStruct, saveJawStructFromState } from "./jawStructApi.js";
@@ -348,43 +349,49 @@ async function applyQuickPickSelection(tabId, componentId, options = {}) {
       return;
     }
     state.selectedTab = tabId;
-    state.selectedComponentId = id;
     state.suppressArchPlacementSuggestions = false;
-    // Lazy-load catalog renderer to avoid static import cycle.
-    import("./annotationCatalog.js")
-      .then(({ renderComponentCatalog }) => renderComponentCatalog())
-      .catch(() => {});
-    renderJaws();
 
     const placeOnToothId = options?.placeOnToothId ? String(options.placeOnToothId) : null;
-    if (placeOnToothId) {
-      if (id === "plate-crossmesh" || id === "plate-prox") {
-        const tooth = state.teeth[placeOnToothId];
-        if (tooth) {
-          const teethModel = await import("./annotationTeethModel.js");
-          teethModel.ensureToothPlacementState(tooth);
-          tooth.componentPlacements = (tooth.componentPlacements || []).filter(
-            (entry) =>
-              entry.componentId !== "reciprocating-clasp" &&
-              entry.componentId !== "plate-prox" &&
-              entry.componentId !== "plate-crossmesh"
-          );
-          teethModel.addPlacement(tooth, id, null);
-          teethModel.syncToothComponentsFromPlacements(tooth);
-          const label = COMPONENT_BY_ID.get(id)?.label || id;
-          setMessage(`Placed ${label} on tooth ${placeOnToothId}.`, false);
-          renderJaws();
-          return;
-        }
+
+    // Desktop RECIP MESH / RECIP PLATE quick-picks: place plate-crossmesh /
+    // plate-prox directly on the tapped tooth. This shortcut bypasses the
+    // generic catalog handler because those two components have a one-tooth
+    // placement story that doesn't match the catalog's auto-place-on-arch flow.
+    if (placeOnToothId && (id === "plate-crossmesh" || id === "plate-prox")) {
+      state.selectedComponentId = id;
+      const tooth = state.teeth[placeOnToothId];
+      if (tooth) {
+        const teethModel = await import("./annotationTeethModel.js");
+        teethModel.ensureToothPlacementState(tooth);
+        tooth.componentPlacements = (tooth.componentPlacements || []).filter(
+          (entry) =>
+            entry.componentId !== "reciprocating-clasp" &&
+            entry.componentId !== "plate-prox" &&
+            entry.componentId !== "plate-crossmesh"
+        );
+        teethModel.addPlacement(tooth, id, null);
+        teethModel.syncToothComponentsFromPlacements(tooth);
+        const label = COMPONENT_BY_ID.get(id)?.label || id;
+        setMessage(`Placed ${label} on tooth ${placeOnToothId}.`, false);
+        import("./annotationCatalog.js")
+          .then(({ renderComponentCatalog }) => renderComponentCatalog())
+          .catch(() => {});
+        renderJaws();
+        return;
       }
-      const placement = await import("./annotationPlacement.js");
-      placement.placeSelectedComponentOnTooth(placeOnToothId);
-      renderJaws();
-      return;
     }
 
-    const label = COMPONENT_BY_ID.get(id)?.label || id;
-    setMessage(`${label} selected - use suggestion markers on the arch.`, false);
+    // Everything else (majors, meshes, plates picked from the category list,
+    // rests, clasps, bars) defers to the catalog's own click handler so each
+    // type gets its proper treatment — majors get parts placed on supported
+    // teeth via ensureMajorConnectorPlacementsOnSupportedTeethInJaws, meshes
+    // join state.components, plates set up the plate-toggle suggestions, etc.
+    // Without this, picking a major from the mobile popup only set
+    // state.selectedComponentId — the overlay rendered as a preview, and a
+    // subsequent whitespace click cleared the selection and made the
+    // "appeared" connector vanish because nothing was actually placed.
+    const { handleDesignComponentSelect } = await import("./annotationCatalog.js");
+    handleDesignComponentSelect(id);
   } catch (error) {
     console.error("applyQuickPickSelection failed", error);
     setMessage("Could not apply quick pick selection.", true);
@@ -396,30 +403,24 @@ async function applyQuickPickSelection(tabId, componentId, options = {}) {
 
 /**
  * Present-tooth quick picker: Rest / Bar / Recip / Clasp.
+ *
+ * Touch devices (phones, tablets) get a centered popup sheet with full-size
+ * tap targets — the 50%-corner radial wheel has 8.5px labels and tiny hit
+ * areas that are unusable with a finger. Mouse-driven desktops keep the
+ * compact radial wheel anchored at the click point.
  */
 export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
   closePresentToothRadialQuickPick();
 
-  const backdrop = document.createElement("div");
-  backdrop.className = "tooth-radial-backdrop";
-  backdrop.setAttribute("role", "dialog");
-  backdrop.setAttribute("aria-modal", "true");
-
-  const panel = document.createElement("div");
-  panel.className = "tooth-radial-panel";
-  const center = document.createElement("div");
-  center.className = "tooth-radial-tooth-id";
-  center.textContent = String(toothId);
-  panel.appendChild(center);
-
-  const mainActions = [
+  // Desktop radial: the original 4 hand-curated quick-picks with a RECIP
+  // submenu. Tight footprint anchored at the click point.
+  const radialMain = [
     { label: "REST", tab: "rests", componentId: "rest-seat", pos: "top-left" },
     { label: "BAR", tab: "bars", componentId: "bar-i", pos: "top-right" },
     { label: "RECIP", menu: "recip", pos: "bottom-left" },
     { label: "CLASP", tab: "clasps", componentId: "retainer-clasp", pos: "bottom-right" },
   ];
-
-  const recipActions = [
+  const radialRecip = [
     {
       label: "RECIP CLASP",
       tab: "clasps",
@@ -431,7 +432,93 @@ export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
     { label: "BACK", menu: "main", pos: "bottom-right", icon: "../../back.png" },
   ];
 
-  function renderQuickPickMenu(menu) {
+  // Mobile sheet: every component category from COMPONENT_TABS (excluding the
+  // CASE NOTE form). Tapping a category opens a second view showing every
+  // catalog item in that category — tapping an item commits it. The bottom
+  // #componentTabs strip is hidden on touch devices since this sheet replaces
+  // it (see 2Dannotation.css `@media (pointer: coarse)`).
+  const sheetCategories = COMPONENT_TABS
+    .filter((tab) => tab.kind !== "form")
+    .map((tab) => ({
+      label: tab.label,
+      tabId: tab.id,
+      icon: COMPONENT_BY_ID.get(firstCatalogIdForTab(tab.id))?.icon || null,
+    }));
+
+  // `(pointer: coarse)` matches touch/stylus primary input — phones, tablets,
+  // and any desktop with a touchscreen as its main pointer. Anything with a
+  // mouse keeps the radial wheel.
+  const useMobileSheet =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(pointer: coarse)").matches;
+
+  // Commit a picked component: select it (and place it directly if it's one
+  // of the plate-on-tooth variants the catalog handles specially) then close.
+  const commit = async (action) => {
+    const placeOnToothId =
+      action.componentId === "plate-crossmesh" || action.componentId === "plate-prox"
+        ? toothId
+        : null;
+    await applyQuickPickSelection(action.tab, action.componentId, { placeOnToothId });
+    closePresentToothRadialQuickPick();
+  };
+
+  // Desktop radial uses its own submenu pattern (RECIP → reciprocating items
+  // → BACK). The mobile sheet has its own internal two-view nav, so it
+  // doesn't need this wrapper.
+  const runActionOrNavigate = async (action, renderMenu) => {
+    if (action.menu === "recip") return renderMenu("recip");
+    if (action.menu === "main") return renderMenu("main");
+    await commit(action);
+  };
+
+  const backdrop = document.createElement("div");
+  backdrop.className = useMobileSheet
+    ? "tooth-quickpick-backdrop"
+    : "tooth-radial-backdrop";
+  backdrop.setAttribute("role", "dialog");
+  backdrop.setAttribute("aria-modal", "true");
+
+  const panel = useMobileSheet
+    ? buildToothQuickPickSheet(toothId, sheetCategories, commit)
+    : buildToothRadialPanel(toothId, radialMain, radialRecip, runActionOrNavigate);
+
+  backdrop.appendChild(panel);
+  document.body.appendChild(backdrop);
+  ui.presentToothRadialHost = backdrop;
+
+  if (!useMobileSheet) {
+    // Anchor the radial wheel at the click point so it appears under the
+    // user's cursor; the mobile sheet is centered via CSS instead.
+    const left = Math.max(
+      8,
+      Math.min(clientX - QUICK_PICK_SIZE / 2, window.innerWidth - QUICK_PICK_SIZE - 8)
+    );
+    const top = Math.max(
+      8,
+      Math.min(clientY - QUICK_PICK_SIZE / 2, window.innerHeight - QUICK_PICK_SIZE - 8)
+    );
+    panel.style.left = `${Math.round(left)}px`;
+    panel.style.top = `${Math.round(top)}px`;
+  }
+
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) {
+      closePresentToothRadialQuickPick();
+    }
+  });
+  document.addEventListener("keydown", onPresentToothRadialKeydown);
+}
+
+function buildToothRadialPanel(toothId, mainActions, recipActions, runActionOrNavigate) {
+  const panel = document.createElement("div");
+  panel.className = "tooth-radial-panel";
+  const center = document.createElement("div");
+  center.className = "tooth-radial-tooth-id";
+  center.textContent = String(toothId);
+  panel.appendChild(center);
+
+  const renderMenu = (menu) => {
     panel.querySelectorAll(".tooth-radial-option").forEach((node) => node.remove());
     const actions = menu === "recip" ? recipActions : mainActions;
     for (const action of actions) {
@@ -440,13 +527,12 @@ export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
       button.className = `tooth-radial-option ${action.pos}`;
       button.setAttribute("aria-label", action.label);
       button.setAttribute("data-tooltip", action.label);
-      const iconPath = action.icon || (action.componentId ? COMPONENT_BY_ID.get(action.componentId)?.icon : null);
+      const iconPath =
+        action.icon || (action.componentId ? COMPONENT_BY_ID.get(action.componentId)?.icon : null);
       if (iconPath) {
         const icon = document.createElement("img");
         icon.className = "tooth-radial-option-icon";
-        if (action.menu === "main") {
-          icon.classList.add("tooth-radial-option-icon-back");
-        }
+        if (action.menu === "main") icon.classList.add("tooth-radial-option-icon-back");
         icon.src = iconPath;
         icon.alt = action.label;
         button.appendChild(icon);
@@ -456,48 +542,122 @@ export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
       button.addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (action.menu === "recip") {
-          renderQuickPickMenu("recip");
-          return;
-        }
-        if (action.menu === "main") {
-          renderQuickPickMenu("main");
-          return;
-        }
-        const placeOnToothId =
-          action.componentId === "plate-crossmesh" || action.componentId === "plate-prox"
-            ? toothId
-            : null;
-        await applyQuickPickSelection(action.tab, action.componentId, { placeOnToothId });
-        closePresentToothRadialQuickPick();
+        await runActionOrNavigate(action, renderMenu);
       });
       panel.appendChild(button);
     }
-  }
+  };
+  renderMenu("main");
+  return panel;
+}
 
-  renderQuickPickMenu("main");
+function buildToothQuickPickSheet(toothId, categories, commit) {
+  const sheet = document.createElement("div");
+  sheet.className = "tooth-quickpick-sheet";
 
-  backdrop.appendChild(panel);
-  document.body.appendChild(backdrop);
-  ui.presentToothRadialHost = backdrop;
+  // Header: [back] [title] [close]. Back is hidden in the categories view and
+  // appears when the user drills into a category's items.
+  const header = document.createElement("div");
+  header.className = "tooth-quickpick-header";
 
-  const left = Math.max(
-    8,
-    Math.min(clientX - QUICK_PICK_SIZE / 2, window.innerWidth - QUICK_PICK_SIZE - 8)
-  );
-  const top = Math.max(
-    8,
-    Math.min(clientY - QUICK_PICK_SIZE / 2, window.innerHeight - QUICK_PICK_SIZE - 8)
-  );
-  panel.style.left = `${Math.round(left)}px`;
-  panel.style.top = `${Math.round(top)}px`;
+  const backBtn = document.createElement("button");
+  backBtn.type = "button";
+  backBtn.className = "tooth-quickpick-back is-hidden";
+  backBtn.setAttribute("aria-label", "Back to categories");
+  backBtn.innerHTML = "&larr;";
 
-  backdrop.addEventListener("click", (e) => {
-    if (e.target === backdrop) {
-      closePresentToothRadialQuickPick();
-    }
+  const heading = document.createElement("span");
+  heading.className = "tooth-quickpick-id";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "tooth-quickpick-close";
+  closeBtn.setAttribute("aria-label", "Close");
+  closeBtn.innerHTML = "&times;";
+  closeBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closePresentToothRadialQuickPick();
   });
-  document.addEventListener("keydown", onPresentToothRadialKeydown);
+
+  header.appendChild(backBtn);
+  header.appendChild(heading);
+  header.appendChild(closeBtn);
+  sheet.appendChild(header);
+
+  const grid = document.createElement("div");
+  grid.className = "tooth-quickpick-grid";
+  sheet.appendChild(grid);
+
+  // Build one tile (button with icon + label). The click handler is supplied
+  // by the caller so the same tile shape works for both category and item
+  // rendering.
+  const buildTile = (label, iconPath, onClick) => {
+    const tile = document.createElement("button");
+    tile.type = "button";
+    tile.className = "tooth-quickpick-tile";
+    tile.setAttribute("aria-label", label);
+    if (iconPath) {
+      const img = document.createElement("img");
+      img.className = "tooth-quickpick-tile-icon";
+      img.src = iconPath;
+      img.alt = "";
+      tile.appendChild(img);
+    }
+    const text = document.createElement("span");
+    text.className = "tooth-quickpick-tile-label";
+    text.textContent = label;
+    tile.appendChild(text);
+    tile.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      await onClick();
+    });
+    return tile;
+  };
+
+  const renderCategories = () => {
+    heading.textContent = `Tooth ${toothId}`;
+    backBtn.classList.add("is-hidden");
+    grid.classList.remove("is-items-view");
+    grid.innerHTML = "";
+    for (const cat of categories) {
+      grid.appendChild(buildTile(cat.label, cat.icon, () => renderItems(cat)));
+    }
+  };
+
+  const renderItems = (cat) => {
+    heading.textContent = cat.label;
+    backBtn.classList.remove("is-hidden");
+    grid.classList.add("is-items-view");
+    grid.innerHTML = "";
+    const items = COMPONENT_CATALOG.filter(
+      (entry) => entry.tab === cat.tabId && entry.hidden !== true
+    );
+    if (!items.length) {
+      const empty = document.createElement("div");
+      empty.className = "tooth-quickpick-empty";
+      empty.textContent = "No components in this category.";
+      grid.appendChild(empty);
+      return;
+    }
+    for (const item of items) {
+      grid.appendChild(
+        buildTile(item.label, item.icon, () =>
+          commit({ tab: item.tab, componentId: item.id, label: item.label })
+        )
+      );
+    }
+  };
+
+  backBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    renderCategories();
+  });
+
+  renderCategories();
+  return sheet;
 }
 
 export function closeRemoveComponentDialog() {

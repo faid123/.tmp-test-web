@@ -297,6 +297,19 @@ export function renderJaw(jaw) {
         if (hadSuppressedHints) renderJaw(jaw);
         return;
       }
+
+      // Empty-hand tap on any tooth (present OR missing/mesh) opens the
+      // picker popup. On touch devices the bottom #editModePanel is hidden
+      // (see 2Dannotation.css), so this is the only way to pick a component
+      // from the canvas; on desktop it's a convenience entry point that
+      // complements the catalog. Limited to `!catalogPick` so an in-progress
+      // mesh/bar/major placement workflow isn't disrupted by accidental taps.
+      if (!catalogPick) {
+        showPresentToothRadialQuickPick(toothId, event.clientX, event.clientY);
+        if (hadSuppressedHints) renderJaw(jaw);
+        return;
+      }
+
       if (tooth.isPresent) {
         if (catalogPick?.id === "rest-onlay") {
           placeSelectedComponentOnTooth(toothId, null);

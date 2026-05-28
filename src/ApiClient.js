@@ -1,4 +1,5 @@
 import { logApi } from "./js/apiLog.js";
+import { LOGIN_CREDENTIALS, MACHINE_ID, VIEWER_UUID } from "./config.js";
 export class ApiClient {
   constructor(baseUrl) {
     this.baseUrl = baseUrl;
@@ -10,7 +11,7 @@ export class ApiClient {
     let that = '';
     if(what == undefined)
     {
-      that == '';
+      that = '';
     }
     else
     {
@@ -120,23 +121,10 @@ export class ApiClient {
 
 
 async function login() {
-  const loginData = {
-    id: 0,
-    username: "faid",
-    email: "",
-    password: "faid30413041D**",
-    salt: "",
-    create_time: 0,
-    is_admin: 1,
-    uuid: "",
-    deleted: 0
-  };
+  const loginData = LOGIN_CREDENTIALS;
   const dataish = {
-    machine_id: '3a0df9c37b50873c63cebecd7bed73152a5ef616',
-	uuid: 'AC4gRQXZJoNz9EhhW36Q8jMJXBsf',
-    //uuid: 'eOqJe2FpjqdECy25l0KuJkH2cPQm', // dev server acc uuid
-
-
+    machine_id: MACHINE_ID,
+    uuid: VIEWER_UUID,
   };
 
   const urllogin = 'https://live.api.smartrpdai.com/api/smartrpd/user/login';

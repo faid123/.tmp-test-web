@@ -395,6 +395,33 @@
   filter: brightness(0) saturate(100%) invert(45%) sepia(85%) saturate(2500%) hue-rotate(105deg) brightness(95%) contrast(105%);
 }
 
+/* Root stump: blacken the crown silhouette. */
+.clinical-info-tooth-img.is-tint-black {
+  filter: brightness(0);
+}
+
+/* Root stump: white "RS" centered over the blacked-out crown. */
+.clinical-info-tooth-rootstump-label {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.8rem;
+  line-height: 1;
+  letter-spacing: 0.5px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.clinical-info-tooth.is-upper .clinical-info-tooth-rootstump-label {
+  bottom: 17%;
+}
+
+.clinical-info-tooth.is-lower .clinical-info-tooth-rootstump-label {
+  top: 20%;
+}
+
 
 .clinical-info-tooth-img.is-hidden {
   visibility: hidden;

@@ -228,6 +228,17 @@ button {
   font-size: 16px;
 }
 
+.cm-user-avatar.logout {
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.cm-user-avatar.logout:hover {
+  background: var(--primary-dark);
+}
+
 /* ============ toolbar (chips + create button) ============ */
 .cm-toolbar {
   display: flex;
@@ -378,99 +389,110 @@ button {
 
 .cm-toolbar .cm-btn-primary { margin-left: auto; }
 
-/* ============ case card list ============ */
-.cm-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  overflow-y: auto;
-  padding-right: 4px;
-  padding-bottom: 8px;
+/* ============ case table ============ */
+.cm-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--panel);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
 }
 
-.cm-list::-webkit-scrollbar { width: 8px; }
-.cm-list::-webkit-scrollbar-thumb {
+.cm-table-wrap::-webkit-scrollbar { width: 8px; height: 8px; }
+.cm-table-wrap::-webkit-scrollbar-thumb {
   background: #d4d8e0;
   border-radius: 4px;
 }
 
-.cm-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 18px;
+.cm-table {
+  width: 100%;
+  /* Keep columns legible on narrow tablet/phone widths — the .cm-table-wrap
+     above this is overflow:auto, so falling below this width turns into a
+     clean horizontal scroll instead of crushed columns. */
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.cm-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   background: var(--panel);
-  border-radius: var(--radius);
-  border: 1.5px solid transparent;
-  box-shadow: var(--shadow-sm);
+  text-align: left;
+  padding: 14px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.cm-th-sort { cursor: pointer; user-select: none; }
+.cm-th-sort span { margin-right: 6px; }
+.cm-th-sort:hover { color: var(--ink-soft); }
+.cm-th-sort.is-sorted { color: var(--ink); }
+.cm-sort-caret { font-size: 11px; opacity: 0.45; }
+.cm-th-sort.is-sorted .cm-sort-caret { opacity: 1; color: var(--primary-dark); }
+
+.cm-th-actions { text-align: right; }
+
+.cm-table tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink-soft);
+  vertical-align: middle;
+}
+.cm-table tbody tr:last-child td { border-bottom: none; }
+
+.cm-row {
   cursor: pointer;
-  transition: border-color 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+  transition: background 0.12s ease;
 }
+.cm-row:hover { background: var(--line-soft); }
 
-.cm-card:hover {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
-}
-
-.cm-card.is-active {
-  border-color: var(--primary);
+.cm-row.is-active {
   background: #f0faf7;
+  box-shadow: inset 3px 0 0 var(--primary);
 }
+.cm-row.is-active:hover { background: #e6f5ef; }
 
-.cm-card-main {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-
-.cm-card-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.cm-card-name {
-  font-size: 15px;
+.cm-td-name { min-width: 200px; }
+.cm-row-name {
   font-weight: 600;
   color: var(--ink);
 }
-
-.cm-card-meta {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
-  color: var(--ink-soft);
-  font-size: 12px;
+.cm-row-pin {
+  margin-left: 8px;
+  color: var(--primary);
+  font-size: 11px;
 }
 
-.cm-meta-item {
+.cm-td-date { white-space: nowrap; }
+
+.cm-td-owner { white-space: nowrap; }
+.cm-td-owner > i { color: var(--muted); margin-right: 6px; }
+.cm-owner-name { color: var(--ink-soft); }
+.cm-row-coowners {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-}
-.cm-meta-item i { color: var(--muted); font-size: 12px; }
-
-.cm-meta-coowners {
-  color: var(--primary-dark);
-  font-weight: 500;
-}
-.cm-meta-coowners i { color: var(--primary); }
-
-.cm-card-actions {
-  display: flex;
-  align-items: center;
   gap: 4px;
-  flex-shrink: 0;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  font-size: 11px;
+  font-weight: 600;
 }
 
-.cm-card-icon {
-  width: 32px;
-  height: 32px;
+.cm-td-actions { text-align: right; white-space: nowrap; }
+.cm-row-icon {
+  width: 30px;
+  height: 30px;
   border-radius: 8px;
   color: var(--muted);
   display: inline-flex;
@@ -478,17 +500,12 @@ button {
   justify-content: center;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.cm-card-icon:hover {
-  background: var(--line-soft);
-  color: var(--ink);
-}
-.cm-card-icon-danger:hover {
-  background: var(--status-danger-bg);
-  color: var(--danger);
-}
+.cm-row-icon:hover { background: var(--line); color: var(--ink); }
+.cm-row-icon.is-pinned { color: var(--warning); }
+.cm-row-icon-danger:hover { background: var(--status-danger-bg); color: var(--danger); }
 
 .cm-list-empty {
-  padding: 60px 20px;
+  padding: 60px 20px !important;
   text-align: center;
   color: var(--muted);
   font-size: 14px;
@@ -679,6 +696,42 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ----- SHARED WITH chips in the detail pane ----- */
+.cm-shared-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  align-items: center;
+}
+.cm-shared-empty {
+  font-size: 14px;
+  color: var(--muted);
+}
+.cm-shared-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 3px;
+  border-radius: 999px;
+  background: var(--line-soft);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  max-width: 100%;
+}
+.cm-avatar-coowner {
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+}
+.cm-shared-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
 }
 
 /* ============ dropdown (rename / delete / etc.) ============ */
@@ -740,13 +793,25 @@ button {
 }
 
 /* ============ responsive ============ */
+/* Tablet landscape (iPad regular landscape, iPad mini landscape ~1133). Keep
+   side-by-side layout but trim the detail pane so the table has room. */
 @media (max-width: 1100px) {
-  .cm-page { grid-template-columns: minmax(0, 1fr) 360px; }
+  .cm-page { grid-template-columns: minmax(0, 1fr) 340px; }
+  .cm-main { padding: 22px 20px 16px; }
   .cm-detail { padding: 22px 18px; }
+  .cm-table thead th,
+  .cm-table tbody td { padding: 12px 12px; }
 }
 
+/* Tablet portrait / iPad mini portrait (~744). Single column with the detail
+   pane sliding in on row click. The JS handleRowClick adds .show-details to
+   .cm-page when innerWidth ≤ 860 — keep these breakpoints in sync. */
 @media (max-width: 860px) {
   .cm-page { grid-template-columns: 1fr; }
+  .cm-main { padding: 20px 18px 14px; gap: 14px; }
+  .cm-titles h1 { font-size: 22px; }
+  .cm-toolbar { padding: 8px; gap: 8px; }
+  .cm-toolbar .cm-btn-primary { margin-left: 0; }
   .cm-detail {
     position: fixed;
     inset: 0;
@@ -755,9 +820,126 @@ button {
     background: var(--bg);
     transform: translateX(100%);
     transition: transform 0.22s ease;
+    padding: 20px 18px 24px;
   }
   .cm-page.show-details .cm-detail { transform: translateX(0); }
   .back-to-list { display: inline-flex; }
+  /* Slightly bigger touch targets on tablet/phone — 30→34px row icons. */
+  .cm-row-icon { width: 34px; height: 34px; }
+}
+
+/* The mobile sort picker is hidden on tablet and desktop — those rely on
+   clickable table headers (which are themselves hidden on phone). */
+.cm-sort-chip { display: none; }
+
+/* Phone (≤640). The table collapses to a vertical card list — a horizontally
+   scrolling 6-column table on a 390px viewport is unusable. Each row becomes
+   a self-contained card with its own field labels (via data-label attrs on
+   the date/owner cells). The thead is hidden; the .cm-sort-chip dropdown is
+   the sort affordance instead. */
+@media (max-width: 640px) {
+  .cm-sort-chip { display: inline-flex; }
+
+  .cm-main { padding: 16px 14px 12px; gap: 12px; }
+  .cm-titles h1 { font-size: 20px; }
+  .cm-header { gap: 10px; }
+  .cm-detail { padding: 18px 14px 22px; }
+
+  /* Toolbar as a 2-column grid pairs the six items into three even rows:
+     All Cases | Search by Date, Filter by Status | Sort by, Create New | Refresh.
+     min-width: 0 + ellipsis lets the inner selects/inputs shrink to the cell
+     width rather than overflowing. */
+  .cm-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 8px;
+  }
+  .cm-toolbar > * { margin: 0; min-width: 0; }
+  .cm-chip {
+    padding: 8px 10px;
+    font-size: 12px;
+    gap: 6px;
+    overflow: hidden;
+  }
+  /* Drop the chip labels on phone — the icons (calendar / filter / sort) and
+     the selected values carry the meaning, and reclaiming the label space is
+     what lets the native date input actually show its placeholder. The dark
+     "All Cases" chip is .cm-chip-dark (not .cm-chip-filter), so its count
+     stays. */
+  .cm-chip-filter > label { display: none; }
+  .cm-filter-select,
+  .cm-date-input {
+    min-width: 0;
+    flex: 1 1 auto;
+    text-overflow: ellipsis;
+  }
+  .cm-btn { width: 100%; padding: 10px 12px; }
+  .cm-icon-btn { width: 100%; }
+
+  /* The wrap loses its panel chrome (each card carries its own); cards stack
+     vertically inside and the wrap scrolls only on the Y axis. */
+  .cm-table-wrap {
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  .cm-table { min-width: 0; display: block; }
+  .cm-table thead { display: none; }
+  .cm-table tbody,
+  .cm-table tr,
+  .cm-table td { display: block; }
+
+  .cm-row {
+    background: var(--panel);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .cm-row:hover { background: var(--panel); } /* drop the table-row hover */
+  .cm-row.is-active { background: #f0faf7; }
+
+  .cm-table tbody td { padding: 4px 0; border: none; }
+  .cm-table tbody tr:last-child td { border: none; }
+
+  /* Name as the card heading, status pill just below. */
+  .cm-td-name { padding: 0 0 6px !important; }
+  .cm-row-name { font-size: 15px; }
+  .cm-td-status { padding: 0 0 10px !important; }
+
+  /* Field rows: small label prefix from the data-label attribute, then value.
+     `white-space: normal` lets long dates wrap instead of push the card wide. */
+  .cm-td-date,
+  .cm-td-owner { white-space: normal; }
+  .cm-td-date::before,
+  .cm-td-owner::before {
+    content: attr(data-label) ": ";
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-right: 6px;
+  }
+
+  /* Actions in their own row, divider above, right-aligned. */
+  .cm-td-actions {
+    text-align: right;
+    padding-top: 10px !important;
+    margin-top: 8px;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .cm-shared-name { max-width: 110px; }
+}
+
+/* Extra-narrow phones (≤360, iPhone SE etc.) — the 2-col toolbar grid gets
+   too cramped for the native date input; fall back to a single column. */
+@media (max-width: 360px) {
+  .cm-toolbar { grid-template-columns: 1fr; }
 }
 
 /* ============ legacy compatibility ============ */
@@ -769,14 +951,10 @@ button {
 .hidden { display: none !important; }
 
 /* ============ pinned cases ============ */
-.cm-card.is-pinned {
-  box-shadow: inset 3px 0 0 var(--primary), var(--shadow-sm);
-}
-.cm-card-icon.is-pinned {
-  color: var(--primary);
-}
-.cm-card-icon.is-pinned:hover {
-  color: var(--primary-dark);
+/* Pinned rows are indicated by the flag next to the name and the filled star
+   action; the .cm-row-icon.is-pinned color is set in the table section. */
+.cm-row-icon.is-pinned:hover {
+  filter: brightness(0.9);
 }
 
 /* ============ rename case modal ============ */
