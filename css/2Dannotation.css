@@ -1951,6 +1951,7 @@ body.is-panel-resizing {
    .jaw-range-missing-btn {
   display: inline-flex;
   }
+
     .preview-frame {
     min-height: min(480px, 82vh);
   }
@@ -2358,6 +2359,18 @@ body.is-panel-resizing {
   height: 34px;
   object-fit: contain;
   display: block;
+}
+
+.tooth-quickpick-tile-icon--mask {
+  background-color: #8b5cf6;
+  -webkit-mask-image: var(--tile-icon-mask);
+  mask-image: var(--tile-icon-mask);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 }
 
 .tooth-quickpick-tile-label {

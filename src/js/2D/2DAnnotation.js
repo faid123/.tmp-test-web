@@ -12,6 +12,7 @@ import {
   COMPONENT_BY_ID,
   COMPONENT_CATALOG,
   COMPONENT_TABS,
+  isMeshComponent,
   isPlateComponentId,
 } from "./components.js";
 import { fetchJawStruct as apiFetchJawStruct, saveJawStructFromState } from "./jawStructApi.js";
@@ -592,17 +593,25 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
   // Build one tile (button with icon + label). The click handler is supplied
   // by the caller so the same tile shape works for both category and item
   // rendering.
-  const buildTile = (label, iconPath, onClick) => {
+  const buildTile = (label, iconPath, onClick, options = {}) => {
     const tile = document.createElement("button");
     tile.type = "button";
     tile.className = "tooth-quickpick-tile";
+    if (options.tileClass) tile.classList.add(options.tileClass);
     tile.setAttribute("aria-label", label);
     if (iconPath) {
-      const img = document.createElement("img");
-      img.className = "tooth-quickpick-tile-icon";
-      img.src = iconPath;
-      img.alt = "";
-      tile.appendChild(img);
+      if (options.iconAsMask) {
+        const maskEl = document.createElement("span");
+        maskEl.className = "tooth-quickpick-tile-icon tooth-quickpick-tile-icon--mask";
+        maskEl.style.setProperty("--tile-icon-mask", `url("${iconPath}")`);
+        tile.appendChild(maskEl);
+      } else {
+        const img = document.createElement("img");
+        img.className = "tooth-quickpick-tile-icon";
+        img.src = iconPath;
+        img.alt = "";
+        tile.appendChild(img);
+      }
     }
     const text = document.createElement("span");
     text.className = "tooth-quickpick-tile-label";
@@ -642,9 +651,13 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
       return;
     }
     for (const item of items) {
+      const isMesh = isMeshComponent(item.id);
       grid.appendChild(
-        buildTile(item.label, item.icon, () =>
-          commit({ tab: item.tab, componentId: item.id, label: item.label })
+        buildTile(
+          item.label,
+          item.icon,
+          () => commit({ tab: item.tab, componentId: item.id, label: item.label }),
+          isMesh ? { iconAsMask: true, tileClass: "tooth-quickpick-tile--mesh" } : undefined
         )
       );
     }
