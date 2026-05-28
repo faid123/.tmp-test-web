@@ -79,6 +79,10 @@ const preview3DState = {
   heatmapEnabled: false,
   heatmapToggleBtn: null,
   heatmapBoard: null,
+  // Lazy-loaded server STLs that aren't the upper/lower jaws (type 3+).
+  // Keyed by stl type. Value: { mesh, visible, filename }.
+  extrasGroup: null,
+  loadedExtras: new Map(),
 };
 
 export async function loadInteractiveJawPreview(area) {
@@ -204,6 +208,8 @@ export function teardown3DPreview() {
   preview3DState.heatmapEnabled = false;
   preview3DState.heatmapToggleBtn = null;
   preview3DState.heatmapBoard = null;
+  preview3DState.extrasGroup = null;
+  preview3DState.loadedExtras = new Map();
 }
 
 function getLoggedInUser() {
@@ -271,79 +277,6 @@ async function uploadLatest3DCapture(dataUrl) {
   setMessage(`3D capture saved (noticeboard + ${labels} thumbnail).`, false);
 }
 
-function disposeJawGroup(jaw) {
-  const group = preview3DState.groups[jaw];
-  if (!group) return;
-  group.traverse((obj) => {
-    if (obj.isMesh) {
-      obj.geometry?.dispose?.();
-      if (Array.isArray(obj.material)) obj.material.forEach((m) => m?.dispose?.());
-      else obj.material?.dispose?.();
-      obj.userData?.heatmapMaterial?.dispose?.();
-      obj.userData?.flatMaterial?.dispose?.();
-    }
-  });
-  group.parent?.remove(group);
-  preview3DState.groups[jaw] = null;
-}
-
-async function deleteJawStl(jaw) {
-  if (!state.caseIntID) {
-    alert("⚠️ Missing case info.");
-    return false;
-  }
-  const user = getLoggedInUser();
-  if (!user?.uuid) {
-    alert("⚠️ You must be logged in to delete files.");
-    return false;
-  }
-
-  if (!preview3DState.caseData) {
-    preview3DState.caseData = await fetchCaseData();
-  }
-  const caseIdStr = preview3DState.caseData?.case_id || "";
-  const jawType = jaw === "upper" ? "upper_jaw" : "lower_jaw";
-
-  const payload = [
-    {
-      machine_id: PREVIEW_MACHINE_ID,
-      uuid: user.uuid,
-      caseIntID: state.caseIntID,
-    },
-    {
-      case_id: caseIdStr,
-      type: jawType,
-    },
-  ];
-
-  const endpoints = [
-    `${SMARTRPD_API_BASE}/stl/raw/delete`,
-    `${SMARTRPD_API_BASE}/stl/delete`,
-  ];
-
-  for (const url of endpoints) {
-    const path = url.replace(SMARTRPD_API_BASE, "");
-    const t0 = performance.now();
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const dt = Math.round(performance.now() - t0);
-      const tag = res.ok ? "✓" : "✕";
-      console.log(`[preview3D] ${tag} POST ${path} status=${res.status} ${dt}ms`);
-      if (res.ok) return true;
-      if (res.status !== 404 && res.status !== 405) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-    } catch (err) {
-      console.warn(`[preview3D] ✕ POST ${path} failed`, err);
-    }
-  }
-  return false;
-}
-
 async function fetchJawFilesForCase() {
   if (!state.caseIntID) return [];
   const user = getLoggedInUser();
@@ -351,41 +284,400 @@ async function fetchJawFilesForCase() {
 
   const payload = [
     { machine_id: PREVIEW_MACHINE_ID, uuid: user.uuid, caseIntID: state.caseIntID },
-    { case_int_id: state.caseIntID },
+    { case_id: state.caseIntID, case_int_id: state.caseIntID, caseIntID: state.caseIntID },
   ];
 
-  const endpoints = [
-    `${SMARTRPD_API_BASE}/stl/raw/get`,
-    `${SMARTRPD_API_BASE}/stl/get`,
-  ];
-
-  for (const endpoint of endpoints) {
+  const tryEndpoint = async (endpoint, requestPayload) => {
     const path = endpoint.replace(SMARTRPD_API_BASE, "");
     const t0 = performance.now();
     try {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(requestPayload),
       });
       const dt = Math.round(performance.now() - t0);
       const tag = res.ok ? "✓" : "✕";
       console.log(`[preview3D] ${tag} POST ${path} status=${res.status} ${dt}ms`);
-      if (!res.ok) continue;
+      if (!res.ok) return [];
       const data = await res.json();
       const list = Array.isArray(data) ? data : [data];
-      const filtered = list.filter((item) => {
-        if (!item?.data) return false;
-        const type = String(item.type || item.jaw_type || "").toLowerCase();
-        const name = String(item.filename || "").toLowerCase();
-        return type.includes("upper") || type.includes("lower") || name.includes("upper") || name.includes("lower");
-      });
-      if (filtered.length) return filtered;
+      return list.filter((item) => item?.data && getJawKeyFromFile(item));
     } catch (err) {
       console.warn(`[preview3D] ✕ POST ${path} failed`, err);
+      return [];
     }
+  };
+
+  // Primary STL source for preview: /stl/get.
+  const all = await tryEndpoint(`${SMARTRPD_API_BASE}/stl/get`, payload);
+  if (all.length) return all;
+
+  // Fallback per-jaw route: /stl/get/:type (1=upper, 2=lower).
+  const upperPayload = [payload[0], { ...payload[1], type: 1, jaw_type: "upper_jaw" }];
+  const lowerPayload = [payload[0], { ...payload[1], type: 2, jaw_type: "lower_jaw" }];
+  const [upperOnly, lowerOnly] = await Promise.all([
+    tryEndpoint(`${SMARTRPD_API_BASE}/stl/get/1`, upperPayload),
+    tryEndpoint(`${SMARTRPD_API_BASE}/stl/get/2`, lowerPayload),
+  ]);
+
+  const byJaw = new Map();
+  [...upperOnly, ...lowerOnly].forEach((item) => {
+    const jaw = getJawKeyFromFile(item);
+    if (jaw && !byJaw.has(jaw)) byJaw.set(jaw, item);
+  });
+  return [...byJaw.values()];
+}
+
+function ensureUploadModalStyle() {
+  if (document.getElementById("jp-upload-modal-style")) return;
+  const style = document.createElement("style");
+  style.id = "jp-upload-modal-style";
+  style.textContent = `
+    .jp-upload-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); z-index: 2500; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .jp-upload-card { width: min(560px, 100%); background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 18px 48px rgba(2, 6, 23, 0.25); }
+    .jp-upload-title { margin: 0 0 6px; font-size: 18px; font-weight: 700; color: #0f172a; }
+    .jp-upload-sub { margin: 0 0 12px; font-size: 12px; color: #64748b; line-height: 1.45; }
+    .jp-upload-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+    .jp-upload-label { margin: 0; font-size: 13px; font-weight: 600; color: #1e293b; }
+    .jp-upload-file { margin: 3px 0 0; font-size: 12px; color: #64748b; word-break: break-all; }
+    .jp-upload-actions { margin-top: 12px; display: flex; justify-content: flex-end; }
+    .jp-upload-close { border: 1px solid #cbd5e1; background: #fff; color: #0f172a; border-radius: 8px; padding: 7px 12px; font-weight: 600; cursor: pointer; }
+    .jp-upload-replace { border: 0; background: #0f766e; color: #fff; border-radius: 8px; padding: 8px 12px; font-weight: 600; cursor: pointer; }
+    .jp-upload-replace:disabled, .jp-upload-close:disabled { opacity: 0.65; cursor: wait; }
+    .jp-stl-list { list-style: none; margin: 0 0 10px; padding: 0; max-height: 260px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
+    .jp-stl-item { display: flex; align-items: center; padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
+    .jp-stl-item:last-child { border-bottom: 0; }
+    .jp-stl-toggle { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; font-size: 13px; color: #0f172a; }
+    .jp-stl-toggle input { cursor: pointer; }
+    .jp-stl-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+    .jp-stl-tag { flex-shrink: 0; font-size: 11px; font-weight: 700; color: #0f766e; background: #ccfbf1; padding: 2px 8px; border-radius: 999px; }
+    .jp-stl-empty { padding: 14px 12px; font-size: 12px; color: #64748b; text-align: center; }
+  `;
+  document.head.appendChild(style);
+}
+
+async function openUploadOther3DFilesModal() {
+  ensureUploadModalStyle();
+  await ensureThreeDeps();
+
+  let files = [];
+
+  const overlay = document.createElement("div");
+  overlay.className = "jp-upload-overlay";
+  overlay.innerHTML = `
+    <div class="jp-upload-card" role="dialog" aria-modal="true" aria-label="STL files">
+      <h3 class="jp-upload-title">STL files for this case</h3>
+      <p class="jp-upload-sub">Check a file to display it in the viewer. Picking a non-jaw STL replaces the upper/lower jaws in the view.</p>
+      <ul class="jp-stl-list"></ul>
+      <div style="margin: 10px 0;">
+        <button type="button" class="jp-upload-replace" data-action="upload-more">Upload another STL</button>
+      </div>
+      <div class="jp-upload-actions">
+        <button type="button" class="jp-upload-close">Close</button>
+      </div>
+    </div>
+  `;
+
+  const listEl = overlay.querySelector(".jp-stl-list");
+  const uploadBtn = overlay.querySelector('[data-action="upload-more"]');
+  const closeBtn = overlay.querySelector(".jp-upload-close");
+
+  const isChecked = (file) => {
+    const jaw = getJawKeyFromFile(file);
+    if (jaw === "upper") return !!preview3DState.groups.upper?.visible;
+    if (jaw === "lower") return !!preview3DState.groups.lower?.visible;
+    const entry = preview3DState.loadedExtras.get(Number(file.type));
+    return !!entry?.visible;
+  };
+
+  const applySelection = async (file, checked) => {
+    const jaw = getJawKeyFromFile(file);
+    if (jaw === "upper" || jaw === "lower") {
+      setJawVisibility(jaw, checked);
+      return;
+    }
+    const type = Number(file.type);
+    if (checked) {
+      if (!preview3DState.loadedExtras.has(type)) {
+        await loadServerStlAsExtra(file);
+      } else {
+        const entry = preview3DState.loadedExtras.get(type);
+        entry.mesh.visible = true;
+        entry.visible = true;
+      }
+      // Replace semantics: hide the case's upper/lower jaws so the chosen
+      // STL takes over the viewer. User can re-check upper/lower if they
+      // want to see them alongside.
+      setJawVisibility("upper", false);
+      setJawVisibility("lower", false);
+    } else {
+      const entry = preview3DState.loadedExtras.get(type);
+      if (entry) {
+        entry.mesh.visible = false;
+        entry.visible = false;
+      }
+    }
+  };
+
+  const renderListUI = () => {
+    listEl.innerHTML = "";
+    if (!files.length) {
+      const empty = document.createElement("li");
+      empty.className = "jp-stl-empty";
+      empty.textContent = "No STL files in this case yet.";
+      listEl.appendChild(empty);
+      return;
+    }
+    for (const file of files) {
+      const jaw = getJawKeyFromFile(file);
+      const li = document.createElement("li");
+      li.className = "jp-stl-item";
+
+      const label = document.createElement("label");
+      label.className = "jp-stl-toggle";
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = isChecked(file);
+      checkbox.addEventListener("change", async () => {
+        checkbox.disabled = true;
+        try {
+          await applySelection(file, checkbox.checked);
+          renderListUI();
+        } catch (err) {
+          console.error("[preview3D] STL toggle failed", err);
+          setMessage(`Failed to ${checkbox.checked ? "show" : "hide"} STL. ${err.message || err}`, true);
+          checkbox.checked = !checkbox.checked;
+        } finally {
+          checkbox.disabled = false;
+        }
+      });
+
+      const name = document.createElement("span");
+      name.className = "jp-stl-name";
+      const displayName = file.filename || `stl_${file.type ?? "x"}.stl`;
+      name.textContent = displayName;
+      name.title = displayName;
+
+      const tag = document.createElement("span");
+      tag.className = "jp-stl-tag";
+      tag.textContent = jaw === "upper" ? "Upper" : jaw === "lower" ? "Lower" : `Type ${file.type ?? "?"}`;
+
+      label.appendChild(checkbox);
+      label.appendChild(name);
+      label.appendChild(tag);
+      li.appendChild(label);
+      listEl.appendChild(li);
+    }
+  };
+
+  const refresh = async () => {
+    try {
+      files = await fetchAllStlsForCase();
+    } catch (err) {
+      console.warn("[preview3D] fetchAllStlsForCase failed", err);
+      files = [];
+    }
+    renderListUI();
+  };
+
+  const onUploadAnother = async () => {
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.accept = ".stl,model/stl,application/sla";
+    picker.addEventListener("change", async () => {
+      const file = picker.files?.[0];
+      if (!file) return;
+      if (!/\.stl$/i.test(file.name || "")) {
+        setMessage("Please select an STL file (.stl).", true);
+        return;
+      }
+      uploadBtn.disabled = true;
+      closeBtn.disabled = true;
+      setMessage(`Uploading ${file.name}…`, false);
+      try {
+        const existing = await fetchAllStlsForCase();
+        const maxType = existing.reduce((max, f) => {
+          const t = Number(f.type);
+          return Number.isFinite(t) && t > max ? t : max;
+        }, 2);
+        const type = maxType + 1;
+        await uploadGenericStl(file, type);
+        setMessage(`Uploaded ${file.name} as type ${type}.`, false);
+        await refresh();
+        // Auto-display the freshly uploaded STL: replaces upper/lower view.
+        const newFile = files.find((f) => Number(f.type) === type);
+        if (newFile) {
+          await applySelection(newFile, true);
+          renderListUI();
+        }
+      } catch (err) {
+        console.error("[preview3D] generic STL upload failed", err);
+        setMessage(`Upload failed. ${err.message || err}`, true);
+      } finally {
+        uploadBtn.disabled = false;
+        closeBtn.disabled = false;
+      }
+    }, { once: true });
+    picker.click();
+  };
+
+  uploadBtn.addEventListener("click", onUploadAnother);
+  closeBtn.addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) overlay.remove();
+  });
+
+  document.body.appendChild(overlay);
+  await refresh();
+}
+
+// Parse a server-fetched STL (base64 in file.data) and add a mesh to the
+// shared extrasGroup so it renders alongside upper/lower in the viewer.
+async function loadServerStlAsExtra(file) {
+  if (!STLLoader || !THREE) {
+    const ok = await ensureThreeDeps();
+    if (!ok) throw new Error("3D dependencies failed to load");
   }
-  return [];
+  if (!preview3DState.modelRoot) throw new Error("3D viewer is not ready");
+
+  const buf = base64ToArrayBuffer(file.data);
+  const loader = new STLLoader();
+  let geometry = loader.parse(buf);
+  geometry = mergeStlVertices(geometry);
+  geometry.computeVertexNormals();
+
+  // Match the upper-jaw dental tan from populateJawPreview.
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xd7b794,
+    metalness: 0.05,
+    roughness: 0.6,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.visible = true;
+
+  if (!preview3DState.extrasGroup) {
+    preview3DState.extrasGroup = new THREE.Group();
+    preview3DState.modelRoot.add(preview3DState.extrasGroup);
+  }
+  preview3DState.extrasGroup.add(mesh);
+
+  const type = Number(file.type);
+  preview3DState.loadedExtras.set(type, {
+    mesh,
+    visible: true,
+    filename: file.filename || `stl_${type}.stl`,
+  });
+
+  centerRootOnCombinedBounds(preview3DState.modelRoot);
+  fitPreviewCamera();
+}
+
+// Returns every STL row stored for this case (no jaw filter). POST /stl/get
+// is the canonical list endpoint per the backend router (smart.findAllSTLs).
+async function fetchAllStlsForCase() {
+  if (!state.caseIntID) return [];
+  const user = getLoggedInUser();
+  if (!user?.uuid) return [];
+
+  const payload = [
+    { machine_id: PREVIEW_MACHINE_ID, uuid: user.uuid, caseIntID: state.caseIntID },
+    { case_id: state.caseIntID, case_int_id: state.caseIntID, caseIntID: state.caseIntID },
+  ];
+
+  const t0 = performance.now();
+  try {
+    const res = await fetch(`${SMARTRPD_API_BASE}/stl/get`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const dt = Math.round(performance.now() - t0);
+    const tag = res.ok ? "✓" : "✕";
+    console.log(`[preview3D] ${tag} POST /stl/get (all) status=${res.status} ${dt}ms`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : [data];
+    return list.filter((item) => item?.data || item?.filename);
+  } catch (err) {
+    console.warn("[preview3D] /stl/get (all) failed", err);
+    return [];
+  }
+}
+
+// POST /stl/ (smart.createSTL) — inserts a new STL row for this case. Unlike
+// /stl/slot/, this doesn't upsert on a slot, so each call adds a new row.
+// Caller supplies the type number (use the next free value beyond 1/2).
+async function uploadGenericStl(file, type) {
+  if (!state.caseIntID) throw new Error("Missing case id");
+  const user = getLoggedInUser();
+  if (!user?.uuid) throw new Error("You must be logged in");
+
+  const base64 = await fileToBase64(file);
+  const payload = [
+    { machine_id: PREVIEW_MACHINE_ID, uuid: user.uuid, caseIntID: state.caseIntID },
+    {
+      case_id: state.caseIntID,
+      case_int_id: state.caseIntID,
+      caseIntID: state.caseIntID,
+      type,
+      data: base64,
+      filename: file.name || `stl_${type}.stl`,
+    },
+  ];
+
+  const endpoint = `${SMARTRPD_API_BASE}/stl/`;
+  const t0 = performance.now();
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const dt = Math.round(performance.now() - t0);
+  const tag = res.ok ? "✓" : "✕";
+  console.log(`[preview3D] ${tag} POST /stl/ type=${type} status=${res.status} ${dt}ms`);
+  if (!res.ok) {
+    let body = "";
+    try { body = await res.text(); } catch {}
+    throw new Error(`Upload failed (${res.status}) ${body.slice(0, 160)}`);
+  }
+}
+
+function setJawVisibility(jaw, visible) {
+  const group = preview3DState.groups[jaw];
+  if (!group) return;
+  group.visible = !!visible;
+  const rowKey = jaw === "upper" ? "rowUpper" : "rowLower";
+  const row = preview3DState.topControls?.[rowKey]?.row;
+  row?.classList.toggle("is-hidden-jaw", !visible);
+}
+
+// POST /stl/slot/ (smart.createSlotSTL) — upserts the STL stored in the
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const arrayBuffer = event?.target?.result;
+        if (!arrayBuffer) {
+          reject(new Error("No file buffer found"));
+          return;
+        }
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i += 1) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        resolve(btoa(binary));
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error("Failed reading STL file"));
+    reader.readAsArrayBuffer(file);
+  });
 }
 
 async function fetchParameterisedMeshForCase() {
@@ -673,9 +965,16 @@ function init3DPreview(area) {
   const footer = document.createElement("div");
   footer.className = "jaw-preview-footer";
   footer.innerHTML = `
-    <button type="button" class="jaw-preview-footer-btn">Upload Other 3D Files</button>
+    <button type="button" class="jaw-preview-footer-btn" data-action="upload-other-3d">Upload Other 3D Files</button>
     <button type="button" class="jaw-preview-footer-btn">Download Jaw Profile</button>
   `;
+  const uploadOther3DBtn = footer.querySelector('[data-action="upload-other-3d"]');
+  uploadOther3DBtn?.addEventListener("click", () => {
+    openUploadOther3DFilesModal().catch((err) => {
+      console.error("[preview3D] openUploadOther3DFilesModal failed", err);
+      setMessage(`Failed to open upload dialog. ${err.message || err}`, true);
+    });
+  });
 
   const cameraBtn = document.createElement("button");
   cameraBtn.type = "button";
@@ -809,23 +1108,19 @@ function init3DPreview(area) {
     if (btn.disabled) return;
     const label = jaw === "upper" ? "upper" : "lower";
     const confirmed = await showConfirmModal({
-      title: `Delete ${label} jaw`,
-      message: `Delete the ${label} jaw STL file? This cannot be undone.`,
-      confirmLabel: "Delete",
+      title: `Hide ${label} jaw`,
+      message: `Hide the ${label} jaw in this viewer only? The STL stays in the case and can be re-shown from the Upload Other 3D Files list.`,
+      confirmLabel: "Hide",
       cancelLabel: "Cancel",
-      danger: true,
+      danger: false,
     });
     if (!confirmed) return;
     btn.disabled = true;
     try {
-      const ok = await deleteJawStl(jaw);
-      if (!ok) {
-        setMessage(`Failed to delete ${label} jaw STL. Please try again.`, true);
-        return;
-      }
-      disposeJawGroup(jaw);
-      row.classList.add("is-hidden-jaw");
-      setMessage(`${label.charAt(0).toUpperCase() + label.slice(1)} jaw STL deleted.`, false);
+      // Hide-only — keep the group attached so the modal list can re-show it
+      // and the data isn't disposed.
+      setJawVisibility(jaw, false);
+      setMessage(`${label.charAt(0).toUpperCase() + label.slice(1)} jaw hidden from viewer.`, false);
     } finally {
       btn.disabled = false;
     }
@@ -1466,9 +1761,18 @@ function base64ToArrayBuffer(base64) {
 }
 
 function isUpper(file) {
-  const type = String(file?.type || file?.jaw_type || "").toLowerCase();
-  const name = String(file?.filename || "").toLowerCase();
-  return type.includes("upper") || name.includes("upper");
+  return getJawKeyFromFile(file) === "upper";
+}
+
+function getJawKeyFromFile(file) {
+  const typeRaw = file?.type ?? file?.jaw_type ?? file?.slot ?? file?.jawSlot;
+  if (typeRaw === 1 || typeRaw === "1") return "upper";
+  if (typeRaw === 2 || typeRaw === "2") return "lower";
+  const type = String(typeRaw || "").toLowerCase();
+  const name = String(file?.filename || file?.name || "").toLowerCase();
+  if (type.includes("upper") || name.includes("upper")) return "upper";
+  if (type.includes("lower") || name.includes("lower")) return "lower";
+  return null;
 }
 
 function buildJawRow({ jaw, icon, label }) {
