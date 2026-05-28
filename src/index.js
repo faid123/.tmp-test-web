@@ -462,14 +462,34 @@ function anchorViewerRotationTarget(control = controls) {
   return true;
 }
 
+function setViewerRotationAnchorToOrigin(control = controls) {
+  if (!control?.target) return false;
+  const target = hasViewerRotationOrigin
+    ? viewerRotationOrigin
+    : updateViewerRotationOrigin();
+  if (!target) return false;
+
+  viewerRotationTargetAnchor.copy(target);
+  const correction = viewerRotationTargetAnchor.clone().sub(control.target);
+  if (correction.lengthSq() > 0.00000001) {
+    control.target.copy(viewerRotationTargetAnchor);
+    camera.position.add(correction);
+    if (orb_controls?.target) {
+      orb_controls.target.copy(viewerRotationTargetAnchor);
+    }
+    camera.updateProjectionMatrix();
+  }
+  return true;
+}
+
 function bindViewerRotationTargetAnchor(domElement) {
   if (!domElement) return;
 
   domElement.addEventListener("pointerdown", (event) => {
     if (event.button !== 0 || !controls?.target) return;
     isViewerLeftButtonRotating = true;
-    viewerRotationTargetAnchor.copy(controls.target);
-  });
+    setViewerRotationAnchorToOrigin(controls);
+  }, true);
 
   const releaseRotationAnchor = () => {
     isViewerLeftButtonRotating = false;
