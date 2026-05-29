@@ -14,70 +14,128 @@
       crossorigin
     />
     <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./css/login.css" />
     <link rel="icon" href="./assets/favicon.ico" type="image/x-icon" />
   </head>
   <body>
-    <div class="login-page">
-      <div class="dot-grid dot-grid-left" aria-hidden="true"></div>
-      <div class="dot-grid dot-grid-right" aria-hidden="true"></div>
-      <div class="blob blob-left" aria-hidden="true"></div>
-      <div class="blob blob-right" aria-hidden="true"></div>
+    <div class="auth-page">
+      <!-- Decorative dot patterns -->
+      <div class="dot-pattern dot-tl" aria-hidden="true"></div>
+      <div class="dot-pattern dot-bl" aria-hidden="true"></div>
+      <div class="dot-pattern dot-tr" aria-hidden="true"></div>
+      <div class="dot-pattern dot-br" aria-hidden="true"></div>
 
-      <div class="login-box">
-        <div class="brand-badge" aria-hidden="true">
-          <img src="./assets/profile.png" alt="" />
+      <div class="auth-container">
+        <!-- ===== Login view ===== -->
+        <div class="auth-card" id="login-view">
+          <div class="auth-header">
+            <div class="logo">
+              <img src="./assets/profile.png" alt="SmartRPD" />
+            </div>
+            <h1>Welcome Back</h1>
+            <p class="auth-subtitle">Sign in to continue to your account</p>
+          </div>
+
+          <form id="login-form" class="auth-form">
+            <div class="form-group">
+              <label for="username">Username</label>
+              <div class="input-wrap">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                <input
+                  id="username"
+                  type="text"
+                  placeholder="Enter your username"
+                  autocomplete="username"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="password">Password</label>
+              <div class="input-wrap">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                <input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  autocomplete="current-password"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label class="remember">
+                <input type="checkbox" id="remember" />
+                <span>Remember me</span>
+              </label>
+              <button type="button" class="link-btn">Forgot password?</button>
+            </div>
+
+            <button type="submit" class="primary-btn" id="signin-btn">Sign In</button>
+          </form>
+
+          <p id="error-message" class="error-message" role="alert"></p>
         </div>
 
-        <div class="login-content">
-          <h1>Welcome Back!</h1>
-
-          <label class="field">
-            <span class="icon" aria-hidden="true"><img src="./assets/user.png" alt="" /></span>
-            <input type="text" id="username" placeholder="Enter your username" />
-          </label>
-
-          <label class="field">
-            <span class="icon" aria-hidden="true"><img src="./assets/padlock.png" alt="" /></span>
-            <input
-              type="password"
-              id="password"
-              placeholder="Enter your password"
-            />
-            <button
-              type="button"
-              class="toggle-eye"
-              id="togglePassword"
-              aria-label="Show password"
-              aria-pressed="false"
-            >
-              <svg class="eye-icon eye-show" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
-              <svg class="eye-icon eye-hide" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a19.79 19.79 0 0 1 5.06-5.94"/>
-                <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 7 11 7a19.86 19.86 0 0 1-3.17 4.19"/>
-                <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/>
-                <line x1="1" y1="1" x2="23" y2="23"/>
-              </svg>
-            </button>
-          </label>
-
-          <button id="btn" onclick="login()">
-            <span>Log In</span>
-            <span class="arrow" aria-hidden="true">&#8594;</span>
+        <!-- ===== OTP view ===== -->
+        <div class="auth-card hidden" id="otp-view">
+          <button type="button" class="back-btn" id="back-to-login">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="19" y1="12" x2="5" y2="12"/>
+              <polyline points="12 19 5 12 12 5"/>
+            </svg>
+            Back to login
           </button>
 
-          <p id="error-message"></p>
+          <div class="auth-header">
+            <div class="logo">
+              <img src="./assets/profile.png" alt="SmartRPD" />
+            </div>
+            <h1>Enter OTP</h1>
+            <p class="auth-subtitle">
+              We've sent a verification code to
+              <br />
+              <span class="otp-target" id="otp-target">your account</span>
+            </p>
+          </div>
 
-          <p class="forgot-text">Forgot your password?</p>
+          <form id="otp-form" class="auth-form">
+            <div class="form-group">
+              <label class="otp-label">Enter 6-digit code</label>
+              <div class="otp-inputs" id="otp-inputs">
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+              </div>
+            </div>
+
+            <button type="submit" class="primary-btn" id="verify-btn">Verify OTP</button>
+
+            <p class="resend-text">
+              Didn't receive the code?
+              <button type="button" class="link-btn" id="resend-otp">Resend OTP</button>
+            </p>
+          </form>
+
+          <p id="otp-error-message" class="error-message" role="alert"></p>
         </div>
       </div>
     </div>
+
     <script src="./src/js/login.js"></script>
   </body>
 </html>

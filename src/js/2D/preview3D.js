@@ -1,47 +1,6 @@
 import { state, setMessage } from "./2DAnnotation.js";
 import { addViewcaptureFromImage } from "./noticeboard.js";
 
-function showConfirmModal({ title = "Confirm", message = "", confirmLabel = "Confirm", cancelLabel = "Cancel", danger = false } = {}) {
-  return new Promise((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.className = "jp-confirm-overlay";
-    overlay.innerHTML = `
-      <div class="jp-confirm-card" role="dialog" aria-modal="true">
-        <h3 class="jp-confirm-title"></h3>
-        <p class="jp-confirm-message"></p>
-        <div class="jp-confirm-actions">
-          <button type="button" class="jp-confirm-cancel"></button>
-          <button type="button" class="jp-confirm-ok ${danger ? "is-danger" : ""}"></button>
-        </div>
-      </div>
-    `;
-    overlay.querySelector(".jp-confirm-title").textContent = title;
-    overlay.querySelector(".jp-confirm-message").textContent = message;
-    const cancelBtn = overlay.querySelector(".jp-confirm-cancel");
-    const okBtn = overlay.querySelector(".jp-confirm-ok");
-    cancelBtn.textContent = cancelLabel;
-    okBtn.textContent = confirmLabel;
-
-    const close = (result) => {
-      document.removeEventListener("keydown", onKey);
-      overlay.remove();
-      resolve(result);
-    };
-    const onKey = (e) => {
-      if (e.key === "Escape") { e.preventDefault(); close(false); }
-      else if (e.key === "Enter") { e.preventDefault(); close(true); }
-    };
-
-    cancelBtn.addEventListener("click", () => close(false));
-    okBtn.addEventListener("click", () => close(true));
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) close(false); });
-    document.addEventListener("keydown", onKey);
-
-    document.body.appendChild(overlay);
-    setTimeout(() => okBtn.focus(), 0);
-  });
-}
-
 let THREE = null;
 let TrackballControls = null;
 let STLLoader = null;
@@ -79,10 +38,6 @@ const preview3DState = {
   heatmapEnabled: false,
   heatmapToggleBtn: null,
   heatmapBoard: null,
-  // Lazy-loaded server STLs that aren't the upper/lower jaws (type 3+).
-  // Keyed by stl type. Value: { mesh, visible, filename }.
-  extrasGroup: null,
-  loadedExtras: new Map(),
 };
 
 export async function loadInteractiveJawPreview(area) {
@@ -208,8 +163,15 @@ export function teardown3DPreview() {
   preview3DState.heatmapEnabled = false;
   preview3DState.heatmapToggleBtn = null;
   preview3DState.heatmapBoard = null;
-  preview3DState.extrasGroup = null;
-  preview3DState.loadedExtras = new Map();
+  if (preview3DState.captureCleanup) {
+    preview3DState.captureCleanup();
+    preview3DState.captureCleanup = null;
+  }
+  if (preview3DState.downloadJawCleanup) {
+    preview3DState.downloadJawCleanup();
+    preview3DState.downloadJawCleanup = null;
+  }
+  preview3DState.capturing = false;
 }
 
 function getLoggedInUser() {
@@ -309,7 +271,12 @@ async function fetchJawFilesForCase() {
     }
   };
 
-  // Primary STL source for preview: /stl/get.
+  // Primary STL source for preview: /stl/raw/get (the table the desktop
+  // client writes into on initial case creation). Fall back to /stl/get for
+  // cases whose STLs were only written through the web client's PUT /stl path.
+  const raw = await tryEndpoint(`${SMARTRPD_API_BASE}/stl/raw/get`, payload);
+  if (raw.length) return raw;
+
   const all = await tryEndpoint(`${SMARTRPD_API_BASE}/stl/get`, payload);
   if (all.length) return all;
 
@@ -329,322 +296,6 @@ async function fetchJawFilesForCase() {
   return [...byJaw.values()];
 }
 
-function ensureUploadModalStyle() {
-  if (document.getElementById("jp-upload-modal-style")) return;
-  const style = document.createElement("style");
-  style.id = "jp-upload-modal-style";
-  style.textContent = `
-    .jp-upload-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); z-index: 2500; display: flex; align-items: center; justify-content: center; padding: 16px; }
-    .jp-upload-card { width: min(560px, 100%); background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 18px 48px rgba(2, 6, 23, 0.25); }
-    .jp-upload-title { margin: 0 0 6px; font-size: 18px; font-weight: 700; color: #0f172a; }
-    .jp-upload-sub { margin: 0 0 12px; font-size: 12px; color: #64748b; line-height: 1.45; }
-    .jp-upload-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
-    .jp-upload-label { margin: 0; font-size: 13px; font-weight: 600; color: #1e293b; }
-    .jp-upload-file { margin: 3px 0 0; font-size: 12px; color: #64748b; word-break: break-all; }
-    .jp-upload-actions { margin-top: 12px; display: flex; justify-content: flex-end; }
-    .jp-upload-close { border: 1px solid #cbd5e1; background: #fff; color: #0f172a; border-radius: 8px; padding: 7px 12px; font-weight: 600; cursor: pointer; }
-    .jp-upload-replace { border: 0; background: #0f766e; color: #fff; border-radius: 8px; padding: 8px 12px; font-weight: 600; cursor: pointer; }
-    .jp-upload-replace:disabled, .jp-upload-close:disabled { opacity: 0.65; cursor: wait; }
-    .jp-stl-list { list-style: none; margin: 0 0 10px; padding: 0; max-height: 260px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
-    .jp-stl-item { display: flex; align-items: center; padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
-    .jp-stl-item:last-child { border-bottom: 0; }
-    .jp-stl-toggle { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; font-size: 13px; color: #0f172a; }
-    .jp-stl-toggle input { cursor: pointer; }
-    .jp-stl-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-    .jp-stl-tag { flex-shrink: 0; font-size: 11px; font-weight: 700; color: #0f766e; background: #ccfbf1; padding: 2px 8px; border-radius: 999px; }
-    .jp-stl-empty { padding: 14px 12px; font-size: 12px; color: #64748b; text-align: center; }
-  `;
-  document.head.appendChild(style);
-}
-
-async function openUploadOther3DFilesModal() {
-  ensureUploadModalStyle();
-  await ensureThreeDeps();
-
-  let files = [];
-
-  const overlay = document.createElement("div");
-  overlay.className = "jp-upload-overlay";
-  overlay.innerHTML = `
-    <div class="jp-upload-card" role="dialog" aria-modal="true" aria-label="STL files">
-      <h3 class="jp-upload-title">STL files for this case</h3>
-      <p class="jp-upload-sub">Check a file to display it in the viewer. Picking a non-jaw STL replaces the upper/lower jaws in the view.</p>
-      <ul class="jp-stl-list"></ul>
-      <div style="margin: 10px 0;">
-        <button type="button" class="jp-upload-replace" data-action="upload-more">Upload another STL</button>
-      </div>
-      <div class="jp-upload-actions">
-        <button type="button" class="jp-upload-close">Close</button>
-      </div>
-    </div>
-  `;
-
-  const listEl = overlay.querySelector(".jp-stl-list");
-  const uploadBtn = overlay.querySelector('[data-action="upload-more"]');
-  const closeBtn = overlay.querySelector(".jp-upload-close");
-
-  const isChecked = (file) => {
-    const jaw = getJawKeyFromFile(file);
-    if (jaw === "upper") return !!preview3DState.groups.upper?.visible;
-    if (jaw === "lower") return !!preview3DState.groups.lower?.visible;
-    const entry = preview3DState.loadedExtras.get(Number(file.type));
-    return !!entry?.visible;
-  };
-
-  const applySelection = async (file, checked) => {
-    const jaw = getJawKeyFromFile(file);
-    if (jaw === "upper" || jaw === "lower") {
-      setJawVisibility(jaw, checked);
-      return;
-    }
-    const type = Number(file.type);
-    if (checked) {
-      if (!preview3DState.loadedExtras.has(type)) {
-        await loadServerStlAsExtra(file);
-      } else {
-        const entry = preview3DState.loadedExtras.get(type);
-        entry.mesh.visible = true;
-        entry.visible = true;
-      }
-      // Replace semantics: hide the case's upper/lower jaws so the chosen
-      // STL takes over the viewer. User can re-check upper/lower if they
-      // want to see them alongside.
-      setJawVisibility("upper", false);
-      setJawVisibility("lower", false);
-    } else {
-      const entry = preview3DState.loadedExtras.get(type);
-      if (entry) {
-        entry.mesh.visible = false;
-        entry.visible = false;
-      }
-    }
-  };
-
-  const renderListUI = () => {
-    listEl.innerHTML = "";
-    if (!files.length) {
-      const empty = document.createElement("li");
-      empty.className = "jp-stl-empty";
-      empty.textContent = "No STL files in this case yet.";
-      listEl.appendChild(empty);
-      return;
-    }
-    for (const file of files) {
-      const jaw = getJawKeyFromFile(file);
-      const li = document.createElement("li");
-      li.className = "jp-stl-item";
-
-      const label = document.createElement("label");
-      label.className = "jp-stl-toggle";
-
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = isChecked(file);
-      checkbox.addEventListener("change", async () => {
-        checkbox.disabled = true;
-        try {
-          await applySelection(file, checkbox.checked);
-          renderListUI();
-        } catch (err) {
-          console.error("[preview3D] STL toggle failed", err);
-          setMessage(`Failed to ${checkbox.checked ? "show" : "hide"} STL. ${err.message || err}`, true);
-          checkbox.checked = !checkbox.checked;
-        } finally {
-          checkbox.disabled = false;
-        }
-      });
-
-      const name = document.createElement("span");
-      name.className = "jp-stl-name";
-      const displayName = file.filename || `stl_${file.type ?? "x"}.stl`;
-      name.textContent = displayName;
-      name.title = displayName;
-
-      const tag = document.createElement("span");
-      tag.className = "jp-stl-tag";
-      tag.textContent = jaw === "upper" ? "Upper" : jaw === "lower" ? "Lower" : `Type ${file.type ?? "?"}`;
-
-      label.appendChild(checkbox);
-      label.appendChild(name);
-      label.appendChild(tag);
-      li.appendChild(label);
-      listEl.appendChild(li);
-    }
-  };
-
-  const refresh = async () => {
-    try {
-      files = await fetchAllStlsForCase();
-    } catch (err) {
-      console.warn("[preview3D] fetchAllStlsForCase failed", err);
-      files = [];
-    }
-    renderListUI();
-  };
-
-  const onUploadAnother = async () => {
-    const picker = document.createElement("input");
-    picker.type = "file";
-    picker.accept = ".stl,model/stl,application/sla";
-    picker.addEventListener("change", async () => {
-      const file = picker.files?.[0];
-      if (!file) return;
-      if (!/\.stl$/i.test(file.name || "")) {
-        setMessage("Please select an STL file (.stl).", true);
-        return;
-      }
-      uploadBtn.disabled = true;
-      closeBtn.disabled = true;
-      setMessage(`Uploading ${file.name}…`, false);
-      try {
-        const existing = await fetchAllStlsForCase();
-        const maxType = existing.reduce((max, f) => {
-          const t = Number(f.type);
-          return Number.isFinite(t) && t > max ? t : max;
-        }, 2);
-        const type = maxType + 1;
-        await uploadGenericStl(file, type);
-        setMessage(`Uploaded ${file.name} as type ${type}.`, false);
-        await refresh();
-        // Auto-display the freshly uploaded STL: replaces upper/lower view.
-        const newFile = files.find((f) => Number(f.type) === type);
-        if (newFile) {
-          await applySelection(newFile, true);
-          renderListUI();
-        }
-      } catch (err) {
-        console.error("[preview3D] generic STL upload failed", err);
-        setMessage(`Upload failed. ${err.message || err}`, true);
-      } finally {
-        uploadBtn.disabled = false;
-        closeBtn.disabled = false;
-      }
-    }, { once: true });
-    picker.click();
-  };
-
-  uploadBtn.addEventListener("click", onUploadAnother);
-  closeBtn.addEventListener("click", () => overlay.remove());
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) overlay.remove();
-  });
-
-  document.body.appendChild(overlay);
-  await refresh();
-}
-
-// Parse a server-fetched STL (base64 in file.data) and add a mesh to the
-// shared extrasGroup so it renders alongside upper/lower in the viewer.
-async function loadServerStlAsExtra(file) {
-  if (!STLLoader || !THREE) {
-    const ok = await ensureThreeDeps();
-    if (!ok) throw new Error("3D dependencies failed to load");
-  }
-  if (!preview3DState.modelRoot) throw new Error("3D viewer is not ready");
-
-  const buf = base64ToArrayBuffer(file.data);
-  const loader = new STLLoader();
-  let geometry = loader.parse(buf);
-  geometry = mergeStlVertices(geometry);
-  geometry.computeVertexNormals();
-
-  // Match the upper-jaw dental tan from populateJawPreview.
-  const material = new THREE.MeshStandardMaterial({
-    color: 0xd7b794,
-    metalness: 0.05,
-    roughness: 0.6,
-    side: THREE.DoubleSide,
-  });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.visible = true;
-
-  if (!preview3DState.extrasGroup) {
-    preview3DState.extrasGroup = new THREE.Group();
-    preview3DState.modelRoot.add(preview3DState.extrasGroup);
-  }
-  preview3DState.extrasGroup.add(mesh);
-
-  const type = Number(file.type);
-  preview3DState.loadedExtras.set(type, {
-    mesh,
-    visible: true,
-    filename: file.filename || `stl_${type}.stl`,
-  });
-
-  centerRootOnCombinedBounds(preview3DState.modelRoot);
-  fitPreviewCamera();
-}
-
-// Returns every STL row stored for this case (no jaw filter). POST /stl/get
-// is the canonical list endpoint per the backend router (smart.findAllSTLs).
-async function fetchAllStlsForCase() {
-  if (!state.caseIntID) return [];
-  const user = getLoggedInUser();
-  if (!user?.uuid) return [];
-
-  const payload = [
-    { machine_id: PREVIEW_MACHINE_ID, uuid: user.uuid, caseIntID: state.caseIntID },
-    { case_id: state.caseIntID, case_int_id: state.caseIntID, caseIntID: state.caseIntID },
-  ];
-
-  const t0 = performance.now();
-  try {
-    const res = await fetch(`${SMARTRPD_API_BASE}/stl/get`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const dt = Math.round(performance.now() - t0);
-    const tag = res.ok ? "✓" : "✕";
-    console.log(`[preview3D] ${tag} POST /stl/get (all) status=${res.status} ${dt}ms`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    const list = Array.isArray(data) ? data : [data];
-    return list.filter((item) => item?.data || item?.filename);
-  } catch (err) {
-    console.warn("[preview3D] /stl/get (all) failed", err);
-    return [];
-  }
-}
-
-// POST /stl/ (smart.createSTL) — inserts a new STL row for this case. Unlike
-// /stl/slot/, this doesn't upsert on a slot, so each call adds a new row.
-// Caller supplies the type number (use the next free value beyond 1/2).
-async function uploadGenericStl(file, type) {
-  if (!state.caseIntID) throw new Error("Missing case id");
-  const user = getLoggedInUser();
-  if (!user?.uuid) throw new Error("You must be logged in");
-
-  const base64 = await fileToBase64(file);
-  const payload = [
-    { machine_id: PREVIEW_MACHINE_ID, uuid: user.uuid, caseIntID: state.caseIntID },
-    {
-      case_id: state.caseIntID,
-      case_int_id: state.caseIntID,
-      caseIntID: state.caseIntID,
-      type,
-      data: base64,
-      filename: file.name || `stl_${type}.stl`,
-    },
-  ];
-
-  const endpoint = `${SMARTRPD_API_BASE}/stl/`;
-  const t0 = performance.now();
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const dt = Math.round(performance.now() - t0);
-  const tag = res.ok ? "✓" : "✕";
-  console.log(`[preview3D] ${tag} POST /stl/ type=${type} status=${res.status} ${dt}ms`);
-  if (!res.ok) {
-    let body = "";
-    try { body = await res.text(); } catch {}
-    throw new Error(`Upload failed (${res.status}) ${body.slice(0, 160)}`);
-  }
-}
-
 function setJawVisibility(jaw, visible) {
   const group = preview3DState.groups[jaw];
   if (!group) return;
@@ -652,32 +303,6 @@ function setJawVisibility(jaw, visible) {
   const rowKey = jaw === "upper" ? "rowUpper" : "rowLower";
   const row = preview3DState.topControls?.[rowKey]?.row;
   row?.classList.toggle("is-hidden-jaw", !visible);
-}
-
-// POST /stl/slot/ (smart.createSlotSTL) — upserts the STL stored in the
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const arrayBuffer = event?.target?.result;
-        if (!arrayBuffer) {
-          reject(new Error("No file buffer found"));
-          return;
-        }
-        const bytes = new Uint8Array(arrayBuffer);
-        let binary = "";
-        for (let i = 0; i < bytes.length; i += 1) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        resolve(btoa(binary));
-      } catch (err) {
-        reject(err);
-      }
-    };
-    reader.onerror = () => reject(new Error("Failed reading STL file"));
-    reader.readAsArrayBuffer(file);
-  });
 }
 
 async function fetchParameterisedMeshForCase() {
@@ -962,32 +587,22 @@ function init3DPreview(area) {
     setHeatmapEnabled(!preview3DState.heatmapEnabled);
   });
 
-  const footer = document.createElement("div");
-  footer.className = "jaw-preview-footer";
-  footer.innerHTML = `
-    <button type="button" class="jaw-preview-footer-btn" data-action="upload-other-3d">Upload Other 3D Files</button>
-    <button type="button" class="jaw-preview-footer-btn">Download Jaw Profile</button>
-  `;
-  const uploadOther3DBtn = footer.querySelector('[data-action="upload-other-3d"]');
-  uploadOther3DBtn?.addEventListener("click", () => {
-    openUploadOther3DFilesModal().catch((err) => {
-      console.error("[preview3D] openUploadOther3DFilesModal failed", err);
-      setMessage(`Failed to open upload dialog. ${err.message || err}`, true);
-    });
-  });
-
-  const cameraBtn = document.createElement("button");
-  cameraBtn.type = "button";
-  cameraBtn.className = "jaw-preview-camera";
-  cameraBtn.title = "Save screenshot to noticeboard";
-  cameraBtn.setAttribute("aria-label", "Save screenshot to noticeboard");
-  cameraBtn.innerHTML = `<i class="fa-solid fa-camera" aria-hidden="true"></i>`;
+  // Download Jaw Profile was moved to the app footer, which dispatches
+  // `request-download-jaw-profile`; we forward it to the save action here so
+  // the screen-capture pattern stays consistent. (The "Upload other 3D files"
+  // footer button is temporarily disabled — see 2DAnnotation.html.)
+  const handleDownloadJawProfileRequest = () => {
+    document.getElementById("saveAnnotationBtn")?.click();
+  };
+  preview3DState.downloadJawCleanup?.();
+  window.addEventListener("request-download-jaw-profile", handleDownloadJawProfileRequest);
+  preview3DState.downloadJawCleanup = () => {
+    window.removeEventListener("request-download-jaw-profile", handleDownloadJawProfileRequest);
+  };
 
   shell.appendChild(toolbar);
   shell.appendChild(mount);
   mount.appendChild(undercut);
-  mount.appendChild(cameraBtn);
-  shell.appendChild(footer);
   area.appendChild(shell);
 
   const renderer = new THREE.WebGLRenderer({
@@ -1053,10 +668,13 @@ function init3DPreview(area) {
     saveSurveyAngle("lower", rowLower.surveyBtn)
   );
 
-  cameraBtn.addEventListener("click", async () => {
-    if (cameraBtn.disabled) return;
-    cameraBtn.disabled = true;
-    cameraBtn.classList.add("is-flash");
+  // Screen-capture handler: the in-canvas camera button was removed in favor
+  // of a footer-level button. The footer dispatches `request-3d-capture` and
+  // we run the same render+upload pipeline. preview3DState.capturing serves as
+  // a single-flight guard so rapid clicks don't fire multiple uploads.
+  const handleCaptureRequest = async () => {
+    if (preview3DState.capturing) return;
+    preview3DState.capturing = true;
     try {
       renderer.render(scene, camera);
       const dataUrl = renderer.domElement.toDataURL("image/png");
@@ -1068,12 +686,14 @@ function init3DPreview(area) {
     } catch (err) {
       console.error("Failed to capture 3D preview screenshot:", err);
     } finally {
-      setTimeout(() => {
-        cameraBtn.classList.remove("is-flash");
-        cameraBtn.disabled = false;
-      }, 400);
+      setTimeout(() => { preview3DState.capturing = false; }, 400);
     }
-  });
+  };
+  preview3DState.captureCleanup?.();
+  window.addEventListener("request-3d-capture", handleCaptureRequest);
+  preview3DState.captureCleanup = () => {
+    window.removeEventListener("request-3d-capture", handleCaptureRequest);
+  };
 
   // Intentionally keep ALLOW PROCESSING checkboxes as display-only (no jaw visibility behavior).
 
@@ -1104,33 +724,9 @@ function init3DPreview(area) {
     }
   });
 
-  const handleJawDelete = async (jaw, row, btn) => {
-    if (btn.disabled) return;
-    const label = jaw === "upper" ? "upper" : "lower";
-    const confirmed = await showConfirmModal({
-      title: `Hide ${label} jaw`,
-      message: `Hide the ${label} jaw in this viewer only? The STL stays in the case and can be re-shown from the Upload Other 3D Files list.`,
-      confirmLabel: "Hide",
-      cancelLabel: "Cancel",
-      danger: false,
-    });
-    if (!confirmed) return;
-    btn.disabled = true;
-    try {
-      // Hide-only — keep the group attached so the modal list can re-show it
-      // and the data isn't disposed.
-      setJawVisibility(jaw, false);
-      setMessage(`${label.charAt(0).toUpperCase() + label.slice(1)} jaw hidden from viewer.`, false);
-    } finally {
-      btn.disabled = false;
-    }
-  };
-  rowUpper.deleteBtn.addEventListener("click", () =>
-    handleJawDelete("upper", rowUpper.row, rowUpper.deleteBtn)
-  );
-  rowLower.deleteBtn.addEventListener("click", () =>
-    handleJawDelete("lower", rowLower.row, rowLower.deleteBtn)
-  );
+  // Trash icon hides the jaw in the viewer only (no DB delete, no confirm).
+  rowUpper.deleteBtn.addEventListener("click", () => setJawVisibility("upper", false));
+  rowLower.deleteBtn.addEventListener("click", () => setJawVisibility("lower", false));
 
   preview3DState.renderer = renderer;
   preview3DState.scene = scene;

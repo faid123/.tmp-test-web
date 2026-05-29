@@ -12,6 +12,7 @@ import {
   COMPONENT_BY_ID,
   COMPONENT_CATALOG,
   COMPONENT_TABS,
+  isMeshComponent,
   isPlateComponentId,
 } from "./components.js";
 import { fetchJawStruct as apiFetchJawStruct, saveJawStructFromState } from "./jawStructApi.js";
@@ -170,10 +171,16 @@ async function refreshUiAfterHistoryRestore() {
 }
 
 function updateUndoRedoButtons() {
-  const undoBtn = document.getElementById("undoWorkflowBtn");
-  const redoBtn = document.getElementById("redoWorkflowBtn");
-  if (undoBtn) undoBtn.disabled = history.past.length < 2;
-  if (redoBtn) redoBtn.disabled = history.future.length === 0;
+  const undoDisabled = history.past.length < 2;
+  const redoDisabled = history.future.length === 0;
+  ["undoWorkflowBtn", "footerUndoBtn"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = undoDisabled;
+  });
+  ["redoWorkflowBtn", "footerRedoBtn"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = redoDisabled;
+  });
 }
 
 export async function undoWorkflow() {
@@ -218,6 +225,10 @@ function bindHistoryControls() {
   const redoBtn = document.getElementById("redoWorkflowBtn");
   if (undoBtn) undoBtn.addEventListener("click", () => undoWorkflow());
   if (redoBtn) redoBtn.addEventListener("click", () => redoWorkflow());
+  const footerUndo = document.getElementById("footerUndoBtn");
+  const footerRedo = document.getElementById("footerRedoBtn");
+  if (footerUndo) footerUndo.addEventListener("click", () => undoWorkflow());
+  if (footerRedo) footerRedo.addEventListener("click", () => redoWorkflow());
   document.addEventListener("keydown", (event) => {
     const tag = document.activeElement?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
@@ -591,18 +602,33 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
 
   // Build one tile (button with icon + label). The click handler is supplied
   // by the caller so the same tile shape works for both category and item
-  // rendering.
-  const buildTile = (label, iconPath, onClick) => {
+  // rendering. `options.iconAsMask` renders the icon as a CSS mask so mesh
+  // SVGs can be recolored (the bundled assets are black-on-transparent, and
+  // we want them in the mesh tint).
+  const buildTile = (label, iconPath, onClick, options = {}) => {
     const tile = document.createElement("button");
     tile.type = "button";
     tile.className = "tooth-quickpick-tile";
+    if (options.tileClass) tile.classList.add(options.tileClass);
     tile.setAttribute("aria-label", label);
     if (iconPath) {
-      const img = document.createElement("img");
-      img.className = "tooth-quickpick-tile-icon";
-      img.src = iconPath;
-      img.alt = "";
-      tile.appendChild(img);
+      if (options.iconAsMask) {
+        const maskEl = document.createElement("span");
+        maskEl.className = "tooth-quickpick-tile-icon tooth-quickpick-tile-icon--mask";
+        const maskUrl = `url("${iconPath}")`;
+        maskEl.style.setProperty("--tile-icon-mask", maskUrl);
+        // iOS Safari needs the prefixed property and is unreliable resolving a
+        // var() inside -webkit-mask-image, so set the mask URL directly too.
+        maskEl.style.webkitMaskImage = maskUrl;
+        maskEl.style.maskImage = maskUrl;
+        tile.appendChild(maskEl);
+      } else {
+        const img = document.createElement("img");
+        img.className = "tooth-quickpick-tile-icon";
+        img.src = iconPath;
+        img.alt = "";
+        tile.appendChild(img);
+      }
     }
     const text = document.createElement("span");
     text.className = "tooth-quickpick-tile-label";
@@ -622,7 +648,13 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
     grid.classList.remove("is-items-view");
     grid.innerHTML = "";
     for (const cat of categories) {
-      grid.appendChild(buildTile(cat.label, cat.icon, () => renderItems(cat)));
+      // The mesh category icon is a black/transparent PNG; render it as a mask
+      // so it picks up the violet mesh tint (matches the drill-in mesh items).
+      const opts =
+        cat.tabId === "mesh"
+          ? { iconAsMask: true, tileClass: "tooth-quickpick-tile--mesh" }
+          : undefined;
+      grid.appendChild(buildTile(cat.label, cat.icon, () => renderItems(cat), opts));
     }
   };
 
@@ -642,9 +674,13 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
       return;
     }
     for (const item of items) {
+      const isMesh = isMeshComponent(item.id);
       grid.appendChild(
-        buildTile(item.label, item.icon, () =>
-          commit({ tab: item.tab, componentId: item.id, label: item.label })
+        buildTile(
+          item.label,
+          item.icon,
+          () => commit({ tab: item.tab, componentId: item.id, label: item.label }),
+          isMesh ? { iconAsMask: true, tileClass: "tooth-quickpick-tile--mesh" } : undefined
         )
       );
     }
@@ -1064,14 +1100,17 @@ function bindPanelSplitter() {
 }
 
 function bindBackNavigationDialog(locks) {
-  const backLink = document.getElementById("backToCaseListBtn");
   const modal = document.getElementById("backConfirmModal");
   const cancelBtn = document.getElementById("backConfirmCancel");
   const backBtn = document.getElementById("backConfirmBack");
   const saveBackBtn = document.getElementById("backConfirmSaveBack");
-  if (!backLink || !modal || !cancelBtn || !backBtn || !saveBackBtn || !locks) return;
+  if (!modal || !cancelBtn || !backBtn || !saveBackBtn || !locks) return;
 
-  const targetHref = backLink.getAttribute("href") || "case_list.html";
+  // The original topbar Back link was removed; the Return menu item in the
+  // sidebar now triggers this confirm dialog.
+  const sidebarReturnBtn = document.getElementById("sidebarReturnBtn");
+  const backLink = document.getElementById("backToCaseListBtn");
+  const targetHref = backLink?.getAttribute("href") || "case_list.html";
 
   const closeModal = () => {
     modal.classList.add("is-hidden");
@@ -1084,29 +1123,51 @@ function bindBackNavigationDialog(locks) {
     cancelBtn.focus();
   };
 
-  backLink.addEventListener("click", (event) => {
-    event.preventDefault();
-    openModal();
-  });
+  if (backLink) {
+    backLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      openModal();
+    });
+  }
+  if (sidebarReturnBtn) {
+    sidebarReturnBtn.addEventListener("click", () => {
+      // Close the sidebar first so the modal isn't competing with it.
+      document.getElementById("appSidebar")?.querySelector("[data-sidebar-close]")?.click();
+      openModal();
+    });
+  }
 
   cancelBtn.addEventListener("click", closeModal);
   backBtn.addEventListener("click", () => {
     window.location.href = targetHref;
   });
-  saveBackBtn.addEventListener("click", async () => {
-    saveBackBtn.disabled = true;
+  // Persist the current annotation locally + upload the jaw thumbnail. The
+  // boolean indicates whether the save part succeeded; thumbnail failures
+  // log but don't fail the operation. Shared between the modal's Save &
+  // Return button and the sidebar's Save action (which just saves and
+  // stays on the page).
+  const saveCurrent = async () => {
+    let saved = true;
     try {
       localStorage.setItem(locks.getStorageKey(), JSON.stringify(locks.buildPayload()));
     } catch {
-      setMessage("Could not save locally. Going back anyway.", true);
+      saved = false;
     }
     try {
       setMessage("Uploading thumbnail…", false);
       const ok = await locks.uploadJawPngThumbnail();
-      if (!ok) setMessage("Thumbnail upload failed (see console). Going back anyway.", true);
+      if (!ok) setMessage("Thumbnail upload failed (see console).", true);
     } catch (err) {
-      console.warn("[saveBack] thumbnail upload failed", err);
+      console.warn("[save] thumbnail upload failed", err);
     }
+    return saved;
+  };
+  window.__ann2dSaveCurrent = saveCurrent;
+
+  saveBackBtn.addEventListener("click", async () => {
+    saveBackBtn.disabled = true;
+    const saved = await saveCurrent();
+    if (!saved) setMessage("Could not save locally. Going back anyway.", true);
     window.location.href = targetHref;
   });
 
@@ -1124,7 +1185,76 @@ function bindBackNavigationDialog(locks) {
 function start() {
   if (ui.hasInitialized) return;
   ui.hasInitialized = true;
+  initAnnFooter();
   init();
+}
+
+async function initSidebar() {
+  const { setupAppSidebar } = await import("../appSidebar.js");
+  const handle = setupAppSidebar({ indexHref: "../../index.html" });
+
+  // Sidebar Save: just runs the save pipeline (no navigation). The full
+  // save fn is wired by bindBackNavigationDialog onto window.__ann2dSaveCurrent;
+  // try that first, otherwise fall back to clicking the main Save button.
+  document.getElementById("sidebarSaveBtn")?.addEventListener("click", async () => {
+    handle.close();
+    const saveFn = window.__ann2dSaveCurrent;
+    if (typeof saveFn === "function") {
+      const saved = await saveFn();
+      setMessage(saved ? "Saved." : "Save failed locally.", !saved);
+    } else {
+      document.getElementById("saveAnnotationBtn")?.click();
+    }
+  });
+}
+
+function initAnnFooter() {
+  document.body.classList.add("has-ann-footer");
+
+  try {
+    const raw = localStorage.getItem("loggedInUser");
+    const u = raw ? JSON.parse(raw) : null;
+    const userEl = document.getElementById("footerUserName");
+    if (userEl) userEl.textContent = u?.username || "—";
+  } catch {}
+
+  import("../connectivityIndicator.js").then(({ setupConnectivityIndicator }) => {
+    setupConnectivityIndicator(document.getElementById("footerConnection"));
+  });
+
+  document.getElementById("footerScreenCaptureBtn")?.addEventListener("click", () => {
+    window.dispatchEvent(new CustomEvent("request-3d-capture"));
+  });
+
+  // "Upload other 3D files" (#footerUpload3dBtn) is temporarily disabled — the
+  // backend has no store for arbitrary extra STLs (see 2DAnnotation.html). Its
+  // click handler is intentionally omitted until a backing store exists.
+
+  document.getElementById("footerDownloadJawProfileBtn")?.addEventListener("click", () => {
+    window.dispatchEvent(new CustomEvent("request-download-jaw-profile"));
+  });
+
+  // Load Proposal is a placeholder — the action isn't implemented yet, so we
+  // just surface a status message rather than wire it to a noop button.
+  document.getElementById("loadProposalBtn")?.addEventListener("click", () => {
+    setMessage("Load Proposal — coming soon.", false);
+  });
+
+  initSidebar();
+
+  // Mirror the existing #caseLabel into the footer's case name slot. The
+  // caseLabel text is updated by fetchCaseOwner() asynchronously, so use a
+  // MutationObserver instead of patching every write site.
+  const caseLabel = document.getElementById("caseLabel");
+  const footerCaseName = document.getElementById("footerCaseName");
+  if (caseLabel && footerCaseName) {
+    const sync = () => {
+      const txt = caseLabel.textContent || "";
+      footerCaseName.textContent = txt.replace(/^Case:\s*/i, "").trim() || "—";
+    };
+    sync();
+    new MutationObserver(sync).observe(caseLabel, { childList: true, characterData: true, subtree: true });
+  }
 }
 
 function init() {

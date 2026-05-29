@@ -2,6 +2,8 @@ import { lol } from "../crypt.js";
 import { toast } from "./toast.js";
 import { confirmModal } from "./confirmModal.js";
 import { logApi } from "./apiLog.js";
+import { setupConnectivityIndicator } from "./connectivityIndicator.js";
+import { setupAppSidebar } from "./appSidebar.js";
 
 function getLoggedInUser() {
   const user = localStorage.getItem("loggedInUser");
@@ -720,6 +722,8 @@ function displayCaseDetails(data) {
   if (nameHeader) nameHeader.textContent = "Case Details";
 
   document.getElementById("selected-case").textContent = displayName;
+  const footerCaseName = document.getElementById("footerCaseName");
+  if (footerCaseName) footerCaseName.textContent = data.case_name || displayName;
   const assignee = data.assigned_to || data.username || "N/A";
   document.getElementById("created-by").textContent = assignee;
   const avatar = document.getElementById("assigneeAvatar");
@@ -944,6 +948,13 @@ async function fetchThumbnails(caseId) {
 
 // 初始化页面
 document.addEventListener("DOMContentLoaded", async () => {
+  const footerUserName = document.getElementById("footerUserName");
+  if (footerUserName) {
+    const u = getLoggedInUser();
+    footerUserName.textContent = u?.username || "—";
+  }
+  setupConnectivityIndicator(document.getElementById("footerConnection"));
+  setupAppSidebar({ indexHref: "../../index.html" });
   updateThumbnail();
   const cases = await fetchCases();
 

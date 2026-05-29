@@ -362,6 +362,25 @@
           </div>
         </div>
       </aside>
+
+      <footer class="cm-footer" aria-label="Application status bar">
+        <div class="cm-footer-left">
+          <button type="button" class="cm-footer-btn" id="footerMenuBtn" aria-label="Menu" data-tooltip="Menu">
+            <i class="fa fa-bars" aria-hidden="true"></i>
+          </button>
+          <span class="cm-footer-case-label">
+            Case : <span id="footerCaseName">—</span>
+          </span>
+        </div>
+
+        <div class="cm-footer-right">
+          <span class="cm-footer-user" id="footerUserName">—</span>
+          <span class="cm-footer-conn" id="footerConnection"></span>
+          <button type="button" class="cm-footer-btn cm-footer-chat-btn" id="footerChatBtn" aria-label="Open chat" data-tooltip="Chat">
+            <i class="fa-regular fa-comment" aria-hidden="true"></i>
+          </button>
+        </div>
+      </footer>
     </div>
 
     <div id="userAccessModal" class="modal hidden">
@@ -436,6 +455,71 @@
         </div>
       </div>
     </div>
+
+    <aside id="appSidebar" class="app-sidebar is-hidden" aria-hidden="true" aria-label="Navigation">
+      <div class="app-sidebar-backdrop" data-sidebar-close></div>
+      <nav class="app-sidebar-panel" role="navigation">
+        <header class="app-sidebar-header">
+          <img class="app-sidebar-brand-logo" src="/assets/favicon.ico" alt="" />
+          <span class="app-sidebar-title">SMARTRPD</span>
+          <span class="app-sidebar-version">v2.0</span>
+          <button type="button" class="app-sidebar-close" data-sidebar-close aria-label="Close menu">
+            <i class="fa fa-xmark" aria-hidden="true"></i>
+          </button>
+        </header>
+        <ul id="appSidebarList" class="app-sidebar-list">
+          <li>
+            <button type="button" id="sidebarChangePasswordBtn" class="app-sidebar-item">
+              <i class="fa fa-key app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Change Account Password</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarLogoutBtn" class="app-sidebar-item">
+              <i class="fa fa-right-from-bracket app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Logout</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarQuitBtn" class="app-sidebar-item app-sidebar-item-danger">
+              <i class="fa fa-xmark app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Quit</span>
+            </button>
+          </li>
+          <li><hr class="app-sidebar-separator" /></li>
+          <li>
+            <button type="button" id="sidebarHelpBtn" class="app-sidebar-item">
+              <i class="fa fa-circle-info app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Help</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarReportIssueBtn" class="app-sidebar-item">
+              <i class="fa fa-bug app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Report Issue</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarFeedbackBtn" class="app-sidebar-item">
+              <i class="fa fa-comment-dots app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Feedback</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarAboutBtn" class="app-sidebar-item">
+              <i class="fa-regular fa-square-caret-right app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>About</span>
+            </button>
+          </li>
+          <li class="app-sidebar-language">
+            <i class="fa fa-globe app-sidebar-language-icon" aria-hidden="true"></i>
+            <select id="sidebarLanguageSelect" aria-label="Language">
+              <option value="en">English</option>
+            </select>
+          </li>
+        </ul>
+      </nav>
+    </aside>
 
     <script type="importmap">
       {

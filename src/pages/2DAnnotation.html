@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="../../css/2Dannotation.css" />
   <link rel="stylesheet" href="../../css/noticeboard.css" />
   <link rel="stylesheet" href="../../css/clinicalInformation.css" />
+  <link rel="stylesheet" href="../../css/toast.css" />
   <link rel="icon" href="/assets/favicon.ico" type="image/x-icon" />
   <link
     rel="stylesheet"
@@ -50,10 +51,11 @@
 
     <section class="workspace-panel">
       <section class="panel arch-panel">
+        <!-- On desktop, the topbar's role collapses (caseLabel is shown in
+             the footer instead) and the clinical button is grid-placed at
+             the top-right of the jaw cell. On mobile/tablet the topbar
+             stays as the centered case label + clinical info row. -->
         <div class="arch-topbar">
-          <a id="backToCaseListBtn" class="back-to-case-list" href="case_list.html" aria-label="Back" data-tooltip="Back">
-            <i class="fa fa-arrow-left"></i>
-          </a>
           <div id="caseLabel" class="case-label">Case: Unknown</div>
           <button
             type="button"
@@ -158,7 +160,7 @@
           <button id="drawFromScratchBtn" class="action-btn">Draw from Scratch</button>
           <button id="saveAnnotationBtn" class="action-btn primary">Save</button>
           <button id="saveJpegBtn" type="button" class="action-btn">Save as JPEG</button>
-          <button id="openNoticeboardBtn" type="button" class="action-btn">Noticeboard</button>
+          <button id="loadProposalBtn" type="button" class="action-btn">Load Proposal</button>
         </div>
 
         <p id="saveMessage" class="save-message" role="status"></p>
@@ -192,6 +194,48 @@
       </aside>
     </section>
   </main>
+
+  <footer class="ann-footer" aria-label="Application status bar">
+    <div class="ann-footer-left">
+      <button type="button" class="ann-footer-btn" id="footerMenuBtn" aria-label="Menu" data-tooltip="Menu">
+        <i class="fa fa-bars" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="ann-footer-btn" id="openNoticeboardBtn" aria-label="Noticeboard" data-tooltip="Noticeboard">
+        <i class="fa fa-clipboard" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="ann-footer-btn" id="footerScreenCaptureBtn" aria-label="Screen capture" data-tooltip="Screen capture">
+        <i class="fa fa-camera" aria-hidden="true"></i>
+      </button>
+      <!-- Upload other 3D files: temporarily disabled. The live backend has no
+           store for arbitrary extra STLs — jaw_stls/jaw_stls_raw.type is an
+           ENUM('upper_jaw','lower_jaw') and only holds one of each per case.
+           Re-enable this button + the handler in 2DAnnotation.js once a backing
+           store exists. -->
+      <button type="button" class="ann-footer-btn" id="footerUpload3dBtn" aria-label="Upload other 3D files" data-tooltip="Upload other 3D files" disabled hidden>
+        <i class="fa fa-cloud-arrow-up" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="ann-footer-btn" id="footerDownloadJawProfileBtn" aria-label="Download jaw profile" data-tooltip="Download jaw profile">
+        <i class="fa fa-file-arrow-down" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="ann-footer-btn ann-footer-undo" id="footerUndoBtn" aria-label="Undo" data-tooltip="Undo">
+        <i class="fa fa-rotate-left" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="ann-footer-btn ann-footer-redo" id="footerRedoBtn" aria-label="Redo" data-tooltip="Redo">
+        <i class="fa fa-rotate-right" aria-hidden="true"></i>
+      </button>
+      <span class="ann-footer-case-label">
+        Case : <span id="footerCaseName">—</span>
+      </span>
+    </div>
+
+    <div class="ann-footer-right">
+      <span class="ann-footer-user" id="footerUserName">—</span>
+      <span class="ann-footer-conn" id="footerConnection"></span>
+      <button type="button" class="ann-footer-btn ann-footer-chat-btn" id="footerChatBtn" aria-label="Open chat" data-tooltip="Chat">
+        <i class="fa-regular fa-comment" aria-hidden="true"></i>
+      </button>
+    </div>
+  </footer>
 
   <div id="removeComponentDialog" class="remove-component-dialog is-hidden" aria-hidden="true">
     <div class="remove-component-dialog-backdrop" aria-hidden="true"></div>
@@ -546,8 +590,8 @@
       <p>Your latest edits may be unsaved.</p>
       <div class="back-confirm-actions">
         <button id="backConfirmCancel" type="button">Cancel</button>
-        <button id="backConfirmBack" type="button">Back</button>
-        <button id="backConfirmSaveBack" type="button">Save and Back</button>
+        <button id="backConfirmBack" type="button">Return</button>
+        <button id="backConfirmSaveBack" type="button">Save &amp; Return</button>
       </div>
     </div>
   </div>
@@ -691,6 +735,83 @@
       </section>
     </div>
   </div>
+
+  <aside id="appSidebar" class="app-sidebar is-hidden" aria-hidden="true" aria-label="Navigation">
+    <div class="app-sidebar-backdrop" data-sidebar-close></div>
+    <nav class="app-sidebar-panel" role="navigation">
+      <header class="app-sidebar-header">
+        <img class="app-sidebar-brand-logo" src="/assets/favicon.ico" alt="" />
+        <span class="app-sidebar-title">SMARTRPD</span>
+        <span class="app-sidebar-version">v2.0</span>
+        <button type="button" class="app-sidebar-close" data-sidebar-close aria-label="Close menu">
+          <i class="fa fa-xmark" aria-hidden="true"></i>
+        </button>
+      </header>
+      <ul id="appSidebarList" class="app-sidebar-list">
+        <li>
+          <button type="button" id="sidebarChangePasswordBtn" class="app-sidebar-item">
+            <i class="fa fa-key app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Change Account Password</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" id="sidebarSaveBtn" class="app-sidebar-item">
+            <i class="fa fa-floppy-disk app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Save</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" id="sidebarReturnBtn" class="app-sidebar-item">
+            <i class="fa fa-angles-left app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Return to Case Selection</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" id="sidebarLogoutBtn" class="app-sidebar-item">
+            <i class="fa fa-right-from-bracket app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Logout</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" id="sidebarQuitBtn" class="app-sidebar-item app-sidebar-item-danger">
+            <i class="fa fa-xmark app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Quit</span>
+          </button>
+        </li>
+        <li><hr class="app-sidebar-separator" /></li>
+        <li>
+          <button type="button" id="sidebarHelpBtn" class="app-sidebar-item">
+            <i class="fa fa-circle-info app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Help</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" id="sidebarReportIssueBtn" class="app-sidebar-item">
+            <i class="fa fa-bug app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Report Issue</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" id="sidebarFeedbackBtn" class="app-sidebar-item">
+            <i class="fa fa-comment-dots app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Feedback</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" id="sidebarAboutBtn" class="app-sidebar-item">
+            <i class="fa-regular fa-square-caret-right app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>About</span>
+          </button>
+        </li>
+        <li class="app-sidebar-language">
+          <i class="fa fa-globe app-sidebar-language-icon" aria-hidden="true"></i>
+          <select id="sidebarLanguageSelect" aria-label="Language">
+            <option value="en">English</option>
+          </select>
+        </li>
+      </ul>
+    </nav>
+  </aside>
 
   <script type="importmap">
     {

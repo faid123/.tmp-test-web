@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PUT /stl — Test Report</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #222; font-size: 11pt; line-height: 1.45; }
+  h1 { font-size: 20pt; margin: 0 0 4pt; }
+  h2 { font-size: 13pt; margin: 18pt 0 6pt; border-bottom: 1px solid #ccc; padding-bottom: 3pt; }
+  h3 { font-size: 11pt; margin: 12pt 0 4pt; }
+  .meta { color: #666; font-size: 9.5pt; margin-bottom: 14pt; }
+  code, pre { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9pt; }
+  pre { background: #f4f4f6; border: 1px solid #e2e2e6; border-radius: 4px; padding: 8pt 10pt; white-space: pre-wrap; word-break: break-word; }
+  .ok { color: #117a3a; font-weight: 600; }
+  .fail { color: #b8261b; font-weight: 600; }
+  table { border-collapse: collapse; width: 100%; margin: 4pt 0 8pt; }
+  th, td { border: 1px solid #d0d0d4; padding: 4pt 6pt; text-align: left; font-size: 9.5pt; vertical-align: top; }
+  th { background: #efefef; }
+  ul { margin: 4pt 0 8pt 18pt; padding: 0; }
+  li { margin: 1pt 0; }
+  .badge { display: inline-block; padding: 1pt 6pt; border-radius: 3pt; font-size: 9pt; font-weight: 600; }
+  .badge.ok { background: #dff5e6; color: #117a3a; }
+  .badge.fail { background: #fce4e1; color: #b8261b; }
+</style>
+</head>
+<body>
+
+<h1>PUT /stl &mdash; Endpoint Test Report</h1>
+<div class="meta">
+  Endpoint: <code>PUT https://live.api.smartrpdai.com/api/smartrpd/stl</code> (router: <code>router.put("/stl", smart.updateSTL)</code>)<br>
+  Tester: nyunt &lt;nyuntsinhtet96@gmail.com&gt; &middot; Case: 2275 (case_id "Testing_05") &middot; Date: 2026-05-29
+</div>
+
+<h2>Summary</h2>
+<table>
+  <tr><th>Endpoint</th><th>Result</th><th>Status</th><th>Notes</th></tr>
+  <tr><td><code>POST /user/login</code></td><td><span class="badge ok">PASS</span></td><td>HTTP 200</td><td>Returns uuid <code>hxhgNlcboDoEYiYYVufClzHaboNu</code> for nyunt</td></tr>
+  <tr><td><code>POST /case/get/2275</code></td><td><span class="badge ok">PASS</span></td><td>HTTP 200</td><td>Returns case_id <code>"Testing_05"</code></td></tr>
+  <tr><td><code>POST /stl</code></td><td><span class="badge ok">PASS</span></td><td>HTTP 200</td><td>Created STL row. Response: <code>{"successful":true}</code></td></tr>
+  <tr><td><code>POST /stl/get</code></td><td><span class="badge ok">PASS</span></td><td>HTTP 200</td><td>Confirms uploaded row exists (case_id=2275 int, type="upper_jaw" string)</td></tr>
+  <tr><td><code>PUT /stl</code></td><td><span class="badge fail">FAIL</span></td><td>HTTP 500</td><td><b>Server bug</b>: case_id never bound; SQL inserts <code>case_id = NULL</code></td></tr>
+</table>
+
+<h2>Test setup</h2>
+<ul>
+  <li>Script: <code>put_stl_debug.sh upper|lower</code> — performs login &rarr; case lookup &rarr; PUT /stl with cookie session.</li>
+  <li>Upper STL: <code>/Users/pingpong/Downloads/ATC-P-29U.stl</code> (8,585,384 bytes)</li>
+  <li>Lower STL: <code>/Users/pingpong/Downloads/ATC-P-29L.stl</code> (6,725,434 bytes)</li>
+  <li>Payload base64-encoded into a temp file (inline arg overflowed <code>ARG_MAX</code>); sent via <code>curl --data-binary @file</code>.</li>
+</ul>
+
+<h2>Payload shape tested</h2>
+<pre>[
+  { "machine_id": "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+    "uuid": "hxhgNlcboDoEYiYYVufClzHaboNu",
+    "caseIntID": 2275 },
+  { "case_id": "Testing_05",
+    "case_int_id": 2275,
+    "caseIntID": 2275,
+    "type": 1,
+    "filename": "ATC-P-29U.stl",
+    "data": "&lt;base64 STL&gt;" }
+]</pre>
+
+<h2>PUT /stl &mdash; failing response</h2>
+<pre>HTTP 500
+{
+  "serverErrorMessage": "Error updating STL for case with caseIntID 2275.",
+  "code": "ER_BAD_NULL_ERROR",
+  "errno": 1048,
+  "sqlState": "23000",
+  "sqlMessage": "Column 'case_id' cannot be null",
+  "sql": "REPLACE INTO jaw_stls SET `type` = 1, `case_id` = NULL,
+          `filename` = 'ATC-P-29U.stl', `data` = '&lt;base64&gt;'"
+}</pre>
+
+<h2>Variants tried (all returned the same NULL error)</h2>
+<table>
+  <tr><th>#</th><th>Variant</th><th>Outcome</th></tr>
+  <tr><td>1</td><td>case_id as string in 2nd object</td><td>case_id = NULL</td></tr>
+  <tr><td>2</td><td>case_id as integer 2275 in 2nd object</td><td>case_id = NULL</td></tr>
+  <tr><td>3</td><td>case_id added to 1st (auth) object</td><td>case_id = NULL</td></tr>
+  <tr><td>4</td><td>caseId camelCase</td><td>case_id = NULL</td></tr>
+  <tr><td>5</td><td>Single-object body (not array)</td><td>HTTP 500 generic "Internal server error"</td></tr>
+  <tr><td>6</td><td>Kitchen sink (case_id, caseId, CaseID, id, case_int_id, query params)</td><td>case_id = NULL</td></tr>
+  <tr><td>7</td><td>Retry after POST /stl created a row</td><td>case_id = NULL</td></tr>
+</table>
+
+<h2>Diagnosis</h2>
+<p>
+The server's <code>smart.updateSTL</code> handler never binds <code>case_id</code> into the
+<code>REPLACE INTO jaw_stls</code> statement. The SQL is built with <code>type</code>,
+<code>filename</code>, <code>data</code> read from the request, but <code>case_id</code> is left
+unbound (<code>NULL</code>), violating the NOT NULL constraint on that column.
+</p>
+<p>
+Existing rows stored via POST /stl have <code>case_id = 2275</code> (integer, equal to
+caseIntID). The PUT handler should either populate <code>case_id</code> from the request body
+or look it up from <code>caseIntID</code>. Currently it does neither.
+</p>
+
+<h2>Web client impact</h2>
+<p>
+<code>updateJawStl</code> in <code>src/js/2D/preview3D.js</code> (line 422) calls
+<code>PUT /stl</code> with this exact payload shape. It will fail HTTP 500 against the live API
+until the server-side handler is fixed.
+</p>
+
+<h2>Recommendation</h2>
+<ul>
+  <li>Fix <code>smart.updateSTL</code> to bind <code>case_id</code> in the REPLACE INTO statement (mirror POST /stl's handler).</li>
+  <li>Workaround: use POST /stl from <code>updateJawStl</code> until PUT is fixed &mdash; the
+  <code>REPLACE INTO</code> on <code>(case_id, type)</code> already gives upsert semantics.</li>
+</ul>
+
+</body>
+</html>
