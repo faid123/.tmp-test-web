@@ -610,7 +610,6 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
     tile.type = "button";
     tile.className = "tooth-quickpick-tile";
     if (options.tileClass) tile.classList.add(options.tileClass);
-    if (options.tileClass) tile.classList.add(options.tileClass);
     tile.setAttribute("aria-label", label);
     if (iconPath) {
       if (options.iconAsMask) {
@@ -676,13 +675,7 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
     }
     for (const item of items) {
       const isMesh = isMeshComponent(item.id);
-      const isMesh = isMeshComponent(item.id);
       grid.appendChild(
-        buildTile(
-          item.label,
-          item.icon,
-          () => commit({ tab: item.tab, componentId: item.id, label: item.label }),
-          isMesh ? { iconAsMask: true, tileClass: "tooth-quickpick-tile--mesh" } : undefined
         buildTile(
           item.label,
           item.icon,
