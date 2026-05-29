@@ -1932,6 +1932,7 @@ body.is-panel-resizing {
    .jaw-range-missing-btn {
   display: inline-flex;
   }
+
     .preview-frame {
     min-height: min(480px, 82vh);
   }
