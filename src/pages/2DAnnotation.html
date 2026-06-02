@@ -206,12 +206,10 @@
       <button type="button" class="ann-footer-btn" id="footerScreenCaptureBtn" aria-label="Screen capture" data-tooltip="Screen capture">
         <i class="fa fa-camera" aria-hidden="true"></i>
       </button>
-      <!-- Upload other 3D files: temporarily disabled. The live backend has no
-           store for arbitrary extra STLs — jaw_stls/jaw_stls_raw.type is an
-           ENUM('upper_jaw','lower_jaw') and only holds one of each per case.
-           Re-enable this button + the handler in 2DAnnotation.js once a backing
-           store exists. -->
-      <button type="button" class="ann-footer-btn" id="footerUpload3dBtn" aria-label="Upload other 3D files" data-tooltip="Upload other 3D files" disabled hidden>
+      <!-- Upload other 3D files: stored in jaw_stls_extra_slot_1..4 via
+           POST /stl/slot/ (up to 4 extra STLs per case). The handler in
+           2DAnnotation.js opens the picker and hands the file to preview3D.js. -->
+      <button type="button" class="ann-footer-btn" id="footerUpload3dBtn" aria-label="Upload other 3D files" data-tooltip="Upload other 3D files">
         <i class="fa fa-cloud-arrow-up" aria-hidden="true"></i>
       </button>
       <button type="button" class="ann-footer-btn" id="footerDownloadJawProfileBtn" aria-label="Download jaw profile" data-tooltip="Download jaw profile">

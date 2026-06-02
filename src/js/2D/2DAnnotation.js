@@ -1226,9 +1226,12 @@ function initAnnFooter() {
     window.dispatchEvent(new CustomEvent("request-3d-capture"));
   });
 
-  // "Upload other 3D files" (#footerUpload3dBtn) is temporarily disabled — the
-  // backend has no store for arbitrary extra STLs (see 2DAnnotation.html). Its
-  // click handler is intentionally omitted until a backing store exists.
+  // "Upload other 3D files": open the upload modal (managed in preview3D.js),
+  // which lists the case's extra STLs (jaw_stls_extra_slot_1..4) and handles
+  // upload + delete.
+  document.getElementById("footerUpload3dBtn")?.addEventListener("click", () => {
+    window.dispatchEvent(new CustomEvent("request-open-upload-3d"));
+  });
 
   document.getElementById("footerDownloadJawProfileBtn")?.addEventListener("click", () => {
     window.dispatchEvent(new CustomEvent("request-download-jaw-profile"));

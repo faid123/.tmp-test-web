@@ -243,6 +243,306 @@ body.is-panel-resizing {
   border-color: var(--rose-500);
 }
 
+/* Empty-jaw upload icon: same footprint as the trash button, shown in its
+   place when a jaw has no STL loaded. */
+.jaw-preview-upload-btn {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  height: 32px;
+  width: 32px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.85rem;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.jaw-preview-upload-btn:hover {
+  background: var(--rose-050);
+  color: var(--rose-700);
+  border-color: var(--rose-500);
+}
+
+/* Dim the jaw icon while its row is in the empty/upload state. */
+.jaw-preview-row.is-empty-jaw .jaw-preview-row-icon {
+  opacity: 0.4;
+}
+
+/* State-driven control visibility. A loaded jaw shows trash + SET SURVEY ANGLE;
+   an empty jaw shows only the upload icon. Driven by the class (not the JS
+   `hidden` attribute, which these elements' `display` rules would override). */
+.jaw-preview-row.is-empty-jaw .jaw-preview-delete-btn,
+.jaw-preview-row.is-empty-jaw .jaw-preview-survey-btn {
+  display: none;
+}
+
+.jaw-preview-row:not(.is-empty-jaw) .jaw-preview-upload-btn {
+  display: none;
+}
+
+/* ===== Upload other 3D files modal ===== */
+.upload3d-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 4200;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.upload3d-modal.is-hidden {
+  display: none;
+}
+
+.upload3d-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  pointer-events: auto;
+}
+
+.upload3d-modal-panel {
+  position: relative;
+  z-index: 1;
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(80vh, 640px);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  padding: 18px;
+  pointer-events: auto;
+}
+
+.upload3d-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.upload3d-modal-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--ink, #2b3440);
+}
+
+.upload3d-modal-close {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 1.05rem;
+  color: var(--muted, #6b7280);
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+}
+
+.upload3d-modal-close:hover {
+  background: #f1f3f5;
+  color: var(--ink, #2b3440);
+}
+
+/* The grey card that holds the file rows + upload button. */
+.upload3d-card {
+  background: #e6e9ee;
+  border: 1px solid #d2d7df;
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+.upload3d-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.upload3d-row {
+  display: grid;
+  grid-template-columns: 34px 28px 1fr;
+  align-items: center;
+  column-gap: 16px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+}
+
+button.upload3d-row {
+  cursor: pointer;
+}
+
+.upload3d-file-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  color: #3f5168;
+}
+
+.upload3d-file-icon.is-empty {
+  color: #8b95a3;
+}
+
+.upload3d-file-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: #3f5168;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+}
+
+.upload3d-slash {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #8b95a3;
+  font-size: 1.6rem;
+}
+
+.upload3d-folder {
+  display: grid;
+  place-items: center;
+  font-size: 1.25rem;
+  color: #3f5168;
+}
+
+.upload3d-row-delete {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #3f5168;
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  transition: color 120ms ease;
+}
+
+.upload3d-row-delete:hover {
+  color: var(--rose-600, #e03131);
+}
+
+.upload3d-row-name {
+  color: #3f5168;
+  font-size: 0.92rem;
+  font-weight: 600;
+  word-break: break-all;
+  line-height: 1.3;
+}
+
+.upload3d-row-name.is-muted {
+  color: #8b95a3;
+  font-weight: 500;
+}
+
+.upload3d-placeholder:hover .upload3d-row-name.is-muted {
+  color: #5f6b7a;
+}
+
+.upload3d-upload-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border: 1px solid #c3cad4;
+  border-radius: 10px;
+  background: #fff;
+  color: #2b3440;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.upload3d-upload-btn i {
+  font-size: 0.95rem;
+  color: #3f5168;
+}
+
+.upload3d-upload-btn:hover {
+  background: var(--rose-050, #fff0f3);
+  border-color: var(--rose-500, #f06595);
+  color: var(--rose-700, #c2255c);
+}
+
+.upload3d-upload-btn:disabled,
+.upload3d-upload-btn.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.upload3d-modal.is-busy .upload3d-list {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Upload progress bar (track + fill + centered label). */
+.upload3d-progress {
+  position: relative;
+  height: 20px;
+  border-radius: 10px;
+  background: #d2d7df;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+
+.upload3d-progress.is-hidden {
+  display: none;
+}
+
+.upload3d-progress-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: var(--rose-500, #f06595);
+  transition: width 120ms ease;
+}
+
+.upload3d-progress-label {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  text-align: center;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #2b3440;
+}
+
 .jaw-preview-survey-btn {
   justify-self: start;
   border: 1px solid var(--rose-500);

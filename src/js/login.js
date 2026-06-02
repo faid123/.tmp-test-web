@@ -90,22 +90,24 @@ async function sendOTP() {
       };
       localStorage.setItem("loggedInUser", JSON.stringify(userInfo));
 
-      // Trigger OTP generation / email.
-      const otpRes = await fetch(`${API_BASE}/otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([{ machine_id: MACHINE_ID, uuid: currentUUID }])
-      });
-      logApi(otpRes, "POST /otp");
-
-      if (!otpRes.ok) {
-        setError("error-message", "Login succeeded but OTP generation failed.");
-        return false;
-      }
-
-      // Move to OTP view and show where the code was sent.
-      const target = document.getElementById("otp-target");
-      if (target) target.textContent = data.email || username || "your account";
+      // ===== TEMP: OTP feature disabled — skip generation/verification =====
+      // // Trigger OTP generation / email.
+      // const otpRes = await fetch(`${API_BASE}/otp`, {
+      //   method: "POST",
+      //   headers: { "Content-Type": "application/json" },
+      //   body: JSON.stringify([{ machine_id: MACHINE_ID, uuid: currentUUID }])
+      // });
+      // logApi(otpRes, "POST /otp");
+      //
+      // if (!otpRes.ok) {
+      //   setError("error-message", "Login succeeded but OTP generation failed.");
+      //   return false;
+      // }
+      //
+      // // Move to OTP view and show where the code was sent.
+      // const target = document.getElementById("otp-target");
+      // if (target) target.textContent = data.email || username || "your account";
+      // ===== END TEMP =====
       return true;
     }
 
@@ -219,7 +221,12 @@ document.addEventListener("DOMContentLoaded", () => {
       if (btn) btn.disabled = true;
       const ok = await sendOTP();
       if (btn) btn.disabled = false;
-      if (ok) showView("otp");
+      // ===== TEMP: OTP feature disabled — redirect straight to case list
+      // instead of showing the OTP view. Restore `if (ok) showView("otp");`
+      // and re-enable the OTP block in sendOTP() to turn OTP back on. =====
+      if (ok) window.location.href = "./src/pages/case_list.html";
+      // if (ok) showView("otp");
+      // ===== END TEMP =====
     });
   }
 
