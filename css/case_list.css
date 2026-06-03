@@ -77,6 +77,12 @@ button:hover {
     padding: 10px;
     text-align: left;
     border-bottom: 1px solid #ddd;
+    overflow-wrap: anywhere;
+}
+
+.case-table th:last-child,
+.case-table td.actions-cell {
+    width: 118px !important;
 }
 
 .case-table thead th {
@@ -432,22 +438,6 @@ button:hover {
   color: #000 !important;        /* ✅ 仅颜色变深 */
 }
 
-td {
-  padding: 0px 8px;
-  height: 30px; /* ✅ 控制行高度 */
-  line-height: 1;
-  vertical-align: middle;
-}
-/* 限制所有行的高度 */
-.case-table td,
-.case-table th {
-  padding: 0px 8px;
-  height: 30px;         /* ✅ 控制最大行高 */
-  line-height: 1.2;     /* ✅ 避免撑开 */
-  vertical-align: middle;
-  font-size: 16px;      /* ✅ 可选：适当压缩字体也有助于紧凑 */
-}
-
 /* .shared-user-item button:hover {
   color: red !important;
 } */
@@ -467,6 +457,31 @@ td {
 .delete-user-btn:hover {
   color: red;
   background: transparent !important;
+}
+
+.actions-cell {
+  padding: 6px 8px !important;
+  line-height: 1;
+  white-space: nowrap;
+  overflow-wrap: normal !important;
+}
+
+.actions-cell .action-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.actions-cell .icon-button {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 26px;
 }
 
 .shared-user-item {

@@ -58,7 +58,7 @@ function populateTable(cases) {
 
   if (!cases || cases.length === 0) {
     tbody.innerHTML =
-      "<tr><td colspan='5' style='text-align:center;'>No cases found</td></tr>";
+      "<tr><td colspan='6' style='text-align:center;'>No cases found</td></tr>";
     return;
   }
 
@@ -79,15 +79,17 @@ function populateTable(cases) {
     // });
 
     row.innerHTML = `
-      <td style="width: 18%;">${caseItem.case_id || "N/A"}</td>
-      <td style="width: 18%;">${formatDateTime(caseItem.creation_date)}</td>
-      <td style="width: 18%;">${dueDate}</td>
-      <td style="width: 18%;">${newStatus}</td>
-      <td style="width: 18%;">${assignedTo}</td>
-      <td style="width: 12%;">
-        <button class="icon-button" title="Attachment"><i class="fa fa-paperclip"></i></button>
-        <button class="icon-button" title="Download"><i class="fa fa-download"></i></button>
-        <button class="icon-button" title="Flag"><i class="fa fa-flag"></i></button>
+      <td>${caseItem.case_id || "N/A"}</td>
+      <td>${formatDateTime(caseItem.creation_date)}</td>
+      <td>${dueDate}</td>
+      <td>${newStatus}</td>
+      <td>${assignedTo}</td>
+      <td class="actions-cell">
+        <div class="action-icons">
+          <button class="icon-button" title="Attachment"><i class="fa fa-paperclip"></i></button>
+          <button class="icon-button" title="Download"><i class="fa fa-download"></i></button>
+          <button class="icon-button" title="Flag"><i class="fa fa-flag"></i></button>
+        </div>
       </td>
     `;
 

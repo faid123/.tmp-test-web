@@ -1751,6 +1751,10 @@ export function createArtificialTeethRenderer({
     ["upper", true],
     ["lower", true],
   ]);
+  const jawOpacity = new Map([
+    ["upper", 1],
+    ["lower", 1],
+  ]);
   const material = new THREE.MeshStandardMaterial({
     color: 0xeef36a,
     emissive: 0x5a6100,
@@ -1962,12 +1966,32 @@ export function createArtificialTeethRenderer({
   };
 
   const isJawVisible = (arch) => jawVisibility.get(arch) ?? true;
+  const getJawOpacity = (arch) => jawOpacity.get(arch) ?? 1;
+
+  const applyArtificialTeethOpacity = (object, opacity) => {
+    object.traverse((child) => {
+      if (!child.material) return;
+      const materials = Array.isArray(child.material)
+        ? child.material
+        : [child.material];
+      materials.forEach((materialEntry) => {
+        if (!materialEntry) return;
+        materialEntry.opacity = opacity;
+        materialEntry.transparent = opacity < 1;
+        materialEntry.depthWrite = opacity >= 0.95;
+        materialEntry.needsUpdate = true;
+      });
+    });
+  };
 
   const syncVisibility = () => {
     group.visible = true;
     group.children.forEach((child) => {
       const arch = child.userData?.arch;
       child.visible = arch ? isJawVisible(arch) : true;
+      if (arch) {
+        applyArtificialTeethOpacity(child, getJawOpacity(arch));
+      }
     });
   };
 
@@ -2639,6 +2663,13 @@ export function createArtificialTeethRenderer({
   const setJawVisibility = (arch, isVisible) => {
     if (arch !== "upper" && arch !== "lower") return;
     jawVisibility.set(arch, Boolean(isVisible));
+    syncVisibility();
+  };
+
+  const setJawOpacity = (arch, opacity) => {
+    if (arch !== "upper" && arch !== "lower") return;
+    const normalizedOpacity = Math.max(0, Math.min(1, Number(opacity)));
+    jawOpacity.set(arch, Number.isFinite(normalizedOpacity) ? normalizedOpacity : 1);
     syncVisibility();
   };
 
@@ -3976,6 +4007,8 @@ export function createArtificialTeethRenderer({
   window.clearArtificialTeeth = clear;
   window.setArtificialTeethJawVisibility = setJawVisibility;
   window.getArtificialTeethJawVisibility = getJawVisibility;
+  window.setArtificialTeethJawOpacity = setJawOpacity;
+  window.getArtificialTeethJawOpacity = getJawOpacity;
 
   return {
     clear,
@@ -4000,5 +4033,7 @@ export function createArtificialTeethRenderer({
     updateCameraVisibility,
     setJawVisibility,
     getJawVisibility,
+    setJawOpacity,
+    getJawOpacity,
   };
 }

@@ -178,6 +178,10 @@ const polylineJawVisibility = new Map([
   ["upper", true],
   ["lower", true],
 ]);
+const polylineJawOpacity = new Map([
+  ["upper", 1],
+  ["lower", 1],
+]);
 const polylineDiagnostics = {
   base64DecodeMs: 0,
   base64DecodeCount: 0,
@@ -462,42 +466,135 @@ function anchorViewerRotationTarget(control = controls) {
   return true;
 }
 
-function setViewerRotationAnchorToOrigin(control = controls) {
+function setViewerRotationAnchorToCurrentTarget(control = controls) {
   if (!control?.target) return false;
-  const target = hasViewerRotationOrigin
-    ? viewerRotationOrigin
-    : updateViewerRotationOrigin();
-  if (!target) return false;
-
-  viewerRotationTargetAnchor.copy(target);
-  const correction = viewerRotationTargetAnchor.clone().sub(control.target);
-  if (correction.lengthSq() > 0.00000001) {
-    control.target.copy(viewerRotationTargetAnchor);
-    camera.position.add(correction);
-    if (orb_controls?.target) {
-      orb_controls.target.copy(viewerRotationTargetAnchor);
-    }
-    camera.updateProjectionMatrix();
-  }
+  viewerRotationTargetAnchor.copy(control.target);
   return true;
 }
 
 function bindViewerRotationTargetAnchor(domElement) {
   if (!domElement) return;
-
-  domElement.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || !controls?.target) return;
-    isViewerLeftButtonRotating = true;
-    setViewerRotationAnchorToOrigin(controls);
-  }, true);
+  const activeTouchPointers = new Set();
+  const manualPanState = {
+    active: false,
+    lastX: 0,
+    lastY: 0,
+    pointerId: null,
+  };
 
   const releaseRotationAnchor = () => {
     isViewerLeftButtonRotating = false;
   };
-  domElement.addEventListener("pointerup", releaseRotationAnchor);
-  domElement.addEventListener("pointercancel", releaseRotationAnchor);
-  domElement.addEventListener("pointerleave", releaseRotationAnchor);
-  window.addEventListener("blur", releaseRotationAnchor);
+
+  const releaseManualPan = () => {
+    if (manualPanState.pointerId != null) {
+      domElement.releasePointerCapture?.(manualPanState.pointerId);
+    }
+    manualPanState.active = false;
+    manualPanState.pointerId = null;
+  };
+
+  const panViewerTargetByScreenDelta = (deltaX, deltaY) => {
+    if (!camera || !controls?.target) return;
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+    camera.getWorldDirection(right);
+    right.cross(camera.up).normalize();
+    up.copy(camera.up).normalize();
+
+    const panSpeed = Math.max(1, controls.panSpeed || 1) / 8;
+    const scale = panSpeed / Math.max(camera.zoom || 1, 0.0001);
+    const panOffset = right
+      .multiplyScalar(-deltaX * scale)
+      .add(up.multiplyScalar(deltaY * scale));
+
+    camera.position.add(panOffset);
+    controls.target.add(panOffset);
+    viewerRotationTargetAnchor.copy(controls.target);
+    if (orb_controls?.target) {
+      orb_controls.target.copy(controls.target);
+    }
+    camera.updateProjectionMatrix();
+  };
+
+  const startManualPan = (event) => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    releaseRotationAnchor();
+    manualPanState.active = true;
+    manualPanState.pointerId = event.pointerId ?? null;
+    manualPanState.lastX = event.clientX;
+    manualPanState.lastY = event.clientY;
+    if (manualPanState.pointerId != null) {
+      domElement.setPointerCapture?.(manualPanState.pointerId);
+    }
+  };
+
+  const moveManualPan = (event) => {
+    if (!manualPanState.active) return;
+    event.preventDefault();
+    event.stopImmediatePropagation?.();
+    const deltaX = event.clientX - manualPanState.lastX;
+    const deltaY = event.clientY - manualPanState.lastY;
+    manualPanState.lastX = event.clientX;
+    manualPanState.lastY = event.clientY;
+    panViewerTargetByScreenDelta(deltaX, deltaY);
+  };
+
+  domElement.addEventListener("mousedown", (event) => {
+    if (event.button !== 2) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
+
+  domElement.addEventListener("pointerdown", (event) => {
+    if (!controls?.target) return;
+
+    if (event.pointerType === "touch") {
+      activeTouchPointers.add(event.pointerId);
+      if (activeTouchPointers.size > 1) {
+        releaseRotationAnchor();
+        return;
+      }
+    } else if (event.button === 2) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      releaseRotationAnchor();
+      releaseManualPan();
+      return;
+    } else if (event.button === 1 || (event.button === 0 && event.shiftKey)) {
+      startManualPan(event);
+      return;
+    } else if (event.button !== 0 || event.shiftKey) {
+      return;
+    }
+
+    isViewerLeftButtonRotating = true;
+    setViewerRotationAnchorToCurrentTarget(controls);
+  }, true);
+
+  const releasePointer = (event) => {
+    if (event.pointerType === "touch") {
+      activeTouchPointers.delete(event.pointerId);
+    }
+    releaseRotationAnchor();
+    if (event.type !== "pointerleave") {
+      releaseManualPan();
+    }
+  };
+
+  domElement.addEventListener("pointerup", releasePointer);
+  domElement.addEventListener("pointercancel", releasePointer);
+  domElement.addEventListener("pointerleave", releasePointer);
+  domElement.addEventListener("pointermove", moveManualPan, true);
+  domElement.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+  });
+  window.addEventListener("blur", () => {
+    activeTouchPointers.clear();
+    releaseRotationAnchor();
+    releaseManualPan();
+  });
 }
 
 function disposeObject3D(object) {
@@ -510,6 +607,188 @@ function disposeObject3D(object) {
       child.material.dispose();
     }
   });
+}
+
+const PRESET_CAMERA_VIEWS = [
+  {
+    key: "top",
+    label: "Top",
+    direction: new THREE.Vector3(0, 1, 0),
+    up: new THREE.Vector3(0, 0, -1),
+  },
+  {
+    key: "bottom",
+    label: "Bottom",
+    direction: new THREE.Vector3(0, -1, 0),
+    up: new THREE.Vector3(0, 0, 1),
+  },
+  {
+    key: "left",
+    label: "Left",
+    direction: new THREE.Vector3(-1, 0, 0),
+    up: new THREE.Vector3(0, 1, 0),
+  },
+  {
+    key: "right",
+    label: "Right",
+    direction: new THREE.Vector3(1, 0, 0),
+    up: new THREE.Vector3(0, 1, 0),
+  },
+  {
+    key: "front",
+    label: "Front",
+    direction: new THREE.Vector3(0, 0, 1),
+    up: new THREE.Vector3(0, 1, 0),
+  },
+  {
+    key: "rear",
+    label: "Rear",
+    direction: new THREE.Vector3(0, 0, -1),
+    up: new THREE.Vector3(0, 1, 0),
+  },
+];
+
+function getPresetViewBounds() {
+  const jawBox = getJawMeshBoundingBox();
+  if (jawBox) return jawBox;
+
+  const box = new THREE.Box3();
+  let hasMesh = false;
+  parentObject.updateMatrixWorld(true);
+  parentObject.traverse((child) => {
+    if (!child.isMesh) return;
+    child.updateMatrixWorld(true);
+    box.expandByObject(child);
+    hasMesh = true;
+  });
+
+  return hasMesh && !box.isEmpty() ? box : null;
+}
+
+function setPresetCameraView(viewKey) {
+  if (viewKey === "center") {
+    setCenterCameraView();
+    return;
+  }
+
+  const view = PRESET_CAMERA_VIEWS.find((item) => item.key === viewKey);
+  if (!view || !camera) return;
+
+  const box = getPresetViewBounds();
+  const target = box
+    ? box.getCenter(new THREE.Vector3())
+    : hasViewerRotationOrigin
+      ? viewerRotationOrigin.clone()
+      : new THREE.Vector3(0, 0, 0);
+  const size = box ? box.getSize(new THREE.Vector3()) : new THREE.Vector3(120, 120, 120);
+  const radius = Math.max(size.length() * 0.5, VIEWER_TARGET_MIN_DRIFT_LIMIT);
+  const distance = Math.max(radius * 4, 500);
+  const direction = view.direction.clone().normalize();
+
+  viewerRotationOrigin.copy(target);
+  viewerRotationBoundsRadius = radius;
+  hasViewerRotationOrigin = true;
+  camera.position.copy(target).addScaledVector(direction, distance);
+  camera.up.copy(view.up);
+  camera.lookAt(target);
+  camera.zoom = 7;
+  camera.updateProjectionMatrix();
+
+  if (controls?.target) {
+    controls.target.copy(target);
+    controls.update();
+  }
+  if (orb_controls?.target) {
+    orb_controls.target.copy(target);
+    orb_controls.update();
+  }
+
+  document.querySelectorAll(".preset-view-button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.viewKey === viewKey);
+  });
+}
+
+function setCenterCameraView() {
+  if (!camera) return;
+
+  const box = getPresetViewBounds();
+  const target = box
+    ? box.getCenter(new THREE.Vector3())
+    : hasViewerRotationOrigin
+      ? viewerRotationOrigin.clone()
+      : new THREE.Vector3(0, 0, 0);
+  const size = box ? box.getSize(new THREE.Vector3()) : new THREE.Vector3(120, 120, 120);
+  const radius = Math.max(size.length() * 0.5, VIEWER_TARGET_MIN_DRIFT_LIMIT);
+  const currentTarget = controls?.target || viewerRotationOrigin;
+  const direction = camera.position.clone().sub(currentTarget).normalize();
+  if (!Number.isFinite(direction.lengthSq()) || direction.lengthSq() < 0.000001) {
+    direction.set(0, 0, 1);
+  }
+  const distance = Math.max(radius * 4, 500);
+
+  viewerRotationOrigin.copy(target);
+  viewerRotationBoundsRadius = radius;
+  hasViewerRotationOrigin = true;
+  camera.position.copy(target).addScaledVector(direction, distance);
+  camera.lookAt(target);
+  camera.zoom = 7;
+  camera.updateProjectionMatrix();
+
+  if (controls?.target) {
+    controls.target.copy(target);
+    controls.update();
+  }
+  if (orb_controls?.target) {
+    orb_controls.target.copy(target);
+    orb_controls.update();
+  }
+
+  document.querySelectorAll(".preset-view-button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.viewKey === "center");
+  });
+}
+
+function createPresetViewControls() {
+  if (document.querySelector(".preset-view-panel")) return;
+
+  const panel = document.createElement("div");
+  panel.className = "preset-view-panel";
+
+  const viewPad = document.createElement("div");
+  viewPad.className = "preset-view-pad";
+
+  const visualViews = [
+    { key: "top", label: "Top", slot: "top" },
+    { key: "bottom", label: "Bottom", slot: "bottom" },
+    { key: "left", label: "Left", slot: "left" },
+    { key: "right", label: "Right", slot: "right" },
+    { key: "rear", label: "Rear", slot: "rear" },
+    { key: "front", label: "Front", slot: "front" },
+    { key: "center", label: "Center", slot: "center" },
+  ];
+
+  visualViews.forEach((view) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `preset-view-button preset-view-${view.slot}`;
+    button.dataset.viewKey = view.key;
+    const ariaLabel =
+      view.key === "center" ? "Center model view" : `${view.label} view`;
+    button.title = ariaLabel;
+    button.setAttribute("aria-label", ariaLabel);
+
+    const face = document.createElement("span");
+    face.className = "preset-view-face";
+    button.appendChild(face);
+
+    button.addEventListener("click", () => {
+      setPresetCameraView(view.key);
+    });
+    viewPad.appendChild(button);
+  });
+
+  panel.appendChild(viewPad);
+  document.body.appendChild(panel);
 }
 
 function clearPolylineOverlay() {
@@ -654,8 +933,41 @@ function getPolylineJawVisibility(arch) {
   return isPolylineJawVisible(arch);
 }
 
+function applyPolylineJawOpacity(arch) {
+  const opacity = polylineJawOpacity.get(arch) ?? 1;
+  polylineOverlayGroup.children.forEach((group) => {
+    if (group.userData?.arch !== arch) return;
+    group.traverse((child) => {
+      if (!child.material) return;
+      const materials = Array.isArray(child.material)
+        ? child.material
+        : [child.material];
+      materials.forEach((materialEntry) => {
+        if (!materialEntry) return;
+        materialEntry.opacity = opacity;
+        materialEntry.transparent = opacity < 1;
+        materialEntry.depthWrite = false;
+        materialEntry.needsUpdate = true;
+      });
+    });
+  });
+}
+
+function setPolylineJawOpacity(arch, opacity) {
+  if (arch !== "upper" && arch !== "lower") return;
+  const normalizedOpacity = Math.max(0, Math.min(1, Number(opacity)));
+  polylineJawOpacity.set(arch, Number.isFinite(normalizedOpacity) ? normalizedOpacity : 1);
+  applyPolylineJawOpacity(arch);
+}
+
+function getPolylineJawOpacity(arch) {
+  return polylineJawOpacity.get(arch) ?? 1;
+}
+
 window.setPolylineJawVisibility = setPolylineJawVisibility;
 window.getPolylineJawVisibility = getPolylineJawVisibility;
+window.setPolylineJawOpacity = setPolylineJawOpacity;
+window.getPolylineJawOpacity = getPolylineJawOpacity;
 
 function formatPolylineComponentLabel(key) {
   return key || "polyline";
@@ -1797,6 +2109,7 @@ function syncPolylineOverlayVisibility() {
       isPolylineOverlayVisible &&
       isPolylineJawVisible(arch) &&
       (polylineComponentVisibility.get(key) ?? true);
+    applyPolylineJawOpacity(arch);
   });
 
   if (polylineMenuButton) {
@@ -1969,12 +2282,13 @@ function createPolylineVisibilityToggle(container, domElement) {
   wrapper.id = "polyline-visibility-menu";
   wrapper.style.position = "fixed";
   wrapper.style.right = "20px";
-  wrapper.style.bottom = "230px";
+  wrapper.style.bottom = "430px";
   wrapper.style.zIndex = "1000";
   wrapper.style.display = "flex";
   wrapper.style.flexDirection = "column";
   wrapper.style.alignItems = "flex-end";
   wrapper.style.gap = "8px";
+  wrapper.style.pointerEvents = "none";
 
   const button = document.createElement("button");
   button.id = "polyline-visibility-toggle";
@@ -1988,11 +2302,18 @@ function createPolylineVisibilityToggle(container, domElement) {
   button.style.fontWeight = "bold";
   button.style.cursor = "pointer";
   button.style.minWidth = "150px";
+  button.style.pointerEvents = "auto";
 
   const panel = document.createElement("div");
+  panel.id = "polyline-visibility-panel";
   panel.style.display = "none";
-  panel.style.width = "290px";
-  panel.style.maxHeight = "45vh";
+  panel.style.position = "fixed";
+  panel.style.right = "20px";
+  panel.style.top = "50%";
+  panel.style.transform = "translateY(-50%)";
+  panel.style.zIndex = "1002";
+  panel.style.width = "min(360px, calc(100vw - 40px))";
+  panel.style.maxHeight = "calc(100vh - 40px)";
   panel.style.overflow = "auto";
   panel.style.background = "rgba(255, 255, 255, 0.96)";
   panel.style.color = "#111827";
@@ -2000,12 +2321,39 @@ function createPolylineVisibilityToggle(container, domElement) {
   panel.style.borderRadius = "8px";
   panel.style.boxShadow = "0 8px 24px rgba(0, 0, 0, 0.18)";
   panel.style.padding = "10px";
+  panel.style.pointerEvents = "auto";
+  panel.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+  });
+  panel.addEventListener("wheel", (event) => {
+    event.stopPropagation();
+  });
+
+  const updatePolylineMenuLayout = () => {
+    const compact = window.innerWidth <= 640 || window.innerHeight <= 720;
+    wrapper.style.right = compact ? "10px" : "20px";
+    wrapper.style.bottom = compact ? "398px" : "470px";
+    button.style.minWidth = compact ? "132px" : "150px";
+    panel.style.right = compact ? "8px" : "20px";
+    panel.style.top = "50%";
+    panel.style.width = compact
+      ? "min(300px, calc(100vw - 16px))"
+      : "min(360px, calc(100vw - 40px))";
+    panel.style.maxHeight = compact
+      ? "calc(100vh - 20px)"
+      : "calc(100vh - 40px)";
+  };
 
   const actions = document.createElement("div");
   actions.style.display = "flex";
   actions.style.flexWrap = "wrap";
   actions.style.gap = "6px";
   actions.style.marginBottom = "8px";
+  actions.style.position = "sticky";
+  actions.style.top = "0";
+  actions.style.zIndex = "1";
+  actions.style.paddingBottom = "8px";
+  actions.style.background = "rgba(255, 255, 255, 0.96)";
 
   const makeActionButton = (label, onClick) => {
     const actionButton = document.createElement("button");
@@ -2023,6 +2371,11 @@ function createPolylineVisibilityToggle(container, domElement) {
   };
 
   actions.appendChild(
+    makeActionButton("Close", () => {
+      panel.style.display = "none";
+    })
+  );
+  actions.appendChild(
     makeActionButton("All", () => {
       setPolylineMenuVisibility(() => true, true);
     })
@@ -2039,12 +2392,18 @@ function createPolylineVisibilityToggle(container, domElement) {
   panel.appendChild(list);
 
   button.addEventListener("click", () => {
-    panel.style.display = panel.style.display === "none" ? "block" : "none";
+    const willOpen = panel.style.display === "none";
+    panel.style.display = willOpen ? "block" : "none";
+    if (willOpen) {
+      updatePolylineMenuLayout();
+    }
   });
+  window.addEventListener("resize", updatePolylineMenuLayout);
 
-  wrapper.appendChild(panel);
   wrapper.appendChild(button);
   container.appendChild(wrapper);
+  document.body.appendChild(panel);
+  updatePolylineMenuLayout();
 
   polylineMenuButton = button;
   polylineMenuList = list;
@@ -2419,106 +2778,9 @@ function setupChatToggle() {
     jaw_type: 1,
     caseIntID: paramValue,
   };
-  const captureInitialLoadPromise = (label, startedAt, promise) =>
-    promise
-      .then((result) => {
-        endViewerLoadTimer(label);
-        addViewerLoadTiming(
-          label.replace(/^viewer: /, ""),
-          performance.now() - startedAt
-        );
-        return result;
-      })
-      .catch((error) => {
-        endViewerLoadTimer(label);
-        addViewerLoadTiming(
-          label.replace(/^viewer: /, ""),
-          performance.now() - startedAt,
-          { status: "failed" }
-        );
-        return { __viewerLoadError: error };
-      });
-  const unwrapInitialLoadResult = (result) => {
-    if (result?.__viewerLoadError) {
-      throw result.__viewerLoadError;
-    }
-    return result;
-  };
-
   const urldatas = ["/case/get/" + paramValue];
   const thumbnail_url = ["/thumbnails/get"];
   const heatmap_urldatas = ["/undercutheatmap/get"];
-
-  const caseDataStartedAt = performance.now();
-  startViewerLoadTimer("viewer: case data loading");
-  const caseDataPromise = captureInitialLoadPromise(
-    "viewer: case data loading",
-    caseDataStartedAt,
-    apiClient.post(urldatas[0], [data], false, "Case Info")
-  );
-
-  const thumbnailStartedAt = performance.now();
-  startViewerLoadTimer("viewer: thumbnail loading");
-  const thumbnailDataPromise = captureInitialLoadPromise(
-    "viewer: thumbnail loading",
-    thumbnailStartedAt,
-    apiClient.post(thumbnail_url[0], [data], false, "2D image")
-  );
-
-  const heatmapStartedAt = performance.now();
-  startViewerLoadTimer("viewer: heatmap data loading");
-  const heatmapDataPromise = captureInitialLoadPromise(
-    "viewer: heatmap data loading",
-    heatmapStartedAt,
-    Promise.all([
-      apiClient.post(heatmap_urldatas, data, false, "Heatmap upper"),
-      apiClient.post(heatmap_urldatas, data2, false, "Heatmap lower"),
-    ])
-  );
-
-  const meshDataStartedAt = performance.now();
-  startViewerLoadTimer("viewer: jaw mesh data loading");
-  const parameterisationMeshTimerLabel = "viewer: mesh API /parameterisation/mesh/getall";
-  const surfaceMeshTimerLabel = "viewer: mesh API /surface/getall";
-  const closedMeshAvailabilityTimerLabel =
-    "viewer: mesh API /stl/get availability check";
-  const closedMeshTimerLabel = "viewer: mesh API /stl/get";
-  if (!close) {
-    startViewerLoadTimer(parameterisationMeshTimerLabel);
-    startViewerLoadTimer(surfaceMeshTimerLabel);
-    startViewerLoadTimer(closedMeshAvailabilityTimerLabel);
-  } else {
-    startViewerLoadTimer(closedMeshTimerLabel);
-  }
-  const parameterisationMeshPromise = !close
-    ? captureInitialLoadPromise(
-        parameterisationMeshTimerLabel,
-        performance.now(),
-        apiClient.post("/parameterisation/mesh/getall", [data], false, "Jaw mesh")
-      )
-    : Promise.resolve("stl");
-  const surfaceMeshPromise = !close
-    ? captureInitialLoadPromise(
-        surfaceMeshTimerLabel,
-        performance.now(),
-        apiClient.post("/surface/getall", [data], false, "Denture mesh")
-      )
-    : Promise.resolve("stl");
-  const closedMeshAvailabilityPromise = !close
-    ? captureInitialLoadPromise(
-        closedMeshAvailabilityTimerLabel,
-        performance.now(),
-        apiClient.post("/stl/get", [data], "test", "Jaw mesh")
-      )
-    : Promise.resolve("stl");
-  const closedMeshPromise = close
-    ? captureInitialLoadPromise(
-        closedMeshTimerLabel,
-        performance.now(),
-        apiClient.post("/stl/get", [data], false, "Jaw mesh")
-      )
-    : Promise.resolve("stl");
-  artificialTeethRenderer.prefetch(paramValue);
   let positionDatas = [];
   let positionData;
 
@@ -2526,7 +2788,7 @@ function setupChatToggle() {
   try {
     // Call the post method and wait for the response
     for (const urldata of urldatas) {
-      positionData = unwrapInitialLoadResult(await caseDataPromise);
+      positionData = await apiClient.post(urldata, [data], false, "Case Info");
       //console.log('Success:', positionData)
       positionDatas = positionDatas.concat(positionData);
       window.caseID = positionData.case_id;
@@ -2552,7 +2814,12 @@ function setupChatToggle() {
   try {
     // Call the post method and wait for the response
     for (const urldata of thumbnail_url) {
-      const thumbnailData = unwrapInitialLoadResult(await thumbnailDataPromise);
+      const thumbnailData = await apiClient.post(
+        urldata,
+        [data],
+        false,
+        "2D image"
+      );
       //console.log('Success thumb:', thumbnailData)
       for (const thumb in thumbnailData) {
         if (thumbnailData[thumb].slot == 0) {
@@ -2810,17 +3077,13 @@ btnContainer.appendChild(edit2DStatic); */
 
                 const composedDataURL = canvas.toDataURL();
                 localStorage.setItem(
-                  `annotateBackground_${encryptedID}`,
+                  `annotateBackground_${encryptedId}`,
                   composedDataURL
                 );
-                console.log(`✅ 已保存 annotateBackground_${encryptedID}`);
+                console.log(`✅ 已保存 annotateBackground_${encryptedId}`);
 
                 // 🟢 跳转
                 // 🟢 跳转（确保使用 URL 中的加密 ID）
-                const encryptedId = new URLSearchParams(
-                  window.location.search
-                ).get("id"); // ✅ 确保使用真实的加密 ID
-
                 const isGitHubPages =
                   window.location.hostname.includes("github.io");
                 //const isLocal = window.location.hostname === "localhost";
@@ -2931,8 +3194,11 @@ btnContainer.appendChild(edit2DStatic); */
   try {
     // Call the post method and wait for the response
 
-    const [undercut_value, undercut_value1] = unwrapInitialLoadResult(
-      await heatmapDataPromise
+    const undercut_value = await apiClient.post(
+      heatmap_urldatas,
+      data,
+      false,
+      "Heatmap upper"
     );
     undercut_values = undercut_values.concat(undercut_value);
     //console.log('Success:', undercut_value)
@@ -2942,6 +3208,12 @@ btnContainer.appendChild(edit2DStatic); */
       Boolean(undercut_value.occlusion_values),
     ];
 
+    const undercut_value1 = await apiClient.post(
+      heatmap_urldatas,
+      data2,
+      false,
+      "Heatmap lower"
+    );
     undercut_values = undercut_values.concat(undercut_value1);
 
     undercut_type[undercut_value1.jaw_type] = [
@@ -2974,11 +3246,7 @@ btnContainer.appendChild(edit2DStatic); */
         } else if (url == "/surface/getall") {
           name_of_mesh = "Denture mesh";
         }
-        responseData = unwrapInitialLoadResult(
-          await (url == "/parameterisation/mesh/getall"
-            ? parameterisationMeshPromise
-            : surfaceMeshPromise)
-        );
+        responseData = await apiClient.post(url, [data], false, name_of_mesh);
         //console.log(responseData);
         if (isObject(responseData)) {
           responseDatas = responseDatas.concat(responseData);
@@ -2986,8 +3254,11 @@ btnContainer.appendChild(edit2DStatic); */
         //loop to prevent repeated check
         if (loop == 1) {
           //check for closed.off
-          const test = unwrapInitialLoadResult(
-            await closedMeshAvailabilityPromise
+          const test = await apiClient.post(
+            "/stl/get",
+            [data],
+            "test",
+            "Jaw mesh"
           );
 
           if (test != "stl") {
@@ -3081,35 +3352,42 @@ btnContainer.appendChild(edit2DStatic); */
           });
           btnContainer3D.appendChild(editButton3D);
 
-          // Create a new wrapper ONLY for the email input and button
           const emailWrapperContainer = document.createElement("div");
-          emailWrapperContainer.style.marginTop = "12px"; // spacing from other buttons
-          emailWrapperContainer.style.display = "block"; // block-level to avoid affecting other buttons
-          emailWrapperContainer.style.position = "fixed";
-          emailWrapperContainer.style.bottom = "40px"; // adjust as needed
-          emailWrapperContainer.style.right = "20px";
-          emailWrapperContainer.style.zIndex = "1000";
+          emailWrapperContainer.className = "mail-popup hidden";
 
-          // Create inner wrapper to align input + button side by side
+          const emailPopupHeader = document.createElement("div");
+          emailPopupHeader.className = "mail-popup-header";
+          emailPopupHeader.textContent = "Add email to mailing list";
+
           const emailInputWrapper = document.createElement("div");
-          emailInputWrapper.style.display = "flex";
-          emailInputWrapper.style.gap = "8px";
+          emailInputWrapper.className = "mail-popup-fields";
 
           // Create the Email Input Field
           const emailInput = document.createElement("input");
           emailInput.type = "email";
           emailInput.placeholder = "Enter email address";
-          emailInput.style.padding = "8px";
-          emailInput.style.border = "1px solid #ccc";
-          emailInput.style.borderRadius = "4px";
-          emailInput.style.width = "200px";
 
-          // Create the Submit Button
+          const submitEmailBtn = document.createElement("button");
+          submitEmailBtn.textContent = "Add";
+          submitEmailBtn.className = "smart-btn mail-submit";
+
+          const closeEmailPopupBtn = document.createElement("button");
+          closeEmailPopupBtn.textContent = "Cancel";
+          closeEmailPopupBtn.className = "smart-btn mail-cancel";
+
           const addEmailBtn = document.createElement("button");
           addEmailBtn.textContent = "Add to Mail";
-          addEmailBtn.className = "smart-btn";
-          addEmailBtn.style.backgroundColor = "#6c757d"; // grey
-          addEmailBtn.addEventListener("click", async () => {
+          addEmailBtn.className = "smart-btn mail-open";
+          addEmailBtn.addEventListener("click", () => {
+            emailWrapperContainer.classList.remove("hidden");
+            emailInput.focus();
+          });
+
+          closeEmailPopupBtn.addEventListener("click", () => {
+            emailWrapperContainer.classList.add("hidden");
+          });
+
+          submitEmailBtn.addEventListener("click", async () => {
             const email = emailInput.value.trim();
             if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
               alert("Please enter a valid email address.");
@@ -3137,6 +3415,7 @@ btnContainer.appendChild(edit2DStatic); */
               if (response.ok) {
                 alert("✅ Email added to mailing list.");
                 emailInput.value = "";
+                emailWrapperContainer.classList.add("hidden");
               } else {
                 console.error(result);
                 alert(
@@ -3150,15 +3429,14 @@ btnContainer.appendChild(edit2DStatic); */
             }
           });
 
-          // Append input + button to inner wrapper
+          emailWrapperContainer.appendChild(emailPopupHeader);
           emailInputWrapper.appendChild(emailInput);
-          emailInputWrapper.appendChild(addEmailBtn);
+          emailInputWrapper.appendChild(submitEmailBtn);
+          emailInputWrapper.appendChild(closeEmailPopupBtn);
 
-          // Add inner wrapper into outer container
           emailWrapperContainer.appendChild(emailInputWrapper);
-
-          // Finally, append the email wrapper
           document.body.appendChild(emailWrapperContainer);
+          btnContainer3D.appendChild(addEmailBtn);
 
           // Create "Load Other STLs" button
           const loadOtherStlButton = document.createElement("button");
@@ -3177,10 +3455,12 @@ btnContainer.appendChild(edit2DStatic); */
               window.location.reload();
             };
           });
-          btnContainer.appendChild(loadOtherStlButton);
+          btnContainer3D.appendChild(loadOtherStlButton);
 
           // Append the container to the body
-          document.body.appendChild(btnContainer);
+          if (btnContainer.children.length > 0) {
+            document.body.appendChild(btnContainer);
+          }
           //document.body.appendChild(btnContainer2D);
           document.body.appendChild(btnContainer3D);
         }
@@ -3203,7 +3483,12 @@ btnContainer.appendChild(edit2DStatic); */
         stl = true;
       } else if (close && url == "/parameterisation/mesh/getall") {
         responseData = "stl";
-        responseData = unwrapInitialLoadResult(await closedMeshPromise);
+        responseData = await apiClient.post(
+          "/stl/get",
+          [data],
+          false,
+          "Jaw mesh"
+        );
         //console.log(responseData);
         stl = false;
         const button = document.createElement("button");
@@ -3275,6 +3560,7 @@ btnContainer.appendChild(edit2DStatic); */
       grid-template-columns: 1fr 1fr;
       gap: 10px;
       z-index: 1000;
+      pointer-events: none;
   }
 
   .smart-btn {
@@ -3287,6 +3573,7 @@ btnContainer.appendChild(edit2DStatic); */
       transition: background-color 0.3s, transform 0.2s;
       min-width: 140px;
       text-align: center;
+      pointer-events: auto;
   }
 
   .smart-btn:hover {
@@ -3331,12 +3618,242 @@ btnContainer.appendChild(edit2DStatic); */
 	.smart-btn-container-3d {
 		position: fixed;
 		right: 20px;
-		bottom: 120px;
+		bottom: 272px;
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
 		z-index: 1000;
+        pointer-events: none;
 	}
+
+  .smart-btn.mail-open {
+    background-color: #6c757d;
+  }
+
+  .mail-popup {
+    position: fixed;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1002;
+    width: min(360px, calc(100vw - 40px));
+    max-height: calc(100vh - 40px);
+    overflow: auto;
+    padding: 14px;
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.14);
+    border-radius: 8px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
+    pointer-events: auto;
+  }
+
+  .mail-popup.hidden {
+    display: none;
+  }
+
+  .mail-popup-header {
+    color: #1f2933;
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+
+  .mail-popup-fields {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .mail-popup input {
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1px solid #c8cdd2;
+    border-radius: 5px;
+    font-size: 14px;
+  }
+
+  .smart-btn.mail-submit,
+  .smart-btn.mail-cancel {
+    min-width: auto;
+    padding: 9px 12px;
+  }
+
+  .smart-btn.mail-submit {
+    background-color: #28a745;
+  }
+
+  .smart-btn.mail-cancel {
+    background-color: #6c757d;
+  }
+
+  .preset-view-panel {
+    position: fixed;
+    bottom: 12px;
+    right: 10px;
+    z-index: 1000;
+    width: 224px;
+    padding: 14px 12px;
+    background: #303030;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+    color: #f5f5f5;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    pointer-events: none;
+  }
+
+  .preset-view-pad {
+    position: relative;
+    width: 196px;
+    height: 214px;
+    margin: 0 auto;
+  }
+
+  .preset-view-button {
+    position: absolute;
+    width: 58px;
+    height: 48px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.25));
+    pointer-events: auto;
+  }
+
+  .preset-view-face {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #bcbcbc, #8f8f8f);
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    box-sizing: border-box;
+  }
+
+  .preset-view-button:hover,
+  .preset-view-button.active {
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.65));
+  }
+
+  .preset-view-button:hover .preset-view-face,
+  .preset-view-button.active .preset-view-face {
+    background: linear-gradient(135deg, #ffffff, #d6d6d6);
+  }
+
+  .preset-view-center {
+    left: 69px;
+    top: 66px;
+    width: 58px;
+    height: 58px;
+  }
+
+  .preset-view-center .preset-view-face {
+    clip-path: polygon(0 0, 75% 0, 100% 24%, 100% 100%, 0 100%);
+  }
+
+  .preset-view-front {
+    left: 16px;
+    top: 128px;
+    width: 50px;
+    height: 68px;
+    transform: skew(-34deg);
+  }
+
+  .preset-view-front .preset-view-face {
+    background: linear-gradient(135deg, #ffffff 0%, #ffffff 26%, #dcdcdc 27%, #dcdcdc 100%);
+    clip-path: polygon(0 0, 68% 0, 100% 100%, 32% 100%);
+  }
+
+  .preset-view-top {
+    left: 83px;
+    top: 0;
+    width: 36px;
+    height: 62px;
+  }
+
+  .preset-view-top .preset-view-face {
+    clip-path: polygon(0 0, 100% 0, 100% 68%, 50% 100%, 0 68%);
+  }
+
+  .preset-view-bottom {
+    left: 83px;
+    top: 120px;
+    width: 36px;
+    height: 58px;
+  }
+
+  .preset-view-bottom .preset-view-face {
+    clip-path: polygon(50% 0, 100% 32%, 100% 100%, 0 100%, 0 32%);
+  }
+
+  .preset-view-left {
+    left: 0;
+    top: 82px;
+    width: 58px;
+    height: 36px;
+  }
+
+  .preset-view-left .preset-view-face {
+    clip-path: polygon(0 0, 78% 0, 100% 50%, 78% 100%, 0 100%);
+  }
+
+  .preset-view-right {
+    right: 0;
+    top: 82px;
+    width: 58px;
+    height: 36px;
+  }
+
+  .preset-view-right .preset-view-face {
+    clip-path: polygon(22% 0, 100% 0, 100% 100%, 22% 100%, 0 50%);
+  }
+
+  .preset-view-rear {
+    right: 16px;
+    top: 18px;
+    width: 50px;
+    height: 68px;
+    transform: skew(-34deg);
+  }
+
+  .preset-view-rear .preset-view-face {
+    background: linear-gradient(135deg, #dcdcdc 0%, #dcdcdc 73%, #ffffff 74%, #ffffff 100%);
+    clip-path: polygon(32% 0, 100% 0, 68% 100%, 0 100%);
+  }
+
+  @media (max-width: 640px), (max-height: 720px) {
+    .smart-btn {
+      min-width: 132px;
+      padding: 9px 12px;
+      font-size: 12px;
+    }
+
+    .smart-btn-container-3d {
+      right: 10px;
+      bottom: 226px;
+      gap: 8px;
+    }
+
+    .mail-popup {
+      right: 8px;
+      width: min(300px, 58vw);
+      max-height: calc(100vh - 20px);
+      padding: 10px;
+    }
+
+    .mail-popup-fields {
+      grid-template-columns: 1fr;
+    }
+
+    .preset-view-panel {
+      right: 6px;
+      bottom: 6px;
+      transform: scale(0.82);
+      transform-origin: bottom right;
+    }
+  }
 	
 	.twod-overlay {
   position: fixed;
@@ -3374,11 +3891,8 @@ btnContainer.appendChild(edit2DStatic); */
 
   
   #center-load-button {
-    position: fixed;
-    top: 70%;
-    left: 50%;
-    transform: translate(-50%, -70%);
-    z-index: 1000;
+    position: static;
+    transform: none;
   }
 
   #container3D {
@@ -3399,23 +3913,20 @@ btnContainer.appendChild(edit2DStatic); */
   
   @media (max-height: 950px) {
 	  #center-load-button {
-		top: 80%; /* shift lower on short screens */
-		transform: translate(-50%, -80%);
+		transform: none;
 	  }
 	}
 
 	@media (max-height: 700px) {
 	  #center-load-button {
-		top: 80%; /* even lower for very short screens */
-		transform: translate(-50%, -80%);
+		transform: none;
 	  }
 	}
 
   
   @media (max-width: 1024px) {
     #center-load-button {
-        top: 80%; /* more spacing on smaller screens */
-		transform: translate(-50%, -80%);
+		transform: none;
 		}
 	}
 
@@ -3687,6 +4198,7 @@ btnContainer.appendChild(edit2DStatic); */
 
         enforceOpaqueJawMesh(mesh);
         parentObject.add(mesh);
+        updateViewerRotationOrigin();
         syncPolylineFocusMode();
 
         controls.update();
@@ -3708,7 +4220,6 @@ btnContainer.appendChild(edit2DStatic); */
       alert("❌ No STL files found in slots 1 to 4.");
     } else {
       alert("✅ STL loading completed.");
-      await fetchAndRenderCaseOverlays(paramValue);
       removeVisibilityAndTransparencyControls();
       // 🧩 Re-enable visibility/transparency controls after loading
       addVisibilityAndTransparencyControls(
@@ -3988,15 +4499,25 @@ btnContainer.appendChild(edit2DStatic); */
     orb_controls = new OrbitControls(camera, renderer.domElement);
 
     controls.rotateSpeed = 4.0;
-    orb_controls.zoomSpeed = 2;
-    orb_controls.enableRotate = false;
-    orb_controls.enablePan = true;
-
+    controls.zoomSpeed = 1.4;
     controls.panSpeed = 30;
-    controls.noZoom = true;
+    // Trackball's RIGHT slot is its PAN state. Point that slot at button 1
+    // so middle-drag pans while the actual right button remains inert.
+    controls.mouseButtons = {
+      LEFT: THREE.MOUSE.ROTATE,
+      MIDDLE: -1,
+      RIGHT: 1,
+    };
+    controls.noZoom = false;
     controls.noPan = false;
     controls.staticMoving = true;
     controls.dynamicDampingFactor = 0.3;
+
+    orb_controls.enabled = false;
+    orb_controls.enableRotate = false;
+    orb_controls.enablePan = false;
+    orb_controls.enableZoom = false;
+
     applyViewerRotationOrigin();
     bindViewerRotationTargetAnchor(renderer.domElement);
 
@@ -4008,7 +4529,6 @@ btnContainer.appendChild(edit2DStatic); */
     requestAnimationFrame(animate);
     controls.update();
     anchorViewerRotationTarget(controls);
-    clampViewerControlTarget(controls);
     artificialTeethRenderer.syncToJawMeshes();
 
     renderer.render(scene, camera);
@@ -4039,7 +4559,13 @@ btnContainer.appendChild(edit2DStatic); */
   camera.zoom = 7;
   camera.updateProjectionMatrix();
   const clonedCamera = camera.clone();
-  addResetButton(camera, clonedCamera, controls, () => viewerRotationOrigin.clone());
+  addResetButton(camera, clonedCamera, controls, () => {
+    const target = hasViewerRotationOrigin
+      ? viewerRotationOrigin
+      : updateViewerRotationOrigin();
+    return target?.clone?.() || null;
+  });
+  createPresetViewControls();
   setupChatToggle();
   //console.log(camera)
 
@@ -4085,18 +4611,12 @@ btnContainer.appendChild(edit2DStatic); */
     }
   };
 
-  fetchAndRenderCaseOverlays(paramValue)
-    .catch((error) => {
-      console.error("[viewer] Background overlays failed", error);
-    })
-    .finally(() => {
-      addViewerLoadTiming(
-        "total viewer load",
-        performance.now() - viewerTotalStartedAt
-      );
-      logViewerPerformanceSummary();
-      logoutAfterBackgroundLoad();
-    });
+  addViewerLoadTiming(
+    "total viewer load",
+    performance.now() - viewerTotalStartedAt
+  );
+  logViewerPerformanceSummary();
+  logoutAfterBackgroundLoad();
 })();
 
 function isMobileDevice() {
