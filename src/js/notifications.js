@@ -51,26 +51,27 @@ import { logApi } from "./apiLog.js";
       if (!caseRes2.ok) throw new Error("case fetch failed (dot)");
       const caseArr2 = await caseRes2.json();
       const caseIDs2 = Array.isArray(caseArr2) ? [...new Set(caseArr2.map(c => c.id))] : [];
+      const caseIDSet2 = new Set(caseIDs2.map(id => String(id)));
 
       let unreadCount = 0;
-      for (const cid of caseIDs2) {
-        const aRes2 = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/alerts/getallbytouser",
-          {
-            method : "POST",
-            headers: { "Content-Type": "application/json" },
-            body   : JSON.stringify([
-              { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: cid },
-              { to_user: USERNAME }
-            ])
-          }
-        );
-        logApi(aRes2, 'POST /alerts/getallbytouser');
-        if (!aRes2.ok) continue;
+      const aRes2 = await fetch(
+        "https://live.api.smartrpdai.com/api/smartrpd/alerts/getallbytouser",
+        {
+          method : "POST",
+          headers: { "Content-Type": "application/json" },
+          body   : JSON.stringify([
+            { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: caseIDs2[0] || 0 },
+            { to_user: USERNAME }
+          ])
+        }
+      );
+      logApi(aRes2, 'POST /alerts/getallbytouser');
+      if (aRes2.ok) {
         const list2 = await aRes2.json();
         if (Array.isArray(list2)) {
           for (const a of list2) {
-            if (Number(a.read_status) !== 1) unreadCount += 1;
+            const belongsToCurrentCase = !a.case_int_id || caseIDSet2.has(String(a.case_int_id));
+            if (belongsToCurrentCase && Number(a.read_status) !== 1) unreadCount += 1;
           }
         }
       }
@@ -124,7 +125,6 @@ import { logApi } from "./apiLog.js";
   // the notifications burst on top of the case list's initial load — the
   // backend rate-limiter trips when both fire in the same instant.
   setTimeout(() => {
-    refreshNotifDotFromAPI();
     startNotificationDotPolling(15000);
   }, 2000);
 
@@ -158,29 +158,28 @@ import { logApi } from "./apiLog.js";
 
       // B. per case 拉取 alerts
       const allAlerts = [];
-      for (const cid of caseIDs) {
-        const aRes = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/alerts/getallbytouser",
-          {
-            method : "POST",
-            headers: { "Content-Type": "application/json" },
-            body   : JSON.stringify([
-              { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: cid },
-              { to_user: USERNAME }
-            ])
-          }
-        );
-        logApi(aRes, 'POST /alerts/getallbytouser');
-        if (aRes.ok) {
-          const list = await aRes.json();
-          if (Array.isArray(list)) {
-            // ★ 给每条补上 _cid 兜底（有的返回 case_int_id 可能为空/类型不对）
-            list.forEach(a => {
-              a._cid = cid;
-              if (a.case_int_id == null) a.case_int_id = cid;
+      const caseIDSet = new Set(caseIDs.map(id => String(id)));
+      const aRes = await fetch(
+        "https://live.api.smartrpdai.com/api/smartrpd/alerts/getallbytouser",
+        {
+          method : "POST",
+          headers: { "Content-Type": "application/json" },
+          body   : JSON.stringify([
+            { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: caseIDs[0] || 0 },
+            { to_user: USERNAME }
+          ])
+        }
+      );
+      logApi(aRes, 'POST /alerts/getallbytouser');
+      if (aRes.ok) {
+        const list = await aRes.json();
+        if (Array.isArray(list)) {
+          list.forEach(a => {
+            if (!a.case_int_id || caseIDSet.has(String(a.case_int_id))) {
+              a._cid = a.case_int_id;
               allAlerts.push(a);
-            });
-          }
+            }
+          });
         }
       }
 
