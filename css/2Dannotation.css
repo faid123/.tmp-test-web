@@ -728,17 +728,19 @@ button.upload3d-row {
 }
 
 .jpnav-grid {
-  width: 76px;
-  height: 76px;
+  /* Auto tracks (sized to the buttons) with no gap keep every button inside
+     the grid's box, so nothing spills past the nav corner and gets clipped by
+     the mount's overflow:hidden. Tight buttons put the arrows on the cube. */
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr);
+  grid-template-columns: repeat(3, auto);
+  grid-template-rows: repeat(3, auto);
+  gap: 0;
   place-items: center;
 }
 
 .jpnav-btn {
-  width: 34px;
-  height: 34px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: 0;
   background: none;
@@ -763,8 +765,8 @@ button.upload3d-row {
   transform: scale(0.95);
 }
 .jpnav-cube {
-  width: 38px;
-  height: 38px;
+  width: 30px;
+  height: 30px;
 }
 .jpnav-cube:hover {
   transform: scale(1.08);

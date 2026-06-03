@@ -2032,15 +2032,16 @@ function buildPreviewNavGizmo() {
 
   // rot is clockwise from the base "down" arrow, so every arrow points at the
   // center cube: top→down, right→left, bottom→up, left→right, and the two
-  // corners point diagonally inward. The top and bottom positions are swapped:
-  // the top control snaps to the bottom view and vice versa.
+  // corners point diagonally inward. The top/bottom and front/back positions
+  // are swapped: the top control snaps to the bottom view and vice versa, and
+  // the front-corner control snaps to the back view and vice versa.
   const items = [
     { cls: "jpnav-top", snap: "bottom", label: "Bottom view", rot: 0 },
-    { cls: "jpnav-front", snap: "front", label: "Front view", rot: 45 },
+    { cls: "jpnav-front", snap: "back", label: "Back view", rot: 45 },
     { cls: "jpnav-left", snap: "left", label: "Left view", rot: 270 },
     { cls: "jpnav-cube", snap: "fit", label: "Default view", cube: true },
     { cls: "jpnav-right", snap: "right", label: "Right view", rot: 90 },
-    { cls: "jpnav-back", snap: "back", label: "Back view", rot: 225 },
+    { cls: "jpnav-back", snap: "front", label: "Front view", rot: 225 },
     { cls: "jpnav-bottom", snap: "top", label: "Top view", rot: 180 },
   ];
   items.forEach((def, i) => {

@@ -73,7 +73,14 @@
   display: flex;
   gap: 8px;
 }
-.cc-invite-row .modal-input { flex: 1; }
+.cc-invite-row .modal-input { flex: 1; min-width: 0; }
+/* Keep the Add button hugging its label; the phone-wide `.cm-btn { width:100% }`
+   rule would otherwise stretch it across the row and crush the input. */
+.cc-invite-row .cm-btn {
+  width: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 
 .cc-invite-list {
   list-style: none;
