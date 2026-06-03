@@ -1,11 +1,12 @@
 /* ==================== Inline Create-Case View ==================== */
-/* The form pane lives inside .cm-main (sibling of .cm-list); the upload
-   pane lives inside .cm-detail. Both are hidden unless .cm-page.creating. */
+/* The form pane lives inside .cm-main (sibling of the .cm-table-wrap list);
+   the upload pane lives inside .cm-detail. Both are hidden unless
+   .cm-page.creating. */
 
 .cc-form-pane.hidden,
 .cc-upload-pane.hidden { display: none !important; }
 
-.cm-page.creating .cm-list,
+.cm-page.creating .cm-table-wrap,
 .cm-page.creating .table-head-wrapper,
 .cm-page.creating .table-body-wrapper { display: none !important; }
 
