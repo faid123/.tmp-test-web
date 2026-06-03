@@ -54,12 +54,14 @@ const preview3DState = {
   heatmapEnabled: false,
   heatmapToggleBtn: null,
   heatmapBoard: null,
+  // Flat view-navigation gizmo (bottom-right of the preview).
+  previewNav: null,
 };
 
 // Up to four arbitrary extra STLs per case (one per jaw_stls_extra_slot_N).
 const EXTRA_STL_SLOTS = [1, 2, 3, 4];
 // Same flat tan as the upper-jaw material so extras match the original jaws.
-const EXTRA_STL_COLOR = 0xd7b794;
+const EXTRA_STL_COLOR = 0xb0875a;
 
 export async function loadInteractiveJawPreview(area) {
   showPreviewLoading(area, "Loading 3D jaws...");
@@ -436,7 +438,16 @@ async function loadExtraStlsIntoPreview() {
   for (const extra of extras) {
     preview3DState.occupiedSlots.add(extra.slotNumber);
     preview3DState.extraFileNames[extra.slotNumber] = extra.filename;
-    await renderExtraStl(extra);
+    // Isolate per-slot failures: a single corrupt/undecodable extra STL must not
+    // abort the whole interactive preview (the jaws are already loaded by now).
+    try {
+      await renderExtraStl(extra);
+    } catch (err) {
+      console.warn(
+        `[preview3D] ✕ extra STL slot ${extra.slotNumber} failed to render — skipping`,
+        err
+      );
+    }
   }
   if (extras.length) {
     centerRootOnCombinedBounds(preview3DState.modelRoot);
@@ -692,7 +703,7 @@ async function renderJawStl(jaw, file) {
   geometry.computeVertexNormals();
 
   const flatMat = new THREE.MeshStandardMaterial({
-    color: jaw === "upper" ? 0xd7b794 : 0xc8a882,
+    color: 0xD2B89C,
     metalness: 0.05,
     roughness: jaw === "upper" ? 0.6 : 0.62,
     side: THREE.DoubleSide,
@@ -1226,7 +1237,7 @@ function init3DPreview(area) {
     preserveDrawingBuffer: true,
   });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.setClearColor(0xffffff, 1);
+  renderer.setClearColor(0xdce3e8, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.85;
@@ -1236,22 +1247,22 @@ function init3DPreview(area) {
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
   camera.position.set(0, 40, 160);
 
-  const hemi = new THREE.HemisphereLight(0xffffff, 0xfff1f5, 1.55);
+  const hemi = new THREE.HemisphereLight(0xffffff, 0xfff1f5, 0.8);
   scene.add(hemi);
 
-  const keyLight = new THREE.DirectionalLight(0xffffff, 1.1);
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.2);
   keyLight.position.set(80, 140, 120);
   scene.add(keyLight);
 
-  const fillLight = new THREE.DirectionalLight(0xffffff, 0.65);
+  const fillLight = new THREE.DirectionalLight(0xffffff, .4);
   fillLight.position.set(-90, 60, -40);
   scene.add(fillLight);
 
-  const rimLight = new THREE.DirectionalLight(0xffffff, 0.4);
+  const rimLight = new THREE.DirectionalLight(0xffffff, 0.5);
   rimLight.position.set(0, -100, -80);
   scene.add(rimLight);
 
-  const ambient = new THREE.AmbientLight(0xffffff, 0.35);
+  const ambient = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambient);
 
   const modelRoot = new THREE.Group();
@@ -1360,6 +1371,9 @@ function init3DPreview(area) {
   preview3DState.heatmapEnabled = false;
   preview3DState.heatmapToggleBtn = heatmapToggleBtn;
   preview3DState.heatmapBoard = undercut;
+  // Flat view-navigation gizmo (bottom-right). Plain DOM, removed with the shell.
+  preview3DState.previewNav = buildPreviewNavGizmo();
+  mount.appendChild(preview3DState.previewNav);
 
   const resize = () => {
     const rect = mount.getBoundingClientRect();
@@ -1396,8 +1410,19 @@ async function populateJawPreview(jawFiles, undercut) {
     roughness: 0.6,
     side: THREE.DoubleSide,
   });
-  const flatUpper = new THREE.MeshStandardMaterial({ color: 0xd7b794, metalness: 0.05, roughness: 0.6 });
-  const flatLower = new THREE.MeshStandardMaterial({ color: 0xc8a882, metalness: 0.05, roughness: 0.62 });
+  // DoubleSide + explicit opaque so the hollow STL shell's open base/underside
+  // renders solid from every angle instead of letting you see through it.
+  const flatBaseProps = {
+    color: 0xD2B89C,
+    metalness: 0,
+    roughness: 0.8,
+    side: THREE.DoubleSide,
+    transparent: false,
+    opacity: 1,
+    depthWrite: true,
+  };
+  const flatUpper = new THREE.MeshStandardMaterial(flatBaseProps);
+  const flatLower = new THREE.MeshStandardMaterial(flatBaseProps);
 
   preview3DState.jawFiles = {};
 
@@ -1891,8 +1916,159 @@ function fitPreviewCamera() {
   controls.saveState?.();
 }
 
+// Camera offset direction + up-vector for each orthographic snap, expressed in
+// the MODEL's local frame (Z-up dental convention: +Z = occlusal/top). The model
+// sits inside modelRoot, which is tilted -PI/2 on X, so these are rotated by
+// modelRoot's world quaternion at snap time — that's what makes "top" show the
+// occlusal surface instead of a world-axis side. Keys match the BoxGeometry face
+// order used by the ViewCube, and the cube carries the same quaternion so a
+// clicked face always shows that face of the model.
+const PREVIEW_VIEW_PRESETS = {
+  top: { dir: [0, -1, 0], up: [0, 0, 1] },
+  bottom: { dir: [0, 1, 0], up: [0, 0, 1] },
+  left: { dir: [-1, 0, 0], up: [0, 1, 0] },
+  right: { dir: [1, 0, 0], up: [0, 1, 0] },
+  front: { dir: [0, 0, 1], up: [0, 1, 0] },
+  back: { dir: [0, 0, -1], up: [0, 1, 0] },
+};
+
+// Snap the preview camera to a named orthographic view (or re-fit on "fit").
+function snapPreviewView(view) {
+  if (view === "fit") {
+    fitPreviewCamera();
+    return;
+  }
+  const preset = PREVIEW_VIEW_PRESETS[view];
+  const root = preview3DState.modelRoot;
+  const camera = preview3DState.camera;
+  const controls = preview3DState.controls;
+  if (!preset || !root || !camera || !controls) return;
+
+  const box = new THREE.Box3().setFromObject(root);
+  if (box.isEmpty()) return;
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z, 1);
+  const fitDist = (maxDim / (2 * Math.tan((camera.fov * Math.PI) / 360))) * 1.5;
+
+  // Rotate the model-local direction/up into world space so the view follows the
+  // jaw's actual orientation regardless of modelRoot's tilt.
+  const modelQuat = root.getWorldQuaternion(new THREE.Quaternion());
+  const dir = new THREE.Vector3(preset.dir[0], preset.dir[1], preset.dir[2])
+    .applyQuaternion(modelQuat)
+    .normalize();
+  const up = new THREE.Vector3(preset.up[0], preset.up[1], preset.up[2])
+    .applyQuaternion(modelQuat)
+    .normalize();
+  camera.up.copy(up);
+  camera.position.copy(center).addScaledVector(dir, fitDist);
+  controls.target.copy(center);
+  controls.update();
+  controls.saveState?.();
+}
+
+// Flat view-navigation gizmo (bottom-right of the preview). An isometric 3D cube
+// in the center, ringed by beveled SVG arrows that all point inward toward it.
+// Each arrow snaps the preview camera to a standard view via snapPreviewView;
+// the arrows share one "points down" shape, rotated per position so they face
+// the cube. No background panel, no text labels.
+function buildPreviewNavGizmo() {
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const svgNode = (tag, attrs = {}) => {
+    const el = document.createElementNS(SVGNS, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
+    return el;
+  };
+
+  // Beveled arrow (base shape points DOWN); `rotateDeg` aims it at the cube.
+  const makeArrow = (rotateDeg, gradId) => {
+    const svg = svgNode("svg", { viewBox: "0 0 24 24", width: 22, height: 22 });
+    svg.style.transform = `rotate(${rotateDeg}deg)`;
+    const defs = svgNode("defs");
+    const grad = svgNode("linearGradient", { id: gradId, x1: 0, y1: 0, x2: 0, y2: 1 });
+    grad.appendChild(svgNode("stop", { offset: 0, "stop-color": "#5fd0b6" }));
+    grad.appendChild(svgNode("stop", { offset: 1, "stop-color": "#2f9079" }));
+    defs.appendChild(grad);
+    svg.appendChild(defs);
+    svg.appendChild(
+      svgNode("path", {
+        d: "M12 19.5 L4 9.5 H8.5 V4.5 H15.5 V9.5 H20 Z",
+        fill: `url(#${gradId})`,
+        stroke: "#25735f",
+        "stroke-width": 0.8,
+        "stroke-linejoin": "round",
+      })
+    );
+    return svg;
+  };
+
+  // Isometric cube: top (lightest), left (mid), right (darkest) faces.
+  const makeCube = () => {
+    const svg = svgNode("svg", { viewBox: "0 0 32 34", width: 30, height: 32 });
+    const faces = [
+      { points: "16,3 29,10.5 16,18 3,10.5", fill: "#dfe4ea" },
+      { points: "3,10.5 16,18 16,31 3,23.5", fill: "#a9afb8" },
+      { points: "29,10.5 16,18 16,31 29,23.5", fill: "#868c95" },
+    ];
+    for (const f of faces) {
+      svg.appendChild(
+        svgNode("polygon", {
+          points: f.points,
+          fill: f.fill,
+          stroke: "#565c65",
+          "stroke-width": 0.8,
+          "stroke-linejoin": "round",
+        })
+      );
+    }
+    return svg;
+  };
+
+  const nav = document.createElement("div");
+  nav.className = "jaw-preview-nav";
+
+  const grid = document.createElement("div");
+  grid.className = "jpnav-grid";
+
+  // rot is clockwise from the base "down" arrow, so every arrow points at the
+  // center cube: top→down, right→left, bottom→up, left→right, and the two
+  // corners point diagonally inward. The top and bottom positions are swapped:
+  // the top control snaps to the bottom view and vice versa.
+  const items = [
+    { cls: "jpnav-top", snap: "bottom", label: "Bottom view", rot: 0 },
+    { cls: "jpnav-front", snap: "front", label: "Front view", rot: 45 },
+    { cls: "jpnav-left", snap: "left", label: "Left view", rot: 270 },
+    { cls: "jpnav-cube", snap: "fit", label: "Default view", cube: true },
+    { cls: "jpnav-right", snap: "right", label: "Right view", rot: 90 },
+    { cls: "jpnav-back", snap: "back", label: "Back view", rot: 225 },
+    { cls: "jpnav-bottom", snap: "top", label: "Top view", rot: 180 },
+  ];
+  items.forEach((def, i) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `jpnav-btn ${def.cls}`;
+    btn.title = def.label;
+    btn.appendChild(def.cube ? makeCube() : makeArrow(def.rot, `jpnav-grad-${i}`));
+    btn.addEventListener("click", () => snapPreviewView(def.snap));
+    grid.appendChild(btn);
+  });
+  nav.appendChild(grid);
+  return nav;
+}
+
 function base64ToArrayBuffer(base64) {
-  const raw = atob(base64);
+  let cleaned = String(base64 || "").trim();
+  // Some backend payloads (e.g. /stl/slot/get) arrive as a data-URI or URL-safe
+  // base64 with stray whitespace — plain atob() throws InvalidCharacterError on
+  // those. Normalize to standard base64 + correct padding before decoding, the
+  // same way safeAtob() does in jawStructCodec.js / clinicalInfo.js.
+  const comma = cleaned.indexOf(",");
+  if (cleaned.startsWith("data:") && comma !== -1) {
+    cleaned = cleaned.slice(comma + 1);
+  }
+  cleaned = cleaned.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  cleaned += "=".repeat((4 - (cleaned.length % 4)) % 4);
+  const raw = atob(cleaned);
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
   return bytes.buffer;

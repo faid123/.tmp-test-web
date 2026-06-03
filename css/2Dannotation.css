@@ -704,7 +704,7 @@ button.upload3d-row {
   position: absolute;
   left: 16px;
   top: 16px;
-  background: rgba(255, 255, 255, 0.94);
+  background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 6px 8px;
@@ -712,6 +712,71 @@ button.upload3d-row {
   -webkit-backdrop-filter: blur(4px);
   box-shadow: 0 2px 8px rgba(26, 77, 63, 0.08);
 }
+
+/* View-navigation gizmo (square pad, bottom-right): isometric cube ringed by
+   beveled arrows pointing inward. The arrows are standalone 3D SVG shapes on a
+   dark panel — no square button chrome. */
+.jaw-preview-nav {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  user-select: none;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.jpnav-grid {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  place-items: center;
+}
+
+.jpnav-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s ease;
+}
+.jpnav-btn svg {
+  display: block;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.5));
+  transition: filter 0.12s ease;
+}
+.jpnav-btn:hover {
+  transform: scale(1.14);
+}
+.jpnav-btn:hover svg {
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.6)) brightness(1.12);
+}
+.jpnav-btn:active {
+  transform: scale(0.95);
+}
+.jpnav-cube {
+  width: 38px;
+  height: 38px;
+}
+.jpnav-cube:hover {
+  transform: scale(1.08);
+}
+
+.jpnav-top    { grid-area: 1 / 2; }
+.jpnav-front  { grid-area: 1 / 3; }
+.jpnav-left   { grid-area: 2 / 1; }
+.jpnav-cube   { grid-area: 2 / 2; }
+.jpnav-right  { grid-area: 2 / 3; }
+.jpnav-back   { grid-area: 3 / 1; }
+.jpnav-bottom { grid-area: 3 / 2; }
 
 .jaw-preview-undercut-header {
   display: flex;
