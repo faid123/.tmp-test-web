@@ -920,6 +920,84 @@ function reportFieldRow(label, value) {
   return `<div class="cli-field"><span class="cli-field-label">${escapeHtml(label)} :</span><span class="cli-field-value">${escapeHtml(value || "")}</span></div>`;
 }
 
+// Crop the uniform white border around an image so the actual content fills
+// the frame. Editor previews are exported at the editor's aspect ratio and
+// letterbox the design, leaving it small once placed on the report page.
+// Returns the original data URL unchanged if nothing meaningful can be cropped.
+function trimImageMargins(dataUrl) {
+  return new Promise((resolve) => {
+    if (!dataUrl) {
+      resolve("");
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        if (!w || !h) {
+          resolve(dataUrl);
+          return;
+        }
+        const src = document.createElement("canvas");
+        src.width = w;
+        src.height = h;
+        const sctx = src.getContext("2d");
+        sctx.drawImage(img, 0, 0);
+        const { data } = sctx.getImageData(0, 0, w, h);
+        // A pixel counts as content if it's visible and not near-white (the
+        // 244 threshold tolerates JPEG noise in the white background).
+        const isContent = (x, y) => {
+          const i = (y * w + x) * 4;
+          if (data[i + 3] < 16) return false;
+          return data[i] < 244 || data[i + 1] < 244 || data[i + 2] < 244;
+        };
+        let top = 0;
+        let bottom = h - 1;
+        let left = 0;
+        let right = w - 1;
+        const rowHas = (y) => {
+          for (let x = 0; x < w; x += 1) if (isContent(x, y)) return true;
+          return false;
+        };
+        const colHas = (x) => {
+          for (let y = top; y <= bottom; y += 1) if (isContent(x, y)) return true;
+          return false;
+        };
+        while (top < bottom && !rowHas(top)) top += 1;
+        while (bottom > top && !rowHas(bottom)) bottom -= 1;
+        while (left < right && !colHas(left)) left += 1;
+        while (right > left && !colHas(right)) right -= 1;
+        const cw = right - left + 1;
+        const ch = bottom - top + 1;
+        // Nothing worth cropping (blank image or already tight).
+        if (cw < 8 || ch < 8 || (cw === w && ch === h)) {
+          resolve(dataUrl);
+          return;
+        }
+        const pad = Math.round(Math.min(cw, ch) * 0.02);
+        const ox = Math.max(0, left - pad);
+        const oy = Math.max(0, top - pad);
+        const ow = Math.min(w - ox, cw + pad * 2);
+        const oh = Math.min(h - oy, ch + pad * 2);
+        const out = document.createElement("canvas");
+        out.width = ow;
+        out.height = oh;
+        const octx = out.getContext("2d");
+        octx.fillStyle = "#ffffff";
+        octx.fillRect(0, 0, ow, oh);
+        octx.drawImage(src, ox, oy, ow, oh, 0, 0, ow, oh);
+        resolve(out.toDataURL("image/png"));
+      } catch (err) {
+        console.warn("trimImageMargins failed", err);
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 async function generateReport() {
   // Prefer the full "UID {id}:{name}" label rendered in the topbar so the
   // report matches what the user sees on screen.
@@ -933,15 +1011,19 @@ async function generateReport() {
   const workCategoryLabel =
     WORK_CATEGORY_LABELS[caseNote.workCategory] || caseNote.workCategory || "";
 
-  const previewEl = document.getElementById("previewImage");
-  const previewSrc = previewEl?.currentSrc || previewEl?.src || "";
-
-  let jaw2dSrc = "";
-  try {
-    jaw2dSrc = (await captureJawJpegDataUrl()) || "";
-  } catch (err) {
-    console.warn("Failed to capture 2D jaw for report:", err);
-  }
+  // The report mirrors the noticeboard's saved edits: the 2D page shows the
+  // most recent instruction (2D_*) and the 3D page shows the most recent
+  // viewcapture (3D_*) — each item's edited .preview image.
+  const boardData = ensureCache();
+  const lastInstruction = (boardData.instructions || []).at(-1);
+  const lastViewcapture = (boardData.viewcaptures || []).at(-1);
+  // The previews are exported at the editor's on-screen aspect ratio, which
+  // letterboxes the design with wide white margins. Trim those margins so the
+  // design itself — not the padding — fills the report page.
+  const [jaw2dSrc, previewSrc] = await Promise.all([
+    trimImageMargins(lastInstruction?.preview || ""),
+    trimImageMargins(lastViewcapture?.preview || ""),
+  ]);
 
   const notes = await getClinicalNotesForCase(state.caseIntID);
   const upperRow = buildReportRowHtml(UPPER_TEETH, assetBase, notes);
@@ -1021,8 +1103,8 @@ async function generateReport() {
   .cli-mob-2 { background: #f6c344; color: #3a2c00; }
   .cli-mob-3 { background: #c0392b; }
 
-  .cli-3d-page { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; min-height: 95vh; gap: 12px; }
-  .cli-3d-page > img { max-width: 100%; max-height: 78vh; object-fit: contain; align-self: center; margin: auto 0; }
+  .cli-3d-page { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; height: 100vh; gap: 12px; overflow: hidden; }
+  .cli-3d-page > img { flex: 1 1 auto; min-height: 0; width: 100%; max-width: 100%; object-fit: contain; image-rendering: auto; align-self: center; }
   .cli-3d-page .cli-empty { color: #8895a4; font-style: italic; align-self: center; margin: auto 0; }
   .cli-page-caseid { font-size: 1rem; font-weight: 700; color: #2aa67c; letter-spacing: 0.05em; }
 

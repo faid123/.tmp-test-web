@@ -66,30 +66,39 @@ const EXTRA_STL_COLOR = 0xb0875a;
 export async function loadInteractiveJawPreview(area) {
   showPreviewLoading(area, "Loading 3D jaws...");
   try {
-    const depsReady = await ensureThreeDeps();
-    if (!depsReady) {
-      teardown3DPreview();
-      return false;
-    }
-
+    // Start the three.js CDN import and all network fetches together so the
+    // module download overlaps the STL/undercut requests instead of running
+    // strictly before them (the fetches don't need THREE to be ready).
+    const depsPromise = ensureThreeDeps();
     // Fetch the heatmap up front so both render paths can use it.
     const undercutPromise = fetchUndercutForCase();
+    const jawFilesPromise = fetchJawFilesForCase();
     // Prefetch case data so SET SURVEY ANGLE can preserve the unmodified jaw's
     // angles without an extra round-trip when the button is clicked.
     fetchCaseData().then((data) => {
       if (data) preview3DState.caseData = data;
     });
 
+    const depsReady = await depsPromise;
+    if (!depsReady) {
+      teardown3DPreview();
+      return false;
+    }
+
     const meshFiles = await fetchParameterisedMeshForCase();
     if (meshFiles.length) {
       const undercut = await undercutPromise;
       init3DPreview(area);
       await populateJawPreviewFromOFF(meshFiles, undercut);
-      await loadExtraStlsIntoPreview();
+      // Extra STLs are secondary — load them in the background so the spinner
+      // clears as soon as the jaws are painted.
+      loadExtraStlsIntoPreview().catch((err) =>
+        console.warn("[preview3D] extra STL background load failed", err)
+      );
       return true;
     }
 
-    const jawFiles = await fetchJawFilesForCase();
+    const jawFiles = await jawFilesPromise;
     const undercut = await undercutPromise;
     init3DPreview(area);
     if (jawFiles.length) {
@@ -99,7 +108,11 @@ export async function loadInteractiveJawPreview(area) {
       // their empty/upload state so the user can still add 3D files.
       showEmptyJawPanel();
     }
-    await loadExtraStlsIntoPreview();
+    // Don't block first paint on the extra-slot fetches (usually empty 404s);
+    // they pop into the scene and re-center when they arrive.
+    loadExtraStlsIntoPreview().catch((err) =>
+      console.warn("[preview3D] extra STL background load failed", err)
+    );
     return true;
   } finally {
     hidePreviewLoading(area);

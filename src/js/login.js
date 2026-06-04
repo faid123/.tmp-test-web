@@ -90,6 +90,14 @@ async function sendOTP() {
       };
       localStorage.setItem("loggedInUser", JSON.stringify(userInfo));
 
+      // TEMP: OTP feature disabled — skip code generation/verification and go
+      // straight to the case list after a successful login. To re-enable OTP,
+      // delete this redirect and uncomment the block below (and restore the
+      // `if (ok) showView("otp")` line in the login-form submit handler).
+      window.location.href = "./src/pages/case_list.html";
+      return true;
+
+      /* --- OTP flow (temporarily disabled) ---
       // Trigger OTP generation / email.
       const otpRes = await fetch(`${API_BASE}/otp`, {
         method: "POST",
@@ -107,6 +115,7 @@ async function sendOTP() {
       const target = document.getElementById("otp-target");
       if (target) target.textContent = data.email || username || "your account";
       return true;
+      --- end OTP flow --- */
     }
 
     setError("error-message", "Login failed. Please check your username and password.");
@@ -219,7 +228,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (btn) btn.disabled = true;
       const ok = await sendOTP();
       if (btn) btn.disabled = false;
-      if (ok) showView("otp");
+      // TEMP: OTP disabled — sendOTP() redirects on success, so don't switch to
+      // the OTP view (avoids a flash of it). Re-enable with: if (ok) showView("otp");
+      // if (ok) showView("otp");
     });
   }
 

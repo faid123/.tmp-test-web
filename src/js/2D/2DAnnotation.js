@@ -7,6 +7,7 @@
  */
 
 import { lol } from "../../crypt.js";
+import { toggleChat } from "../chat.js";
 import { SVG_NS } from "./constants.js";
 import {
   COMPONENT_BY_ID,
@@ -1224,6 +1225,12 @@ function initAnnFooter() {
 
   document.getElementById("footerScreenCaptureBtn")?.addEventListener("click", () => {
     window.dispatchEvent(new CustomEvent("request-3d-capture"));
+  });
+
+  // Footer chat: this page already carries the encrypted case id in its URL
+  // (?id=), so chat.js resolves the case itself — just toggle the widget.
+  document.getElementById("footerChatBtn")?.addEventListener("click", () => {
+    toggleChat();
   });
 
   // "Upload other 3D files": open the upload modal (managed in preview3D.js),

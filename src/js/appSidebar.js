@@ -49,23 +49,6 @@ export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../.
     window.location.href = indexHref;
   });
 
-  document.getElementById("sidebarQuitBtn")?.addEventListener("click", async () => {
-    close();
-    const ok = await confirmModal({
-      title: "Quit SmartRPD?",
-      message: "This will sign you out and close the workspace.",
-      confirmText: "Quit",
-      cancelText: "Cancel",
-      variant: "danger",
-    });
-    if (!ok) return;
-    localStorage.removeItem("loggedInUser");
-    // window.close() only works for script-opened windows; fall back to
-    // navigating to the login screen so the user always lands somewhere safe.
-    window.close();
-    window.location.href = indexHref;
-  });
-
   document.getElementById("sidebarChangePasswordBtn")?.addEventListener("click", () => {
     close();
     toast.info("Change password — coming soon.");

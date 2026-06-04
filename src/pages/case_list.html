@@ -9,7 +9,8 @@
     <link rel="stylesheet" href="../../css/notification.css" />
     <link rel="stylesheet" href="../../css/versionHistory.css" />
     <link rel="stylesheet" href="../../css/toast.css" />
-    <link rel="icon" href="/assets/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="../../css/chat.css" />
+    <link rel="icon" href="../../assets/profile.png" type="image/png" />
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
@@ -460,7 +461,7 @@
       <div class="app-sidebar-backdrop" data-sidebar-close></div>
       <nav class="app-sidebar-panel" role="navigation">
         <header class="app-sidebar-header">
-          <img class="app-sidebar-brand-logo" src="/assets/favicon.ico" alt="" />
+          <img class="app-sidebar-brand-logo" src="../../assets/profile.png" alt="" />
           <span class="app-sidebar-title">SMARTRPD</span>
           <span class="app-sidebar-version">v2.0</span>
           <button type="button" class="app-sidebar-close" data-sidebar-close aria-label="Close menu">
@@ -478,12 +479,6 @@
             <button type="button" id="sidebarLogoutBtn" class="app-sidebar-item">
               <i class="fa fa-right-from-bracket app-sidebar-item-icon" aria-hidden="true"></i>
               <span>Logout</span>
-            </button>
-          </li>
-          <li>
-            <button type="button" id="sidebarQuitBtn" class="app-sidebar-item app-sidebar-item-danger">
-              <i class="fa fa-xmark app-sidebar-item-icon" aria-hidden="true"></i>
-              <span>Quit</span>
             </button>
           </li>
           <li><hr class="app-sidebar-separator" /></li>
@@ -529,6 +524,27 @@
         }
       }
     </script>
+    <!-- Case chat (notes) — slide-in side panel toggled by the footer chat button -->
+    <div id="chat-widget" class="chat-sidebar is-hidden" aria-hidden="true">
+      <div class="chat-sidebar-backdrop" data-chat-close></div>
+      <aside class="chat-sidebar-panel" role="dialog" aria-label="Case chat">
+        <header class="chat-sidebar-header">
+          <span class="chat-sidebar-title">Case Chat</span>
+          <button type="button" class="chat-sidebar-close" data-chat-close aria-label="Close chat">&times;</button>
+        </header>
+        <div id="chat-box"></div>
+        <div id="chat-input-area">
+          <input type="file" id="imageInput" accept="image/*" hidden />
+          <button id="uploadBtn" type="button">+</button>
+          <textarea id="textInput" rows="1" placeholder="Type a comment..."></textarea>
+          <button id="sendBtn" type="button">Send</button>
+        </div>
+      </aside>
+    </div>
+    <div class="image-modal" id="imageModal">
+      <img id="modalImage" src="" alt="Zoomed" />
+    </div>
+
     <script type="module" src="../js/caseManagement.js"></script>
     <script type="module" src="../js/createCase.js"></script>
     <script type="module" src="../js/notifications.js"></script>
