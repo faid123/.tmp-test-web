@@ -152,6 +152,21 @@ export function capture3DPreviewDataUrl() {
   }
 }
 
+// Dispose every mesh under an Object3D: geometry, material(s), and the cached
+// heatmap/flat materials we stash in userData. Used by teardown and by the jaw/
+// extra-STL removal paths so disposal logic lives in exactly one place.
+function disposeObject3D(obj) {
+  if (!obj) return;
+  obj.traverse((node) => {
+    if (!node.isMesh) return;
+    node.geometry?.dispose?.();
+    if (Array.isArray(node.material)) node.material.forEach((m) => m?.dispose?.());
+    else node.material?.dispose?.();
+    node.userData?.heatmapMaterial?.dispose?.();
+    node.userData?.flatMaterial?.dispose?.();
+  });
+}
+
 export function teardown3DPreview() {
   if (preview3DState.frameId) {
     cancelAnimationFrame(preview3DState.frameId);
@@ -165,20 +180,7 @@ export function teardown3DPreview() {
     preview3DState.controls.dispose();
     preview3DState.controls = null;
   }
-  if (preview3DState.scene) {
-    preview3DState.scene.traverse((obj) => {
-      if (obj.isMesh) {
-        obj.geometry?.dispose?.();
-        if (Array.isArray(obj.material)) {
-          obj.material.forEach((m) => m?.dispose?.());
-        } else {
-          obj.material?.dispose?.();
-        }
-        obj.userData?.heatmapMaterial?.dispose?.();
-        obj.userData?.flatMaterial?.dispose?.();
-      }
-    });
-  }
+  disposeObject3D(preview3DState.scene);
   if (preview3DState.renderer) {
     preview3DState.renderer.dispose();
     preview3DState.renderer.domElement.remove();
@@ -351,13 +353,7 @@ function removeJawMesh(jaw) {
   const group = preview3DState.groups[jaw];
   if (group) {
     preview3DState.modelRoot?.remove(group);
-    group.traverse((obj) => {
-      if (obj.isMesh) {
-        obj.geometry?.dispose?.();
-        if (Array.isArray(obj.material)) obj.material.forEach((m) => m?.dispose?.());
-        else obj.material?.dispose?.();
-      }
-    });
+    disposeObject3D(group);
     preview3DState.groups[jaw] = null;
   }
   delete preview3DState.jawFiles[jaw];
@@ -503,12 +499,7 @@ function removeExtraStlMesh(slotNumber) {
   const entry = preview3DState.extraGroups[slotNumber];
   if (!entry) return;
   preview3DState.modelRoot?.remove(entry.group);
-  entry.group.traverse((obj) => {
-    if (obj.isMesh) {
-      obj.geometry?.dispose?.();
-      obj.material?.dispose?.();
-    }
-  });
+  disposeObject3D(entry.group);
   delete preview3DState.extraGroups[slotNumber];
   if (preview3DState.modelRoot) centerRootOnCombinedBounds(preview3DState.modelRoot);
 }
@@ -1336,32 +1327,24 @@ function init3DPreview(area) {
 
   // Intentionally keep ALLOW PROCESSING checkboxes as display-only (no jaw visibility behavior).
 
-  const onIconToggleUpper = () => {
-    if (!preview3DState.groups.upper) return;
-    const visible = !preview3DState.groups.upper.visible;
-    preview3DState.groups.upper.visible = visible;
-    rowUpper.row.classList.toggle("is-hidden-jaw", !visible);
+  // Jaw row icon toggles that jaw's mesh visibility (no-op if it has no STL).
+  const toggleJawVisibility = (jaw) => {
+    const group = preview3DState.groups[jaw];
+    if (!group) return;
+    group.visible = !group.visible;
+    const row = jaw === "upper" ? rowUpper.row : rowLower.row;
+    row.classList.toggle("is-hidden-jaw", !group.visible);
   };
-  const onIconToggleLower = () => {
-    if (!preview3DState.groups.lower) return;
-    const visible = !preview3DState.groups.lower.visible;
-    preview3DState.groups.lower.visible = visible;
-    rowLower.row.classList.toggle("is-hidden-jaw", !visible);
-  };
-  rowUpper.iconEl.addEventListener("click", onIconToggleUpper);
-  rowLower.iconEl.addEventListener("click", onIconToggleLower);
-  rowUpper.iconEl.addEventListener("keydown", (e) => {
+  const onJawIconKeydown = (jaw) => (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      onIconToggleUpper();
+      toggleJawVisibility(jaw);
     }
-  });
-  rowLower.iconEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      onIconToggleLower();
-    }
-  });
+  };
+  rowUpper.iconEl.addEventListener("click", () => toggleJawVisibility("upper"));
+  rowLower.iconEl.addEventListener("click", () => toggleJawVisibility("lower"));
+  rowUpper.iconEl.addEventListener("keydown", onJawIconKeydown("upper"));
+  rowLower.iconEl.addEventListener("keydown", onJawIconKeydown("lower"));
 
   // Trash icon saves the jaw's current STL to /stlclosed/ then removes it from
   // the preview (confirms first).

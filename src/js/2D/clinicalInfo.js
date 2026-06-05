@@ -5,8 +5,17 @@ import { logApi } from "../apiLog.js";
 const ASSET_BASE = "../../assets/clinicalInfo";
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
-const CLINICAL_WRAPPER_HEADER = [0, 1, 0, 0, 255, 255, 127, 1];
-const CLINICAL_WRAPPER_TAIL = 0;
+// .NET BinaryFormatter "single System.String" envelope — must match the desktop
+// SmartRPD app byte-for-byte so it can deserialize web-saved clinical info (and
+// vice-versa). Layout: HEADER(17) + STRING_RECORD(5) + <7-bit length> + UTF-8 JSON + END(1).
+const NET_BF_HEADER = [0, 1, 0, 0, 0, 255, 255, 255, 255, 1, 0, 0, 0, 0, 0, 0, 0];
+const NET_BF_STRING_RECORD = [0x06, 1, 0, 0, 0]; // BinaryObjectString, objectId = 1
+const NET_BF_END = 0x0b; // MessageEnd
+
+// Desktop int-enum tables. Index = desktop integer; the "none" sentinel is the
+// array length (restoration → 4, tilt → 6). Inferred from stored desktop records.
+const RESTORATION_ENUM = ["AR", "TCR", "INLAY", "ONLAY"]; // none = 4
+const TILT_ENUM = ["M", "D", "B", "L", "A", "SE"]; // none = 6
 
 export const UPPER_TEETH = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
 export const LOWER_TEETH = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
@@ -106,25 +115,67 @@ function safeAtob(b64) {
   }
 }
 
+// Pull the JSON string out of a .NET BinaryFormatter single-String envelope by
+// walking it (header 17 + 0x06 + objId 4 + 7-bit length + bytes). Robust to a
+// length-prefix byte that happens to equal '[' — which the old bracket-scan wasn't.
+function extractDotNetString(bin) {
+  if (bin.length < 23 || bin.charCodeAt(17) !== 0x06) return null;
+  let p = 22; // 17 (header) + 1 (record type) + 4 (objectId)
+  let len = 0;
+  let shift = 0;
+  let b;
+  do {
+    if (p >= bin.length) return null;
+    b = bin.charCodeAt(p++);
+    len |= (b & 0x7f) << shift;
+    shift += 7;
+  } while (b & 0x80);
+  return bin.substr(p, len);
+}
+
+// Fallback for anything that isn't a recognizable .NET envelope.
+function bracketSlice(bin) {
+  const start = bin.indexOf("[");
+  const end = bin.lastIndexOf("]");
+  return start === -1 || end === -1 || end < start ? null : bin.slice(start, end + 1);
+}
+
 function decodeClinicalInfoData(dataB64) {
   const decoded = safeAtob(dataB64);
   if (!decoded) return [];
-  const start = decoded.indexOf("[");
-  const end = decoded.lastIndexOf("]");
-  if (start === -1 || end === -1 || end < start) return [];
+  const json = extractDotNetString(decoded) ?? bracketSlice(decoded);
+  if (json == null) return [];
   try {
-    const parsed = JSON.parse(decoded.slice(start, end + 1));
+    const parsed = JSON.parse(json);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
+// 7-bit-encoded length prefix used by .NET BinaryFormatter for string records.
+function encode7BitLength(byteLength) {
+  let out = "";
+  let n = byteLength;
+  do {
+    let b = n & 0x7f;
+    n >>>= 7;
+    if (n) b |= 0x80;
+    out += String.fromCharCode(b);
+  } while (n);
+  return out;
+}
+
 function encodeClinicalInfoData(rows) {
-  const json = JSON.stringify(Array.isArray(rows) ? rows : []);
-  const head = String.fromCharCode(...CLINICAL_WRAPPER_HEADER);
-  const tail = String.fromCharCode(CLINICAL_WRAPPER_TAIL);
-  return btoa(`${head}${json}${tail}`);
+  // 2-space JSON mirrors the desktop's style for human-diffability; any whitespace
+  // deserializes fine. Payload is pure ASCII, so char length == UTF-8 byte length,
+  // which the .NET length prefix below requires.
+  const json = JSON.stringify(Array.isArray(rows) ? rows : [], null, 2);
+  const header = String.fromCharCode(...NET_BF_HEADER);
+  const record = String.fromCharCode(...NET_BF_STRING_RECORD);
+  const lenPrefix = encode7BitLength(json.length);
+  const tail = String.fromCharCode(NET_BF_END);
+  return btoa(`${header}${record}${lenPrefix}${json}${tail}`);
 }
 
 function normalizeApiResult(apiResult) {
@@ -133,34 +184,47 @@ function normalizeApiResult(apiResult) {
   return apiResult;
 }
 
-function toUiRestoration(value) {
-  return ["AR", "TCR", "INLAY", "ONLAY"].includes(value) ? value : null;
+// --- desktop int-enum <-> web UI value converters ---
+function desktopMobilityToUi(value) {
+  return value === 1 || value === 2 || value === 3 ? String(value) : null; // 0 = none
 }
-
-function toUiTilt(value) {
-  return ["M", "D", "B", "L", "A", "SE"].includes(value) ? value : null;
+function desktopRestorationToUi(value) {
+  return RESTORATION_ENUM[value] ?? null; // 4/other => none
 }
-
-function toUiMobility(value) {
-  return ["1", "2", "3"].includes(value) ? value : null;
+function desktopTiltToUi(value) {
+  return TILT_ENUM[value] ?? null; // 6/other => none
+}
+function uiMobilityToDesktop(value) {
+  return value === "1" || value === "2" || value === "3" ? Number(value) : 0;
+}
+function uiRestorationToDesktop(value) {
+  const i = RESTORATION_ENUM.indexOf(value);
+  return i === -1 ? RESTORATION_ENUM.length : i; // none => 4
+}
+function uiTiltToDesktop(value) {
+  const i = TILT_ENUM.indexOf(value);
+  return i === -1 ? TILT_ENUM.length : i; // none => 6
 }
 
 function apiRowsToClinicalNotes(rows) {
   const notes = {};
   (Array.isArray(rows) ? rows : []).forEach((row) => {
-    const toothId = Number(row?.ToothNo);
+    const toothId = Number(row?.ToothIndex);
     if (!ALL_TEETH.includes(toothId)) return;
     notes[toothId] = {
-      mobility: toUiMobility(row?.ToothNote_Mobility),
-      rct: !!row?.rct,
-      restoration: toUiRestoration(row?.ToothRestoration),
-      crown: !!row?.crown,
-      implant: !!row?.implant,
-      rootStump: !!row?.rootStump,
-      cracked: !!row?.cracked,
-      tilted: toUiTilt(row?.ToothNote_Tilt),
-      extraction: !!row?.extraction,
-      abutment: !!row?.abutment,
+      // Desktop polarity is inverted vs. the field name: 0 = present, 1 = missing
+      // (an abutment/RCT/crown tooth is always present yet stored as ToothPresence 0).
+      present: row?.ToothPresence !== 1,
+      mobility: desktopMobilityToUi(row?.ToothNote_Mobility),
+      rct: !!row?.ToothNote_RootCanal,
+      restoration: desktopRestorationToUi(row?.ToothRestoration),
+      crown: !!row?.ToothNote_Crown,
+      implant: !!row?.ToothNote_Implant,
+      rootStump: !!row?.ToothNote_RootStump,
+      cracked: !!row?.ToothNote_Cracked,
+      tilted: desktopTiltToUi(row?.ToothNote_Tilt),
+      extraction: !!row?.ToothNote_Extraction,
+      abutment: !!row?.ToothNote_Abutment,
     };
   });
   return notes;
@@ -170,18 +234,22 @@ function clinicalNotesToApiRows(notes) {
   const ordered = [...UPPER_TEETH, ...LOWER_TEETH];
   return ordered.map((toothId) => {
     const note = notes?.[toothId] || emptyToothNote();
+    // Desktop-loaded notes carry an explicit presence; web-edited notes don't, so
+    // fall back to the annotation state (state.teeth) for those.
+    const present = note.present !== undefined ? note.present : statusFor(toothId) !== "missing";
     return {
-      ToothNo: toothId,
-      ToothNote_Mobility: toUiMobility(note.mobility),
-      ToothRestoration: toUiRestoration(note.restoration),
-      ToothNote_Tilt: toUiTilt(note.tilted),
-      rct: !!note.rct,
-      crown: !!note.crown,
-      implant: !!note.implant,
-      rootStump: !!note.rootStump,
-      cracked: !!note.cracked,
-      extraction: !!note.extraction,
-      abutment: !!note.abutment,
+      ToothIndex: toothId,
+      ToothPresence: present ? 0 : 1, // desktop: 0 = present, 1 = missing
+      ToothNote_Mobility: uiMobilityToDesktop(note.mobility),
+      ToothNote_RootCanal: !!note.rct,
+      ToothRestoration: uiRestorationToDesktop(note.restoration),
+      ToothNote_Crown: !!note.crown,
+      ToothNote_Implant: !!note.implant,
+      ToothNote_RootStump: !!note.rootStump,
+      ToothNote_Cracked: !!note.cracked,
+      ToothNote_Tilt: uiTiltToDesktop(note.tilted),
+      ToothNote_Extraction: !!note.extraction,
+      ToothNote_Abutment: !!note.abutment,
     };
   });
 }
@@ -214,6 +282,7 @@ function buildToothCell(toothId) {
   // Note-derived status takes precedence over base status for visual rendering.
   // Extraction is no longer treated as "missing" — it has its own crown-arrow marker.
   let effectiveStatus = baseStatus;
+  if (note && note.present === false) effectiveStatus = "missing";
   if (note?.abutment) effectiveStatus = "abutment";
 
   const cell = document.createElement("div");
@@ -577,6 +646,8 @@ async function saveNotes() {
     await saveClinicalInfoRow(state.caseIntID, user.uuid, encodedData);
     savedSnapshot = JSON.stringify(clinicalNotes);
     setMessage("Clinical info saved.", false);
+    // Snapshot is now up to date, so closing won't discard anything.
+    closeClinicalInfo();
   } catch (err) {
     console.error("Failed to save clinical info:", err);
     setMessage("Failed to save clinical info to server.", true);

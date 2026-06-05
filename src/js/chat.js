@@ -230,7 +230,7 @@ async function handleSendMessage() {
 
     // Optimistic echo. Built by concatenation (no template-literal indentation)
     // so the pre-wrapped text doesn't render blank lines above/below it.
-    messages = messages.filter(m => m.author !== PREVIEW_AUTHOR);
+    removePendingPreview();
     let echo = '';
     if (sentImage) echo += `<img src="data:${sentMime};base64,${sentImage}" alt="Image" class="uploaded-image" />`;
     if (message) echo += `<div class="msg-text">${message}</div>`;
@@ -245,6 +245,11 @@ async function handleSendMessage() {
     fetchNotes();
 }
 
+
+// Drop the local-only "pending upload" preview bubble from the message list.
+function removePendingPreview() {
+    messages = messages.filter(m => m.author !== PREVIEW_AUTHOR);
+}
 
 // Build the "pending upload" preview message (shown until Send is pressed).
 function buildPendingPreviewMessage() {
@@ -264,11 +269,10 @@ function buildPendingPreviewMessage() {
 function previewImage(base64, mime = 'image/jpeg') {
     pendingImageBase64 = base64;
     pendingImageMime = mime;
-    messages = messages.filter(m => m.author !== PREVIEW_AUTHOR);
+    removePendingPreview();
     messages.push(buildPendingPreviewMessage());
     displayMessages();
 }
-
 // Auto-grow the comment textarea with its content, capped at 5 rows; once the
 // cap is reached it scrolls instead of growing further.
 const MAX_INPUT_ROWS = 5;
@@ -309,7 +313,7 @@ function handleImageUpload(event) {
 // 取消图片预览（不清除文本）
 window.clearImage = function () {
     pendingImageBase64 = null;
-    messages = messages.filter(m => m.author !== PREVIEW_AUTHOR);
+    removePendingPreview();
     displayMessages();
     if (imageInput) imageInput.value = '';
 };
@@ -419,7 +423,10 @@ function bindDom() {
 }
 
 // Load (or reload) the conversation for a case. Returns true when the chat is
-// ready (widget present + a resolvable case id), false otherwise.
+// ready (widget present + a resolvable case id), false otherwise. This does a
+// one-time fetch but does NOT start the live poll — polling is tied to the
+// panel being open (see openWidget), so pages that carry the chat widget but
+// keep it closed (the 2D annotation / 3D viewer pages) don't poll all session.
 export function initChat(explicitEncryptedId) {
     if (!bindDom()) return false;
     const resolved = resolveCaseId(explicitEncryptedId);
@@ -432,7 +439,6 @@ export function initChat(explicitEncryptedId) {
         lastNotesSignature = '';
     }
     if (changed || !messages.length) fetchNotes();
-    startPolling();
     return true;
 }
 
@@ -448,6 +454,10 @@ function openWidget(widget) {
     });
     widget.setAttribute('aria-hidden', 'false');
     setTimeout(() => textInput && textInput.focus(), 60);
+    // Start the live poll only now that the panel is actually open; closeWidget
+    // stops it. This keeps closed-but-present chat widgets from polling all
+    // session on the annotation / 3D viewer pages.
+    startPolling();
 }
 function closeWidget(widget) {
     widget.classList.remove('is-open');
@@ -473,8 +483,17 @@ export function toggleChat(explicitEncryptedId) {
 
 // Standalone viewer behaviour: when the page already carries a ?id= and the
 // widget exists, bind and fetch immediately (matches the original chat.js).
+// Start the live poll on boot only for always-on chat widgets (e.g. the 3D
+// viewer's inline panel, which has no open/close toggle). Slide-in sidebar
+// widgets start hidden (.is-hidden) and begin polling when opened instead, so
+// they don't poll all session while closed on the annotation page.
 if (new URLSearchParams(window.location.search).get('id')) {
-    const boot = () => initChat();
+    const boot = () => {
+        if (!initChat()) return;
+        const widget = document.getElementById('chat-widget');
+        const isClosedPanel = widget && widget.classList.contains('is-hidden');
+        if (!isClosedPanel) startPolling();
+    };
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', boot);
     } else {

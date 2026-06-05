@@ -250,6 +250,14 @@ export function titleCase(value) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : "";
 }
 
+function getLoggedInUser() {
+  try {
+    return JSON.parse(localStorage.getItem("loggedInUser") || "null");
+  } catch {
+    return null;
+  }
+}
+
 export function setMessage(message, isError) {
   const el = document.getElementById("saveMessage");
   if (!el) return;
@@ -866,13 +874,7 @@ function initializeCaseIds() {
 
 async function fetchCaseOwner() {
   if (!state.caseIntID) return;
-  let loggedInUser = null;
-  try {
-    const raw = localStorage.getItem("loggedInUser");
-    loggedInUser = raw ? JSON.parse(raw) : null;
-  } catch {
-    loggedInUser = null;
-  }
+  const loggedInUser = getLoggedInUser();
   if (!loggedInUser?.uuid) return;
   try {
     const response = await fetch(
@@ -915,13 +917,7 @@ async function fetchCaseOwner() {
 // for inspection in the browser console.
 async function fetchJawStruct() {
   if (!state.caseIntID) return;
-  let loggedInUser = null;
-  try {
-    const raw = localStorage.getItem("loggedInUser");
-    loggedInUser = raw ? JSON.parse(raw) : null;
-  } catch {
-    loggedInUser = null;
-  }
+  const loggedInUser = getLoggedInUser();
   if (!loggedInUser?.uuid) return;
 
   try {
@@ -942,13 +938,7 @@ async function fetchJawStruct() {
 async function saveJawStructAutosave() {
   if (!ENABLE_JAW_STRUCT_AUTOSAVE) return;
   if (!state.caseIntID) return;
-  let loggedInUser = null;
-  try {
-    const raw = localStorage.getItem("loggedInUser");
-    loggedInUser = raw ? JSON.parse(raw) : null;
-  } catch {
-    loggedInUser = null;
-  }
+  const loggedInUser = getLoggedInUser();
   if (!loggedInUser?.uuid) return;
   try {
     await saveJawStructFromState(state.caseIntID, loggedInUser.uuid, state);
@@ -1212,12 +1202,9 @@ async function initSidebar() {
 function initAnnFooter() {
   document.body.classList.add("has-ann-footer");
 
-  try {
-    const raw = localStorage.getItem("loggedInUser");
-    const u = raw ? JSON.parse(raw) : null;
-    const userEl = document.getElementById("footerUserName");
-    if (userEl) userEl.textContent = u?.username || "—";
-  } catch {}
+  const footerUser = getLoggedInUser();
+  const userEl = document.getElementById("footerUserName");
+  if (userEl) userEl.textContent = footerUser?.username || "—";
 
   import("../connectivityIndicator.js").then(({ setupConnectivityIndicator }) => {
     setupConnectivityIndicator(document.getElementById("footerConnection"));

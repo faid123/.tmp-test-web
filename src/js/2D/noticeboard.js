@@ -243,7 +243,10 @@ function mergeInstructions(localItems, serverItems) {
     return `preview:${item.preview || ""}`;
   };
   for (const it of localItems || []) map.set(keyOf(it), it);
-  for (const it of serverItems || []) map.set(keyOf(it), { ...(map.get(keyOf(it)) || {}), ...it });
+  for (const it of serverItems || []) {
+    const key = keyOf(it);
+    map.set(key, { ...(map.get(key) || {}), ...it });
+  }
   return Array.from(map.values());
 }
 
@@ -664,11 +667,10 @@ async function refreshAddInstructionPreview() {
   }
 }
 
-function refreshAddViewcapturePreview() {
-  const previewImg = document.getElementById("addViewcapturePreview");
-  if (!previewImg) return;
-  // The 3D panel is usually a WebGL canvas (preview3D.js) — capture it. If
-  // that's not active, fall back to the static <img id="previewImage">.
+// The 3D panel is usually a WebGL canvas (preview3D.js) — capture it. If that's
+// not active, fall back to the static <img id="previewImage">. Shared by the
+// add-viewcapture flow and its add-card preview thumbnail.
+function capture3DOrFallbackDataUrl() {
   let src = capture3DPreviewDataUrl();
   if (!src) {
     const fallback = document.getElementById("previewImage");
@@ -676,13 +678,23 @@ function refreshAddViewcapturePreview() {
       src = fallback.currentSrc || fallback.src || "";
     }
   }
+  return src;
+}
+
+function refreshAddViewcapturePreview() {
+  const previewImg = document.getElementById("addViewcapturePreview");
+  if (!previewImg) return;
+  const src = capture3DOrFallbackDataUrl();
   if (src) previewImg.src = src;
   else previewImg.removeAttribute("src");
 }
 
-async function addInstruction() {
+// Shared add flow for both noticeboard columns: grab a base image, open the
+// instruction editor on it, then push the result into the given bucket and
+// sync to the server. `captureBaseImage` may be sync or async.
+async function addBoardItem({ bucket, idPrefix, titlePrefix, captureBaseImage }) {
   setMessage("Opening instruction editor…", false);
-  const baseImage = await captureJawJpegDataUrl(0.92);
+  const baseImage = await captureBaseImage();
   const caseLabelText =
     document.getElementById("caseLabel")?.textContent?.trim() || "";
   const result = await openInstructionEditor({
@@ -694,9 +706,10 @@ async function addInstruction() {
     return;
   }
   const data = ensureCache();
-  data.instructions.push({
-    id: `inst_${Date.now()}`,
-    title: `Instruction ${data.instructions.length + 1}`,
+  const list = data[bucket];
+  list.push({
+    id: `${idPrefix}_${Date.now()}`,
+    title: `${titlePrefix} ${list.length + 1}`,
     baseImage,
     strokes: result.strokes,
     preview: result.dataUrl,
@@ -705,41 +718,25 @@ async function addInstruction() {
   saveData(data);
   const synced = await syncInstructionsToEditedView();
   renderGrids();
-  if (!synced) setMessage("Instruction added locally.", false);
+  if (!synced) setMessage(`${titlePrefix} added locally.`, false);
 }
 
-async function addViewcapture() {
-  setMessage("Opening instruction editor…", false);
-  let baseImage = capture3DPreviewDataUrl();
-  if (!baseImage) {
-    const fallback = document.getElementById("previewImage");
-    if (fallback && fallback.style.display !== "none") {
-      baseImage = fallback.currentSrc || fallback.src || "";
-    }
-  }
-  const caseLabelText =
-    document.getElementById("caseLabel")?.textContent?.trim() || "";
-  const result = await openInstructionEditor({
-    initialImage: baseImage,
-    caseLabel: caseLabelText,
+function addInstruction() {
+  return addBoardItem({
+    bucket: "instructions",
+    idPrefix: "inst",
+    titlePrefix: "Instruction",
+    captureBaseImage: () => captureJawJpegDataUrl(0.92),
   });
-  if (!result) {
-    setMessage("Instruction discarded.", false);
-    return;
-  }
-  const data = ensureCache();
-  data.viewcaptures.push({
-    id: `vc_${Date.now()}`,
-    title: `Instruction ${data.viewcaptures.length + 1}`,
-    baseImage,
-    strokes: result.strokes,
-    preview: result.dataUrl,
-    createdAt: new Date().toISOString(),
+}
+
+function addViewcapture() {
+  return addBoardItem({
+    bucket: "viewcaptures",
+    idPrefix: "vc",
+    titlePrefix: "Viewcapture",
+    captureBaseImage: capture3DOrFallbackDataUrl,
   });
-  saveData(data);
-  const synced = await syncInstructionsToEditedView();
-  renderGrids();
-  if (!synced) setMessage("Instruction added locally.", false);
 }
 
 export function addViewcaptureFromImage(dataUrl) {

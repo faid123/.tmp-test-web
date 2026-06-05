@@ -1590,6 +1590,33 @@ function renderSharedUserList() {
   });
 }
 
+// Max in-flight requests for the per-case detail/co-owner fetches below. These
+// endpoints have no by-user batch variant (only alerts does), so the case list
+// must fetch one row per case — but firing `Promise.all(cases.map(fetch))` sent
+// every request at once, so a large case list produced a burst of dozens-to-
+// hundreds of simultaneous connections that overwhelmed the backend. This cap
+// keeps the request COUNT the same but spreads them out (≤ this many at a time).
+const CASE_DETAIL_FETCH_CONCURRENCY = 5;
+
+// Run `mapper` over `items` with at most `limit` promises in flight at once.
+// Drop-in for `Promise.all(items.map(mapper))`; results keep input order.
+async function mapWithConcurrency(items, limit, mapper) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  const runWorker = async () => {
+    while (cursor < items.length) {
+      const i = cursor++;
+      results[i] = await mapper(items[i], i);
+    }
+  };
+  const workers = [];
+  for (let i = 0; i < Math.min(limit, items.length); i += 1) {
+    workers.push(runWorker());
+  }
+  await Promise.all(workers);
+  return results;
+}
+
 async function fetchAdditionalCaseDetails(caseList) {
   const logged = getLoggedInUser();
   if (!logged || !caseList?.length) return {};
@@ -1597,8 +1624,8 @@ async function fetchAdditionalCaseDetails(caseList) {
   const url =
     "https://live.api.smartrpdai.com/api/smartrpd/additionalcasedetails/getall";
 
-  // 并发请求 → Promise.all
-  const reqs = caseList.map((c) => {
+  // One request per case, but capped so they don't all fire at once.
+  const results = await mapWithConcurrency(caseList, CASE_DETAIL_FETCH_CONCURRENCY, (c) => {
     const body = [
       {
         machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
@@ -1616,8 +1643,6 @@ async function fetchAdditionalCaseDetails(caseList) {
       .then((arr) => arr.at(-1)) // 接口返回 [ {...} ]
       .catch(() => undefined);
   });
-
-  const results = await Promise.all(reqs);
 
   // 把有数据的条目塞进 map
   const map = {};
@@ -1646,7 +1671,8 @@ async function fetchCoOwners(caseList) {
   const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
   const url = "https://live.api.smartrpdai.com/api/smartrpd/role/all/get";
 
-  const reqs = caseList.map((c) => {
+  // One request per case, but capped so they don't all fire at once.
+  const results = await mapWithConcurrency(caseList, CASE_DETAIL_FETCH_CONCURRENCY, (c) => {
     const caseIntID = c.case_int_id ?? c.id;
     return fetch(url, {
       method: "POST",
@@ -1660,8 +1686,6 @@ async function fetchCoOwners(caseList) {
       .then((arr) => ({ id: caseIntID, rows: Array.isArray(arr) ? arr : [] }))
       .catch(() => ({ id: caseIntID, rows: [] }));
   });
-
-  const results = await Promise.all(reqs);
   const map = {};
   results.forEach(({ id, rows }) => {
     if (!id) return;
