@@ -322,6 +322,43 @@
   }
 }
 
+@media (min-width: 721px) and (max-width: 900px) {
+  .clinical-info-legend {
+    margin: 8px 12px;
+    padding: 8px 12px;
+  }
+
+  .clinical-info-legend-grid {
+    column-gap: 10px;
+    row-gap: 8px;
+  }
+
+  .clinical-info-legend-row {
+    gap: 4px;
+  }
+
+  .clinical-info-legend-item {
+    min-width: 46px;
+    gap: 3px;
+  }
+
+  .clinical-info-legend-img {
+    height: 40px;
+    max-width: 40px;
+  }
+
+  .clinical-info-legend-swatch {
+    width: 30px;
+    height: 30px;
+    font-size: 0.62rem;
+  }
+
+  .clinical-info-legend-label-top,
+  .clinical-info-legend-text {
+    font-size: 0.62rem;
+  }
+}
+
 /* ----- Interactive legend (when a tooth is selected) ----- */
 
 .clinical-info-legend [data-ci-toggle],
@@ -524,6 +561,132 @@
   height: 10px;
   background: #b8860b;
   border-radius: 2px;
+}
+
+@media (min-width: 721px) and (max-width: 900px) {
+  .clinical-info-tooth-restoration {
+  position: absolute;
+  left: 35%;
+  transform: translateX(-10%);
+  z-index: 2;
+  pointer-events: none;
+ }
+ .clinical-info-tooth.is-upper .clinical-info-tooth-restoration {
+  bottom: 27%;
+}
+
+.clinical-info-tooth.is-lower .clinical-info-tooth-restoration {
+  top: 30%;
+}
+
+  .clinical-info-tooth-restoration.is-ar,
+  .clinical-info-tooth-restoration.is-tcr {
+    width: 12px;
+    height: 12px;
+  }
+
+  .clinical-info-tooth-restoration.is-inlay,
+  .clinical-info-tooth-restoration.is-onlay {
+    width: 16px;
+    height: 8px;
+  }
+}
+
+@media (max-width: 720px) {
+   .clinical-info-tooth-restoration {
+  position: absolute;
+  left: 38%;
+  transform: translateX(-20%);
+  z-index: 2;
+  pointer-events: none;
+ }
+ .clinical-info-tooth.is-upper .clinical-info-tooth-restoration {
+  bottom: 38%;
+}
+
+.clinical-info-tooth.is-lower .clinical-info-tooth-restoration {
+  top: 38%;
+}
+  .clinical-info-tooth-restoration.is-ar,
+  .clinical-info-tooth-restoration.is-tcr {
+    width: 5px;
+    height: 5px;
+  }
+
+  .clinical-info-tooth-restoration.is-inlay,
+  .clinical-info-tooth-restoration.is-onlay {
+    width: 8px;
+    height: 4px;
+  }
+  .clinical-info-tooth-rootstump-label {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.3rem;
+  line-height: 1;
+  letter-spacing: 0.5px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.clinical-info-tooth.is-upper .clinical-info-tooth-rootstump-label {
+  bottom: 38%;
+}
+
+.clinical-info-tooth.is-lower .clinical-info-tooth-rootstump-label {
+  top: 38%;
+}
+.clinical-info-tooth-tilt {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1rem;
+  font-weight: 900;
+  color: var(--rose-500);
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.9), 0 0 2px rgba(255, 255, 255, 0.9);
+  z-index: 3;
+  line-height: 0;
+  pointer-events: none;
+}
+
+/* Crown sits at the bottom of upper-tooth cells, top of lower-tooth cells. */
+.clinical-info-tooth.is-upper .clinical-info-tooth-tilt {
+  bottom: 30%;
+}
+
+.clinical-info-tooth.is-lower .clinical-info-tooth-tilt {
+  top: 30%;
+}
+
+.clinical-info-tooth-tilt--SE {
+  font-size: 0.5rem;
+  background: transparent;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.clinical-info-tooth-extraction-arrow {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.9rem;
+  color: #3BAE95;
+  font-weight: 900;
+  z-index: 3;
+  line-height: 1;
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+
+.clinical-info-tooth.is-upper .clinical-info-tooth-extraction-arrow {
+  bottom: 27%;
+}
+
+.clinical-info-tooth.is-lower .clinical-info-tooth-extraction-arrow {
+  top: 27%;
+}
 }
 
 

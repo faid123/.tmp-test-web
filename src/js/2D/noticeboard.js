@@ -11,6 +11,7 @@ import {
   tiltArrowFor,
 } from "./clinicalInfo.js";
 import { WORK_CATEGORY_LABELS, loadCaseNote } from "./caseNote.js";
+import { encodeEditedViewColumns } from "./dotnetBinaryFormatter.js";
 
 //Add constants
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
@@ -73,16 +74,24 @@ async function fetchNoticeboardEdited(caseIntID, uuid) {
 async function saveNoticeboardEdited(caseIntID, uuid, filenames, data) {
   const names = Array.isArray(filenames) ? filenames : [];
   const datas = Array.isArray(data) ? data : [];
+  // Encode in the desktop's .NET BinaryFormatter byte[][] layout so the SmartRPD
+  // desktop client can deserialize web-saved editedview rows. Writing plain JSON
+  // here is what made desktop login wipe web uploads: the desktop fails to parse
+  // the JSON, shows an empty noticeboard, then overwrites the row on its next
+  // save — destroying the web's post. (Encoder verified byte-for-byte against
+  // desktop-written production records; see [[noticeboard-editedview-format]].)
+  const { filenames: filenamesBlob, data: dataBlob, count } =
+    await encodeEditedViewColumns(names, datas);
   const payload = [
     { machine_id: MACHINE_ID, uuid, caseIntID },
     {
       case_id: caseIntID,
-      filenames: JSON.stringify(names),
-      data: JSON.stringify(datas),
+      filenames: filenamesBlob,
+      data: dataBlob,
     },
   ];
   console.log(
-    `[noticeboard] → POST /noticeboard/editedview  caseIntID=${caseIntID}  items=${names.length}`,
+    `[noticeboard] → POST /noticeboard/editedview  caseIntID=${caseIntID}  items=${count}`,
     { filenames: names }
   );
   const t0 = performance.now();
@@ -769,7 +778,11 @@ function buildReportToothHtml(toothId, assetBase, note) {
   const isUpper = toothId >= 11 && toothId <= 28;
   const mirrorClass = mirrored ? " is-mirrored" : "";
 
+  // Mirror the clinical-info chart: a tooth flagged missing in the clinical
+  // notes (note.present === false, e.g. desktop ToothPresence=1) renders as
+  // missing — i.e. gets the cross — even when the base annotation status isn't.
   let effectiveStatus = baseStatus;
+  if (note && note.present === false) effectiveStatus = "missing";
   if (note?.abutment) effectiveStatus = "abutment";
 
   // Root stump: keep the crown but render it solid black with a white "RS"
@@ -1075,7 +1088,7 @@ async function generateReport() {
   .cli-tooth.is-lower .cli-tooth-tilt { top: 38px; }
   .cli-tooth-tilt--SE { font-size: 0.7rem; padding: 2px 5px; }
 
-  .cli-tooth-extraction-arrow { position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.1rem; color: #b0341c !important; padding: 0 4px; border-radius: 4px; font-weight: 900; letter-spacing: -1px; z-index: 3; line-height: 1.1; pointer-events: none; }
+  .cli-tooth-extraction-arrow { position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.1rem; color: #3BAE95 !important; padding: 0 4px; border-radius: 4px; font-weight: 900; letter-spacing: -1px; z-index: 3; line-height: 1.1; pointer-events: none; }
   .cli-tooth.is-upper .cli-tooth-extraction-arrow { bottom: -2px; }
   .cli-tooth.is-lower .cli-tooth-extraction-arrow { top: 0px; }
 
@@ -1083,7 +1096,7 @@ async function generateReport() {
   .cli-tooth.is-upper .cli-tooth-restoration { bottom: 22%; }
   .cli-tooth.is-lower .cli-tooth-restoration { top: 26%; }
   .cli-tooth-restoration.is-ar { width: 10px; height: 10px; background: #888a8f; border-radius: 50%; }
-  .cli-tooth-restoration.is-tcr { width: 10px; height: 10px; background: rgba(255,255,255,0.85); border: 1.5px solid #cc0011; border-radius: 50%; }
+  .cli-tooth-restoration.is-tcr { width: 10px; height: 10px; background: cyan; border-radius: 50%; }
   .cli-tooth-restoration.is-inlay { width: 12px; height: 7px; background: #2563eb; border-radius: 2px; }
   .cli-tooth-restoration.is-onlay { width: 12px; height: 7px; background: #b8860b; border-radius: 2px; }
 
