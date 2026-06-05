@@ -8,16 +8,8 @@ export class ApiClient {
     if (what !== undefined) {
       console.log(what);
     }
-    let that = '';
-    if(what == undefined)
-    {
-      that == '';
-    }
-    else
-    {
-      that = `Downloading: ${what} | `
-    }
-    const buffer = await login();
+    const downloadLabel = what === undefined ? '' : `Downloading: ${what} | `;
+    await getSessionLogin();
 
 
     const response = await fetch(url, {
@@ -99,7 +91,7 @@ export class ApiClient {
             // Calculate download speed in MB/s
             const timeElapsed = performance.now() / 1000; // in seconds
             const downloadSpeedMBps = (loadedBytes / (1024 * 1024 * timeElapsed)).toFixed(1); // Convert bytes to MB and round to 1 decimal place
-            displayBox.textContent = `${that}   Download speed: ${downloadSpeedMBps} MB/s`;
+            displayBox.textContent = `${downloadLabel}   Download speed: ${downloadSpeedMBps} MB/s`;
 
             controller.enqueue(value);
             push();
@@ -117,6 +109,18 @@ export class ApiClient {
 
     return jsonResponse;
   }
+}
+
+let sessionLoginPromise = null;
+
+function getSessionLogin() {
+  if (!sessionLoginPromise) {
+    sessionLoginPromise = login().catch((error) => {
+      sessionLoginPromise = null;
+      throw error;
+    });
+  }
+  return sessionLoginPromise;
 }
 
 

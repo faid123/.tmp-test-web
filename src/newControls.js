@@ -9,12 +9,12 @@ style.textContent = `
     position: static;
     order: 50;
     z-index: 1001;
-    width: 150px;
+    width: 100%;
     height: 40px;
     padding: 0 14px;
     border: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 6px;
-    background: #303030;
+    background: #b08d2f;
     color: #ffffff;
     font: 700 13px Arial, sans-serif;
     cursor: pointer;
@@ -58,18 +58,45 @@ style.textContent = `
   }
 
   .component-panel-title {
+    padding: 7px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
     font-size: 14px;
     font-weight: 800;
+    cursor: pointer;
+  }
+
+  .component-panel-title:hover {
+    border-color: rgba(255, 255, 255, 0.52);
+    background: rgba(255, 255, 255, 0.15);
   }
 
   .component-panel-close {
-    width: 26px;
-    height: 26px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    width: 30px;
+    height: 30px;
+    border: 1px solid #ef4444;
     border-radius: 5px;
-    background: #262626;
+    background: #b91c1c;
     color: #ffffff;
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1;
     cursor: pointer;
+  }
+
+  .component-panel-close:hover {
+    background: #dc2626;
+  }
+
+  .component-row.unavailable {
+    opacity: 0.58;
+  }
+
+  .component-row.unavailable button,
+  .component-row.unavailable input {
+    cursor: not-allowed;
   }
 
   .component-panel-body {
@@ -219,8 +246,8 @@ style.textContent = `
       overflow: visible;
       border: 1px solid rgba(255, 255, 255, 0.16);
       border-radius: 6px;
-      background: #303030;
-      color: #ffffff;
+      background: #b08d2f;
+      color: #17130a;
       box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
     }
 
@@ -251,9 +278,9 @@ style.textContent = `
     .component-panel-close {
       width: 32px;
       height: 32px;
-      border: 1px solid rgba(255, 255, 255, 0.14);
+      border: 1px solid #ef4444;
       border-radius: 5px;
-      background: #262626;
+      background: #b91c1c;
       color: #ffffff;
     }
 
@@ -374,8 +401,8 @@ style.textContent = `
 
   @media (min-width: 769px) and (max-width: 1024px) {
     .component-panel-toggle {
-      width: 150px;
-      height: 76px;
+      width: 140px;
+      height: 64px;
       padding: 0 14px;
     }
 
@@ -388,8 +415,8 @@ style.textContent = `
 
   @media (max-width: 768px) {
     .component-panel-toggle {
-      width: 132px;
-      height: 68px;
+      width: 128px;
+      height: 60px;
       padding: 0 10px;
     }
 
@@ -521,14 +548,19 @@ function createComponentPanel(groups) {
   const header = document.createElement("div");
   header.className = "component-panel-header";
 
-  const title = document.createElement("div");
+  const title = document.createElement("button");
+  title.type = "button";
   title.className = "component-panel-title";
   title.textContent = "Show All";
+  title.title = "Show all available components";
+  title.setAttribute("aria-label", "Show all available components");
 
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = "component-panel-close";
-  closeButton.textContent = "x";
+  closeButton.textContent = "\u00d7";
+  closeButton.title = "Close components";
+  closeButton.setAttribute("aria-label", "Close components");
 
   header.appendChild(title);
   header.appendChild(closeButton);
@@ -540,6 +572,14 @@ function createComponentPanel(groups) {
   const syncAllRows = () => {
     rowControllers.forEach((controller) => controller.sync());
   };
+
+  title.addEventListener("click", () => {
+    groups.forEach((group) => {
+      if (group.hasContent?.() === false) return;
+      group.setVisible?.(true);
+    });
+    syncAllRows();
+  });
 
   groups.forEach((group) => {
     const row = document.createElement("div");
@@ -649,12 +689,18 @@ function createComponentPanel(groups) {
 
     rowControllers.push({
       sync: () => {
-        const isVisible = group.getVisible?.() ?? true;
+        const hasContent = group.hasContent?.() ?? true;
+        const isVisible = hasContent && (group.getVisible?.() ?? true);
+        row.classList.toggle("unavailable", !hasContent);
         visibilityButton.classList.toggle("hidden-state", !isVisible);
+        visibilityButton.disabled = !hasContent;
         visibilityButton.setAttribute("aria-pressed", String(isVisible));
-        visibilityButton.title = `${isVisible ? "Hide" : "Show"} ${group.label}`;
+        visibilityButton.title = hasContent
+          ? `${isVisible ? "Hide" : "Show"} ${group.label}`
+          : `${group.label} unavailable`;
         const opacityValue = Math.round((group.getOpacity?.() ?? 1) * 100);
         opacitySlider.value = String(opacityValue);
+        opacitySlider.disabled = !hasContent;
         controls.dataset.opacity = String(opacityValue);
         const mode = group.getMode?.() || "normal";
         undercutButton?.classList.toggle("active", mode === "undercut");
@@ -682,6 +728,7 @@ function createComponentPanel(groups) {
   const nav = window.getViewerRightNav?.() || document.body;
   nav.appendChild(toggle);
   document.body.appendChild(panel);
+  window.syncComponentPanelRows = syncAllRows;
   syncAllRows();
 }
 
@@ -769,6 +816,7 @@ function addVisibilityAndTransparencyControls(parentObject, name, materialArray)
       iconPath: `${basePath}/assets/Icon_Hide_SkeletalPrev.png`,
       meshes: [],
       supportsAnalysis: false,
+      hasContent: () => window.hasPolylineJawComponents?.(jawKey) ?? false,
       getVisible: () => window.getPolylineJawVisibility?.(jawKey) ?? true,
       setVisible: (isVisible) => window.setPolylineJawVisibility?.(jawKey, isVisible),
       getOpacity: () => window.getPolylineJawOpacity?.(jawKey) ?? 1,
@@ -782,6 +830,7 @@ function addVisibilityAndTransparencyControls(parentObject, name, materialArray)
       iconPath: `${basePath}/assets/Icon_ToothBaseAT.png`,
       meshes: [],
       supportsAnalysis: false,
+      hasContent: () => window.hasArtificialTeethJaw?.(jawKey) ?? false,
       getVisible: () => window.getArtificialTeethJawVisibility?.(jawKey) ?? true,
       setVisible: (isVisible) => window.setArtificialTeethJawVisibility?.(jawKey, isVisible),
       getOpacity: () => window.getArtificialTeethJawOpacity?.(jawKey) ?? 1,

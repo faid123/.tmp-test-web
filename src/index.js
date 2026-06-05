@@ -14,8 +14,6 @@ import { ApiClient } from "./ApiClient.js";
 
 import { addResetButton } from "./resetButton.js";
 import { lol } from "./crypt.js";
-import "./js/sidebar.js";
-import "./js/createCase";
 import {
   addVisibilityAndTransparencyControls,
   removeVisibilityAndTransparencyControls,
@@ -73,7 +71,6 @@ if (!paramValue) {
 const scene = new THREE.Scene();
 // Create a new camera with positions and angles
 let camera;
-const aspect = window.innerWidth / window.innerHeight;
 camera = new THREE.OrthographicCamera(
   window.innerWidth / -2,
   window.innerWidth / 2,
@@ -83,9 +80,6 @@ camera = new THREE.OrthographicCamera(
   1000
 );
 
-// Keep track of the mouse position, so we can make the eye move
-let mouseX = window.innerWidth / 2;
-let mouseY = window.innerHeight / 2;
 let undercut_type = {};
 // Keep the 3D object on a global variable so we can access it later
 
@@ -213,7 +207,6 @@ let hasLoggedFirstSceneRender = false;
 const viewerRotationOrigin = new THREE.Vector3(0, 0, 0);
 let viewerRotationBoundsRadius = 40;
 let hasViewerRotationOrigin = false;
-const VIEWER_TARGET_DRIFT_FACTOR = 1.6;
 const VIEWER_TARGET_MIN_DRIFT_LIMIT = 45;
 let isViewerLeftButtonRotating = false;
 const viewerRotationTargetAnchor = new THREE.Vector3();
@@ -445,7 +438,6 @@ function updateViewerRotationOrigin() {
   window.viewerRotationGuard = {
     origin: window.viewerRotationOrigin,
     boundsRadius: Number(viewerRotationBoundsRadius.toFixed(3)),
-    targetDriftLimit: Number((viewerRotationBoundsRadius * VIEWER_TARGET_DRIFT_FACTOR).toFixed(3)),
   };
   if (LOG_VIEWER_OBJECT_COUNTS_TO_CONSOLE) {
     console.log("[viewer] rotation origin", window.viewerRotationGuard);
@@ -1011,6 +1003,14 @@ function getPolylineJawVisibility(arch) {
   return isPolylineJawVisible(arch);
 }
 
+function hasPolylineJawComponents(arch) {
+  return polylineOverlayGroup.children.some(
+    (group) =>
+      group.userData?.overlayType === "polyline" &&
+      group.userData?.arch === arch
+  );
+}
+
 function applyPolylineJawOpacity(arch) {
   const opacity = polylineJawOpacity.get(arch) ?? 1;
   polylineOverlayGroup.children.forEach((group) => {
@@ -1044,6 +1044,7 @@ function getPolylineJawOpacity(arch) {
 
 window.setPolylineJawVisibility = setPolylineJawVisibility;
 window.getPolylineJawVisibility = getPolylineJawVisibility;
+window.hasPolylineJawComponents = hasPolylineJawComponents;
 window.setPolylineJawOpacity = setPolylineJawOpacity;
 window.getPolylineJawOpacity = getPolylineJawOpacity;
 
@@ -2291,14 +2292,20 @@ function updatePolylineComponentMenu() {
 
   polylineMenuList.replaceChildren();
   if (!summary.length) {
+    isPolylineOverlayVisible = false;
     const empty = document.createElement("div");
     empty.textContent = "No polyline components";
     empty.style.padding = "8px 0";
     empty.style.color = "#6b7280";
     polylineMenuList.appendChild(empty);
     syncPolylineOverlayVisibility();
+    window.syncComponentPanelRows?.();
     return;
   }
+
+  isPolylineOverlayVisible = Array.from(
+    polylineComponentVisibility.values()
+  ).some(Boolean);
 
   summary.forEach(({ key, color, segments, points }) => {
     const row = document.createElement("label");
@@ -2339,6 +2346,7 @@ function updatePolylineComponentMenu() {
   });
 
   syncPolylineOverlayVisibility();
+  window.syncComponentPanelRows?.();
 }
 
 function setPolylineMenuVisibility(filterSummaryItem, isVisible) {
@@ -2378,7 +2386,7 @@ function createPolylineVisibilityToggle(container, domElement) {
   button.style.color = "white";
   button.style.fontWeight = "bold";
   button.style.cursor = "pointer";
-  button.style.width = "150px";
+  button.style.width = "100%";
   button.style.height = "40px";
   button.style.pointerEvents = "auto";
 
@@ -2408,9 +2416,11 @@ function createPolylineVisibilityToggle(container, domElement) {
   });
 
   const updatePolylineMenuLayout = () => {
+    const phone = window.innerWidth <= 768;
+    const tablet = window.innerWidth <= 1024;
     const compact = window.innerWidth <= 640 || window.innerHeight <= 720;
-    button.style.width = compact ? "132px" : "150px";
-    button.style.height = compact ? "38px" : "40px";
+    button.style.width = phone ? "128px" : tablet ? "140px" : "100%";
+    button.style.height = phone ? "60px" : tablet ? "64px" : "40px";
     panel.style.right = compact ? "8px" : "20px";
     panel.style.top = "50%";
     panel.style.width = compact
@@ -2447,11 +2457,18 @@ function createPolylineVisibilityToggle(container, domElement) {
     return actionButton;
   };
 
-  actions.appendChild(
-    makeActionButton("Close", () => {
-      panel.style.display = "none";
-    })
-  );
+  const closePolylineButton = makeActionButton("\u00d7", () => {
+    panel.style.display = "none";
+  });
+  closePolylineButton.title = "Close polylines";
+  closePolylineButton.setAttribute("aria-label", "Close polylines");
+  closePolylineButton.style.flex = "0 0 34px";
+  closePolylineButton.style.background = "#b91c1c";
+  closePolylineButton.style.borderColor = "#ef4444";
+  closePolylineButton.style.color = "#ffffff";
+  closePolylineButton.style.fontSize = "20px";
+  closePolylineButton.style.fontWeight = "800";
+  actions.appendChild(closePolylineButton);
   actions.appendChild(
     makeActionButton("All", () => {
       setPolylineMenuVisibility(() => true, true);
@@ -2594,8 +2611,10 @@ async function fetchAndRenderPolylines(caseIntID) {
 async function fetchAndRenderCaseOverlays(caseIntID) {
   const overlaysStartedAt = performance.now();
   startViewerLoadTimer("viewer: case overlays");
-  await fetchAndRenderPolylines(caseIntID);
-  await artificialTeethRenderer.fetchAndRender(caseIntID);
+  await Promise.all([
+    fetchAndRenderPolylines(caseIntID),
+    artificialTeethRenderer.fetchAndRender(caseIntID),
+  ]);
   endViewerLoadTimer("viewer: case overlays");
   addViewerLoadTiming("case overlays", performance.now() - overlaysStartedAt);
   logViewerObjectCounts("after case overlays");
@@ -2846,23 +2865,29 @@ function setupChatToggle() {
     jaw_type: 1,
     caseIntID: paramValue,
   };
-  const urldatas = ["/case/get/" + paramValue];
-  const thumbnail_url = ["/thumbnails/get"];
-  const heatmap_urldatas = ["/undercutheatmap/get"];
-  let positionDatas = [];
+  const caseInfoEndpoint = "/case/get/" + paramValue;
+  const thumbnailEndpoint = "/thumbnails/get";
+  const heatmapEndpoint = "/undercutheatmap/get";
   let positionData;
+  const caseInfoPromise = apiClient.post(
+    caseInfoEndpoint,
+    [data],
+    false,
+    "Case Info"
+  );
+  const thumbnailPromise = apiClient.post(
+    thumbnailEndpoint,
+    [data],
+    false,
+    "2D image"
+  );
 
   //This section is for the processing of creation date, case id and last updated
   try {
-    // Call the post method and wait for the response
-    for (const urldata of urldatas) {
-      positionData = await apiClient.post(urldata, [data], false, "Case Info");
-      //console.log('Success:', positionData)
-      positionDatas = positionDatas.concat(positionData);
-      window.caseID = positionData.case_id;
-      window.lastEdited = unixToHumanReadable(positionData.last_updated);
-      window.username = positionData.username;
-    }
+    positionData = await caseInfoPromise;
+    window.caseID = positionData.case_id;
+    window.lastEdited = unixToHumanReadable(positionData.last_updated);
+    window.username = positionData.username;
   } catch (error) {
     console.error("Error:", error);
   }
@@ -2880,14 +2905,7 @@ function setupChatToggle() {
   );
 
   try {
-    // Call the post method and wait for the response
-    for (const urldata of thumbnail_url) {
-      const thumbnailData = await apiClient.post(
-        urldata,
-        [data],
-        false,
-        "2D image"
-      );
+    const thumbnailData = await thumbnailPromise;
       //console.log('Success thumb:', thumbnailData)
       for (const thumb in thumbnailData) {
         if (thumbnailData[thumb].slot == 0) {
@@ -2985,31 +3003,32 @@ btnContainer.appendChild(edit2DStatic); */
           const container3D = document.getElementById("container3D");
           container3D.appendChild(thumbWrapper);
 
-          const positionThumbWrapperAboveLegend = () => {
-            const legend = document.querySelector(".legend-container");
-            if (!legend) return false;
-            const legendRect = legend.getBoundingClientRect();
+          const positionThumbWrapperAboveCreationDate = () => {
+            const creationDateBubble = document.querySelector(
+              '.viewer-meta-bubble[data-position="bottom-left"]'
+            );
+            if (!creationDateBubble) return false;
+            const bubbleRect = creationDateBubble.getBoundingClientRect();
             const wrapperRect = thumbWrapper.getBoundingClientRect();
-            thumbWrapper.style.left = `${Math.max(20, legendRect.left)}px`;
+            thumbWrapper.style.left = `${Math.max(20, bubbleRect.left)}px`;
             thumbWrapper.style.top = `${Math.max(
               16,
-              legendRect.top - wrapperRect.height - 14
+              bubbleRect.top - wrapperRect.height - 14
             )}px`;
             return true;
           };
-          if (!positionThumbWrapperAboveLegend()) {
-            setTimeout(positionThumbWrapperAboveLegend, 500);
-            setTimeout(positionThumbWrapperAboveLegend, 1500);
+          if (!positionThumbWrapperAboveCreationDate()) {
+            setTimeout(positionThumbWrapperAboveCreationDate, 500);
+            setTimeout(positionThumbWrapperAboveCreationDate, 1500);
           }
           window.addEventListener(
-            "legend-positioned",
-            positionThumbWrapperAboveLegend
+            "resize",
+            positionThumbWrapperAboveCreationDate
           );
-          window.addEventListener("resize", positionThumbWrapperAboveLegend);
           if (img.complete) {
-            positionThumbWrapperAboveLegend();
+            positionThumbWrapperAboveCreationDate();
           } else {
-            img.addEventListener("load", positionThumbWrapperAboveLegend, {
+            img.addEventListener("load", positionThumbWrapperAboveCreationDate, {
               once: true,
             });
           }
@@ -3253,7 +3272,6 @@ btnContainer.appendChild(edit2DStatic); */
 			}); */
         }
       }
-    }
   } catch (error) {
     console.error("Error:", error);
   }
@@ -3263,32 +3281,18 @@ btnContainer.appendChild(edit2DStatic); */
   try {
     // Call the post method and wait for the response
 
-    const undercut_value = await apiClient.post(
-      heatmap_urldatas,
-      data,
-      false,
-      "Heatmap upper"
-    );
-    undercut_values = undercut_values.concat(undercut_value);
-    //console.log('Success:', undercut_value)
+    const [undercut_value, undercut_value1] = await Promise.all([
+      apiClient.post(heatmapEndpoint, data, false, "Heatmap upper"),
+      apiClient.post(heatmapEndpoint, data2, false, "Heatmap lower"),
+    ]);
+    undercut_values = [undercut_value1, undercut_value];
 
-    undercut_type[undercut_value.jaw_type] = [
-      Boolean(undercut_value.surveying_values),
-      Boolean(undercut_value.occlusion_values),
-    ];
-
-    const undercut_value1 = await apiClient.post(
-      heatmap_urldatas,
-      data2,
-      false,
-      "Heatmap lower"
-    );
-    undercut_values = undercut_values.concat(undercut_value1);
-
-    undercut_type[undercut_value1.jaw_type] = [
-      Boolean(undercut_value1.surveying_values),
-      Boolean(undercut_value1.occlusion_values),
-    ];
+    [undercut_value, undercut_value1].forEach((heatmap) => {
+      undercut_type[heatmap.jaw_type] = [
+        Boolean(heatmap.surveying_values),
+        Boolean(heatmap.occlusion_values),
+      ];
+    });
   } catch (error) {
     console.error("Error:", error);
   }
@@ -3301,11 +3305,9 @@ btnContainer.appendChild(edit2DStatic); */
   const urls = ["/parameterisation/mesh/getall", "/surface/getall"];
   let responseDatas = [];
   let responseData;
-  let loop = 0;
   try {
     // Call the post method and wait for the response
     for (const url of urls) {
-      loop += 1;
       //console.log('raw: ' + close);
 
       // this is for the generation of button to change to closed mesh if it exist
@@ -3321,8 +3323,7 @@ btnContainer.appendChild(edit2DStatic); */
         if (isObject(responseData)) {
           responseDatas = responseDatas.concat(responseData);
         }
-        //loop to prevent repeated check
-        if (loop == 1) {
+        if (url == "/parameterisation/mesh/getall") {
           //check for closed.off
           const test = await apiClient.post(
             "/stl/get",
@@ -3606,20 +3607,6 @@ btnContainer.appendChild(edit2DStatic); */
   addViewerLoadTiming("mesh API data loading", performance.now() - meshDataStartedAt, {
     files: responseDatas.length,
   });
-
-  // Function to style buttons
-  function styleButton(button, color) {
-    button.style.position = "fixed";
-    button.style.bottom = "80px"; // Adjust based on order
-    button.style.right = "20px";
-    button.style.padding = "10px";
-    button.style.backgroundColor = color;
-    button.style.color = "white";
-    button.style.border = "none";
-    button.style.cursor = "pointer";
-    button.style.borderRadius = "5px";
-    button.style.zIndex = "1000";
-  }
 
   const style = document.createElement("style");
   style.textContent = `
@@ -4500,7 +4487,12 @@ btnContainer.appendChild(edit2DStatic); */
   let jawMeshCpuMs = 0;
   let frameworkMeshCpuMs = 0;
   startViewerLoadTimer("viewer: mesh decode/parse/render");
-  for (const offFile of responseDatas) {
+  const jawFirstResponseDatas = [...responseDatas].sort((left, right) => {
+    const leftIsSurface = left.filename.includes("surface");
+    const rightIsSurface = right.filename.includes("surface");
+    return Number(leftIsSurface) - Number(rightIsSurface);
+  });
+  for (const offFile of jawFirstResponseDatas) {
     const meshFileStartedAt = performance.now();
     let meshDecodeMs = 0;
     let meshParseMs = 0;
@@ -4787,12 +4779,6 @@ btnContainer.appendChild(edit2DStatic); */
     clampViewerControlTarget(controls);
   });
   new ResizeObserver(() => resizeViewerStage(renderer)).observe(container);
-
-  // Add mouse position listener, so we can make the eye move
-  document.onmousemove = (e) => {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-  };
 
   camera.zoom = 7;
   camera.updateProjectionMatrix();

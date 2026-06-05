@@ -21,7 +21,19 @@
             placeholder="Enter your password"
           />
 
-          <button id="btn" onclick="login()">Log In</button>
+          <div class="otp-wrapper">
+            <input
+              type="text"
+              id="otp"
+              placeholder="Enter verification code"
+              maxlength="6"
+            />
+            <button type="button" id="send-otp-btn" onclick="sendOTP()">
+              Send Code
+            </button>
+          </div>
+
+          <button id="login-btn" onclick="verifyAndLogin()">Log In</button>
 
           <p id="error-message"></p>
         </div>

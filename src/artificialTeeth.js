@@ -2024,6 +2024,7 @@ export function createArtificialTeethRenderer({
       group.remove(child);
       disposeObject3D(child);
     }
+    window.syncComponentPanelRows?.();
   };
 
   const normalizeResponse = (rawResponse) => {
@@ -2583,6 +2584,7 @@ export function createArtificialTeethRenderer({
     }
     reveal();
     window.lastArtificialTeethRenderCounts = createdCounts;
+    window.syncComponentPanelRows?.();
     auditArtificialTeeth({ logToConsole: LOG_ARTIFICIAL_TEETH_AUTO_AUDIT_TO_CONSOLE });
     if (LOG_ARTIFICIAL_TEETH_LOAD_DETAILS_TO_CONSOLE) {
       console.timeEnd("viewer: artificial teeth loading/rendering");
@@ -2681,6 +2683,19 @@ export function createArtificialTeethRenderer({
       if (child.userData?.overlayType === "artificial-tooth") count += 1;
     });
     return count > 0;
+  };
+
+  const hasArtificialTeethJaw = (arch) => {
+    let hasContent = false;
+    group.traverse((child) => {
+      if (
+        child.userData?.overlayType === "artificial-tooth" &&
+        child.userData?.arch === arch
+      ) {
+        hasContent = true;
+      }
+    });
+    return hasContent;
   };
 
   const getArtificialToothMeshes = () => {
@@ -4004,6 +4019,7 @@ export function createArtificialTeethRenderer({
   window.auditArtificialTeethJawSources = auditJawSourceMapping;
   window.artificialTeethRenderRuleVersion = ARTIFICIAL_TEETH_RENDER_RULE_VERSION;
   window.hasRenderedArtificialTeeth = hasRenderedTeeth;
+  window.hasArtificialTeethJaw = hasArtificialTeethJaw;
   window.clearArtificialTeeth = clear;
   window.setArtificialTeethJawVisibility = setJawVisibility;
   window.getArtificialTeethJawVisibility = getJawVisibility;

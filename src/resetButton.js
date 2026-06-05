@@ -26,22 +26,29 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
             position: static;
             order: 20;
             z-index: 1000;
-            background-color: transparent;
-            border: 1px solid transparent;
+            background-color: rgba(48, 48, 48, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.42);
             padding: 5px 10px;
             border-radius: 5px;
+            color: #ffffff;
             font-family: Arial, sans-serif;
             font-size: 20px;
             cursor: pointer;
             display: flex;
             align-items: center;
-            transition: background-color 0.3s, border 0.3s;
+            box-shadow:
+                0 0 0 2px rgba(255, 255, 255, 0.08),
+                0 5px 14px rgba(0, 0, 0, 0.32);
+            transition: background-color 0.3s, border 0.3s, box-shadow 0.3s;
         }
 
         /* Highlight on hover */
         #reset-button:hover {
-            background-color: rgba(200, 200, 200, 0.5);
-            border: 1px solid #ccc;
+            background-color: rgba(58, 58, 58, 0.98);
+            border-color: rgba(255, 255, 255, 0.72);
+            box-shadow:
+                0 0 0 2px rgba(255, 255, 255, 0.16),
+                0 6px 18px rgba(0, 0, 0, 0.38);
         }
 
         /* Styles for the reset icon */
@@ -62,10 +69,11 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
             position: static;
             order: 30;
             z-index: 1000;
-            background-color: transparent;
-            border: 1px solid transparent;
+            background-color: rgba(48, 48, 48, 0.92);
+            border: 1px solid rgba(255, 255, 255, 0.42);
             padding: 0px;
             border-radius: 5px;
+            color: #ffffff;
             font-family: Arial, sans-serif;
             font-size: 20px;
             cursor: pointer;
@@ -75,13 +83,19 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
             align-items: center;
             justify-content: center;
             gap: 10px;
-            transition: background-color 0.3s, border-color 0.3s;
+            box-shadow:
+                0 0 0 2px rgba(255, 255, 255, 0.08),
+                0 5px 14px rgba(0, 0, 0, 0.32);
+            transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
         }
 
         /* Highlight on hover */
         #lock-rotation-button:hover {
-            background-color: rgba(200, 200, 200, 0.5);
-            border: 1px solid #ccc;
+            background-color: rgba(58, 58, 58, 0.98);
+            border-color: rgba(255, 255, 255, 0.72);
+            box-shadow:
+                0 0 0 2px rgba(255, 255, 255, 0.16),
+                0 6px 18px rgba(0, 0, 0, 0.38);
         }
     `;
     document.head.appendChild(style);
@@ -163,15 +177,7 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
 
     // Add a listener to the lock rotation button
     lockRotationButton.addEventListener('click', toggleRotationLock);
-    function autoClickTwice(button) {
-        // Click the button for the first time
-        button.click();
-        // Click the button for the second time
-        
-    }
-    
-    // Call the function to auto click the button twice
-    autoClickTwice(lockRotationButton);
+    lockRotationButton.click();
 
     // Function to update lock rotation button image based on current state
     function updateLockRotationButtonImage() {
@@ -201,52 +207,54 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
         lockRotationButton.appendChild(span);
     }
 
-    const legendContainer = document.createElement('div');
-    legendContainer.style.position = 'fixed';
-    legendContainer.style.bottom = '100px';
-    legendContainer.style.left = '5px';
-    legendContainer.style.zIndex = '1000';
-    legendContainer.style.backgroundColor = 'transparent';
-    legendContainer.style.border = '0px solid transparent';
-    legendContainer.style.padding = '10px';
-    legendContainer.style.borderRadius = '0px';
-    legendContainer.style.fontFamily = 'Arial, sans-serif';
-    legendContainer.style.fontSize = '14px';
-    legendContainer.style.minWidth = '190px';
-    legendContainer.style.width = '20%';
-    legendContainer.style.maxWidth = '250px'
-    legendContainer.style.display = 'flex';
-    legendContainer.style.flexWrap = 'wrap';
+    const legendContainer = document.createElement('section');
+    legendContainer.className = 'legend-container';
+    legendContainer.setAttribute('aria-label', 'Undercut and occlusion legend');
+
+    const legendHeader = document.createElement('div');
+    legendHeader.className = 'legend-header';
+
+    const legendHeading = document.createElement('strong');
+    legendHeading.textContent = 'Measurement Legend';
+
+    const legendToggle = document.createElement('button');
+    legendToggle.type = 'button';
+    legendToggle.className = 'legend-toggle';
+    legendToggle.textContent = 'Hide';
+    legendToggle.setAttribute('aria-expanded', 'true');
+    legendToggle.setAttribute('aria-label', 'Hide measurement legend');
+
+    const legendBody = document.createElement('div');
+    legendBody.className = 'legend-body';
+
+    legendHeader.appendChild(legendHeading);
+    legendHeader.appendChild(legendToggle);
+    legendContainer.appendChild(legendHeader);
+    legendContainer.appendChild(legendBody);
 
     // sets the stuff for legends
     const legendSections = [
-        { title: 'Undercut(mm)', colors: {'#D7C60C': '0.25', '#D7A60B': '0.5', '#D8790E': '0.75', '#B20F1D': '> 0.75'} },
-        { title: 'Occlusion(mm)', colors: {'#8A01D3': '0.1', '#08009B': '0.25', '#48D6FA': '0.3 - 0.4', '#00E930': '0.5'} }
+        { title: 'Undercut (mm)', colors: {'#D7C60C': '0.25', '#D7A60B': '0.5', '#D8790E': '0.75', '#B20F1D': '> 0.75'} },
+        { title: 'Occlusion (mm)', colors: {'#8A01D3': '0.1', '#08009B': '0.25', '#48D6FA': '0.3 - 0.4', '#00E930': '0.5'} }
     ];
 
     // Create legend sections
     legendSections.forEach(section => {
         const sectionContainer = document.createElement('div');
-        sectionContainer.style.marginRight = '20px';
+        sectionContainer.className = 'legend-section';
 
         const sectionTitle = document.createElement('div');
+        sectionTitle.className = 'legend-section-title';
         sectionTitle.textContent = section.title;
-        sectionTitle.style.marginBottom = '5px';
-        sectionTitle.style.fontWeight = 'bold';
         sectionContainer.appendChild(sectionTitle);
 
         Object.entries(section.colors).forEach(([color, label]) => {
             const legendItem = document.createElement('div');
-            legendItem.style.display = 'flex';
-            legendItem.style.alignItems = 'center';
-            legendItem.style.marginBottom = '5px';
+            legendItem.className = 'legend-item';
 
             const colorBox = document.createElement('div');
-            colorBox.style.width = '20px';
-            colorBox.style.height = '20px';
+            colorBox.className = 'legend-color';
             colorBox.style.backgroundColor = color || '#FFFFFF';
-            colorBox.style.marginRight = '10px';
-            colorBox.style.border = '1px solid #000';
 
             const itemText = document.createElement('span');
             itemText.textContent = label;
@@ -256,31 +264,120 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
             sectionContainer.appendChild(legendItem);
         });
 
-        legendContainer.appendChild(sectionContainer);
+        legendBody.appendChild(sectionContainer);
     });
 
-    // Append the legend container to the body
+    legendToggle.addEventListener('click', () => {
+        const collapsed = legendContainer.classList.toggle('collapsed');
+        legendToggle.textContent = collapsed ? 'Show' : 'Hide';
+        legendToggle.setAttribute('aria-expanded', String(!collapsed));
+        legendToggle.setAttribute(
+            'aria-label',
+            `${collapsed ? 'Show' : 'Hide'} measurement legend`
+        );
+    });
+
     document.body.appendChild(legendContainer);
 
-    // Add custom CSS for responsiveness
     const customCSS = document.createElement('style');
     customCSS.innerHTML = `
-        @media (max-width: 1200px) {
-            .legend-container { width: 35%; }
+        .legend-container {
+            position: fixed;
+            right: 250px;
+            bottom: 12px;
+            z-index: 1001;
+            width: 250px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.34);
+            border-radius: 7px;
+            background: rgba(48, 48, 48, 0.94);
+            color: #ffffff;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+            font: 13px Arial, sans-serif;
         }
+
+        .legend-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            min-height: 38px;
+            padding: 6px 8px 6px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(65, 65, 65, 0.98);
+        }
+
+        .legend-toggle {
+            min-width: 48px;
+            min-height: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.32);
+            border-radius: 5px;
+            background: #303030;
+            color: #ffffff;
+            cursor: pointer;
+        }
+
+        .legend-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            padding: 10px;
+        }
+
+        .legend-container.collapsed .legend-body {
+            display: none;
+        }
+
+        .legend-container.collapsed .legend-header {
+            border-bottom: 0;
+        }
+
+        .legend-section-title {
+            margin-bottom: 7px;
+            font-weight: 700;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            margin-bottom: 5px;
+            white-space: nowrap;
+        }
+
+        .legend-color {
+            flex: 0 0 18px;
+            width: 18px;
+            height: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.48);
+            box-sizing: border-box;
+        }
+
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .legend-container {
+                right: 10px;
+                bottom: calc(124px + env(safe-area-inset-bottom, 0px));
+            }
+        }
+
         @media (max-width: 768px) {
-            .legend-container { width: 50%; bottom: 70px; }
-        }
-        @media (max-width: 480px) {
-            .legend-container { width: 70%; bottom: 50px; left: 5px; padding: 5px; }
-            .legend-container div { font-size: 12px; }
-            .legend-container div div { font-size: 10px; }
-            .legend-container div div div { width: 15px; height: 15px; margin-right: 5px; }
+            .legend-container {
+                right: 10px;
+                bottom: calc(116px + env(safe-area-inset-bottom, 0px));
+                width: min(250px, calc(100vw - 20px));
+            }
+
+            .legend-body {
+                gap: 8px;
+                padding: 8px;
+            }
+
+            .legend-container,
+            .legend-toggle {
+                font-size: 12px;
+            }
         }
     `;
     document.head.appendChild(customCSS);
 
-    // Assign the class to the legend container
-    legendContainer.className = 'legend-container';
-    window.dispatchEvent(new Event('legend-positioned'));
 }
