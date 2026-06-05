@@ -93,6 +93,25 @@ let undercut_type = {};
 let controls;
 let orb_controls;
 
+function getViewerStageSize() {
+  const rect = viewerContainer?.getBoundingClientRect?.();
+  return {
+    width: Math.max(1, Math.round(rect?.width || window.innerWidth)),
+    height: Math.max(1, Math.round(rect?.height || window.innerHeight)),
+  };
+}
+
+function resizeViewerStage(renderer) {
+  if (!renderer || !camera) return;
+  const { width, height } = getViewerStageSize();
+  camera.left = width / -2;
+  camera.right = width / 2;
+  camera.top = height / 2;
+  camera.bottom = height / -2;
+  camera.updateProjectionMatrix();
+  renderer.setSize(width, height, false);
+}
+
 // Set which object to render
 let objToRender = "dino";
 let mesh_geo;
@@ -315,6 +334,40 @@ function logViewerPerformanceSummary() {
   console.groupEnd();
 }
 
+function saveAnnotationBackground(storageKey, dataUrl) {
+  try {
+    localStorage.setItem(storageKey, dataUrl);
+    return true;
+  } catch (err) {
+    console.warn("Failed to save annotation background in localStorage.", err);
+    return false;
+  }
+}
+
+function getViewerRightNav() {
+  let nav = document.getElementById("viewer-right-nav");
+  if (nav) return nav;
+
+  nav = document.createElement("nav");
+  nav.id = "viewer-right-nav";
+  nav.setAttribute("aria-label", "Viewer controls");
+  document.body.appendChild(nav);
+  return nav;
+}
+
+window.getViewerRightNav = getViewerRightNav;
+
+function getViewerMetaBar() {
+  let metaBar = document.getElementById("viewer-meta-bar");
+  if (metaBar) return metaBar;
+
+  metaBar = document.createElement("div");
+  metaBar.id = "viewer-meta-bar";
+  metaBar.setAttribute("aria-label", "Case information and chat");
+  document.body.appendChild(metaBar);
+  return metaBar;
+}
+
 function getViewerObjectCounts() {
   let jawMeshes = 0;
   let polylineGroups = 0;
@@ -418,16 +471,41 @@ function applyViewerRotationOrigin() {
 
 function clampViewerControlTarget(control = controls) {
   if (!control?.target || !hasViewerRotationOrigin) return false;
-  const driftLimit = Math.max(
-    VIEWER_TARGET_MIN_DRIFT_LIMIT,
-    viewerRotationBoundsRadius * VIEWER_TARGET_DRIFT_FACTOR
-  );
   const targetOffset = control.target.clone().sub(viewerRotationOrigin);
-  const driftDistance = targetOffset.length();
-  if (!Number.isFinite(driftDistance) || driftDistance <= driftLimit) return false;
+  const cameraRight = new THREE.Vector3();
+  const cameraUp = camera.up.clone().normalize();
+  camera.getWorldDirection(cameraRight);
+  cameraRight.cross(cameraUp).normalize();
 
-  targetOffset.setLength(driftLimit);
-  const clampedTarget = viewerRotationOrigin.clone().add(targetOffset);
+  const zoom = Math.max(camera.zoom || 1, 0.0001);
+  const visibleHalfWidth = Math.abs(camera.right - camera.left) / (2 * zoom);
+  const visibleHalfHeight = Math.abs(camera.top - camera.bottom) / (2 * zoom);
+  const modelMargin = viewerRotationBoundsRadius * 0.55;
+  const horizontalLimit = Math.max(
+    VIEWER_TARGET_MIN_DRIFT_LIMIT * 0.35,
+    visibleHalfWidth - modelMargin
+  );
+  const verticalLimit = Math.max(
+    VIEWER_TARGET_MIN_DRIFT_LIMIT * 0.35,
+    visibleHalfHeight - modelMargin
+  );
+  const horizontalOffset = THREE.MathUtils.clamp(
+    targetOffset.dot(cameraRight),
+    -horizontalLimit,
+    horizontalLimit
+  );
+  const verticalOffset = THREE.MathUtils.clamp(
+    targetOffset.dot(cameraUp),
+    -verticalLimit,
+    verticalLimit
+  );
+  const clampedTarget = viewerRotationOrigin
+    .clone()
+    .addScaledVector(cameraRight, horizontalOffset)
+    .addScaledVector(cameraUp, verticalOffset);
+  const driftDistance = control.target.distanceTo(clampedTarget);
+  if (!Number.isFinite(driftDistance) || driftDistance < 0.0001) return false;
+
   const correction = clampedTarget.clone().sub(control.target);
   control.target.copy(clampedTarget);
   camera.position.add(correction);
@@ -440,7 +518,8 @@ function clampViewerControlTarget(control = controls) {
     ...(window.viewerRotationGuard || {}),
     lastClamp: {
       driftDistance: Number(driftDistance.toFixed(3)),
-      driftLimit: Number(driftLimit.toFixed(3)),
+      horizontalLimit: Number(horizontalLimit.toFixed(3)),
+      verticalLimit: Number(verticalLimit.toFixed(3)),
       correction: {
         x: Number(correction.x.toFixed(3)),
         y: Number(correction.y.toFixed(3)),
@@ -514,6 +593,8 @@ function bindViewerRotationTargetAnchor(domElement) {
     if (orb_controls?.target) {
       orb_controls.target.copy(controls.target);
     }
+    clampViewerControlTarget(controls);
+    viewerRotationTargetAnchor.copy(controls.target);
     camera.updateProjectionMatrix();
   };
 
@@ -544,7 +625,6 @@ function bindViewerRotationTargetAnchor(domElement) {
   domElement.addEventListener("mousedown", (event) => {
     if (event.button !== 2) return;
     event.preventDefault();
-    event.stopImmediatePropagation();
   }, true);
 
   domElement.addEventListener("pointerdown", (event) => {
@@ -557,10 +637,7 @@ function bindViewerRotationTargetAnchor(domElement) {
         return;
       }
     } else if (event.button === 2) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      releaseRotationAnchor();
-      releaseManualPan();
+      startManualPan(event);
       return;
     } else if (event.button === 1 || (event.button === 0 && event.shiftKey)) {
       startManualPan(event);
@@ -788,7 +865,8 @@ function createPresetViewControls() {
   });
 
   panel.appendChild(viewPad);
-  document.body.appendChild(panel);
+  panel.style.order = "10";
+  getViewerRightNav().appendChild(panel);
 }
 
 function clearPolylineOverlay() {
@@ -2280,15 +2358,14 @@ function createPolylineVisibilityToggle(container, domElement) {
 
   const wrapper = document.createElement("div");
   wrapper.id = "polyline-visibility-menu";
-  wrapper.style.position = "fixed";
-  wrapper.style.right = "20px";
-  wrapper.style.bottom = "430px";
+  wrapper.style.position = "static";
   wrapper.style.zIndex = "1000";
   wrapper.style.display = "flex";
   wrapper.style.flexDirection = "column";
-  wrapper.style.alignItems = "flex-end";
+  wrapper.style.alignItems = "stretch";
   wrapper.style.gap = "8px";
   wrapper.style.pointerEvents = "none";
+  wrapper.style.order = "60";
 
   const button = document.createElement("button");
   button.id = "polyline-visibility-toggle";
@@ -2301,7 +2378,8 @@ function createPolylineVisibilityToggle(container, domElement) {
   button.style.color = "white";
   button.style.fontWeight = "bold";
   button.style.cursor = "pointer";
-  button.style.minWidth = "150px";
+  button.style.width = "150px";
+  button.style.height = "40px";
   button.style.pointerEvents = "auto";
 
   const panel = document.createElement("div");
@@ -2331,9 +2409,8 @@ function createPolylineVisibilityToggle(container, domElement) {
 
   const updatePolylineMenuLayout = () => {
     const compact = window.innerWidth <= 640 || window.innerHeight <= 720;
-    wrapper.style.right = compact ? "10px" : "20px";
-    wrapper.style.bottom = compact ? "398px" : "470px";
-    button.style.minWidth = compact ? "132px" : "150px";
+    button.style.width = compact ? "132px" : "150px";
+    button.style.height = compact ? "38px" : "40px";
     panel.style.right = compact ? "8px" : "20px";
     panel.style.top = "50%";
     panel.style.width = compact
@@ -2401,7 +2478,7 @@ function createPolylineVisibilityToggle(container, domElement) {
   window.addEventListener("resize", updatePolylineMenuLayout);
 
   wrapper.appendChild(button);
-  container.appendChild(wrapper);
+  getViewerRightNav().appendChild(wrapper);
   document.body.appendChild(panel);
   updatePolylineMenuLayout();
 
@@ -2709,26 +2786,17 @@ function setupChatToggle() {
   }
 
   chatIcon.style.display = "block";
-  chatIcon.style.position = "fixed";
-  chatIcon.style.top = "14px";
-  chatIcon.style.right = "150px";
-  chatIcon.style.bottom = "auto";
+  chatIcon.style.position = "static";
   chatIcon.style.width = "56px";
   chatIcon.style.height = "56px";
-  chatIcon.style.zIndex = "1001";
+  chatIcon.style.zIndex = "1003";
+  chatIcon.style.alignSelf = "center";
+  getViewerMetaBar().appendChild(chatIcon);
 
-  chatWidget.classList.toggle("active", !isMobile);
-  chatWidget.style.display = isMobile ? "none" : "flex";
-  chatWidget.style.position = "fixed";
-  chatWidget.style.top = "84px";
-  chatWidget.style.right = "150px";
-  chatWidget.style.bottom = "auto";
-  chatWidget.style.left = "auto";
-  chatWidget.style.transform = "none";
-  chatWidget.style.width = "280px";
-  chatWidget.style.height = "280px";
-  chatWidget.style.zIndex = "1001";
-  chatIcon.style.display = isMobile ? "block" : "none";
+  chatWidget.classList.remove("active");
+  chatWidget.style.display = "none";
+  chatWidget.style.zIndex = "1003";
+  chatIcon.style.display = "block";
 
   chatIcon.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -3075,11 +3143,12 @@ btnContainer.appendChild(edit2DStatic); */
                 ctx.shadowBlur = 10;
                 ctx.fillText(text, canvas.width / 2, canvas.height / 2);
 
-                const composedDataURL = canvas.toDataURL();
-                localStorage.setItem(
-                  `annotateBackground_${encryptedId}`,
-                  composedDataURL
-                );
+                const storageKey = `annotateBackground_${encryptedId}`;
+                const composedDataURL = canvas.toDataURL("image/jpeg", 0.82);
+                if (!saveAnnotationBackground(storageKey, composedDataURL)) {
+                  alert("Could not prepare the annotation image. Please try again.");
+                  return;
+                }
                 console.log(`✅ 已保存 annotateBackground_${encryptedId}`);
 
                 // 🟢 跳转
@@ -3227,6 +3296,7 @@ btnContainer.appendChild(edit2DStatic); */
   //Processing mesh
 
   // stl will be true is fail to process parameterisation
+  const meshDataStartedAt = performance.now();
   let stl = false;
   const urls = ["/parameterisation/mesh/getall", "/surface/getall"];
   let responseDatas = [];
@@ -3462,7 +3532,8 @@ btnContainer.appendChild(edit2DStatic); */
             document.body.appendChild(btnContainer);
           }
           //document.body.appendChild(btnContainer2D);
-          document.body.appendChild(btnContainer3D);
+          btnContainer3D.style.order = "70";
+          getViewerRightNav().appendChild(btnContainer3D);
         }
       }
 
@@ -3604,7 +3675,34 @@ btnContainer.appendChild(edit2DStatic); */
   .smart-btn.other-stl {
       background-color: #007bff;
   }
-  
+
+  #viewer-right-nav {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    width: 238px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    overflow-y: auto;
+    overflow-x: visible;
+    padding: 12px 10px;
+    border-left: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(18, 18, 18, 0.74);
+    box-shadow: -10px 0 26px rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(6px);
+    pointer-events: auto;
+    box-sizing: border-box;
+  }
+
+  #viewer-right-nav > * {
+    flex: 0 0 auto;
+    pointer-events: auto;
+  }
+
 /*   .smart-btn-container-2d {
 	position: fixed;
 	left: 10px;
@@ -3616,9 +3714,7 @@ btnContainer.appendChild(edit2DStatic); */
 	} */
 
 	.smart-btn-container-3d {
-		position: fixed;
-		right: 20px;
-		bottom: 272px;
+		position: static;
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
@@ -3688,16 +3784,14 @@ btnContainer.appendChild(edit2DStatic); */
   }
 
   .preset-view-panel {
-    position: fixed;
-    bottom: 12px;
-    right: 10px;
+    position: static;
     z-index: 1000;
     width: 224px;
-    padding: 14px 12px;
-    background: #303030;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0;
+    background: transparent;
+    border: 0;
     border-radius: 2px;
-    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+    box-shadow: none;
     color: #f5f5f5;
     font-family: Arial, sans-serif;
     text-align: center;
@@ -3754,16 +3848,15 @@ btnContainer.appendChild(edit2DStatic); */
   }
 
   .preset-view-front {
-    left: 16px;
-    top: 128px;
-    width: 50px;
-    height: 68px;
-    transform: skew(-34deg);
+    left: 22px;
+    top: 138px;
+    width: 58px;
+    height: 36px;
+    transform: rotate(-45deg);
   }
 
   .preset-view-front .preset-view-face {
-    background: linear-gradient(135deg, #ffffff 0%, #ffffff 26%, #dcdcdc 27%, #dcdcdc 100%);
-    clip-path: polygon(0 0, 68% 0, 100% 100%, 32% 100%);
+    clip-path: polygon(0 0, 78% 0, 100% 50%, 78% 100%, 0 100%);
   }
 
   .preset-view-top {
@@ -3811,16 +3904,15 @@ btnContainer.appendChild(edit2DStatic); */
   }
 
   .preset-view-rear {
-    right: 16px;
-    top: 18px;
-    width: 50px;
-    height: 68px;
-    transform: skew(-34deg);
+    right: 22px;
+    top: 38px;
+    width: 58px;
+    height: 36px;
+    transform: rotate(-45deg);
   }
 
   .preset-view-rear .preset-view-face {
-    background: linear-gradient(135deg, #dcdcdc 0%, #dcdcdc 73%, #ffffff 74%, #ffffff 100%);
-    clip-path: polygon(32% 0, 100% 0, 68% 100%, 0 100%);
+    clip-path: polygon(22% 0, 100% 0, 100% 100%, 22% 100%, 0 50%);
   }
 
   @media (max-width: 640px), (max-height: 720px) {
@@ -3831,8 +3923,6 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .smart-btn-container-3d {
-      right: 10px;
-      bottom: 226px;
       gap: 8px;
     }
 
@@ -3848,10 +3938,184 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .preset-view-panel {
-      right: 6px;
-      bottom: 6px;
       transform: scale(0.82);
       transform-origin: bottom right;
+    }
+  }
+
+  /* Tablet toolbar: larger touch targets, horizontally scrollable. */
+  @media (min-width: 769px) and (max-width: 1024px) {
+    #viewer-right-nav {
+      top: auto;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: calc(112px + env(safe-area-inset-bottom, 0px));
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 12px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+      border-left: 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.24);
+      background: rgba(18, 18, 18, 0.92);
+      box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.24);
+      scroll-behavior: smooth;
+      overscroll-behavior-x: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    #viewer-right-nav > * {
+      flex: 0 0 auto;
+      position: static;
+    }
+
+    .preset-view-panel {
+      position: static;
+      width: 180px;
+      height: 92px;
+      overflow: hidden;
+      transform: none;
+      background: transparent;
+    }
+
+    .preset-view-pad {
+      position: relative;
+      left: auto;
+      bottom: auto;
+      margin: -62px auto 0;
+      transform: scale(0.5);
+      transform-origin: center;
+    }
+
+    #reset-button,
+    #lock-rotation-button {
+      display: flex !important;
+      flex: 0 0 auto;
+    }
+
+    #reset-button,
+    #lock-rotation-button {
+      height: 78px;
+    }
+
+    #reset-icon {
+      width: 42px;
+      height: 42px;
+    }
+
+    .smart-btn-container-3d {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .smart-btn-container-3d .smart-btn {
+      min-width: 140px;
+      height: 64px;
+      white-space: nowrap;
+    }
+
+    .mail-popup,
+    #polyline-visibility-panel {
+      bottom: calc(124px + env(safe-area-inset-bottom, 0px)) !important;
+      max-height: calc(100vh - 144px) !important;
+    }
+  }
+
+  /* Phone toolbar: compact, horizontally scrollable, and keeps every tool available. */
+  @media (max-width: 768px) {
+    #viewer-right-nav {
+      top: auto;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: calc(104px + env(safe-area-inset-bottom, 0px));
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+      border-left: 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(18, 18, 18, 0.94);
+      box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.24);
+      scroll-behavior: smooth;
+      scroll-snap-type: x proximity;
+      overscroll-behavior-x: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    #viewer-right-nav > * {
+      flex: 0 0 auto;
+      position: static;
+      scroll-snap-align: start;
+    }
+
+    .preset-view-panel {
+      position: static;
+      width: 180px;
+      height: 84px;
+      overflow: hidden;
+      transform: none;
+      background: transparent;
+    }
+
+    .preset-view-pad {
+      position: relative;
+      left: auto;
+      bottom: auto;
+      margin: -66px auto 0;
+      transform: scale(0.44);
+      transform-origin: center;
+    }
+
+    #reset-button,
+    #lock-rotation-button {
+      display: flex !important;
+      flex: 0 0 auto;
+    }
+
+    #reset-button,
+    #lock-rotation-button {
+      width: auto;
+      min-width: 72px;
+      height: 76px;
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+
+    #reset-icon {
+      width: 44px;
+      height: 44px;
+      margin-right: 4px;
+    }
+
+    .smart-btn-container-3d {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .smart-btn-container-3d .smart-btn {
+      min-width: 128px;
+      height: 60px;
+      padding: 10px 14px;
+      white-space: nowrap;
+    }
+
+    .mail-popup,
+    #polyline-visibility-panel {
+      bottom: calc(116px + env(safe-area-inset-bottom, 0px)) !important;
+      max-height: calc(100vh - 136px) !important;
     }
   }
 	
@@ -4379,7 +4643,7 @@ btnContainer.appendChild(edit2DStatic); */
   function createTextbox(text, position) {
     const textbox = document.createElement("div");
     textbox.textContent = text;
-    textbox.style.position = "fixed";
+    textbox.className = "viewer-meta-bubble";
     textbox.style.backgroundColor = "rgba(255, 255, 255, 0.8)";
     textbox.style.padding = "5px";
     textbox.style.border = "1px solid #ccc";
@@ -4389,37 +4653,8 @@ btnContainer.appendChild(edit2DStatic); */
     textbox.style.color = "#333";
     textbox.style.boxShadow = "0 2px 10px rgba(0, 0, 0, 0.1)";
 
-    textbox.style.height = "15px";
-
-    // Optionally, add a media query to adjust size for very small screens
-
-    if (position === "bottom-left") {
-      textbox.style.bottom = "55px";
-      textbox.style.left = "10px";
-      textbox.style.height = "30px";
-      textbox.style.minWidth = "220px";
-      textbox.style.width = "20%";
-      textbox.style.maxWidth = "250px";
-    } else if (position === "bottom-right") {
-      textbox.width = "150px";
-      textbox.style.bottom = "10px";
-      textbox.style.right = "10px";
-    } else if (position === "bottom-left2") {
-      textbox.style.bottom = "10px";
-      textbox.style.padding = "5px";
-      textbox.style.left = "10px";
-      textbox.style.height = "30px";
-      textbox.style.minWidth = "220px";
-      textbox.style.width = "20%";
-      textbox.style.maxWidth = "250px";
-    } else if (position === "name") {
-      textbox.style.bottom = "10px";
-      textbox.style.right = "10px";
-      textbox.style.height = "30px";
-      textbox.style.padding = "5px";
-    }
-
-    document.body.appendChild(textbox);
+    textbox.dataset.position = position;
+    getViewerMetaBar().appendChild(textbox);
   }
 
   function unixToHumanReadable(unixTimestamp) {
@@ -4440,7 +4675,7 @@ btnContainer.appendChild(edit2DStatic); */
   finished = true;
   // Instantiate a new renderer and set its size
   const renderer = new THREE.WebGLRenderer({ alpha: true }); // Alpha: true allows for the transparent background
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  resizeViewerStage(renderer);
 
   // Add the renderer to the DOM
   const container = document.getElementById("container3D");
@@ -4501,8 +4736,8 @@ btnContainer.appendChild(edit2DStatic); */
     controls.rotateSpeed = 4.0;
     controls.zoomSpeed = 1.4;
     controls.panSpeed = 30;
-    // Trackball's RIGHT slot is its PAN state. Point that slot at button 1
-    // so middle-drag pans while the actual right button remains inert.
+    // Panning is handled manually so the rotation target can stay anchored
+    // after the jaw has been moved around the screen.
     controls.mouseButtons = {
       LEFT: THREE.MOUSE.ROTATE,
       MIDDLE: -1,
@@ -4529,6 +4764,9 @@ btnContainer.appendChild(edit2DStatic); */
     requestAnimationFrame(animate);
     controls.update();
     anchorViewerRotationTarget(controls);
+    if (!isViewerLeftButtonRotating) {
+      clampViewerControlTarget(controls);
+    }
     artificialTeethRenderer.syncToJawMeshes();
 
     renderer.render(scene, camera);
@@ -4545,10 +4783,10 @@ btnContainer.appendChild(edit2DStatic); */
 
   // Add a listener to the window, so we can resize the window and the camera
   window.addEventListener("resize", function () {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    resizeViewerStage(renderer);
+    clampViewerControlTarget(controls);
   });
+  new ResizeObserver(() => resizeViewerStage(renderer)).observe(container);
 
   // Add mouse position listener, so we can make the eye move
   document.onmousemove = (e) => {
@@ -4598,6 +4836,12 @@ btnContainer.appendChild(edit2DStatic); */
   logViewerObjectCounts("initial viewer usable");
   logViewerPerformanceSummary();
 
+  const overlayLoadPromise = fetchAndRenderCaseOverlays(paramValue).catch(
+    (error) => {
+      console.warn("Case overlays failed to load:", error);
+    }
+  );
+
   const logoutAfterBackgroundLoad = async () => {
     const urlLogout = ["/user/logout"];
     try {
@@ -4616,7 +4860,7 @@ btnContainer.appendChild(edit2DStatic); */
     performance.now() - viewerTotalStartedAt
   );
   logViewerPerformanceSummary();
-  logoutAfterBackgroundLoad();
+  overlayLoadPromise.finally(logoutAfterBackgroundLoad);
 })();
 
 function isMobileDevice() {

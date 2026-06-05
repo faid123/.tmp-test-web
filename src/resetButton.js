@@ -1,5 +1,16 @@
 export function addResetButton(camera, clone, controls, getResetTarget = null) {
     let rotationLocked = true; // Initial state of rotation lock
+    const getViewerRightNav = () => {
+        if (window.getViewerRightNav) return window.getViewerRightNav();
+        let nav = document.getElementById('viewer-right-nav');
+        if (!nav) {
+            nav = document.createElement('nav');
+            nav.id = 'viewer-right-nav';
+            nav.setAttribute('aria-label', 'Viewer controls');
+            document.body.appendChild(nav);
+        }
+        return nav;
+    };
 
     // Create and append styles
     const style = document.createElement('style');
@@ -12,9 +23,8 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
 
         /* Styles for the reset button */
         #reset-button {
-            position: fixed;
-            top: 10px;
-            right: 10px;
+            position: static;
+            order: 20;
             z-index: 1000;
             background-color: transparent;
             border: 1px solid transparent;
@@ -49,9 +59,8 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
 
         /* Styles for the lock rotation button */
         #lock-rotation-button {
-            position: fixed;
-            top: 75px;
-            right: 10px;
+            position: static;
+            order: 30;
             z-index: 1000;
             background-color: transparent;
             border: 1px solid transparent;
@@ -98,7 +107,7 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
     resetButton.appendChild(resetText);
 
     // Append the reset button to the body
-    document.body.appendChild(resetButton);
+    getViewerRightNav().appendChild(resetButton);
 
     // Function to handle reset button click
     function handleResetButtonClick() {
@@ -141,7 +150,7 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
     updateLockRotationButtonImage();
 
     // Append the lock rotation button to the body
-    document.body.appendChild(lockRotationButton);
+    getViewerRightNav().appendChild(lockRotationButton);
 
     // Define the lock/unlock rotation function
     function toggleRotationLock() {

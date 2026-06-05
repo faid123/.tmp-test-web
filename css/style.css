@@ -16,6 +16,27 @@ body {
   background-color: #A7C7E7;
 }
 
+:root {
+  --viewer-stage-width: calc(100vw - 238px);
+  --viewer-stage-height: 100dvh;
+}
+
+main {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--viewer-stage-width);
+  height: var(--viewer-stage-height);
+}
+
+#container3D {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
 header {
   margin-top: 3em;
   text-align: center;
@@ -28,8 +49,9 @@ header h1 {
 }
 
 #container3D canvas {
-  width: 100vw !important;
-  height: 100vh !important;
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
   position: absolute;
   top: 0;
   left: 0;
@@ -235,17 +257,114 @@ header h1 {
   display: flex !important;
   flex-direction: column;
   position: fixed;
-  bottom: 650px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 90%;
-  max-width: 800px;
-  height: 40%;
-  max-height: 50%;
+  top: auto;
+  right: auto;
+  bottom: 82px;
+  left: 10px;
+  transform: none;
+  width: min(360px, calc(100vw - 20px));
+  height: min(420px, calc(100vh - 102px));
+  max-width: none;
+  max-height: none;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 0 10px rgba(0,0,0,0.2);
   z-index: 9999;
+}
+
+#viewer-meta-bar {
+  position: fixed;
+  left: 10px;
+  bottom: 10px;
+  z-index: 1002;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 268px);
+}
+
+.viewer-meta-bubble {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 250px;
+  min-height: 30px;
+  height: auto;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+}
+
+#viewer-meta-bar #chat-icon {
+  position: static;
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  :root {
+    --viewer-stage-width: 100vw;
+    --viewer-stage-height: calc(100dvh - 112px - env(safe-area-inset-bottom, 0px));
+  }
+
+  html,
+  body {
+    height: auto;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  #viewer-meta-bar {
+    bottom: calc(124px + env(safe-area-inset-bottom, 0px));
+    max-width: calc(100vw - 20px);
+    overflow-x: auto;
+  }
+
+  #chat-widget.active {
+    bottom: calc(198px + env(safe-area-inset-bottom, 0px));
+    height: min(420px, calc(100dvh - 218px - env(safe-area-inset-bottom, 0px)));
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --viewer-stage-width: 100vw;
+    --viewer-stage-height: calc(100dvh - 104px - env(safe-area-inset-bottom, 0px));
+  }
+
+  html,
+  body {
+    height: auto;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  #viewer-meta-bar {
+    bottom: calc(116px + env(safe-area-inset-bottom, 0px));
+    gap: 6px;
+    max-width: calc(100vw - 20px);
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .viewer-meta-bubble {
+    flex: 0 0 auto;
+    width: min(220px, 64vw);
+    font-size: 12px !important;
+  }
+
+  #viewer-meta-bar #chat-icon {
+    flex-basis: 52px;
+    width: 52px !important;
+    height: 52px !important;
+  }
+
+  #chat-widget.active {
+    bottom: calc(180px + env(safe-area-inset-bottom, 0px));
+    width: calc(100vw - 20px);
+    height: min(420px, calc(100dvh - 200px - env(safe-area-inset-bottom, 0px)));
+  }
 }
 
 
