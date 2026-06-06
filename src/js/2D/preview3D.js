@@ -321,14 +321,13 @@ async function fetchJawFilesForCase() {
     }
   };
 
-  // Primary STL source for preview: /stl/raw/get (the table the desktop
-  // client writes into on initial case creation). Fall back to /stl/get for
-  // cases whose STLs were only written through the web client's PUT /stl path.
-  const raw = await tryEndpoint(`${SMARTRPD_API_BASE}/stl/raw/get`, payload);
-  if (raw.length) return raw;
-
+  // Primary STL source for preview: /stl/get. Fall back to /stl/raw/get for
+  // older cases that only have raw jaw uploads.
   const all = await tryEndpoint(`${SMARTRPD_API_BASE}/stl/get`, payload);
   if (all.length) return all;
+
+  const raw = await tryEndpoint(`${SMARTRPD_API_BASE}/stl/raw/get`, payload);
+  if (raw.length) return raw;
 
   // Fallback per-jaw route: /stl/get/:type (1=upper, 2=lower).
   const upperPayload = [payload[0], { ...payload[1], type: 1, jaw_type: "upper_jaw" }];

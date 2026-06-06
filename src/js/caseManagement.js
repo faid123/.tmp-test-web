@@ -313,8 +313,8 @@ async function downloadCaseFiles(caseIntId, caseLabel) {
   ];
 
   const endpoints = [
-    "https://live.api.smartrpdai.com/api/smartrpd/stl/raw/get",
     "https://live.api.smartrpdai.com/api/smartrpd/stl/get",
+    "https://live.api.smartrpdai.com/api/smartrpd/stl/raw/get",
   ];
 
   let files = [];

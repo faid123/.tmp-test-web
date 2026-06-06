@@ -2620,7 +2620,7 @@ btnContainer.appendChild(edit2DStatic); */
       ) {
         responseData = "stl";
         responseData = await apiClient.post(
-          "/stl/raw/get",
+          "/stl/get",
           [data],
           false,
           "Jaw mesh"
