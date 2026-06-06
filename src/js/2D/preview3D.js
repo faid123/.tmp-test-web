@@ -324,10 +324,16 @@ async function fetchJawFilesForCase() {
   // Primary STL source for preview: /stl/get. Fall back to /stl/raw/get for
   // older cases that only have raw jaw uploads.
   const all = await tryEndpoint(`${SMARTRPD_API_BASE}/stl/get`, payload);
-  if (all.length) return all;
+  if (all.length) {
+    console.log(`[preview3D] STL source selected: /stl/get (${all.length} file(s))`);
+    return all;
+  }
 
   const raw = await tryEndpoint(`${SMARTRPD_API_BASE}/stl/raw/get`, payload);
-  if (raw.length) return raw;
+  if (raw.length) {
+    console.log(`[preview3D] STL source selected: /stl/raw/get (${raw.length} file(s))`);
+    return raw;
+  }
 
   // Fallback per-jaw route: /stl/get/:type (1=upper, 2=lower).
   const upperPayload = [payload[0], { ...payload[1], type: 1, jaw_type: "upper_jaw" }];
@@ -342,6 +348,9 @@ async function fetchJawFilesForCase() {
     const jaw = getJawKeyFromFile(item);
     if (jaw && !byJaw.has(jaw)) byJaw.set(jaw, item);
   });
+  if (byJaw.size) {
+    console.log(`[preview3D] STL source selected: /stl/get/:type (${byJaw.size} file(s))`);
+  }
   return [...byJaw.values()];
 }
 

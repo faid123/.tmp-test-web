@@ -2619,6 +2619,7 @@ btnContainer.appendChild(edit2DStatic); */
         !close
       ) {
         responseData = "stl";
+        console.log("[viewer3D] STL source selected: /stl/get (parameterisation fallback)");
         responseData = await apiClient.post(
           "/stl/get",
           [data],
@@ -2628,6 +2629,7 @@ btnContainer.appendChild(edit2DStatic); */
         stl = true;
       } else if (close && url == "/parameterisation/mesh/getall") {
         responseData = "stl";
+        console.log("[viewer3D] STL source selected: /stl/get (close view)");
         responseData = await apiClient.post(
           "/stl/get",
           [data],

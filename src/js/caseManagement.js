@@ -330,7 +330,12 @@ async function downloadCaseFiles(caseIntId, caseLabel) {
       const data = await res.json();
       const list = Array.isArray(data) ? data : [data];
       files = list.filter((item) => item && item.data);
-      if (files.length) break;
+      if (files.length) {
+        console.log(
+          `[case/download] STL source selected: ${endpoint.replace('https://live.api.smartrpdai.com/api/smartrpd', '')} (${files.length} file(s))`
+        );
+        break;
+      }
     } catch (err) {
       console.warn("[case/download] endpoint failed", endpoint, err);
     }
