@@ -314,7 +314,9 @@ async function fetchJawFilesForCase() {
       if (!res.ok) return [];
       const data = await res.json();
       const list = Array.isArray(data) ? data : [data];
-      return list.filter((item) => item?.data && getJawKeyFromFile(item));
+      return list
+        .filter((item) => item?.data && getJawKeyFromFile(item))
+        .map((item) => ({ ...item, __sourcePath: path }));
     } catch (err) {
       console.warn(`[preview3D] ✕ POST ${path} failed`, err);
       return [];
@@ -324,15 +326,23 @@ async function fetchJawFilesForCase() {
   // Primary STL source for preview: /stl/get. Fall back to /stl/raw/get for
   // older cases that only have raw jaw uploads.
   const all = await tryEndpoint(`${SMARTRPD_API_BASE}/stl/get`, payload);
+  const validAll = filterRenderableJawFiles(all, "/stl/get");
+  if (validAll.length) {
+    console.log(`[preview3D] STL source selected: /stl/get (${validAll.length} file(s))`);
+    return validAll;
+  }
   if (all.length) {
-    console.log(`[preview3D] STL source selected: /stl/get (${all.length} file(s))`);
-    return all;
+    console.warn("[preview3D] /stl/get returned mesh data, but none of it is renderable as STL/OFF. Trying /stl/raw/get.");
   }
 
   const raw = await tryEndpoint(`${SMARTRPD_API_BASE}/stl/raw/get`, payload);
+  const validRaw = filterRenderableJawFiles(raw, "/stl/raw/get");
+  if (validRaw.length) {
+    console.log(`[preview3D] STL source selected: /stl/raw/get (${validRaw.length} file(s))`);
+    return validRaw;
+  }
   if (raw.length) {
-    console.log(`[preview3D] STL source selected: /stl/raw/get (${raw.length} file(s))`);
-    return raw;
+    console.warn("[preview3D] /stl/raw/get returned mesh data, but none of it is renderable as STL/OFF.");
   }
 
   // Fallback per-jaw route: /stl/get/:type (1=upper, 2=lower).
@@ -1441,8 +1451,35 @@ async function populateJawPreview(jawFiles, undercut) {
       return Math.floor(new Float32Array(new Uint8Array(bytes).buffer).length / 4);
     };
 
-    let geometry = loader.parse(base64ToArrayBuffer(file.data));
+    const stlBuffer = base64ToArrayBuffer(file.data);
+    const payloadInfo = file.__payloadInfo || inspectMeshPayload(stlBuffer);
+    const sourcePath = file.__sourcePath || "selected STL source";
+    console.log(`[preview3D] ${sourcePath} parse check for ${file?.filename || "unknown"}`, payloadInfo);
+    if (!["binary-stl", "ascii-stl", "off"].includes(payloadInfo.format)) {
+      console.warn(
+        `[preview3D] ${file?.filename || "unknown"} is ${payloadInfo.format}, not a renderable STL/OFF mesh. Parse skipped.`
+      );
+      continue;
+    }
+
+    let geometry;
     let useHeatmap = false;
+
+    if (payloadInfo.format === "off") {
+      const offText = new TextDecoder().decode(stlBuffer);
+      geometry = parseOFFToGeometry(offText);
+      if (!geometry) {
+        console.warn(`[preview3D] ${file?.filename || "unknown"} looked like OFF but could not be parsed.`);
+        continue;
+      }
+      applyUndercutVertexColors(geometry, primarySurface);
+      useHeatmap = true;
+      console.log(`[preview3D] OFF mesh rendered for ${file?.filename || "unknown"}`, {
+        source: sourcePath,
+        vertices: geometry.attributes.position.count,
+      });
+    } else {
+      geometry = loader.parse(stlBuffer);
 
     // Determine which heatmap surface to use, then dedup the mesh to match
     // its vertex count so the backend's first-occurrence vertex indices align
@@ -1482,6 +1519,7 @@ async function populateJawPreview(jawFiles, undercut) {
       }
     } else {
       geometry = mergeStlVertices(geometry);
+    }
     }
     geometry.computeVertexNormals();
 
@@ -2077,6 +2115,79 @@ function base64ToArrayBuffer(base64) {
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
   return bytes.buffer;
+}
+
+function inspectMeshPayload(buffer) {
+  const bytes = new Uint8Array(buffer || new ArrayBuffer(0));
+  const byteLength = bytes.byteLength;
+  const previewLength = Math.min(byteLength, 96);
+  let header = "";
+  for (let i = 0; i < previewLength; i += 1) {
+    const code = bytes[i];
+    header += code >= 32 && code <= 126 ? String.fromCharCode(code) : " ";
+  }
+  const trimmedHeader = header.trim();
+  const upperHeader = trimmedHeader.toUpperCase();
+
+  if (upperHeader.startsWith("OFF")) {
+    return {
+      format: "off",
+      byteLength,
+      header: trimmedHeader.slice(0, 80),
+    };
+  }
+
+  if (/^SOLID\b/i.test(trimmedHeader)) {
+    return {
+      format: "ascii-stl",
+      byteLength,
+      header: trimmedHeader.slice(0, 80),
+    };
+  }
+
+  if (byteLength >= 84) {
+    const view = new DataView(buffer);
+    const triangleCount = view.getUint32(80, true);
+    const expectedBinaryBytes = 84 + triangleCount * 50;
+    return {
+      format: expectedBinaryBytes === byteLength ? "binary-stl" : "unknown-binary",
+      byteLength,
+      binaryStlTriangleCount: triangleCount,
+      expectedBinaryStlBytes: expectedBinaryBytes,
+      header: trimmedHeader.slice(0, 80),
+    };
+  }
+
+  return {
+    format: "unknown",
+    byteLength,
+    header: trimmedHeader.slice(0, 80),
+  };
+}
+
+function filterRenderableJawFiles(files, sourcePath) {
+  const valid = [];
+  for (const file of files || []) {
+    let payloadInfo;
+    try {
+      payloadInfo = inspectMeshPayload(base64ToArrayBuffer(file.data));
+    } catch (err) {
+      console.warn(`[preview3D] ${sourcePath} payload check failed for ${file?.filename || "unknown"}`, err);
+      continue;
+    }
+
+    const checkedFile = { ...file, __sourcePath: sourcePath, __payloadInfo: payloadInfo };
+    console.log(`[preview3D] ${sourcePath} payload check for ${file?.filename || "unknown"}`, payloadInfo);
+
+    if (["binary-stl", "ascii-stl", "off"].includes(payloadInfo.format)) {
+      valid.push(checkedFile);
+    } else {
+      console.warn(
+        `[preview3D] ${sourcePath} returned ${payloadInfo.format} for ${file?.filename || "unknown"}; expected STL or OFF.`
+      );
+    }
+  }
+  return valid;
 }
 
 function isUpper(file) {
