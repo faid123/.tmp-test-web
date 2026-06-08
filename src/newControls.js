@@ -24,11 +24,11 @@ style.textContent = `
 
   .component-panel {
     position: fixed;
-    right: 20px;
+    right: 258px;
     top: 50%;
     transform: translateY(-50%);
     z-index: 1002;
-    width: min(380px, calc(100vw - 24px));
+    width: min(380px, calc(100vw - 290px));
     max-height: calc(100vh - 32px);
     overflow: auto;
     border: 1px solid rgba(255, 255, 255, 0.12);
@@ -238,10 +238,10 @@ style.textContent = `
     }
 
     .component-panel {
-      right: 8px;
+      right: 248px;
       top: 50%;
       transform: translateY(-50%);
-      width: min(320px, 62vw);
+      width: min(320px, calc(100vw - 280px));
       max-height: calc(100vh - 20px);
     }
   }
@@ -259,9 +259,10 @@ style.textContent = `
     }
 
     .component-panel {
-      right: 10px;
-      bottom: auto;
-      transform: translateY(-50%);
+      right: 16px;
+      top: auto;
+      bottom: calc(130px + env(safe-area-inset-bottom, 0px));
+      transform: none;
       max-width: calc(100vw - 20px);
       overflow: auto;
       border: 1px solid rgba(255, 255, 255, 0.12);
@@ -406,9 +407,10 @@ style.textContent = `
     }
 
     .component-panel {
-      top: calc((100vh - 112px) / 2);
+      top: auto;
+      bottom: calc(130px + env(safe-area-inset-bottom, 0px));
       width: min(420px, calc(100vw - 20px));
-      max-height: calc(100vh - 132px);
+      max-height: calc(100vh - 154px);
     }
   }
 
@@ -420,9 +422,11 @@ style.textContent = `
     }
 
     .component-panel {
-      top: calc((100vh - 104px) / 2);
+      top: auto;
+      right: 12px;
+      bottom: calc(86px + env(safe-area-inset-bottom, 0px));
       width: min(360px, calc(100vw - 20px));
-      max-height: calc(100vh - 124px);
+      max-height: calc(100vh - 112px);
     }
 
     .component-row {

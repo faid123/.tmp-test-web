@@ -337,6 +337,84 @@ function saveAnnotationBackground(storageKey, dataUrl) {
   }
 }
 
+// ── Hamburger menu ──────────────────────────────────────────────────────────
+
+function createHamburgerButton() {
+  if (document.getElementById("sidebar-hamburger-btn")) return;
+
+  const btn = document.createElement("button");
+  btn.id = "sidebar-hamburger-btn";
+  btn.setAttribute("aria-label", "More controls");
+  btn.setAttribute("aria-expanded", "false");
+  btn.innerHTML = `<svg width="22" height="18" viewBox="0 0 22 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <rect width="22" height="2.5" rx="1.25" fill="currentColor"/>
+    <rect y="7.75" width="22" height="2.5" rx="1.25" fill="currentColor"/>
+    <rect y="15.5" width="22" height="2.5" rx="1.25" fill="currentColor"/>
+  </svg>`;
+  btn.addEventListener("click", toggleHamburgerDrawer);
+  document.body.appendChild(btn);
+
+  const backdrop = document.createElement("div");
+  backdrop.id = "hamburger-backdrop";
+  backdrop.addEventListener("click", closeHamburgerDrawer);
+  document.body.appendChild(backdrop);
+
+  const drawer = document.createElement("div");
+  drawer.id = "hamburger-drawer";
+
+  const header = document.createElement("div");
+  header.id = "hamburger-drawer-header";
+  const title = document.createElement("span");
+  title.textContent = "Controls";
+  const closeBtn = document.createElement("button");
+  closeBtn.id = "hamburger-drawer-close";
+  closeBtn.setAttribute("aria-label", "Close menu");
+  closeBtn.textContent = "×";
+  closeBtn.addEventListener("click", closeHamburgerDrawer);
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+  drawer.appendChild(header);
+
+  const content = document.createElement("div");
+  content.id = "hamburger-drawer-content";
+  drawer.appendChild(content);
+
+  document.body.appendChild(drawer);
+}
+
+function populateHamburgerDrawer() {
+  const content = document.getElementById("hamburger-drawer-content");
+  const nav = getViewerRightNav();
+  if (!content || !nav) return;
+
+  [
+    nav.querySelector("#component-panel-toggle"),
+    nav.querySelector("#polyline-visibility-menu"),
+    nav.querySelector(".smart-btn-container-3d"),
+    nav.querySelector("#viewer-meta-dates"),
+  ]
+    .filter(Boolean)
+    .forEach((el) => content.appendChild(el));
+}
+
+function toggleHamburgerDrawer() {
+  const drawer = document.getElementById("hamburger-drawer");
+  const btn = document.getElementById("sidebar-hamburger-btn");
+  if (!drawer) return;
+  populateHamburgerDrawer();
+  const isOpen = drawer.classList.toggle("open");
+  document.getElementById("hamburger-backdrop")?.classList.toggle("open", isOpen);
+  btn?.setAttribute("aria-expanded", String(isOpen));
+}
+
+function closeHamburgerDrawer() {
+  document.getElementById("hamburger-drawer")?.classList.remove("open");
+  document.getElementById("hamburger-backdrop")?.classList.remove("open");
+  document.getElementById("sidebar-hamburger-btn")?.setAttribute("aria-expanded", "false");
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+
 function getViewerRightNav() {
   let nav = document.getElementById("viewer-right-nav");
   if (nav) return nav;
@@ -546,12 +624,21 @@ function setViewerRotationAnchorToCurrentTarget(control = controls) {
 function bindViewerRotationTargetAnchor(domElement) {
   if (!domElement) return;
   const activeTouchPointers = new Set();
+  const touchPointerPositions = new Map();
   const manualPanState = {
     active: false,
     lastX: 0,
     lastY: 0,
     pointerId: null,
   };
+  const touchGestureState = {
+    active: false,
+    lastCenterX: 0,
+    lastCenterY: 0,
+    lastDistance: 0,
+  };
+  const minTouchZoom = 2;
+  const maxTouchZoom = 20;
 
   const releaseRotationAnchor = () => {
     isViewerLeftButtonRotating = false;
@@ -563,6 +650,29 @@ function bindViewerRotationTargetAnchor(domElement) {
     }
     manualPanState.active = false;
     manualPanState.pointerId = null;
+  };
+
+  const getTouchGestureMetrics = () => {
+    const points = Array.from(touchPointerPositions.values());
+    if (points.length < 2) return null;
+    const [first, second] = points;
+    const deltaX = second.x - first.x;
+    const deltaY = second.y - first.y;
+    return {
+      centerX: (first.x + second.x) / 2,
+      centerY: (first.y + second.y) / 2,
+      distance: Math.hypot(deltaX, deltaY),
+    };
+  };
+
+  const releaseTouchGesture = () => {
+    touchGestureState.active = false;
+    touchGestureState.lastCenterX = 0;
+    touchGestureState.lastCenterY = 0;
+    touchGestureState.lastDistance = 0;
+    if (controls) {
+      controls.enabled = true;
+    }
   };
 
   const panViewerTargetByScreenDelta = (deltaX, deltaY) => {
@@ -588,6 +698,39 @@ function bindViewerRotationTargetAnchor(domElement) {
     clampViewerControlTarget(controls);
     viewerRotationTargetAnchor.copy(controls.target);
     camera.updateProjectionMatrix();
+  };
+
+  const zoomViewerByScale = (scaleFactor) => {
+    if (!camera || !Number.isFinite(scaleFactor) || scaleFactor <= 0) return;
+    const nextZoom = THREE.MathUtils.clamp(
+      (camera.zoom || 1) * scaleFactor,
+      minTouchZoom,
+      maxTouchZoom
+    );
+    if (!Number.isFinite(nextZoom)) return;
+    camera.zoom = nextZoom;
+    camera.updateProjectionMatrix();
+    clampViewerControlTarget(controls);
+    viewerRotationTargetAnchor.copy(controls.target);
+    if (orb_controls?.target) {
+      orb_controls.target.copy(controls.target);
+    }
+  };
+
+  const startTouchGesture = (event) => {
+    event.preventDefault();
+    event.stopImmediatePropagation?.();
+    releaseRotationAnchor();
+    releaseManualPan();
+    const metrics = getTouchGestureMetrics();
+    if (!metrics) return;
+    touchGestureState.active = true;
+    touchGestureState.lastCenterX = metrics.centerX;
+    touchGestureState.lastCenterY = metrics.centerY;
+    touchGestureState.lastDistance = Math.max(metrics.distance, 1);
+    if (controls) {
+      controls.enabled = false;
+    }
   };
 
   const startManualPan = (event) => {
@@ -624,8 +767,12 @@ function bindViewerRotationTargetAnchor(domElement) {
 
     if (event.pointerType === "touch") {
       activeTouchPointers.add(event.pointerId);
+      touchPointerPositions.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
       if (activeTouchPointers.size > 1) {
-        releaseRotationAnchor();
+        startTouchGesture(event);
         return;
       }
     } else if (event.button === 2) {
@@ -645,6 +792,10 @@ function bindViewerRotationTargetAnchor(domElement) {
   const releasePointer = (event) => {
     if (event.pointerType === "touch") {
       activeTouchPointers.delete(event.pointerId);
+      touchPointerPositions.delete(event.pointerId);
+      if (activeTouchPointers.size < 2) {
+        releaseTouchGesture();
+      }
     }
     releaseRotationAnchor();
     if (event.type !== "pointerleave") {
@@ -655,14 +806,40 @@ function bindViewerRotationTargetAnchor(domElement) {
   domElement.addEventListener("pointerup", releasePointer);
   domElement.addEventListener("pointercancel", releasePointer);
   domElement.addEventListener("pointerleave", releasePointer);
-  domElement.addEventListener("pointermove", moveManualPan, true);
+  domElement.addEventListener("pointermove", (event) => {
+    if (event.pointerType === "touch" && activeTouchPointers.has(event.pointerId)) {
+      touchPointerPositions.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
+      if (touchGestureState.active) {
+        event.preventDefault();
+        event.stopImmediatePropagation?.();
+        const metrics = getTouchGestureMetrics();
+        if (!metrics) return;
+        const deltaX = metrics.centerX - touchGestureState.lastCenterX;
+        const deltaY = metrics.centerY - touchGestureState.lastCenterY;
+        touchGestureState.lastCenterX = metrics.centerX;
+        touchGestureState.lastCenterY = metrics.centerY;
+        panViewerTargetByScreenDelta(deltaX, deltaY);
+        if (touchGestureState.lastDistance > 0 && metrics.distance > 0) {
+          zoomViewerByScale(metrics.distance / touchGestureState.lastDistance);
+        }
+        touchGestureState.lastDistance = Math.max(metrics.distance, 1);
+        return;
+      }
+    }
+    moveManualPan(event);
+  }, true);
   domElement.addEventListener("contextmenu", (event) => {
     event.preventDefault();
   });
   window.addEventListener("blur", () => {
     activeTouchPointers.clear();
+    touchPointerPositions.clear();
     releaseRotationAnchor();
     releaseManualPan();
+    releaseTouchGesture();
   });
 }
 
@@ -841,6 +1018,16 @@ function createPresetViewControls() {
     button.type = "button";
     button.className = `preset-view-button preset-view-${view.slot}`;
     button.dataset.viewKey = view.key;
+    const mobileArrowByView = {
+      front: "right",
+      rear: "left",
+      top: "up",
+      bottom: "down",
+      left: "left",
+      right: "right",
+      center: "center",
+    };
+    button.dataset.mobileArrow = mobileArrowByView[view.key] || "";
     const ariaLabel =
       view.key === "center" ? "Center model view" : `${view.label} view`;
     button.title = ariaLabel;
@@ -2421,14 +2608,32 @@ function createPolylineVisibilityToggle(container, domElement) {
     const compact = window.innerWidth <= 640 || window.innerHeight <= 720;
     button.style.width = phone ? "128px" : tablet ? "140px" : "100%";
     button.style.height = phone ? "60px" : tablet ? "64px" : "40px";
-    panel.style.right = compact ? "8px" : "20px";
-    panel.style.top = "50%";
-    panel.style.width = compact
-      ? "min(300px, calc(100vw - 16px))"
-      : "min(360px, calc(100vw - 40px))";
-    panel.style.maxHeight = compact
-      ? "calc(100vh - 20px)"
-      : "calc(100vh - 40px)";
+    if (phone) {
+      panel.style.right = "12px";
+      panel.style.top = "auto";
+      panel.style.bottom = "calc(86px + env(safe-area-inset-bottom, 0px))";
+      panel.style.transform = "none";
+      panel.style.width = "min(340px, calc(100vw - 24px))";
+      panel.style.maxHeight = "calc(100vh - 112px)";
+    } else if (tablet) {
+      panel.style.right = "16px";
+      panel.style.top = "auto";
+      panel.style.bottom = "calc(130px + env(safe-area-inset-bottom, 0px))";
+      panel.style.transform = "none";
+      panel.style.width = "min(360px, calc(100vw - 32px))";
+      panel.style.maxHeight = "calc(100vh - 154px)";
+    } else {
+      panel.style.right = compact ? "248px" : "258px";
+      panel.style.top = "50%";
+      panel.style.bottom = "auto";
+      panel.style.transform = "translateY(-50%)";
+      panel.style.width = compact
+        ? "min(320px, calc(100vw - 280px))"
+        : "min(360px, calc(100vw - 290px))";
+      panel.style.maxHeight = compact
+        ? "calc(100vh - 24px)"
+        : "calc(100vh - 40px)";
+    }
   };
 
   const actions = document.createElement("div");
@@ -3712,11 +3917,182 @@ btnContainer.appendChild(edit2DStatic); */
     pointer-events: auto;
   }
 
+  /* ── Hamburger button (all screen sizes) ── */
+  #sidebar-hamburger-btn {
+    display: flex;
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 1060;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 8px;
+    background: rgba(48, 48, 48, 0.92);
+    color: #ffffff;
+    cursor: pointer;
+  }
+
+  #sidebar-hamburger-btn:hover {
+    background: rgba(68, 68, 68, 0.98);
+  }
+
+  /* ── Always hide hamburger items from the nav (all sizes) ── */
+  #viewer-right-nav > #component-panel-toggle,
+  #viewer-right-nav > #polyline-visibility-menu,
+  #viewer-right-nav > .smart-btn-container-3d,
+  #viewer-right-nav > #viewer-meta-dates {
+    display: none !important;
+  }
+
+  /* ── Hamburger backdrop ── */
+  #hamburger-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  #hamburger-backdrop.open { display: block; }
+
+  /* ── Drawer: desktop — panel sliding in from the right, left of the sidebar ── */
+  #hamburger-drawer {
+    display: none;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    left: auto;
+    width: 238px;
+    max-height: 100dvh;
+    z-index: 1045;
+    flex-direction: column;
+    background: rgba(18, 18, 18, 0.98);
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+    border-right: none;
+    border-radius: 0;
+    box-shadow: -4px 0 18px rgba(0, 0, 0, 0.32);
+    backdrop-filter: blur(8px);
+    overflow: hidden;
+  }
+
+  #hamburger-drawer.open { display: flex; }
+
+  #hamburger-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font: 700 14px Arial, sans-serif;
+    color: #ffffff;
+    flex: 0 0 auto;
+    background: rgba(28, 28, 28, 0.98);
+  }
+
+  #hamburger-drawer-close {
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+
+  #hamburger-drawer-content {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  /* Items inside the drawer fill the full width */
+  #hamburger-drawer-content > * {
+    width: 100% !important;
+    flex: 0 0 auto;
+    pointer-events: auto;
+    box-sizing: border-box;
+  }
+
+  #hamburger-drawer-content .smart-btn-container-3d {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  #hamburger-drawer-content .smart-btn,
+  #hamburger-drawer-content .component-panel-toggle {
+    width: 100% !important;
+    min-width: 0;
+  }
+
+  /* ── Tablet: slide-up from above bottom bar ── */
+  @media (min-width: 769px) and (max-width: 1024px) {
+    #hamburger-drawer {
+      top: 16px;
+      left: auto;
+      right: 0;
+      bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+      width: 176px;
+      max-height: none;
+      border-left: 1px solid rgba(255, 255, 255, 0.18);
+      border-top: none;
+      border-radius: 16px 0 0 16px;
+      box-shadow: -10px 0 36px rgba(0, 0, 0, 0.5);
+    }
+  }
+
+  /* ── Mobile: slide-up from above bottom bar ── */
+  @media (max-width: 768px) {
+    #hamburger-drawer {
+      top: 12px;
+      left: auto;
+      right: 0;
+      bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+      width: 164px;
+      max-height: none;
+      border-left: 1px solid rgba(255, 255, 255, 0.18);
+      border-top: none;
+      border-radius: 16px 0 0 16px;
+      box-shadow: -10px 0 36px rgba(0, 0, 0, 0.5);
+    }
+  }
+
   #viewer-right-nav-top-row {
     display: flex;
     flex-direction: row;
+    align-items: center;
     gap: 8px;
     flex: 0 0 auto;
+    position: fixed;
+    right: 88px;
+    bottom: 16px;
+    z-index: 1060;
+  }
+
+  #reset-button,
+  #lock-rotation-button {
+    width: 64px;
+    min-width: 64px;
+    height: 64px;
+    padding: 8px;
+  }
+
+  #reset-icon {
+    width: 42px;
+    height: 42px;
   }
 
   #viewer-meta-dates {
@@ -3756,11 +4132,11 @@ btnContainer.appendChild(edit2DStatic); */
 
   .mail-popup {
     position: fixed;
-    right: 20px;
+    right: 258px;
     top: 50%;
     transform: translateY(-50%);
     z-index: 1002;
-    width: min(360px, calc(100vw - 40px));
+    width: min(360px, calc(100vw - 290px));
     max-height: calc(100vh - 40px);
     overflow: auto;
     padding: 14px;
@@ -3812,7 +4188,7 @@ btnContainer.appendChild(edit2DStatic); */
   }
 
   .preset-view-panel {
-    position: static;
+    position: fixed;
     z-index: 1000;
     width: 224px;
     padding: 0;
@@ -3824,13 +4200,15 @@ btnContainer.appendChild(edit2DStatic); */
     font-family: Arial, sans-serif;
     text-align: center;
     pointer-events: none;
+    right: 16px;
+    bottom: 92px;
   }
 
   .preset-view-pad {
     position: relative;
     width: 196px;
     height: 214px;
-    margin: 0 auto;
+    margin: 0 0 0 auto;
   }
 
   .preset-view-button {
@@ -3973,6 +4351,13 @@ btnContainer.appendChild(edit2DStatic); */
 
   /* Tablet toolbar: larger touch targets, horizontally scrollable. */
   @media (min-width: 769px) and (max-width: 1024px) {
+    #sidebar-hamburger-btn {
+      right: 16px;
+      bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+      width: 64px;
+      height: 64px;
+    }
+
     #viewer-right-nav {
       top: auto;
       left: 0;
@@ -4006,32 +4391,182 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .preset-view-panel {
-      position: static;
-      width: 180px;
-      height: 92px;
-      overflow: hidden;
+      position: fixed;
+      left: 18px;
+      bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+      width: 290px;
+      height: 64px;
+      padding: 8px 10px;
+      overflow: visible;
       transform: none;
-      background: transparent;
+      background: rgba(42, 42, 42, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 0;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+      z-index: 1015;
     }
 
     .preset-view-pad {
+      width: 270px;
+      height: 48px;
+      margin: 0;
+      transform: none;
+    }
+
+    .preset-view-center {
+      display: none;
+    }
+
+    .preset-view-top,
+    .preset-view-front,
+    .preset-view-rear {
+      width: 28px;
+      height: 28px;
+      transform: none;
+    }
+
+    .preset-view-left,
+    .preset-view-right {
+      width: 28px;
+      height: 28px;
+      transform: none;
+    }
+
+    .preset-view-bottom {
+      width: 28px;
+      height: 28px;
+      transform: none;
+    }
+
+    .preset-view-front {
+      left: 0;
+      top: 0;
+    }
+
+    .preset-view-top .preset-view-face,
+    .preset-view-front .preset-view-face,
+    .preset-view-rear .preset-view-face {
+      clip-path: none;
+    }
+
+    .preset-view-rear {
+      left: 40px;
+      top: 0;
+    }
+
+    .preset-view-top {
+      left: 80px;
+      top: 0;
+    }
+
+    .preset-view-bottom {
+      left: 120px;
+      top: 0;
+    }
+
+    .preset-view-bottom .preset-view-face {
+      clip-path: none;
+    }
+
+    .preset-view-left {
+      left: 160px;
+      top: 10px;
+    }
+
+    .preset-view-left .preset-view-face {
+      clip-path: none;
+    }
+
+    .preset-view-right {
+      left: 220px;
+      top: 10px;
+    }
+
+    .preset-view-right .preset-view-face {
+      clip-path: none;
+    }
+
+    .preset-view-button {
+      filter: none;
+    }
+
+    .preset-view-button .preset-view-face {
       position: relative;
-      left: auto;
-      bottom: auto;
-      margin: -62px auto 0;
-      transform: scale(0.5);
-      transform-origin: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      border: 0;
+    }
+
+    .preset-view-front .preset-view-face::after,
+    .preset-view-rear .preset-view-face::after,
+    .preset-view-top .preset-view-face::after,
+    .preset-view-bottom .preset-view-face::after,
+    .preset-view-left .preset-view-face::after,
+    .preset-view-right .preset-view-face::after {
+      position: absolute;
+      left: 50%;
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1;
+      transform: translateX(-50%);
+    }
+
+    .preset-view-front .preset-view-face::after,
+    .preset-view-rear .preset-view-face::after,
+    .preset-view-top .preset-view-face::after,
+    .preset-view-bottom .preset-view-face::after,
+    .preset-view-left .preset-view-face::after,
+    .preset-view-right .preset-view-face::after {
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .preset-view-front .preset-view-face::after {
+      content: "\\2197";
+    }
+
+    .preset-view-rear .preset-view-face::after {
+      content: "\\2199";
+    }
+
+    .preset-view-top .preset-view-face::after {
+      content: "\\2191";
+    }
+
+    .preset-view-bottom .preset-view-face::after {
+      content: "\\2193";
+    }
+
+    .preset-view-left .preset-view-face::after {
+      content: "\\2190";
+    }
+
+    .preset-view-right .preset-view-face::after {
+      content: "\\2192";
+    }
+
+    #viewer-right-nav-top-row {
+      position: fixed;
+      right: 92px;
+      bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+      z-index: 1060;
+      gap: 8px;
+      order: initial;
     }
 
     #reset-button,
     #lock-rotation-button {
       display: flex !important;
       flex: 0 0 auto;
-    }
-
-    #reset-button,
-    #lock-rotation-button {
-      height: 78px;
+      width: 64px;
+      min-width: 64px;
+      height: 64px;
+      padding: 8px;
     }
 
     #reset-icon {
@@ -4041,26 +4576,53 @@ btnContainer.appendChild(edit2DStatic); */
 
     .smart-btn-container-3d {
       display: flex;
-      flex-direction: row;
+      flex-direction: column;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
 
     .smart-btn-container-3d .smart-btn {
       min-width: 140px;
       height: 64px;
       white-space: nowrap;
+      margin: 0 auto;
+    }
+
+    #hamburger-drawer-content {
+      align-items: center;
+      gap: 8px;
+      padding: 12px 10px;
+    }
+
+    #hamburger-drawer-content .smart-btn,
+    #hamburger-drawer-content .component-panel-toggle,
+    #hamburger-drawer-content #polyline-visibility-toggle {
+      width: 140px !important;
+      min-width: 140px !important;
+      height: 64px !important;
+      margin: 0 auto;
     }
 
     .mail-popup,
     #polyline-visibility-panel {
-      bottom: calc(124px + env(safe-area-inset-bottom, 0px)) !important;
-      max-height: calc(100vh - 144px) !important;
+      right: 16px !important;
+      top: auto !important;
+      bottom: calc(130px + env(safe-area-inset-bottom, 0px)) !important;
+      transform: none !important;
+      width: min(360px, calc(100vw - 32px)) !important;
+      max-height: calc(100vh - 154px) !important;
     }
   }
 
   /* Phone toolbar: compact, horizontally scrollable, and keeps every tool available. */
   @media (max-width: 768px) {
+    #sidebar-hamburger-btn {
+      right: 12px;
+      bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+      width: 60px;
+      height: 60px;
+    }
+
     #viewer-right-nav {
       top: auto;
       left: 0;
@@ -4096,47 +4658,191 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .preset-view-panel {
-      position: static;
-      width: 180px;
-      height: 84px;
-      overflow: hidden;
+      position: fixed;
+      left: 12px;
+      bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+      width: 246px;
+      height: 72px;
+      padding: 6px 8px;
+      overflow: visible;
       transform: none;
-      background: transparent;
+      background: rgba(42, 42, 42, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 0;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+      z-index: 1015;
     }
 
     .preset-view-pad {
+      width: 230px;
+      height: 60px;
+      margin: 0;
+      transform: none;
+    }
+
+    .preset-view-center {
+      display: none;
+    }
+
+    .preset-view-top,
+    .preset-view-front,
+    .preset-view-rear {
+      width: 24px;
+      height: 24px;
+      transform: none;
+    }
+
+    .preset-view-left,
+    .preset-view-right {
+      width: 24px;
+      height: 24px;
+      transform: none;
+    }
+
+    .preset-view-bottom {
+      width: 24px;
+      height: 24px;
+      transform: none;
+    }
+
+    .preset-view-front {
+      left: 0;
+      top: 0;
+    }
+
+    .preset-view-top .preset-view-face,
+    .preset-view-front .preset-view-face,
+    .preset-view-rear .preset-view-face {
+      clip-path: none;
+    }
+
+    .preset-view-rear {
+      left: 32px;
+      top: 0;
+    }
+
+    .preset-view-top {
+      left: 64px;
+      top: 0;
+    }
+
+    .preset-view-bottom {
+      left: 96px;
+      top: 0;
+    }
+
+    .preset-view-bottom .preset-view-face {
+      clip-path: none;
+    }
+
+    .preset-view-left {
+      left: 128px;
+      top: 12px;
+    }
+
+    .preset-view-left .preset-view-face {
+      clip-path: none;
+    }
+
+    .preset-view-right {
+      left: 182px;
+      top: 12px;
+    }
+
+    .preset-view-right .preset-view-face {
+      clip-path: none;
+    }
+
+    .preset-view-button {
+      filter: none;
+    }
+
+    .preset-view-button .preset-view-face {
       position: relative;
-      left: auto;
-      bottom: auto;
-      margin: -66px auto 0;
-      transform: scale(0.44);
-      transform-origin: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      border: 0;
+    }
+
+    .preset-view-button[data-mobile-arrow="right"] .preset-view-face::after,
+    .preset-view-button[data-mobile-arrow="left"] .preset-view-face::after,
+    .preset-view-button[data-mobile-arrow="up"] .preset-view-face::after,
+    .preset-view-button[data-mobile-arrow="down"] .preset-view-face::after {
+      position: absolute;
+      left: 50%;
+      color: #ffffff;
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1;
+      transform: translateX(-50%);
+    }
+
+    .preset-view-front .preset-view-face::after,
+    .preset-view-rear .preset-view-face::after,
+    .preset-view-top .preset-view-face::after,
+    .preset-view-bottom .preset-view-face::after,
+    .preset-view-left .preset-view-face::after,
+    .preset-view-right .preset-view-face::after {
+      top: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .preset-view-front .preset-view-face::after {
+      content: "\\2197";
+    }
+
+    .preset-view-rear .preset-view-face::after {
+      content: "\\2199";
+    }
+
+    .preset-view-top .preset-view-face::after {
+      content: "\\2191";
+    }
+
+    .preset-view-bottom .preset-view-face::after {
+      content: "\\2193";
+    }
+
+    .preset-view-left .preset-view-face::after {
+      content: "\\2190";
+    }
+
+    .preset-view-right .preset-view-face::after {
+      content: "\\2192";
+    }
+
+    #viewer-right-nav-top-row {
+      position: fixed;
+      right: 80px;
+      bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+      z-index: 1060;
+      gap: 8px;
+      order: initial;
     }
 
     #reset-button,
     #lock-rotation-button {
       display: flex !important;
       flex: 0 0 auto;
-    }
-
-    #reset-button,
-    #lock-rotation-button {
-      width: auto;
-      min-width: 72px;
-      height: 76px;
-      padding: 6px 10px;
-      font-size: 12px;
+      width: 60px;
+      min-width: 60px;
+      height: 60px;
+      padding: 6px;
     }
 
     #reset-icon {
-      width: 44px;
-      height: 44px;
-      margin-right: 4px;
+      width: 40px;
+      height: 40px;
+      margin-right: 0;
     }
 
     .smart-btn-container-3d {
       display: flex;
-      flex-direction: row;
+      flex-direction: column;
       align-items: center;
       gap: 8px;
     }
@@ -4146,12 +4852,32 @@ btnContainer.appendChild(edit2DStatic); */
       height: 60px;
       padding: 10px 14px;
       white-space: nowrap;
+      margin: 0 auto;
+    }
+
+    #hamburger-drawer-content {
+      align-items: center;
+      gap: 8px;
+      padding: 10px 8px;
+    }
+
+    #hamburger-drawer-content .smart-btn,
+    #hamburger-drawer-content .component-panel-toggle,
+    #hamburger-drawer-content #polyline-visibility-toggle {
+      width: 128px !important;
+      min-width: 128px !important;
+      height: 60px !important;
+      margin: 0 auto;
     }
 
     .mail-popup,
     #polyline-visibility-panel {
-      bottom: calc(116px + env(safe-area-inset-bottom, 0px)) !important;
-      max-height: calc(100vh - 136px) !important;
+      right: 12px !important;
+      top: auto !important;
+      bottom: calc(86px + env(safe-area-inset-bottom, 0px)) !important;
+      transform: none !important;
+      width: min(340px, calc(100vw - 24px)) !important;
+      max-height: calc(100vh - 112px) !important;
     }
   }
 	
@@ -4845,6 +5571,7 @@ btnContainer.appendChild(edit2DStatic); */
     return target?.clone?.() || null;
   });
   createPresetViewControls();
+  createHamburgerButton();
   setupChatToggle();
   //console.log(camera)
 
