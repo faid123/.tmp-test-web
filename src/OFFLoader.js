@@ -137,18 +137,7 @@ if(check){
                   var r = rgbaColorsArray[i * 4];
                   var g = rgbaColorsArray[i * 4 + 1];
                   var b = rgbaColorsArray[i * 4 + 2];
-                  if (
-                    !Number.isFinite(r) ||
-                    !Number.isFinite(g) ||
-                    !Number.isFinite(b) ||
-                    (r === 0 && g === 0 && b === 0)
-                  )
-                    {
-                      r = 208/255;
-                      g = 190/255;
-                      b = 141/255;
-                    }
-                  else if(r==1)
+                  if(r==1)
                     {
                       r= 208/255;
                     }

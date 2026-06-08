@@ -3645,6 +3645,7 @@ export function createArtificialTeethRenderer({
   };
 
   const postArtificialTeethJson = async (endpoint, payload) => {
+    await apiClient.ensureSession();
     const response = await fetch(`${apiClient.baseUrl}${endpoint}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

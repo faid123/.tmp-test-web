@@ -2891,15 +2891,21 @@ function setupChatToggle() {
   } catch (error) {
     console.error("Error:", error);
   }
-  //for all the text info
+  //for all the text info — added to sidebar
   const time = unixToHumanReadable(positionData.creation_date);
   const update_time = unixToHumanReadable(positionData.last_updated);
+
+  const metaDatesSection = document.createElement("div");
+  metaDatesSection.id = "viewer-meta-dates";
+  metaDatesSection.style.order = "85";
+  getViewerRightNav().appendChild(metaDatesSection);
+
   createTextbox("Creation Date: " + time, "bottom-left");
   //createTextbox("Case Name: " + positionData.case_id, 'bottom-right');
   createTextbox(
     "Last Updated: " +
       update_time +
-      " Last Edited by: " +
+      " — " +
       positionData.username,
     "bottom-left2"
   );
@@ -3528,6 +3534,14 @@ btnContainer.appendChild(edit2DStatic); */
           });
           btnContainer3D.appendChild(loadOtherStlButton);
 
+          const legendToggleBtn = document.createElement("button");
+          legendToggleBtn.textContent = "Measurement Legend";
+          legendToggleBtn.className = "smart-btn legend-toggle-btn";
+          legendToggleBtn.addEventListener("click", () => {
+            window.toggleMeasurementLegend?.();
+          });
+          btnContainer3D.appendChild(legendToggleBtn);
+
           // Append the container to the body
           if (btnContainer.children.length > 0) {
             document.body.appendChild(btnContainer);
@@ -3663,6 +3677,14 @@ btnContainer.appendChild(edit2DStatic); */
       background-color: #007bff;
   }
 
+  .smart-btn.legend-toggle-btn {
+      background-color: #4a5568;
+  }
+
+  .smart-btn.legend-toggle-btn:hover {
+      background-color: #5a6478;
+  }
+
   #viewer-right-nav {
     position: fixed;
     top: 0;
@@ -3688,6 +3710,25 @@ btnContainer.appendChild(edit2DStatic); */
   #viewer-right-nav > * {
     flex: 0 0 auto;
     pointer-events: auto;
+  }
+
+  #viewer-right-nav-top-row {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+
+  #viewer-meta-dates {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  #viewer-meta-dates .viewer-meta-bubble {
+    max-width: none;
+    width: 100%;
+    box-sizing: border-box;
   }
 
 /*   .smart-btn-container-2d {
@@ -3955,6 +3996,10 @@ btnContainer.appendChild(edit2DStatic); */
       -webkit-overflow-scrolling: touch;
     }
 
+    #viewer-right-nav-top-row {
+      flex-direction: row;
+    }
+
     #viewer-right-nav > * {
       flex: 0 0 auto;
       position: static;
@@ -4038,6 +4083,10 @@ btnContainer.appendChild(edit2DStatic); */
       scroll-snap-type: x proximity;
       overscroll-behavior-x: contain;
       -webkit-overflow-scrolling: touch;
+    }
+
+    #viewer-right-nav-top-row {
+      flex-direction: row;
     }
 
     #viewer-right-nav > * {
@@ -4636,17 +4685,23 @@ btnContainer.appendChild(edit2DStatic); */
     const textbox = document.createElement("div");
     textbox.textContent = text;
     textbox.className = "viewer-meta-bubble";
-    textbox.style.backgroundColor = "rgba(255, 255, 255, 0.8)";
-    textbox.style.padding = "5px";
-    textbox.style.border = "1px solid #ccc";
+    textbox.style.backgroundColor = "rgba(255, 255, 255, 0.06)";
+    textbox.style.padding = "7px 10px";
+    textbox.style.border = "1px solid rgba(255, 255, 255, 0.12)";
     textbox.style.borderRadius = "5px";
     textbox.style.fontFamily = "Arial, sans-serif";
-    textbox.style.fontSize = "15px";
-    textbox.style.color = "#333";
-    textbox.style.boxShadow = "0 2px 10px rgba(0, 0, 0, 0.1)";
+    textbox.style.fontSize = "11px";
+    textbox.style.color = "rgba(255, 255, 255, 0.75)";
+    textbox.style.lineHeight = "1.4";
+    textbox.style.wordBreak = "break-word";
 
     textbox.dataset.position = position;
-    getViewerMetaBar().appendChild(textbox);
+    const datesSection = document.getElementById("viewer-meta-dates");
+    if (datesSection) {
+      datesSection.appendChild(textbox);
+    } else {
+      getViewerMetaBar().appendChild(textbox);
+    }
   }
 
   function unixToHumanReadable(unixTimestamp) {

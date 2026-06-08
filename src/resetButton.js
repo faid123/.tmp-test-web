@@ -26,36 +26,33 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
             position: static;
             order: 20;
             z-index: 1000;
-            background-color: rgba(48, 48, 48, 0.92);
-            border: 1px solid rgba(255, 255, 255, 0.42);
-            padding: 5px 10px;
-            border-radius: 5px;
-            color: #ffffff;
+            background-color: #ffffff;
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            padding: 8px;
+            border-radius: 8px;
+            color: #222222;
             font-family: Arial, sans-serif;
-            font-size: 20px;
             cursor: pointer;
             display: flex;
             align-items: center;
-            box-shadow:
-                0 0 0 2px rgba(255, 255, 255, 0.08),
-                0 5px 14px rgba(0, 0, 0, 0.32);
-            transition: background-color 0.3s, border 0.3s, box-shadow 0.3s;
+            justify-content: center;
+            width: 60px;
+            height: 60px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+            transition: background-color 0.2s, box-shadow 0.2s;
         }
 
         /* Highlight on hover */
         #reset-button:hover {
-            background-color: rgba(58, 58, 58, 0.98);
-            border-color: rgba(255, 255, 255, 0.72);
-            box-shadow:
-                0 0 0 2px rgba(255, 255, 255, 0.16),
-                0 6px 18px rgba(0, 0, 0, 0.38);
+            background-color: #f0f0f0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
         }
 
         /* Styles for the reset icon */
         #reset-icon {
-            width: 50px;
-            height: 50px;
-            margin-right: 10px;
+            width: 40px;
+            height: 40px;
+            margin-right: 0;
             transition: transform 0.1s;
         }
 
@@ -69,33 +66,26 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
             position: static;
             order: 30;
             z-index: 1000;
-            background-color: rgba(48, 48, 48, 0.92);
-            border: 1px solid rgba(255, 255, 255, 0.42);
-            padding: 0px;
-            border-radius: 5px;
-            color: #ffffff;
+            background-color: #ffffff;
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            padding: 8px;
+            border-radius: 8px;
+            color: #222222;
             font-family: Arial, sans-serif;
-            font-size: 20px;
             cursor: pointer;
-            width: 125px;
-            height: 75px;
+            width: 60px;
+            height: 60px;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
-            box-shadow:
-                0 0 0 2px rgba(255, 255, 255, 0.08),
-                0 5px 14px rgba(0, 0, 0, 0.32);
-            transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+            transition: background-color 0.2s, box-shadow 0.2s;
         }
 
         /* Highlight on hover */
         #lock-rotation-button:hover {
-            background-color: rgba(58, 58, 58, 0.98);
-            border-color: rgba(255, 255, 255, 0.72);
-            box-shadow:
-                0 0 0 2px rgba(255, 255, 255, 0.16),
-                0 6px 18px rgba(0, 0, 0, 0.38);
+            background-color: #f0f0f0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
         }
     `;
     document.head.appendChild(style);
@@ -112,16 +102,15 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
     resetIcon.alt = 'Reset';
     resetIcon.id = 'reset-icon';
 
-    // Create the text
-    const resetText = document.createElement('span');
-    resetText.textContent = 'Reset';
-
-    // Append the icon and text to the button
+    // Append the icon to the button (no text label)
     resetButton.appendChild(resetIcon);
-    resetButton.appendChild(resetText);
 
-    // Append the reset button to the body
-    getViewerRightNav().appendChild(resetButton);
+    // Wrap reset + lock buttons in a shared row so they sit side by side
+    const topRow = document.createElement('div');
+    topRow.id = 'viewer-right-nav-top-row';
+    topRow.style.order = '40';
+    getViewerRightNav().appendChild(topRow);
+    topRow.appendChild(resetButton);
 
     // Function to handle reset button click
     function handleResetButtonClick() {
@@ -163,8 +152,8 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
     // Initial setup for the button's background image and text
     updateLockRotationButtonImage();
 
-    // Append the lock rotation button to the body
-    getViewerRightNav().appendChild(lockRotationButton);
+    // Add lock button into the same top row as reset
+    topRow.appendChild(lockRotationButton);
 
     // Define the lock/unlock rotation function
     function toggleRotationLock() {
@@ -195,20 +184,15 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
         const img = document.createElement('img');
         img.src = imageUrl;
         img.alt = rotationLocked ? 'Locked' : 'Unlocked';
-        img.style.width = '50px';
-        img.style.height = '50px';
+        img.style.width = '40px';
+        img.style.height = '40px';
 
-        // Create a span element for the text
-        const span = document.createElement('span');
-        span.textContent = 'Rotation';
-
-        // Append the image and span to the button
+        // Append the icon only (no text label)
         lockRotationButton.appendChild(img);
-        lockRotationButton.appendChild(span);
     }
 
     const legendContainer = document.createElement('section');
-    legendContainer.className = 'legend-container';
+    legendContainer.className = 'legend-container legend-hidden';
     legendContainer.setAttribute('aria-label', 'Undercut and occlusion legend');
 
     const legendHeader = document.createElement('div');
@@ -217,28 +201,25 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
     const legendHeading = document.createElement('strong');
     legendHeading.textContent = 'Measurement Legend';
 
-    const legendToggle = document.createElement('button');
-    legendToggle.type = 'button';
-    legendToggle.className = 'legend-toggle';
-    legendToggle.textContent = 'Hide';
-    legendToggle.setAttribute('aria-expanded', 'true');
-    legendToggle.setAttribute('aria-label', 'Hide measurement legend');
+    const legendClose = document.createElement('button');
+    legendClose.type = 'button';
+    legendClose.className = 'legend-close';
+    legendClose.textContent = '×';
+    legendClose.setAttribute('aria-label', 'Close measurement legend');
 
     const legendBody = document.createElement('div');
     legendBody.className = 'legend-body';
 
     legendHeader.appendChild(legendHeading);
-    legendHeader.appendChild(legendToggle);
+    legendHeader.appendChild(legendClose);
     legendContainer.appendChild(legendHeader);
     legendContainer.appendChild(legendBody);
 
-    // sets the stuff for legends
     const legendSections = [
         { title: 'Undercut (mm)', colors: {'#D7C60C': '0.25', '#D7A60B': '0.5', '#D8790E': '0.75', '#B20F1D': '> 0.75'} },
         { title: 'Occlusion (mm)', colors: {'#8A01D3': '0.1', '#08009B': '0.25', '#48D6FA': '0.3 - 0.4', '#00E930': '0.5'} }
     ];
 
-    // Create legend sections
     legendSections.forEach(section => {
         const sectionContainer = document.createElement('div');
         sectionContainer.className = 'legend-section';
@@ -267,33 +248,36 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
         legendBody.appendChild(sectionContainer);
     });
 
-    legendToggle.addEventListener('click', () => {
-        const collapsed = legendContainer.classList.toggle('collapsed');
-        legendToggle.textContent = collapsed ? 'Show' : 'Hide';
-        legendToggle.setAttribute('aria-expanded', String(!collapsed));
-        legendToggle.setAttribute(
-            'aria-label',
-            `${collapsed ? 'Show' : 'Hide'} measurement legend`
-        );
+    legendClose.addEventListener('click', () => {
+        legendContainer.classList.add('legend-hidden');
     });
 
     document.body.appendChild(legendContainer);
+
+    window.toggleMeasurementLegend = () => {
+        legendContainer.classList.toggle('legend-hidden');
+    };
 
     const customCSS = document.createElement('style');
     customCSS.innerHTML = `
         .legend-container {
             position: fixed;
-            right: 250px;
-            bottom: 12px;
-            z-index: 1001;
-            width: 250px;
+            right: 258px;
+            bottom: 16px;
+            z-index: 1002;
+            width: 280px;
             overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.34);
-            border-radius: 7px;
-            background: rgba(48, 48, 48, 0.94);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 8px;
+            background: rgba(28, 28, 28, 0.96);
             color: #ffffff;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
             font: 13px Arial, sans-serif;
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(6px);
+        }
+
+        .legend-container.legend-hidden {
+            display: none;
         }
 
         .legend-header {
@@ -301,80 +285,74 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
             align-items: center;
             justify-content: space-between;
             gap: 8px;
-            min-height: 38px;
-            padding: 6px 8px 6px 10px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.18);
-            background: rgba(65, 65, 65, 0.98);
+            min-height: 36px;
+            padding: 6px 8px 6px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.06);
         }
 
-        .legend-toggle {
-            min-width: 48px;
-            min-height: 28px;
-            border: 1px solid rgba(255, 255, 255, 0.32);
-            border-radius: 5px;
-            background: #303030;
+        .legend-close {
+            width: 26px;
+            height: 26px;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.08);
             color: #ffffff;
+            font-size: 16px;
+            line-height: 1;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .legend-close:hover {
+            background: rgba(255, 255, 255, 0.16);
         }
 
         .legend-body {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            padding: 10px;
-        }
-
-        .legend-container.collapsed .legend-body {
-            display: none;
-        }
-
-        .legend-container.collapsed .legend-header {
-            border-bottom: 0;
+            gap: 10px;
+            padding: 12px;
         }
 
         .legend-section-title {
-            margin-bottom: 7px;
+            margin-bottom: 6px;
             font-weight: 700;
+            font-size: 12px;
         }
 
         .legend-item {
             display: flex;
             align-items: center;
-            gap: 7px;
-            margin-bottom: 5px;
+            gap: 6px;
+            margin-bottom: 4px;
             white-space: nowrap;
+            font-size: 12px;
         }
 
         .legend-color {
-            flex: 0 0 18px;
-            width: 18px;
-            height: 18px;
-            border: 1px solid rgba(255, 255, 255, 0.48);
+            flex: 0 0 16px;
+            width: 16px;
+            height: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.36);
             box-sizing: border-box;
+            border-radius: 2px;
         }
 
         @media (min-width: 769px) and (max-width: 1024px) {
             .legend-container {
-                right: 10px;
-                bottom: calc(124px + env(safe-area-inset-bottom, 0px));
+                right: 16px;
+                bottom: calc(120px + env(safe-area-inset-bottom, 0px));
             }
         }
 
         @media (max-width: 768px) {
             .legend-container {
                 right: 10px;
-                bottom: calc(116px + env(safe-area-inset-bottom, 0px));
-                width: min(250px, calc(100vw - 20px));
-            }
-
-            .legend-body {
-                gap: 8px;
-                padding: 8px;
-            }
-
-            .legend-container,
-            .legend-toggle {
-                font-size: 12px;
+                bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+                width: min(280px, calc(100vw - 20px));
             }
         }
     `;

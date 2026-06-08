@@ -140,10 +140,16 @@ style.textContent = `
   }
 
   .component-row-controls {
-    display: grid;
-    grid-template-columns: 34px 1fr auto auto;
-    align-items: center;
+    display: flex;
+    flex-direction: column;
     gap: 6px;
+  }
+
+  .component-row-buttons {
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    align-items: center;
   }
 
   .component-opacity-control {
@@ -155,8 +161,9 @@ style.textContent = `
   .component-analysis-button,
   .component-web-button {
     position: relative;
+    flex: 0 0 34px;
     width: 34px;
-    height: 28px;
+    height: 34px;
     padding: 0;
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 5px;
@@ -324,11 +331,9 @@ style.textContent = `
     }
 
     .component-row-controls {
-      display: grid;
-      grid-template-columns: 34px 1fr auto auto;
-      min-height: 0;
+      display: flex;
+      flex-direction: column;
       gap: 6px;
-      align-items: center;
       padding-left: 0;
       background: transparent;
     }
@@ -338,7 +343,6 @@ style.textContent = `
     }
 
     .component-opacity-control {
-      grid-column: auto;
       width: 100%;
       height: auto;
       appearance: auto;
@@ -371,18 +375,13 @@ style.textContent = `
     .component-analysis-button,
     .component-web-button {
       display: block;
+      flex: 0 0 34px;
       width: 34px;
       height: 34px;
       border: 1px solid rgba(255, 255, 255, 0.14);
       border-radius: 5px;
       background-color: #2d2d2d;
       background-size: 22px 22px;
-    }
-
-    .component-eye-button,
-    .component-web-button {
-      grid-column: auto;
-      grid-row: auto;
     }
 
     .component-web-button::before {
@@ -555,6 +554,15 @@ function createComponentPanel(groups) {
   title.title = "Show all available components";
   title.setAttribute("aria-label", "Show all available components");
 
+  const syncShowHideButton = () => {
+    const allVisible = groups.every(
+      (g) => g.hasContent?.() === false || (g.getVisible?.() ?? true)
+    );
+    title.textContent = allVisible ? "Hide All" : "Show All";
+    title.title = allVisible ? "Hide all components" : "Show all available components";
+    title.setAttribute("aria-label", allVisible ? "Hide all components" : "Show all available components");
+  };
+
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = "component-panel-close";
@@ -571,12 +579,16 @@ function createComponentPanel(groups) {
 
   const syncAllRows = () => {
     rowControllers.forEach((controller) => controller.sync());
+    syncShowHideButton();
   };
 
   title.addEventListener("click", () => {
+    const allVisible = groups.every(
+      (g) => g.hasContent?.() === false || (g.getVisible?.() ?? true)
+    );
     groups.forEach((group) => {
       if (group.hasContent?.() === false) return;
-      group.setVisible?.(true);
+      group.setVisible?.(!allVisible);
     });
     syncAllRows();
   });
@@ -605,6 +617,10 @@ function createComponentPanel(groups) {
     const controls = document.createElement("div");
     controls.className = "component-row-controls";
 
+    // Top row: all icon toggle buttons, same size
+    const buttonsRow = document.createElement("div");
+    buttonsRow.className = "component-row-buttons";
+
     const visibilityButton = document.createElement("button");
     visibilityButton.type = "button";
     visibilityButton.className = "component-eye-button";
@@ -616,26 +632,12 @@ function createComponentPanel(groups) {
     visibilitySlash.className = "component-eye-slash";
     visibilityButton.appendChild(visibilitySlash);
 
-    const opacitySlider = document.createElement("input");
-    opacitySlider.type = "range";
-    opacitySlider.className = "component-opacity-control";
-    opacitySlider.min = "0";
-    opacitySlider.max = "100";
-    opacitySlider.value = "100";
-    opacitySlider.title = `${group.label} opacity`;
-
     visibilityButton.addEventListener("click", () => {
       group.setVisible?.(!(group.getVisible?.() ?? true));
       syncAllRows();
     });
 
-    opacitySlider.addEventListener("input", () => {
-      group.setOpacity?.(Number(opacitySlider.value) / 100);
-      syncAllRows();
-    });
-
-    controls.appendChild(visibilityButton);
-    controls.appendChild(opacitySlider);
+    buttonsRow.appendChild(visibilityButton);
 
     let undercutButton = null;
     let occlusionButton = null;
@@ -660,8 +662,8 @@ function createComponentPanel(groups) {
         syncAllRows();
       });
 
-      controls.appendChild(undercutButton);
-      controls.appendChild(occlusionButton);
+      buttonsRow.appendChild(undercutButton);
+      buttonsRow.appendChild(occlusionButton);
     }
 
     let webButton = null;
@@ -680,8 +682,26 @@ function createComponentPanel(groups) {
         });
         syncAllRows();
       });
-      controls.appendChild(webButton);
+      buttonsRow.appendChild(webButton);
     }
+
+    controls.appendChild(buttonsRow);
+
+    // Bottom row: opacity slider
+    const opacitySlider = document.createElement("input");
+    opacitySlider.type = "range";
+    opacitySlider.className = "component-opacity-control";
+    opacitySlider.min = "0";
+    opacitySlider.max = "100";
+    opacitySlider.value = "100";
+    opacitySlider.title = `${group.label} opacity`;
+
+    opacitySlider.addEventListener("input", () => {
+      group.setOpacity?.(Number(opacitySlider.value) / 100);
+      syncAllRows();
+    });
+
+    controls.appendChild(opacitySlider);
 
     row.appendChild(main);
     row.appendChild(controls);
@@ -730,6 +750,7 @@ function createComponentPanel(groups) {
   document.body.appendChild(panel);
   window.syncComponentPanelRows = syncAllRows;
   syncAllRows();
+  syncShowHideButton();
 }
 
 function removeVisibilityAndTransparencyControls() {

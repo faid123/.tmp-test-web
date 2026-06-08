@@ -3,6 +3,10 @@ export class ApiClient {
     this.baseUrl = baseUrl;
   }
 
+  async ensureSession() {
+    await getSessionLogin();
+  }
+
   async post(endpoint, data, test,what) {
     const url = `${this.baseUrl}${endpoint}`;
     if (what !== undefined) {
