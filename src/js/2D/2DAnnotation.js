@@ -17,7 +17,8 @@ import {
   isPlateComponentId,
 } from "./components.js";
 import { fetchJawStruct as apiFetchJawStruct, saveJawStructFromState } from "./jawStructApi.js";
-import { decodeJawStructResponse, applyJawStructToState } from "./jawStructCodec.js";
+import { decodeJawStructResponse, resolveJawStructDesign } from "./jawStructCodec.js";
+import { applyJawStructDesign } from "./jawStructApply.js";
 import { logApi } from "../apiLog.js";
 
 /**
@@ -266,7 +267,15 @@ export function setMessage(message, isError) {
 }
 
 export function downloadJson(fileName, data) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  downloadBlob(fileName, JSON.stringify(data, null, 2), "application/json");
+}
+
+export function downloadText(fileName, text) {
+  downloadBlob(fileName, text, "text/plain;charset=utf-8");
+}
+
+function downloadBlob(fileName, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -925,8 +934,8 @@ async function fetchJawStruct() {
     if (!Array.isArray(records) || !records.length) return;
     const decoded = decodeJawStructResponse(records);
     window.__jawStruct = decoded.raw;
-    if (decoded.upper) applyJawStructToState(decoded.upper, state);
-    if (decoded.lower) applyJawStructToState(decoded.lower, state);
+    if (decoded.upper) applyJawStructDesign(resolveJawStructDesign(decoded.upper), state);
+    if (decoded.lower) applyJawStructDesign(resolveJawStructDesign(decoded.lower), state);
     renderJaws();
   } catch (err) {
     console.warn("Failed to fetch jawstruct:", err);

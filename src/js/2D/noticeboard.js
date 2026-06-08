@@ -11,7 +11,6 @@ import {
   tiltArrowFor,
 } from "./clinicalInfo.js";
 import { WORK_CATEGORY_LABELS, loadCaseNote } from "./caseNote.js";
-import { encodeEditedViewColumns } from "./dotnetBinaryFormatter.js";
 
 //Add constants
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
@@ -74,24 +73,20 @@ async function fetchNoticeboardEdited(caseIntID, uuid) {
 async function saveNoticeboardEdited(caseIntID, uuid, filenames, data) {
   const names = Array.isArray(filenames) ? filenames : [];
   const datas = Array.isArray(data) ? data : [];
-  // Encode in the desktop's .NET BinaryFormatter byte[][] layout so the SmartRPD
-  // desktop client can deserialize web-saved editedview rows. Writing plain JSON
-  // here is what made desktop login wipe web uploads: the desktop fails to parse
-  // the JSON, shows an empty noticeboard, then overwrites the row on its next
-  // save — destroying the web's post. (Encoder verified byte-for-byte against
-  // desktop-written production records; see [[noticeboard-editedview-format]].)
-  const { filenames: filenamesBlob, data: dataBlob, count } =
-    await encodeEditedViewColumns(names, datas);
+  // Store the columns as plain JSON arrays (the web app's own format). The
+  // read-back path (buildServerEntries/readEditedViewArrays) prefers JSON and
+  // only falls back to the desktop's BinaryFormatter blob when JSON parsing
+  // fails, so web-saved rows still round-trip here.
   const payload = [
     { machine_id: MACHINE_ID, uuid, caseIntID },
     {
       case_id: caseIntID,
-      filenames: filenamesBlob,
-      data: dataBlob,
+      filenames: JSON.stringify(names),
+      data: JSON.stringify(datas),
     },
   ];
   console.log(
-    `[noticeboard] → POST /noticeboard/editedview  caseIntID=${caseIntID}  items=${count}`,
+    `[noticeboard] → POST /noticeboard/editedview  caseIntID=${caseIntID}  items=${datas.length}`,
     { filenames: names }
   );
   const t0 = performance.now();

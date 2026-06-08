@@ -1,0 +1,85 @@
+
+Start of Jaw Struct yr.mth.day.hr.min.sec: 2026.6.8.15.32.36
+Jaw Type: 0
+Jaw Material: 0
+Tooth 0: Tooth Main.Tooth Index.Major Index: 1
+Tooth 0: Tooth Main.Tooth Index.Minor Index: 8
+Tooth 0: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 0: Tooth Main.Tooth Index.Array Index: 0
+Tooth 0: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 1: Tooth Main.Tooth Index.Major Index: 1
+Tooth 1: Tooth Main.Tooth Index.Minor Index: 7
+Tooth 1: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 1: Tooth Main.Tooth Index.Array Index: 1
+Tooth 1: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 2: Tooth Main.Tooth Index.Major Index: 1
+Tooth 2: Tooth Main.Tooth Index.Minor Index: 6
+Tooth 2: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 2: Tooth Main.Tooth Index.Array Index: 2
+Tooth 2: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 3: Tooth Main.Tooth Index.Major Index: 1
+Tooth 3: Tooth Main.Tooth Index.Minor Index: 5
+Tooth 3: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 3: Tooth Main.Tooth Index.Array Index: 3
+Tooth 3: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 4: Tooth Main.Tooth Index.Major Index: 1
+Tooth 4: Tooth Main.Tooth Index.Minor Index: 4
+Tooth 4: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 4: Tooth Main.Tooth Index.Array Index: 4
+Tooth 4: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 5: Tooth Main.Tooth Index.Major Index: 1
+Tooth 5: Tooth Main.Tooth Index.Minor Index: 3
+Tooth 5: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 5: Tooth Main.Tooth Index.Array Index: 5
+Tooth 5: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 6: Tooth Main.Tooth Index.Major Index: 1
+Tooth 6: Tooth Main.Tooth Index.Minor Index: 2
+Tooth 6: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 6: Tooth Main.Tooth Index.Array Index: 6
+Tooth 6: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 7: Tooth Main.Tooth Index.Major Index: 1
+Tooth 7: Tooth Main.Tooth Index.Minor Index: 1
+Tooth 7: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 7: Tooth Main.Tooth Index.Array Index: 7
+Tooth 7: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 8: Tooth Main.Tooth Index.Major Index: 2
+Tooth 8: Tooth Main.Tooth Index.Minor Index: 1
+Tooth 8: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 8: Tooth Main.Tooth Index.Array Index: 8
+Tooth 8: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 9: Tooth Main.Tooth Index.Major Index: 2
+Tooth 9: Tooth Main.Tooth Index.Minor Index: 2
+Tooth 9: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 9: Tooth Main.Tooth Index.Array Index: 9
+Tooth 9: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 10: Tooth Main.Tooth Index.Major Index: 2
+Tooth 10: Tooth Main.Tooth Index.Minor Index: 3
+Tooth 10: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 10: Tooth Main.Tooth Index.Array Index: 10
+Tooth 10: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 11: Tooth Main.Tooth Index.Major Index: 2
+Tooth 11: Tooth Main.Tooth Index.Minor Index: 4
+Tooth 11: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 11: Tooth Main.Tooth Index.Array Index: 11
+Tooth 11: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 12: Tooth Main.Tooth Index.Major Index: 2
+Tooth 12: Tooth Main.Tooth Index.Minor Index: 5
+Tooth 12: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 12: Tooth Main.Tooth Index.Array Index: 12
+Tooth 12: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 13: Tooth Main.Tooth Index.Major Index: 2
+Tooth 13: Tooth Main.Tooth Index.Minor Index: 6
+Tooth 13: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 13: Tooth Main.Tooth Index.Array Index: 13
+Tooth 13: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 14: Tooth Main.Tooth Index.Major Index: 2
+Tooth 14: Tooth Main.Tooth Index.Minor Index: 7
+Tooth 14: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 14: Tooth Main.Tooth Index.Array Index: 14
+Tooth 14: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 15: Tooth Main.Tooth Index.Major Index: 2
+Tooth 15: Tooth Main.Tooth Index.Minor Index: 8
+Tooth 15: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 15: Tooth Main.Tooth Index.Array Index: 15
+Tooth 15: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+End of Jaw Struct

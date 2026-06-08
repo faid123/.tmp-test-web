@@ -1,2 +1,10 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Jaw-struct exports/fixtures are the desktop's CRLF format — keep them
+# byte-exact (no LF normalization) so web output can be diffed against the
+# desktop client and round-trips faithfully. -text = git leaves the bytes alone.
+*jawstruct*.txt -text
+
+# Reference enum dump is CRLF; keep it diffable but never normalized.
+StructData.cs   text eol=crlf

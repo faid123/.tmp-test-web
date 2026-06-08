@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Undercut Heatmap Fix — Technical Explanation</title>
+<style>
+  :root {
+    --ink: #1a1f29;
+    --muted: #5b6472;
+    --line: #d8dee6;
+    --accent: #b0875a;      /* the jaw tan used in the app */
+    --bad: #c0392b;
+    --good: #1f8a4c;
+    --bg-code: #1e2430;
+    --bg-soft: #f6f8fa;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    font-size: 12px;
+    line-height: 1.55;
+    margin: 0;
+  }
+  .page { padding: 26px 30px; }
+  h1 { font-size: 25px; margin: 0 0 4px; letter-spacing: -0.3px; }
+  h2 {
+    font-size: 16px; margin: 26px 0 8px; padding-bottom: 5px;
+    border-bottom: 2px solid var(--accent); letter-spacing: -0.2px;
+  }
+  h3 { font-size: 13px; margin: 16px 0 5px; color: #2c3340; }
+  p { margin: 7px 0; }
+  code {
+    font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 10.5px; background: var(--bg-soft);
+    padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line);
+  }
+  pre {
+    background: var(--bg-code); color: #e6edf3;
+    padding: 12px 14px; border-radius: 7px; overflow-x: auto;
+    font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 10px; line-height: 1.5; margin: 9px 0;
+  }
+  pre code { background: none; border: none; padding: 0; color: inherit; font-size: 10px; }
+  .cmt { color: #8b98a5; }
+  .kw  { color: #ff7b72; }
+  .fn  { color: #d2a8ff; }
+  .str { color: #a5d6ff; }
+  .num { color: #79c0ff; }
+  .lead {
+    color: var(--muted); font-size: 12.5px; margin: 2px 0 14px;
+  }
+  .meta {
+    font-size: 10.5px; color: var(--muted);
+    border:1px solid var(--line); border-radius:7px;
+    padding:9px 12px; background:var(--bg-soft); margin: 12px 0 4px;
+  }
+  .meta b { color: var(--ink); }
+  .callout {
+    border-left: 4px solid var(--accent); background: var(--bg-soft);
+    padding: 9px 13px; border-radius: 0 7px 7px 0; margin: 11px 0;
+  }
+  .callout.bad  { border-left-color: var(--bad); background: #fdf3f2; }
+  .callout.good { border-left-color: var(--good); background: #f1faf4; }
+  .callout .tag {
+    display:inline-block; font-size:9px; font-weight:700; letter-spacing:.6px;
+    text-transform:uppercase; padding:1px 7px; border-radius:20px; color:#fff;
+    margin-bottom:4px;
+  }
+  .callout.bad  .tag { background: var(--bad); }
+  .callout.good .tag { background: var(--good); }
+  .callout.note .tag { background: var(--accent); }
+  table { border-collapse: collapse; width: 100%; margin: 11px 0; font-size: 10.5px; }
+  th, td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: var(--bg-soft); font-weight: 700; }
+  td.bad { color: var(--bad); }
+  td.good { color: var(--good); }
+  .diagram {
+    font-family: "SF Mono", Menlo, monospace; font-size: 9.5px; line-height: 1.35;
+    background: #fff; border: 1px solid var(--line); border-radius: 7px;
+    padding: 12px 14px; white-space: pre; overflow-x: auto; margin: 10px 0; color: #2c3340;
+  }
+  ol, ul { margin: 7px 0 7px 18px; padding: 0; }
+  li { margin: 3px 0; }
+  .filepath { color: var(--accent); font-weight: 600; }
+  .footer { margin-top: 22px; padding-top: 8px; border-top: 1px solid var(--line);
+            font-size: 9.5px; color: var(--muted); }
+  .pill { display:inline-block; padding:1px 7px; border-radius:20px; font-size:9px;
+          font-weight:700; background:#eef1f5; color:#3a4250; border:1px solid var(--line); }
+  .break { page-break-before: always; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>The Undercut Heatmap Fix</h1>
+  <div class="lead">How the jaw STL → OFF switch made the undercut colouring land on the right vertices &mdash; a walkthrough of <span class="filepath">src/js/2D/preview3D.js</span></div>
+
+  <div class="meta">
+    <b>Component:</b> 3D jaw preview (SmartRPD web)&nbsp; &middot; &nbsp;
+    <b>File:</b> src/js/2D/preview3D.js<br>
+    <b>Fix author:</b> shaikh faid&nbsp; &middot; &nbsp;
+    <b>Commits:</b> <code>fb792d8</code> → <code>1501e95</code> → <code>dd3d3ab</code><br>
+    <b>Superseded approach:</b> dual-dedup + threshold estimation + Laplacian smoothing (commit <code>ece1767</code>)
+  </div>
+
+  <h2>1. What the “undercut” actually is</h2>
+  <p>
+    In removable partial denture (RPD) design, an <b>undercut</b> is a region of a tooth/arch that lies below the
+    survey line relative to the chosen insertion direction — the part that would mechanically block a rigid
+    appliance from seating. The backend surveys the jaw and produces an <b>undercut heatmap</b>: a colour per mesh
+    vertex, ramping yellow → orange → red as the undercut depth grows (0.25 → 0.5 → 0.75 → &gt;0.75&nbsp;mm).
+  </p>
+  <p>
+    The backend ships that heatmap as <code>surveying_values</code> — a packed <code>Float32Array</code> of
+    <b>RGBA per vertex</b>. The colour for vertex <code>i</code> sits at <code>heatmap[i*4 … i*4+3]</code>, and
+    the sentinel <code>(1,1,1)</code> means “no undercut here, keep the base tooth colour.”
+  </p>
+
+  <div class="diagram">surveying_values  (Float32, 4 floats per vertex)
+
+  vertex 0        vertex 1        vertex 2        ...
+ ┌───┬───┬───┬──┐┌───┬───┬───┬──┐┌───┬───┬───┬──┐
+ │ R │ G │ B │ A││ R │ G │ B │ A││ R │ G │ B │ A│
+ └───┴───┴───┴──┘└───┴───┴───┴──┘└───┴───┴───┴──┘
+   ▲
+   └─ colour of mesh-vertex 0   →   so mesh-vertex i MUST equal heatmap-vertex i</div>
+
+  <div class="callout note">
+    <span class="tag">The core requirement</span>
+    For the heatmap to paint correctly, the rendered mesh’s vertices must be in the <b>exact same order and
+    count</b> as the array the backend surveyed. Colouring is a simple copy — <i>if</i> the indices line up.
+  </div>
+
+  <h2>2. The root cause — it was never a colouring bug, it was a topology mismatch</h2>
+  <p>
+    The jaws were fetched as <b>STL</b>. STL is a <b>“triangle soup”</b> format: it stores three raw vertices for
+    every triangle, with <b>no vertex sharing</b>. A single physical corner shared by, say, six triangles is written
+    out <b>six separate times</b>. So a raw STL mesh has many more vertices — in a completely different order — than
+    the <b>indexed, deduplicated</b> mesh the backend computed the heatmap against.
+  </p>
+
+  <div class="diagram">INDEXED mesh (what the backend surveyed)        STL "triangle soup" (what the browser loaded)
+
+      v2                                            corner P appears 6× as distinct verts:
+      /\                                              tri A → P, …            (vertex 11)
+     /  \     4 shared vertices                       tri B → P, …            (vertex 27)
+   v0────v1   2 triangles                             tri C → P, …            (vertex 40)
+     \  /      = heatmap has 4 entries                 …                       …
+      \/                                             same point, 6 indices  → counts & order differ
+      v3                                             → heatmap[i] lands on the WRONG point</div>
+
+  <p>
+    Map heatmap entry <code>i</code> onto STL vertex <code>i</code> and the colours smear across the surface,
+    because index <code>i</code> in the soup is not the same physical point as index <code>i</code> in the
+    backend’s indexed mesh. <b>That</b> is the undercut bug.
+  </p>
+
+  <h2>3. The earlier approach that didn’t fully work (commit <code>ece1767</code>)</h2>
+  <p>
+    The first attempt tried to <b>reverse-engineer</b> the backend’s deduplication from the STL soup so the vertex
+    counts (and hopefully order) would match. Three functions carried it:
+  </p>
+  <ul>
+    <li><code>estimateBackendThreshold()</code> — binary-searches a vertex-merge distance until the deduplicated
+      count matches the heatmap’s vertex count.</li>
+    <li><code>buildDualDedupGeometry()</code> — dedups the soup twice (our threshold + the estimated backend
+      threshold) and builds a <i>surrogate</i> mapping from each of our vertices to the backend vertex it first
+      co-occurs with in the raw stream.</li>
+    <li><code>smoothVertexColors()</code> — Laplacian-smooths the result several times to wash out the speckle
+      from the inevitable misalignment.</li>
+  </ul>
+
+  <pre><code><span class="cmt">// buildDualDedupGeometry — the heuristic: guess the backend's merge threshold,</span>
+<span class="cmt">// then hope each vertex co-occurs with the right backend index in the raw stream.</span>
+<span class="kw">const</span> backendThreshold = <span class="fn">estimateBackendThreshold</span>(positions, targetBackendCount);
+...
+<span class="cmt">// colours come from spatial co-occurrence, not a guaranteed 1:1 alignment</span>
+<span class="kw">if</span> (ourVertToBackendIdx[ourIdx] === -<span class="num">1</span>) ourVertToBackendIdx[ourIdx] = backendIdx;
+...
+<span class="fn">smoothVertexColors</span>(geometry, <span class="num">5</span>); <span class="cmt">// 5× blur to hide the misaligned-vertex streaks</span></code></pre>
+
+  <div class="callout bad">
+    <span class="tag">Why it stayed wrong</span>
+    Matching a vertex <b>count</b> does not guarantee matching a vertex <b>order</b>. The mapping was a statistical
+    guess, so colours landed approximately — then 5× Laplacian smoothing blurred the errors into soft blobs. The
+    code’s own comment concedes it: <i>“Without backend positions we can’t get exact per-vert alignment with the
+    heatmap, so the raw colours are noisy… heavy smoothing collapses the misaligned-vert streaks.”</i>
+    Result: a fuzzy approximation, not the crisp desktop render.
+  </div>
+
+  <h2>4. The fix — change the data, not the math (commits <code>fb792d8</code> → <code>dd3d3ab</code>)</h2>
+  <p>
+    Instead of fighting STL’s lost vertex-sharing, the fix <b>switches the transport format to OFF</b>. OFF
+    (<i>Object File Format</i>) is an <b>indexed</b> mesh: it lists each unique vertex <b>once</b>, then lists faces
+    as indices into that vertex list — the <b>same representation the backend used to compute the heatmap</b>.
+  </p>
+
+  <div class="diagram">OFF payload
+  ┌──────────────────────────────┐
+  │ OFF                          │
+  │ 4  2  0      ← 4 verts, 2 faces
+  │ x0 y0 z0     ← vertex 0  ────┼──►  heatmap[0]   1:1, no guessing
+  │ x1 y1 z1     ← vertex 1  ────┼──►  heatmap[1]
+  │ x2 y2 z2     ← vertex 2  ────┼──►  heatmap[2]
+  │ x3 y3 z3     ← vertex 3  ────┼──►  heatmap[3]
+  │ 3  0 1 2     ← face (indices into the vertex list)
+  │ 3  0 2 3                     │
+  └──────────────────────────────┘</div>
+
+  <p>Because vertex <code>i</code> in the OFF file <b>is</b> heatmap vertex <code>i</code>, colouring collapses to a
+     direct copy with none of the dedup/threshold/smoothing machinery.</p>
+
+  <h3>4.1 — Sniff the payload format: <code>inspectMeshPayload()</code></h3>
+  <p>Reads the first bytes of the decoded buffer and classifies it, so the renderer knows whether it received OFF,
+     ASCII STL, binary STL, or junk.</p>
+  <pre><code><span class="kw">function</span> <span class="fn">inspectMeshPayload</span>(buffer) {
+  <span class="cmt">// build a printable preview of the header bytes</span>
+  <span class="kw">if</span> (upperHeader.<span class="fn">startsWith</span>(<span class="str">"OFF"</span>))      <span class="kw">return</span> { format: <span class="str">"off"</span>, ... };
+  <span class="kw">if</span> (/^SOLID\b/i.<span class="fn">test</span>(trimmedHeader)) <span class="kw">return</span> { format: <span class="str">"ascii-stl"</span>, ... };
+  <span class="kw">if</span> (byteLength >= <span class="num">84</span>) {                 <span class="cmt">// binary STL: 80-byte header + uint32 tri count</span>
+    <span class="kw">const</span> triangleCount = view.<span class="fn">getUint32</span>(<span class="num">80</span>, <span class="kw">true</span>);
+    <span class="kw">const</span> expected = <span class="num">84</span> + triangleCount * <span class="num">50</span>;
+    <span class="kw">return</span> { format: expected === byteLength ? <span class="str">"binary-stl"</span> : <span class="str">"unknown-binary"</span>, ... };
+  }
+  <span class="kw">return</span> { format: <span class="str">"unknown"</span>, ... };
+}</code></pre>
+
+  <h3>4.2 — Keep only renderable files &amp; prefer the right source: <code>filterRenderableJawFiles()</code></h3>
+  <p>Each fetched file is tagged with <code>__payloadInfo</code> / <code>__sourcePath</code> and dropped if it isn’t a
+     real mesh. <code>fetchJawFilesForCase()</code> now selects <code>/stl/get</code> <b>only if</b> it yields a
+     renderable mesh; otherwise it falls back to <code>/stl/raw/get</code>, then the per-jaw route.</p>
+  <pre><code><span class="kw">const</span> all = <span class="kw">await</span> <span class="fn">tryEndpoint</span>(<span class="str">`${BASE}/stl/get`</span>, payload);
+<span class="kw">const</span> validAll = <span class="fn">filterRenderableJawFiles</span>(all, <span class="str">"/stl/get"</span>);
+<span class="kw">if</span> (validAll.length) <span class="kw">return</span> validAll;        <span class="cmt">// ✓ renderable STL/OFF → use it</span>
+<span class="cmt">// else warn "returned mesh data, but none renderable as STL/OFF" and fall back…</span></code></pre>
+
+  <h3>4.3 — The OFF branch in <code>populateJawPreview()</code></h3>
+  <p>When the format is <code>off</code>, parse with the existing <code>parseOFFToGeometry()</code> and apply the
+     heatmap with the plain, direct-index colour function. STL files still fall through to the old dual-dedup path
+     as a fallback.</p>
+  <pre><code><span class="kw">if</span> (payloadInfo.format === <span class="str">"off"</span>) {
+  <span class="kw">const</span> offText = <span class="kw">new</span> <span class="fn">TextDecoder</span>().<span class="fn">decode</span>(stlBuffer);
+  geometry = <span class="fn">parseOFFToGeometry</span>(offText);          <span class="cmt">// indexed verts, in backend order</span>
+  <span class="fn">applyUndercutVertexColors</span>(geometry, primarySurface); <span class="cmt">// direct 1:1 colour copy</span>
+  useHeatmap = <span class="kw">true</span>;
+} <span class="kw">else</span> {
+  geometry = loader.<span class="fn">parse</span>(stlBuffer);              <span class="cmt">// STL fallback → dual-dedup heuristic</span>
+  ...
+}</code></pre>
+
+  <h3>4.4 — Why the colour function is now trivial: <code>applyUndercutVertexColors()</code></h3>
+  <pre><code><span class="cmt">// vertex i  ←  heatmap[i*4]   — no dedup, no threshold search, no smoothing</span>
+<span class="kw">for</span> (<span class="kw">let</span> i = <span class="num">0</span>; i &lt; limit; i += <span class="num">1</span>) {
+  <span class="kw">let</span> r = heatmap[i * <span class="num">4</span>], g = heatmap[i * <span class="num">4</span> + <span class="num">1</span>], b = heatmap[i * <span class="num">4</span> + <span class="num">2</span>];
+  <span class="kw">if</span> (r === <span class="num">1</span>) r = DEFAULT_TOOTH_COLOR[<span class="num">0</span>];   <span class="cmt">// (1,1,1) = "no undercut" sentinel</span>
+  <span class="kw">if</span> (g === <span class="num">1</span>) g = DEFAULT_TOOTH_COLOR[<span class="num">1</span>];
+  <span class="kw">if</span> (b === <span class="num">1</span>) b = DEFAULT_TOOTH_COLOR[<span class="num">2</span>];
+  colors[i*<span class="num">3</span>] = r; colors[i*<span class="num">3</span>+<span class="num">1</span>] = g; colors[i*<span class="num">3</span>+<span class="num">2</span>] = b;
+}</code></pre>
+
+  <div class="callout good">
+    <span class="tag">Why it works now</span>
+    OFF arrives already indexed in the backend’s own vertex order, so <code>mesh-vertex i === heatmap-vertex i</code>
+    is guaranteed by the format — not approximated. The colour application is a one-to-one copy, which is why the
+    render is crisp and matches the desktop app, with <b>zero</b> threshold estimation, surrogate index mapping, or
+    Laplacian blurring.
+  </div>
+
+  <h2>5. Side-by-side</h2>
+  <table>
+    <tr><th>Aspect</th><th>Earlier approach (ece1767)</th><th>The fix (dd3d3ab)</th></tr>
+    <tr><td>Mesh source</td><td class="bad">STL (triangle soup, unshared verts)</td><td class="good">OFF (indexed, shared verts)</td></tr>
+    <tr><td>Vertex/heatmap alignment</td><td class="bad">Guessed via threshold + co-occurrence</td><td class="good">Guaranteed 1:1 by the format</td></tr>
+    <tr><td>Extra machinery</td><td class="bad">estimateBackendThreshold + dual-dedup + 5× smoothing</td><td class="good">None — direct index copy</td></tr>
+    <tr><td>Visual result</td><td class="bad">Blurred, approximate blobs</td><td class="good">Crisp, matches desktop render</td></tr>
+    <tr><td>Failure mode</td><td class="bad">Count matched, order didn’t → smear</td><td class="good">N/A for OFF; STL kept as fallback</td></tr>
+  </table>
+
+  <h2>6. One-sentence summary</h2>
+  <div class="callout note">
+    <span class="tag">TL;DR</span>
+    The undercut was a <b>mesh-topology mismatch</b>: STL throws away vertex sharing while the heatmap is
+    per-<i>shared</i>-vertex, so the old code tried to statistically rebuild the backend’s vertex set and blur over
+    the errors. The fix sidesteps it by requesting an <b>OFF (indexed) mesh</b> whose vertex order already matches
+    the heatmap, turning the colouring into a direct copy.
+  </div>
+
+  <div class="footer">
+    Generated from a code walkthrough of src/js/2D/preview3D.js &middot; key references:
+    inspectMeshPayload (~L1455), filterRenderableJawFiles (~L329), populateJawPreview OFF branch (~L1468),
+    applyUndercutVertexColors (~L1888), parseOFFToGeometry (~L1625), buildDualDedupGeometry / fallback (~L1735).
+  </div>
+
+</div>
+</body>
+</html>

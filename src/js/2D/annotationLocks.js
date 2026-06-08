@@ -16,7 +16,7 @@ import { forEachTooth, TOOTH_ORDER } from "./constants.js";
 import {
   state,
   DEFAULT_COMPONENT_ID,
-  downloadJson,
+  downloadText,
   getHistoryStateSignature,
   recordHistoryIfChanged,
   registerAutosaveHook,
@@ -27,6 +27,7 @@ import {
   renderJaws,
 } from "./2DAnnotation.js";
 import { renderComponentCatalog } from "./annotationCatalog.js";
+import { encodeJawStructText } from "./jawStructCodec.js";
 import {
   ensureToothPlacementState,
   normalizeSurface,
@@ -555,11 +556,16 @@ export function saveAnnotation() {
   const payload = buildPayload();
   const storageKey = getStorageKey();
   try {
+    // Persistence stays JSON (restoreAnnotationFromStorage reads it back); the
+    // downloaded artifact is the jaw-struct .txt so it can be diffed against the
+    // desktop format (one file per jaw, matching 03_jawstruct_<jaw>_jaw.txt).
     localStorage.setItem(storageKey, JSON.stringify(payload));
-    downloadJson(`case_${state.caseIntID ?? "unknown"}_2d_annotation.json`, payload);
-    setMessage(`Saved to localStorage key "${storageKey}" and downloaded JSON file.`, false);
+    const caseTag = state.caseIntID ?? "unknown";
+    downloadText(`case_${caseTag}_jawstruct_upper_jaw.txt`, encodeJawStructText(state, "upper"));
+    downloadText(`case_${caseTag}_jawstruct_lower_jaw.txt`, encodeJawStructText(state, "lower"));
+    setMessage(`Saved to localStorage "${storageKey}" and downloaded upper/lower jaw-struct .txt.`, false);
   } catch {
-    setMessage("Failed to save annotation JSON.", true);
+    setMessage("Failed to save annotation.", true);
   }
 }
 
