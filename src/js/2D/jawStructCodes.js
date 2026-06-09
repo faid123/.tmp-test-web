@@ -11,9 +11,8 @@
  *     Retainer Bar Category for its shape (i/s/u/y/t).
  *   - Mesh is stored as spans (Tooth Mesh N), not per tooth.
  *   - Major connector is a jaw-level field.
- * Those three are resolved in jawStructCodec.js (resolveJawStructDesign), so only
- * the genuinely flat fields live in FIELD_TO_MAP below; the other maps are
- * exported for that resolver to use directly.
+ * All of these are resolved in jawStructCodec.js (resolveJawStructDesign), which
+ * imports the maps below directly.
  */
 
 // Posterior_Rest_Type { no_pr=0, pr_full=1, pr_non_full=2 }
@@ -50,6 +49,16 @@ export const MESH_TYPE = new Map([
   [5, "mesh-flange"], // inferred (plate_mesh)
 ]);
 
+// Reciprocating_Type { no_reciprocating=0, reciprocating_clasp=1, reciprocating_plate=2, reciprocating_crossmesh=3 }
+// Only applied to teeth that also carry a retainer (reciprocation pairs with
+// retention) — that guard also neutralises the desktop's "2 on every present
+// tooth" default seen in case 03. See jawStructCodec.resolveJawStructDesign.
+export const RECIPROCATING_TYPE = new Map([
+  [1, "reciprocating-clasp"],
+  [2, "plate-prox"],       // reciprocating_plate -> proximal plate
+  [3, "plate-crossmesh"],  // reciprocating_crossmesh -> mesh plate
+]);
+
 // Major_Connector_Type { mc_none=0, mc_palatal_strap=1, mc_horseshoe=2, mc_hole=3,
 //   mc_palatal_bar=4, mc_palatal_full_plate=5, mc_lingual_bar=6, mc_lingual_plate=7,
 //   mc_lingual_kennedy=8, mc_cingulum_bar=9 }
@@ -65,20 +74,6 @@ export const MAJOR_CONNECTOR_TYPE = new Map([
   // 9 (mc_cingulum_bar) -> major-lower-cingulum-bar is commented out in components.js -> unmapped
 ]);
 
-/**
- * Field path -> mapping table, for the genuinely flat one-field->one-component
- * fields only. Retainer (composite), mesh (spans) and major connector
- * (jaw-level) are resolved directly in jawStructCodec.js, not here.
- *
- * The "Tooth Reciprocating.Tooth Type" field is intentionally absent: in both
- * samples it is 2 on every present tooth and 0 on every missing tooth
- * (presence-correlated noise, not a per-tooth reciprocating choice), so mapping
- * it would drop a plate onto every present tooth.
- */
-export const FIELD_TO_MAP = {
-  "Tooth Main.Tooth Rest.Posterior Rest Type": POSTERIOR_REST_TYPE,
-};
-
 /** Build a reverse Map<componentId, int> on first use. */
 const _inverseCache = new WeakMap();
 export function inverseOf(map) {
@@ -90,18 +85,4 @@ export function inverseOf(map) {
   }
   _inverseCache.set(map, inv);
   return inv;
-}
-
-/** Look up componentId by integer code for a flat field. Returns null if unknown. */
-export function componentIdForCode(fieldPath, code) {
-  const map = FIELD_TO_MAP[fieldPath];
-  if (!map) return null;
-  return map.get(code) ?? null;
-}
-
-/** Reverse lookup. Returns null if unmapped. */
-export function codeForComponentId(fieldPath, componentId) {
-  const map = FIELD_TO_MAP[fieldPath];
-  if (!map) return null;
-  return inverseOf(map).get(componentId) ?? null;
 }

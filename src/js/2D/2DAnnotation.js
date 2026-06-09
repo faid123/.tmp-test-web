@@ -79,6 +79,9 @@ function cloneStateForHistory() {
     locks: { upper: Boolean(state.locks?.upper), lower: Boolean(state.locks?.lower) },
     designMode: Boolean(state.designMode),
     teeth: JSON.parse(JSON.stringify(state.teeth || {})),
+    jawStructTail: state.jawStructTail
+      ? JSON.parse(JSON.stringify(state.jawStructTail))
+      : undefined,
     components: [...(state.components || [])],
     selectedTab: state.selectedTab,
     selectedComponentId: state.selectedComponentId,
@@ -97,6 +100,9 @@ function applyHistorySnapshot(snapshot) {
   state.locks = { upper: Boolean(snapshot.locks?.upper), lower: Boolean(snapshot.locks?.lower) };
   state.designMode = Boolean(snapshot.designMode);
   state.teeth = JSON.parse(JSON.stringify(snapshot.teeth || {}));
+  if (snapshot.jawStructTail) {
+    state.jawStructTail = JSON.parse(JSON.stringify(snapshot.jawStructTail));
+  }
   state.components = [...(snapshot.components || [])];
   state.selectedTab = snapshot.selectedTab;
   state.selectedComponentId = snapshot.selectedComponentId;
@@ -927,19 +933,59 @@ async function fetchCaseOwner() {
 async function fetchJawStruct() {
   if (!state.caseIntID) return;
   const loggedInUser = getLoggedInUser();
-  if (!loggedInUser?.uuid) return;
 
-  try {
-    const records = await apiFetchJawStruct(state.caseIntID, loggedInUser.uuid);
-    if (!Array.isArray(records) || !records.length) return;
+  let records = null;
+  if (loggedInUser?.uuid) {
+    try {
+      records = await apiFetchJawStruct(state.caseIntID, loggedInUser.uuid);
+    } catch (err) {
+      console.warn("Failed to fetch jawstruct:", err);
+    }
+  }
+
+  if (Array.isArray(records) && records.length) {
     const decoded = decodeJawStructResponse(records);
     window.__jawStruct = decoded.raw;
-    if (decoded.upper) applyJawStructDesign(resolveJawStructDesign(decoded.upper), state);
-    if (decoded.lower) applyJawStructDesign(resolveJawStructDesign(decoded.lower), state);
-    renderJaws();
-  } catch (err) {
-    console.warn("Failed to fetch jawstruct:", err);
+    // Apply each jaw independently so a failure in one doesn't skip the other
+    // (or the renderJaws / history re-seed below).
+    try {
+      if (decoded.upper) applyJawStructDesign(resolveJawStructDesign(decoded.upper), state);
+    } catch (err) {
+      console.error("[jawStructApply] upper apply failed:", err);
+    }
+    try {
+      if (decoded.lower) applyJawStructDesign(resolveJawStructDesign(decoded.lower), state);
+    } catch (err) {
+      console.error("[jawStructApply] lower apply failed:", err);
+    }
+    setMessage("Loaded 2D design from server.", false);
+  } else {
+    // Backend is authoritative for the 2D design. With no server design we must
+    // NOT keep the localStorage-restored one: that snapshot has the placed
+    // components but not the raw desktop fields (bar side, reciprocating flag,
+    // Pr Config, the 16x16 minor-connector grid, ...), so a Save would silently
+    // emit defaults for them. Reset to a clean arch instead — a genuine
+    // from-scratch design encodes correctly (defaults are right when nothing
+    // was loaded), and we never export a degraded reload.
+    await resetJawStructDesignToBaseline();
+    setMessage("No server 2D design for this case — starting from a clean arch.", false);
   }
+
+  renderJaws();
+  // The server design (or the clean reset) is the working baseline now — re-seed
+  // undo history so the load itself isn't an undoable step.
+  history.past = [cloneStateForHistory()];
+  history.future = [];
+  updateUndoRedoButtons();
+}
+
+// Reset the 2D design to a clean baseline (all teeth present, no components, no
+// loaded raw fields, no jaw-level tail). Used when the backend has no design so
+// a stale localStorage-restored design can't drive a degraded Save.
+async function resetJawStructDesignToBaseline() {
+  const teethModel = await import("./annotationTeethModel.js");
+  teethModel.initializeTeethState();
+  state.jawStructTail = {};
 }
 
 // Save current state back to the backend. Off by default — see
@@ -1293,9 +1339,13 @@ function init() {
           catalog.renderComponentCatalog();
         }
       });
-      // Jaw-struct API fetch paused — 2D annotation state is loaded from
-      // localStorage via locks.restoreAnnotationFromStorage() above.
-      // fetchJawStruct();
+      // Load the live 2D design from the backend. Runs after the localStorage
+      // restore + first paint; the backend is authoritative — when it returns
+      // data it replaces local state and re-baselines undo history, and when it
+      // returns nothing it resets to a clean arch (the localStorage-restored
+      // design lacks raw desktop fields, so we don't let it drive a Save).
+      // Fire-and-forget so first paint isn't blocked on the network.
+      fetchJawStruct();
       locks.loadPreviewImage();
       locks.syncDesignModeWithLocks(false);
       renderJaws();

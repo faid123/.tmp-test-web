@@ -23,6 +23,7 @@ import {
   POSTERIOR_REST_TYPE,
   RETAINER_TYPE,
   RETAINER_BAR_CATEGORY,
+  RECIPROCATING_TYPE,
   MESH_TYPE,
   MAJOR_CONNECTOR_TYPE,
   inverseOf,
@@ -35,6 +36,26 @@ const MESH_PRESENCE_FIELD = "Tooth Main.Tooth Index.Mesh Presence";
 const POSTERIOR_REST_FIELD = "Tooth Main.Tooth Rest.Posterior Rest Type";
 const RETAINER_TYPE_FIELD = "Tooth Main.Tooth Retainer.Retainer Type";
 const RETAINER_BAR_CATEGORY_FIELD = "Tooth Main.Tooth Retainer.Retainer Bar Category";
+const RETAINER_BAR_TYPE_FIELD = "Tooth Main.Tooth Retainer.Retainer Bar Type";
+const RETAINER_CLASP_TYPE_FIELD = "Tooth Main.Tooth Retainer.Retainer Clasp Type";
+const RETAINER_RING_TYPE_FIELD = "Tooth Main.Tooth Retainer.Retainer Ring Type";
+const RECIPROCATING_FIELD = "Tooth Main.Tooth Reciprocating.Tooth Type";
+const ANTERIOR_REST_FIELD = "Tooth Main.Tooth Rest.Anterior Rest";
+const ANTERIOR_CINGULUM_FIELD = "Tooth Main.Tooth Rest.Anterior Cingulum Rest Type";
+const ANTERIOR_INCISAL_FIELD = "Tooth Main.Tooth Rest.Anterior Incisal Rest Type";
+const PR_CONFIG_FIELDS = [
+  "Tooth Main.Tooth Rest.Pr Config 0",
+  "Tooth Main.Tooth Rest.Pr Config 1",
+  "Tooth Main.Tooth Rest.Pr Config 2",
+];
+
+// Rests and clasps only render when their placement carries a surface the
+// renderer can anchor to (annotationVisuals skips null-surface markers). These
+// map the desktop's position/orientation fields to that surface vocabulary.
+// Pr Config index (value "0" = that position is present) -> rest anchor surface.
+const REST_POSITION_SURFACE = ["mesial", "distal", "lingual"];
+// Retainer_Clasp_type / Retainer_Ring_type (0..3) -> clasp anchor surface.
+const CLASP_ORIENT_SURFACE = ["mesial_buccal", "mesial_lingual", "distal_buccal", "distal_lingual"];
 
 const JAW_TYPE_KEY = "Jaw Type";
 const MAJOR_CONNECTOR_KEY = "Major Connector Type";
@@ -125,6 +146,42 @@ function fdiFromTooth(tooth) {
   return `${major}${minor}`;
 }
 
+/** Rest anchor surface from Pr Config (first position flagged present, default mesial). */
+function restSurfaceFromConfig(f) {
+  for (let i = 0; i < REST_POSITION_SURFACE.length; i += 1) {
+    if (f[PR_CONFIG_FIELDS[i]] === "0") return REST_POSITION_SURFACE[i];
+  }
+  return "mesial";
+}
+
+/** Clasp anchor surface from a Retainer Clasp/Ring Type field (default mesial_buccal). */
+function claspSurfaceFromField(f, field) {
+  return CLASP_ORIENT_SURFACE[Number(f[field])] || "mesial_buccal";
+}
+
+/**
+ * Anterior rest -> rest-seat surface, or null when none.
+ * Anterior_Rest: 1=cingulum (lingual_mesial/lingual_distal), 2=incisal (mesial/distal).
+ */
+function anteriorRestSurface(f) {
+  const ar = Number(f[ANTERIOR_REST_FIELD]);
+  if (ar === 1) {
+    // Anterior_Cingulum_Rest_Type: ac_full=0, ac_mesial=1, ac_distal=2, ac_both=3.
+    // Surface -> rest asset (components.rest.js getRestPlacementToken):
+    //   "lingual"=ac_full, "lingual_mesial"=ac_mesial, "lingual_distal"=ac_distal.
+    // There's no ac_both asset, so render "both" as the full cingulum too.
+    const ac = Number(f[ANTERIOR_CINGULUM_FIELD]);
+    if (ac === 1) return "lingual_mesial";
+    if (ac === 2) return "lingual_distal";
+    return "lingual"; // 0 full (and 3 both) -> full cingulum coverage
+  }
+  if (ar === 2) {
+    // Anterior_Incisal_Rest_Type: ai_mesial=0, ai_distal=1
+    return Number(f[ANTERIOR_INCISAL_FIELD]) === 1 ? "distal" : "mesial";
+  }
+  return null;
+}
+
 /** Jaw side from the "Jaw Type" header (0=upper, 1=lower). Null if absent. */
 function jawSideFromParsed(parsed) {
   const jt = parsed?.other?.[JAW_TYPE_KEY];
@@ -160,6 +217,9 @@ export function resolveJawStructDesign(parsed) {
     mesh: [],
     major: null,
     rawByFdi: {},
+    // Jaw-level loaded values (Minor Connector grid, Ball Connector flags, etc.)
+    // the web doesn't model — preserved so Save can re-emit them.
+    rawOther: parsed?.other || {},
   };
   if (!parsed?.teeth) return design;
 
@@ -177,19 +237,26 @@ export function resolveJawStructDesign(parsed) {
     design.rawByFdi[fdi] = { ...f };
 
     const present = f[PRESENCE_FIELD] === PRESENCE_PRESENT;
-    const entry = { present, simple: [], bars: [] };
+    // placements: rests/clasps with their anchor surface; bars: shape ids whose
+    // surface is computed from arch geometry at apply time.
+    const entry = { present, placements: [], bars: [] };
     design.teeth[fdi] = entry;
     if (!present) continue; // components live on present (abutment) teeth only
 
-    // Posterior rest (flat).
+    // Posterior rest — surface from Pr Config (mesial/distal/lingual).
     const prCode = Number(f[POSTERIOR_REST_FIELD]);
     if (Number.isFinite(prCode) && prCode > 0) {
       const id = POSTERIOR_REST_TYPE.get(prCode);
-      if (id) entry.simple.push(id);
+      if (id) entry.placements.push({ componentId: id, surface: restSurfaceFromConfig(f) });
       else reportUnmapped(POSTERIOR_REST_FIELD, prCode);
     }
 
-    // Retainer (composite): type picks clasp/ring; a bar's shape comes from category.
+    // Anterior rest (cingulum/incisal) — rendered as rest-seat on a cingulum/incisal surface.
+    const arSurface = anteriorRestSurface(f);
+    if (arSurface) entry.placements.push({ componentId: "rest-seat", surface: arSurface });
+
+    // Retainer (composite): clasp/ring carry an orientation surface; bar shape
+    // comes from Retainer Bar Category.
     const retCode = Number(f[RETAINER_TYPE_FIELD]);
     if (Number.isFinite(retCode) && retCode > 0) {
       if (retCode === 3) {
@@ -199,8 +266,20 @@ export function resolveJawStructDesign(parsed) {
         else reportUnmapped(RETAINER_BAR_CATEGORY_FIELD, barCode);
       } else {
         const id = RETAINER_TYPE.get(retCode);
-        if (id) entry.simple.push(id);
-        else reportUnmapped(RETAINER_TYPE_FIELD, retCode);
+        if (id) {
+          const orientField = retCode === 2 ? RETAINER_RING_TYPE_FIELD : RETAINER_CLASP_TYPE_FIELD;
+          entry.placements.push({ componentId: id, surface: claspSurfaceFromField(f, orientField) });
+        } else reportUnmapped(RETAINER_TYPE_FIELD, retCode);
+      }
+
+      // Reciprocating element — only on teeth that carry a retainer (reciprocation
+      // pairs with retention; this guard also filters the desktop's present=2
+      // default noise). Plates use a null surface; a reciprocating clasp gets a
+      // lingual anchor (reciprocation sits opposite the retentive arm).
+      const recipId = RECIPROCATING_TYPE.get(Number(f[RECIPROCATING_FIELD]));
+      if (recipId) {
+        const surface = recipId === "reciprocating-clasp" ? "mesial_lingual" : null;
+        entry.placements.push({ componentId: recipId, surface });
       }
     }
   }
@@ -241,15 +320,17 @@ export function resolveJawStructDesign(parsed) {
 }
 
 // ---- Encode: web state -> complete jaw-struct text -----------------------
-// Emits the full desktop field set (26 fields/tooth + the Mesh / Major / Minor /
-// Ball tail). Component values are derived from the placed web components;
-// fields the web doesn't model are written with the desktop defaults the samples
-// use (tooth positions 0, tissue stop / retention pin 0, clasp/ring orientation
-// 0, minor-connector paths 1, ball connectors 0). Result is a complete,
-// desktop-readable file. It is NOT byte-identical to a desktop export that
-// carried data the web has no concept of: exact tooth positions, user-edited
-// minor-connector paths, clasp/ring orientation, and reciprocating uses the
-// observed present->2 desktop default rather than the web's reciprocating choice.
+// HYBRID encoder. Emits the full desktop field set (26 fields/tooth + the Mesh /
+// Major / Minor / Ball tail). Fields the web 2D model owns are derived live from
+// the placed components (presence, condition, mesh presence, tooth type, rests,
+// retainer type + bar shape, mesh spans, major connector) so edits flow through.
+// Fields the web can't model are PRESERVED from the loaded data via `rawOr`
+// (tooth positions, Pr Config, bar mesial/distal side, clasp/ring orientation,
+// the reciprocating framework flag, and the jaw-level Minor Connector grid + Ball
+// connectors on state.jawStructTail). When a tooth has loaded raw, a load->Save
+// round-trips byte-identical (bar timestamp + leading blank line); a from-scratch
+// web design has no raw and falls back to the desktop defaults the samples use
+// (positions 0, tissue stop / retention pin 0, orientation 0, paths 1, balls 0).
 
 // Array slot -> FDI, per StructData.cs get_array_index (major 1/3 reversed).
 const UPPER_FDI_ORDER = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
@@ -287,29 +368,65 @@ function majorConnectorCode(state, fdiOrder) {
 }
 
 function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
+  // Loaded per-tooth fields (set on load by applyJawStructDesign). The web 2D
+  // model doesn't carry tooth positions, Pr Config, bar mesial/distal side,
+  // clasp/ring orientation or the reciprocating framework flag, so for those we
+  // fall back to the loaded value; web-owned fields below are derived live so
+  // edits flow through. A from-scratch web design has no raw -> uses defaults.
+  const raw = rec?.rawJawStructFields || {};
+  const rawOr = (field, fallback) => (field in raw ? raw[field] : fallback);
+
   const maj = Math.floor(fdi / 10);
   const min = fdi % 10;
   const toothType = min < 4 ? 1 : 0;       // Tooth_Type: anterior=1, posterior=0
   const present = rec?.isPresent ? 0 : 1;  // Tooth_Presence: present=0, missing=1
   const condition = rec?.status === "abutment" ? 1 : rec?.status === "compromised" ? 2 : 0;
   const comps = componentList(rec);
+  const placements = Array.isArray(rec?.componentPlacements) ? rec.componentPlacements : [];
 
+  // Rest: a rest-seat is anterior or posterior depending on its placement
+  // surface + tooth type (the web uses rest-seat for both; the desktop splits
+  // them into Anterior Rest vs Posterior Rest Type).
   let posteriorRest = 0;
-  if (comps.includes("rest-onlay")) posteriorRest = inverseOf(POSTERIOR_REST_TYPE).get("rest-onlay");
-  else if (comps.includes("rest-seat")) posteriorRest = inverseOf(POSTERIOR_REST_TYPE).get("rest-seat");
+  let anteriorRest = 0;
+  let antCingulum = Number(rawOr(ANTERIOR_CINGULUM_FIELD, 0));
+  let antIncisal = Number(rawOr(ANTERIOR_INCISAL_FIELD, 0));
+  const restPl = placements.find(
+    (p) => p.componentId === "rest-seat" || p.componentId === "rest-onlay"
+  );
+  if (restPl) {
+    const s = String(restPl.surface || "");
+    if (restPl.componentId === "rest-onlay") {
+      posteriorRest = 1; // pr_full
+    } else if (min < 4 && (s === "lingual" || s === "lingual_mesial" || s === "lingual_distal")) {
+      anteriorRest = 1; // cingulum (full / mesial / distal — anterior teeth only)
+      if (!(ANTERIOR_CINGULUM_FIELD in raw)) {
+        antCingulum = s === "lingual_distal" ? 2 : s === "lingual_mesial" ? 1 : 0; // "lingual" -> full
+      }
+    } else if (min < 4) {
+      anteriorRest = 2; // incisal (mesial/distal on an anterior tooth)
+      if (!(ANTERIOR_INCISAL_FIELD in raw)) antIncisal = s === "distal" ? 1 : 0;
+    } else {
+      posteriorRest = 2; // pr_non_full (posterior mesial/distal/lingual rest)
+    }
+  }
 
+  // Retainer: type + bar shape (category) are web-owned (derived live). The bar
+  // mesial/distal side, clasp/ring orientation come from the loaded data.
   let retainerType = 0;
-  let barType = 0;
-  let barCategory = 0;
+  let barCategory = Number(rawOr(RETAINER_BAR_CATEGORY_FIELD, 0));
   const barId = comps.find((id) => String(id).startsWith("bar-"));
-  if (comps.includes("retainer-clasp")) retainerType = 1;       // clasp_retainer
-  else if (comps.includes("ring-clasp")) retainerType = 2;      // ring_retainer
+  if (comps.includes("retainer-clasp")) retainerType = 1;
+  else if (comps.includes("ring-clasp")) retainerType = 2;
   else if (barId) {
-    retainerType = 3;                                           // bar_retainer
-    barCategory = inverseOf(RETAINER_BAR_CATEGORY).get(barId) ?? 0;
-    const placements = Array.isArray(rec?.componentPlacements) ? rec.componentPlacements : [];
+    retainerType = 3;
+    barCategory = inverseOf(RETAINER_BAR_CATEGORY).get(barId) ?? barCategory;
+  }
+  // Bar side: loaded value wins; else derive from the placement surface.
+  let barType = Number(rawOr(RETAINER_BAR_TYPE_FIELD, 0));
+  if (!(RETAINER_BAR_TYPE_FIELD in raw) && barId) {
     const barPl = placements.find((p) => p.componentId === barId);
-    barType = barPl && String(barPl.surface || "").includes("distal") ? 1 : 0; // rb_distal=1
+    barType = barPl && String(barPl.surface || "").includes("distal") ? 1 : 0;
   }
 
   const fields = [
@@ -320,25 +437,25 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
     ["Tooth Main.Tooth Index.Tooth Condition", condition],
     ["Tooth Main.Tooth Index.Mesh Presence", hasMesh ? 0 : 1], // 0 = mesh present
     ["Tooth Main.Tooth Index.Array Index", arrayIdx],
-    ["Tooth Main.Tooth Index.Tissue Stop Presence", 0],
-    ["Tooth Main.Tooth Index.Retention Pin Presence", 0],
-    ["Tooth Main.Tooth Index.Tooth Position X", 0],
-    ["Tooth Main.Tooth Index.Tooth Position Y", 0],
-    ["Tooth Main.Tooth Index.Tooth Position Z", 0],
+    ["Tooth Main.Tooth Index.Tissue Stop Presence", rawOr("Tooth Main.Tooth Index.Tissue Stop Presence", 0)],
+    ["Tooth Main.Tooth Index.Retention Pin Presence", rawOr("Tooth Main.Tooth Index.Retention Pin Presence", 0)],
+    ["Tooth Main.Tooth Index.Tooth Position X", rawOr("Tooth Main.Tooth Index.Tooth Position X", 0)],
+    ["Tooth Main.Tooth Index.Tooth Position Y", rawOr("Tooth Main.Tooth Index.Tooth Position Y", 0)],
+    ["Tooth Main.Tooth Index.Tooth Position Z", rawOr("Tooth Main.Tooth Index.Tooth Position Z", 0)],
     ["Tooth Main.Tooth Rest.Tooth Type", toothType],
-    ["Tooth Main.Tooth Rest.Anterior Rest", 0],
-    ["Tooth Main.Tooth Rest.Anterior Cingulum Rest Type", 0],
-    ["Tooth Main.Tooth Rest.Anterior Incisal Rest Type", 0],
+    ["Tooth Main.Tooth Rest.Anterior Rest", anteriorRest],
+    ["Tooth Main.Tooth Rest.Anterior Cingulum Rest Type", antCingulum],
+    ["Tooth Main.Tooth Rest.Anterior Incisal Rest Type", antIncisal],
     ["Tooth Main.Tooth Rest.Posterior Rest Type", posteriorRest],
-    ["Tooth Main.Tooth Rest.Pr Config 0", posteriorRest > 0 ? 0 : 1],
-    ["Tooth Main.Tooth Rest.Pr Config 1", 1],
-    ["Tooth Main.Tooth Rest.Pr Config 2", 1],
+    ["Tooth Main.Tooth Rest.Pr Config 0", rawOr("Tooth Main.Tooth Rest.Pr Config 0", posteriorRest === 2 ? 0 : 1)],
+    ["Tooth Main.Tooth Rest.Pr Config 1", rawOr("Tooth Main.Tooth Rest.Pr Config 1", 1)],
+    ["Tooth Main.Tooth Rest.Pr Config 2", rawOr("Tooth Main.Tooth Rest.Pr Config 2", 1)],
     ["Tooth Main.Tooth Retainer.Retainer Type", retainerType],
-    ["Tooth Main.Tooth Retainer.Retainer Clasp Type", 0],
-    ["Tooth Main.Tooth Retainer.Retainer Ring Type", 0],
+    ["Tooth Main.Tooth Retainer.Retainer Clasp Type", rawOr(RETAINER_CLASP_TYPE_FIELD, 0)],
+    ["Tooth Main.Tooth Retainer.Retainer Ring Type", rawOr(RETAINER_RING_TYPE_FIELD, 0)],
     ["Tooth Main.Tooth Retainer.Retainer Bar Type", barType],
     ["Tooth Main.Tooth Retainer.Retainer Bar Category", barCategory],
-    ["Tooth Main.Tooth Reciprocating.Tooth Type", present === 0 ? 2 : 0], // present->2 (desktop default)
+    ["Tooth Main.Tooth Reciprocating.Tooth Type", rawOr(RECIPROCATING_FIELD, present === 0 ? 2 : 0)],
   ];
   return fields.map(([k, v]) => `Tooth ${arrayIdx}: ${k}: ${v}`);
 }
@@ -376,13 +493,19 @@ export function encodeJawStructText(state, jawSide) {
   }
 
   lines.push(`Major Connector Type: ${majorConnectorCode(state, fdiOrder)}`);
+  // Minor-connector path grid + ball connectors aren't modeled by the web, so
+  // emit the loaded values when available (preserved on state.jawStructTail),
+  // falling back to the desktop init defaults (paths 1, balls 0).
+  const tail = state?.jawStructTail?.[jawSide] || {};
   for (let c = 0; c < 16; c += 1) {
     for (let p = 0; p < 16; p += 1) {
-      lines.push(`Minor Connector ${c} Path Index ${p}: 1`);
+      const key = `Minor Connector ${c} Path Index ${p}`;
+      lines.push(`${key}: ${key in tail ? tail[key] : 1}`);
     }
   }
   for (let b = 0; b < 17; b += 1) {
-    lines.push(`Ball Connector ${b}: 0`);
+    const key = `Ball Connector ${b}`;
+    lines.push(`${key}: ${key in tail ? tail[key] : 0}`);
   }
 
   lines.push("End of Jaw Struct");
