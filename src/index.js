@@ -990,7 +990,7 @@ function setCenterCameraView() {
   }
 
   document.querySelectorAll(".preset-view-button").forEach((button) => {
-    button.classList.toggle("active", button.dataset.viewKey === "center");
+    button.classList.remove("active");
   });
 }
 
@@ -1004,10 +1004,10 @@ function createPresetViewControls() {
   viewPad.className = "preset-view-pad";
 
   const visualViews = [
-    { key: "top", label: "Top", slot: "top" },
-    { key: "bottom", label: "Bottom", slot: "bottom" },
-    { key: "left", label: "Left", slot: "left" },
-    { key: "right", label: "Right", slot: "right" },
+    { key: "bottom", label: "Top", slot: "top" },
+    { key: "top", label: "Bottom", slot: "bottom" },
+    { key: "right", label: "Left", slot: "left" },
+    { key: "left", label: "Right", slot: "right" },
     { key: "rear", label: "Rear", slot: "rear" },
     { key: "front", label: "Front", slot: "front" },
     { key: "center", label: "Center", slot: "center" },
@@ -4250,7 +4250,9 @@ btnContainer.appendChild(edit2DStatic); */
   }
 
   .preset-view-center .preset-view-face {
-    clip-path: polygon(0 0, 75% 0, 100% 24%, 100% 100%, 0 100%);
+    clip-path: none;
+    background: url(${basePath}/assets/Icon_CenterTeethButton.png) center / contain no-repeat;
+    border: 0;
   }
 
   .preset-view-front {
@@ -4394,9 +4396,9 @@ btnContainer.appendChild(edit2DStatic); */
       position: fixed;
       left: 18px;
       bottom: calc(22px + env(safe-area-inset-bottom, 0px));
-      width: 290px;
-      height: 64px;
-      padding: 8px 10px;
+      width: 412px;
+      height: 84px;
+      padding: 8px 12px;
       overflow: visible;
       transform: none;
       background: rgba(42, 42, 42, 0.96);
@@ -4407,8 +4409,11 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .preset-view-pad {
-      width: 270px;
-      height: 48px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 388px;
+      height: 60px;
       margin: 0;
       transform: none;
     }
@@ -4420,27 +4425,30 @@ btnContainer.appendChild(edit2DStatic); */
     .preset-view-top,
     .preset-view-front,
     .preset-view-rear {
-      width: 28px;
-      height: 28px;
+      position: static;
+      width: 58px;
+      height: 58px;
       transform: none;
     }
 
     .preset-view-left,
     .preset-view-right {
-      width: 28px;
-      height: 28px;
+      position: static;
+      width: 58px;
+      height: 58px;
       transform: none;
     }
 
     .preset-view-bottom {
-      width: 28px;
-      height: 28px;
+      position: static;
+      width: 58px;
+      height: 58px;
       transform: none;
     }
 
     .preset-view-front {
-      left: 0;
-      top: 0;
+      left: auto;
+      top: auto;
     }
 
     .preset-view-top .preset-view-face,
@@ -4450,18 +4458,18 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .preset-view-rear {
-      left: 40px;
-      top: 0;
+      left: auto;
+      top: auto;
     }
 
     .preset-view-top {
-      left: 80px;
-      top: 0;
+      left: auto;
+      top: auto;
     }
 
     .preset-view-bottom {
-      left: 120px;
-      top: 0;
+      left: auto;
+      top: auto;
     }
 
     .preset-view-bottom .preset-view-face {
@@ -4469,8 +4477,8 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .preset-view-left {
-      left: 160px;
-      top: 10px;
+      left: auto;
+      top: auto;
     }
 
     .preset-view-left .preset-view-face {
@@ -4478,8 +4486,8 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .preset-view-right {
-      left: 220px;
-      top: 10px;
+      left: auto;
+      top: auto;
     }
 
     .preset-view-right .preset-view-face {
@@ -4488,6 +4496,11 @@ btnContainer.appendChild(edit2DStatic); */
 
     .preset-view-button {
       filter: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.04);
     }
 
     .preset-view-button .preset-view-face {
@@ -4509,21 +4522,34 @@ btnContainer.appendChild(edit2DStatic); */
     .preset-view-right .preset-view-face::after {
       position: absolute;
       left: 50%;
+      top: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 1em;
+      height: 1em;
       color: #ffffff;
-      font-size: 16px;
+      font-size: 60px;
       font-weight: 800;
       line-height: 1;
-      transform: translateX(-50%);
+      transform: translate(-50%, -50%);
+      -webkit-text-stroke: 1px currentColor;
+      text-rendering: geometricPrecision;
     }
 
-    .preset-view-front .preset-view-face::after,
-    .preset-view-rear .preset-view-face::after,
-    .preset-view-top .preset-view-face::after,
-    .preset-view-bottom .preset-view-face::after,
-    .preset-view-left .preset-view-face::after,
-    .preset-view-right .preset-view-face::after {
-      top: 50%;
-      transform: translate(-50%, -50%);
+    .preset-view-button:hover,
+    .preset-view-button.active {
+      background: rgba(255, 255, 255, 0.12);
+      filter: none;
+    }
+
+    .preset-view-button:hover .preset-view-face,
+    .preset-view-button.active .preset-view-face {
+      background: transparent;
+    }
+
+    .preset-view-button.active .preset-view-face::after {
+      color: #ffd166;
     }
 
     .preset-view-front .preset-view-face::after {
@@ -4601,6 +4627,10 @@ btnContainer.appendChild(edit2DStatic); */
       min-width: 140px !important;
       height: 64px !important;
       margin: 0 auto;
+      white-space: normal !important;
+      text-align: center;
+      line-height: 1.2;
+      padding: 8px 10px !important;
     }
 
     .mail-popup,
@@ -4661,9 +4691,10 @@ btnContainer.appendChild(edit2DStatic); */
       position: fixed;
       left: 12px;
       bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-      width: 246px;
-      height: 72px;
-      padding: 6px 8px;
+      width: 392px;
+      max-width: calc(100vw - 24px);
+      height: 84px;
+      padding: 8px 10px;
       overflow: visible;
       transform: none;
       background: rgba(42, 42, 42, 0.96);
@@ -4674,7 +4705,11 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .preset-view-pad {
-      width: 230px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 366px;
+      max-width: 100%;
       height: 60px;
       margin: 0;
       transform: none;
@@ -4687,27 +4722,30 @@ btnContainer.appendChild(edit2DStatic); */
     .preset-view-top,
     .preset-view-front,
     .preset-view-rear {
-      width: 24px;
-      height: 24px;
+      position: static;
+      width: 56px;
+      height: 56px;
       transform: none;
     }
 
     .preset-view-left,
     .preset-view-right {
-      width: 24px;
-      height: 24px;
+      position: static;
+      width: 56px;
+      height: 56px;
       transform: none;
     }
 
     .preset-view-bottom {
-      width: 24px;
-      height: 24px;
+      position: static;
+      width: 56px;
+      height: 56px;
       transform: none;
     }
 
     .preset-view-front {
-      left: 0;
-      top: 0;
+      left: auto;
+      top: auto;
     }
 
     .preset-view-top .preset-view-face,
@@ -4717,18 +4755,18 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .preset-view-rear {
-      left: 32px;
-      top: 0;
+      left: auto;
+      top: auto;
     }
 
     .preset-view-top {
-      left: 64px;
-      top: 0;
+      left: auto;
+      top: auto;
     }
 
     .preset-view-bottom {
-      left: 96px;
-      top: 0;
+      left: auto;
+      top: auto;
     }
 
     .preset-view-bottom .preset-view-face {
@@ -4736,8 +4774,8 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .preset-view-left {
-      left: 128px;
-      top: 12px;
+      left: auto;
+      top: auto;
     }
 
     .preset-view-left .preset-view-face {
@@ -4745,8 +4783,8 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .preset-view-right {
-      left: 182px;
-      top: 12px;
+      left: auto;
+      top: auto;
     }
 
     .preset-view-right .preset-view-face {
@@ -4755,6 +4793,11 @@ btnContainer.appendChild(edit2DStatic); */
 
     .preset-view-button {
       filter: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.04);
     }
 
     .preset-view-button .preset-view-face {
@@ -4774,21 +4817,34 @@ btnContainer.appendChild(edit2DStatic); */
     .preset-view-button[data-mobile-arrow="down"] .preset-view-face::after {
       position: absolute;
       left: 50%;
+      top: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 1em;
+      height: 1em;
       color: #ffffff;
-      font-size: 16px;
+      font-size: 60px;
       font-weight: 800;
       line-height: 1;
-      transform: translateX(-50%);
+      transform: translate(-50%, -50%);
+      -webkit-text-stroke: 1px currentColor;
+      text-rendering: geometricPrecision;
     }
 
-    .preset-view-front .preset-view-face::after,
-    .preset-view-rear .preset-view-face::after,
-    .preset-view-top .preset-view-face::after,
-    .preset-view-bottom .preset-view-face::after,
-    .preset-view-left .preset-view-face::after,
-    .preset-view-right .preset-view-face::after {
-      top: 50%;
-      transform: translate(-50%, -50%);
+    .preset-view-button:hover,
+    .preset-view-button.active {
+      background: rgba(255, 255, 255, 0.12);
+      filter: none;
+    }
+
+    .preset-view-button:hover .preset-view-face,
+    .preset-view-button.active .preset-view-face {
+      background: transparent;
+    }
+
+    .preset-view-button.active .preset-view-face::after {
+      color: #ffd166;
     }
 
     .preset-view-front .preset-view-face::after {
@@ -4868,6 +4924,10 @@ btnContainer.appendChild(edit2DStatic); */
       min-width: 128px !important;
       height: 60px !important;
       margin: 0 auto;
+      white-space: normal !important;
+      text-align: center;
+      line-height: 1.2;
+      padding: 8px 10px !important;
     }
 
     .mail-popup,

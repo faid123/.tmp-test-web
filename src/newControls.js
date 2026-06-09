@@ -175,18 +175,22 @@ style.textContent = `
     cursor: pointer;
   }
 
+  .component-eye-button {
+    background-size: 24px 14px;
+  }
+
   .component-eye-button.hidden-state {
-    border-color: rgba(248, 113, 113, 0.65);
-    background-color: rgba(127, 29, 29, 0.75);
+    border-color: rgba(248, 113, 113, 0.45);
+    background-color: #2d2d2d;
   }
 
   .component-eye-button.hidden-state .component-eye-slash {
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 24px;
-    height: 2px;
-    background: #fca5a5;
+    width: 22px;
+    height: 1.75px;
+    background: #ef9a9a;
     transform: translate(-50%, -50%) rotate(-38deg);
     border-radius: 999px;
   }
@@ -201,10 +205,10 @@ style.textContent = `
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 18px;
-    height: 18px;
-    border: 2px solid #ffffff;
-    border-radius: 50%;
+    width: 21px;
+    height: 13px;
+    border: 1.5px solid rgba(255, 255, 255, 0.92);
+    border-radius: 999px;
     transform: translate(-50%, -50%);
     box-sizing: border-box;
   }
@@ -214,20 +218,29 @@ style.textContent = `
     position: absolute;
     left: 50%;
     top: 50%;
-    width: 22px;
-    height: 22px;
+    width: 21px;
+    height: 13px;
     transform: translate(-50%, -50%);
     background:
-      linear-gradient(#ffffff, #ffffff) center / 22px 2px no-repeat,
-      linear-gradient(#ffffff, #ffffff) center / 2px 22px no-repeat,
-      linear-gradient(45deg, transparent 47%, #ffffff 48%, #ffffff 52%, transparent 53%),
-      linear-gradient(-45deg, transparent 47%, #ffffff 48%, #ffffff 52%, transparent 53%);
-    opacity: 0.9;
+      linear-gradient(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.9)) center / 1.5px 13px no-repeat,
+      linear-gradient(rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.9)) center / 21px 1.5px no-repeat,
+      linear-gradient(rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.78)) left 5px top / 21px 1.5px no-repeat,
+      linear-gradient(rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.78)) left top 4px / 1.5px 13px no-repeat;
+    opacity: 0.95;
   }
 
   .component-web-button.active {
     border-color: #f472b6;
     background-color: #831843;
+  }
+
+  .component-web-button.has-icon {
+    background-size: 24px 16px;
+  }
+
+  .component-web-button.has-icon::before,
+  .component-web-button.has-icon::after {
+    display: none;
   }
 
   @media (max-width: 640px), (max-height: 720px) {
@@ -385,17 +398,25 @@ style.textContent = `
       background-size: 22px 22px;
     }
 
+    .component-eye-button {
+      background-size: 24px 14px;
+    }
+
     .component-web-button::before {
-      width: 18px;
-      height: 18px;
-      border-color: #ffffff;
-      border-radius: 50%;
+      width: 21px;
+      height: 13px;
+      border-color: rgba(255, 255, 255, 0.92);
+      border-radius: 999px;
       transform: translate(-50%, -50%);
       clip-path: none;
     }
 
     .component-web-button::after {
       display: block;
+    }
+
+    .component-web-button.has-icon {
+      background-size: 24px 16px;
     }
   }
 
@@ -675,8 +696,12 @@ function createComponentPanel(groups) {
       webButton = document.createElement("button");
       webButton.type = "button";
       webButton.className = "component-web-button";
-      webButton.title = `${group.label} triangle web`;
-      webButton.setAttribute("aria-label", `${group.label} triangle web`);
+      if (group.vertexIconPath) {
+        webButton.classList.add("has-icon");
+        webButton.style.backgroundImage = `url(${group.vertexIconPath})`;
+      }
+      webButton.title = `${group.label} vertices`;
+      webButton.setAttribute("aria-label", `${group.label} vertices`);
       webButton.addEventListener("click", () => {
         const nextEnabled = !group.meshes?.some((mesh) => mesh.userData.componentWireframeEnabled);
         group.meshes?.forEach((mesh) => {
@@ -801,6 +826,7 @@ function addVisibilityAndTransparencyControls(parentObject, name, materialArray)
       label: `${titlePrefix} jaw`,
       type: "mesh",
       iconPath: `${basePath}/assets/Icon_${titlePrefix}Jaw_Occlusal.png`,
+      vertexIconPath: `${basePath}/assets/Icon_${jawKey}_jaw_vertice.png`,
       meshes: jawMeshes,
       supportsAnalysis: true,
       getVisible: () => areAnyVisible(jawMeshes),
@@ -823,6 +849,7 @@ function addVisibilityAndTransparencyControls(parentObject, name, materialArray)
       label: `${titlePrefix} Mesh`,
       type: "mesh",
       iconPath: `${basePath}/assets/Icon_${titlePrefix}Jaw.png`,
+      vertexIconPath: `${basePath}/assets/Icon_${jawKey}_mesh.png`,
       meshes: surfaceMeshes,
       supportsAnalysis: false,
       getVisible: () => areAnyVisible(surfaceMeshes),
@@ -852,7 +879,7 @@ function addVisibilityAndTransparencyControls(parentObject, name, materialArray)
       key: `${jawKey}-artificial-teeth`,
       label: `${titlePrefix} artificial teeth`,
       type: "overlay",
-      iconPath: `${basePath}/assets/Icon_ToothBaseAT.png`,
+      iconPath: `${basePath}/assets/Icon_ArtificialTeeth.png`,
       meshes: [],
       supportsAnalysis: false,
       hasContent: () => window.hasArtificialTeethJaw?.(jawKey) ?? false,
