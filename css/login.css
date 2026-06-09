@@ -1,179 +1,332 @@
+:root {
+  /* Tailwind palette referenced from the Sort case list design */
+  --teal-400: #2dd4bf;
+  --teal-500: #14b8a6;
+  --teal-600: #0d9488;
+  --teal-700: #0f766e;
+  --pink-300: #f9a8d4;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-900: #111827;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
-    font-family: Arial, sans-serif;
-    text-align: center;
-    background-color: #f4f4f4;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    margin: 0;
+  margin: 0;
+  font-family: "Manrope", "Segoe UI", system-ui, sans-serif;
+  color: var(--gray-900);
 }
 
-.login_face {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    background-size: cover;
+.hidden {
+  display: none !important;
 }
 
-.login_box {
-    width: 550px;
-    height: 450px;
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.65);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+/* min-h-screen bg-gradient-to-br from-cyan-50 via-teal-50 to-emerald-50 */
+.auth-page {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #ecfeff 0%, #f0fdfa 50%, #ecfdf5 100%);
 }
 
-.img_box {
-    width: 130px;
-    height: 130px;
-    background-image: url('../assets/profile.png');
-    background-size: cover;
-    background-position: center;
-    border-radius: 50%;
-    border: white solid 6px;
-    margin-top: -95px;
+/* w-full max-w-md relative z-10 */
+.auth-container {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 28rem; /* max-w-md */
 }
 
-.login_msg {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 20px;
-    width: 400px;
-    height: 300px;
-    margin-top: 35px;
+/* bg-white rounded-2xl shadow-xl p-8 */
+.auth-card {
+  background: #ffffff;
+  border-radius: 1rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  animation: fade-in 0.35s ease-out;
 }
 
-input {
-    width: 100%;
-    padding: 12px;
-    margin: 10px 0;
-    border: 1px solid #ccc;
-    border-radius: 25px;
-    font-size: 16px;
-    background: rgba(255, 255, 255, 0.65);
+/* ===== Header / logo ===== */
+.auth-header {
+  text-align: center;
+  margin-bottom: 2rem;
 }
 
-
-
-input::placeholder {
-    color: #ccc; 
+/* w-24 h-24 mx-auto mb-6 — original SmartRPD logo */
+.logo {
+  width: 6rem;
+  height: 6rem;
+  margin: 0 auto 1.5rem;
 }
 
-
-button {
-    width: 220px;
-    padding: 12px;
-    background-color: #ba0a26;
-    color: white;
-    border: none;
-    cursor: pointer;
-    border-radius: 40px;
-    font-size: 16px;
-    transition: background-color 0.3s ease;
-    margin-top: 20px;
+.logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
-button:hover {
-    background-color: #8a081e;
+.auth-header h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.875rem; /* text-3xl */
+  font-weight: 600;
 }
 
-#error-message {
-    color: red;
-    font-size: 14px;
-    /*  */
+.auth-subtitle {
+  margin: 0;
+  color: var(--gray-600);
 }
 
-/* ✅ 最小适配，只处理移动端基础问题 */
-@media (max-width: 768px) {
-    .login_msg {
-      width: 100%;
-      max-width: 400px;
-      margin: 0 auto;           /* ✅ 让 .login_msg 居中 */
-      padding: 0 10px;
-      box-sizing: border-box;
-    }
-  
-    input,
-    button {
-      width: 100%;
-      box-sizing: border-box;
-    }
+.otp-target {
+  font-weight: 500;
+  color: var(--gray-900);
+}
+
+/* ===== Form ===== */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem; /* space-y-6 */
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+  color: var(--gray-700);
+}
+
+.input-wrap {
+  position: relative;
+}
+
+.input-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--gray-400);
+  pointer-events: none;
+}
+
+.input-wrap input {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 2.5rem; /* pl-10 */
+  border: 1px solid var(--gray-300);
+  border-radius: 0.5rem;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--gray-900);
+  outline: none;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.input-wrap input::placeholder {
+  color: var(--gray-400);
+}
+
+.input-wrap input:focus {
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--teal-500);
+}
+
+/* remember me / forgot password row */
+.form-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.remember {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--gray-600);
+  cursor: pointer;
+}
+
+.remember input {
+  border-radius: 0.25rem;
+  border: 1px solid var(--gray-300);
+  accent-color: var(--teal-500);
+}
+
+.link-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--teal-600);
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  color: var(--teal-700);
+}
+
+/* w-full bg-teal-500 text-white py-3 rounded-lg hover:bg-teal-600 */
+.primary-btn {
+  width: 100%;
+  padding: 0.75rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: var(--teal-500);
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.primary-btn:hover {
+  background: var(--teal-600);
+}
+
+.primary-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.error-message {
+  margin: 1rem 0 0;
+  min-height: 1.25rem;
+  text-align: center;
+  color: #dc2626;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* ===== OTP view ===== */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: var(--gray-600);
+  cursor: pointer;
+}
+
+.back-btn:hover {
+  color: var(--gray-900);
+}
+
+.back-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.otp-label {
+  text-align: center;
+  margin-bottom: 0.75rem !important;
+}
+
+.otp-inputs {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.otp-box {
+  width: 3rem;
+  height: 3rem;
+  text-align: center;
+  font-size: 1.25rem;
+  border: 1px solid var(--gray-300);
+  border-radius: 0.5rem;
+  outline: none;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.otp-box:focus {
+  border-color: transparent;
+  box-shadow: 0 0 0 2px var(--teal-500);
+}
+
+.resend-text {
+  margin: 0;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--gray-600);
+}
+
+/* ===== Decorative dot patterns =====
+   A 3x3 grid of teal dots rendered with a tiled radial-gradient
+   (matches the four corner clusters in the Sort case list design). */
+.dot-pattern {
+  position: absolute;
+  width: 3.5rem; /* 3 columns of 1.25rem-spaced dots */
+  height: 3.5rem;
+  opacity: 0.3;
+  background-image: radial-gradient(
+    circle,
+    var(--teal-400) 0.25rem,
+    transparent 0.3rem
+  );
+  background-size: 1.25rem 1.25rem;
+  background-position: 0 0;
+  background-repeat: round;
+}
+
+.dot-tl {
+  top: 5rem;
+  left: 2.5rem;
+}
+
+.dot-bl {
+  bottom: 5rem;
+  left: 2.5rem;
+}
+
+.dot-tr {
+  top: 5rem;
+  right: 2.5rem;
+}
+
+.dot-br {
+  bottom: 8rem;
+  right: 5rem;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
-  
-/* ==== OTP hard fix: make it same height as other inputs ==== */
-:root{ --brand:#ba0a26; --brand-dark:#8a081e; }
-
-/* 父容器先定高，子元素百分比才有参照 */
-.login_msg .otp-wrapper{
-  display:flex !important;
-  align-items:center !important;
-  width:100% !important;
-  height:48px !important;          /* 与你其他输入框一致 */
-  min-height:40px !important;
-  margin-top:12px !important;
-  border-radius:24px !important;
-  background:#fff !important;
-  border:1px solid rgba(0,0,0,.08) !important;
-  box-shadow:0 4px 12px rgba(0,0,0,.08) !important;
-  overflow:visible !important;
-  gap:0 !important;
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* 统一清掉全局 input 的宽度/外边距等干扰 */
-#otp{
-  display:block !important;
-  flex:1 1 auto !important;
-  height:48px !important;          /* 直接给定值，避免百分比=0 */
-  width:auto !important;
-  margin:0 !important;
-  padding:0 16px 0 18px !important;
-  border-radius:24px !important;
-  border:none !important;
-  border-right:1px solid rgba(0,0,0,.08) !important;
-  background:transparent !important;
-  font-size:16px !important;
-  line-height:48px !important;     /* 防止文字被压扁 */
-  color:#333 !important;
-  box-sizing:border-box !important;
-  outline:none !important;
-}
-#otp::placeholder{ color:#9aa0a6 !important; }
+@media (max-width: 480px) {
+  .auth-card {
+    padding: 1.5rem;
+  }
 
-/* 清掉全局 button 的宽度/外边距，固定视觉高度 */
-#send-otp-btn{
-  display:block !important;
-  height:40px !important;
-  min-width:128px !important;
-  width:auto !important;
-  margin:0 !important;
-  padding:0 18px !important;
-  border:none !important;
-  border-radius:0 !important;      /* 由外层裁成胶囊 */
-  background:var(--brand) !important;
-  color:#fff !important;
-  border-radius:24px !important;
-  font-size:15px !important;
-  font-weight:400 !important;
-  letter-spacing:.2px !important;
-  white-space:nowrap !important;
-  cursor:pointer !important;
-  transition:background-color .2s ease, transform .06s ease, opacity .2s ease !important;
-}
-#send-otp-btn:hover{ background:var(--brand-dark) !important; }
-#send-otp-btn:active{ transform:translateY(1px) !important; }
-#send-otp-btn:disabled{ opacity:.65 !important; background:#c8c9cc !important; cursor:not-allowed !important; }
+  .dot-pattern {
+    transform: scale(0.7);
+    opacity: 0.2;
+  }
 
-/* 小屏微调 */
-@media (max-width:420px){
-  .login_msg .otp-wrapper{ height:46px !important; min-height:46px !important; }
-  #send-otp-btn{ min-width:112px !important; font-size:14px !important; padding:0 14px !important; }
+  .otp-box {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
 }

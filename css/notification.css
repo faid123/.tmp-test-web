@@ -86,3 +86,18 @@
   display: none;
 }
 .notif-dot.show { display: inline-block; }
+
+/* Case page override: open popup away from detail pane */
+.cm-header-right .notification-popup {
+  top: calc(100% + 10px);
+  right: 52px;
+  left: auto;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  border-radius: 14px;
+  z-index: 1000;
+}
+
+.cm-header-right .notification-popup.hidden {
+  display: none !important;
+}

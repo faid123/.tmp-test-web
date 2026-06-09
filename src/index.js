@@ -341,6 +341,7 @@ function saveAnnotationBackground(storageKey, dataUrl) {
 
 function createHamburgerButton() {
   if (document.getElementById("sidebar-hamburger-btn")) return;
+  const overlayHost = viewerContainer || document.body;
 
   const btn = document.createElement("button");
   btn.id = "sidebar-hamburger-btn";
@@ -352,12 +353,12 @@ function createHamburgerButton() {
     <rect y="15.5" width="22" height="2.5" rx="1.25" fill="currentColor"/>
   </svg>`;
   btn.addEventListener("click", toggleHamburgerDrawer);
-  document.body.appendChild(btn);
+  overlayHost.appendChild(btn);
 
   const backdrop = document.createElement("div");
   backdrop.id = "hamburger-backdrop";
   backdrop.addEventListener("click", closeHamburgerDrawer);
-  document.body.appendChild(backdrop);
+  overlayHost.appendChild(backdrop);
 
   const drawer = document.createElement("div");
   drawer.id = "hamburger-drawer";
@@ -379,7 +380,7 @@ function createHamburgerButton() {
   content.id = "hamburger-drawer-content";
   drawer.appendChild(content);
 
-  document.body.appendChild(drawer);
+  overlayHost.appendChild(drawer);
 }
 
 function populateHamburgerDrawer() {
@@ -422,7 +423,7 @@ function getViewerRightNav() {
   nav = document.createElement("nav");
   nav.id = "viewer-right-nav";
   nav.setAttribute("aria-label", "Viewer controls");
-  document.body.appendChild(nav);
+  (viewerContainer || document.body).appendChild(nav);
   return nav;
 }
 
@@ -435,7 +436,7 @@ function getViewerMetaBar() {
   metaBar = document.createElement("div");
   metaBar.id = "viewer-meta-bar";
   metaBar.setAttribute("aria-label", "Case information and chat");
-  document.body.appendChild(metaBar);
+  (viewerContainer || document.body).appendChild(metaBar);
   return metaBar;
 }
 
@@ -893,6 +894,44 @@ const PRESET_CAMERA_VIEWS = [
     up: new THREE.Vector3(0, 1, 0),
   },
 ];
+let currentPresetToolbarView = "front";
+
+function getPresetArrowGlyph(viewKey) {
+  switch (viewKey) {
+    case "front":
+      return "↗";
+    case "rear":
+      return "↙";
+    case "top":
+      return "↑";
+    case "bottom":
+      return "↓";
+    case "left":
+      return "←";
+    case "right":
+      return "→";
+    default:
+      return "↑";
+  }
+}
+
+function syncPresetViewToolbarSelection(viewKey) {
+  if (!["front", "rear", "top", "bottom", "left", "right"].includes(viewKey)) {
+    return;
+  }
+  currentPresetToolbarView = viewKey;
+  const currentButton = document.getElementById("preset-view-current");
+  if (currentButton) {
+    currentButton.dataset.viewKey = viewKey;
+    currentButton.dataset.mobileArrow = viewKey;
+    currentButton.setAttribute("aria-label", `${viewKey} view`);
+    currentButton.title = `${viewKey} view`;
+    currentButton.textContent = getPresetArrowGlyph(viewKey);
+  }
+  document.querySelectorAll(".preset-view-dropdown-button").forEach((button) => {
+    button.classList.toggle("active", button.dataset.viewKey === viewKey);
+  });
+}
 
 function getPresetViewBounds() {
   const jawBox = getJawMeshBoundingBox();
@@ -952,6 +991,7 @@ function setPresetCameraView(viewKey) {
   document.querySelectorAll(".preset-view-button").forEach((button) => {
     button.classList.toggle("active", button.dataset.viewKey === viewKey);
   });
+  syncPresetViewToolbarSelection(viewKey);
 }
 
 function setCenterCameraView() {
@@ -999,9 +1039,98 @@ function createPresetViewControls() {
 
   const panel = document.createElement("div");
   panel.className = "preset-view-panel";
+  const sceneHost = viewerContainer || document.getElementById("container3D") || document.body;
 
   const viewPad = document.createElement("div");
   viewPad.className = "preset-view-pad";
+
+  const mobileWrap = document.createElement("div");
+  mobileWrap.className = "preset-view-current-wrap";
+
+  const mobileCurrent = document.createElement("button");
+  mobileCurrent.type = "button";
+  mobileCurrent.id = "preset-view-current";
+  mobileCurrent.className = "preset-view-current";
+  mobileCurrent.dataset.viewKey = currentPresetToolbarView;
+  mobileCurrent.dataset.mobileArrow = currentPresetToolbarView;
+  mobileCurrent.setAttribute("aria-label", "Current positional view");
+  mobileCurrent.title = "Choose positional view";
+  mobileCurrent.textContent = getPresetArrowGlyph(currentPresetToolbarView);
+
+  const mobileDropdown = document.createElement("div");
+  mobileDropdown.className = "preset-view-dropdown";
+  sceneHost.appendChild(mobileDropdown);
+
+  const closeMobileDropdown = () => {
+    mobileWrap.classList.remove("open");
+    mobileDropdown.classList.remove("open");
+  };
+
+  const positionMobileDropdown = () => {
+    if (!mobileDropdown.classList.contains("open")) return;
+    const buttonRect = mobileCurrent.getBoundingClientRect();
+    const hostRect = sceneHost.getBoundingClientRect();
+    const dropdownRect = mobileDropdown.getBoundingClientRect();
+    const gap = window.innerWidth <= 768 ? 18 : 14;
+    const maxLeft = Math.max(8, hostRect.width - dropdownRect.width - 8);
+    const desiredLeft = buttonRect.right - hostRect.left - dropdownRect.width;
+    const desiredTop = buttonRect.top - hostRect.top - dropdownRect.height - gap;
+    const left = Math.min(Math.max(8, desiredLeft), maxLeft);
+    const top = Math.max(8, desiredTop);
+    mobileDropdown.style.left = `${left}px`;
+    mobileDropdown.style.top = `${top}px`;
+    mobileDropdown.style.right = "auto";
+    mobileDropdown.style.bottom = "auto";
+  };
+
+  const mobileViews = [
+    { key: "front", label: "Front" },
+    { key: "rear", label: "Rear" },
+    { key: "top", label: "Top" },
+    { key: "bottom", label: "Bottom" },
+    { key: "left", label: "Left" },
+    { key: "right", label: "Right" },
+  ];
+
+  mobileViews.forEach((view) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "preset-view-dropdown-button";
+    item.dataset.viewKey = view.key;
+    item.dataset.mobileArrow = view.key;
+    item.title = `${view.label} view`;
+    item.setAttribute("aria-label", `${view.label} view`);
+    item.textContent = getPresetArrowGlyph(view.key);
+    item.addEventListener("click", () => {
+      closeMobileDropdown();
+      setPresetCameraView(view.key);
+    });
+    mobileDropdown.appendChild(item);
+  });
+
+  mobileCurrent.addEventListener("click", () => {
+    const willOpen = !mobileDropdown.classList.contains("open");
+    closeMobileDropdown();
+    if (willOpen) {
+      mobileWrap.classList.add("open");
+      mobileDropdown.classList.add("open");
+      requestAnimationFrame(positionMobileDropdown);
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!mobileWrap.contains(event.target) && !mobileDropdown.contains(event.target)) {
+      closeMobileDropdown();
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (mobileDropdown.classList.contains("open")) {
+      requestAnimationFrame(positionMobileDropdown);
+    }
+  });
+
+  mobileWrap.appendChild(mobileCurrent);
 
   const visualViews = [
     { key: "bottom", label: "Top", slot: "top" },
@@ -1044,8 +1173,10 @@ function createPresetViewControls() {
   });
 
   panel.appendChild(viewPad);
+  panel.appendChild(mobileWrap);
   panel.style.order = "10";
   getViewerRightNav().appendChild(panel);
+  syncPresetViewToolbarSelection(currentPresetToolbarView);
 }
 
 function clearPolylineOverlay() {
@@ -2580,13 +2711,13 @@ function createPolylineVisibilityToggle(container, domElement) {
   const panel = document.createElement("div");
   panel.id = "polyline-visibility-panel";
   panel.style.display = "none";
-  panel.style.position = "fixed";
+  panel.style.position = "absolute";
   panel.style.right = "20px";
   panel.style.top = "50%";
   panel.style.transform = "translateY(-50%)";
   panel.style.zIndex = "1002";
   panel.style.width = "min(360px, calc(100vw - 40px))";
-  panel.style.maxHeight = "calc(100vh - 40px)";
+  panel.style.maxHeight = "calc(100% - 40px)";
   panel.style.overflow = "auto";
   panel.style.background = "rgba(255, 255, 255, 0.96)";
   panel.style.color = "#111827";
@@ -2614,14 +2745,14 @@ function createPolylineVisibilityToggle(container, domElement) {
       panel.style.bottom = "calc(86px + env(safe-area-inset-bottom, 0px))";
       panel.style.transform = "none";
       panel.style.width = "min(340px, calc(100vw - 24px))";
-      panel.style.maxHeight = "calc(100vh - 112px)";
+      panel.style.maxHeight = "calc(100% - 112px)";
     } else if (tablet) {
       panel.style.right = "16px";
       panel.style.top = "auto";
       panel.style.bottom = "calc(130px + env(safe-area-inset-bottom, 0px))";
       panel.style.transform = "none";
       panel.style.width = "min(360px, calc(100vw - 32px))";
-      panel.style.maxHeight = "calc(100vh - 154px)";
+      panel.style.maxHeight = "calc(100% - 154px)";
     } else {
       panel.style.right = compact ? "248px" : "258px";
       panel.style.top = "50%";
@@ -2631,8 +2762,8 @@ function createPolylineVisibilityToggle(container, domElement) {
         ? "min(320px, calc(100vw - 280px))"
         : "min(360px, calc(100vw - 290px))";
       panel.style.maxHeight = compact
-        ? "calc(100vh - 24px)"
-        : "calc(100vh - 40px)";
+        ? "calc(100% - 24px)"
+        : "calc(100% - 40px)";
     }
   };
 
@@ -2701,7 +2832,7 @@ function createPolylineVisibilityToggle(container, domElement) {
 
   wrapper.appendChild(button);
   getViewerRightNav().appendChild(wrapper);
-  document.body.appendChild(panel);
+  (container || document.getElementById("container3D") || document.body).appendChild(panel);
   updatePolylineMenuLayout();
 
   polylineMenuButton = button;
@@ -3129,7 +3260,7 @@ function setupChatToggle() {
           // Container for thumbnail + 2D buttons
           const thumbWrapper = document.createElement("div");
           thumbWrapper.dataset.twodViewerBlock = "true";
-          thumbWrapper.style.position = "fixed";
+          thumbWrapper.style.position = "absolute";
           thumbWrapper.style.left = "20px"; // left side of screen
           thumbWrapper.style.top = "20px"; // top offset
           thumbWrapper.style.zIndex = "1000";
@@ -3830,7 +3961,7 @@ btnContainer.appendChild(edit2DStatic); */
   const style = document.createElement("style");
   style.textContent = `
   .smart-btn-container {
-      position: fixed;
+      position: absolute;
       bottom: 100px;
       right: 20px;
       display: grid;
@@ -3891,7 +4022,7 @@ btnContainer.appendChild(edit2DStatic); */
   }
 
   #viewer-right-nav {
-    position: fixed;
+    position: absolute;
     top: 0;
     right: 0;
     bottom: 0;
@@ -3920,7 +4051,7 @@ btnContainer.appendChild(edit2DStatic); */
   /* ── Hamburger button (all screen sizes) ── */
   #sidebar-hamburger-btn {
     display: flex;
-    position: fixed;
+    position: absolute;
     right: 16px;
     bottom: 16px;
     z-index: 1060;
@@ -3951,7 +4082,7 @@ btnContainer.appendChild(edit2DStatic); */
   /* ── Hamburger backdrop ── */
   #hamburger-backdrop {
     display: none;
-    position: fixed;
+    position: absolute;
     inset: 0;
     z-index: 1040;
     background: rgba(0, 0, 0, 0.45);
@@ -3962,7 +4093,7 @@ btnContainer.appendChild(edit2DStatic); */
   /* ── Drawer: desktop — panel sliding in from the right, left of the sidebar ── */
   #hamburger-drawer {
     display: none;
-    position: fixed;
+    position: absolute;
     top: 0;
     bottom: 0;
     right: 0;
@@ -4076,7 +4207,7 @@ btnContainer.appendChild(edit2DStatic); */
     align-items: center;
     gap: 8px;
     flex: 0 0 auto;
-    position: fixed;
+    position: absolute;
     right: 88px;
     bottom: 16px;
     z-index: 1060;
@@ -4131,13 +4262,13 @@ btnContainer.appendChild(edit2DStatic); */
   }
 
   .mail-popup {
-    position: fixed;
+    position: absolute;
     right: 258px;
     top: 50%;
     transform: translateY(-50%);
     z-index: 1002;
     width: min(360px, calc(100vw - 290px));
-    max-height: calc(100vh - 40px);
+    max-height: calc(100% - 40px);
     overflow: auto;
     padding: 14px;
     background: #ffffff;
@@ -4188,7 +4319,7 @@ btnContainer.appendChild(edit2DStatic); */
   }
 
   .preset-view-panel {
-    position: fixed;
+    position: absolute;
     z-index: 1000;
     width: 224px;
     padding: 0;
@@ -4209,6 +4340,10 @@ btnContainer.appendChild(edit2DStatic); */
     width: 196px;
     height: 214px;
     margin: 0 0 0 auto;
+  }
+
+  .preset-view-current-wrap {
+    display: none;
   }
 
   .preset-view-button {
@@ -4393,29 +4528,78 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .preset-view-panel {
-      position: fixed;
+      position: absolute;
       left: 18px;
       bottom: calc(22px + env(safe-area-inset-bottom, 0px));
-      width: 412px;
-      height: 84px;
-      padding: 8px 12px;
+      width: 84px;
+      height: auto;
+      padding: 0;
       overflow: visible;
       transform: none;
-      background: rgba(42, 42, 42, 0.96);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 0;
-      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+      background: transparent;
+      border: 0;
+      box-shadow: none;
       z-index: 1015;
     }
 
-    .preset-view-pad {
+    .preset-view-pad { display: none; }
+
+    .preset-view-current-wrap {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+      width: 64px;
+      pointer-events: auto;
+    }
+
+    .preset-view-current,
+    .preset-view-dropdown-button {
       display: flex;
       align-items: center;
+      justify-content: center;
+      width: 58px;
+      height: 58px;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(42, 42, 42, 0.96);
+      color: #ffffff;
+      font-size: 46px;
+      font-weight: 800;
+      line-height: 1;
+      cursor: pointer;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+      -webkit-text-stroke: 1px currentColor;
+      text-rendering: geometricPrecision;
+    }
+
+    .preset-view-dropdown {
+      display: none;
+      position: absolute;
+      left: 0;
+      top: 0;
+      flex-direction: column;
       gap: 8px;
-      width: 388px;
-      height: 60px;
-      margin: 0;
-      transform: none;
+      padding: 8px;
+      max-height: min(360px, calc(100dvh - 220px));
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border-radius: 12px;
+      background: rgba(30, 30, 30, 0.96);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+      pointer-events: auto;
+    }
+
+    .preset-view-dropdown.open {
+      display: flex;
+    }
+
+    .preset-view-dropdown-button.active,
+    .preset-view-current:hover,
+    .preset-view-dropdown-button:hover {
+      background: rgba(255, 255, 255, 0.16);
+      color: #ffd166;
     }
 
     .preset-view-center {
@@ -4577,7 +4761,7 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     #viewer-right-nav-top-row {
-      position: fixed;
+      position: absolute;
       right: 92px;
       bottom: calc(22px + env(safe-area-inset-bottom, 0px));
       z-index: 1060;
@@ -4640,7 +4824,7 @@ btnContainer.appendChild(edit2DStatic); */
       bottom: calc(130px + env(safe-area-inset-bottom, 0px)) !important;
       transform: none !important;
       width: min(360px, calc(100vw - 32px)) !important;
-      max-height: calc(100vh - 154px) !important;
+      max-height: calc(100% - 154px) !important;
     }
   }
 
@@ -4688,31 +4872,80 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .preset-view-panel {
-      position: fixed;
-      left: 12px;
+      position: absolute;
+      left: auto;
+      right: 12px;
       bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-      width: 392px;
-      max-width: calc(100vw - 24px);
-      height: 84px;
-      padding: 8px 10px;
+      width: 84px;
+      max-width: none;
+      height: auto;
+      padding: 0;
       overflow: visible;
       transform: none;
-      background: rgba(42, 42, 42, 0.96);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 0;
-      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+      background: transparent;
+      border: 0;
+      box-shadow: none;
       z-index: 1015;
     }
 
-    .preset-view-pad {
+    .preset-view-pad { display: none; }
+
+    .preset-view-current-wrap {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+      width: 60px;
+      pointer-events: auto;
+    }
+
+    .preset-view-current,
+    .preset-view-dropdown-button {
       display: flex;
       align-items: center;
-      gap: 6px;
-      width: 366px;
-      max-width: 100%;
-      height: 60px;
-      margin: 0;
-      transform: none;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(42, 42, 42, 0.96);
+      color: #ffffff;
+      font-size: 44px;
+      font-weight: 800;
+      line-height: 1;
+      cursor: pointer;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+      -webkit-text-stroke: 1px currentColor;
+      text-rendering: geometricPrecision;
+    }
+
+    .preset-view-dropdown {
+      display: none;
+      position: absolute;
+      left: 0;
+      top: 0;
+      flex-direction: column;
+      gap: 8px;
+      padding: 8px;
+      max-height: min(320px, calc(100dvh - 180px));
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border-radius: 12px;
+      background: rgba(30, 30, 30, 0.96);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+      pointer-events: auto;
+    }
+
+    .preset-view-dropdown.open {
+      display: flex;
+    }
+
+    .preset-view-dropdown-button.active,
+    .preset-view-current:hover,
+    .preset-view-dropdown-button:hover {
+      background: rgba(255, 255, 255, 0.16);
+      color: #ffd166;
     }
 
     .preset-view-center {
@@ -4872,7 +5105,7 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     #viewer-right-nav-top-row {
-      position: fixed;
+      position: absolute;
       right: 80px;
       bottom: calc(18px + env(safe-area-inset-bottom, 0px));
       z-index: 1060;
@@ -4937,7 +5170,21 @@ btnContainer.appendChild(edit2DStatic); */
       bottom: calc(86px + env(safe-area-inset-bottom, 0px)) !important;
       transform: none !important;
       width: min(340px, calc(100vw - 24px)) !important;
-      max-height: calc(100vh - 112px) !important;
+      max-height: calc(100% - 112px) !important;
+    }
+
+    .preset-view-panel {
+      bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+      z-index: 1061;
+    }
+  }
+
+  @media (max-width: 430px) {
+    .preset-view-current,
+    .preset-view-dropdown-button {
+      width: 50px;
+      height: 50px;
+      font-size: 40px;
     }
   }
 	

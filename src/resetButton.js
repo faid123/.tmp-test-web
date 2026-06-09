@@ -252,7 +252,11 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
         legendContainer.classList.add('legend-hidden');
     });
 
-    document.body.appendChild(legendContainer);
+    const legendHost =
+        document.getElementById('container3D') ||
+        getViewerRightNav().parentElement ||
+        document.body;
+    legendHost.appendChild(legendContainer);
 
     window.toggleMeasurementLegend = () => {
         legendContainer.classList.toggle('legend-hidden');
@@ -261,11 +265,12 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
     const customCSS = document.createElement('style');
     customCSS.innerHTML = `
         .legend-container {
-            position: fixed;
+            position: absolute;
             right: 258px;
             bottom: 16px;
             z-index: 1002;
             width: 280px;
+            max-height: calc(100% - 32px);
             overflow: hidden;
             border: 1px solid rgba(255, 255, 255, 0.22);
             border-radius: 8px;
@@ -315,6 +320,8 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
             grid-template-columns: 1fr 1fr;
             gap: 10px;
             padding: 12px;
+            max-height: calc(100% - 48px);
+            overflow: auto;
         }
 
         .legend-section-title {

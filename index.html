@@ -4,41 +4,138 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login</title>
+    <link
+      rel="preconnect"
+      href="https://fonts.googleapis.com"
+    />
+    <link
+      rel="preconnect"
+      href="https://fonts.gstatic.com"
+      crossorigin
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="./css/login.css" />
-    <link rel="icon" href="./assets/favicon.ico" type="image/x-icon" />
+    <link rel="icon" href="./assets/profile.png" type="image/png" />
   </head>
   <body>
-    <div class="login_face">
-      <div class="login_box">
-        <div class="img_box"></div>
-        <!-- Profile image box -->
+    <div class="auth-page">
+      <!-- Decorative dot patterns -->
+      <div class="dot-pattern dot-tl" aria-hidden="true"></div>
+      <div class="dot-pattern dot-bl" aria-hidden="true"></div>
+      <div class="dot-pattern dot-tr" aria-hidden="true"></div>
+      <div class="dot-pattern dot-br" aria-hidden="true"></div>
 
-        <div class="login_msg">
-          <input type="text" id="username" placeholder="Enter your username" />
-          <input
-            type="password"
-            id="password"
-            placeholder="Enter your password"
-          />
-
-          <div class="otp-wrapper">
-            <input
-              type="text"
-              id="otp"
-              placeholder="Enter verification code"
-              maxlength="6"
-            />
-            <button type="button" id="send-otp-btn" onclick="sendOTP()">
-              Send Code
-            </button>
+      <div class="auth-container">
+        <!-- ===== Login view ===== -->
+        <div class="auth-card" id="login-view">
+          <div class="auth-header">
+            <div class="logo">
+              <img src="./assets/profile.png" alt="SmartRPD" />
+            </div>
+            <h1>Welcome Back</h1>
+            <p class="auth-subtitle">Sign in to continue to your account</p>
           </div>
 
-          <button id="login-btn" onclick="verifyAndLogin()">Log In</button>
+          <form id="login-form" class="auth-form">
+            <div class="form-group">
+              <label for="username">Username</label>
+              <div class="input-wrap">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                <input
+                  id="username"
+                  type="text"
+                  placeholder="Enter your username"
+                  autocomplete="username"
+                  required
+                />
+              </div>
+            </div>
 
-          <p id="error-message"></p>
+            <div class="form-group">
+              <label for="password">Password</label>
+              <div class="input-wrap">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                <input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  autocomplete="current-password"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label class="remember">
+                <input type="checkbox" id="remember" />
+                <span>Remember me</span>
+              </label>
+              <button type="button" class="link-btn">Forgot password?</button>
+            </div>
+
+            <button type="submit" class="primary-btn" id="signin-btn">Sign In</button>
+          </form>
+
+          <p id="error-message" class="error-message" role="alert"></p>
+        </div>
+
+        <!-- ===== OTP view ===== -->
+        <div class="auth-card hidden" id="otp-view">
+          <button type="button" class="back-btn" id="back-to-login">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="19" y1="12" x2="5" y2="12"/>
+              <polyline points="12 19 5 12 12 5"/>
+            </svg>
+            Back to login
+          </button>
+
+          <div class="auth-header">
+            <div class="logo">
+              <img src="./assets/profile.png" alt="SmartRPD" />
+            </div>
+            <h1>Enter OTP</h1>
+            <p class="auth-subtitle">
+              We've sent a verification code to
+              <br />
+              <span class="otp-target" id="otp-target">your account</span>
+            </p>
+          </div>
+
+          <form id="otp-form" class="auth-form">
+            <div class="form-group">
+              <label class="otp-label">Enter 6-digit code</label>
+              <div class="otp-inputs" id="otp-inputs">
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+              </div>
+            </div>
+
+            <button type="submit" class="primary-btn" id="verify-btn">Verify OTP</button>
+
+            <p class="resend-text">
+              Didn't receive the code?
+              <button type="button" class="link-btn" id="resend-otp">Resend OTP</button>
+            </p>
+          </form>
+
+          <p id="otp-error-message" class="error-message" role="alert"></p>
         </div>
       </div>
     </div>
+
     <script src="./src/js/login.js"></script>
   </body>
 </html>

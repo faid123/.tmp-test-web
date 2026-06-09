@@ -23,13 +23,13 @@ style.textContent = `
   }
 
   .component-panel {
-    position: fixed;
+    position: absolute;
     right: 258px;
     top: 50%;
     transform: translateY(-50%);
     z-index: 1002;
     width: min(380px, calc(100vw - 290px));
-    max-height: calc(100vh - 32px);
+    max-height: calc(100% - 32px);
     overflow: auto;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 8px;
@@ -255,7 +255,7 @@ style.textContent = `
       top: 50%;
       transform: translateY(-50%);
       width: min(320px, calc(100vw - 280px));
-      max-height: calc(100vh - 20px);
+      max-height: calc(100% - 20px);
     }
   }
 
@@ -431,7 +431,7 @@ style.textContent = `
       top: auto;
       bottom: calc(130px + env(safe-area-inset-bottom, 0px));
       width: min(420px, calc(100vw - 20px));
-      max-height: calc(100vh - 154px);
+      max-height: calc(100% - 154px);
     }
   }
 
@@ -447,7 +447,7 @@ style.textContent = `
       right: 12px;
       bottom: calc(86px + env(safe-area-inset-bottom, 0px));
       width: min(360px, calc(100vw - 20px));
-      max-height: calc(100vh - 112px);
+      max-height: calc(100% - 112px);
     }
 
     .component-row {
@@ -775,8 +775,12 @@ function createComponentPanel(groups) {
   panel.appendChild(header);
   panel.appendChild(body);
   const nav = window.getViewerRightNav?.() || document.body;
+  const panelHost =
+    document.getElementById("container3D") ||
+    nav.parentElement ||
+    document.body;
   nav.appendChild(toggle);
-  document.body.appendChild(panel);
+  panelHost.appendChild(panel);
   window.syncComponentPanelRows = syncAllRows;
   syncAllRows();
   syncShowHideButton();

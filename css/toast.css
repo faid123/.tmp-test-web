@@ -1,0 +1,236 @@
+/* ==================== App toast notifications ==================== */
+.app-toast-container {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.app-toast {
+  pointer-events: auto;
+  min-width: 280px;
+  max-width: 380px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-left-width: 4px;
+  border-radius: 12px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
+  padding: 12px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #0f172a;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.app-toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.app-toast-icon {
+  font-size: 16px;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+.app-toast-msg {
+  flex: 1;
+  word-break: break-word;
+  white-space: pre-line;
+}
+
+.app-toast-close {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+.app-toast-close:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* Variants */
+.app-toast-info    { border-left-color: #3BAE95; }
+.app-toast-info    .app-toast-icon { color: #25735f; }
+
+.app-toast-success { border-left-color: #16a34a; }
+.app-toast-success .app-toast-icon { color: #16a34a; }
+
+.app-toast-warning { border-left-color: #f59e0b; }
+.app-toast-warning .app-toast-icon { color: #b45309; }
+
+.app-toast-error   { border-left-color: #ef4444; }
+.app-toast-error   .app-toast-icon { color: #b91c1c; }
+
+/* ==================== Confirmation modal ==================== */
+.app-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10010;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.app-confirm-overlay.is-visible {
+  opacity: 1;
+}
+
+.app-confirm-box {
+  background: #fff;
+  width: 100%;
+  max-width: 420px;
+  border-radius: 14px;
+  padding: 22px 22px 18px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  color: #0f172a;
+  transform: translateY(8px) scale(0.98);
+  transition: transform 0.18s ease;
+}
+.app-confirm-overlay.is-visible .app-confirm-box {
+  transform: translateY(0) scale(1);
+}
+
+.app-confirm-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.app-confirm-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.app-confirm-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.app-confirm-message {
+  margin: 0 0 18px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #475569;
+  word-break: break-word;
+}
+
+.app-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.app-confirm-btn {
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  font-family: inherit;
+}
+.app-confirm-btn:focus-visible {
+  outline: 2px solid #3BAE95;
+  outline-offset: 2px;
+}
+
+.app-confirm-cancel {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #e2e8f0;
+}
+.app-confirm-cancel:hover {
+  background: #e2e8f0;
+}
+
+.app-confirm-ok {
+  background: #3BAE95;
+  color: #fff;
+}
+.app-confirm-ok:hover {
+  background: #2f947e;
+}
+
+/* Variants tint the icon badge + confirm button. */
+.app-confirm-info .app-confirm-icon {
+  background: #e0f2f1;
+  color: #25735f;
+}
+
+.app-confirm-warning .app-confirm-icon {
+  background: #fef3c7;
+  color: #b45309;
+}
+.app-confirm-warning .app-confirm-ok {
+  background: #d97706;
+}
+.app-confirm-warning .app-confirm-ok:hover {
+  background: #b45309;
+}
+
+.app-confirm-danger .app-confirm-icon {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.app-confirm-danger .app-confirm-ok {
+  background: #dc2626;
+}
+.app-confirm-danger .app-confirm-ok:hover {
+  background: #b91c1c;
+}
+
+@media (max-width: 480px) {
+  .app-toast-container {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+  }
+  .app-toast {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .app-confirm-box {
+    padding: 18px 16px 14px;
+    border-radius: 12px;
+  }
+  .app-confirm-actions {
+    flex-direction: column-reverse;
+  }
+  .app-confirm-btn {
+    width: 100%;
+  }
+}

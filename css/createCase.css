@@ -1,4 +1,406 @@
-/* 背景遮罩 */
+/* ==================== Inline Create-Case View ==================== */
+/* The form pane lives inside .cm-main (sibling of the .cm-table-wrap list);
+   the upload pane lives inside .cm-detail. Both are hidden unless
+   .cm-page.creating. */
+
+.cc-form-pane.hidden,
+.cc-upload-pane.hidden { display: none !important; }
+
+.cm-page.creating .cm-table-wrap,
+.cm-page.creating .table-head-wrapper,
+.cm-page.creating .table-body-wrapper { display: none !important; }
+
+.cm-page.creating .cm-detail > *:not(.cc-upload-pane) {
+  display: none !important;
+}
+
+.cc-form-pane {
+  flex: 1;
+  min-height: 0;
+  background: var(--panel, #fff);
+  border-radius: var(--radius, 14px);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.06));
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  overflow-y: auto;
+}
+
+.cc-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 32px;
+}
+
+.cc-field { display: flex; flex-direction: column; gap: 6px; }
+.cc-field-full { grid-column: 1 / -1; }
+
+.cc-field .input-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft, #475569);
+  margin: 0;
+}
+
+.cc-field .modal-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  background: #fff;
+  box-sizing: border-box;
+}
+.cc-field .modal-input:focus {
+  outline: none;
+  border-color: var(--primary, #3BAE95);
+}
+
+.cc-display {
+  padding: 10px 12px;
+  background: var(--line-soft, #f1f5f9);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--ink, #0f172a);
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.cc-invite-row {
+  display: flex;
+  gap: 8px;
+}
+.cc-invite-row .modal-input { flex: 1; min-width: 0; }
+/* Keep the Add button hugging its label; the phone-wide `.cm-btn { width:100% }`
+   rule would otherwise stretch it across the row and crush the input. */
+.cc-invite-row .cm-btn {
+  width: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.cc-invite-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cc-invite-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--line-soft, #f1f5f9);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--ink, #0f172a);
+}
+.cc-invite-list li button {
+  background: transparent;
+  border: none;
+  color: var(--muted, #94a3b8);
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.cc-upload-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.cc-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 50;
+  border-radius: inherit;
+}
+
+.cc-loading-overlay.hidden { display: none !important; }
+
+.cc-loading-card {
+  width: min(360px, 80%);
+  padding: 20px 24px;
+  background: var(--panel, #fff);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cc-loading-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cc-loading-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink, #0f172a);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cc-loading-percent {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft, #475569);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.cc-loading-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--line, #e2e8f0);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.cc-loading-bar-fill {
+  position: relative;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #3BAE95, #2563eb);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+  overflow: hidden;
+}
+
+.cc-loading-bar-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: translateX(-100%);
+  animation: cc-loading-shimmer 1.4s linear infinite;
+}
+
+@keyframes cc-loading-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-loading-bar-fill::after { animation: none; }
+  .cc-loading-bar-fill { transition: none; }
+}
+
+/* On small screens (iPad Mini portrait + phones) the case-list layout pushes
+   .cm-detail off-canvas. In create mode we want the upload pane to stack
+   below the form pane, so override the off-canvas positioning and allow
+   the page to scroll vertically (the base layout locks scrolling). */
+@media (max-width: 860px) {
+  html:has(body.creating-case),
+  body.creating-case {
+    overflow: auto !important;
+    height: auto !important;
+  }
+  .cm-page.creating {
+    height: auto;
+    min-height: 100vh;
+  }
+  .cm-page.creating .cm-main { overflow: visible; }
+  .cm-page.creating .cm-detail {
+    position: static;
+    inset: auto;
+    transform: none;
+    transition: none;
+    padding: 0 28px 28px;
+    overflow: visible;
+    z-index: auto;
+  }
+  .cm-page.creating .back-to-list { display: none; }
+  .cm-page.creating .cc-form-pane { overflow: visible; }
+}
+
+.cc-jaw-row .cc-jaw-models {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 0;
+}
+
+.upload-placeholder.cc-jaw-tile,
+.upload-placeholder.cc-ref-tile {
+  width: 100%;
+}
+
+.cc-jaw-tile {
+  width: 100%;
+  height: 96px;
+  background: #fdf3f3;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 10px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+}
+.cc-jaw-tile .jaw-bg {
+  position: absolute;
+  width: 22%;
+  height: 70%;
+  opacity: 0.18;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.cc-jaw-label {
+  position: relative;
+  z-index: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink, #0f172a);
+}
+
+.cc-ref-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cc-ref-tile {
+  width: 100%;
+  height: 96px;
+  background: #fdf3f3;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.cc-ref-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink, #0f172a);
+}
+
+.cc-ref-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.cc-ref-grid .uploaded-model {
+  position: relative;
+  width: 84px;
+  height: 84px;
+}
+.cc-ref-grid .uploaded-model img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line, #e2e8f0);
+}
+.cc-ref-grid .remove-model {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 14px;
+  color: #888;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cc-actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+}
+
+.cc-actions .cm-btn { width: 100%; }
+
+/* dragover affordance for jaw + ref tiles in inline view */
+.cc-jaw-tile.is-dragover,
+.cc-ref-tile.is-dragover {
+  background: #d4f0e8;
+  outline: 2px dashed var(--primary, #3BAE95);
+  outline-offset: -3px;
+}
+
+/* uploaded jaw preview within tiles */
+.cc-jaw-models .uploaded-model {
+  position: relative;
+  width: 100%;
+  height: 96px;
+  background: #fdf3f3;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cc-jaw-models .uploaded-model img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  border: none;
+  border-radius: 0;
+}
+.cc-jaw-models .remove-model {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #555;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+
+/* ==================== Legacy modal styles (kept for userAccessModal) ==================== */
 .modal {
   display: none;
   position: fixed;
@@ -11,13 +413,10 @@
   justify-content: center;
   align-items: center;
 }
-
-/* 弹出时显示 */
 .modal.show {
   display: flex;
 }
 
-/* 主框体内容 */
 .modal-content {
   background: #fff;
   width: 600px;
@@ -29,7 +428,6 @@
   font-family: "Segoe UI", sans-serif;
 }
 
-/* 关闭按钮 */
 .close-btn {
   position: absolute;
   top: 18px;
@@ -39,14 +437,12 @@
   cursor: pointer;
 }
 
-/* 标题样式 */
 .modal-title {
   font-size: 22px;
   font-weight: 600;
   margin-bottom: 20px;
 }
 
-/* 表单输入区 */
 .input-label {
   display: block;
   font-weight: 600;
@@ -63,20 +459,6 @@
   box-sizing: border-box;
 }
 
-.input-with-icon {
-  position: relative;
-}
-
-.calendar-icon {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: white;
-  pointer-events: none;
-}
-
-/* 上传模型列表样式 */
 .uploaded-models {
   display: flex;
   flex-wrap: wrap;
@@ -84,129 +466,13 @@
   margin-top: 10px;
 }
 
-/* ➕ 加号上传按钮 */
-.upload-placeholder {
-  width: 60px;
-  height: 60px;
-  background-color: #f2f2f2;
-  border-radius: 12px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.upload-placeholder:hover {
-  background-color: #e0e0e0;
-}
-
-.plus-icon {
-  font-size: 30px;
-  color: #333;
-}
-
-上传按钮区域
-.upload-buttons {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 24px;
-  gap: 12px;
-}
-
-/* .upload-btn {
-  flex: 1;
-  padding: 12px;
-  font-weight: 600;
-  font-size: 14px;
-  color: white;
-  background: #88abda;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-} */
-
-/* .upload-btn.upload-ref {
-  background: #88abda;
-}
-
-.upload-btn.upload-jaw {
-  background: #88abda;
-} */
-
-.modal-footer {
-  display: flex;
-  justify-content: space-between;  /* 按照图1分布：左中右 */
-  align-items: center;
-  gap: 12px;
-  margin-top: 24px;
-}
-
-/* 每个按钮根据内容自适应宽度，保留你原有颜色样式 */
-.cancel-btn,
-.invite-btn,
-.start-btn {
-  padding: 12px 20px;
-  font-weight: 600;
-  font-size: 14px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-/* 各自颜色（保留你的蓝色主题） */
 .cancel-btn {
   background: rgb(245, 245, 245);
   color: black;
 }
-
-
 .cancel-btn:hover {
-  background: #cccccc !important;
+  background: #cccccc;
 }
-
-.invite-btn {
-  background: #88abda;
-  color: white;
-}
-
-.start-btn {
-  background: #88abda;
-  color: white;
-}
-
-
-
-.modal.hidden {
-  display: none;
-}
-
-.modal.show {
-  display: flex; /* 配合 modal 居中显示 */
-}
-
-
-/* .upload-buttons,
-.modal-footer {
-  width: 100%;
-  box-sizing: border-box; 
-}
-
-
-.upload-buttons {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 24px;
-  align-self: stretch; 
-}
-
-.upload-btn.upload-ref,
-.upload-btn.upload-jaw {
-  flex: 1;
-  min-width: 0;
-} */
 
 .uploaded-model img {
   width: 100px;
@@ -233,41 +499,17 @@
 
 
 .uploaded-model {
-  position: relative;  /* 仅加这句：提供定位上下文 */
+  position: relative;
 }
 
-.upload-sections-row {
-  display: flex;
-  flex-direction: row;
-  gap: 32px;         /* 间距可以调大或调小 */
-  margin-top: 10px;
-}
-
-.upload-section {
-  display: flex;
-  flex-direction: column;
-}
-
-.upload-sections-row {
-  display: flex;
-  justify-content: space-between;  /* 让左右两边贴紧拉开 */
-  gap: 32px;
-  margin-top: 10px;
-}
-
-.upload-section {
-  flex: 1;                         /* 平分宽度 */
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;         /* 保证文字 + 加号对齐左边 */
-}
-
-/* ✅ 用于右侧上传图片的缩略图展示（无限上传） */
+/* Right-side reference-image thumbnails (unlimited). */
 #uploadedReferenceImages {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   max-width: 100%;
+  max-height: 300px;
+  overflow-y: auto;
 }
 
 #uploadedReferenceImages .uploaded-model {
@@ -297,237 +539,277 @@
   line-height: 1;
 }
 
-#uploadedReferenceImages {
-  max-height: 300px;         /* 你可以按需调整高度 */
-  overflow-y: auto;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.upload-placeholder {
-  width: 100px;
-  height: 100px;
-  background-color: #f2f2f2;
-  border-radius: 12px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  transition: background 0.2s;
-  border: 1px solid #ccc; /* 可选：保持与图片缩略图一致的边框 */
-}
-
-.upload-placeholder:hover {
-  background-color: #e0e0e0;
-}
-
-.plus-icon {
-  font-size: 32px; /* 略大一点居中更好看 */
-  color: #333;
-}
-
-
-.upload-placeholder {
-  position: relative;
-  overflow: hidden;
-  background-color: #f8f8f8;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  width: 100px;
-  height: 100px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.jaw-bg {
-  position: absolute;
-  width: 60%;
-  height: 60%;
-  opacity: 0.3; /* 淡淡的背景图 */
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.plus-icon {
-  position: relative;
-  z-index: 1; /* 保证在 SVG 背景图上方 */
-  font-size: 24px;
-  color: #333;
-}
-
-/* 通用模态背景（共用） */
-#userAccessModal.modal {
-  display: none;
-  position: fixed;
-  z-index: 1000;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.3);
-  justify-content: center;
-  align-items: center;
-}
-
-#userAccessModal.modal.show {
-  display: flex;
-}
-
-/* 主弹窗体 */
-#userAccessModal .modal-content {
-  background: #fff;
-  width: 700px;
-  max-width: 90%;
-  border-radius: 8px;
-  padding: 30px;
-  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.15);
-  position: relative;
-  font-family: "Segoe UI", sans-serif;
-}
-
-/* 标题 */
-#userAccessModal h3 {
-  font-size: 22px;
-  font-weight: 600;
-  margin-bottom: 20px;
-}
-
-/* Case 名称行 */
-#userAccessModal p {
-  margin: 12px 0;
-  font-size: 15px;
-}
-
-#caseNameDisplay {
-  font-weight: 600;
-  color: #333;
-}
-
-/* 搜索输入和按钮组合 */
-.input-with-button {
-  display: flex;
-  gap: 8px;
-  margin-top: 12px;
-  margin-bottom: 12px;
-}
-
-#userSearchInput {
-  flex: 1;
-  padding: 10px 12px;
-  font-size: 14px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  box-sizing: border-box;
-}
-
-#addUserBtn {
-  padding: 10px 16px;
-  background-color: #88abda;
-  color: white;
-  font-weight: 600;
-  font-size: 14px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-
-/* Shared User 列表 */
-#sharedUserList {
-  list-style: none;
+/* User-access modal: layout overrides on top of the generic .modal rules. */
+/* ==================== User Access Modal ==================== */
+#userAccessModal .modal-content.uam-modal {
+  width: 480px;
+  max-width: calc(100vw - 32px);
   padding: 0;
-  margin-top: 8px;
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+  font-family: inherit;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 48px);
 }
 
-#sharedUserList li {
-  padding: 8px 12px;
-  background-color: #f9f9f9;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  margin-bottom: 6px;
+.uam-header {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.uam-header-text { min-width: 0; }
+
+.uam-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.uam-subtitle {
+  display: flex;
   align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  min-width: 0;
 }
 
-#sharedUserList li .remove-user-btn {
-  background: transparent;
-  color: #888;
-  border: none;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-/* 关闭按钮 */
-#userAccessModal .close-btn {
-  position: absolute;
-  top: 18px;
-  right: 24px;
-  font-size: 24px;
-  color: #888;
-  cursor: pointer;
-}
-
-/* 底部按钮 */
-#userAccessModal .modal-actions {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 30px;
-}
-
-#cancelInviteBtn,
-#saveInviteBtn {
-  padding: 12px 20px;
+.uam-subtitle-label {
+  font-size: 11px;
   font-weight: 600;
-  font-size: 14px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.uam-subtitle .case-name-display {
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-#cancelInviteBtn {
-  background: rgb(245, 245, 245);
-  color: black;
+.uam-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.uam-close:hover {
+  background: var(--line-soft);
+  color: var(--ink);
 }
 
-#cancelInviteBtn:hover {
-  background: #cccccc !important;
+.uam-search-row {
+  display: flex;
+  gap: 10px;
+  padding: 18px 24px 14px;
 }
 
-#saveInviteBtn {
-  background: #88abda;
-  color: white;
+.uam-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
 }
 
+.uam-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 13px;
+  pointer-events: none;
+}
 
-.shared-user-list {
+.uam-search-input {
+  width: 100%;
+  padding: 10px 12px 10px 34px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.uam-search-input::placeholder { color: var(--muted); }
+.uam-search-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 174, 149, 0.18);
+}
+
+.uam-add-btn { flex-shrink: 0; }
+
+.uam-list-section {
+  padding: 4px 24px 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.uam-list-header {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 4px 0 10px;
+}
+
+.uam-list {
   list-style: none;
   padding: 0;
   margin: 0;
-}
-
-.shared-user-item {
   display: flex;
-  justify-content: space-between;
-  padding: 6px 10px;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: 320px;
+}
+.uam-list::-webkit-scrollbar { width: 6px; }
+.uam-list::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 3px;
+}
+
+.uam-list .shared-user-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin: 0;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.uam-list .shared-user-item:hover {
+  border-color: #cfd8e3;
+  background: var(--line-soft);
+}
+
+.uam-list .shared-user-item .user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.uam-list .shared-user-item .user-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.uam-list .shared-user-item .user-name {
+  font-size: 14px;
+  font-weight: 600;
+  font-style: normal;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uam-list .shared-user-item .user-role {
+  font-size: 12px;
+  font-style: normal;
+  color: var(--ink-soft);
+  text-transform: capitalize;
+}
+.uam-list .shared-user-item .user-role.is-owner {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  align-self: flex-start;
+}
+
+.uam-list .delete-user-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.uam-list .delete-user-btn:hover {
+  background: var(--status-danger-bg);
+  color: var(--danger);
+}
+
+.uam-list .uam-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  background: var(--line-soft);
+  border-radius: 10px;
+}
+.uam-list .uam-empty i {
+  font-size: 22px;
   margin-bottom: 4px;
-  background-color: #f5f5f5;
-  border-radius: 4px;
+  opacity: 0.7;
 }
 
-.user-name {
-  font-weight: 500;
+.uam-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px 22px;
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
 }
 
-.user-role {
-  font-style: italic;
-  color: #555;
-}
-/*  */
+.uam-footer .cm-btn { min-width: 120px; }

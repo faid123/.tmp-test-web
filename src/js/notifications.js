@@ -1,3 +1,4 @@
+import { logApi } from "./apiLog.js";
 (function () {
   const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
@@ -11,16 +12,30 @@
   const USERNAME = user.username || (user.email ? user.email.split("@")[0] : "");
 
   /* ====== 红点工具 & 统计函数（新增） ====== */
-  function setDotVisible(on) {
+  function applyUnreadCount(count) {
     const dot = document.getElementById("notificationDot");
-    if (!dot) return;                // 页面里没放红点元素就直接跳过
-    dot.classList.toggle("show", !!on);
+    if (dot) {
+      dot.classList.toggle("show", count > 0);
+      // The new bell badge uses [hidden]; only show the numeric count when > 0.
+      if (count > 0) {
+        dot.hidden = false;
+        dot.textContent = String(count > 99 ? "99+" : count);
+      } else {
+        dot.hidden = true;
+        dot.textContent = "";
+      }
+    }
+    const toolbarBadge = document.getElementById("notificationBadge");
+    if (toolbarBadge) toolbarBadge.textContent = String(count > 99 ? "99+" : count);
   }
 
-  // 从后端统计是否存在未读（任一 case 有一条未读就点亮红点）
+  function setDotVisible(on) {
+    applyUnreadCount(on ? 1 : 0);
+  }
+
+  // Count unread alerts across all of the user's cases. Returns 0 on any failure.
   async function refreshNotifDotFromAPI() {
     try {
-      // 1) 取 case 列表
       const caseRes2 = await fetch(
         "https://live.api.smartrpdai.com/api/smartrpd/case/user/findall/get",
         {
@@ -32,38 +47,38 @@
           ])
         }
       );
+      logApi(caseRes2, 'POST /case/user/findall/get');
       if (!caseRes2.ok) throw new Error("case fetch failed (dot)");
       const caseArr2 = await caseRes2.json();
       const caseIDs2 = Array.isArray(caseArr2) ? [...new Set(caseArr2.map(c => c.id))] : [];
+      const caseIDSet2 = new Set(caseIDs2.map(id => String(id)));
 
-      // 2) 遍历 case 取 alerts，只要发现一条未读就早停
-      let foundUnread = false;
-      for (const cid of caseIDs2) {
-        const aRes2 = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/alerts/getallbytouser",
-          {
-            method : "POST",
-            headers: { "Content-Type": "application/json" },
-            body   : JSON.stringify([
-              { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: cid },
-              { to_user: USERNAME }
-            ])
-          }
-        );
-        if (!aRes2.ok) continue;
+      let unreadCount = 0;
+      const aRes2 = await fetch(
+        "https://live.api.smartrpdai.com/api/smartrpd/alerts/getallbytouser",
+        {
+          method : "POST",
+          headers: { "Content-Type": "application/json" },
+          body   : JSON.stringify([
+            { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: caseIDs2[0] || 0 },
+            { to_user: USERNAME }
+          ])
+        }
+      );
+      logApi(aRes2, 'POST /alerts/getallbytouser');
+      if (aRes2.ok) {
         const list2 = await aRes2.json();
         if (Array.isArray(list2)) {
           for (const a of list2) {
-            if (Number(a.read_status) !== 1) { foundUnread = true; break; }
+            const belongsToCurrentCase = !a.case_int_id || caseIDSet2.has(String(a.case_int_id));
+            if (belongsToCurrentCase && Number(a.read_status) !== 1) unreadCount += 1;
           }
         }
-        if (foundUnread) break;
       }
 
-      setDotVisible(foundUnread);
+      applyUnreadCount(unreadCount);
     } catch (err) {
       console.error("[refreshNotifDotFromAPI] failed:", err);
-      // 失败时保持当前红点状态
     }
   }
 
@@ -106,10 +121,12 @@
       notifPopup.classList.add("hidden");
   });
 
-  // 页面加载完成就先统计一次红点（无需点开弹窗）
-  refreshNotifDotFromAPI();
-    // 启动红点轮询：每 5 秒检查一次
-  startNotificationDotPolling(5000);
+  // Delay the first dot refresh + start polling by ~2s so we don't pile
+  // the notifications burst on top of the case list's initial load — the
+  // backend rate-limiter trips when both fire in the same instant.
+  setTimeout(() => {
+    startNotificationDotPolling(15000);
+  }, 2000);
 
 
   async function loadNotifications() {
@@ -127,6 +144,7 @@
           ])
         }
       );
+      logApi(caseRes, 'POST /case/user/findall/get');
       if (!caseRes.ok) throw new Error("case fetch failed");
       const caseArr = await caseRes.json();
       if (!Array.isArray(caseArr)) throw new Error("case list not array");
@@ -140,28 +158,28 @@
 
       // B. per case 拉取 alerts
       const allAlerts = [];
-      for (const cid of caseIDs) {
-        const aRes = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/alerts/getallbytouser",
-          {
-            method : "POST",
-            headers: { "Content-Type": "application/json" },
-            body   : JSON.stringify([
-              { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: cid },
-              { to_user: USERNAME }
-            ])
-          }
-        );
-        if (aRes.ok) {
-          const list = await aRes.json();
-          if (Array.isArray(list)) {
-            // ★ 给每条补上 _cid 兜底（有的返回 case_int_id 可能为空/类型不对）
-            list.forEach(a => {
-              a._cid = cid;
-              if (a.case_int_id == null) a.case_int_id = cid;
+      const caseIDSet = new Set(caseIDs.map(id => String(id)));
+      const aRes = await fetch(
+        "https://live.api.smartrpdai.com/api/smartrpd/alerts/getallbytouser",
+        {
+          method : "POST",
+          headers: { "Content-Type": "application/json" },
+          body   : JSON.stringify([
+            { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: caseIDs[0] || 0 },
+            { to_user: USERNAME }
+          ])
+        }
+      );
+      logApi(aRes, 'POST /alerts/getallbytouser');
+      if (aRes.ok) {
+        const list = await aRes.json();
+        if (Array.isArray(list)) {
+          list.forEach(a => {
+            if (!a.case_int_id || caseIDSet.has(String(a.case_int_id))) {
+              a._cid = a.case_int_id;
               allAlerts.push(a);
-            });
-          }
+            }
+          });
         }
       }
 
@@ -185,6 +203,7 @@
               ])
             }
           );
+          logApi(r, 'POST /case/get/:id');
           if (r.ok) {
             const d = await r.json();
             if (d && d.case_id) caseNameMap[String(cid)] = d.case_id;
@@ -266,6 +285,7 @@
         body   : JSON.stringify(payload)
       }
     );
+    logApi(res, 'POST /alerts/setreadstatus');
     const text = await res.text(); // 可能是 mysql info
     console.debug("[setreadstatus]", payload, text);
     if (!res.ok) throw new Error(text || "setreadstatus failed");
