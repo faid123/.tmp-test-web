@@ -313,6 +313,85 @@ function restMarkerAnchorSurface(placementSurface, toothId) {
   return s;
 }
 
+/**
+ * Which embrasure side(s) a tooth's minor connector should attach on, from its placed
+ * components — mirrors the desktop `GenericTooth.GetConnectorData` + `isMesio`: a rest/bar
+ * sits on its own surface; a retentive clasp anchors at its ORIGIN, opposite the tip
+ * (a mesial-tip clasp connects distally). Returns `{ mesial, distal }` booleans.
+ */
+function getMinorConnectorSupportSides(tooth) {
+  const sides = { mesial: false, distal: false };
+  if (!tooth || !Array.isArray(tooth.componentPlacements)) return sides;
+  for (const placement of tooth.componentPlacements) {
+    const id = placement?.componentId;
+    const surface = normalizeSurface(placement?.surface);
+    if (!surface) continue;
+    if (isRestComponent(id) || isBarComponent(id) || isReciprocatingClaspComponent(id)) {
+      if (surface.includes("mesial")) sides.mesial = true;
+      else if (surface.includes("distal")) sides.distal = true;
+      else if (surface === "lingual") { sides.mesial = true; sides.distal = true; } // full cingulum
+    } else if (isRetainerClaspComponent(id) || isRingClaspComponent(id)) {
+      // Retentive clasp origin (where the minor connector attaches) is opposite the tip.
+      if (surface.includes("mesial")) sides.distal = true;
+      else if (surface.includes("distal")) sides.mesial = true;
+    }
+  }
+  return sides;
+}
+
+/**
+ * Whether the embrasure on `side` of `toothId` is shared — the neighbouring tooth across
+ * it also carries a minor-connector support facing back. A shared embrasure draws the
+ * `mid` (full) connector on both teeth; a solo side draws the `mesial`/`distal` half.
+ */
+function isMinorConnectorEmbrasureShared(toothId, jaw, side) {
+  const order = TOOTH_ORDER[jaw];
+  if (!Array.isArray(order)) return false;
+  const idx = order.indexOf(String(toothId));
+  if (idx < 0) return false;
+  const mid = order.length / 2;
+  // Mesial = toward the midline (order centre); distal = toward the back (order ends).
+  const step = side === "mesial" ? (idx < mid ? 1 : -1) : (idx < mid ? -1 : 1);
+  const neighborId = order[idx + step];
+  const neighbor = neighborId ? state.teeth[neighborId] : null;
+  if (!neighbor) return false;
+  // Side of the neighbour that faces back toward this tooth (mesial-to-mesial at the midline).
+  const nIdx = order.indexOf(neighborId);
+  const neighborMesialId = order[nIdx + (nIdx < mid ? 1 : -1)];
+  const facingSide = neighborMesialId === String(toothId) ? "mesial" : "distal";
+  return Boolean(getMinorConnectorSupportSides(neighbor)[facingSide]);
+}
+
+/** Build + append one minor-connector image for a tooth side ("mesial"/"distal") and variant. */
+function appendMinorConnectorVisual(group, toothId, jaw, variant, side, mirrored) {
+  const href = getMinorConnectorAssetReference(toothId, variant);
+  const size = getMinorConnectorImageSize(toothId, variant);
+  if (!href || !size) return;
+  const offset = getMinorConnectorOffset(toothId, side);
+  const scale = getMinorConnectorRenderScale(jaw);
+  const width = size.width * scale;
+  const height = size.height * scale;
+  const minor = svgEl("g", {
+    class: "minor-connector-placement",
+    transform: `translate(${offset.x} ${offset.y}) scale(${mirrored ? -1 : 1} 1)`,
+    "pointer-events": "none",
+  });
+  minor.appendChild(
+    svgEl("image", {
+      href,
+      x: String(-width / 2),
+      y: String(-height / 2),
+      width: String(width),
+      height: String(height),
+      preserveAspectRatio: "xMidYMid meet",
+      class: "minor-connector-image",
+      "data-component-id": "minor-connector",
+      "pointer-events": "none",
+    })
+  );
+  group.appendChild(minor);
+}
+
 function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
   ensureToothPlacementState(tooth);
   const { mirrored } = getToothAssetSpec(toothId);
@@ -332,47 +411,13 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
     return Boolean(componentId && state.selectedComponentId === componentId);
   };
 
-  const hasMinorConnectorSupportPlacement = tooth.componentPlacements.some((placement) => {
-    const componentId = placement?.componentId;
-    return (
-      isRestComponent(componentId) ||
-      isRetainerClaspComponent(componentId) ||
-      isReciprocatingClaspComponent(componentId) ||
-      isRingClaspComponent(componentId) ||
-      isBarComponent(componentId)
-    );
-  });
-
-  if (hasMinorConnectorSupportPlacement) {
-    const href = getMinorConnectorAssetReference(toothId);
-    const size = getMinorConnectorImageSize(toothId);
-    const offset = getMinorConnectorOffset(toothId);
-    if (href && size) {
-      const scale = getMinorConnectorRenderScale(jaw);
-      const width = size.width * scale;
-      const height = size.height * scale;
-      const minor = svgEl("g", {
-        class: "minor-connector-placement",
-        transform: `translate(${offset.x} ${offset.y}) scale(${mirrored ? -1 : 1} 1)`,
-        "pointer-events": "none",
-      });
-
-      minor.appendChild(
-        svgEl("image", {
-          href,
-          x: String(-width / 2),
-          y: String(-height / 2),
-          width: String(width),
-          height: String(height),
-          preserveAspectRatio: "xMidYMid meet",
-          class: "minor-connector-image",
-          "data-component-id": "minor-connector",
-          "pointer-events": "none",
-        })
-      );
-
-      group.appendChild(minor);
-    }
+  // A minor connector per supported embrasure side: the `mid` (full) variant when the
+  // neighbour across the embrasure also has support facing back, else the mesial/distal half.
+  const minorConnectorSupportSides = getMinorConnectorSupportSides(tooth);
+  for (const side of ["mesial", "distal"]) {
+    if (!minorConnectorSupportSides[side]) continue;
+    const variant = isMinorConnectorEmbrasureShared(toothId, jaw, side) ? "mid" : side;
+    appendMinorConnectorVisual(group, toothId, jaw, variant, side, mirrored);
   }
 
   for (const placement of tooth.componentPlacements) {

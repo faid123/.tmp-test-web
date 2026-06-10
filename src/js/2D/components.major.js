@@ -773,6 +773,124 @@ export function getDefaultMajorConnectorIdForDesignMode(componentById) {
 }
 
 /**
+ * Major-connector ids whose coverage runs *continuously to the midline*. The desktop
+ * draws these as one span from the most-distal anchor across every tooth (present or
+ * missing, plate or bare) up to the central incisors, via an `isStartFound` state machine
+ * that reaches the midline: `ConnectorsLogic.CheckAndSetTop` for the upper, `SetLingualMajor`
+ * (i=0..8) for **all** lower connectors — lingual bar included (its `isSetPlate` flag only
+ * gates per-tooth plate forcing, not the span). The only posterior-only majors are the
+ * *upper* palatal bar/strap, whose `CheckAndSetTop` runs with `EndCheck=5`; those keep the
+ * per-tooth placement instead.
+ */
+const MIDLINE_REACHING_MAJOR_CONNECTOR_IDS = Object.freeze(
+  new Set([
+    "major-upper-horseshoe",
+    "major-upper-palatal-hole",
+    "major-upper-palatal-plate",
+    "major-lower-lingual-bar",
+    "major-lower-lingual-plate",
+    "major-lower-lingual-kennedy",
+  ])
+);
+
+/** True when the major connector spans the arch to the midline (vs. posterior-only bar/strap). */
+export function majorConnectorRunsToMidline(componentId) {
+  return MIDLINE_REACHING_MAJOR_CONNECTOR_IDS.has(String(componentId));
+}
+
+/**
+ * Whether a tooth can *anchor* a major-connector run: a present tooth via a plate /
+ * reciprocating clasp, a missing tooth via mesh. Mirrors the desktop start test
+ * (isComponentPresent / isMesh), narrowed to the components the web models. Shared by
+ * placement (where a run may start) and {@link pruneInvalidMajorConnectorPlacementsInJaw}
+ * (which runs survive).
+ */
+function toothAnchorsMajorConnector(tooth, componentById) {
+  if (!tooth || !Array.isArray(tooth.componentPlacements)) {
+    return false;
+  }
+  return tooth.componentPlacements.some(({ componentId }) => {
+    const def = componentById?.get?.(componentId);
+    if (!def) {
+      return false;
+    }
+    if (tooth.isPresent) {
+      return (
+        String(componentId).startsWith("plate-") ||
+        String(componentId) === "reciprocating-clasp"
+      );
+    }
+    return def.tab === "mesh" || String(componentId).startsWith("mesh-");
+  });
+}
+
+/** Add `majorComponentId` to a tooth once, keeping `componentPlacements` and `components` in sync. */
+function placeMajorConnectorOnce(tooth, majorComponentId) {
+  if (!Array.isArray(tooth.componentPlacements)) {
+    tooth.componentPlacements = [];
+  }
+  if (tooth.componentPlacements.some(({ componentId }) => isMajorConnectorComponent(componentId))) {
+    return;
+  }
+  tooth.componentPlacements.push({ componentId: majorComponentId, surface: null });
+  if (Array.isArray(tooth.components) && !tooth.components.includes(majorComponentId)) {
+    tooth.components.push(majorComponentId);
+  }
+}
+
+/**
+ * Per-tooth placement for posterior-only majors (bar / strap): place the major on every
+ * eligible tooth that already anchors it (mesh when missing, plate when present).
+ */
+function placeMajorConnectorPerTooth(teeth, majorComponentId, componentById, jawKey) {
+  const ids = TOOTH_ORDER && Array.isArray(TOOTH_ORDER[jawKey]) ? TOOTH_ORDER[jawKey] : [];
+  for (const toothId of ids) {
+    if (!getMajorConnectorAssetReference(toothId, jawKey)) continue;
+    if (isMajorConnectorToothExcluded(majorComponentId, toothId)) continue;
+    const tooth = teeth[toothId];
+    if (!tooth) continue;
+    if (!toothAnchorsMajorConnector(tooth, componentById)) continue;
+    placeMajorConnectorOnce(tooth, majorComponentId);
+  }
+}
+
+/**
+ * Desktop-style span fill for midline-reaching majors. For each side of the arch, scan
+ * distal -> midline, start the run at the first anchor tooth (mesh saddle or plate/clasp
+ * abutment), then place the major on *every* subsequent tooth that has connector art up
+ * to the midline — bare anterior teeth included. Mirrors the `isStartFound` continuation
+ * in `ConnectorsLogic.CheckAndSetTop` (a present tooth without its own plate is still
+ * covered once the run has started).
+ */
+function fillMajorConnectorSpanInArch(teeth, majorComponentId, componentById, jawKey) {
+  const order = TOOTH_ORDER && Array.isArray(TOOTH_ORDER[jawKey]) ? TOOTH_ORDER[jawKey] : [];
+  if (order.length === 0) return;
+  const mid = Math.floor(order.length / 2);
+  // Each quadrant is scanned distal -> midline. The right quadrant is reversed so both
+  // walks run from the back of the mouth toward the central incisors.
+  const quadrants = [order.slice(0, mid), order.slice(mid).reverse()];
+  for (const quadrant of quadrants) {
+    let started = false;
+    for (const toothId of quadrant) {
+      const tooth = teeth[toothId];
+      if (!tooth) continue;
+      const hasArt = Boolean(getMajorConnectorAssetReference(toothId, jawKey));
+      const excluded = isMajorConnectorToothExcluded(majorComponentId, toothId);
+      if (!started) {
+        // The run begins at the first anchor tooth that can carry the major.
+        if (excluded || !hasArt) continue;
+        if (!toothAnchorsMajorConnector(tooth, componentById)) continue;
+        started = true;
+      } else if (excluded || !hasArt) {
+        // Skip teeth with no art / excluded (e.g. 18/28); the run carries on past them.
+        continue;
+      }
+      placeMajorConnectorOnce(tooth, majorComponentId);
+    }
+  }
+}
+
+/**
  * When both arches lock, drop a default major connector on every tooth that already has
  * mesh (missing) or plate (present) **where** {@link getMajorConnectorAssetReference} returns art
  * for that jaw (upper 11–28; lower 31–48 using `41`–`48` basenames; Q3 mirrored like upper Q2).
@@ -805,54 +923,18 @@ export function ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
     return;
   }
 
-  const tryArch = (jawKey) => {
-    const ids = TOOTH_ORDER && Array.isArray(TOOTH_ORDER[jawKey]) ? TOOTH_ORDER[jawKey] : [];
-    for (const toothId of ids) {
-      if (!getMajorConnectorAssetReference(toothId, jawKey)) {
-        continue;
-      }
-      if (isMajorConnectorToothExcluded(majorComponentId, toothId)) {
-        continue;
-      }
-      const tooth = teeth[toothId];
-      if (!tooth) {
-        continue;
-      }
-      if (!Array.isArray(tooth.componentPlacements)) {
-        tooth.componentPlacements = [];
-      }
-      const hasMeshOrPlate = tooth.componentPlacements.some(({ componentId }) => {
-        const def = componentById.get(componentId);
-        if (!def) {
-          return false;
-        }
-        if (tooth.isPresent) {
-          return (
-            String(componentId).startsWith("plate-") ||
-            String(componentId) === "reciprocating-clasp"
-          );
-        }
-        return def.tab === "mesh" || String(componentId).startsWith("mesh-");
-      });
-      if (!hasMeshOrPlate) {
-        continue;
-      }
-      const hasMajor = tooth.componentPlacements.some(({ componentId }) =>
-        isMajorConnectorComponent(componentId)
-      );
-      if (hasMajor) {
-        continue;
-      }
-      tooth.componentPlacements.push({ componentId: majorComponentId, surface: null });
-      if (Array.isArray(tooth.components) && !tooth.components.includes(majorComponentId)) {
-        tooth.components.push(majorComponentId);
-      }
-    }
-  };
-
+  // Midline-reaching majors (plate / horseshoe / hole / kennedy) fill one continuous run
+  // across the arch — including bare anterior teeth between anchors — matching the desktop.
+  // Posterior-only majors (bar / strap) keep the per-tooth placement.
+  const runsToMidline = majorConnectorRunsToMidline(majorComponentId);
   for (const jawKey of jawKeys) {
-    if (jawKey === "upper" || jawKey === "lower") {
-      tryArch(jawKey);
+    if (jawKey !== "upper" && jawKey !== "lower") {
+      continue;
+    }
+    if (runsToMidline) {
+      fillMajorConnectorSpanInArch(teeth, majorComponentId, componentById, jawKey);
+    } else {
+      placeMajorConnectorPerTooth(teeth, majorComponentId, componentById, jawKey);
     }
   }
 }
@@ -994,39 +1076,45 @@ export function pruneInvalidMajorConnectorPlacementsInJaw(teeth, componentById, 
     }
   }
 
-  for (let i = 0; i < order.length; i += 1) {
-    const toothId = order[i];
-    const tooth = teeth[toothId];
-    if (!tooth || !Array.isArray(tooth.componentPlacements)) {
-      continue;
-    }
-    const hasMajor = tooth.componentPlacements.some((entry) =>
-      isMajorConnectorComponent(entry.componentId)
-    );
-    if (!hasMajor) {
-      continue;
-    }
-    if (hasAnchorSupport(tooth)) {
-      continue;
-    }
+  // Drop major-connector *runs* that aren't anchored anywhere. The desktop draws a major
+  // connector as one continuous span anchored by at least one mesh saddle or abutment
+  // (ConnectorsLogic.CheckAndSetTop); a contiguous run of major-bearing teeth with no
+  // anchored tooth is a stray placement -> remove the whole run. Run-scoped (not per-tooth)
+  // so span-filled bare anterior teeth, which sit mid-run, survive instead of being
+  // unravelled inward from the open end.
+  const majorOnTooth = (tooth) =>
+    tooth &&
+    Array.isArray(tooth.componentPlacements) &&
+    tooth.componentPlacements.some((entry) => isMajorConnectorComponent(entry.componentId));
 
-    const prevId = i > 0 ? order[i - 1] : null;
-    const nextId = i < order.length - 1 ? order[i + 1] : null;
-    const prevHasMajor = Boolean(prevId && toothHasMajorConnectorPlacement(teeth[prevId]));
-    const nextHasMajor = Boolean(nextId && toothHasMajorConnectorPlacement(teeth[nextId]));
-
-    // Keep the segment when it is structurally connected on both sides.
-    if (prevHasMajor && nextHasMajor) {
+  let i = 0;
+  while (i < order.length) {
+    if (!majorOnTooth(teeth[order[i]])) {
+      i += 1;
       continue;
     }
-
-    const beforeLen = tooth.componentPlacements.length;
-    tooth.componentPlacements = tooth.componentPlacements.filter(
-      (entry) => !isMajorConnectorComponent(entry.componentId)
-    );
-    if (tooth.componentPlacements.length !== beforeLen) {
-      touchedToothIds.add(toothId);
+    // Extent of this contiguous run of major-bearing teeth: [i, runEnd).
+    let runEnd = i;
+    let runAnchored = false;
+    while (runEnd < order.length && majorOnTooth(teeth[order[runEnd]])) {
+      if (hasAnchorSupport(teeth[order[runEnd]])) {
+        runAnchored = true;
+      }
+      runEnd += 1;
     }
+    if (!runAnchored) {
+      for (let k = i; k < runEnd; k += 1) {
+        const stray = teeth[order[k]];
+        const beforeLen = stray.componentPlacements.length;
+        stray.componentPlacements = stray.componentPlacements.filter(
+          (entry) => !isMajorConnectorComponent(entry.componentId)
+        );
+        if (stray.componentPlacements.length !== beforeLen) {
+          touchedToothIds.add(order[k]);
+        }
+      }
+    }
+    i = runEnd + 1;
   }
 
   for (const toothId of touchedToothIds) {
