@@ -24,9 +24,9 @@ style.textContent = `
 
   .component-panel {
     position: absolute;
-    right: 258px;
-    top: 50%;
-    transform: translateY(-50%);
+    left: 16px;
+    top: 16px;
+    transform: none;
     z-index: 1002;
     width: min(380px, calc(100vw - 290px));
     max-height: calc(100% - 32px);
@@ -251,9 +251,9 @@ style.textContent = `
     }
 
     .component-panel {
-      right: 248px;
-      top: 50%;
-      transform: translateY(-50%);
+      left: 16px;
+      top: 16px;
+      transform: none;
       width: min(320px, calc(100vw - 280px));
       max-height: calc(100% - 20px);
     }
@@ -272,7 +272,7 @@ style.textContent = `
     }
 
     .component-panel {
-      right: 16px;
+      left: 16px;
       top: auto;
       bottom: calc(130px + env(safe-area-inset-bottom, 0px));
       transform: none;
@@ -431,7 +431,7 @@ style.textContent = `
       top: auto;
       bottom: calc(130px + env(safe-area-inset-bottom, 0px));
       width: min(420px, calc(100vw - 20px));
-      max-height: calc(100% - 154px);
+      max-height: min(400px, 52dvh);
     }
   }
 
@@ -444,10 +444,10 @@ style.textContent = `
 
     .component-panel {
       top: auto;
-      right: 12px;
+      left: 12px;
       bottom: calc(86px + env(safe-area-inset-bottom, 0px));
       width: min(360px, calc(100vw - 20px));
-      max-height: calc(100% - 112px);
+      max-height: min(340px, 48dvh);
     }
 
     .component-row {
@@ -563,11 +563,11 @@ function createComponentPanel(groups) {
   toggle.className = "component-panel-toggle";
   toggle.type = "button";
   toggle.textContent = "Components";
-  toggle.setAttribute("aria-expanded", "false");
+  toggle.setAttribute("aria-expanded", "true");
 
   const panel = document.createElement("div");
   panel.id = "component-panel";
-  panel.className = "component-panel hidden";
+  panel.className = "component-panel";
 
   const header = document.createElement("div");
   header.className = "component-panel-header";

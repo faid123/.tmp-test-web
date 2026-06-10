@@ -2,19 +2,6 @@
 // UI referenced from the "Sort case list" design (two-view: login -> OTP).
 // OTP API logic referenced from the nyunt/dev branch.
 
-// Inline copy of apiLog.js — login.js is loaded as a plain script (not a module)
-// so it can't import. Same dedup contract: log success once per label.
-const _apiLoggedLogin = new Set();
-function logApi(res, label) {
-  if (!res.ok) {
-    console.warn(`[API] ✗ ${label} status=${res.status}`);
-    return;
-  }
-  if (_apiLoggedLogin.has(label)) return;
-  _apiLoggedLogin.add(label);
-  console.log(`[API] ✓ ${label} status=${res.status}`);
-}
-
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
@@ -75,7 +62,6 @@ async function sendOTP() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(loginBody)
     });
-    logApi(response, "POST /user/login");
     const data = await response.json();
 
     if (response.ok && data.successful && data.uuid) {
@@ -96,8 +82,6 @@ async function sendOTP() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify([{ machine_id: MACHINE_ID, uuid: currentUUID }])
       });
-      logApi(otpRes, "POST /otp");
-
       if (!otpRes.ok) {
         setError("error-message", "Login succeeded but OTP generation failed.");
         return false;
@@ -157,7 +141,6 @@ async function verifyAndLogin() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(verifyBody)
     });
-    logApi(response, "POST /otp/verify");
     const data = await response.json();
 
     if (response.ok && data.successful) {

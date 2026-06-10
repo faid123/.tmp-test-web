@@ -1,7 +1,6 @@
 import { lol } from "../crypt.js";
 import { toast } from "./toast.js";
 import { confirmModal } from "./confirmModal.js";
-import { logApi } from "./apiLog.js";
 import { setupConnectivityIndicator } from "./connectivityIndicator.js";
 import { setupAppSidebar } from "./appSidebar.js";
 import { toggleChat } from "./chat.js";
@@ -44,7 +43,6 @@ async function fetchCases() {
         body: requestBody,
       }
     );
-    logApi(response, 'POST /case/user/findall/get');
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     return Array.isArray(data) ? dedupeCases(data) : data;
@@ -124,7 +122,6 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
         body: requestBody,
       }
     );
-    logApi(response, 'POST /case/delete/:id');
     const rawText = await response.text();
     console.log("[case/delete] ←", response.status, rawText);
 
@@ -216,7 +213,6 @@ async function duplicateCaseById(caseId, { skipConfirm = false } = {}) {
         body: requestBody,
       }
     );
-    logApi(response, 'POST /case/duplicate');
     const rawText = await response.text();
     console.log("[case/duplicate] ←", response.status, rawText);
 
@@ -325,7 +321,6 @@ async function downloadCaseFiles(caseIntId, caseLabel) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      logApi(res, `POST ${endpoint.replace('https://live.api.smartrpdai.com/api/smartrpd', '')}`);
       if (!res.ok) continue;
       const data = await res.json();
       const list = Array.isArray(data) ? data : [data];
@@ -625,7 +620,6 @@ async function handleRowClick(caseId) {
         body: requestBody,
       }
     );
-    logApi(response, 'POST /case/get/:id');
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const detail = await response.json();
 
@@ -710,7 +704,6 @@ async function fireLastOpenedBump(caseId, detail, user) {
       body: JSON.stringify([auth, caseBody]),
     }
   );
-  logApi(res, 'PUT /case/:id');
   if (!res.ok) {
     throw new Error(`PUT /case/${caseId} status=${res.status}`);
   }
@@ -930,7 +923,6 @@ async function fetchThumbnails(caseId) {
         body: requestBody,
       }
     );
-    logApi(res, 'POST /thumbnails/get');
     if (!res.ok) {
       console.warn("⚠️ No images found or request failed:", res.status);
       currentThumbnails = [];
@@ -1279,7 +1271,6 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
             body: JSON.stringify(rolePayload),
           }
         );
-        logApi(roleRes, 'POST /role/all/get');
         const text = await roleRes.text();
         if (!roleRes.ok)
           throw new Error(`Role fetch failed: ${roleRes.status}`);
@@ -1354,7 +1345,6 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
           body: JSON.stringify(requestData),
         }
       );
-      logApi(response, 'POST /case/rename/:id');
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -1559,7 +1549,6 @@ function renderSharedUserList() {
             body: JSON.stringify(payload),
           }
         );
-        logApi(res, 'PUT /role/delete');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         toast.success(`User ${user.username} removed.`);
 
@@ -1644,7 +1633,7 @@ async function fetchAdditionalCaseDetails(caseList) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     })
-      .then((r) => { logApi(r, 'POST /additionalcasedetails/getall'); return r.ok ? r.json() : []; })
+      .then((r) => r.ok ? r.json() : [])
       .then((arr) => arr.at(-1)) // 接口返回 [ {...} ]
       .catch(() => undefined);
   });
@@ -1687,7 +1676,7 @@ async function fetchCoOwners(caseList) {
         { case_int_id: caseIntID },
       ]),
     })
-      .then((r) => { logApi(r, 'POST /role/all/get'); return r.ok ? r.json() : []; })
+      .then((r) => r.ok ? r.json() : [])
       .then((arr) => ({ id: caseIntID, rows: Array.isArray(arr) ? arr : [] }))
       .catch(() => ({ id: caseIntID, rows: [] }));
   });
@@ -1725,7 +1714,6 @@ async function postNewStatus(caseObj, newStatus) {
       body: JSON.stringify(body),
     }
   );
-  logApi(res, 'POST /additionalcasedetails');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   /* ★★★ 这三行是新加的 ★★★ */
 await createStatusAlerts(
@@ -1758,7 +1746,6 @@ async function createStatusAlerts(caseObj, fromUser, newStatus) {
         ])
       }
     );
-    logApi(res, 'POST /role/all/get');
     if (res.ok) {
       const arr = await res.json();
       recipients = arr
@@ -1809,7 +1796,6 @@ async function createStatusAlerts(caseObj, fromUser, newStatus) {
             body   : JSON.stringify(body)
           }
         );
-        logApi(alertRes, 'POST /alerts');
       } catch (e) {
         console.error("[alerts] create failed:", e);
       }

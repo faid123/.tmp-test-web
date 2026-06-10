@@ -1,6 +1,5 @@
 // ../js/versionHistory.js
 import { toast } from "./toast.js";
-import { logApi } from "./apiLog.js";
 
 (function () {
   const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
@@ -67,7 +66,6 @@ const TYPE_ICON = {
           { case_int_id: caseIntID }
         ])
       });
-      logApi(res, 'POST /role/all/get');
       if (!res.ok) return new Map();
       const arr = await res.json();
 
@@ -99,7 +97,6 @@ const TYPE_ICON = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify([{ machine_id: MACHINE_ID, uuid, caseIntID }])
     });
-    logApi(res, 'POST /casehistory/getall');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     return Array.isArray(data) ? data : [];

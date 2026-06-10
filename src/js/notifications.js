@@ -1,4 +1,3 @@
-import { logApi } from "./apiLog.js";
 (function () {
   const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
@@ -47,7 +46,6 @@ import { logApi } from "./apiLog.js";
           ])
         }
       );
-      logApi(caseRes2, 'POST /case/user/findall/get');
       if (!caseRes2.ok) throw new Error("case fetch failed (dot)");
       const caseArr2 = await caseRes2.json();
       const caseIDs2 = Array.isArray(caseArr2) ? [...new Set(caseArr2.map(c => c.id))] : [];
@@ -65,7 +63,6 @@ import { logApi } from "./apiLog.js";
           ])
         }
       );
-      logApi(aRes2, 'POST /alerts/getallbytouser');
       if (aRes2.ok) {
         const list2 = await aRes2.json();
         if (Array.isArray(list2)) {
@@ -144,7 +141,6 @@ import { logApi } from "./apiLog.js";
           ])
         }
       );
-      logApi(caseRes, 'POST /case/user/findall/get');
       if (!caseRes.ok) throw new Error("case fetch failed");
       const caseArr = await caseRes.json();
       if (!Array.isArray(caseArr)) throw new Error("case list not array");
@@ -170,7 +166,6 @@ import { logApi } from "./apiLog.js";
           ])
         }
       );
-      logApi(aRes, 'POST /alerts/getallbytouser');
       if (aRes.ok) {
         const list = await aRes.json();
         if (Array.isArray(list)) {
@@ -203,7 +198,6 @@ import { logApi } from "./apiLog.js";
               ])
             }
           );
-          logApi(r, 'POST /case/get/:id');
           if (r.ok) {
             const d = await r.json();
             if (d && d.case_id) caseNameMap[String(cid)] = d.case_id;
@@ -285,7 +279,6 @@ import { logApi } from "./apiLog.js";
         body   : JSON.stringify(payload)
       }
     );
-    logApi(res, 'POST /alerts/setreadstatus');
     const text = await res.text(); // 可能是 mysql info
     console.debug("[setreadstatus]", payload, text);
     if (!res.ok) throw new Error(text || "setreadstatus failed");

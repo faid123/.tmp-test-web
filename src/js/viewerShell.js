@@ -1,5 +1,4 @@
 import { lol } from "../crypt.js";
-import { logApi } from "./apiLog.js";
 import { setupAppSidebar } from "./appSidebar.js";
 import { toggleChat } from "./chat.js";
 import { setupConnectivityIndicator } from "./connectivityIndicator.js";
@@ -50,7 +49,6 @@ async function populateCaseName() {
         },
       ]),
     });
-    logApi(response, "POST /case/get/:id");
     if (!response.ok) return;
     const detail = await response.json();
     footerCaseName.textContent = detail?.case_id || `UID_${caseId}`;

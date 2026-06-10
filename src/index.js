@@ -3260,14 +3260,8 @@ function setupChatToggle() {
           // Container for thumbnail + 2D buttons
           const thumbWrapper = document.createElement("div");
           thumbWrapper.dataset.twodViewerBlock = "true";
-          thumbWrapper.style.position = "absolute";
-          thumbWrapper.style.left = "20px"; // left side of screen
-          thumbWrapper.style.top = "20px"; // top offset
-          thumbWrapper.style.zIndex = "1000";
-          thumbWrapper.style.display = "flex";
-          thumbWrapper.style.flexDirection = "column";
-          thumbWrapper.style.alignItems = "flex-start";
-          thumbWrapper.style.gap = "6px"; // spacing between image and buttons
+          thumbWrapper.className = "twod-viewer-nav-block";
+          thumbWrapper.style.order = "1";
 
           // Create thumbnail button
           const button = document.createElement("button");
@@ -3276,8 +3270,9 @@ function setupChatToggle() {
           button.style.border = "none";
           button.style.background = "none";
           button.style.cursor = "pointer";
-          button.style.width = isMobile ? "300px" : "280px";
+          button.style.width = "100%";
           button.style.height = "auto";
+          button.style.position = "relative";
 
           // Create thumbnail image
           const img = new Image();
@@ -3297,10 +3292,9 @@ function setupChatToggle() {
           watermark.style.transform = "translate(-50%, -50%)";
           watermark.style.color = "#0078d4";
           watermark.style.fontWeight = "bold";
-          watermark.style.fontSize = isMobile ? "34px" : "22px";
+          watermark.style.fontSize = "18px";
           watermark.style.textShadow = "1px 1px 3px rgba(255, 255, 255, 0.9)";
-          watermark.style.pointerEvents = "none"; // so clicks go through to the button
-          button.style.position = "relative"; // Make sure parent is positioned
+          watermark.style.pointerEvents = "none";
           button.appendChild(watermark);
 
           // Append to wrapper
@@ -3309,22 +3303,8 @@ function setupChatToggle() {
           // Static 2D buttons below the image
           const btnContainer = document.createElement("div");
           btnContainer.style.display = "flex";
-          btnContainer.style.flexDirection = "column"; // <- make them vertical
+          btnContainer.style.flexDirection = "column";
           btnContainer.style.gap = "6px";
-          btnContainer.style.position = "absolute"; // ensure absolute for precise positioning
-
-          img.onload = () => {
-            const isMobile =
-              /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-                navigator.userAgent
-              );
-            const imgRect = img.getBoundingClientRect();
-            const offset = isMobile ? -350 : 25; // Slightly more offset on mobile
-            // btnContainer.style.top = `380px`;
-            // btnContainer.style.left = `0px`;
-            btnContainer.style.top = isMobile ? "820px" : "380px";
-            btnContainer.style.left = isMobile ? "10px" : "0px";
-          };
 
           /* const approve2DStatic = document.createElement('button');
 approve2DStatic.className = 'smart-btn approve';
@@ -3341,41 +3321,10 @@ btnContainer.appendChild(edit2DStatic); */
           // Append buttons to wrapper
           thumbWrapper.appendChild(btnContainer);
 
-          // Finally, append everything to container3D so it's layout-aware
-          const container3D = document.getElementById("container3D");
-          container3D.appendChild(thumbWrapper);
+          // Append into the right nav sidebar
+          getViewerRightNav().appendChild(thumbWrapper);
 
-          const positionThumbWrapperAboveCreationDate = () => {
-            const creationDateBubble = document.querySelector(
-              '.viewer-meta-bubble[data-position="bottom-left"]'
-            );
-            if (!creationDateBubble) return false;
-            const bubbleRect = creationDateBubble.getBoundingClientRect();
-            const wrapperRect = thumbWrapper.getBoundingClientRect();
-            thumbWrapper.style.left = `${Math.max(20, bubbleRect.left)}px`;
-            thumbWrapper.style.top = `${Math.max(
-              16,
-              bubbleRect.top - wrapperRect.height - 14
-            )}px`;
-            return true;
-          };
-          if (!positionThumbWrapperAboveCreationDate()) {
-            setTimeout(positionThumbWrapperAboveCreationDate, 500);
-            setTimeout(positionThumbWrapperAboveCreationDate, 1500);
-          }
-          window.addEventListener(
-            "resize",
-            positionThumbWrapperAboveCreationDate
-          );
-          if (img.complete) {
-            positionThumbWrapperAboveCreationDate();
-          } else {
-            img.addEventListener("load", positionThumbWrapperAboveCreationDate, {
-              once: true,
-            });
-          }
-
-          button.addEventListener("click", function () {
+          function openTwodOverlay() {
             // Fullscreen overlay
             const overlay = document.createElement("div");
             overlay.className = "twod-overlay";
@@ -3571,7 +3520,19 @@ btnContainer.appendChild(edit2DStatic); */
 
             // Close on overlay click
             overlay.addEventListener("click", () => overlay.remove());
-          });
+          }
+          button.addEventListener("click", openTwodOverlay);
+
+          // Mobile/tablet 2D trigger button (hidden on desktop, shown on tablet/mobile)
+          const mobileTwodBtn = document.createElement("button");
+          mobileTwodBtn.type = "button";
+          mobileTwodBtn.className = "twod-mobile-trigger";
+          mobileTwodBtn.setAttribute("aria-label", "View 2D design");
+          mobileTwodBtn.title = "View 2D design";
+          mobileTwodBtn.innerHTML = '<i class="fa-solid fa-tooth" aria-hidden="true" style="font-size:20px;display:block;margin-bottom:2px"></i><span style="font-size:10px;font-weight:700;letter-spacing:0.5px">2D</span>';
+          mobileTwodBtn.style.order = "2";
+          mobileTwodBtn.addEventListener("click", openTwodOverlay);
+          getViewerRightNav().appendChild(mobileTwodBtn);
 
           /* 			button.addEventListener('click', function () {
 				
@@ -3671,7 +3632,7 @@ btnContainer.appendChild(edit2DStatic); */
             "/stl/get",
             [data],
             "test",
-            "Jaw mesh"
+            "Closed Jaw Mesh Check"
           );
 
           if (test != "stl") {
@@ -4346,6 +4307,35 @@ btnContainer.appendChild(edit2DStatic); */
     display: none;
   }
 
+  .preset-view-dropdown {
+    display: none;
+  }
+
+  .twod-viewer-nav-block {
+    width: 100%;
+    flex: 0 0 auto;
+    border-radius: 6px;
+    overflow: hidden;
+    max-height: 220px;
+  }
+
+  .twod-viewer-nav-block [data-twod-viewer-button="true"] {
+    display: block;
+    width: 100% !important;
+  }
+
+  .twod-viewer-nav-block [data-twod-viewer-button="true"] img {
+    width: 100%;
+    height: auto;
+    max-height: 220px;
+    object-fit: cover;
+    display: block;
+  }
+
+  .twod-mobile-trigger {
+    display: none;
+  }
+
   .preset-view-button {
     position: absolute;
     width: 58px;
@@ -4472,7 +4462,8 @@ btnContainer.appendChild(edit2DStatic); */
     .mail-popup {
       right: 8px;
       width: min(300px, 58vw);
-      max-height: calc(100vh - 20px);
+      max-height: 60dvh;
+      overflow-y: auto;
       padding: 10px;
     }
 
@@ -4516,6 +4507,31 @@ btnContainer.appendChild(edit2DStatic); */
       scroll-behavior: smooth;
       overscroll-behavior-x: contain;
       -webkit-overflow-scrolling: touch;
+    }
+
+    .twod-viewer-nav-block {
+      display: none;
+    }
+
+    .twod-mobile-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 2px;
+      width: 58px;
+      height: 58px;
+      padding: 0;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 12px;
+      background: rgba(48, 48, 48, 0.92);
+      color: #ffffff;
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+
+    .twod-mobile-trigger:active {
+      background: rgba(68, 68, 68, 0.98);
     }
 
     #viewer-right-nav-top-row {
@@ -4859,6 +4875,27 @@ btnContainer.appendChild(edit2DStatic); */
       scroll-snap-type: x proximity;
       overscroll-behavior-x: contain;
       -webkit-overflow-scrolling: touch;
+    }
+
+    .twod-viewer-nav-block {
+      display: none;
+    }
+
+    .twod-mobile-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 2px;
+      width: 56px;
+      height: 56px;
+      padding: 0;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 12px;
+      background: rgba(48, 48, 48, 0.92);
+      color: #ffffff;
+      cursor: pointer;
+      flex: 0 0 auto;
     }
 
     #viewer-right-nav-top-row {
@@ -5213,6 +5250,20 @@ btnContainer.appendChild(edit2DStatic); */
   max-width: 90vw;
   max-height: 70vh;
   margin-bottom: 15px;
+}
+
+@media (max-width: 1024px) {
+  .twod-group {
+    padding: 12px;
+    max-width: min(520px, 88vw);
+    max-height: 78dvh;
+    overflow-y: auto;
+  }
+  .twod-fullscreen-image {
+    max-width: 100%;
+    max-height: 48dvh;
+    margin-bottom: 8px;
+  }
 }
 
 .smart-btn-container-2d {

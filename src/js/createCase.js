@@ -2,7 +2,6 @@
 import { lol } from "../crypt.js";
 import { toast, flashToast } from "./toast.js";
 import { confirmModal } from "./confirmModal.js";
-import { logApi } from "./apiLog.js";
 
 let THREE;
 let STLLoader;
@@ -529,7 +528,6 @@ document.addEventListener("DOMContentLoaded", async () => {
           body: JSON.stringify(payload),
         }
       );
-      logApi(res, 'POST /case');
       if (!res.ok) {
         let errorText = "";
         try {
@@ -615,7 +613,6 @@ document.addEventListener("DOMContentLoaded", async () => {
               body: JSON.stringify([{ machine_id }, { username }]),
             }
           );
-          logApi(checkRes, 'POST /user/checkifusernameexists/get');
           const checkData = await checkRes.json();
           if (!checkData || !checkData.uuid) {
             console.warn(`User "${username}" not found — skipping.`);
@@ -630,7 +627,6 @@ document.addEventListener("DOMContentLoaded", async () => {
               { role: 3, uuid: targetUUID, case_int_id: caseIntID },
             ]),
           });
-          logApi(roleInviteRes, 'POST /role');
           const alertInviteRes = await fetch("https://live.api.smartrpdai.com/api/smartrpd/alerts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -646,7 +642,6 @@ document.addEventListener("DOMContentLoaded", async () => {
               },
             ]),
           });
-          logApi(alertInviteRes, 'POST /alerts');
         } catch (e) {
           console.warn(`❌ Failed to invite ${username}:`, e);
         }
@@ -705,7 +700,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             body: JSON.stringify([{ machine_id }, { username }]),
           }
         );
-        logApi(checkRes, 'POST /user/checkifusernameexists/get');
         const checkData = await checkRes.json();
         if (!checkData || !checkData.uuid) {
           throw new Error("User not found");
@@ -725,7 +719,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             ]),
           }
         );
-        logApi(roleRes, 'POST /role');
         if (!roleRes.ok) throw new Error("Add role failed");
 
         // Send an in-app notification to the invitee. Failures are non-fatal.
@@ -746,7 +739,6 @@ document.addEventListener("DOMContentLoaded", async () => {
               },
             ]),
           });
-          logApi(alertSendRes, 'POST /alerts');
         } catch (e) {
           console.warn("Failed to send invite alert:", e);
         }
@@ -763,7 +755,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             ]),
           }
         );
-        logApi(refreshed, 'POST /role/all/get');
         existingUsers = await refreshed.json();
         renderSharedUserList();
 
@@ -851,7 +842,6 @@ async function uploadSTL(
             body: JSON.stringify(rawPayload),
           }
         );
-        logApi(rawRes, 'POST /stl/raw');
         if (!rawRes.ok) {
           console.error(`❌ Failed to upload ${jawType} (raw)`, rawRes.status);
         } else {
@@ -879,7 +869,6 @@ async function uploadSTL(
             body: JSON.stringify(stlPayload),
           }
         );
-        logApi(stlRes, 'POST /stl');
         if (!stlRes.ok) {
           let body = "";
           try { body = await stlRes.text(); } catch {}
@@ -984,7 +973,6 @@ function renderSharedUserList() {
               ]),
             }
           );
-          logApi(res, 'PUT /role/delete');
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
           existingUsers = existingUsers.filter((u) => u.uuid !== user.uuid);
@@ -1053,7 +1041,6 @@ async function uploadReferenceImage(
             body: JSON.stringify(payload),
           }
         );
-        logApi(res, 'POST /referenceimages');
         if (!res.ok) {
           console.error(
             `❌ Failed to upload reference image ${file.name}`,
@@ -1096,7 +1083,6 @@ async function uploadCaseThumbnail(machine_id, uuid, caseIntID, slot, dataUrl) {
         body: JSON.stringify(payload),
       }
     );
-    logApi(res, 'POST /thumbnails');
     if (!res.ok) {
       console.error(`❌ Failed to upload thumbnail slot ${slot}:`, res.status);
     } else {
