@@ -3262,6 +3262,8 @@ function setupChatToggle() {
           thumbWrapper.dataset.twodViewerBlock = "true";
           thumbWrapper.className = "twod-viewer-nav-block";
           thumbWrapper.style.order = "1";
+          thumbWrapper.style.overflow = "hidden";
+          thumbWrapper.style.maxHeight = "270px";
 
           // Create thumbnail button
           const button = document.createElement("button");
@@ -3279,6 +3281,8 @@ function setupChatToggle() {
           img.src = "data:image/png;base64," + test;
           img.style.width = "100%";
           img.style.height = "auto";
+          img.style.maxHeight = "270px";
+          img.style.objectFit = "cover";
           img.style.display = "block";
           img.style.transform = "none";
           button.appendChild(img);
@@ -4316,7 +4320,7 @@ btnContainer.appendChild(edit2DStatic); */
     flex: 0 0 auto;
     border-radius: 6px;
     overflow: hidden;
-    max-height: 220px;
+    max-height: 270px;
   }
 
   .twod-viewer-nav-block [data-twod-viewer-button="true"] {
@@ -4327,7 +4331,7 @@ btnContainer.appendChild(edit2DStatic); */
   .twod-viewer-nav-block [data-twod-viewer-button="true"] img {
     width: 100%;
     height: auto;
-    max-height: 220px;
+    max-height: 270px;
     object-fit: cover;
     display: block;
   }
@@ -4477,11 +4481,11 @@ btnContainer.appendChild(edit2DStatic); */
     }
   }
 
-  /* Tablet toolbar: larger touch targets, horizontally scrollable. */
+  /* Tablet toolbar: compact cluster at bottom-left above footer. */
   @media (min-width: 769px) and (max-width: 1024px) {
     #sidebar-hamburger-btn {
       right: 16px;
-      bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
       width: 64px;
       height: 64px;
     }
@@ -4489,24 +4493,22 @@ btnContainer.appendChild(edit2DStatic); */
     #viewer-right-nav {
       top: auto;
       left: 0;
-      right: 0;
+      right: auto;
       bottom: 0;
-      width: 100%;
-      height: calc(112px + env(safe-area-inset-bottom, 0px));
+      width: auto;
+      height: auto;
       flex-direction: row;
       align-items: center;
       justify-content: flex-start;
-      gap: 12px;
-      overflow-x: auto;
-      overflow-y: hidden;
-      padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+      gap: 10px;
+      overflow: visible;
+      padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)) 14px;
       border-left: 0;
-      border-top: 1px solid rgba(255, 255, 255, 0.24);
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      border-right: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 0 10px 0 0;
       background: rgba(18, 18, 18, 0.92);
-      box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.24);
-      scroll-behavior: smooth;
-      overscroll-behavior-x: contain;
-      -webkit-overflow-scrolling: touch;
+      box-shadow: 2px -4px 20px rgba(0, 0, 0, 0.28);
     }
 
     .twod-viewer-nav-block {
@@ -4544,10 +4546,11 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .preset-view-panel {
-      position: absolute;
-      left: 18px;
-      bottom: calc(22px + env(safe-area-inset-bottom, 0px));
-      width: 84px;
+      position: static;
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      width: auto;
       height: auto;
       padding: 0;
       overflow: visible;
@@ -4555,7 +4558,7 @@ btnContainer.appendChild(edit2DStatic); */
       background: transparent;
       border: 0;
       box-shadow: none;
-      z-index: 1015;
+      z-index: auto;
     }
 
     .preset-view-pad { display: none; }
@@ -4777,12 +4780,13 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     #viewer-right-nav-top-row {
-      position: absolute;
-      right: 92px;
-      bottom: calc(22px + env(safe-area-inset-bottom, 0px));
-      z-index: 1060;
+      position: static;
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: row;
       gap: 8px;
-      order: initial;
+      z-index: auto;
+      order: 15;
     }
 
     #reset-button,
@@ -4844,11 +4848,11 @@ btnContainer.appendChild(edit2DStatic); */
     }
   }
 
-  /* Phone toolbar: compact, horizontally scrollable, and keeps every tool available. */
+  /* Phone toolbar: compact cluster at bottom-left above footer. */
   @media (max-width: 768px) {
     #sidebar-hamburger-btn {
       right: 12px;
-      bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+      bottom: calc(12px + env(safe-area-inset-bottom, 0px));
       width: 60px;
       height: 60px;
     }
@@ -4856,25 +4860,22 @@ btnContainer.appendChild(edit2DStatic); */
     #viewer-right-nav {
       top: auto;
       left: 0;
-      right: 0;
+      right: auto;
       bottom: 0;
-      width: 100%;
-      height: calc(104px + env(safe-area-inset-bottom, 0px));
+      width: auto;
+      height: auto;
       flex-direction: row;
       align-items: center;
       justify-content: flex-start;
       gap: 8px;
-      overflow-x: auto;
-      overflow-y: hidden;
-      padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+      overflow: visible;
+      padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)) 12px;
       border-left: 0;
-      border-top: 1px solid rgba(255, 255, 255, 0.22);
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      border-right: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 0 10px 0 0;
       background: rgba(18, 18, 18, 0.94);
-      box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.24);
-      scroll-behavior: smooth;
-      scroll-snap-type: x proximity;
-      overscroll-behavior-x: contain;
-      -webkit-overflow-scrolling: touch;
+      box-shadow: 2px -4px 16px rgba(0, 0, 0, 0.28);
     }
 
     .twod-viewer-nav-block {
@@ -4905,15 +4906,14 @@ btnContainer.appendChild(edit2DStatic); */
     #viewer-right-nav > * {
       flex: 0 0 auto;
       position: static;
-      scroll-snap-align: start;
     }
 
     .preset-view-panel {
-      position: absolute;
-      left: auto;
-      right: 12px;
-      bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-      width: 84px;
+      position: static;
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      width: auto;
       max-width: none;
       height: auto;
       padding: 0;
@@ -4922,7 +4922,7 @@ btnContainer.appendChild(edit2DStatic); */
       background: transparent;
       border: 0;
       box-shadow: none;
-      z-index: 1015;
+      z-index: auto;
     }
 
     .preset-view-pad { display: none; }
@@ -5142,12 +5142,13 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     #viewer-right-nav-top-row {
-      position: absolute;
-      right: 80px;
-      bottom: calc(18px + env(safe-area-inset-bottom, 0px));
-      z-index: 1060;
+      position: static;
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: row;
       gap: 8px;
-      order: initial;
+      z-index: auto;
+      order: 15;
     }
 
     #reset-button,
@@ -5208,11 +5209,6 @@ btnContainer.appendChild(edit2DStatic); */
       transform: none !important;
       width: min(340px, calc(100vw - 24px)) !important;
       max-height: calc(100% - 112px) !important;
-    }
-
-    .preset-view-panel {
-      bottom: calc(86px + env(safe-area-inset-bottom, 0px));
-      z-index: 1061;
     }
   }
 
