@@ -430,6 +430,51 @@ function getViewerRightNav() {
 
 window.getViewerRightNav = getViewerRightNav;
 
+window.viewerPanelManager = (() => {
+  const _panels = {};
+  function _dimAll() {
+    for (const p of Object.values(_panels)) {
+      p.btn.classList.remove("vpm-active");
+      p.btn.classList.add("vpm-dimmed");
+    }
+  }
+  function _clearAll() {
+    for (const p of Object.values(_panels)) {
+      p.btn.classList.remove("vpm-active", "vpm-dimmed");
+    }
+  }
+  return {
+    register(id, btn, openFn, closeFn) {
+      _panels[id] = { btn, openFn, closeFn, isOpen: false };
+    },
+    open(id) {
+      for (const [pid, p] of Object.entries(_panels)) {
+        if (pid !== id && p.isOpen) { p.closeFn(); p.isOpen = false; }
+      }
+      const p = _panels[id];
+      if (!p) return;
+      p.openFn();
+      p.isOpen = true;
+      _dimAll();
+      p.btn.classList.remove("vpm-dimmed");
+      p.btn.classList.add("vpm-active");
+    },
+    close(id) {
+      const p = _panels[id];
+      if (!p) return;
+      p.closeFn();
+      p.isOpen = false;
+      if (!Object.values(_panels).some(x => x.isOpen)) _clearAll();
+    },
+    toggle(id) {
+      const p = _panels[id];
+      if (!p) return;
+      if (p.isOpen) this.close(id);
+      else this.open(id);
+    },
+  };
+})();
+
 function getViewerMetaBar() {
   let metaBar = document.getElementById("viewer-meta-bar");
   if (metaBar) return metaBar;
@@ -2511,7 +2556,7 @@ function syncPolylineOverlayVisibility() {
   });
 
   if (polylineMenuButton) {
-    const componentCount = getPolylineComponentSummary().length;
+    const componentCount = getPolylineComponentSummary().filter(({ points }) => points > 0).length;
     polylineMenuButton.textContent = isPolylineOverlayVisible
       ? `Polylines (${componentCount})`
       : `Polylines hidden (${componentCount})`;
@@ -2597,7 +2642,7 @@ function getPolylineComponentSummary() {
 }
 
 function updatePolylineComponentMenu() {
-  const summary = getPolylineComponentSummary();
+  const summary = getPolylineComponentSummary().filter(({ points }) => points > 0);
   summary.forEach(({ key }) => {
     if (!polylineComponentVisibility.has(key)) {
       polylineComponentVisibility.set(
@@ -2823,17 +2868,25 @@ function createPolylineVisibilityToggle(container, domElement) {
   panel.appendChild(list);
 
   button.addEventListener("click", () => {
+    if (window.viewerPanelManager) {
+      window.viewerPanelManager.toggle("polylines-panel");
+      return;
+    }
     const willOpen = panel.style.display === "none";
     panel.style.display = willOpen ? "block" : "none";
-    if (willOpen) {
-      updatePolylineMenuLayout();
-    }
+    if (willOpen) updatePolylineMenuLayout();
   });
   window.addEventListener("resize", updatePolylineMenuLayout);
 
   wrapper.appendChild(button);
   getViewerRightNav().appendChild(wrapper);
   (container || document.getElementById("container3D") || document.body).appendChild(panel);
+  window.viewerPanelManager?.register(
+    "polylines-panel",
+    button,
+    () => { panel.style.display = "block"; updatePolylineMenuLayout(); },
+    () => { panel.style.display = "none"; }
+  );
   updatePolylineMenuLayout();
 
   polylineMenuButton = button;
@@ -3193,26 +3246,23 @@ function createViewerLoadingScreen() {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 16px;
-      padding: 32px 44px;
+      gap: 14px;
+      padding: 36px 48px;
       background: rgba(255,255,255,0.22);
       border-radius: 16px;
       backdrop-filter: blur(10px);
       box-shadow: 0 4px 28px rgba(0,0,0,0.14);
-      min-width: 260px;
-      max-width: 90vw;
+      width: min(480px, 88vw);
     }
-    .vls-title {
-      font-family: "Montserrat", sans-serif;
-      font-size: 20px;
-      font-weight: 800;
-      color: #1a3a5c;
-      letter-spacing: 3px;
-      text-transform: uppercase;
+    .vls-logo {
+      width: 80px;
+      height: 80px;
+      object-fit: contain;
+      display: block;
     }
     .vls-bar-track {
       width: 100%;
-      height: 5px;
+      height: 6px;
       background: rgba(0,0,0,0.14);
       border-radius: 3px;
       overflow: hidden;
@@ -3228,6 +3278,50 @@ function createViewerLoadingScreen() {
       border-radius: 3px;
       animation: loading 1.4s ease-in-out infinite;
     }
+    #vls-progress {
+      width: 100%;
+      height: 14px;
+      border: none;
+      border-radius: 7px;
+      overflow: hidden;
+      display: none;
+    }
+    #vls-progress::-webkit-progress-bar {
+      background: rgba(0,0,0,0.12);
+      border-radius: 7px;
+    }
+    #vls-progress::-webkit-progress-value {
+      background: linear-gradient(90deg, #1a6bbf, #4fa3e8);
+      border-radius: 7px;
+    }
+    #vls-progress::-moz-progress-bar {
+      background: linear-gradient(90deg, #1a6bbf, #4fa3e8);
+      border-radius: 7px;
+    }
+    .vls-info-row {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    #vls-percent {
+      font-family: "Montserrat", sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: #1a3a5c;
+      min-width: 46px;
+    }
+    #vls-display {
+      font-family: "Montserrat", sans-serif;
+      font-size: 12px;
+      color: rgba(26,58,92,0.75);
+      text-align: right;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .vls-status {
       font-family: "Montserrat", sans-serif;
       font-size: 12px;
@@ -3235,8 +3329,8 @@ function createViewerLoadingScreen() {
       font-weight: 500;
       text-align: center;
       min-height: 16px;
-      max-width: 240px;
       opacity: 0.85;
+      width: 100%;
     }
   `;
   document.head.appendChild(style);
@@ -3244,11 +3338,21 @@ function createViewerLoadingScreen() {
   screen.id = "viewer-loading-screen";
   screen.innerHTML = `
     <div class="vls-card">
-      <div class="vls-title">SmartRPD</div>
+      <img class="vls-logo" src="../../assets/profile.png" alt="SmartRPD">
       <div class="vls-bar-track"><div class="vls-bar-fill"></div></div>
+      <progress id="vls-progress" value="0" max="100"></progress>
+      <div class="vls-info-row">
+        <span id="vls-percent"></span>
+        <span id="vls-display"></span>
+      </div>
       <div class="vls-status" id="vls-status">Initialising…</div>
     </div>`;
   (viewerContainer || document.body).appendChild(screen);
+  window.viewerLoadingEls = {
+    progressBar: screen.querySelector("#vls-progress"),
+    percentage:  screen.querySelector("#vls-percent"),
+    displayBox:  screen.querySelector("#vls-display"),
+  };
   window.updateViewerLoading = (label) => {
     const el = document.getElementById("vls-status");
     if (el) el.textContent = label || "Loading…";
@@ -3264,6 +3368,7 @@ function removeViewerLoadingScreen() {
     document.getElementById("viewer-loading-screen-style")?.remove();
   }, 380);
   delete window.updateViewerLoading;
+  delete window.viewerLoadingEls;
 }
 
 //The async prevents processing of data before the stuff is loaded in
@@ -3710,6 +3815,14 @@ btnContainer.appendChild(edit2DStatic); */
   const urls = ["/parameterisation/mesh/getall", "/surface/getall"];
   let responseDatas = [];
   let responseData;
+
+  // Pre-start both mesh downloads in parallel so denture downloads while jaw is being
+  // fetched and processed. The promises are consumed inside the loop below.
+  const meshPromises = !close ? {
+    "/parameterisation/mesh/getall": apiClient.post("/parameterisation/mesh/getall", [data], false, "Jaw mesh"),
+    "/surface/getall":               apiClient.post("/surface/getall",               [data], false, "Denture mesh"),
+  } : {};
+
   try {
     // Call the post method and wait for the response
     for (const url of urls) {
@@ -3723,7 +3836,8 @@ btnContainer.appendChild(edit2DStatic); */
         } else if (url == "/surface/getall") {
           name_of_mesh = "Denture mesh";
         }
-        responseData = await apiClient.post(url, [data], false, name_of_mesh);
+        // Await the pre-started promise instead of issuing a new request
+        responseData = await meshPromises[url];
         //console.log(responseData);
         if (isObject(responseData)) {
           responseDatas = responseDatas.concat(responseData);
@@ -5412,6 +5526,18 @@ btnContainer.appendChild(edit2DStatic); */
       .smart-btn-container {
           grid-template-columns: 1fr !important;
       }
+  }
+
+  .vpm-active {
+    box-shadow: 0 0 0 2px #38bdf8, 0 0 10px rgba(56, 189, 248, 0.35) !important;
+    background: #0c4a6e !important;
+    transition: box-shadow 0.15s, background 0.15s, opacity 0.15s, filter 0.15s;
+  }
+
+  .vpm-dimmed {
+    opacity: 0.35;
+    filter: grayscale(0.55);
+    transition: opacity 0.15s, filter 0.15s;
   }
 `;
   document.head.appendChild(style);

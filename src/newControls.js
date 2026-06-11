@@ -20,6 +20,7 @@ style.textContent = `
     cursor: pointer;
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
     pointer-events: auto;
+    transition: box-shadow 0.15s, background 0.15s, opacity 0.15s, filter 0.15s;
   }
 
   .component-panel {
@@ -562,12 +563,12 @@ function createComponentPanel(groups) {
   toggle.id = "component-panel-toggle";
   toggle.className = "component-panel-toggle";
   toggle.type = "button";
-  toggle.textContent = "Components";
-  toggle.setAttribute("aria-expanded", "true");
+  toggle.textContent = "Objects";
+  toggle.setAttribute("aria-expanded", "false");
 
   const panel = document.createElement("div");
   panel.id = "component-panel";
-  panel.className = "component-panel";
+  panel.className = "component-panel hidden";
 
   const header = document.createElement("div");
   header.className = "component-panel-header";
@@ -576,24 +577,24 @@ function createComponentPanel(groups) {
   title.type = "button";
   title.className = "component-panel-title";
   title.textContent = "Show All";
-  title.title = "Show all available components";
-  title.setAttribute("aria-label", "Show all available components");
+  title.title = "Show all available objects";
+  title.setAttribute("aria-label", "Show all available objects");
 
   const syncShowHideButton = () => {
     const allVisible = groups.every(
       (g) => g.hasContent?.() === false || (g.getVisible?.() ?? true)
     );
     title.textContent = allVisible ? "Hide All" : "Show All";
-    title.title = allVisible ? "Hide all components" : "Show all available components";
-    title.setAttribute("aria-label", allVisible ? "Hide all components" : "Show all available components");
+    title.title = allVisible ? "Hide all objects" : "Show all available objects";
+    title.setAttribute("aria-label", allVisible ? "Hide all objects" : "Show all available objects");
   };
 
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = "component-panel-close";
   closeButton.textContent = "\u00d7";
-  closeButton.title = "Close components";
-  closeButton.setAttribute("aria-label", "Close components");
+  closeButton.title = "Close objects";
+  closeButton.setAttribute("aria-label", "Close objects");
 
   header.appendChild(title);
   header.appendChild(closeButton);
@@ -763,13 +764,21 @@ function createComponentPanel(groups) {
   });
 
   toggle.addEventListener("click", () => {
-    const isHidden = panel.classList.toggle("hidden");
-    toggle.setAttribute("aria-expanded", String(!isHidden));
+    if (window.viewerPanelManager) {
+      window.viewerPanelManager.toggle("objects-panel");
+    } else {
+      const isHidden = panel.classList.toggle("hidden");
+      toggle.setAttribute("aria-expanded", String(!isHidden));
+    }
   });
 
   closeButton.addEventListener("click", () => {
-    panel.classList.add("hidden");
-    toggle.setAttribute("aria-expanded", "false");
+    if (window.viewerPanelManager) {
+      window.viewerPanelManager.close("objects-panel");
+    } else {
+      panel.classList.add("hidden");
+      toggle.setAttribute("aria-expanded", "false");
+    }
   });
 
   panel.appendChild(header);
@@ -781,6 +790,12 @@ function createComponentPanel(groups) {
     document.body;
   nav.appendChild(toggle);
   panelHost.appendChild(panel);
+  window.viewerPanelManager?.register(
+    "objects-panel",
+    toggle,
+    () => { panel.classList.remove("hidden"); toggle.setAttribute("aria-expanded", "true"); },
+    () => { panel.classList.add("hidden"); toggle.setAttribute("aria-expanded", "false"); }
+  );
   window.syncComponentPanelRows = syncAllRows;
   syncAllRows();
   syncShowHideButton();

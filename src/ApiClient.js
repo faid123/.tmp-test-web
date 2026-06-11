@@ -42,13 +42,19 @@ export class ApiClient {
 
     const totalBytes = parseInt(contentLength, 10);
     let loadedBytes = 0;
-    const hasCentralized = typeof window.updateViewerLoading === 'function';
+    const els = window.viewerLoadingEls;
 
     // Shared UI state for the fallback local overlay
     let container = null, progressBar = null, percentage = null, displayBox = null;
 
-    if (hasCentralized) {
-      if (downloadLabel) window.updateViewerLoading(`Loading ${downloadLabel}…`);
+    if (els) {
+      // Use the centralized loading screen — identical update pattern to main branch
+      progressBar = els.progressBar;
+      percentage  = els.percentage;
+      displayBox  = els.displayBox;
+      progressBar.max = totalBytes;
+      progressBar.value = 0;
+      progressBar.style.display = 'block';
     } else {
       container = document.createElement('div');
       container.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;text-align:center;';
@@ -75,20 +81,14 @@ export class ApiClient {
               return;
             }
             loadedBytes += value.length;
-            const percent = ((loadedBytes / totalBytes) * 100).toFixed(1);
+            progressBar.value = loadedBytes;
+
+            const percent = ((loadedBytes / totalBytes) * 100).toFixed(2);
+            percentage.textContent = `${percent}%`;
+
             const timeElapsed = performance.now() / 1000;
             const downloadSpeedMBps = (loadedBytes / (1024 * 1024 * timeElapsed)).toFixed(1);
-
-            if (hasCentralized) {
-              const label = downloadLabel
-                ? `Loading ${downloadLabel}… ${percent}%`
-                : `Loading… ${percent}%`;
-              window.updateViewerLoading(label);
-            } else {
-              progressBar.value = loadedBytes;
-              percentage.textContent = `${percent}%`;
-              displayBox.textContent = `${downloadLabel}   Download speed: ${downloadSpeedMBps} MB/s`;
-            }
+            displayBox.textContent = `${downloadLabel}   Download speed: ${downloadSpeedMBps} MB/s`;
 
             controller.enqueue(value);
             push();
