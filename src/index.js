@@ -154,6 +154,7 @@ const artificialTeethRenderer = createArtificialTeethRenderer({
   },
   onStatus: (label, progress = 0, autoHide = false) => {
     window.lastArtificialTeethStatus = { label, progress, autoHide };
+    window.updateViewerLoading?.(label);
     if (LOG_ARTIFICIAL_TEETH_STATUS_TO_CONSOLE) {
       console.log("[artificial teeth]", label, progress);
     }
@@ -3169,11 +3170,108 @@ function setupChatToggle() {
   });
 }
 
+function createViewerLoadingScreen() {
+  if (document.getElementById("viewer-loading-screen")) return;
+  const style = document.createElement("style");
+  style.id = "viewer-loading-screen-style";
+  style.textContent = `
+    #viewer-loading-screen {
+      position: absolute;
+      inset: 0;
+      z-index: 9500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #A7C7E7;
+      transition: opacity 0.35s ease;
+    }
+    #viewer-loading-screen.vls-fade {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .vls-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 32px 44px;
+      background: rgba(255,255,255,0.22);
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 28px rgba(0,0,0,0.14);
+      min-width: 260px;
+      max-width: 90vw;
+    }
+    .vls-title {
+      font-family: "Montserrat", sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      color: #1a3a5c;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+    .vls-bar-track {
+      width: 100%;
+      height: 5px;
+      background: rgba(0,0,0,0.14);
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+    .vls-bar-fill {
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #1a6bbf, #4fa3e8);
+      border-radius: 3px;
+      animation: loading 1.4s ease-in-out infinite;
+    }
+    .vls-status {
+      font-family: "Montserrat", sans-serif;
+      font-size: 12px;
+      color: #1a3a5c;
+      font-weight: 500;
+      text-align: center;
+      min-height: 16px;
+      max-width: 240px;
+      opacity: 0.85;
+    }
+  `;
+  document.head.appendChild(style);
+  const screen = document.createElement("div");
+  screen.id = "viewer-loading-screen";
+  screen.innerHTML = `
+    <div class="vls-card">
+      <div class="vls-title">SmartRPD</div>
+      <div class="vls-bar-track"><div class="vls-bar-fill"></div></div>
+      <div class="vls-status" id="vls-status">Initialising…</div>
+    </div>`;
+  (viewerContainer || document.body).appendChild(screen);
+  window.updateViewerLoading = (label) => {
+    const el = document.getElementById("vls-status");
+    if (el) el.textContent = label || "Loading…";
+  };
+}
+
+function removeViewerLoadingScreen() {
+  const screen = document.getElementById("viewer-loading-screen");
+  if (!screen) return;
+  screen.classList.add("vls-fade");
+  setTimeout(() => {
+    screen.remove();
+    document.getElementById("viewer-loading-screen-style")?.remove();
+  }, 380);
+  delete window.updateViewerLoading;
+}
+
 //The async prevents processing of data before the stuff is loaded in
 (async () => {
   if (!viewerContainer) {
     return;
   }
+  createViewerLoadingScreen();
   const viewerTotalStartedAt = performance.now();
   const pageInitializationStartedAt = performance.now();
   startViewerLoadTimer("viewer: page/viewer initialization");
@@ -5933,6 +6031,7 @@ btnContainer.appendChild(edit2DStatic); */
   const finalSceneRenderStartedAt = performance.now();
   startViewerLoadTimer("viewer: final scene render/update");
   animate();
+  removeViewerLoadingScreen();
   endViewerLoadTimer("viewer: page/viewer initialization");
   addViewerLoadTiming(
     "page/viewer initialization",
