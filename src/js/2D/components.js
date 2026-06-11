@@ -512,6 +512,7 @@ export {
 export {
   getMinorConnectorAssetReference,
   getMinorConnectorImageSize,
+  getMinorConnectorMidOffset,
   getMinorConnectorOffset,
   getMinorConnectorRenderScale,
 } from "./components.minor.js";

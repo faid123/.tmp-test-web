@@ -5,10 +5,13 @@ const MAJOR_TAB = "major";
 const MAJOR_CONNECTOR_EXCLUDED_TOOTH_IDS_BY_COMPONENT = Object.freeze({
   "major-upper-palatal-strap": Object.freeze(new Set(["11", "12", "13", "18", "21", "22", "23", "28"])),
   "major-upper-horseshoe": Object.freeze(new Set(["18", "28"])),
-  "major-upper-palatal-hole": Object.freeze(new Set(["18", "28"])),
+  // AP-strap (palatal hole) and the lower lingual bar may run onto the second molars
+  // (18/28, 38/48) when those teeth anchor the connector (plate when present, mesh when
+  // missing) — user directive. They previously excluded the *8 teeth; now allowed.
+  "major-upper-palatal-hole": Object.freeze(new Set([])),
   "major-upper-palatal-plate": Object.freeze(new Set(["18", "28"])),
   "major-upper-palatal-bar": Object.freeze(new Set(["18", "28"])),
-  "major-lower-lingual-bar": Object.freeze(new Set(["38", "48"])),
+  "major-lower-lingual-bar": Object.freeze(new Set([])),
 });
 
 /** Fallback major-connector id auto-placed on lock (design mode). Upper-arch only for now. */
@@ -310,7 +313,7 @@ export function shouldUseMajorConnectorEndAsset(toothId, teeth) {
  * @param {string} toothId
  * @param {string} jaw
  * @param {Record<string, unknown> | null | undefined} [teeth]
- * @param {{ palatalBarSecondMolarDistal?: boolean }} [options] Palatal bar: when true, `17` / `27` use `{17}_distal.svg` (caller should set this only while `18` / `28` have no palatal-bar placement).
+ * @param {{ palatalBarSecondMolarDistal?: boolean, palatalBarFirstPremolarMesial?: boolean }} [options] Palatal bar: `palatalBarSecondMolarDistal` makes `17` / `27` use `{17}_distal.svg` (set only while `18` / `28` have no palatal-bar placement); `palatalBarFirstPremolarMesial` makes `14` / `24` use `{14}_mesial.svg` (the bar's anterior cap — set whenever the palatal bar is rendering, since the posterior bar span always terminates at 14/24).
  */
 export function getMajorConnectorAssetReference(toothId, jaw, teeth, options) {
   const id = String(toothId);
@@ -327,6 +330,12 @@ export function getMajorConnectorAssetReference(toothId, jaw, teeth, options) {
     if (options?.palatalBarSecondMolarDistal && (id === "17" || id === "27")) {
       if (MAJOR_CONNECTOR_MESIAL_DISTAL_TEMPLATES.has(file)) {
         return `${baseDir}/${file}_distal.svg`;
+      }
+    }
+
+    if (options?.palatalBarFirstPremolarMesial && (id === "14" || id === "24")) {
+      if (MAJOR_CONNECTOR_MESIAL_DISTAL_TEMPLATES.has(file)) {
+        return `${baseDir}/${file}_mesial.svg`;
       }
     }
 

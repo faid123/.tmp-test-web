@@ -168,12 +168,51 @@ function getMinorConnectorDirectionalDelta(toothId, direction) {
   };
 }
 
-// Resolve per-tooth XY offset for minor connector, plus a hand-tuned mesial/distal nudge
-// (`direction` from the placed rest/clasp) so it sits in the correct interproximal gap.
+// Resolve per-tooth XY offset for the minor connector. A solo mesial/distal half passes its
+// `direction` for the hand-tuned nudge; the shared `mid` uses getMinorConnectorMidOffset instead.
 export function getMinorConnectorOffset(toothId, direction) {
   const offset = MINOR_CONNECTOR_OFFSET_BY_TOOTH[String(toothId)];
   const baseX = Number.isFinite(offset?.x) ? offset.x : 0;
   const baseY = Number.isFinite(offset?.y) ? offset.y : 0;
   const delta = getMinorConnectorDirectionalDelta(toothId, direction);
   return { x: baseX + delta.x, y: baseY + delta.y };
+}
+
+/**
+ * Manual (x, y) position for the shared `mid` connector — the one drawn in an embrasure when
+ * both adjacent teeth carry support. Keyed per template tooth (`11`-`18` / `41`-`48`; quadrants
+ * 2 & 3 mirror X automatically). Edit a row by hand to move that tooth's mid connector; +x =
+ * toward the arch/lingual centre. Independent of the solo-half base table above.
+ */
+const MINOR_CONNECTOR_MID_OFFSET_BY_TEMPLATE_TOOTH = Object.freeze({
+  "11": { x: 29, y: 33 },
+  "12": { x: 34, y: 25 },
+  "13": { x: 36, y: 11 },
+  "14": { x: 36, y: -4 },
+  "15": { x: 31, y: -9 },
+  "16": { x: 31, y: -20 },
+  "17": { x: 31, y: -16 },
+  "18": { x: 31, y: -19 },
+  "41": { x: 15, y: -28 },
+  "42": { x: 24, y: -21 },
+  "43": { x: 30, y: -16 },
+  "44": { x: 41, y: -1 },
+  "45": { x: 36, y: 14 },
+  "46": { x: 33, y: 27 },
+  "47": { x: 28, y: 20 },
+  "48": { x: 32, y: 18 },
+});
+
+// Resolve the manual (x, y) offset for the shared mid connector (template lookup; X mirrored for
+// quadrants 2 & 3). Edit MINOR_CONNECTOR_MID_OFFSET_BY_TEMPLATE_TOOTH to reposition.
+export function getMinorConnectorMidOffset(toothId) {
+  const template = getComponentTemplateToothId(toothId);
+  const row = MINOR_CONNECTOR_MID_OFFSET_BY_TEMPLATE_TOOTH[template];
+  if (!row) return { x: 0, y: 0 };
+  const quadrant = Math.floor(Number(toothId) / 10);
+  const mirrorX = quadrant === 2 || quadrant === 3;
+  return {
+    x: (mirrorX ? -1 : 1) * (Number.isFinite(row.x) ? row.x : 0),
+    y: Number.isFinite(row.y) ? row.y : 0,
+  };
 }

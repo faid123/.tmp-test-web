@@ -1,16 +1,10 @@
 import {
   COMPONENT_BY_ID,
   ensureMajorConnectorPlacementsOnSupportedTeeth,
-  ensureMeshPlacementsOnMissingTeeth,
-  ensurePlatePlacementsOnPresentTeeth,
   getDefaultMajorConnectorIdForDesignMode,
-  getDefaultMeshIdForDesignMode,
-  getDefaultPlateIdForDesignMode,
   isBarComponent,
   isBarPlacementSurface,
   isMajorConnectorComponent,
-  isPlateComponentId,
-  meshSelectionContextFromState,
 } from "./components.js";
 import { forEachTooth, TOOTH_ORDER } from "./constants.js";
 import {
@@ -445,15 +439,8 @@ export function syncDesignModeWithLocks(notify) {
   state.designMode = next;
 
   if (next && !prev) {
-    const meshId = getDefaultMeshIdForDesignMode(meshSelectionContextFromState(state), COMPONENT_BY_ID);
-    ensureMeshPlacementsOnMissingTeeth(state.teeth, meshId, COMPONENT_BY_ID);
-    const plateId =
-      state.selectedComponentId &&
-      isPlateComponentId(state.selectedComponentId) &&
-      COMPONENT_BY_ID.has(state.selectedComponentId)
-        ? state.selectedComponentId
-        : getDefaultPlateIdForDesignMode(COMPONENT_BY_ID);
-    ensurePlatePlacementsOnPresentTeeth(state.teeth, plateId, COMPONENT_BY_ID);
+    // Mesh and plate are no longer auto-placed on locking (user directive) — they come from
+    // the loaded design or are placed by hand. Only the major connector is auto-seeded.
     const majorId =
       state.selectedComponentId &&
       isMajorConnectorComponent(state.selectedComponentId) &&

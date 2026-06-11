@@ -21,6 +21,7 @@ import {
   getBarPlacementRenderScale,
   getMinorConnectorAssetReference,
   getMinorConnectorImageSize,
+  getMinorConnectorMidOffset,
   getMinorConnectorOffset,
   getMinorConnectorRenderScale,
   getMajorConnectorPlacementImageSize,
@@ -317,7 +318,8 @@ function restMarkerAnchorSurface(placementSurface, toothId) {
  * Which embrasure side(s) a tooth's minor connector should attach on, from its placed
  * components — mirrors the desktop `GenericTooth.GetConnectorData` + `isMesio`: a rest/bar
  * sits on its own surface; a retentive clasp anchors at its ORIGIN, opposite the tip
- * (a mesial-tip clasp connects distally). Returns `{ mesial, distal }` booleans.
+ * (a mesial-tip clasp connects distally). A reciprocating clasp is not a retainer, so it does
+ * not join a minor connector and is ignored here. Returns `{ mesial, distal }` booleans.
  */
 function getMinorConnectorSupportSides(tooth) {
   const sides = { mesial: false, distal: false };
@@ -326,7 +328,7 @@ function getMinorConnectorSupportSides(tooth) {
     const id = placement?.componentId;
     const surface = normalizeSurface(placement?.surface);
     if (!surface) continue;
-    if (isRestComponent(id) || isBarComponent(id) || isReciprocatingClaspComponent(id)) {
+    if (isRestComponent(id) || isBarComponent(id)) {
       if (surface.includes("mesial")) sides.mesial = true;
       else if (surface.includes("distal")) sides.distal = true;
       else if (surface === "lingual") { sides.mesial = true; sides.distal = true; } // full cingulum
@@ -340,26 +342,27 @@ function getMinorConnectorSupportSides(tooth) {
 }
 
 /**
- * Whether the embrasure on `side` of `toothId` is shared — the neighbouring tooth across
- * it also carries a minor-connector support facing back. A shared embrasure draws the
- * `mid` (full) connector on both teeth; a solo side draws the `mesial`/`distal` half.
+ * If the embrasure on `side` of `toothId` is shared — the neighbouring tooth across it also
+ * carries a minor-connector support facing back — return that neighbour's tooth id, else null.
+ * A shared embrasure gets a single `mid` (full) connector spanning the gap; a solo side draws
+ * the `mesial`/`distal` half. (Caller renders the shared `mid` once, from the lower-id tooth.)
  */
-function isMinorConnectorEmbrasureShared(toothId, jaw, side) {
+function getMinorConnectorSharedNeighborId(toothId, jaw, side) {
   const order = TOOTH_ORDER[jaw];
-  if (!Array.isArray(order)) return false;
+  if (!Array.isArray(order)) return null;
   const idx = order.indexOf(String(toothId));
-  if (idx < 0) return false;
+  if (idx < 0) return null;
   const mid = order.length / 2;
   // Mesial = toward the midline (order centre); distal = toward the back (order ends).
   const step = side === "mesial" ? (idx < mid ? 1 : -1) : (idx < mid ? -1 : 1);
   const neighborId = order[idx + step];
   const neighbor = neighborId ? state.teeth[neighborId] : null;
-  if (!neighbor) return false;
+  if (!neighbor) return null;
   // Side of the neighbour that faces back toward this tooth (mesial-to-mesial at the midline).
   const nIdx = order.indexOf(neighborId);
   const neighborMesialId = order[nIdx + (nIdx < mid ? 1 : -1)];
   const facingSide = neighborMesialId === String(toothId) ? "mesial" : "distal";
-  return Boolean(getMinorConnectorSupportSides(neighbor)[facingSide]);
+  return getMinorConnectorSupportSides(neighbor)[facingSide] ? String(neighborId) : null;
 }
 
 /** Build + append one minor-connector image for a tooth side ("mesial"/"distal") and variant. */
@@ -367,7 +370,9 @@ function appendMinorConnectorVisual(group, toothId, jaw, variant, side, mirrored
   const href = getMinorConnectorAssetReference(toothId, variant);
   const size = getMinorConnectorImageSize(toothId, variant);
   if (!href || !size) return;
-  const offset = getMinorConnectorOffset(toothId, side);
+  const offset = variant === "mid"
+    ? getMinorConnectorMidOffset(toothId)
+    : getMinorConnectorOffset(toothId, side);
   const scale = getMinorConnectorRenderScale(jaw);
   const width = size.width * scale;
   const height = size.height * scale;
@@ -411,13 +416,22 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
     return Boolean(componentId && state.selectedComponentId === componentId);
   };
 
-  // A minor connector per supported embrasure side: the `mid` (full) variant when the
-  // neighbour across the embrasure also has support facing back, else the mesial/distal half.
+  // A minor connector per supported embrasure side. When the neighbour across the embrasure
+  // also has support facing back, the gap is bridged by a single `mid` (full) connector drawn
+  // ONCE so it isn't doubled. The owner is the higher-id tooth — the more-distal one, whose rest
+  // faces the gap on its MESIAL side (e.g. distal rest on 44 + mesial rest on 45 -> 45 owns it).
+  // The shared mid uses that tooth's mid offset; a solo side draws its own directional half.
   const minorConnectorSupportSides = getMinorConnectorSupportSides(tooth);
   for (const side of ["mesial", "distal"]) {
     if (!minorConnectorSupportSides[side]) continue;
-    const variant = isMinorConnectorEmbrasureShared(toothId, jaw, side) ? "mid" : side;
-    appendMinorConnectorVisual(group, toothId, jaw, variant, side, mirrored);
+    const sharedNeighborId = getMinorConnectorSharedNeighborId(toothId, jaw, side);
+    if (sharedNeighborId) {
+      if (Number(toothId) > Number(sharedNeighborId)) {
+        appendMinorConnectorVisual(group, toothId, jaw, "mid", null, mirrored);
+      }
+      continue;
+    }
+    appendMinorConnectorVisual(group, toothId, jaw, side, side, mirrored);
   }
 
   for (const placement of tooth.componentPlacements) {
@@ -1371,6 +1385,11 @@ function createMajorConnectorVisual(majorComponentId, tooth, toothId, jaw) {
     palatalBarSecondMolarDistal:
       isPalatalBarMajorComponent(majorComponentId) &&
       shouldUsePalatalBarSecondMolarDistalTemplate(toothId, state.teeth),
+    // The palatal bar's posterior span always terminates at 14/24, so cap those
+    // with the mesial end art even when the load-time auto-placer tagged 13/23.
+    palatalBarFirstPremolarMesial:
+      isPalatalBarMajorComponent(majorComponentId) &&
+      (toothId === "14" || toothId === "24"),
   });
   if (!connectorHref) return null;
 

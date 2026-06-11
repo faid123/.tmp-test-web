@@ -468,7 +468,10 @@ export function getBarSuggestibleToothIdSet(teethById, jaw) {
  * Resolve bar surface from nearest mesh-bearing tooth:
  * - distance 1 => d1
  * - distance 2 => d2
- * - side => mesial/distal (relative to each side of the arch)
+ * - side => mesial/distal (relative to each side of the arch). NB this label is a
+ *   name matched to the per-tooth bar offset/asset tuning in
+ *   `BAR_PLACEMENT_OFFSET_BY_TOOTH_SURFACE` — terminal molars (18/28/38/48) are only
+ *   tuned for the `distal` side, so don't invert this mapping without re-tuning them.
  */
 // Resolve bar surface for a selected suggestible tooth.
 export function getBarPlacementSurfaceForTooth(toothId, jaw, teethById) {

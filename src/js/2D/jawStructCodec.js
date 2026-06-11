@@ -271,16 +271,18 @@ export function resolveJawStructDesign(parsed) {
           entry.placements.push({ componentId: id, surface: claspSurfaceFromField(f, orientField) });
         } else reportUnmapped(RETAINER_TYPE_FIELD, retCode);
       }
+    }
 
-      // Reciprocating element — only on teeth that carry a retainer (reciprocation
-      // pairs with retention; this guard also filters the desktop's present=2
-      // default noise). Plates use a null surface; a reciprocating clasp gets a
-      // lingual anchor (reciprocation sits opposite the retentive arm).
-      const recipId = RECIPROCATING_TYPE.get(Number(f[RECIPROCATING_FIELD]));
-      if (recipId) {
-        const surface = recipId === "reciprocating-clasp" ? "mesial_lingual" : null;
-        entry.placements.push({ componentId: recipId, surface });
-      }
+    // Reciprocating element (Reciprocating.Tooth Type): 1=reciprocating-clasp, 2=plate-prox,
+    // 3=plate-crossmesh — taken literally, drawn on any present tooth that has the value (no
+    // filtering). The encoder only writes a non-zero value where a reciprocating component is
+    // actually placed, so this stays accurate for web/from-scratch designs; a raw desktop file
+    // that defaults 2 onto every present tooth will therefore show a plate on each of them.
+    // Plate uses a null surface; a reciprocating clasp gets a lingual anchor (opposite the arm).
+    const recipId = RECIPROCATING_TYPE.get(Number(f[RECIPROCATING_FIELD]));
+    if (recipId) {
+      const surface = recipId === "reciprocating-clasp" ? "mesial_lingual" : null;
+      entry.placements.push({ componentId: recipId, surface });
     }
   }
 
@@ -429,6 +431,19 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
     barType = barPl && String(barPl.surface || "").includes("distal") ? 1 : 0;
   }
 
+  // Reciprocating: web-owned, derived from the placed reciprocating clasp / plate so it
+  // round-trips on save (previously only preserved from raw, so web-placed reciprocating
+  // clasps and plates were lost). Falls back to the loaded value / desktop default when no
+  // reciprocating component is placed. Decode pairs this with a retainer on the same tooth.
+  let reciprocatingType;
+  if (comps.includes("reciprocating-clasp")) reciprocatingType = 1;
+  else if (comps.includes("plate-prox")) reciprocatingType = 2;
+  else if (comps.includes("plate-crossmesh")) reciprocatingType = 3;
+  // No reciprocating component placed: keep the loaded raw value, else 0. We no longer invent
+  // the desktop's present->2 default, so a from-scratch/web design only marks reciprocating on
+  // teeth that actually have it (keeps the field a deliberate subset, not all-tooth noise).
+  else reciprocatingType = Number(rawOr(RECIPROCATING_FIELD, 0));
+
   const fields = [
     ["Tooth Main.Tooth Index.Major Index", maj],
     ["Tooth Main.Tooth Index.Minor Index", min],
@@ -455,7 +470,7 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
     ["Tooth Main.Tooth Retainer.Retainer Ring Type", rawOr(RETAINER_RING_TYPE_FIELD, 0)],
     ["Tooth Main.Tooth Retainer.Retainer Bar Type", barType],
     ["Tooth Main.Tooth Retainer.Retainer Bar Category", barCategory],
-    ["Tooth Main.Tooth Reciprocating.Tooth Type", rawOr(RECIPROCATING_FIELD, present === 0 ? 2 : 0)],
+    ["Tooth Main.Tooth Reciprocating.Tooth Type", reciprocatingType],
   ];
   return fields.map(([k, v]) => `Tooth ${arrayIdx}: ${k}: ${v}`);
 }
