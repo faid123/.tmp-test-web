@@ -376,7 +376,7 @@ header h1 {
   .viewer-meta-bubble {
     flex: 0 0 auto;
     width: min(220px, 64vw);
-    font-size: 12px !important;
+    font-size: 13px !important;
   }
 
   #viewer-meta-bar #chat-icon {

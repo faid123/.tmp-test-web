@@ -2557,9 +2557,11 @@ function syncPolylineOverlayVisibility() {
 
   if (polylineMenuButton) {
     const componentCount = getPolylineComponentSummary().filter(({ points }) => points > 0).length;
-    polylineMenuButton.textContent = isPolylineOverlayVisible
+    const _polylineLabel = isPolylineOverlayVisible
       ? `Polylines (${componentCount})`
       : `Polylines hidden (${componentCount})`;
+    polylineMenuButton.setAttribute("aria-label", _polylineLabel);
+    polylineMenuButton.title = _polylineLabel;
   }
   syncPolylineFocusMode();
 }
@@ -2674,7 +2676,7 @@ function updatePolylineComponentMenu() {
   summary.forEach(({ key, color, segments, points }) => {
     const row = document.createElement("label");
     row.style.display = "grid";
-    row.style.gridTemplateColumns = "18px 12px 1fr";
+    row.style.gridTemplateColumns = "18px 14px 1fr";
     row.style.alignItems = "center";
     row.style.gap = "8px";
     row.style.padding = "6px 0";
@@ -2692,16 +2694,16 @@ function updatePolylineComponentMenu() {
     });
 
     const swatch = document.createElement("span");
-    swatch.style.width = "10px";
-    swatch.style.height = "10px";
+    swatch.style.width = "14px";
+    swatch.style.height = "14px";
     swatch.style.borderRadius = "50%";
     swatch.style.background = `#${color.toString(16).padStart(6, "0")}`;
     swatch.style.display = "inline-block";
 
     const text = document.createElement("span");
     text.textContent = `${formatPolylineComponentLabel(key)} (${segments} seg, ${points} pts)`;
-    text.style.fontSize = "12px";
-    text.style.lineHeight = "1.25";
+    text.style.fontSize = "15px";
+    text.style.lineHeight = "1.3";
 
     row.appendChild(checkbox);
     row.appendChild(swatch);
@@ -2742,7 +2744,10 @@ function createPolylineVisibilityToggle(container, domElement) {
   const button = document.createElement("button");
   button.id = "polyline-visibility-toggle";
   button.type = "button";
-  button.textContent = "Polylines (0)";
+  button.setAttribute("aria-label", "Polylines (0)");
+  button.title = "Polylines (0)";
+  const _polylineBp = window.location.hostname.includes("github.io") ? "/.tmp-test-web" : "";
+  button.innerHTML = `<img src="${_polylineBp}/assets/Icon_Hide_SkeletalPrev.png" alt="Polylines">`;
   button.style.padding = "10px 14px";
   button.style.border = "none";
   button.style.borderRadius = "5px";
@@ -2768,9 +2773,9 @@ function createPolylineVisibilityToggle(container, domElement) {
   panel.style.background = "rgba(255, 255, 255, 0.96)";
   panel.style.color = "#111827";
   panel.style.border = "1px solid rgba(17, 24, 39, 0.14)";
-  panel.style.borderRadius = "8px";
+  panel.style.borderRadius = "10px";
   panel.style.boxShadow = "0 8px 24px rgba(0, 0, 0, 0.18)";
-  panel.style.padding = "10px";
+  panel.style.padding = "14px";
   panel.style.pointerEvents = "auto";
   panel.addEventListener("pointerdown", (event) => {
     event.stopPropagation();
@@ -2784,29 +2789,27 @@ function createPolylineVisibilityToggle(container, domElement) {
     const tablet = window.innerWidth <= 1024;
     const compact = window.innerWidth <= 640 || window.innerHeight <= 720;
     button.style.width = phone ? "128px" : tablet ? "140px" : "100%";
-    button.style.height = phone ? "60px" : tablet ? "64px" : "40px";
+    button.style.height = phone ? "60px" : tablet ? "64px" : "56px";
     if (phone) {
       panel.style.right = "12px";
       panel.style.top = "auto";
       panel.style.bottom = "calc(86px + env(safe-area-inset-bottom, 0px))";
       panel.style.transform = "none";
-      panel.style.width = "min(340px, calc(100vw - 24px))";
+      panel.style.width = "min(300px, calc(100vw - 24px))";
       panel.style.maxHeight = "calc(100% - 112px)";
     } else if (tablet) {
       panel.style.right = "16px";
       panel.style.top = "auto";
       panel.style.bottom = "calc(130px + env(safe-area-inset-bottom, 0px))";
       panel.style.transform = "none";
-      panel.style.width = "min(360px, calc(100vw - 32px))";
+      panel.style.width = "min(320px, calc(100vw - 32px))";
       panel.style.maxHeight = "calc(100% - 154px)";
     } else {
       panel.style.right = compact ? "248px" : "258px";
       panel.style.top = "50%";
       panel.style.bottom = "auto";
       panel.style.transform = "translateY(-50%)";
-      panel.style.width = compact
-        ? "min(320px, calc(100vw - 280px))"
-        : "min(360px, calc(100vw - 290px))";
+      panel.style.width = "min(400px, calc(100vw - 270px))";
       panel.style.maxHeight = compact
         ? "calc(100% - 24px)"
         : "calc(100% - 40px)";
@@ -2821,7 +2824,7 @@ function createPolylineVisibilityToggle(container, domElement) {
   actions.style.position = "sticky";
   actions.style.top = "0";
   actions.style.zIndex = "1";
-  actions.style.paddingBottom = "8px";
+  actions.style.paddingBottom = "6px";
   actions.style.background = "rgba(255, 255, 255, 0.96)";
 
   const makeActionButton = (label, onClick) => {
@@ -2829,12 +2832,12 @@ function createPolylineVisibilityToggle(container, domElement) {
     actionButton.type = "button";
     actionButton.textContent = label;
     actionButton.style.flex = "1";
-    actionButton.style.padding = "6px 8px";
+    actionButton.style.padding = "8px 10px";
     actionButton.style.border = "1px solid rgba(17, 24, 39, 0.16)";
-    actionButton.style.borderRadius = "5px";
+    actionButton.style.borderRadius = "6px";
     actionButton.style.background = "#f9fafb";
     actionButton.style.cursor = "pointer";
-    actionButton.style.fontSize = "12px";
+    actionButton.style.fontSize = "14px";
     actionButton.addEventListener("click", onClick);
     return actionButton;
   };
@@ -2844,24 +2847,33 @@ function createPolylineVisibilityToggle(container, domElement) {
   });
   closePolylineButton.title = "Close polylines";
   closePolylineButton.setAttribute("aria-label", "Close polylines");
-  closePolylineButton.style.flex = "0 0 34px";
+  closePolylineButton.style.flex = "0 0 44px";
   closePolylineButton.style.background = "#b91c1c";
   closePolylineButton.style.borderColor = "#ef4444";
   closePolylineButton.style.color = "#ffffff";
   closePolylineButton.style.fontSize = "20px";
   closePolylineButton.style.fontWeight = "800";
   actions.appendChild(closePolylineButton);
-  actions.appendChild(
-    makeActionButton("All", () => {
-      setPolylineMenuVisibility(() => true, true);
-    })
-  );
-  actions.appendChild(
-    makeActionButton("None", () => {
-      setPolylineMenuVisibility(() => true, false);
-    })
-  );
-  actions.appendChild(makeActionButton("Reset", resetPolylineEdits));
+  let _polylineAllVisible = true;
+  const _eyeToggleBtn = makeActionButton("", () => {
+    _polylineAllVisible = !_polylineAllVisible;
+    setPolylineMenuVisibility(() => true, _polylineAllVisible);
+    _eyeToggleBtn.innerHTML = _polylineAllVisible
+      ? '<i class="fa fa-eye" aria-hidden="true"></i>'
+      : '<i class="fa fa-eye-slash" aria-hidden="true"></i>';
+    const _lbl = _polylineAllVisible ? "Hide all" : "Show all";
+    _eyeToggleBtn.title = _lbl;
+    _eyeToggleBtn.setAttribute("aria-label", _lbl);
+  });
+  _eyeToggleBtn.innerHTML = '<i class="fa fa-eye" aria-hidden="true"></i>';
+  _eyeToggleBtn.title = "Hide all";
+  _eyeToggleBtn.setAttribute("aria-label", "Hide all");
+  actions.appendChild(_eyeToggleBtn);
+  const _resetBtn = makeActionButton("", resetPolylineEdits);
+  _resetBtn.innerHTML = `<img src="${_polylineBp}/assets/reset.png" alt="Reset" style="width:22px;height:22px;object-fit:contain;display:block;margin:auto;pointer-events:none;">`;
+  _resetBtn.title = "Reset polylines";
+  _resetBtn.setAttribute("aria-label", "Reset polylines");
+  actions.appendChild(_resetBtn);
 
   const list = document.createElement("div");
   panel.appendChild(actions);
@@ -3291,11 +3303,11 @@ function createViewerLoadingScreen() {
       border-radius: 7px;
     }
     #vls-progress::-webkit-progress-value {
-      background: linear-gradient(90deg, #1a6bbf, #4fa3e8);
+      background: linear-gradient(90deg, #d97706, #fbbf24);
       border-radius: 7px;
     }
     #vls-progress::-moz-progress-bar {
-      background: linear-gradient(90deg, #1a6bbf, #4fa3e8);
+      background: linear-gradient(90deg, #d97706, #fbbf24);
       border-radius: 7px;
     }
     .vls-info-row {
@@ -3307,14 +3319,14 @@ function createViewerLoadingScreen() {
     }
     #vls-percent {
       font-family: "Montserrat", sans-serif;
-      font-size: 13px;
+      font-size: 15px;
       font-weight: 700;
       color: #1a3a5c;
       min-width: 46px;
     }
     #vls-display {
       font-family: "Montserrat", sans-serif;
-      font-size: 12px;
+      font-size: 14px;
       color: rgba(26,58,92,0.75);
       text-align: right;
       flex: 1;
@@ -3324,7 +3336,7 @@ function createViewerLoadingScreen() {
     }
     .vls-status {
       font-family: "Montserrat", sans-serif;
-      font-size: 12px;
+      font-size: 14px;
       color: #1a3a5c;
       font-weight: 500;
       text-align: center;
@@ -3340,12 +3352,12 @@ function createViewerLoadingScreen() {
     <div class="vls-card">
       <img class="vls-logo" src="../../assets/profile.png" alt="SmartRPD">
       <div class="vls-bar-track"><div class="vls-bar-fill"></div></div>
+      <div class="vls-status" id="vls-status">Initialising…</div>
       <progress id="vls-progress" value="0" max="100"></progress>
       <div class="vls-info-row">
         <span id="vls-percent"></span>
         <span id="vls-display"></span>
       </div>
-      <div class="vls-status" id="vls-status">Initialising…</div>
     </div>`;
   (viewerContainer || document.body).appendChild(screen);
   window.viewerLoadingEls = {
@@ -3376,6 +3388,7 @@ function removeViewerLoadingScreen() {
   if (!viewerContainer) {
     return;
   }
+  const basePath = window.location.hostname.includes("github.io") ? "/.tmp-test-web" : "";
   createViewerLoadingScreen();
   const viewerTotalStartedAt = performance.now();
   const pageInitializationStartedAt = performance.now();
@@ -3428,26 +3441,27 @@ function removeViewerLoadingScreen() {
     window.lastEdited = unixToHumanReadable(positionData.last_updated);
     window.username = positionData.username;
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Error fetching case info:", error);
   }
-  //for all the text info — added to sidebar
-  const time = unixToHumanReadable(positionData.creation_date);
-  const update_time = unixToHumanReadable(positionData.last_updated);
 
   const metaDatesSection = document.createElement("div");
   metaDatesSection.id = "viewer-meta-dates";
   metaDatesSection.style.order = "85";
   getViewerRightNav().appendChild(metaDatesSection);
 
-  createTextbox("Creation Date: " + time, "bottom-left");
-  //createTextbox("Case Name: " + positionData.case_id, 'bottom-right');
-  createTextbox(
-    "Last Updated: " +
-      update_time +
-      " — " +
-      positionData.username,
-    "bottom-left2"
-  );
+  //for all the text info — added to sidebar
+  if (positionData) {
+    const time = unixToHumanReadable(positionData.creation_date);
+    const update_time = unixToHumanReadable(positionData.last_updated);
+    createTextbox("Creation Date: " + time, "bottom-left");
+    createTextbox(
+      "Last Updated: " +
+        update_time +
+        " — " +
+        positionData.username,
+      "bottom-left2"
+    );
+  }
 
   try {
     const thumbnailData = await thumbnailPromise;
@@ -3601,14 +3615,18 @@ btnContainer.appendChild(edit2DStatic); */
 
             const approve2D = document.createElement("button");
             approve2D.className = "smart-btn approve";
-            approve2D.textContent = "Approve 2D";
+            approve2D.setAttribute("aria-label", "Approve 2D");
+            approve2D.title = "Approve 2D";
+            approve2D.innerHTML = `<img src="${basePath}/assets/Icon_approve.png" alt="Approve 2D">`;
             approve2D.onclick = () =>
               sendEmail("Your 2D Design has been APPROVED.");
             btnContainer2D.appendChild(approve2D);
 
             const edit2D = document.createElement("button");
             edit2D.className = "smart-btn edit";
-            edit2D.textContent = "Edit 2D";
+            edit2D.setAttribute("aria-label", "Edit 2D");
+            edit2D.title = "Edit 2D";
+            edit2D.innerHTML = `<img src="${basePath}/assets/Icon_edit.png" alt="Edit 2D">`;
             edit2D.onclick = () =>
               sendEmail(
                 "Please do some modifications on 2D Design. See Notebox."
@@ -3618,7 +3636,9 @@ btnContainer.appendChild(edit2DStatic); */
             // 🟣 创建 Annotate 按钮（跳转到 2DAnnotate.html）
             const annotateBtn = document.createElement("button");
             annotateBtn.className = "smart-btn annotate";
-            annotateBtn.textContent = "Annotate";
+            annotateBtn.setAttribute("aria-label", "Annotate");
+            annotateBtn.title = "Annotate";
+            annotateBtn.innerHTML = `<img src="${basePath}/assets/Icon_annotate.png" alt="Annotate">`;
 
             annotateBtn.addEventListener("click", (e) => {
               e.stopPropagation();
@@ -3695,7 +3715,9 @@ btnContainer.appendChild(edit2DStatic); */
             // btnContainer2D.appendChild(historyBtn);
             const historyBtn = document.createElement("button");
             historyBtn.className = "smart-btn history";
-            historyBtn.textContent = "History";
+            historyBtn.setAttribute("aria-label", "History");
+            historyBtn.title = "History";
+            historyBtn.innerHTML = `<img src="${basePath}/assets/Icon_history.png" alt="History">`;
 
             historyBtn.addEventListener("click", (e) => {
               e.stopPropagation();
@@ -3924,8 +3946,10 @@ btnContainer.appendChild(edit2DStatic); */
 
           // Create "Approve 3D" button
           const approveButton3D = document.createElement("button");
-          approveButton3D.textContent = "Approve 3D";
           approveButton3D.className = "smart-btn approve";
+          approveButton3D.setAttribute("aria-label", "Approve 3D");
+          approveButton3D.title = "Approve 3D";
+          approveButton3D.innerHTML = `<img src="${basePath}/assets/Icon_approve.png" alt="Approve 3D">`;
           approveButton3D.addEventListener("click", function () {
             sendEmail("Your 3D Design has been APPROVED.");
           });
@@ -3933,8 +3957,10 @@ btnContainer.appendChild(edit2DStatic); */
 
           // Create "Edit 3D" button
           const editButton3D = document.createElement("button");
-          editButton3D.textContent = "Edit 3D";
           editButton3D.className = "smart-btn edit";
+          editButton3D.setAttribute("aria-label", "Edit 3D");
+          editButton3D.title = "Edit 3D";
+          editButton3D.innerHTML = `<img src="${basePath}/assets/Icon_edit.png" alt="Edit 3D">`;
           editButton3D.addEventListener("click", function () {
             sendEmail(
               "Please do some modifications on 3D Design. See Notebox."
@@ -3966,8 +3992,10 @@ btnContainer.appendChild(edit2DStatic); */
           closeEmailPopupBtn.className = "smart-btn mail-cancel";
 
           const addEmailBtn = document.createElement("button");
-          addEmailBtn.textContent = "Add to Mail";
           addEmailBtn.className = "smart-btn mail-open";
+          addEmailBtn.setAttribute("aria-label", "Add to Mail");
+          addEmailBtn.title = "Add to Mail";
+          addEmailBtn.innerHTML = `<img src="${basePath}/assets/Icon_addtomail2.png" alt="Add to Mail">`;
           addEmailBtn.addEventListener("click", () => {
             emailWrapperContainer.classList.remove("hidden");
             emailInput.focus();
@@ -4031,8 +4059,10 @@ btnContainer.appendChild(edit2DStatic); */
           // Create "Load Other STLs" button
           const loadOtherStlButton = document.createElement("button");
           loadOtherStlButton.id = "center-load-button";
-          loadOtherStlButton.textContent = "Show me 3D RPD design";
           loadOtherStlButton.className = "smart-btn other-stl";
+          loadOtherStlButton.setAttribute("aria-label", "Show me 3D RPD design");
+          loadOtherStlButton.title = "Show me 3D RPD design";
+          loadOtherStlButton.innerHTML = `<img src="${basePath}/assets/Icon_showdesign2.png" alt="Show me 3D RPD design">`;
           loadOtherStlButton.addEventListener("click", () => {
             loadAllSTLSlots(); // You can change slot number accordingly
 
@@ -4048,8 +4078,10 @@ btnContainer.appendChild(edit2DStatic); */
           btnContainer3D.appendChild(loadOtherStlButton);
 
           const legendToggleBtn = document.createElement("button");
-          legendToggleBtn.textContent = "Measurement Legend";
           legendToggleBtn.className = "smart-btn legend-toggle-btn";
+          legendToggleBtn.setAttribute("aria-label", "Heatmap");
+          legendToggleBtn.title = "Heatmap";
+          legendToggleBtn.innerHTML = `<img src="${basePath}/assets/Icon_heatmap2.png" alt="Heatmap">`;
           legendToggleBtn.addEventListener("click", () => {
             window.toggleMeasurementLegend?.();
           });
@@ -4164,6 +4196,24 @@ btnContainer.appendChild(edit2DStatic); */
   .smart-btn:hover {
       transform: scale(1.05);
       filter: brightness(1.1);
+  }
+
+  .smart-btn img {
+      width: 36px;
+      height: 36px;
+      object-fit: contain;
+      display: block;
+      margin: 0 auto;
+      pointer-events: none;
+  }
+
+  #polyline-visibility-toggle img {
+      width: 36px;
+      height: 36px;
+      object-fit: contain;
+      display: block;
+      margin: 0 auto;
+      pointer-events: none;
   }
 
   .smart-btn.nudge {
@@ -4305,11 +4355,12 @@ btnContainer.appendChild(edit2DStatic); */
   #hamburger-drawer-close {
     width: 30px;
     height: 30px;
-    border: 1px solid rgba(255, 255, 255, 0.22);
+    border: 1px solid #ef4444;
     border-radius: 5px;
-    background: rgba(255, 255, 255, 0.08);
+    background: #b91c1c;
     color: #ffffff;
     font-size: 20px;
+    font-weight: 800;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -4352,9 +4403,10 @@ btnContainer.appendChild(edit2DStatic); */
       top: 16px;
       left: auto;
       right: 0;
-      bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+      bottom: auto;
       width: 176px;
-      max-height: none;
+      height: auto;
+      max-height: calc(100dvh - 136px - env(safe-area-inset-bottom, 0px));
       border-left: 1px solid rgba(255, 255, 255, 0.18);
       border-top: none;
       border-radius: 16px 0 0 16px;
@@ -4429,7 +4481,7 @@ btnContainer.appendChild(edit2DStatic); */
 		position: static;
 		display: flex;
 		flex-direction: column;
-		gap: 10px;
+		gap: 6px;
 		z-index: 1000;
         pointer-events: none;
 	}
@@ -4585,15 +4637,18 @@ btnContainer.appendChild(edit2DStatic); */
 
   .preset-view-center {
     left: 69px;
-    top: 66px;
-    width: 58px;
-    height: 58px;
+    top: 74px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    overflow: hidden;
   }
 
   .preset-view-center .preset-view-face {
     clip-path: none;
     background: url(${basePath}/assets/Icon_CenterTeethButton.png) center / contain no-repeat;
     border: 0;
+    border-radius: 50%;
   }
 
   .preset-view-front {
@@ -4621,7 +4676,7 @@ btnContainer.appendChild(edit2DStatic); */
 
   .preset-view-bottom {
     left: 83px;
-    top: 120px;
+    top: 132px;
     width: 36px;
     height: 58px;
   }
@@ -5031,7 +5086,9 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     #hamburger-drawer-content {
+      flex: 0 0 auto;
       align-items: center;
+      justify-content: center;
       gap: 8px;
       padding: 12px 10px;
     }
@@ -5476,8 +5533,23 @@ btnContainer.appendChild(edit2DStatic); */
 
 .smart-btn-container-2d {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   justify-content: center;
+  flex-wrap: wrap;
+}
+
+.smart-btn-container-2d .smart-btn {
+  min-width: 0;
+  width: 52px;
+  height: 52px;
+  padding: 8px;
+  border-radius: 10px;
+  flex: 0 0 auto;
+}
+
+.smart-btn-container-2d .smart-btn img {
+  width: 30px;
+  height: 30px;
 }
 
 
@@ -5994,7 +6066,7 @@ btnContainer.appendChild(edit2DStatic); */
     textbox.style.border = "1px solid rgba(255, 255, 255, 0.12)";
     textbox.style.borderRadius = "5px";
     textbox.style.fontFamily = "Arial, sans-serif";
-    textbox.style.fontSize = "11px";
+    textbox.style.fontSize = "14px";
     textbox.style.color = "rgba(255, 255, 255, 0.75)";
     textbox.style.lineHeight = "1.4";
     textbox.style.wordBreak = "break-word";

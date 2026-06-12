@@ -3,7 +3,6 @@ import { toast } from "./toast.js";
 import { confirmModal } from "./confirmModal.js";
 import { setupConnectivityIndicator } from "./connectivityIndicator.js";
 import { setupAppSidebar } from "./appSidebar.js";
-import { toggleChat } from "./chat.js";
 
 function getLoggedInUser() {
   const user = localStorage.getItem("loggedInUser");
@@ -957,12 +956,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Footer chat: the case list has no ?id= in its URL, so feed the chat widget
   // the currently selected case (encrypted the same way we build annotation
   // links). Requires a case to be selected in the table first.
-  document.getElementById("footerChatBtn")?.addEventListener("click", () => {
+  document.getElementById("footerChatBtn")?.addEventListener("click", async () => {
     const caseId = window.selectedCaseId;
     if (caseId == null) {
       toast.info("Select a case first to open its chat.");
       return;
     }
+    const { toggleChat } = await import("./chat.js");
     toggleChat(lol(caseId));
   });
   updateThumbnail();

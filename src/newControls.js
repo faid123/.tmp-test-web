@@ -10,7 +10,7 @@ style.textContent = `
     order: 50;
     z-index: 1001;
     width: 100%;
-    height: 40px;
+    height: 56px;
     padding: 0 14px;
     border: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 6px;
@@ -563,8 +563,10 @@ function createComponentPanel(groups) {
   toggle.id = "component-panel-toggle";
   toggle.className = "component-panel-toggle";
   toggle.type = "button";
-  toggle.textContent = "Objects";
+  toggle.setAttribute("aria-label", "Objects");
+  toggle.title = "Objects";
   toggle.setAttribute("aria-expanded", "false");
+  toggle.innerHTML = `<img src="${basePath}/assets/Icon_objects3.png" alt="Objects" style="width:36px;height:36px;object-fit:contain;display:block;margin:auto;pointer-events:none;">`;
 
   const panel = document.createElement("div");
   panel.id = "component-panel";

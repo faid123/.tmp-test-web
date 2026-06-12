@@ -37,7 +37,9 @@ export class ApiClient {
 
     const contentLength = response.headers.get('content-length');
     if (!contentLength) {
-      throw new Error('Content-Length response header unavailable');
+      // Server used chunked transfer encoding — no progress bar possible.
+      if (container) document.body.removeChild(container);
+      return response.json();
     }
 
     const totalBytes = parseInt(contentLength, 10);

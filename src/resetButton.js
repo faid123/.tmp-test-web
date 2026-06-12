@@ -199,7 +199,7 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
     legendHeader.className = 'legend-header';
 
     const legendHeading = document.createElement('strong');
-    legendHeading.textContent = 'Measurement Legend';
+    legendHeading.textContent = 'Heatmap';
 
     const legendClose = document.createElement('button');
     legendClose.type = 'button';
