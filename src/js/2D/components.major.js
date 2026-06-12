@@ -2,15 +2,17 @@ import { TOOTH_ORDER, TOOTH_POSITION_MAP } from "./constants.js";
 
 const MAJOR_TAB = "major";
 
+// No major connector excludes the third molars (*8: 18/28/38/48) anymore — per
+// user directive, every connector may run onto / span the *8 teeth when those
+// teeth anchor it (plate when present, mesh when missing). The only remaining
+// exclusions are the palatal-strap's *anterior* teeth (11–13 / 21–23), which is
+// a separate rule unrelated to *8.
 const MAJOR_CONNECTOR_EXCLUDED_TOOTH_IDS_BY_COMPONENT = Object.freeze({
-  "major-upper-palatal-strap": Object.freeze(new Set(["11", "12", "13", "18", "21", "22", "23", "28"])),
-  "major-upper-horseshoe": Object.freeze(new Set(["18", "28"])),
-  // AP-strap (palatal hole) and the lower lingual bar may run onto the second molars
-  // (18/28, 38/48) when those teeth anchor the connector (plate when present, mesh when
-  // missing) — user directive. They previously excluded the *8 teeth; now allowed.
+  "major-upper-palatal-strap": Object.freeze(new Set(["11", "12", "13", "21", "22", "23"])),
+  "major-upper-horseshoe": Object.freeze(new Set([])),
   "major-upper-palatal-hole": Object.freeze(new Set([])),
-  "major-upper-palatal-plate": Object.freeze(new Set(["18", "28"])),
-  "major-upper-palatal-bar": Object.freeze(new Set(["18", "28"])),
+  "major-upper-palatal-plate": Object.freeze(new Set([])),
+  "major-upper-palatal-bar": Object.freeze(new Set([])),
   "major-lower-lingual-bar": Object.freeze(new Set([])),
 });
 
@@ -824,9 +826,12 @@ function toothAnchorsMajorConnector(tooth, componentById) {
       return false;
     }
     if (tooth.isPresent) {
+      // Plate or any clasp (retainer / reciprocating / ring) anchors the
+      // connector — a plate/clasp abutment, matching the desktop anchor test.
+      // So a clasped terminal molar (e.g. 38/48) starts the span and is covered.
       return (
         String(componentId).startsWith("plate-") ||
-        String(componentId) === "reciprocating-clasp"
+        String(componentId).endsWith("-clasp")
       );
     }
     return def.tab === "mesh" || String(componentId).startsWith("mesh-");
@@ -891,7 +896,7 @@ function fillMajorConnectorSpanInArch(teeth, majorComponentId, componentById, ja
         if (!toothAnchorsMajorConnector(tooth, componentById)) continue;
         started = true;
       } else if (excluded || !hasArt) {
-        // Skip teeth with no art / excluded (e.g. 18/28); the run carries on past them.
+        // Skip teeth with no connector art / excluded; the run carries on past them.
         continue;
       }
       placeMajorConnectorOnce(tooth, majorComponentId);
@@ -978,9 +983,11 @@ export function ensurePalatalBarPlacementsOnConnectorTeeth(teeth, componentById)
         return false;
       }
       if (tooth.isPresent) {
+        // Plate or any clasp (retainer / reciprocating / ring) anchors the
+        // connector — a plate/clasp abutment, matching the desktop anchor test.
         return (
           String(componentId).startsWith("plate-") ||
-          String(componentId) === "reciprocating-clasp"
+          String(componentId).endsWith("-clasp")
         );
       }
       return def.tab === "mesh" || String(componentId).startsWith("mesh-");
@@ -1058,9 +1065,11 @@ export function pruneInvalidMajorConnectorPlacementsInJaw(teeth, componentById, 
         return false;
       }
       if (tooth.isPresent) {
+        // Plate or any clasp (retainer / reciprocating / ring) anchors the
+        // connector — a plate/clasp abutment, matching the desktop anchor test.
         return (
           String(componentId).startsWith("plate-") ||
-          String(componentId) === "reciprocating-clasp"
+          String(componentId).endsWith("-clasp")
         );
       }
       return def.tab === "mesh" || String(componentId).startsWith("mesh-");

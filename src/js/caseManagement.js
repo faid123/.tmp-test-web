@@ -4,7 +4,6 @@ import { confirmModal } from "./confirmModal.js";
 import { logApi } from "./apiLog.js";
 import { setupConnectivityIndicator } from "./connectivityIndicator.js";
 import { setupAppSidebar } from "./appSidebar.js";
-import { toggleChat } from "./chat.js";
 
 function getLoggedInUser() {
   const user = localStorage.getItem("loggedInUser");
@@ -962,34 +961,42 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupConnectivityIndicator(document.getElementById("footerConnection"));
   setupAppSidebar({ indexHref: "../../index.html" });
 
-  // Footer chat: the case list has no ?id= in its URL, so feed the chat widget
-  // the currently selected case (encrypted the same way we build annotation
-  // links). Requires a case to be selected in the table first.
-  document.getElementById("footerChatBtn")?.addEventListener("click", () => {
-    const caseId = window.selectedCaseId;
-    if (caseId == null) {
-      toast.info("Select a case first to open its chat.");
-      return;
-    }
-    toggleChat(lol(caseId));
-  });
   updateThumbnail();
   const cases = await fetchCases();
 
   if (cases) {
-    // Pull additional per-case data and the co-owner list in parallel.
-    const [extraMap, coOwnerMap] = await Promise.all([
-      fetchAdditionalCaseDetails(cases),
-      fetchCoOwners(cases),
-    ]);
-    cases.forEach((c) => {
-      const key = String(c.id ?? c.case_int_id);
-      Object.assign(c, extraMap?.[key] || {});
-      c.co_owners = coOwnerMap?.[key] || [];
-    });
+    // Paint the base list immediately. The per-case enrichment below fires
+    // 2×N requests (additional details + co-owners, capped at 5 in flight);
+    // gating the first paint on all of them left the table blank until every
+    // one returned. That was worst right after leaving the 2D annotation page,
+    // whose own request burst leaves the API briefly rate-limited — so the list
+    // "took forever" to show on return. Render now; merge + re-render in place
+    // when the extra data lands.
     currentCases = cases;
     populateTable(currentCases);
     applyClientFilters();
+
+    // Pull additional per-case data and the co-owner list in parallel, then
+    // fold them into the already-rendered rows. Fire-and-forget so it never
+    // blocks the list from showing.
+    Promise.all([
+      fetchAdditionalCaseDetails(cases),
+      fetchCoOwners(cases),
+    ])
+      .then(([extraMap, coOwnerMap]) => {
+        cases.forEach((c) => {
+          const key = String(c.id ?? c.case_int_id);
+          Object.assign(c, extraMap?.[key] || {});
+          c.co_owners = coOwnerMap?.[key] || [];
+        });
+        currentCases = cases;
+        populateTable(currentCases);
+        applyClientFilters();
+      })
+      .catch((err) => {
+        // Enrichment is best-effort; the base list is already on screen.
+        console.warn("[caseList] per-case enrichment failed", err);
+      });
 
     const searchInput = document.getElementById("searchCaseInput");
     const dateInput = document.getElementById("dateFilterInput");

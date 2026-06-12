@@ -1,4 +1,4 @@
-import { state, setMessage } from "./2DAnnotation.js";
+import { state, setMessage, fetchCaseDetail } from "./2DAnnotation.js";
 import { addViewcaptureFromImage } from "./noticeboard.js";
 import { confirmModal } from "../confirmModal.js";
 
@@ -1010,29 +1010,11 @@ async function fetchUndercutForCase() {
   return { upper, lower };
 }
 
-async function fetchCaseData() {
-  if (!state.caseIntID) return null;
-  const user = getLoggedInUser();
-  const uuid = user?.uuid || PREVIEW_FALLBACK_UUID;
-  const path = `/case/get/${state.caseIntID}`;
-  const t0 = performance.now();
-  try {
-    const res = await fetch(`${SMARTRPD_API_BASE}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([
-        { machine_id: PREVIEW_MACHINE_ID, uuid, caseIntID: state.caseIntID },
-      ]),
-    });
-    const dt = Math.round(performance.now() - t0);
-    const tag = res.ok ? "✓" : "✕";
-    console.log(`[preview3D] ${tag} POST ${path} status=${res.status} ${dt}ms`);
-    if (!res.ok) return null;
-    return await res.json();
-  } catch (err) {
-    console.warn(`[preview3D] ✕ POST ${path} failed`, err);
-    return null;
-  }
+// Reuse the single shared /case/get round-trip started during 2D init instead
+// of firing a duplicate request here (same endpoint + payload). Only used to
+// preserve the unmodified jaw's survey angles, so a null result is harmless.
+function fetchCaseData() {
+  return fetchCaseDetail();
 }
 
 // Capture the camera position as an XYZ Euler. X = pitch from the horizontal

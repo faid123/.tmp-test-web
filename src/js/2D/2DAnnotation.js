@@ -887,42 +887,56 @@ function initializeCaseIds() {
   if (label) label.textContent = `Case: ${state.caseIntID ?? "Unknown"}`;
 }
 
-async function fetchCaseOwner() {
-  if (!state.caseIntID) return;
+// Single shared GET of the case detail (POST /case/get/:id), memoized on
+// `state`. Both fetchCaseOwner (label/owner) and preview3D's SET-SURVEY-ANGLE
+// path need this row; without the cache they each fire the same request on
+// load. The promise is started early in init() so it overlaps the JS module
+// downloads. Resolves to the detail object, or null on any failure.
+export function fetchCaseDetail() {
+  if (state.__caseDetailPromise) return state.__caseDetailPromise;
+  if (!state.caseIntID) return Promise.resolve(null);
   const loggedInUser = getLoggedInUser();
-  if (!loggedInUser?.uuid) return;
-  try {
-    const response = await fetch(
-      `https://live.api.smartrpdai.com/api/smartrpd/case/get/${state.caseIntID}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([
-          {
-            machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
-            uuid: loggedInUser.uuid,
-            caseIntID: state.caseIntID,
-          },
-        ]),
-      }
-    );
-    logApi(response, 'POST /case/get/:id');
-    if (!response.ok) return;
-    const detail = await response.json();
-    if (detail?.username) state.caseOwner = detail.username;
-    if (detail?.case_id) {
-      state.caseName = detail.case_id;
-      const label = document.getElementById("caseLabel");
-      const caseIntId = detail.id ?? state.caseIntID;
-      if (label) {
-        label.textContent =
-          caseIntId != null
-            ?  `UID ${caseIntId} : ${detail.case_id}`
-            : `Case: ${detail.case_id}`;
-      }
+  if (!loggedInUser?.uuid) return Promise.resolve(null);
+  state.__caseDetailPromise = fetch(
+    `https://live.api.smartrpdai.com/api/smartrpd/case/get/${state.caseIntID}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        {
+          machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+          uuid: loggedInUser.uuid,
+          caseIntID: state.caseIntID,
+        },
+      ]),
     }
-  } catch (err) {
-    console.warn("Failed to fetch case owner:", err);
+  )
+    .then(async (response) => {
+      logApi(response, "POST /case/get/:id");
+      if (!response.ok) return null;
+      return response.json();
+    })
+    .catch((err) => {
+      console.warn("Failed to fetch case detail:", err);
+      return null;
+    });
+  return state.__caseDetailPromise;
+}
+
+async function fetchCaseOwner() {
+  const detail = await fetchCaseDetail();
+  if (!detail) return;
+  if (detail.username) state.caseOwner = detail.username;
+  if (detail.case_id) {
+    state.caseName = detail.case_id;
+    const label = document.getElementById("caseLabel");
+    const caseIntId = detail.id ?? state.caseIntID;
+    if (label) {
+      label.textContent =
+        caseIntId != null
+          ? `UID ${caseIntId} : ${detail.case_id}`
+          : `Case: ${detail.case_id}`;
+    }
   }
 }
 
@@ -930,12 +944,16 @@ async function fetchCaseOwner() {
 // Parsing / state-merging / encoding live in ./jawStructCodec.js;
 // HTTP transport lives in ./jawStructApi.js. window.__jawStruct is preserved
 // for inspection in the browser console.
-async function fetchJawStruct() {
+async function fetchJawStruct(recordsPromise = null) {
   if (!state.caseIntID) return;
   const loggedInUser = getLoggedInUser();
 
+  // Prefer the request started early in init() (so it ran concurrently with the
+  // module downloads). Fall back to firing it here if no promise was supplied.
   let records = null;
-  if (loggedInUser?.uuid) {
+  if (recordsPromise) {
+    records = await recordsPromise;
+  } else if (loggedInUser?.uuid) {
     try {
       records = await apiFetchJawStruct(state.caseIntID, loggedInUser.uuid);
     } catch (err) {
@@ -1313,6 +1331,24 @@ function init() {
   initializeCaseIds();
   bindPreviewPanelToggle();
   bindPanelSplitter();
+
+  // Kick off the case-independent network work *now*, before the feature
+  // modules below are downloaded. These requests only need state.caseIntID
+  // (set synchronously by initializeCaseIds()) and the logged-in user, so
+  // starting them here lets them run concurrently with the module imports
+  // instead of waiting behind them (the module-load → fetch waterfall). The
+  // apply/render steps still happen inside the Promise.all .then() below, in
+  // their original order — only the network start is hoisted.
+  fetchCaseDetail(); // shared /case/get — also reused by preview3D
+  const loggedInUser = getLoggedInUser();
+  const jawStructRecordsPromise =
+    state.caseIntID && loggedInUser?.uuid
+      ? apiFetchJawStruct(state.caseIntID, loggedInUser.uuid).catch((err) => {
+          console.warn("Failed to fetch jawstruct:", err);
+          return null;
+        })
+      : Promise.resolve(null);
+
   // Load render module early so render bridge + mesh env are registered.
   const renderLoad = import("./annotationRender.js");
 
@@ -1344,8 +1380,9 @@ function init() {
       // data it replaces local state and re-baselines undo history, and when it
       // returns nothing it resets to a clean arch (the localStorage-restored
       // design lacks raw desktop fields, so we don't let it drive a Save).
-      // Fire-and-forget so first paint isn't blocked on the network.
-      fetchJawStruct();
+      // Fire-and-forget so first paint isn't blocked on the network. Consumes
+      // the request started up front in init() (already in flight by now).
+      fetchJawStruct(jawStructRecordsPromise);
       locks.loadPreviewImage();
       locks.syncDesignModeWithLocks(false);
       renderJaws();

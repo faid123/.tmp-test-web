@@ -12,14 +12,21 @@ let pendingImageBase64 = null;
 let pendingImageMime = 'image/jpeg';
 let caseId = null;
 let domBound = false;
-let lastNotesSignature = '';
-let pollTimer = null;
-let pollInFlight = false;
-let chatFocusHandler = null;
+// `null` = "force the next render" (initial load + on case switch). Real
+// signatures are always strings (''.join for an empty chat), so the null
+// sentinel can never equal one — an empty chat still renders/clears once.
+let lastNotesSignature = null;
 
-// Live-chat poll cadence while the tab is focused. Kept tight so a friend's
-// message shows within a few seconds, but guarded (in-flight + hidden-tab
-// pause) so requests never stack and trip the backend rate-limiter.
+// Live-chat lifecycle. We poll only while the panel is open and the tab is
+// visible, and we hard-stop (clear timer + abort any in-flight request) when
+// the panel closes OR the page is being unloaded — so navigating back to the
+// case list never leaves a chat fetch running and competing with its load.
+let pollTimer = null;        // setInterval handle while the chat is live
+let pollInFlight = false;    // guards against overlapping polls
+let notesAbort = null;       // AbortController for the in-flight notes fetch
+let lifecycleBound = false;  // visibilitychange/pagehide bound once
+
+// Poll cadence while the chat is open and the tab is focused.
 const CHAT_POLL_MS = 3000;
 
 // Author tag used for the local-only "pending upload" preview bubble.
@@ -63,11 +70,17 @@ function detectImageMime(base64) {
 // 获取历史记录
 async function fetchNotes() {
     if (!caseId || !chatBox) return;
+    // Single-flight: abort any previous notes request so a slow one can't land
+    // after a newer one — and so stopChatLive()/page-leave can cancel it.
+    notesAbort?.abort();
+    const ctrl = new AbortController();
+    notesAbort = ctrl;
     try {
         const response = await fetch(`https://live.api.smartrpdai.com/api/smartrpd/notes/get/${caseId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
+            body: JSON.stringify({}),
+            signal: ctrl.signal
         });
         logApi(response, 'POST /notes/get/:id');
         if (response.ok) {
@@ -76,10 +89,15 @@ async function fetchNotes() {
             // Only re-render when the server data actually changed, so the
             // auto-refresh poll doesn't yank the user's scroll position or
             // flicker the list every few seconds.
+            // The signature is cheap — ids only, no image payload. Bail here
+            // when the server data is unchanged so an open chat doesn't
+            // re-stringify every note's base64 image into HTML (and re-render)
+            // on every 3s poll. The network round-trip + JSON.parse are still
+            // unavoidable until the endpoint supports incremental fetch.
             const signature = notes
                 .map(n => n.id ?? `${n.author_username}:${n.created_at}`)
                 .join('|');
-            const changed = signature !== lastNotesSignature;
+            if (signature === lastNotesSignature) return;
             lastNotesSignature = signature;
 
             messages = notes.map(note => {
@@ -99,20 +117,29 @@ async function fetchNotes() {
             });
             // Keep any in-progress image preview visible across refreshes.
             if (pendingImageBase64) messages.push(buildPendingPreviewMessage());
-            // Only re-render on real changes so the poll doesn't yank scroll
-            // position; an untouched preview is already in the DOM.
-            if (changed) displayMessages();
+            displayMessages();
         } else {
             console.error('❌ Failed to fetch notes:', await response.text());
         }
     } catch (err) {
+        // Aborts are expected (panel closed / navigated away) — not errors.
+        if (err?.name === 'AbortError') return;
         console.error('❌ Error fetching notes:', err);
+    } finally {
+        if (notesAbort === ctrl) notesAbort = null;
     }
 }
 
-// One guarded poll: skip if a request is already in flight, there's no case,
-// or the tab is hidden — so polls can't pile up and get rate-limited.
+// One guarded poll. Hard rule first: if the panel is closed (is-hidden), stop
+// the whole live loop — a closed chat must never poll in the background, even if
+// some path left a timer running. Otherwise skip (without stopping) when a
+// request is already in flight, there's no case, or the tab is backgrounded.
 async function pollTick() {
+    const widget = document.getElementById('chat-widget');
+    if (!widget || widget.classList.contains('is-hidden')) {
+        stopChatLive();
+        return;
+    }
     if (pollInFlight || !caseId || !chatBox || document.hidden) return;
     pollInFlight = true;
     try {
@@ -122,26 +149,32 @@ async function pollTick() {
     }
 }
 
-// Poll for new messages while the chat is active so incoming notes appear
-// without a manual refresh. Also fetch immediately whenever the user returns
-// to the tab/window, so messages that arrived while it was hidden show at once.
-function startPolling() {
-    stopPolling();
-    pollTimer = setInterval(pollTick, CHAT_POLL_MS);
-    chatFocusHandler = () => { if (!document.hidden) pollTick(); };
-    document.addEventListener('visibilitychange', chatFocusHandler);
-    window.addEventListener('focus', chatFocusHandler);
+// Bind the visibility/unload hooks once. Returning to the tab refreshes right
+// away (so messages that arrived while it was hidden show at once), and leaving
+// the page hard-stops the chat so no request lingers into the next page.
+function bindChatLifecycle() {
+    if (lifecycleBound) return;
+    lifecycleBound = true;
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && pollTimer) fetchNotes();
+    });
+    window.addEventListener('pagehide', stopChatLive);
 }
-function stopPolling() {
-    if (pollTimer) {
-        clearInterval(pollTimer);
-        pollTimer = null;
-    }
-    if (chatFocusHandler) {
-        document.removeEventListener('visibilitychange', chatFocusHandler);
-        window.removeEventListener('focus', chatFocusHandler);
-        chatFocusHandler = null;
-    }
+
+// Go live: refresh immediately, then poll while the panel is open + tab visible.
+function startChatLive() {
+    bindChatLifecycle();
+    stopChatLive();                 // never run two timers
+    fetchNotes();                   // immediate refresh on open
+    pollTimer = setInterval(pollTick, CHAT_POLL_MS);
+}
+
+// Hard-stop: clear the poll timer and abort any in-flight notes request. Called
+// when the panel closes and on page unload (back to the case list).
+function stopChatLive() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (notesAbort) { notesAbort.abort(); notesAbort = null; }
+    pollInFlight = false;
 }
 
 // 渲染消息
@@ -423,10 +456,10 @@ function bindDom() {
 }
 
 // Load (or reload) the conversation for a case. Returns true when the chat is
-// ready (widget present + a resolvable case id), false otherwise. This does a
-// one-time fetch but does NOT start the live poll — polling is tied to the
-// panel being open (see openWidget), so pages that carry the chat widget but
-// keep it closed (the 2D annotation / 3D viewer pages) don't poll all session.
+// ready (widget present + a resolvable case id), false otherwise. It does NOT
+// start the live poll — polling is tied to the panel being open (openWidget),
+// so a slide-in chat that carries the widget but stays closed (the 2D annotation
+// and case-list footer panels) never polls in the background.
 export function initChat(explicitEncryptedId) {
     if (!bindDom()) return false;
     const resolved = resolveCaseId(explicitEncryptedId);
@@ -434,11 +467,14 @@ export function initChat(explicitEncryptedId) {
     const changed = resolved !== caseId;
     caseId = resolved;
     if (changed) {
-        // Switching cases: drop the old conversation so it can't linger.
+        // Switching cases: drop the old conversation so it can't linger. Reset
+        // the signature to the null sentinel so the next fetch always re-renders
+        // (clearing the old case's messages) even if the new case is empty.
         messages = [];
-        lastNotesSignature = '';
+        lastNotesSignature = null;
     }
-    if (changed || !messages.length) fetchNotes();
+    // No fetch here — the open path (openWidget) and the always-on boot path
+    // each refresh once themselves, so initChat stays pure setup.
     return true;
 }
 
@@ -454,16 +490,17 @@ function openWidget(widget) {
     });
     widget.setAttribute('aria-hidden', 'false');
     setTimeout(() => textInput && textInput.focus(), 60);
-    // Start the live poll only now that the panel is actually open; closeWidget
-    // stops it. This keeps closed-but-present chat widgets from polling all
-    // session on the annotation / 3D viewer pages.
-    startPolling();
+    // Go live now that the panel is open: refresh immediately, then poll for
+    // incoming messages while it stays open (closeWidget / page-leave stop it).
+    startChatLive();
 }
 function closeWidget(widget) {
     widget.classList.remove('is-open');
     widget.setAttribute('aria-hidden', 'true');
     setTimeout(() => widget.classList.add('is-hidden'), 220);
-    stopPolling();
+    // Stop polling + abort any in-flight fetch so a closed chat never keeps
+    // hitting the network.
+    stopChatLive();
 }
 
 // Toggle the chat side panel, lazily initialising it for the given case. Used
@@ -482,17 +519,22 @@ export function toggleChat(explicitEncryptedId) {
 }
 
 // Standalone viewer behaviour: when the page already carries a ?id= and the
-// widget exists, bind and fetch immediately (matches the original chat.js).
-// Start the live poll on boot only for always-on chat widgets (e.g. the 3D
-// viewer's inline panel, which has no open/close toggle). Slide-in sidebar
-// widgets start hidden (.is-hidden) and begin polling when opened instead, so
-// they don't poll all session while closed on the annotation page.
+// widget exists, go live on boot — only for always-on chat widgets (e.g. the 3D
+// viewer's inline panel, which has no open/close toggle, so boot is its "open").
+// Slide-in sidebar widgets start hidden (.is-hidden) and go live when the user
+// actually opens them instead (toggleChat → openWidget).
 if (new URLSearchParams(window.location.search).get('id')) {
     const boot = () => {
-        if (!initChat()) return;
+        // Closed slide-in panels (annotation / case-list footer chat) must stay
+        // off the network on boot: a notes/get here hits the same API host as the
+        // jaw STL downloads, and chat.js is imported before the page entry module,
+        // so it would jump ahead of the jaws in the per-host connection queue.
+        // Those panels go live when opened. Only always-on widgets (no is-hidden
+        // state) start polling immediately here.
         const widget = document.getElementById('chat-widget');
-        const isClosedPanel = widget && widget.classList.contains('is-hidden');
-        if (!isClosedPanel) startPolling();
+        if (widget && widget.classList.contains('is-hidden')) return;
+        if (!initChat()) return;
+        startChatLive();
     };
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', boot);

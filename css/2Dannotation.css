@@ -2927,31 +2927,26 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
 .conn-indicator {
   position: relative;
   display: inline-flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 16px;
+  align-items: center;
+  gap: 5px;
   padding: 0 4px;
   cursor: default;
+  color: rgba(255, 255, 255, 0.85);
 }
-.conn-bar {
-  width: 3px;
-  border-radius: 1px;
-  background: rgba(255, 255, 255, 0.35);
-  transition: background 0.15s ease;
+.conn-wifi-icon {
+  font-size: 14px;
+  color: #fff;
 }
-.conn-bar[data-bar="1"] { height: 4px; }
-.conn-bar[data-bar="2"] { height: 8px; }
-.conn-bar[data-bar="3"] { height: 12px; }
-.conn-bar[data-bar="4"] { height: 16px; }
-
-.conn-indicator[data-level="1"] .conn-bar[data-bar="1"],
-.conn-indicator[data-level="2"] .conn-bar[data-bar="1"],
-.conn-indicator[data-level="2"] .conn-bar[data-bar="2"],
-.conn-indicator[data-level="3"] .conn-bar[data-bar="1"],
-.conn-indicator[data-level="3"] .conn-bar[data-bar="2"],
-.conn-indicator[data-level="3"] .conn-bar[data-bar="3"],
-.conn-indicator[data-level="4"] .conn-bar { background: #fff; }
-.conn-indicator[data-online="0"] .conn-bar { background: #ef4444; }
+.conn-name {
+  font-size: 11px;
+  font-weight: 500;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conn-indicator[data-online="0"] .conn-wifi-icon,
+.conn-indicator[data-online="0"] .conn-name { color: #ef4444; }
 
 .conn-tooltip {
   position: absolute;

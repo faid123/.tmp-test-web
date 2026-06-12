@@ -26,6 +26,28 @@ const MINOR_CONNECTOR_RENDER_SCALE = Object.freeze({
   lower: 0.56,
 });
 
+/**
+ * Mirror a per-template `{x, y}` offset row for a given tooth: quadrants 2 & 3 flip X,
+ * quadrants 1 & 4 pass through. Shared by every per-tooth offset lookup below so the
+ * mirroring rule lives in one place. A missing/invalid row resolves to no offset.
+ */
+function mirrorTemplateRowForTooth(toothId, row) {
+  if (!row) return { x: 0, y: 0 };
+  const quadrant = Math.floor(Number(toothId) / 10);
+  const mirrorX = quadrant === 2 || quadrant === 3;
+  return {
+    x: (mirrorX ? -1 : 1) * (Number.isFinite(row.x) ? row.x : 0),
+    y: Number.isFinite(row.y) ? row.y : 0,
+  };
+}
+
+/**
+ * Base per-tooth offset for a SOLO mesial/distal minor-connector half. Keyed per template
+ * tooth (`11`-`18` / `41`-`48`; quadrants 2 & 3 mirror X automatically). The hand-tuned
+ * directional nudge is added on top (see getMinorConnectorOffset); the shared `mid`
+ * connector uses MINOR_CONNECTOR_MID_OFFSET_BY_TEMPLATE_TOOTH instead. +x = toward the
+ * lingual/arch centre.
+ */
 const MINOR_CONNECTOR_OFFSET_SEED_BY_TEMPLATE_TOOTH = Object.freeze({
   "11": { x: 29, y: 33 },
   "12": { x: 34, y: 25 },
@@ -44,41 +66,6 @@ const MINOR_CONNECTOR_OFFSET_SEED_BY_TEMPLATE_TOOTH = Object.freeze({
   "47": { x: 28, y: 20 },
   "48": { x: 32, y: 18 },
 });
-
-function mirrorMinorConnectorOffsetSeedRow(row) {
-  return {
-    x: Number.isFinite(row?.x) ? -row.x : 0,
-    y: Number.isFinite(row?.y) ? row.y : 0,
-  };
-}
-
-function buildMinorConnectorOffsetByTooth() {
-  const out = {};
-  for (let u = 1; u <= 8; u += 1) {
-    const unit = String(u);
-    const upper = MINOR_CONNECTOR_OFFSET_SEED_BY_TEMPLATE_TOOTH[`1${unit}`];
-    const lower = MINOR_CONNECTOR_OFFSET_SEED_BY_TEMPLATE_TOOTH[`4${unit}`];
-
-    if (upper) {
-      out[`1${unit}`] = {
-        x: Number.isFinite(upper.x) ? upper.x : 0,
-        y: Number.isFinite(upper.y) ? upper.y : 0,
-      };
-      out[`2${unit}`] = mirrorMinorConnectorOffsetSeedRow(upper);
-    }
-
-    if (lower) {
-      out[`4${unit}`] = {
-        x: Number.isFinite(lower.x) ? lower.x : 0,
-        y: Number.isFinite(lower.y) ? lower.y : 0,
-      };
-      out[`3${unit}`] = mirrorMinorConnectorOffsetSeedRow(lower);
-    }
-  }
-  return Object.freeze(out);
-}
-
-const MINOR_CONNECTOR_OFFSET_BY_TOOTH = buildMinorConnectorOffsetByTooth();
 
 /** Filename suffix per variant: "mid" = full embrasure connector, else the mesial/distal half. */
 const MINOR_CONNECTOR_VARIANT_SUFFIX = Object.freeze({
@@ -146,12 +133,11 @@ const MINOR_CONNECTOR_DIRECTIONAL_OFFSET_SEED_BY_TEMPLATE_TOOTH = Object.freeze(
   "17": { mesial: { x: 0, y: -1 }, distal: { x: -8, y: 57 } },
   "16": { mesial: { x: 0, y: -1 }, distal: { x: -12, y: 66 } },
   "15": { mesial: { x: 0, y: 0 }, distal: { x: -13, y: 45 } },
-  "14": { mesial: { x: 0, y: 0 }, distal: { x: -24, y: 44 } },      
+  "14": { mesial: { x: 0, y: 0 }, distal: { x: -24, y: 44 } },
   "13": { mesial: { x: 0, y: 0 }, distal: { x: -25, y: 28 } },
-  "12": { mesial: { x: 0, y: 0 }, distal: { x: -31, y: 12 } },  
-  "11": { mesial: { x: 0, y: 0 }, distal: { x: -40, y: 3 } },       
-  // "44": { mesial: { x: 0, y: 0 }, distal: { x: 0, y: 0 } },
-  // "35"/"34"/... are driven by their "45"/"44" template rows (X mirrored automatically).
+  "12": { mesial: { x: 0, y: 0 }, distal: { x: -31, y: 12 } },
+  "11": { mesial: { x: 0, y: 0 }, distal: { x: -40, y: 3 } },
+  // Quadrants 2 & 3 (e.g. 35/34) are driven by their 1x/4x template rows, X mirrored automatically.
 });
 
 /** Hand-tuned directional delta for a tooth (template lookup; X mirrored for quadrants 2 & 3). */
@@ -159,60 +145,40 @@ function getMinorConnectorDirectionalDelta(toothId, direction) {
   if (direction !== "mesial" && direction !== "distal") return { x: 0, y: 0 };
   const template = getComponentTemplateToothId(toothId);
   const row = MINOR_CONNECTOR_DIRECTIONAL_OFFSET_SEED_BY_TEMPLATE_TOOTH[template]?.[direction];
-  if (!row) return { x: 0, y: 0 };
-  const quadrant = Math.floor(Number(toothId) / 10);
-  const mirrorX = quadrant === 2 || quadrant === 3;
-  return {
-    x: (mirrorX ? -1 : 1) * (Number.isFinite(row.x) ? row.x : 0),
-    y: Number.isFinite(row.y) ? row.y : 0,
-  };
+  return mirrorTemplateRowForTooth(toothId, row);
 }
 
-// Resolve per-tooth XY offset for the minor connector. A solo mesial/distal half passes its
-// `direction` for the hand-tuned nudge; the shared `mid` uses getMinorConnectorMidOffset instead.
+// Resolve per-tooth XY offset for a SOLO mesial/distal minor-connector half: the base seed
+// (mirrored) plus the hand-tuned directional nudge. The shared `mid` half (drawn when both
+// adjacent teeth carry support) uses getMinorConnectorMidOffset instead.
 export function getMinorConnectorOffset(toothId, direction) {
-  const offset = MINOR_CONNECTOR_OFFSET_BY_TOOTH[String(toothId)];
-  const baseX = Number.isFinite(offset?.x) ? offset.x : 0;
-  const baseY = Number.isFinite(offset?.y) ? offset.y : 0;
+  const template = getComponentTemplateToothId(toothId);
+  const base = mirrorTemplateRowForTooth(
+    toothId,
+    MINOR_CONNECTOR_OFFSET_SEED_BY_TEMPLATE_TOOTH[template]
+  );
   const delta = getMinorConnectorDirectionalDelta(toothId, direction);
-  return { x: baseX + delta.x, y: baseY + delta.y };
+  return { x: base.x + delta.x, y: base.y + delta.y };
 }
 
 /**
- * Manual (x, y) position for the shared `mid` connector — the one drawn in an embrasure when
- * both adjacent teeth carry support. Keyed per template tooth (`11`-`18` / `41`-`48`; quadrants
- * 2 & 3 mirror X automatically). Edit a row by hand to move that tooth's mid connector; +x =
- * toward the arch/lingual centre. Independent of the solo-half base table above.
+ * Per-template OVERRIDE for the shared `mid` connector — the connector drawn in an embrasure
+ * when both adjacent teeth carry support. By default the mid connector reuses the solo-half
+ * base offset (MINOR_CONNECTOR_OFFSET_SEED_BY_TEMPLATE_TOOTH); add a row here only for a
+ * template tooth whose mid connector needs to sit somewhere different. Keyed per template tooth
+ * (`11`-`18` / `41`-`48`; quadrants 2 & 3 mirror X automatically). +x = toward the arch/lingual
+ * centre. Empty = the mid connector follows the base offset on every tooth.
  */
-const MINOR_CONNECTOR_MID_OFFSET_BY_TEMPLATE_TOOTH = Object.freeze({
-  "11": { x: 29, y: 33 },
-  "12": { x: 34, y: 25 },
-  "13": { x: 36, y: 11 },
-  "14": { x: 36, y: -4 },
-  "15": { x: 31, y: -9 },
-  "16": { x: 31, y: -20 },
-  "17": { x: 31, y: -16 },
-  "18": { x: 31, y: -19 },
-  "41": { x: 15, y: -28 },
-  "42": { x: 24, y: -21 },
-  "43": { x: 30, y: -16 },
-  "44": { x: 41, y: -1 },
-  "45": { x: 36, y: 14 },
-  "46": { x: 33, y: 27 },
-  "47": { x: 28, y: 20 },
-  "48": { x: 32, y: 18 },
+const MINOR_CONNECTOR_MID_OFFSET_OVERRIDE_BY_TEMPLATE_TOOTH = Object.freeze({
+  // e.g. "12": { x: 30, y: 20 },  // move only tooth 12's mid connector, leaving its solo halves
 });
 
-// Resolve the manual (x, y) offset for the shared mid connector (template lookup; X mirrored for
-// quadrants 2 & 3). Edit MINOR_CONNECTOR_MID_OFFSET_BY_TEMPLATE_TOOTH to reposition.
+// Resolve the (x, y) offset for the shared mid connector: a per-template override if one exists,
+// otherwise the solo-half base seed (template lookup; X mirrored for quadrants 2 & 3).
 export function getMinorConnectorMidOffset(toothId) {
   const template = getComponentTemplateToothId(toothId);
-  const row = MINOR_CONNECTOR_MID_OFFSET_BY_TEMPLATE_TOOTH[template];
-  if (!row) return { x: 0, y: 0 };
-  const quadrant = Math.floor(Number(toothId) / 10);
-  const mirrorX = quadrant === 2 || quadrant === 3;
-  return {
-    x: (mirrorX ? -1 : 1) * (Number.isFinite(row.x) ? row.x : 0),
-    y: Number.isFinite(row.y) ? row.y : 0,
-  };
+  const row =
+    MINOR_CONNECTOR_MID_OFFSET_OVERRIDE_BY_TEMPLATE_TOOTH[template] ??
+    MINOR_CONNECTOR_OFFSET_SEED_BY_TEMPLATE_TOOTH[template];
+  return mirrorTemplateRowForTooth(toothId, row);
 }

@@ -9,7 +9,6 @@
     <link rel="stylesheet" href="../../css/notification.css" />
     <link rel="stylesheet" href="../../css/versionHistory.css" />
     <link rel="stylesheet" href="../../css/toast.css" />
-    <link rel="stylesheet" href="../../css/chat.css" />
     <link rel="icon" href="../../assets/profile.png" type="image/png" />
     <link
       rel="stylesheet"
@@ -377,9 +376,6 @@
         <div class="cm-footer-right">
           <span class="cm-footer-user" id="footerUserName">—</span>
           <span class="cm-footer-conn" id="footerConnection"></span>
-          <button type="button" class="cm-footer-btn cm-footer-chat-btn" id="footerChatBtn" aria-label="Open chat" data-tooltip="Chat">
-            <i class="fa-regular fa-comment" aria-hidden="true"></i>
-          </button>
         </div>
       </footer>
     </div>
@@ -524,27 +520,6 @@
         }
       }
     </script>
-    <!-- Case chat (notes) — slide-in side panel toggled by the footer chat button -->
-    <div id="chat-widget" class="chat-sidebar is-hidden" aria-hidden="true">
-      <div class="chat-sidebar-backdrop" data-chat-close></div>
-      <aside class="chat-sidebar-panel" role="dialog" aria-label="Case chat">
-        <header class="chat-sidebar-header">
-          <span class="chat-sidebar-title">Case Chat</span>
-          <button type="button" class="chat-sidebar-close" data-chat-close aria-label="Close chat">&times;</button>
-        </header>
-        <div id="chat-box"></div>
-        <div id="chat-input-area">
-          <input type="file" id="imageInput" accept="image/*" hidden />
-          <button id="uploadBtn" type="button">+</button>
-          <textarea id="textInput" rows="1" placeholder="Type a comment..."></textarea>
-          <button id="sendBtn" type="button">Send</button>
-        </div>
-      </aside>
-    </div>
-    <div class="image-modal" id="imageModal">
-      <img id="modalImage" src="" alt="Zoomed" />
-    </div>
-
     <script type="module" src="../js/caseManagement.js"></script>
     <script type="module" src="../js/createCase.js"></script>
     <script type="module" src="../js/notifications.js"></script>

@@ -168,12 +168,14 @@ function anteriorRestSurface(f) {
   if (ar === 1) {
     // Anterior_Cingulum_Rest_Type: ac_full=0, ac_mesial=1, ac_distal=2, ac_both=3.
     // Surface -> rest asset (components.rest.js getRestPlacementToken):
-    //   "lingual"=ac_full, "lingual_mesial"=ac_mesial, "lingual_distal"=ac_distal.
-    // There's no ac_both asset, so render "both" as the full cingulum too.
+    //   "lingual"=ac_full, "lingual_mesial"=ac_mesial, "lingual_distal"=ac_distal,
+    //   "lingual_both"=ac_both. ac_both art exists only on the lower anterior
+    //   templates; the token resolver falls back to ac_full for the upper arch.
     const ac = Number(f[ANTERIOR_CINGULUM_FIELD]);
     if (ac === 1) return "lingual_mesial";
     if (ac === 2) return "lingual_distal";
-    return "lingual"; // 0 full (and 3 both) -> full cingulum coverage
+    if (ac === 3) return "lingual_both";
+    return "lingual"; // 0 -> full cingulum coverage
   }
   if (ar === 2) {
     // Anterior_Incisal_Rest_Type: ai_mesial=0, ai_distal=1
@@ -330,7 +332,8 @@ export function resolveJawStructDesign(parsed) {
 // (tooth positions, Pr Config, bar mesial/distal side, clasp/ring orientation,
 // the reciprocating framework flag, and the jaw-level Minor Connector grid + Ball
 // connectors on state.jawStructTail). When a tooth has loaded raw, a load->Save
-// round-trips byte-identical (bar timestamp + leading blank line); a from-scratch
+// round-trips byte-identical except the re-stamped "Start of Jaw Struct" time
+// line (validated end-to-end in __tests__/jawStructRoundTrip.test.mjs); a from-scratch
 // web design has no raw and falls back to the desktop defaults the samples use
 // (positions 0, tissue stop / retention pin 0, orientation 0, paths 1, balls 0).
 
@@ -400,10 +403,10 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
     const s = String(restPl.surface || "");
     if (restPl.componentId === "rest-onlay") {
       posteriorRest = 1; // pr_full
-    } else if (min < 4 && (s === "lingual" || s === "lingual_mesial" || s === "lingual_distal")) {
-      anteriorRest = 1; // cingulum (full / mesial / distal — anterior teeth only)
+    } else if (min < 4 && (s === "lingual" || s === "lingual_mesial" || s === "lingual_distal" || s === "lingual_both")) {
+      anteriorRest = 1; // cingulum (full / mesial / distal / both — anterior teeth only)
       if (!(ANTERIOR_CINGULUM_FIELD in raw)) {
-        antCingulum = s === "lingual_distal" ? 2 : s === "lingual_mesial" ? 1 : 0; // "lingual" -> full
+        antCingulum = s === "lingual_distal" ? 2 : s === "lingual_mesial" ? 1 : s === "lingual_both" ? 3 : 0; // "lingual" -> full
       }
     } else if (min < 4) {
       anteriorRest = 2; // incisal (mesial/distal on an anterior tooth)
@@ -524,7 +527,9 @@ export function encodeJawStructText(state, jawSide) {
   }
 
   lines.push("End of Jaw Struct");
-  return lines.join("\r\n");
+  // Desktop terminates the file with a trailing CRLF after "End of Jaw Struct".
+  // Without it a no-edit load->Save differs from the loaded file by one byte-run.
+  return lines.join("\r\n") + "\r\n";
 }
 
 /** Base64-encode the text for transport. */

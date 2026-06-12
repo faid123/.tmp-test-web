@@ -217,6 +217,17 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
   }
 
   for (const majorId of majorIds) {
+    // Lingual plate = the same bar band as the lingual bar, PLUS a plate filling
+    // the lingual surface between each tooth and the bar. The fill climbs the
+    // lingual surface of an actual tooth, so it only belongs on PRESENT teeth
+    // (anterior + posterior). A missing tooth — a saddle, even one carrying mesh —
+    // gets the bar band crossing it but NO plate fill. Draw the plate fill first so
+    // the bar band sits on top of it. The lingual bar (and other majors) render the
+    // band only.
+    if (majorId === "major-lower-lingual-plate" && tooth.isPresent) {
+      const plate = createComponentVisual("plate-prox", toothId, jaw);
+      if (plate) group.appendChild(plate);
+    }
     const under = createMajorConnectorVisual(majorId, tooth, toothId, jaw);
     if (under) {
       group.appendChild(under);
@@ -307,6 +318,8 @@ function getClaspSurfacePointMap(toothId, jaw) {
 function restMarkerAnchorSurface(placementSurface, toothId) {
   const s = normalizeSurface(placementSurface);
   if (!s) return null;
+  // ac_both spans both sides; anchor it at the centered full-cingulum point.
+  if (s === "lingual_both") return "lingual";
   if (isAnteriorRestSurfaceDialogTooth(toothId)) {
     if (s === "lingual_mesial" || s === "lingual_distal") return s;
     if (s === "lingual") return "lingual";
@@ -697,6 +710,22 @@ function isAnteriorRestSurfaceDialogTooth(toothId) {
   return ANTERIOR_REST_SURFACE_DIALOG_TEETH.has(String(toothId));
 }
 
+// A cingulum rest can be stored on any lingual sub-surface: full coverage
+// ("lingual"), mesial/distal halves ("lingual_mesial"/"lingual_distal"), or both
+// halves ("lingual_both", from a loaded ac_both desktop design). They are all the
+// same logical rest for placement/removal purposes.
+const CINGULUM_REST_SURFACES = new Set([
+  "lingual",
+  "lingual_mesial",
+  "lingual_distal",
+  "lingual_both",
+]);
+
+function isCingulumRestSurface(surface) {
+  const s = normalizeSurface(surface);
+  return Boolean(s && CINGULUM_REST_SURFACES.has(s));
+}
+
 const ASSEMBLY_REST_SUGGESTION_IDS = new Set([
   "assembly-circ",
   "assembly-circ-embrasure",
@@ -917,6 +946,28 @@ function handleRestSuggestionPick(jaw, toothId, pointSurface, anchor) {
   if (!isAnteriorRestSurfaceDialogTooth(toothId) || skipCingulumDialog) {
     applySurface(pointSurface);
     return;
+  }
+
+  // Toggle-off path: the surface dialog only offers a subset of the cingulum
+  // sub-surfaces, so a surface-exact toggle in placeSelectedComponentOnTooth can't
+  // remove a rest whose stored sub-surface isn't on offer (notably a loaded
+  // "lingual_both"/ac_both). Treat a click on the lingual point of a tooth that
+  // already carries a cingulum rest as "remove it" — regardless of sub-surface —
+  // and only open the dialog to choose a surface when none exists yet.
+  const selectedTooth = state.teeth[String(toothId)];
+  if (selectedComponent?.id === "rest-seat" && selectedTooth) {
+    ensureToothPlacementState(selectedTooth);
+    const existingCingulum = (selectedTooth.componentPlacements || []).filter(
+      (entry) => entry.componentId === "rest-seat" && isCingulumRestSurface(entry.surface)
+    );
+    if (existingCingulum.length) {
+      for (const entry of existingCingulum) {
+        removePlacement(selectedTooth, entry.componentId, entry.surface);
+      }
+      setMessage(`Removed cingulum rest from tooth ${toothId}.`, false);
+      renderJaw(jaw);
+      return;
+    }
   }
 
   showAnteriorRestSurfaceDialog(toothId, anchor, (chosen) => {

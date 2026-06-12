@@ -1,66 +1,30 @@
-// Connectivity indicator: renders 4 signal bars whose fill level reflects the
-// browser's effective connection type, with a hover tooltip showing the active
-// network name/status. Browsers cannot expose the literal WiFi SSID for
-// privacy reasons, so the tooltip falls back to the connection type
-// (`4g`, `3g`, `wifi`, `ethernet`, etc.) plus an Online/Offline label.
+// Connectivity indicator: a Wi‑Fi icon only. The network name is intentionally
+// not displayed (browsers also can't read the literal Wi‑Fi SSID anyway). The
+// icon turns red when offline; online/offline status is exposed via title +
+// aria-label for accessibility, but no name text is shown.
 
-const LEVEL_BY_EFFECTIVE_TYPE = {
-  "slow-2g": 1,
-  "2g": 1,
-  "3g": 2,
-  "4g": 4,
-  "5g": 4,
-};
-
-function readState() {
-  if (typeof navigator === "undefined") {
-    return { online: true, level: 4, label: "Connected" };
-  }
-  const online = navigator.onLine !== false;
-  if (!online) return { online: false, level: 0, label: "Offline" };
-
-  const conn =
-    navigator.connection ||
-    navigator.mozConnection ||
-    navigator.webkitConnection ||
-    null;
-  if (!conn) return { online: true, level: 4, label: "Connected" };
-
-  const type = conn.type || conn.effectiveType || "";
-  const level =
-    LEVEL_BY_EFFECTIVE_TYPE[conn.effectiveType] ??
-    (type === "wifi" || type === "ethernet" ? 4 : 3);
-
-  const parts = [];
-  if (type === "wifi") parts.push("Wi‑Fi");
-  else if (type === "ethernet") parts.push("Ethernet");
-  else if (type === "cellular") parts.push("Cellular");
-  else parts.push("Connected");
-  if (conn.effectiveType) parts.push(conn.effectiveType.toUpperCase());
-  if (Number.isFinite(conn.downlink)) parts.push(`${conn.downlink} Mbps`);
-
-  return { online: true, level, label: parts.join(" · ") };
+function isOnline() {
+  return typeof navigator === "undefined" || navigator.onLine !== false;
 }
 
 export function setupConnectivityIndicator(el) {
   if (!el) return () => {};
   el.classList.add("conn-indicator");
+  // Icon + hover tooltip. The network name is intentionally not shown in the
+  // footer; the tooltip reports only Online/Offline status.
   el.innerHTML = `
-    <span class="conn-bar" data-bar="1"></span>
-    <span class="conn-bar" data-bar="2"></span>
-    <span class="conn-bar" data-bar="3"></span>
-    <span class="conn-bar" data-bar="4"></span>
+    <i class="conn-wifi-icon fa fa-wifi" aria-hidden="true"></i>
     <span class="conn-tooltip" role="tooltip"></span>
   `;
   const tooltip = el.querySelector(".conn-tooltip");
 
   const apply = () => {
-    const { online, level, label } = readState();
-    el.dataset.level = String(level);
+    const online = isOnline();
     el.dataset.online = online ? "1" : "0";
-    el.setAttribute("title", label);
-    el.setAttribute("aria-label", label);
-    if (tooltip) tooltip.textContent = label;
+    const status = online ? "Online" : "Offline";
+    el.setAttribute("title", status);
+    el.setAttribute("aria-label", `Network: ${status}`);
+    if (tooltip) tooltip.textContent = status;
   };
 
   apply();

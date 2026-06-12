@@ -219,6 +219,15 @@ function getRestPlacementToken(_componentId, toothId, surface) {
     if (normalizedSurface === "distal") return "ai_distal";
     if (normalizedSurface === "lingual_mesial") return "ac_mesial";
     if (normalizedSurface === "lingual_distal") return "ac_distal";
+    if (normalizedSurface === "lingual_both") {
+      // ac_both art exists only on the lower anterior templates (41/42/43, which
+      // 31/32/33 mirror). Upper anterior (11/12/13) has no ac_both — fall back to
+      // the full cingulum.
+      const templateToothId = getComponentTemplateToothId(toothId);
+      return templateToothId === "41" || templateToothId === "42" || templateToothId === "43"
+        ? "ac_both"
+        : "ac_full";
+    }
     if (normalizedSurface === "lingual") return "ac_full";
     return null;
   }
@@ -234,9 +243,6 @@ export function getRestPlacementAssetReference(componentId, toothId, surface) {
   const templateToothId = getComponentTemplateToothId(toothId);
   const token = getRestPlacementToken(componentId, toothId, surface);
   if (!token) return null;
-  if ((templateToothId === "17" || templateToothId === "18") && token === "p_mesial") {
-    return `${REST_PLACEMENT_ASSET_BASE}/${templateToothId}/rest/${templateToothId}-p_meisal.svg`;
-  }
   return `${REST_PLACEMENT_ASSET_BASE}/${templateToothId}/rest/${templateToothId}-${token}.svg`;
 }
 

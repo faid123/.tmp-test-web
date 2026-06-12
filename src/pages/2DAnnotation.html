@@ -14,6 +14,14 @@
     rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
   />
+  <!-- Start the three.js CDN download on HTML parse so it overlaps everything
+       else, instead of only beginning deep in the load chain (module import →
+       loadPreviewImage → ensureThreeDeps). Same versions/URLs the 3D preview
+       imports; absolute so the addons' bare `three` import resolves to a warm
+       cache entry. -->
+  <link rel="modulepreload" crossorigin href="https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js" />
+  <link rel="modulepreload" crossorigin href="https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/TrackballControls.js" />
+  <link rel="modulepreload" crossorigin href="https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/STLLoader.js" />
 </head>
 <body>
   <main class="annotation-shell">
