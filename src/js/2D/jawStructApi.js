@@ -44,12 +44,37 @@ async function postJson(path, payload) {
 
 /**
  * Fetch the jaw struct (upper + lower) for a case.
- * Returns the raw API array (or null on failure). Use decodeJawStructResponse
- * from jawStructCodec.js to parse it.
+ * Returns the raw API body on success (which the caller decodes), or null when
+ * the request *fails* after retries.
+ *
+ * The first cross-origin POST on a freshly opened tab (cold TLS + CORS preflight,
+ * no warm connection) can fail transiently. Callers treat a null/empty result as
+ * "no server design" and reset to a clean arch, so a single transient failure
+ * would silently blank a real design until the user refreshes. Retry the read so
+ * that doesn't happen. A *successful* response (even an empty design) is returned
+ * as-is and never retried — a genuinely empty case must stay empty.
  */
-export async function fetchJawStruct(caseIntID, uuid) {
-  const { body } = await postJson("/jawstruct/l2/getall", buildPayload(caseIntID, uuid));
-  return body;
+export async function fetchJawStruct(caseIntID, uuid, { retries = 2, retryDelayMs = 600 } = {}) {
+  const payload = buildPayload(caseIntID, uuid);
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    let res;
+    try {
+      res = await postJson("/jawstruct/l2/getall", payload);
+    } catch (err) {
+      // Network-level failure (fetch threw) — treat as a non-ok attempt.
+      console.warn(`[jawStructApi] getall attempt ${attempt + 1} threw:`, err);
+      res = { ok: false, status: 0, body: null };
+    }
+    if (res.ok) return res.body;
+    if (attempt < retries) {
+      console.warn(
+        `[jawStructApi] getall attempt ${attempt + 1} failed (status=${res.status}); retrying in ${retryDelayMs}ms…`
+      );
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    }
+  }
+  console.warn("[jawStructApi] getall failed after retries — no design loaded for this case");
+  return null;
 }
 
 /**
