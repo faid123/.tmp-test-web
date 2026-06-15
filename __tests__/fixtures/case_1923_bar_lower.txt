@@ -1,11 +1,11 @@
 
-Start of Jaw Struct yr.mth.day.hr.min.sec: 2026.5.20.9.24.18
+Start of Jaw Struct yr.mth.day.hr.min.sec: 2026.6.15.10.26.37
 Jaw Type: 1
 Jaw Material: 0
 Tooth 0: Tooth Main.Tooth Index.Major Index: 3
 Tooth 0: Tooth Main.Tooth Index.Minor Index: 8
 Tooth 0: Tooth Main.Tooth Index.Tooth Type: 0
-Tooth 0: Tooth Main.Tooth Index.Tooth Presence: 1
+Tooth 0: Tooth Main.Tooth Index.Tooth Presence: 0
 Tooth 0: Tooth Main.Tooth Index.Tooth Condition: 0
 Tooth 0: Tooth Main.Tooth Index.Mesh Presence: 1
 Tooth 0: Tooth Main.Tooth Index.Array Index: 0
@@ -18,11 +18,11 @@ Tooth 0: Tooth Main.Tooth Rest.Tooth Type: 0
 Tooth 0: Tooth Main.Tooth Rest.Anterior Rest: 0
 Tooth 0: Tooth Main.Tooth Rest.Anterior Cingulum Rest Type: 0
 Tooth 0: Tooth Main.Tooth Rest.Anterior Incisal Rest Type: 0
-Tooth 0: Tooth Main.Tooth Rest.Posterior Rest Type: 0
-Tooth 0: Tooth Main.Tooth Rest.Pr Config 0: 1
+Tooth 0: Tooth Main.Tooth Rest.Posterior Rest Type: 2
+Tooth 0: Tooth Main.Tooth Rest.Pr Config 0: 0
 Tooth 0: Tooth Main.Tooth Rest.Pr Config 1: 1
 Tooth 0: Tooth Main.Tooth Rest.Pr Config 2: 1
-Tooth 0: Tooth Main.Tooth Retainer.Retainer Type: 0
+Tooth 0: Tooth Main.Tooth Retainer.Retainer Type: 1
 Tooth 0: Tooth Main.Tooth Retainer.Retainer Clasp Type: 0
 Tooth 0: Tooth Main.Tooth Retainer.Retainer Ring Type: 0
 Tooth 0: Tooth Main.Tooth Retainer.Retainer Bar Type: 0
@@ -31,9 +31,9 @@ Tooth 0: Tooth Main.Tooth Reciprocating.Tooth Type: 0
 Tooth 1: Tooth Main.Tooth Index.Major Index: 3
 Tooth 1: Tooth Main.Tooth Index.Minor Index: 7
 Tooth 1: Tooth Main.Tooth Index.Tooth Type: 0
-Tooth 1: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 1: Tooth Main.Tooth Index.Tooth Presence: 1
 Tooth 1: Tooth Main.Tooth Index.Tooth Condition: 0
-Tooth 1: Tooth Main.Tooth Index.Mesh Presence: 1
+Tooth 1: Tooth Main.Tooth Index.Mesh Presence: 0
 Tooth 1: Tooth Main.Tooth Index.Array Index: 1
 Tooth 1: Tooth Main.Tooth Index.Tissue Stop Presence: 0
 Tooth 1: Tooth Main.Tooth Index.Retention Pin Presence: 0
@@ -44,22 +44,22 @@ Tooth 1: Tooth Main.Tooth Rest.Tooth Type: 0
 Tooth 1: Tooth Main.Tooth Rest.Anterior Rest: 0
 Tooth 1: Tooth Main.Tooth Rest.Anterior Cingulum Rest Type: 0
 Tooth 1: Tooth Main.Tooth Rest.Anterior Incisal Rest Type: 0
-Tooth 1: Tooth Main.Tooth Rest.Posterior Rest Type: 2
-Tooth 1: Tooth Main.Tooth Rest.Pr Config 0: 0
+Tooth 1: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 1: Tooth Main.Tooth Rest.Pr Config 0: 1
 Tooth 1: Tooth Main.Tooth Rest.Pr Config 1: 1
 Tooth 1: Tooth Main.Tooth Rest.Pr Config 2: 1
-Tooth 1: Tooth Main.Tooth Retainer.Retainer Type: 1
+Tooth 1: Tooth Main.Tooth Retainer.Retainer Type: 0
 Tooth 1: Tooth Main.Tooth Retainer.Retainer Clasp Type: 0
 Tooth 1: Tooth Main.Tooth Retainer.Retainer Ring Type: 0
 Tooth 1: Tooth Main.Tooth Retainer.Retainer Bar Type: 0
 Tooth 1: Tooth Main.Tooth Retainer.Retainer Bar Category: 0
-Tooth 1: Tooth Main.Tooth Reciprocating.Tooth Type: 2
+Tooth 1: Tooth Main.Tooth Reciprocating.Tooth Type: 0
 Tooth 2: Tooth Main.Tooth Index.Major Index: 3
 Tooth 2: Tooth Main.Tooth Index.Minor Index: 6
 Tooth 2: Tooth Main.Tooth Index.Tooth Type: 0
-Tooth 2: Tooth Main.Tooth Index.Tooth Presence: 0
+Tooth 2: Tooth Main.Tooth Index.Tooth Presence: 1
 Tooth 2: Tooth Main.Tooth Index.Tooth Condition: 0
-Tooth 2: Tooth Main.Tooth Index.Mesh Presence: 1
+Tooth 2: Tooth Main.Tooth Index.Mesh Presence: 0
 Tooth 2: Tooth Main.Tooth Index.Array Index: 2
 Tooth 2: Tooth Main.Tooth Index.Tissue Stop Presence: 0
 Tooth 2: Tooth Main.Tooth Index.Retention Pin Presence: 0
@@ -79,7 +79,7 @@ Tooth 2: Tooth Main.Tooth Retainer.Retainer Clasp Type: 0
 Tooth 2: Tooth Main.Tooth Retainer.Retainer Ring Type: 0
 Tooth 2: Tooth Main.Tooth Retainer.Retainer Bar Type: 0
 Tooth 2: Tooth Main.Tooth Retainer.Retainer Bar Category: 0
-Tooth 2: Tooth Main.Tooth Reciprocating.Tooth Type: 2
+Tooth 2: Tooth Main.Tooth Reciprocating.Tooth Type: 0
 Tooth 3: Tooth Main.Tooth Index.Major Index: 3
 Tooth 3: Tooth Main.Tooth Index.Minor Index: 5
 Tooth 3: Tooth Main.Tooth Index.Tooth Type: 0
@@ -96,16 +96,16 @@ Tooth 3: Tooth Main.Tooth Rest.Tooth Type: 0
 Tooth 3: Tooth Main.Tooth Rest.Anterior Rest: 0
 Tooth 3: Tooth Main.Tooth Rest.Anterior Cingulum Rest Type: 0
 Tooth 3: Tooth Main.Tooth Rest.Anterior Incisal Rest Type: 0
-Tooth 3: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 3: Tooth Main.Tooth Rest.Posterior Rest Type: 2
 Tooth 3: Tooth Main.Tooth Rest.Pr Config 0: 1
-Tooth 3: Tooth Main.Tooth Rest.Pr Config 1: 1
+Tooth 3: Tooth Main.Tooth Rest.Pr Config 1: 0
 Tooth 3: Tooth Main.Tooth Rest.Pr Config 2: 1
-Tooth 3: Tooth Main.Tooth Retainer.Retainer Type: 0
+Tooth 3: Tooth Main.Tooth Retainer.Retainer Type: 1
 Tooth 3: Tooth Main.Tooth Retainer.Retainer Clasp Type: 0
 Tooth 3: Tooth Main.Tooth Retainer.Retainer Ring Type: 0
 Tooth 3: Tooth Main.Tooth Retainer.Retainer Bar Type: 0
 Tooth 3: Tooth Main.Tooth Retainer.Retainer Bar Category: 0
-Tooth 3: Tooth Main.Tooth Reciprocating.Tooth Type: 2
+Tooth 3: Tooth Main.Tooth Reciprocating.Tooth Type: 0
 Tooth 4: Tooth Main.Tooth Index.Major Index: 3
 Tooth 4: Tooth Main.Tooth Index.Minor Index: 4
 Tooth 4: Tooth Main.Tooth Index.Tooth Type: 0
@@ -131,7 +131,7 @@ Tooth 4: Tooth Main.Tooth Retainer.Retainer Clasp Type: 0
 Tooth 4: Tooth Main.Tooth Retainer.Retainer Ring Type: 0
 Tooth 4: Tooth Main.Tooth Retainer.Retainer Bar Type: 0
 Tooth 4: Tooth Main.Tooth Retainer.Retainer Bar Category: 0
-Tooth 4: Tooth Main.Tooth Reciprocating.Tooth Type: 2
+Tooth 4: Tooth Main.Tooth Reciprocating.Tooth Type: 0
 Tooth 5: Tooth Main.Tooth Index.Major Index: 3
 Tooth 5: Tooth Main.Tooth Index.Minor Index: 3
 Tooth 5: Tooth Main.Tooth Index.Tooth Type: 1
@@ -157,7 +157,7 @@ Tooth 5: Tooth Main.Tooth Retainer.Retainer Clasp Type: 0
 Tooth 5: Tooth Main.Tooth Retainer.Retainer Ring Type: 0
 Tooth 5: Tooth Main.Tooth Retainer.Retainer Bar Type: 0
 Tooth 5: Tooth Main.Tooth Retainer.Retainer Bar Category: 0
-Tooth 5: Tooth Main.Tooth Reciprocating.Tooth Type: 2
+Tooth 5: Tooth Main.Tooth Reciprocating.Tooth Type: 0
 Tooth 6: Tooth Main.Tooth Index.Major Index: 3
 Tooth 6: Tooth Main.Tooth Index.Minor Index: 2
 Tooth 6: Tooth Main.Tooth Index.Tooth Type: 1
@@ -183,7 +183,7 @@ Tooth 6: Tooth Main.Tooth Retainer.Retainer Clasp Type: 0
 Tooth 6: Tooth Main.Tooth Retainer.Retainer Ring Type: 0
 Tooth 6: Tooth Main.Tooth Retainer.Retainer Bar Type: 0
 Tooth 6: Tooth Main.Tooth Retainer.Retainer Bar Category: 0
-Tooth 6: Tooth Main.Tooth Reciprocating.Tooth Type: 2
+Tooth 6: Tooth Main.Tooth Reciprocating.Tooth Type: 0
 Tooth 7: Tooth Main.Tooth Index.Major Index: 3
 Tooth 7: Tooth Main.Tooth Index.Minor Index: 1
 Tooth 7: Tooth Main.Tooth Index.Tooth Type: 1
@@ -209,7 +209,7 @@ Tooth 7: Tooth Main.Tooth Retainer.Retainer Clasp Type: 0
 Tooth 7: Tooth Main.Tooth Retainer.Retainer Ring Type: 0
 Tooth 7: Tooth Main.Tooth Retainer.Retainer Bar Type: 0
 Tooth 7: Tooth Main.Tooth Retainer.Retainer Bar Category: 0
-Tooth 7: Tooth Main.Tooth Reciprocating.Tooth Type: 2
+Tooth 7: Tooth Main.Tooth Reciprocating.Tooth Type: 0
 Tooth 8: Tooth Main.Tooth Index.Major Index: 4
 Tooth 8: Tooth Main.Tooth Index.Minor Index: 1
 Tooth 8: Tooth Main.Tooth Index.Tooth Type: 1
@@ -235,7 +235,7 @@ Tooth 8: Tooth Main.Tooth Retainer.Retainer Clasp Type: 0
 Tooth 8: Tooth Main.Tooth Retainer.Retainer Ring Type: 0
 Tooth 8: Tooth Main.Tooth Retainer.Retainer Bar Type: 0
 Tooth 8: Tooth Main.Tooth Retainer.Retainer Bar Category: 0
-Tooth 8: Tooth Main.Tooth Reciprocating.Tooth Type: 2
+Tooth 8: Tooth Main.Tooth Reciprocating.Tooth Type: 0
 Tooth 9: Tooth Main.Tooth Index.Major Index: 4
 Tooth 9: Tooth Main.Tooth Index.Minor Index: 2
 Tooth 9: Tooth Main.Tooth Index.Tooth Type: 1
@@ -261,7 +261,7 @@ Tooth 9: Tooth Main.Tooth Retainer.Retainer Clasp Type: 0
 Tooth 9: Tooth Main.Tooth Retainer.Retainer Ring Type: 0
 Tooth 9: Tooth Main.Tooth Retainer.Retainer Bar Type: 0
 Tooth 9: Tooth Main.Tooth Retainer.Retainer Bar Category: 0
-Tooth 9: Tooth Main.Tooth Reciprocating.Tooth Type: 2
+Tooth 9: Tooth Main.Tooth Reciprocating.Tooth Type: 0
 Tooth 10: Tooth Main.Tooth Index.Major Index: 4
 Tooth 10: Tooth Main.Tooth Index.Minor Index: 3
 Tooth 10: Tooth Main.Tooth Index.Tooth Type: 1
@@ -271,13 +271,13 @@ Tooth 10: Tooth Main.Tooth Index.Mesh Presence: 1
 Tooth 10: Tooth Main.Tooth Index.Array Index: 10
 Tooth 10: Tooth Main.Tooth Index.Tissue Stop Presence: 0
 Tooth 10: Tooth Main.Tooth Index.Retention Pin Presence: 0
-Tooth 10: Tooth Main.Tooth Index.Tooth Position X: 6.63124e-316
+Tooth 10: Tooth Main.Tooth Index.Tooth Position X: 4.94066e-324
 Tooth 10: Tooth Main.Tooth Index.Tooth Position Y: 0
 Tooth 10: Tooth Main.Tooth Index.Tooth Position Z: 0
 Tooth 10: Tooth Main.Tooth Rest.Tooth Type: 1
-Tooth 10: Tooth Main.Tooth Rest.Anterior Rest: 0
+Tooth 10: Tooth Main.Tooth Rest.Anterior Rest: 2
 Tooth 10: Tooth Main.Tooth Rest.Anterior Cingulum Rest Type: 0
-Tooth 10: Tooth Main.Tooth Rest.Anterior Incisal Rest Type: 0
+Tooth 10: Tooth Main.Tooth Rest.Anterior Incisal Rest Type: 1
 Tooth 10: Tooth Main.Tooth Rest.Posterior Rest Type: 0
 Tooth 10: Tooth Main.Tooth Rest.Pr Config 0: 1
 Tooth 10: Tooth Main.Tooth Rest.Pr Config 1: 1
@@ -287,7 +287,7 @@ Tooth 10: Tooth Main.Tooth Retainer.Retainer Clasp Type: 0
 Tooth 10: Tooth Main.Tooth Retainer.Retainer Ring Type: 0
 Tooth 10: Tooth Main.Tooth Retainer.Retainer Bar Type: 0
 Tooth 10: Tooth Main.Tooth Retainer.Retainer Bar Category: 0
-Tooth 10: Tooth Main.Tooth Reciprocating.Tooth Type: 2
+Tooth 10: Tooth Main.Tooth Reciprocating.Tooth Type: 0
 Tooth 11: Tooth Main.Tooth Index.Major Index: 4
 Tooth 11: Tooth Main.Tooth Index.Minor Index: 4
 Tooth 11: Tooth Main.Tooth Index.Tooth Type: 0
@@ -297,23 +297,23 @@ Tooth 11: Tooth Main.Tooth Index.Mesh Presence: 1
 Tooth 11: Tooth Main.Tooth Index.Array Index: 11
 Tooth 11: Tooth Main.Tooth Index.Tissue Stop Presence: 0
 Tooth 11: Tooth Main.Tooth Index.Retention Pin Presence: 0
-Tooth 11: Tooth Main.Tooth Index.Tooth Position X: 0
-Tooth 11: Tooth Main.Tooth Index.Tooth Position Y: 0
+Tooth 11: Tooth Main.Tooth Index.Tooth Position X: 2.122e-314
+Tooth 11: Tooth Main.Tooth Index.Tooth Position Y: 6.95335e-310
 Tooth 11: Tooth Main.Tooth Index.Tooth Position Z: 0
 Tooth 11: Tooth Main.Tooth Rest.Tooth Type: 0
 Tooth 11: Tooth Main.Tooth Rest.Anterior Rest: 0
 Tooth 11: Tooth Main.Tooth Rest.Anterior Cingulum Rest Type: 0
 Tooth 11: Tooth Main.Tooth Rest.Anterior Incisal Rest Type: 0
-Tooth 11: Tooth Main.Tooth Rest.Posterior Rest Type: 0
+Tooth 11: Tooth Main.Tooth Rest.Posterior Rest Type: 2
 Tooth 11: Tooth Main.Tooth Rest.Pr Config 0: 1
-Tooth 11: Tooth Main.Tooth Rest.Pr Config 1: 1
+Tooth 11: Tooth Main.Tooth Rest.Pr Config 1: 0
 Tooth 11: Tooth Main.Tooth Rest.Pr Config 2: 1
-Tooth 11: Tooth Main.Tooth Retainer.Retainer Type: 0
-Tooth 11: Tooth Main.Tooth Retainer.Retainer Clasp Type: 0
+Tooth 11: Tooth Main.Tooth Retainer.Retainer Type: 1
+Tooth 11: Tooth Main.Tooth Retainer.Retainer Clasp Type: 2
 Tooth 11: Tooth Main.Tooth Retainer.Retainer Ring Type: 0
 Tooth 11: Tooth Main.Tooth Retainer.Retainer Bar Type: 0
 Tooth 11: Tooth Main.Tooth Retainer.Retainer Bar Category: 0
-Tooth 11: Tooth Main.Tooth Reciprocating.Tooth Type: 2
+Tooth 11: Tooth Main.Tooth Reciprocating.Tooth Type: 0
 Tooth 12: Tooth Main.Tooth Index.Major Index: 4
 Tooth 12: Tooth Main.Tooth Index.Minor Index: 5
 Tooth 12: Tooth Main.Tooth Index.Tooth Type: 0
@@ -324,22 +324,22 @@ Tooth 12: Tooth Main.Tooth Index.Array Index: 12
 Tooth 12: Tooth Main.Tooth Index.Tissue Stop Presence: 0
 Tooth 12: Tooth Main.Tooth Index.Retention Pin Presence: 0
 Tooth 12: Tooth Main.Tooth Index.Tooth Position X: 0
-Tooth 12: Tooth Main.Tooth Index.Tooth Position Y: 0
-Tooth 12: Tooth Main.Tooth Index.Tooth Position Z: 2.37152e-322
+Tooth 12: Tooth Main.Tooth Index.Tooth Position Y: 2.122e-314
+Tooth 12: Tooth Main.Tooth Index.Tooth Position Z: 0
 Tooth 12: Tooth Main.Tooth Rest.Tooth Type: 0
 Tooth 12: Tooth Main.Tooth Rest.Anterior Rest: 0
 Tooth 12: Tooth Main.Tooth Rest.Anterior Cingulum Rest Type: 0
 Tooth 12: Tooth Main.Tooth Rest.Anterior Incisal Rest Type: 0
 Tooth 12: Tooth Main.Tooth Rest.Posterior Rest Type: 2
-Tooth 12: Tooth Main.Tooth Rest.Pr Config 0: 0
-Tooth 12: Tooth Main.Tooth Rest.Pr Config 1: 1
+Tooth 12: Tooth Main.Tooth Rest.Pr Config 0: 1
+Tooth 12: Tooth Main.Tooth Rest.Pr Config 1: 0
 Tooth 12: Tooth Main.Tooth Rest.Pr Config 2: 1
-Tooth 12: Tooth Main.Tooth Retainer.Retainer Type: 3
+Tooth 12: Tooth Main.Tooth Retainer.Retainer Type: 0
 Tooth 12: Tooth Main.Tooth Retainer.Retainer Clasp Type: 0
 Tooth 12: Tooth Main.Tooth Retainer.Retainer Ring Type: 0
-Tooth 12: Tooth Main.Tooth Retainer.Retainer Bar Type: 1
+Tooth 12: Tooth Main.Tooth Retainer.Retainer Bar Type: 0
 Tooth 12: Tooth Main.Tooth Retainer.Retainer Bar Category: 0
-Tooth 12: Tooth Main.Tooth Reciprocating.Tooth Type: 2
+Tooth 12: Tooth Main.Tooth Reciprocating.Tooth Type: 0
 Tooth 13: Tooth Main.Tooth Index.Major Index: 4
 Tooth 13: Tooth Main.Tooth Index.Minor Index: 6
 Tooth 13: Tooth Main.Tooth Index.Tooth Type: 0
@@ -350,8 +350,8 @@ Tooth 13: Tooth Main.Tooth Index.Array Index: 13
 Tooth 13: Tooth Main.Tooth Index.Tissue Stop Presence: 0
 Tooth 13: Tooth Main.Tooth Index.Retention Pin Presence: 0
 Tooth 13: Tooth Main.Tooth Index.Tooth Position X: 0
-Tooth 13: Tooth Main.Tooth Index.Tooth Position Y: 6.95295e-310
-Tooth 13: Tooth Main.Tooth Index.Tooth Position Z: 5.72939e-313
+Tooth 13: Tooth Main.Tooth Index.Tooth Position Y: 1.07921e-311
+Tooth 13: Tooth Main.Tooth Index.Tooth Position Z: 2.88604e-312
 Tooth 13: Tooth Main.Tooth Rest.Tooth Type: 0
 Tooth 13: Tooth Main.Tooth Rest.Anterior Rest: 0
 Tooth 13: Tooth Main.Tooth Rest.Anterior Cingulum Rest Type: 0
@@ -375,7 +375,7 @@ Tooth 14: Tooth Main.Tooth Index.Mesh Presence: 0
 Tooth 14: Tooth Main.Tooth Index.Array Index: 14
 Tooth 14: Tooth Main.Tooth Index.Tissue Stop Presence: 0
 Tooth 14: Tooth Main.Tooth Index.Retention Pin Presence: 0
-Tooth 14: Tooth Main.Tooth Index.Tooth Position X: 0
+Tooth 14: Tooth Main.Tooth Index.Tooth Position X: 1.61065e-321
 Tooth 14: Tooth Main.Tooth Index.Tooth Position Y: 0
 Tooth 14: Tooth Main.Tooth Index.Tooth Position Z: 0
 Tooth 14: Tooth Main.Tooth Rest.Tooth Type: 0
@@ -395,36 +395,36 @@ Tooth 14: Tooth Main.Tooth Reciprocating.Tooth Type: 0
 Tooth 15: Tooth Main.Tooth Index.Major Index: 4
 Tooth 15: Tooth Main.Tooth Index.Minor Index: 8
 Tooth 15: Tooth Main.Tooth Index.Tooth Type: 0
-Tooth 15: Tooth Main.Tooth Index.Tooth Presence: 1
+Tooth 15: Tooth Main.Tooth Index.Tooth Presence: 0
 Tooth 15: Tooth Main.Tooth Index.Tooth Condition: 0
 Tooth 15: Tooth Main.Tooth Index.Mesh Presence: 1
 Tooth 15: Tooth Main.Tooth Index.Array Index: 15
 Tooth 15: Tooth Main.Tooth Index.Tissue Stop Presence: 0
 Tooth 15: Tooth Main.Tooth Index.Retention Pin Presence: 0
-Tooth 15: Tooth Main.Tooth Index.Tooth Position X: 0
-Tooth 15: Tooth Main.Tooth Index.Tooth Position Y: 0
+Tooth 15: Tooth Main.Tooth Index.Tooth Position X: 1.18576e-322
+Tooth 15: Tooth Main.Tooth Index.Tooth Position Y: 2.76677e-322
 Tooth 15: Tooth Main.Tooth Index.Tooth Position Z: 0
 Tooth 15: Tooth Main.Tooth Rest.Tooth Type: 0
 Tooth 15: Tooth Main.Tooth Rest.Anterior Rest: 0
 Tooth 15: Tooth Main.Tooth Rest.Anterior Cingulum Rest Type: 0
 Tooth 15: Tooth Main.Tooth Rest.Anterior Incisal Rest Type: 0
-Tooth 15: Tooth Main.Tooth Rest.Posterior Rest Type: 0
-Tooth 15: Tooth Main.Tooth Rest.Pr Config 0: 1
+Tooth 15: Tooth Main.Tooth Rest.Posterior Rest Type: 2
+Tooth 15: Tooth Main.Tooth Rest.Pr Config 0: 0
 Tooth 15: Tooth Main.Tooth Rest.Pr Config 1: 1
 Tooth 15: Tooth Main.Tooth Rest.Pr Config 2: 1
-Tooth 15: Tooth Main.Tooth Retainer.Retainer Type: 0
+Tooth 15: Tooth Main.Tooth Retainer.Retainer Type: 1
 Tooth 15: Tooth Main.Tooth Retainer.Retainer Clasp Type: 0
 Tooth 15: Tooth Main.Tooth Retainer.Retainer Ring Type: 0
 Tooth 15: Tooth Main.Tooth Retainer.Retainer Bar Type: 0
 Tooth 15: Tooth Main.Tooth Retainer.Retainer Bar Category: 0
 Tooth 15: Tooth Main.Tooth Reciprocating.Tooth Type: 0
-Mesh Number: 1
+Mesh Number: 2
 Tooth Mesh 0: Mesh Type: 1
-Tooth Mesh 0: Start Index: 13
-Tooth Mesh 0: End Index: 14
-Tooth Mesh 1: Mesh Type: 0
-Tooth Mesh 1: Start Index: -1
-Tooth Mesh 1: End Index: -1
+Tooth Mesh 0: Start Index: 1
+Tooth Mesh 0: End Index: 2
+Tooth Mesh 1: Mesh Type: 1
+Tooth Mesh 1: Start Index: 13
+Tooth Mesh 1: End Index: 14
 Tooth Mesh 2: Mesh Type: 0
 Tooth Mesh 2: Start Index: -1
 Tooth Mesh 2: End Index: -1
@@ -443,7 +443,7 @@ Tooth Mesh 6: End Index: -1
 Tooth Mesh 7: Mesh Type: 0
 Tooth Mesh 7: Start Index: -1
 Tooth Mesh 7: End Index: -1
-Major Connector Type: 7
+Major Connector Type: 6
 Minor Connector 0 Path Index 0: 1
 Minor Connector 0 Path Index 1: 1
 Minor Connector 0 Path Index 2: 1
@@ -456,8 +456,8 @@ Minor Connector 0 Path Index 8: 1
 Minor Connector 0 Path Index 9: 1
 Minor Connector 0 Path Index 10: 1
 Minor Connector 0 Path Index 11: 1
-Minor Connector 0 Path Index 12: 1
-Minor Connector 0 Path Index 13: 1
+Minor Connector 0 Path Index 12: 0
+Minor Connector 0 Path Index 13: 0
 Minor Connector 0 Path Index 14: 1
 Minor Connector 0 Path Index 15: 1
 Minor Connector 1 Path Index 0: 1
@@ -466,8 +466,8 @@ Minor Connector 1 Path Index 2: 1
 Minor Connector 1 Path Index 3: 1
 Minor Connector 1 Path Index 4: 1
 Minor Connector 1 Path Index 5: 1
-Minor Connector 1 Path Index 6: 0
-Minor Connector 1 Path Index 7: 0
+Minor Connector 1 Path Index 6: 1
+Minor Connector 1 Path Index 7: 1
 Minor Connector 1 Path Index 8: 1
 Minor Connector 1 Path Index 9: 1
 Minor Connector 1 Path Index 10: 1
@@ -504,7 +504,7 @@ Minor Connector 3 Path Index 8: 1
 Minor Connector 3 Path Index 9: 1
 Minor Connector 3 Path Index 10: 1
 Minor Connector 3 Path Index 11: 1
-Minor Connector 3 Path Index 12: 1
+Minor Connector 3 Path Index 12: 0
 Minor Connector 3 Path Index 13: 1
 Minor Connector 3 Path Index 14: 1
 Minor Connector 3 Path Index 15: 1
@@ -632,8 +632,8 @@ Minor Connector 11 Path Index 8: 1
 Minor Connector 11 Path Index 9: 1
 Minor Connector 11 Path Index 10: 1
 Minor Connector 11 Path Index 11: 1
-Minor Connector 11 Path Index 12: 1
-Minor Connector 11 Path Index 13: 1
+Minor Connector 11 Path Index 12: 0
+Minor Connector 11 Path Index 13: 0
 Minor Connector 11 Path Index 14: 1
 Minor Connector 11 Path Index 15: 1
 Minor Connector 12 Path Index 0: 1
@@ -643,12 +643,12 @@ Minor Connector 12 Path Index 3: 1
 Minor Connector 12 Path Index 4: 1
 Minor Connector 12 Path Index 5: 1
 Minor Connector 12 Path Index 6: 1
-Minor Connector 12 Path Index 7: 0
+Minor Connector 12 Path Index 7: 1
 Minor Connector 12 Path Index 8: 1
 Minor Connector 12 Path Index 9: 1
 Minor Connector 12 Path Index 10: 1
 Minor Connector 12 Path Index 11: 1
-Minor Connector 12 Path Index 12: 1
+Minor Connector 12 Path Index 12: 0
 Minor Connector 12 Path Index 13: 1
 Minor Connector 12 Path Index 14: 1
 Minor Connector 12 Path Index 15: 1
@@ -696,8 +696,8 @@ Minor Connector 15 Path Index 8: 1
 Minor Connector 15 Path Index 9: 1
 Minor Connector 15 Path Index 10: 1
 Minor Connector 15 Path Index 11: 1
-Minor Connector 15 Path Index 12: 1
-Minor Connector 15 Path Index 13: 1
+Minor Connector 15 Path Index 12: 0
+Minor Connector 15 Path Index 13: 0
 Minor Connector 15 Path Index 14: 1
 Minor Connector 15 Path Index 15: 1
 Ball Connector 0: 0

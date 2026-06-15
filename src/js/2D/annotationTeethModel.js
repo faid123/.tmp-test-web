@@ -99,8 +99,22 @@ export function hasPlacement(tooth, componentId, surface) {
   );
 }
 
+// A tooth's reciprocating element is a single slot (Reciprocating.Tooth Type):
+// a reciprocating clasp OR a proximal/mesh plate — never more than one. This is
+// the universal choke point, so enforcing it here also covers the compound
+// clasp/bar assembly placements (which call addPlacement directly and bypass the
+// catalog's conflictsWith check) and prevents an overlapping clasp + plate.
+const RECIPROCATING_SLOT_IDS = new Set(["reciprocating-clasp", "plate-prox", "plate-crossmesh"]);
+
 // Add one component placement on tooth.
 export function addPlacement(tooth, componentId, surface) {
+  if (!Array.isArray(tooth.componentPlacements)) tooth.componentPlacements = [];
+  // Placing a reciprocating element drops any other reciprocating element first.
+  if (RECIPROCATING_SLOT_IDS.has(componentId)) {
+    tooth.componentPlacements = tooth.componentPlacements.filter(
+      (entry) => !RECIPROCATING_SLOT_IDS.has(entry.componentId)
+    );
+  }
   tooth.componentPlacements.push({
     componentId,
     surface: normalizeSurface(surface),

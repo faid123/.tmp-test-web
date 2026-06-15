@@ -224,7 +224,15 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
     // gets the bar band crossing it but NO plate fill. Draw the plate fill first so
     // the bar band sits on top of it. The lingual bar (and other majors) render the
     // band only.
-    if (majorId === "major-lower-lingual-plate" && tooth.isPresent) {
+    // The lingual-plate fill IS that tooth's reciprocal/plating element. If the
+    // tooth already carries a reciprocating clasp, that is its reciprocal — drawing
+    // the plate fill on top would overlap it (clasp XOR plate per tooth), so skip
+    // the fill there and let the clasp show. Other present teeth still get filled.
+    if (
+      majorId === "major-lower-lingual-plate" &&
+      tooth.isPresent &&
+      !tooth.components.some((id) => isReciprocatingClaspComponent(id))
+    ) {
       const plate = createComponentVisual("plate-prox", toothId, jaw);
       if (plate) group.appendChild(plate);
     }
@@ -1485,6 +1493,15 @@ function createMajorConnectorVisual(majorComponentId, tooth, toothId, jaw) {
     transform: `translate(${ox.toFixed(2)} ${oy.toFixed(2)}) scale(${scaleXConn.toFixed(3)} ${scaleYConn.toFixed(3)})`,
   });
   const isSeparated = isMajorConnectorPlacementSeparated(toothId, state.teeth, jaw);
+  // A separated segment is a stray, floating major-connector cap on a tooth whose
+  // order-neighbors carry no connector — e.g. a lone clasped *8 abutment (18/28/
+  // 38/48) under a posterior-only palatal bar/strap, which the per-tooth placer
+  // tags on its own. A major connector is a continuous span, so a single-tooth
+  // segment is meaningless. Don't render it in the locked preview; design mode
+  // still draws it tinted (below) as an editing cue.
+  if (isSeparated && !state.designMode) {
+    return null;
+  }
   const imageClass = isSeparated
     ? "component-image major-connector-image is-separated"
     : "component-image major-connector-image";

@@ -234,7 +234,10 @@ export const COMPONENT_CATALOG = [
     tab: "clasps",
     requiresPresence: true,
     requiresMissing: false,
-    conflictsWith: [],
+    // A tooth's reciprocating element is a single slot (Reciprocating.Tooth Type):
+    // a reciprocating clasp OR a proximal/mesh plate, never both. Mutually exclusive
+    // with the plates so placing one removes the other (no overlapping clasp+plate).
+    conflictsWith: ["plate-prox", "plate-crossmesh"],
     actionUponFailure: ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
   },
   {
@@ -312,7 +315,9 @@ export const COMPONENT_CATALOG = [
     tab: "plate",
     requiresPresence: true,
     requiresMissing: false,
-    conflictsWith: ["plate-crossmesh"],
+    // One reciprocating element per tooth: a plate excludes the other plate AND a
+    // reciprocating clasp (see reciprocating-clasp).
+    conflictsWith: ["plate-crossmesh", "reciprocating-clasp"],
     actionUponFailure: ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
   },
   {
@@ -323,7 +328,9 @@ export const COMPONENT_CATALOG = [
     tab: "plate",
     requiresPresence: true,
     requiresMissing: false,
-    conflictsWith: ["plate-prox"],
+    // One reciprocating element per tooth: a plate excludes the other plate AND a
+    // reciprocating clasp (see reciprocating-clasp).
+    conflictsWith: ["plate-prox", "reciprocating-clasp"],
     actionUponFailure: ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
   },
   {

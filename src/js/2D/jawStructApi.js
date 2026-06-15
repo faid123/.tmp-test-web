@@ -3,11 +3,10 @@
  * and noticeboard.js: same API base, same MACHINE_ID, same
  * [{machine_id, uuid, caseIntID}, {case_id, ...}] payload envelope.
  *
- * The fetch endpoint is already in use in 2DAnnotation.js.
- * The save endpoint name + record shape is NOT confirmed with the backend.
- * See OPEN ITEM #1 in the plan. Until confirmed, saveJawStruct() will POST
- * with the most likely shape and log the result; callers are gated by
- * `enableJawStructAutosave` flag in 2DAnnotation.js.
+ * Both endpoints are live: fetch via POST /jawstruct/l2/getall, save via
+ * POST /jawstruct/l2 (returns {"successful":true}, upsert per case+type).
+ * The save endpoint + payload shape were verified against the backend with
+ * put_jawstruct_debug.sh. The Save button (saveAnnotation) drives the write.
  */
 import { encodeJawStructBase64 } from "./jawStructCodec.js";
 
@@ -55,7 +54,7 @@ export async function fetchJawStruct(caseIntID, uuid) {
 
 /**
  * Save one jaw's struct text (already base64-encoded) back to the backend.
- * Endpoint + payload shape is unconfirmed — see file-level note.
+ * POST /jawstruct/l2 upserts on (case_id, type) — see file-level note.
  */
 export async function saveJawStructJaw(caseIntID, uuid, type, base64Data, filename) {
   const payload = buildPayload(caseIntID, uuid, {
@@ -63,7 +62,6 @@ export async function saveJawStructJaw(caseIntID, uuid, type, base64Data, filena
     filename: filename || (type === "upper_jaw" ? "JawUpper_Struct_L2.txt" : "JawLower_Struct_L2.txt"),
     data: base64Data,
   });
-  // Save path mirrors the GET path. Backend hasn't been verified for this — see file header.
   return postJson("/jawstruct/l2", payload);
 }
 

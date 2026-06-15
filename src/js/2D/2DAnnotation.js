@@ -20,10 +20,13 @@ import { fetchJawStruct as apiFetchJawStruct, saveJawStructFromState } from "./j
 import { decodeJawStructResponse, resolveJawStructDesign } from "./jawStructCodec.js";
 import { applyJawStructDesign } from "./jawStructApply.js";
 import { logApi } from "../apiLog.js";
+import { toast, flashToast } from "../toast.js";
 
 /**
- * Autosave to /jawstruct_l2 is off until the save endpoint's name + payload
- * shape are confirmed with the backend. Flip to true once verified.
+ * The Save button is the chosen trigger for writing the 2D design back to the
+ * server (saveAnnotation → postJawStructToServer). This flag additionally
+ * enables autosave-on-every-edit via the history hook; kept off to avoid a POST
+ * per placement. The endpoint itself (POST /jawstruct/l2) is verified.
  */
 const ENABLE_JAW_STRUCT_AUTOSAVE = false;
 
@@ -1006,15 +1009,37 @@ async function resetJawStructDesignToBaseline() {
   state.jawStructTail = {};
 }
 
-// Save current state back to the backend. Off by default — see
-// ENABLE_JAW_STRUCT_AUTOSAVE at the top of this file.
+// Post the current 2D design (both jaws) to the backend.
+// Returns saveJawStructFromState's { upper, lower } per-jaw result, or
+// { ok: false, reason } when it can't run (no case / not logged in).
+// Endpoint + payload shape verified against the live backend (POST
+// /jawstruct/l2 → {"successful":true}; see put_jawstruct_debug.sh).
+// Used by the Save button and by the (off-by-default) autosave hook below.
+export async function postJawStructToServer() {
+  if (!state.caseIntID) {
+    console.warn("[2D-post] skipped — no caseIntID");
+    return { ok: false, reason: "no-case" };
+  }
+  const loggedInUser = getLoggedInUser();
+  if (!loggedInUser?.uuid) {
+    console.warn("[2D-post] skipped — not logged in");
+    return { ok: false, reason: "no-auth" };
+  }
+  console.log(`[2D-post] posting 2D structure for case ${state.caseIntID} (upper + lower)…`);
+  const res = await saveJawStructFromState(state.caseIntID, loggedInUser.uuid, state);
+  console.log("[2D-post] post result:", {
+    upper: res?.upper?.ok ? `ok (${res.upper.status})` : `FAILED (${res?.upper?.status})`,
+    lower: res?.lower?.ok ? `ok (${res.lower.status})` : `FAILED (${res?.lower?.status})`,
+  });
+  return res;
+}
+
+// Autosave hook — off by default; the Save button is the chosen trigger.
+// See ENABLE_JAW_STRUCT_AUTOSAVE at the top of this file.
 async function saveJawStructAutosave() {
   if (!ENABLE_JAW_STRUCT_AUTOSAVE) return;
-  if (!state.caseIntID) return;
-  const loggedInUser = getLoggedInUser();
-  if (!loggedInUser?.uuid) return;
   try {
-    await saveJawStructFromState(state.caseIntID, loggedInUser.uuid, state);
+    await postJawStructToServer();
   } catch (err) {
     console.warn("Failed to save jawstruct:", err);
   }
@@ -1217,6 +1242,14 @@ function bindBackNavigationDialog(locks) {
     } catch {
       saved = false;
     }
+    // Post the 2D design to the backend — same as the main Save button.
+    let posted = false;
+    try {
+      const res = await postJawStructToServer();
+      posted = !!(res?.upper?.ok && res?.lower?.ok);
+    } catch (err) {
+      console.warn("[save] jawstruct post failed", err);
+    }
     try {
       setMessage("Uploading thumbnail…", false);
       const ok = await locks.uploadJawPngThumbnail();
@@ -1224,14 +1257,17 @@ function bindBackNavigationDialog(locks) {
     } catch (err) {
       console.warn("[save] thumbnail upload failed", err);
     }
-    return saved;
+    return { saved, posted };
   };
   window.__ann2dSaveCurrent = saveCurrent;
 
   saveBackBtn.addEventListener("click", async () => {
     saveBackBtn.disabled = true;
-    const saved = await saveCurrent();
-    if (!saved) setMessage("Could not save locally. Going back anyway.", true);
+    const { saved, posted } = await saveCurrent();
+    // flashToast survives the navigation below and shows on the next page.
+    if (posted) flashToast("Saved successfully", "success");
+    else if (saved) flashToast("Saved locally; server save failed — see console.", "warning");
+    else flashToast("Could not save. Going back anyway.", "warning");
     window.location.href = targetHref;
   });
 
@@ -1264,8 +1300,10 @@ async function initSidebar() {
     handle.close();
     const saveFn = window.__ann2dSaveCurrent;
     if (typeof saveFn === "function") {
-      const saved = await saveFn();
-      setMessage(saved ? "Saved." : "Save failed locally.", !saved);
+      const { saved, posted } = await saveFn();
+      if (posted) toast.success("Saved successfully");
+      else if (!saved) toast.error("Save failed locally.");
+      else toast.warning("Saved locally; server save failed — see console.");
     } else {
       document.getElementById("saveAnnotationBtn")?.click();
     }

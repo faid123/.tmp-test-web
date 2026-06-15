@@ -10,10 +10,10 @@ import { forEachTooth, TOOTH_ORDER } from "./constants.js";
 import {
   state,
   DEFAULT_COMPONENT_ID,
-  downloadText,
   getHistoryStateSignature,
   recordHistoryIfChanged,
   registerAutosaveHook,
+  postJawStructToServer,
   titleCase,
   setMessage,
   closePresentToothRadialQuickPick,
@@ -21,7 +21,6 @@ import {
   renderJaws,
 } from "./2DAnnotation.js";
 import { renderComponentCatalog } from "./annotationCatalog.js";
-import { encodeJawStructText } from "./jawStructCodec.js";
 import {
   ensureToothPlacementState,
   normalizeSurface,
@@ -31,6 +30,7 @@ import {
 } from "./annotationTeethModel.js";
 import { loadInteractiveJawPreview, teardown3DPreview } from "./preview3D.js";
 import { logApi } from "../apiLog.js";
+import { toast } from "../toast.js";
 
 // Bind tooth status picker buttons (presence/abutment/compromised).
 export function bindStatusPicker() {
@@ -235,8 +235,8 @@ export function bindActionButtons() {
   const reset = document.getElementById("drawFromScratchBtn");
   const save = document.getElementById("saveAnnotationBtn");
   const saveJpeg = document.getElementById("saveJpegBtn");
-  if (clearTop) clearTop.addEventListener("click", () => clearArchButtonClicked("upper"));
-  if (clearBottom) clearBottom.addEventListener("click", () => clearArchButtonClicked("lower"));
+  if (clearTop) clearTop.addEventListener("click", () => clearJawTeethBaseline("upper"));
+  if (clearBottom) clearBottom.addEventListener("click", () => clearJawTeethBaseline("lower"));
   if (reset) reset.addEventListener("click", drawFromScratch);
   if (save) save.addEventListener("click", saveAnnotation);
   if (saveJpeg) saveJpeg.addEventListener("click", saveAsJpeg);
@@ -292,28 +292,6 @@ function refreshLockButtons() {
   );
 }
 
-function updateClearArchButtonLabels() {
-  const clearTop = document.getElementById("clearTopBtn");
-  const clearBottom = document.getElementById("clearBottomBtn");
-  if (!clearTop || !clearBottom) return;
-
-  if (state.designMode) {
-    clearTop.textContent = "Clear Top";
-    clearBottom.textContent = "Clear Bottom";
-  } else {
-    clearTop.textContent = "Clear upper teeth";
-    clearBottom.textContent = "Clear lower teeth";
-  }
-}
-
-function clearArchButtonClicked(jaw) {
-  if (state.designMode) {
-    clearDesignModeArch(jaw);
-  } else {
-    clearJawTeethBaseline(jaw);
-  }
-}
-
 function clearJawTeethBaseline(jaw) {
   const historyBefore = getHistoryStateSignature();
   for (const toothId of TOOTH_ORDER[jaw]) {
@@ -329,27 +307,6 @@ function clearJawTeethBaseline(jaw) {
   }
   renderJaw(jaw);
   setMessage(`${titleCase(jaw)} arch: all teeth marked missing.`, false);
-  recordHistoryIfChanged(historyBefore);
-}
-
-function clearDesignModeArch(jaw) {
-  const historyBefore = getHistoryStateSignature();
-  if (!state.designMode) return;
-
-  for (const toothId of TOOTH_ORDER[jaw]) {
-    const tooth = state.teeth[toothId];
-    if (!tooth) continue;
-    tooth.componentPlacements = [];
-    syncToothComponentsFromPlacements(tooth);
-  }
-
-  if (jaw === "upper") {
-    state.archOverlayPalatalHoleActive = false;
-  }
-
-  renderComponentCatalog();
-  renderJaws();
-  setMessage(`${titleCase(jaw)} arch cleared.`, false);
   recordHistoryIfChanged(historyBefore);
 }
 
@@ -389,6 +346,13 @@ export function updateEditModeUI() {
   if (selectPanel) {
     selectPanel.classList.toggle("is-hidden", active);
   }
+
+  // Clear upper/lower teeth only act on tooth presence (a select-mode action),
+  // so hide them in design mode where tooth selection is disabled.
+  const clearTop = document.getElementById("clearTopBtn");
+  const clearBottom = document.getElementById("clearBottomBtn");
+  if (clearTop) clearTop.classList.toggle("is-hidden", active);
+  if (clearBottom) clearBottom.classList.toggle("is-hidden", active);
 
   const eraser = document.getElementById("removeComponentModeBtn");
   const rangeBtn = document.getElementById("teethRangeMissingBtn");
@@ -474,8 +438,6 @@ export function syncDesignModeWithLocks(notify) {
       setMessage("Exited design mode. Unlock state allows tooth editing again.", false);
     }
   }
-
-  updateClearArchButtonLabels();
 }
 
 export function bindArchWhitespaceDismiss() {
@@ -539,20 +501,32 @@ export function bindRemoveComponentModeBtn() {
   });
 }
 
-export function saveAnnotation() {
+export async function saveAnnotation() {
   const payload = buildPayload();
   const storageKey = getStorageKey();
   try {
-    // Persistence stays JSON (restoreAnnotationFromStorage reads it back); the
-    // downloaded artifact is the jaw-struct .txt so it can be diffed against the
-    // desktop format (one file per jaw, matching 03_jawstruct_<jaw>_jaw.txt).
+    // Persistence stays JSON (restoreAnnotationFromStorage reads it back).
     localStorage.setItem(storageKey, JSON.stringify(payload));
-    const caseTag = state.caseIntID ?? "unknown";
-    downloadText(`case_${caseTag}_jawstruct_upper_jaw.txt`, encodeJawStructText(state, "upper"));
-    downloadText(`case_${caseTag}_jawstruct_lower_jaw.txt`, encodeJawStructText(state, "lower"));
-    setMessage(`Saved to localStorage "${storageKey}" and downloaded upper/lower jaw-struct .txt.`, false);
   } catch {
-    setMessage("Failed to save annotation.", true);
+    toast.error("Failed to save annotation.");
+    return;
+  }
+
+  // Post the 2D design (both jaws) to the backend (POST /jawstruct/l2 per jaw).
+  try {
+    const res = await postJawStructToServer();
+    if (res?.reason === "no-case") {
+      toast.warning("Saved locally. Server save skipped — no case loaded.");
+    } else if (res?.reason === "no-auth") {
+      toast.warning("Saved locally. Server save skipped — not logged in.");
+    } else if (res?.upper?.ok && res?.lower?.ok) {
+      toast.success("Saved successfully");
+    } else {
+      toast.error("Saved locally, but the server save failed for one or both jaws — see console.");
+    }
+  } catch (err) {
+    console.warn("Failed to post jawstruct to server:", err);
+    toast.error("Saved locally, but the server save errored — see console.");
   }
 }
 

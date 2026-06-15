@@ -225,6 +225,9 @@ export function resolveJawStructDesign(parsed) {
   };
   if (!parsed?.teeth) return design;
 
+  // Jaw major connector type, read up-front so per-tooth decode can reference it.
+  const jawMcCode = Number(parsed?.other?.[MAJOR_CONNECTOR_KEY]);
+
   // array index (0..15) -> FDI, derived from the data itself (robust vs hardcoding).
   const idxToFdi = {};
   for (const [idx, tooth] of Object.entries(parsed.teeth)) {
@@ -276,13 +279,14 @@ export function resolveJawStructDesign(parsed) {
     }
 
     // Reciprocating element (Reciprocating.Tooth Type): 1=reciprocating-clasp, 2=plate-prox,
-    // 3=plate-crossmesh — taken literally, drawn on any present tooth that has the value (no
-    // filtering). The encoder only writes a non-zero value where a reciprocating component is
-    // actually placed, so this stays accurate for web/from-scratch designs; a raw desktop file
-    // that defaults 2 onto every present tooth will therefore show a plate on each of them.
-    // Plate uses a null surface; a reciprocating clasp gets a lingual anchor (opposite the arm).
+    // 3=plate-crossmesh. Plate uses a null surface; a reciprocating clasp gets a lingual anchor.
+    // EXCEPTION: under a lower lingual PLATE (mc 7) the desktop stamps reciprocating=2 on every
+    // present tooth as implied plating — decoding each into a plate-prox draws proximal plates
+    // that overlap the plate body. Skip those (the plate already represents the plating); real
+    // reciprocating clasps (1) and crossmesh plates (3) are still kept. The encoder re-derives
+    // reciprocating=2 for a lingual plate from the connector type, so this round-trips.
     const recipId = RECIPROCATING_TYPE.get(Number(f[RECIPROCATING_FIELD]));
-    if (recipId) {
+    if (recipId && !(jawMcCode === 7 && recipId === "plate-prox")) {
       const surface = recipId === "reciprocating-clasp" ? "mesial_lingual" : null;
       entry.placements.push({ componentId: recipId, surface });
     }
@@ -372,7 +376,33 @@ function majorConnectorCode(state, fdiOrder) {
   return 0;
 }
 
-function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
+// The lower lingual connector's plate-vs-bar SHAPE lives in the 16x16 Minor
+// Connector grid, not just the "Major Connector Type" label: the desktop routes
+// a PLATE through Path D (StructData.cs Path index 6=distal / 7=mesial) and a BAR
+// through Path G (12=distal / 13=mesial). The web doesn't model the grid (it only
+// preserves what was loaded), so switching the type used to leave the desktop
+// drawing the old shape. Here we re-route the active path segments to match the
+// chosen type. Verified byte-exact against desktop case 1923 in both directions;
+// idempotent, so a loaded design that already matches its type round-trips
+// unchanged. Only applies to lower lingual bar(6) / plate(7); other connectors
+// (and from-scratch designs with no active grid) pass through untouched.
+function normalizeLingualGridForType(tail, mcCode) {
+  if (mcCode !== 6 && mcCode !== 7) return tail;
+  const out = { ...tail };
+  const key = (n, p) => `Minor Connector ${n} Path Index ${p}`;
+  const active = (n, p) => String(out[key(n, p)]) === "0";
+  const reroute = (n, fromD, fromM, toD, toM) => {
+    if (active(n, fromD)) { out[key(n, fromD)] = 1; out[key(n, toD)] = 0; }
+    if (active(n, fromM)) { out[key(n, fromM)] = 1; out[key(n, toM)] = 0; }
+  };
+  for (let n = 0; n < 16; n += 1) {
+    if (mcCode === 7) reroute(n, 12, 13, 6, 7);   // Path G -> Path D (plate)
+    else reroute(n, 6, 7, 12, 13);                 // Path D -> Path G (bar)
+  }
+  return out;
+}
+
+function encodeToothLines(arrayIdx, fdi, rec, hasMesh, jawMajorCode) {
   // Loaded per-tooth fields (set on load by applyJawStructDesign). The web 2D
   // model doesn't carry tooth positions, Pr Config, bar mesial/distal side,
   // clasp/ring orientation or the reciprocating framework flag, so for those we
@@ -438,13 +468,20 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
   // round-trips on save (previously only preserved from raw, so web-placed reciprocating
   // clasps and plates were lost). Falls back to the loaded value / desktop default when no
   // reciprocating component is placed. Decode pairs this with a retainer on the same tooth.
+  // Explicit reciprocating-clasp / plate-crossmesh placements are distinct user
+  // intent and win first. Then the LOWER lingual connector decides proximal
+  // plating: a PLATE plates every present tooth (=2), a BAR plates none (=0) —
+  // verified vs desktop case 1923. Deriving this from the connector TYPE (rather
+  // than a placed plate-prox component) is what lets a plate->bar switch drop the
+  // plate's per-tooth plating: loading a lingual plate decodes reciprocating=2
+  // into plate-prox components, and without this they'd survive the switch and
+  // reopen as a plate. Otherwise fall back to a placed plate-prox, then raw, else 0.
   let reciprocatingType;
   if (comps.includes("reciprocating-clasp")) reciprocatingType = 1;
-  else if (comps.includes("plate-prox")) reciprocatingType = 2;
   else if (comps.includes("plate-crossmesh")) reciprocatingType = 3;
-  // No reciprocating component placed: keep the loaded raw value, else 0. We no longer invent
-  // the desktop's present->2 default, so a from-scratch/web design only marks reciprocating on
-  // teeth that actually have it (keeps the field a deliberate subset, not all-tooth noise).
+  else if (jawMajorCode === 7 && rec?.isPresent) reciprocatingType = 2;
+  else if (jawMajorCode === 6 && rec?.isPresent) reciprocatingType = 0;
+  else if (comps.includes("plate-prox")) reciprocatingType = 2;
   else reciprocatingType = Number(rawOr(RECIPROCATING_FIELD, 0));
 
   const fields = [
@@ -491,6 +528,7 @@ export function encodeJawStructText(state, jawSide) {
     if (componentList(state.teeth?.[fdi]).some((id) => String(id).startsWith("mesh-"))) meshFdi.add(fdi);
   });
   const meshSpans = buildMeshSpans(state, fdiOrder);
+  const mcCode = majorConnectorCode(state, fdiOrder);
 
   const lines = [];
   lines.push("");
@@ -499,7 +537,7 @@ export function encodeJawStructText(state, jawSide) {
   lines.push("Jaw Material: 0");
 
   fdiOrder.forEach((fdi, arrayIdx) => {
-    lines.push(...encodeToothLines(arrayIdx, fdi, state.teeth?.[fdi], meshFdi.has(fdi)));
+    lines.push(...encodeToothLines(arrayIdx, fdi, state.teeth?.[fdi], meshFdi.has(fdi), mcCode));
   });
 
   lines.push(`Mesh Number: ${meshSpans.length}`);
@@ -510,11 +548,13 @@ export function encodeJawStructText(state, jawSide) {
     lines.push(`Tooth Mesh ${i}: End Index: ${span ? span.end : -1}`);
   }
 
-  lines.push(`Major Connector Type: ${majorConnectorCode(state, fdiOrder)}`);
+  lines.push(`Major Connector Type: ${mcCode}`);
   // Minor-connector path grid + ball connectors aren't modeled by the web, so
   // emit the loaded values when available (preserved on state.jawStructTail),
-  // falling back to the desktop init defaults (paths 1, balls 0).
-  const tail = state?.jawStructTail?.[jawSide] || {};
+  // falling back to the desktop init defaults (paths 1, balls 0). For a lower
+  // lingual bar/plate we re-route the grid's active path to match the chosen
+  // type so the desktop renders the right shape (see normalizeLingualGridForType).
+  const tail = normalizeLingualGridForType(state?.jawStructTail?.[jawSide] || {}, mcCode);
   for (let c = 0; c < 16; c += 1) {
     for (let p = 0; p < 16; p += 1) {
       const key = `Minor Connector ${c} Path Index ${p}`;
