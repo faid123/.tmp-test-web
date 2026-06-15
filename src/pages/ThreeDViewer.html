@@ -13,10 +13,6 @@
   </head>
   <body>
     <div class="viewer-shell">
-      <div class="viewer-header" aria-label="Viewer header">
-        <h1>SmartRPD 3D</h1>
-      </div>
-
       <div class="viewer-main">
         <div id="container3D"></div>
       </div>
@@ -31,14 +27,51 @@
           </span>
         </div>
 
+        <!-- TODO: pen/eraser/notes toolbar — not ready yet
+        <div class="cm-footer-center">
+          <button type="button" class="cm-footer-btn cm-footer-tool-btn" id="footerPenBtn" aria-label="Pen" aria-pressed="false" data-tooltip="Pen">
+            <img src="" id="footerPenIcon" alt="Pen" class="cm-footer-tool-icon">
+          </button>
+          <button type="button" class="cm-footer-btn cm-footer-tool-btn" id="footerEraserBtn" aria-label="Eraser" aria-pressed="false" data-tooltip="Eraser">
+            <img src="" id="footerEraserIcon" alt="Eraser" class="cm-footer-tool-icon">
+          </button>
+          <div class="cm-footer-tool-divider" aria-hidden="true"></div>
+          <button type="button" class="cm-footer-btn" id="footerDrawUndoBtn" aria-label="Undo drawing" data-tooltip="Undo" disabled>
+            <img src="" id="footerDrawUndoIcon" alt="Undo" class="cm-footer-tool-icon">
+          </button>
+          <button type="button" class="cm-footer-btn" id="footerDrawRedoBtn" aria-label="Redo drawing" data-tooltip="Redo" disabled>
+            <img src="" id="footerDrawRedoIcon" alt="Redo" class="cm-footer-tool-icon">
+          </button>
+          <div class="cm-footer-tool-divider" aria-hidden="true"></div>
+          <button type="button" class="cm-footer-btn cm-footer-tool-btn" id="footerNotesBtn" aria-label="Clinical notes" aria-pressed="false" data-tooltip="Notes">
+            <img src="" id="footerNotesIcon" alt="Notes" class="cm-footer-tool-icon">
+          </button>
+        </div>
+        -->
+
         <div class="cm-footer-right">
           <span class="cm-footer-user" id="footerUserName">&mdash;</span>
           <span class="cm-footer-conn" id="footerConnection"></span>
           <button type="button" class="cm-footer-btn cm-footer-chat-btn" id="footerChatBtn" aria-label="Open chat" data-tooltip="Chat">
             <i class="fa-regular fa-comment" aria-hidden="true"></i>
           </button>
+          <button type="button" class="cm-footer-btn" id="footerRightNavBtn" aria-label="Close right panel" data-tooltip="Right panel">
+            <img id="footerRightNavIcon" src="" alt="Right panel" style="width:22px;height:22px;object-fit:contain;display:block;">
+          </button>
         </div>
       </footer>
+
+      <!-- TODO: clinical notes popup — not ready yet
+      <div id="clinicalNotesPopup" class="clinical-notes-popup" aria-hidden="true" role="dialog" aria-label="Clinical Design Notes">
+        <div class="clinical-notes-panel">
+          <header class="clinical-notes-header">
+            <span class="clinical-notes-title">Clinical Design Notes</span>
+            <button type="button" id="clinicalNotesClose" class="clinical-notes-close" aria-label="Close notes">&times;</button>
+          </header>
+          <textarea id="clinicalNotesText" class="clinical-notes-textarea" placeholder="Enter clinical design notes…" spellcheck="true"></textarea>
+        </div>
+      </div>
+      -->
     </div>
 
     <aside id="appSidebar" class="app-sidebar is-hidden" aria-hidden="true" aria-label="Navigation">

@@ -30,7 +30,7 @@ style.textContent = `
     transform: none;
     z-index: 1002;
     width: min(380px, calc(100vw - 290px));
-    max-height: calc(100% - 32px);
+    max-height: min(340px, calc(55vh - 32px));
     overflow: auto;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 8px;
@@ -231,8 +231,8 @@ style.textContent = `
   }
 
   .component-web-button.active {
-    border-color: #f472b6;
-    background-color: #831843;
+    border-color: rgba(0, 0, 0, 0.55);
+    background-color: #222222;
   }
 
   .component-web-button.has-icon {
@@ -256,7 +256,7 @@ style.textContent = `
       top: 16px;
       transform: none;
       width: min(320px, calc(100vw - 280px));
-      max-height: calc(100% - 20px);
+      max-height: min(300px, calc(50vh - 20px));
     }
   }
 
@@ -432,7 +432,7 @@ style.textContent = `
       top: auto;
       bottom: calc(130px + env(safe-area-inset-bottom, 0px));
       width: min(420px, calc(100vw - 20px));
-      max-height: min(400px, 52dvh);
+      max-height: min(320px, 44dvh);
     }
   }
 
@@ -448,7 +448,7 @@ style.textContent = `
       left: 12px;
       bottom: calc(86px + env(safe-area-inset-bottom, 0px));
       width: min(360px, calc(100vw - 20px));
-      max-height: min(340px, 48dvh);
+      max-height: min(280px, 44dvh);
     }
 
     .component-row {
@@ -487,7 +487,7 @@ function applyWireframeOverlay(mesh) {
 
   const geometry = new THREE.WireframeGeometry(mesh.geometry);
   const material = new THREE.LineBasicMaterial({
-    color: "#ff1493",
+    color: "#000000",
     depthTest: false,
     depthWrite: false,
     transparent: true,
@@ -578,7 +578,7 @@ function createComponentPanel(groups) {
   const title = document.createElement("button");
   title.type = "button";
   title.className = "component-panel-title";
-  title.textContent = "Show All";
+  title.innerHTML = `<img src="${basePath}/assets/Icon_layers3.png" alt="Show All" style="width:24px;height:24px;object-fit:contain;display:block;margin:auto;pointer-events:none;">`;
   title.title = "Show all available objects";
   title.setAttribute("aria-label", "Show all available objects");
 
@@ -586,9 +586,12 @@ function createComponentPanel(groups) {
     const allVisible = groups.every(
       (g) => g.hasContent?.() === false || (g.getVisible?.() ?? true)
     );
-    title.textContent = allVisible ? "Hide All" : "Show All";
-    title.title = allVisible ? "Hide all objects" : "Show all available objects";
-    title.setAttribute("aria-label", allVisible ? "Hide all objects" : "Show all available objects");
+    const icon = allVisible ? "Icon_layers4" : "Icon_layers3";
+    const altText = allVisible ? "Hide All" : "Show All";
+    const label = allVisible ? "Hide all objects" : "Show all available objects";
+    title.innerHTML = `<img src="${basePath}/assets/${icon}.png" alt="${altText}" style="width:24px;height:24px;object-fit:contain;display:block;margin:auto;pointer-events:none;">`;
+    title.title = label;
+    title.setAttribute("aria-label", label);
   };
 
   const closeButton = document.createElement("button");

@@ -266,7 +266,8 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
     customCSS.innerHTML = `
         .legend-container {
             position: absolute;
-            right: 258px;
+            left: 16px;
+            right: auto;
             bottom: 16px;
             z-index: 1002;
             width: 280px;
@@ -350,14 +351,16 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
 
         @media (min-width: 769px) and (max-width: 1024px) {
             .legend-container {
-                right: 16px;
+                left: 16px;
+                right: auto;
                 bottom: calc(120px + env(safe-area-inset-bottom, 0px));
             }
         }
 
         @media (max-width: 768px) {
             .legend-container {
-                right: 10px;
+                left: 10px;
+                right: auto;
                 bottom: calc(112px + env(safe-area-inset-bottom, 0px));
                 width: min(280px, calc(100vw - 20px));
             }

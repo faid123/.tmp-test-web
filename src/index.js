@@ -187,6 +187,11 @@ let activePolylineDrag = null;
 let polylineMenuButton = null;
 let polylineMenuList = null;
 let polylineDepthTestEnabled = true;
+const polylineUndoStack = [];
+const polylineRedoStack = [];
+let polylinePreDragSnapshot = null;
+let polylineUndoBtn = null;
+let polylineRedoBtn = null;
 const polylineComponentVisibility = new Map();
 const polylineJawVisibility = new Map([
   ["upper", true],
@@ -2407,7 +2412,44 @@ function resetPolylineGroup(polylineGroup) {
   });
 }
 
+function capturePolylineSnapshot() {
+  return polylineOverlayGroup.children
+    .filter((g) => g.userData?.overlayType === "polyline")
+    .map((group) => ({
+      group,
+      data: group.userData.positionAttribute?.array.slice(),
+    }))
+    .filter((s) => s.data);
+}
+
+function applyPolylineSnapshot(snapshot) {
+  snapshot.forEach(({ group, data }) => {
+    const posAttr = group.userData?.positionAttribute;
+    if (!posAttr || posAttr.array.length !== data.length) return;
+    posAttr.array.set(data);
+    posAttr.needsUpdate = true;
+    group.traverse((child) => {
+      if (child.userData?.overlayType === "polyline-edit-point") {
+        const idx = child.userData.index;
+        child.position.set(posAttr.getX(idx), posAttr.getY(idx), posAttr.getZ(idx));
+      } else if (child.userData?.overlayType === "polyline-line") {
+        syncPolylineTubeGeometries(child);
+      } else {
+        child.geometry?.computeBoundingSphere?.();
+      }
+    });
+  });
+}
+
+function updatePolylineUndoRedoButtons() {
+  if (polylineUndoBtn) polylineUndoBtn.disabled = polylineUndoStack.length === 0;
+  if (polylineRedoBtn) polylineRedoBtn.disabled = polylineRedoStack.length === 0;
+}
+
 function resetPolylineEdits() {
+  polylineUndoStack.length = 0;
+  polylineRedoStack.length = 0;
+  updatePolylineUndoRedoButtons();
   polylineOverlayGroup.children.forEach(resetPolylineGroup);
   auditRenderedPolylines({ logToConsole: LOG_POLYLINE_AUTO_AUDITS_TO_CONSOLE });
 }
@@ -2770,11 +2812,11 @@ function createPolylineVisibilityToggle(container, domElement) {
   panel.style.width = "min(360px, calc(100vw - 40px))";
   panel.style.maxHeight = "calc(100% - 40px)";
   panel.style.overflow = "auto";
-  panel.style.background = "rgba(255, 255, 255, 0.96)";
-  panel.style.color = "#111827";
-  panel.style.border = "1px solid rgba(17, 24, 39, 0.14)";
+  panel.style.background = "rgba(20, 20, 26, 0.97)";
+  panel.style.color = "#f0eff4";
+  panel.style.border = "1px solid rgba(255, 255, 255, 0.14)";
   panel.style.borderRadius = "10px";
-  panel.style.boxShadow = "0 8px 24px rgba(0, 0, 0, 0.18)";
+  panel.style.boxShadow = "0 8px 28px rgba(0, 0, 0, 0.45)";
   panel.style.padding = "14px";
   panel.style.pointerEvents = "auto";
   panel.addEventListener("pointerdown", (event) => {
@@ -2791,25 +2833,28 @@ function createPolylineVisibilityToggle(container, domElement) {
     button.style.width = phone ? "128px" : tablet ? "140px" : "100%";
     button.style.height = phone ? "60px" : tablet ? "64px" : "56px";
     if (phone) {
-      panel.style.right = "12px";
+      panel.style.left = "12px";
+      panel.style.right = "auto";
       panel.style.top = "auto";
       panel.style.bottom = "calc(86px + env(safe-area-inset-bottom, 0px))";
       panel.style.transform = "none";
       panel.style.width = "min(300px, calc(100vw - 24px))";
       panel.style.maxHeight = "calc(100% - 112px)";
     } else if (tablet) {
-      panel.style.right = "16px";
+      panel.style.left = "16px";
+      panel.style.right = "auto";
       panel.style.top = "auto";
       panel.style.bottom = "calc(130px + env(safe-area-inset-bottom, 0px))";
       panel.style.transform = "none";
       panel.style.width = "min(320px, calc(100vw - 32px))";
       panel.style.maxHeight = "calc(100% - 154px)";
     } else {
-      panel.style.right = compact ? "248px" : "258px";
+      panel.style.left = "16px";
+      panel.style.right = "auto";
       panel.style.top = "50%";
       panel.style.bottom = "auto";
       panel.style.transform = "translateY(-50%)";
-      panel.style.width = "min(400px, calc(100vw - 270px))";
+      panel.style.width = "min(400px, calc(100vw - 240px))";
       panel.style.maxHeight = compact
         ? "calc(100% - 24px)"
         : "calc(100% - 40px)";
@@ -2825,7 +2870,7 @@ function createPolylineVisibilityToggle(container, domElement) {
   actions.style.top = "0";
   actions.style.zIndex = "1";
   actions.style.paddingBottom = "6px";
-  actions.style.background = "rgba(255, 255, 255, 0.96)";
+  actions.style.background = "rgba(20, 20, 26, 0.97)";
 
   const makeActionButton = (label, onClick) => {
     const actionButton = document.createElement("button");
@@ -2833,9 +2878,10 @@ function createPolylineVisibilityToggle(container, domElement) {
     actionButton.textContent = label;
     actionButton.style.flex = "1";
     actionButton.style.padding = "8px 10px";
-    actionButton.style.border = "1px solid rgba(17, 24, 39, 0.16)";
+    actionButton.style.border = "1px solid rgba(255, 255, 255, 0.18)";
     actionButton.style.borderRadius = "6px";
-    actionButton.style.background = "#f9fafb";
+    actionButton.style.background = "rgba(255, 255, 255, 0.08)";
+    actionButton.style.color = "#f0eff4";
     actionButton.style.cursor = "pointer";
     actionButton.style.fontSize = "14px";
     actionButton.addEventListener("click", onClick);
@@ -2873,7 +2919,39 @@ function createPolylineVisibilityToggle(container, domElement) {
   _resetBtn.innerHTML = `<img src="${_polylineBp}/assets/reset.png" alt="Reset" style="width:22px;height:22px;object-fit:contain;display:block;margin:auto;pointer-events:none;">`;
   _resetBtn.title = "Reset polylines";
   _resetBtn.setAttribute("aria-label", "Reset polylines");
+  _resetBtn.style.background = "#ffffff";
+  _resetBtn.style.borderColor = "rgba(0, 0, 0, 0.18)";
+  _resetBtn.style.color = "#222222";
   actions.appendChild(_resetBtn);
+
+  const _undoBtn = makeActionButton("", () => {
+    if (!polylineUndoStack.length) return;
+    const snapshot = polylineUndoStack.pop();
+    polylineRedoStack.push(capturePolylineSnapshot());
+    applyPolylineSnapshot(snapshot);
+    updatePolylineUndoRedoButtons();
+  });
+  _undoBtn.innerHTML = `<img src="${_polylineBp}/assets/Icon_undo2.png" alt="Undo" style="width:22px;height:22px;object-fit:contain;display:block;margin:auto;pointer-events:none;">`;
+  _undoBtn.title = "Undo";
+  _undoBtn.setAttribute("aria-label", "Undo");
+  _undoBtn.disabled = true;
+  actions.appendChild(_undoBtn);
+
+  const _redoBtn = makeActionButton("", () => {
+    if (!polylineRedoStack.length) return;
+    const snapshot = polylineRedoStack.pop();
+    polylineUndoStack.push(capturePolylineSnapshot());
+    applyPolylineSnapshot(snapshot);
+    updatePolylineUndoRedoButtons();
+  });
+  _redoBtn.innerHTML = `<img src="${_polylineBp}/assets/Icon_redo2.png" alt="Redo" style="width:22px;height:22px;object-fit:contain;display:block;margin:auto;pointer-events:none;">`;
+  _redoBtn.title = "Redo";
+  _redoBtn.setAttribute("aria-label", "Redo");
+  _redoBtn.disabled = true;
+  actions.appendChild(_redoBtn);
+
+  polylineUndoBtn = _undoBtn;
+  polylineRedoBtn = _redoBtn;
 
   const list = document.createElement("div");
   panel.appendChild(actions);
@@ -3124,6 +3202,7 @@ function attachPolylineDragHandlers(domElement) {
     const hit = pickPolylinePoint(event, domElement);
     if (!hit) return;
 
+    polylinePreDragSnapshot = capturePolylineSnapshot();
     event.preventDefault();
     domElement.setPointerCapture?.(event.pointerId);
     camera.getWorldDirection(polylineCameraDirection);
@@ -3166,6 +3245,13 @@ function attachPolylineDragHandlers(domElement) {
     activePolylineDrag = null;
     setPolylineDragging(false);
     domElement.style.cursor = pickPolylinePoint(event, domElement) ? "grab" : "";
+    if (polylinePreDragSnapshot) {
+      polylineUndoStack.push(polylinePreDragSnapshot);
+      if (polylineUndoStack.length > 50) polylineUndoStack.shift();
+      polylineRedoStack.length = 0;
+      polylinePreDragSnapshot = null;
+      updatePolylineUndoRedoButtons();
+    }
   };
 
   domElement.addEventListener("pointerup", stopDragging);
@@ -4325,7 +4411,7 @@ btnContainer.appendChild(edit2DStatic); */
     bottom: 0;
     right: 0;
     left: auto;
-    width: 238px;
+    width: 210px;
     max-height: 100dvh;
     z-index: 1045;
     flex-direction: column;
@@ -4492,18 +4578,19 @@ btnContainer.appendChild(edit2DStatic); */
 
   .mail-popup {
     position: absolute;
-    right: 258px;
+    left: 16px;
+    right: auto;
     top: 50%;
     transform: translateY(-50%);
     z-index: 1002;
-    width: min(360px, calc(100vw - 290px));
+    width: min(360px, calc(100vw - 240px));
     max-height: calc(100% - 40px);
     overflow: auto;
     padding: 14px;
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.14);
+    background: rgba(20, 20, 26, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 8px;
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.22);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
     pointer-events: auto;
   }
 
@@ -4512,7 +4599,7 @@ btnContainer.appendChild(edit2DStatic); */
   }
 
   .mail-popup-header {
-    color: #1f2933;
+    color: #f0eff4;
     font-size: 14px;
     font-weight: 700;
     margin-bottom: 10px;
@@ -4528,9 +4615,11 @@ btnContainer.appendChild(edit2DStatic); */
   .mail-popup input {
     min-width: 0;
     padding: 9px 10px;
-    border: 1px solid #c8cdd2;
+    border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 5px;
     font-size: 14px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #f0eff4;
   }
 
   .smart-btn.mail-submit,
@@ -4731,7 +4820,8 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     .mail-popup {
-      right: 8px;
+      left: 8px;
+      right: auto;
       width: min(300px, 58vw);
       max-height: 60dvh;
       overflow-y: auto;
@@ -5108,7 +5198,8 @@ btnContainer.appendChild(edit2DStatic); */
 
     .mail-popup,
     #polyline-visibility-panel {
-      right: 16px !important;
+      left: 16px !important;
+      right: auto !important;
       top: auto !important;
       bottom: calc(130px + env(safe-area-inset-bottom, 0px)) !important;
       transform: none !important;
@@ -5472,7 +5563,8 @@ btnContainer.appendChild(edit2DStatic); */
 
     .mail-popup,
     #polyline-visibility-panel {
-      right: 12px !important;
+      left: 12px !important;
+      right: auto !important;
       top: auto !important;
       bottom: calc(86px + env(safe-area-inset-bottom, 0px)) !important;
       transform: none !important;
@@ -6098,6 +6190,7 @@ btnContainer.appendChild(edit2DStatic); */
   finished = true;
   // Instantiate a new renderer and set its size
   const renderer = new THREE.WebGLRenderer({ alpha: true }); // Alpha: true allows for the transparent background
+  renderer.setClearColor(0xf8f5fb, 1);
   resizeViewerStage(renderer);
 
   // Add the renderer to the DOM
