@@ -244,6 +244,41 @@
   z-index: 1;
 }
 
+/* Loading skeleton shown while the first notes fetch is in flight */
+.chat-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px;
+  flex: 1;
+}
+
+@keyframes chat-shimmer {
+  0%   { background-position: -300px 0; }
+  100% { background-position: 300px 0; }
+}
+
+.chat-skeleton {
+  height: 48px;
+  border-radius: 12px;
+  width: 72%;
+  align-self: flex-start;
+  background: linear-gradient(90deg, #e8e2ee 25%, #f3eff7 50%, #e8e2ee 75%);
+  background-size: 600px 100%;
+  animation: chat-shimmer 1.4s ease-in-out infinite;
+}
+
+.chat-skeleton--short {
+  width: 48%;
+  height: 36px;
+}
+
+.chat-skeleton--mine {
+  align-self: flex-end;
+  background: linear-gradient(90deg, #d4ead0 25%, #e6f5e3 50%, #d4ead0 75%);
+  background-size: 600px 100%;
+}
+
 /* Zoom overlay for tapped images */
 .image-modal {
   display: none;

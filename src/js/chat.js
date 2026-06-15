@@ -14,6 +14,7 @@ let domBound = false;
 let lastNotesSignature = '';
 let pollTimer = null;
 let pollInFlight = false;
+let fetchInFlight = false;
 let chatFocusHandler = null;
 
 // Live-chat poll cadence while the tab is focused. Kept tight so a friend's
@@ -61,7 +62,22 @@ function detectImageMime(base64) {
 
 // 获取历史记录
 async function fetchNotes() {
-    if (!caseId || !chatBox) return;
+    if (!caseId || !chatBox || fetchInFlight) return;
+    fetchInFlight = true;
+
+    // Show skeleton only on first load (box is empty and no messages yet).
+    const firstLoad = messages.length === 0;
+    if (firstLoad) {
+        chatBox.innerHTML = `
+            <div class="chat-loading">
+                <div class="chat-skeleton"></div>
+                <div class="chat-skeleton chat-skeleton--short"></div>
+                <div class="chat-skeleton chat-skeleton--mine"></div>
+                <div class="chat-skeleton chat-skeleton--short chat-skeleton--mine"></div>
+                <div class="chat-skeleton"></div>
+            </div>`;
+    }
+
     try {
         const response = await fetch(`https://live.api.smartrpdai.com/api/smartrpd/notes/get/${caseId}`, {
             method: 'POST',
@@ -97,14 +113,18 @@ async function fetchNotes() {
             });
             // Keep any in-progress image preview visible across refreshes.
             if (pendingImageBase64) messages.push(buildPendingPreviewMessage());
-            // Only re-render on real changes so the poll doesn't yank scroll
-            // position; an untouched preview is already in the DOM.
-            if (changed) displayMessages();
+            // Always re-render after first load so the skeleton is replaced,
+            // then only on real changes to avoid yanking scroll position.
+            if (changed || firstLoad) displayMessages();
         } else {
+            if (firstLoad) chatBox.innerHTML = '';
             console.error('❌ Failed to fetch notes:', await response.text());
         }
     } catch (err) {
+        if (firstLoad) chatBox.innerHTML = '';
         console.error('❌ Error fetching notes:', err);
+    } finally {
+        fetchInFlight = false;
     }
 }
 
@@ -434,6 +454,7 @@ export function initChat(explicitEncryptedId) {
         // Switching cases: drop the old conversation so it can't linger.
         messages = [];
         lastNotesSignature = '';
+        fetchInFlight = false;
     }
     if (changed || !messages.length) fetchNotes();
     return true;

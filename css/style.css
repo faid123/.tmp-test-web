@@ -13,7 +13,7 @@
 body {
   margin: 0;
   font-family: "Montserrat", sans-serif;
-  background-color: #A7C7E7;
+  background-color: #f8f5fb;
 }
 
 :root {
@@ -39,7 +39,11 @@ main {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: contain;
-  background-color: #A7C7E7;
+  background-color: #f8f5fb;
+  background-image:
+    linear-gradient(rgba(184,159,200,0.28) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(184,159,200,0.28) 1px, transparent 1px);
+  background-size: 1cm 1cm;
 }
 
 header {

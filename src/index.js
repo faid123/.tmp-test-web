@@ -3247,7 +3247,7 @@ function createViewerLoadingScreen() {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #A7C7E7;
+      background: #f8f5fb;
       transition: opacity 0.35s ease;
     }
     #viewer-loading-screen.vls-fade {
