@@ -1,4 +1,4 @@
-import { state, setMessage } from "./2DAnnotation.js";
+import { state, setMessage, fetchCaseDetail } from "./2DAnnotation.js";
 import { captureJawJpegDataUrl } from "./annotationLocks.js";
 import { openInstructionEditor } from "./instructionEditor.js";
 import { capture3DPreviewDataUrl } from "./preview3D.js";
@@ -865,22 +865,15 @@ function buildReportLegendHtml(assetBase) {
           <span class="cli-mob cli-mob-1">I</span>
           <span class="cli-mob cli-mob-2">II</span>
           <span class="cli-mob cli-mob-3">III</span>
-          <span class="cli-legend-text cli-legend-sub">CLEAR</span>
         </div>
       </div>
       <div class="cli-legend-item">
         <span class="cli-legend-text">ROOT CANAL THERAPY</span>
         <img class="cli-legend-img" src="${assetBase}/root_canal.png" alt="" />
       </div>
-      <div class="cli-legend-item cli-legend-row-item">
+      <div class="cli-legend-item">
         <span class="cli-legend-text">RESTORATION</span>
-        <div class="cli-legend-cluster">
-          <img class="cli-legend-img" src="${assetBase}/filling.png" alt="" />
-          <span class="cli-legend-text cli-legend-sub">AR</span>
-          <span class="cli-legend-text cli-legend-sub">TCR</span>
-          <span class="cli-legend-text cli-legend-sub">INLAY</span>
-          <span class="cli-legend-text cli-legend-sub">ONLAY</span>
-        </div>
+        <img class="cli-legend-img" src="${assetBase}/filling.png" alt="" />
       </div>
       <div class="cli-legend-item">
         <span class="cli-legend-text">CROWN</span>
@@ -898,17 +891,9 @@ function buildReportLegendHtml(assetBase) {
         <span class="cli-legend-text">CRACKED</span>
         <img class="cli-legend-img" src="${assetBase}/cracked.png" alt="" />
       </div>
-      <div class="cli-legend-item cli-legend-row-item">
+      <div class="cli-legend-item">
         <span class="cli-legend-text">TILTED TOOTH</span>
-        <div class="cli-legend-cluster">
-          <img class="cli-legend-img" src="${assetBase}/tilted.png" alt="" />
-          <span class="cli-legend-text cli-legend-sub">M</span>
-          <span class="cli-legend-text cli-legend-sub">D</span>
-          <span class="cli-legend-text cli-legend-sub">B</span>
-          <span class="cli-legend-text cli-legend-sub">L</span>
-          <span class="cli-legend-text cli-legend-sub">A</span>
-          <span class="cli-legend-text cli-legend-sub">SE</span>
-        </div>
+        <img class="cli-legend-img" src="${assetBase}/tilted.png" alt="" />
       </div>
       <div class="cli-legend-item">
         <span class="cli-legend-text">EXTRACTION</span>
@@ -1003,6 +988,92 @@ function trimImageMargins(dataUrl) {
   });
 }
 
+// Map the case's API status string to a display label + pill colors, mirroring
+// statusPillClass/statusDisplayText in caseManagement.js (which aren't exported)
+// and the --status-* palette in case_list.css. Drives the top-right status badge.
+function reportStatusBadge(apiStatus) {
+  const v = apiStatus ? String(apiStatus).toLowerCase().replace(/ /g, "_") : "na";
+  const jaw = v.startsWith("2d_") ? " (2D)" : v.startsWith("3d_") ? " (3D)" : "";
+
+  let label;
+  if (!v || v === "na") label = "N/A";
+  else if (v === "draft") label = "Draft";
+  else if (v.endsWith("_pending") || v === "pending") label = `Pending${jaw}`;
+  else if (v.endsWith("_drafted") || v.endsWith("_approved")) label = `In-progress${jaw}`;
+  else if (v === "in_production") label = "In-progress";
+  else if (v === "out_for_delivery") label = "Out for delivery";
+  else if (v === "delivered") label = "Delivered";
+  else if (v === "completed") label = "Completed";
+  else label = v.replace(/_/g, " ");
+
+  // Follow statusPillClass's precedence so the color matches the case list.
+  let bg = "#e2e8f0";
+  let fg = "#475569"; // na (grey)
+  if (v === "completed" || v === "delivered") { bg = "#d1fae5"; fg = "#047857"; } // green
+  else if (v === "draft") { bg = "#f5f5f4"; fg = "#57534e"; } // draft grey
+  else if (v.endsWith("_pending") || v === "pending") { bg = "#fef3c7"; fg = "#92400e"; } // yellow
+  else if (v && v !== "na") { bg = "#dbeafe"; fg = "#1e40af"; } // in-progress (blue)
+
+  return { label, bg, fg };
+}
+
+// Fetch the case's upper (slot 1) and lower (slot 2) 3D jaw renders for the
+// report's bottom-right panel. POST /thumbnails/get returns one row per slot
+// (slot 0 = composite 2D, 1 = upper STL render, 2 = lower STL render). Prefer
+// the explicit slot field; if the API omits it, fall back to classifying the
+// landscape (3D) images by aspect ratio the way the case-list carousel does.
+async function fetchCaseThumbnailSlots(caseIntID, caseIdStr) {
+  const user = getLoggedInUser();
+  if (!caseIntID || !user?.uuid) return { upper: "", lower: "" };
+
+  const toDataUrl = (d) => {
+    if (typeof d !== "string" || !d) return "";
+    return d.startsWith("data:") ? d : `data:image/png;base64,${d}`;
+  };
+
+  try {
+    const res = await fetch(`${API_BASE}/thumbnails/get`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID },
+        { case_id: caseIdStr ?? caseIntID },
+      ]),
+    });
+    if (!res.ok) return { upper: "", lower: "" };
+    const rows = await res.json();
+    if (!Array.isArray(rows) || !rows.length) return { upper: "", lower: "" };
+
+    // Preferred path: the API tags each row with its slot.
+    const hasSlot = rows.some((r) => r && r.slot != null);
+    if (hasSlot) {
+      const bySlot = (n) => rows.find((r) => Number(r?.slot) === n);
+      return {
+        upper: toDataUrl(bySlot(1)?.data),
+        lower: toDataUrl(bySlot(2)?.data),
+      };
+    }
+
+    // Fallback: no slot field — classify by aspect ratio. 3D renders are
+    // landscape (w/h ≥ 1.3); take the first two as upper/lower in order.
+    const measure = (src) =>
+      new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve({ src, landscape: img.width / img.height >= 1.3 });
+        img.onerror = () => resolve({ src, landscape: false });
+        img.src = src;
+      });
+    const measured = await Promise.all(
+      rows.map((r) => toDataUrl(r?.data)).filter(Boolean).map(measure)
+    );
+    const threeD = measured.filter((m) => m.landscape).map((m) => m.src);
+    return { upper: threeD[0] || "", lower: threeD[1] || "" };
+  } catch (err) {
+    console.warn("[noticeboard] thumbnail slots fetch failed", err);
+    return { upper: "", lower: "" };
+  }
+}
+
 async function generateReport() {
   // Prefer the full "UID {id}:{name}" label rendered in the topbar so the
   // report matches what the user sees on screen.
@@ -1016,19 +1087,31 @@ async function generateReport() {
   const workCategoryLabel =
     WORK_CATEGORY_LABELS[caseNote.workCategory] || caseNote.workCategory || "";
 
-  // The report mirrors the noticeboard's saved edits: the 2D page shows the
-  // most recent instruction (2D_*) and the 3D page shows the most recent
-  // viewcapture (3D_*) — each item's edited .preview image.
+  // Bottom-left "2D Design" panel shows the noticeboard's "2D Setup & Design"
+  // column only — the most recent 2D instruction (2D_*) and its edited .preview.
+  // The viewcaptures bucket is the separate "3D Design" column (3D screenshots),
+  // so it is deliberately NOT used here: only genuine 2D designs belong in this
+  // panel. Cases with no 2D design show the "No 2D design available" placeholder.
   const boardData = ensureCache();
   const lastInstruction = (boardData.instructions || []).at(-1);
-  const lastViewcapture = (boardData.viewcaptures || []).at(-1);
-  // The previews are exported at the editor's on-screen aspect ratio, which
-  // letterboxes the design with wide white margins. Trim those margins so the
-  // design itself — not the padding — fills the report page.
-  const [jaw2dSrc, previewSrc] = await Promise.all([
-    trimImageMargins(lastInstruction?.preview || ""),
-    trimImageMargins(lastViewcapture?.preview || ""),
+  const twoDPreviewSrc = lastInstruction?.preview || "";
+
+  // Case detail gives the string case id needed to look up the upper/lower 3D
+  // jaw renders (thumbnail slots 1/2) and the status for the top-right badge.
+  const detail = await fetchCaseDetail();
+  const status = reportStatusBadge(detail?.new_status);
+  const caseIdStr = detail?.case_id ?? state.caseName ?? state.caseIntID;
+
+  // The 2D preview is exported at the editor's on-screen aspect ratio, which
+  // letterboxes the design with wide white margins. Trim those so the design
+  // itself — not the padding — fills its panel. The 3D jaw renders come from
+  // the case thumbnail slots (1 = upper, 2 = lower).
+  const [jaw2dSrc, jaws] = await Promise.all([
+    trimImageMargins(twoDPreviewSrc),
+    fetchCaseThumbnailSlots(state.caseIntID, caseIdStr),
   ]);
+  const jaw3dUpper = jaws.upper;
+  const jaw3dLower = jaws.lower;
 
   const notes = await getClinicalNotesForCase(state.caseIntID);
   const upperRow = buildReportRowHtml(UPPER_TEETH, assetBase, notes);
@@ -1039,30 +1122,38 @@ async function generateReport() {
 <html><head><meta charset="utf-8" />
 <title>SmartRPD Report — Case ${escapeHtml(caseLabel)}</title>
 <style>
+  @page { size: A4 portrait; margin: 10mm; }
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body { font-family: "Segoe UI", "Montserrat", sans-serif; color: #2f3b46; margin: 0; padding: 28px; }
+  body { font-family: "Segoe UI", "Montserrat", sans-serif; color: #2f3b46; margin: 0; padding: 18px; }
   img { image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; }
-  .cli-page { page-break-after: always; }
-  .cli-page:last-child { page-break-after: auto; }
-  .cli-meta { display: grid; grid-template-columns: 1fr 1fr; row-gap: 14px; column-gap: 32px; margin-bottom: 28px; }
-  .cli-field { font-size: 0.95rem; }
+
+  .cli-sheet { display: flex; flex-direction: column; }
+
+  .cli-report-title { margin: 0 0 14px; padding-bottom: 10px; border-bottom: 2px solid #2aa67c; text-align: center; font-size: 1.35rem; font-weight: 700; letter-spacing: 0.06em; color: #2aa67c; text-transform: uppercase; }
+
+  .cli-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 12px; }
+  .cli-meta { display: grid; grid-template-columns: 1fr 1fr; row-gap: 7px; column-gap: 28px; flex: 1; }
+  .cli-field { font-size: 0.82rem; }
   .cli-field-label { color: #4a5663; margin-right: 6px; }
   .cli-field-value { color: #2f3b46; font-weight: 500; }
   .cli-field.cli-field-creation .cli-field-value { color: #b0341c; font-weight: 600; }
+  .cli-status-wrap { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+  .cli-status-title { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; color: #2aa67c; text-transform: uppercase; }
+  .cli-status { padding: 6px 16px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; text-transform: none; letter-spacing: 0.02em; white-space: nowrap; }
 
-  .cli-chart { display: flex; flex-direction: column; gap: 6px; margin-top: 18px; }
-  .cli-chart-label { text-align: center; font-weight: 700; letter-spacing: 0.12em; font-size: 0.78rem; color: #2aa67c; }
+  .cli-chart { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+  .cli-chart-label { text-align: center; font-weight: 700; letter-spacing: 0.12em; font-size: 0.72rem; color: #2aa67c; }
   .cli-row { display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px; }
 
-  .cli-tooth { position: relative; display: flex; flex-direction: column; align-items: center; background: #fafafa; border: 1px solid #e1e4e8; border-radius: 4px; padding: 3px 1px; min-height: 108px; }
-  .cli-tooth-number { font-size: 0.62rem; color: #2a3340; font-weight: 600; margin-bottom: 1px; }
+  .cli-tooth { position: relative; display: flex; flex-direction: column; align-items: center; background: #fafafa; border: 1px solid #e1e4e8; border-radius: 4px; padding: 2px 1px; min-height: 84px; }
+  .cli-tooth-number { font-size: 0.58rem; color: #2a3340; font-weight: 600; margin-bottom: 1px; }
   .cli-tooth-img-wrap { position: relative; flex: 1; width: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
   .cli-tooth-stack { display: flex; flex-direction: column; align-items: center; line-height: 0; }
   .cli-tooth-img { max-width: 100%; object-fit: contain; display: block; }
-  .cli-tooth-crown { max-height: 34px; }
-  .cli-tooth-root { max-height: 60px; }
-  .cli-tooth-full { max-height: 96px; }
+  .cli-tooth-crown { max-height: 26px; }
+  .cli-tooth-root { max-height: 44px; }
+  .cli-tooth-full { max-height: 70px; }
   .cli-tooth-img.is-mirrored { transform: scaleX(-1); }
   .cli-tooth-cross { position: absolute; inset: 0; pointer-events: none; }
   .cli-tooth-cross::before, .cli-tooth-cross::after { content: ""; position: absolute; left: 50%; top: 50%; width: 260%; height: 3px; background: #b0341c; transform-origin: center; border-radius: 2px; }
@@ -1078,10 +1169,10 @@ async function generateReport() {
   .cli-tooth.is-upper .cli-tooth-rootstump-label { bottom: 22%; }
   .cli-tooth.is-lower .cli-tooth-rootstump-label { top: 26%; }
 
-  .cli-tooth-tilt { position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.4rem; font-weight: 900; color: #1f8a6b !important; padding: 2px 6px; border-radius: 6px; z-index: 3; line-height: 1; pointer-events: none; }
-  .cli-tooth.is-upper .cli-tooth-tilt { bottom: 30px; }
-  .cli-tooth.is-lower .cli-tooth-tilt { top: 38px; }
-  .cli-tooth-tilt--SE { font-size: 0.7rem; padding: 2px 5px; }
+  .cli-tooth-tilt { position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.2rem; font-weight: 900; color: #1f8a6b !important; padding: 2px 6px; border-radius: 6px; z-index: 3; line-height: 1; pointer-events: none; }
+  .cli-tooth.is-upper .cli-tooth-tilt { bottom: 24px; }
+  .cli-tooth.is-lower .cli-tooth-tilt { top: 30px; }
+  .cli-tooth-tilt--SE { font-size: 0.66rem; padding: 2px 5px; }
 
   .cli-tooth-extraction-arrow { position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.1rem; color: #3BAE95 !important; padding: 0 4px; border-radius: 4px; font-weight: 900; letter-spacing: -1px; z-index: 3; line-height: 1.1; pointer-events: none; }
   .cli-tooth.is-upper .cli-tooth-extraction-arrow { bottom: -2px; }
@@ -1095,77 +1186,109 @@ async function generateReport() {
   .cli-tooth-restoration.is-inlay { width: 12px; height: 7px; background: #2563eb; border-radius: 2px; }
   .cli-tooth-restoration.is-onlay { width: 12px; height: 7px; background: #b8860b; border-radius: 2px; }
 
-  .cli-legend-title { color: #2aa67c; letter-spacing: 0.1em; font-weight: 700; font-size: 0.85rem; margin: 24px 0 8px; }
-  .cli-legend-grid { display: flex; flex-wrap: wrap; row-gap: 14px; column-gap: 18px; align-items: flex-end; }
-  .cli-legend-item { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 36px; }
+  .cli-legend-title { color: #2aa67c; letter-spacing: 0.1em; font-weight: 700; font-size: 0.78rem; margin: 12px 0 6px; }
+  .cli-legend-grid { display: flex; flex-wrap: wrap; row-gap: 8px; column-gap: 16px; align-items: flex-end; }
+  .cli-legend-item { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 34px; }
   .cli-legend-row-item { align-items: flex-start; }
   .cli-legend-cluster { display: flex; gap: 6px; align-items: flex-end; }
-  .cli-legend-text { font-size: 0.62rem; font-weight: 700; color: #2a3340; text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; }
+  .cli-legend-text { font-size: 0.58rem; font-weight: 700; color: #2a3340; text-transform: uppercase; letter-spacing: 0.02em; white-space: nowrap; }
   .cli-legend-sub { align-self: flex-end; padding-bottom: 4px; }
-  .cli-legend-img { height: 28px; max-width: 34px; object-fit: contain; display: block; }
-  .cli-mob { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 4px; font-size: 0.68rem; font-weight: 700; color: #fff; }
+  .cli-legend-img { height: 24px; max-width: 30px; object-fit: contain; display: block; }
+  .cli-mob { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 4px; font-size: 0.64rem; font-weight: 700; color: #fff; }
   .cli-mob-1 { background: #4caf50; }
   .cli-mob-2 { background: #f6c344; color: #3a2c00; }
   .cli-mob-3 { background: #c0392b; }
 
-  .cli-3d-page { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; height: 100vh; gap: 12px; overflow: hidden; }
-  .cli-3d-page > img { flex: 1 1 auto; min-height: 0; width: 100%; max-width: 100%; object-fit: contain; image-rendering: auto; align-self: center; }
-  .cli-3d-page .cli-empty { color: #8895a4; font-style: italic; align-self: center; margin: auto 0; }
-  .cli-page-caseid { font-size: 1rem; font-weight: 700; color: #2aa67c; letter-spacing: 0.05em; }
+  .cli-comment { font-size: 0.82rem; margin: 10px 0 12px; }
+  .cli-comment .cli-field-label { color: #4a5663; margin-right: 6px; }
+  .cli-comment .cli-field-value { color: #2f3b46; font-weight: 500; white-space: pre-wrap; }
+
+  /* Bottom panel: 2D design on the left, the two 3D jaw renders stacked right.
+     A tall fixed height fills most of the page below the chart while staying
+     safely within one printed page (forcing a full-page flex fill is unreliable
+     under print fragmentation and bumps this block to a second page). */
+  .cli-bottom { display: flex; gap: 12px; align-items: stretch; height: 470px; margin-top: 16px; }
+  .cli-bottom-left { flex: 1.15; }
+  .cli-bottom-right { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+  .cli-panel { display: flex; flex-direction: column; border: 1px solid #e1e4e8; border-radius: 6px; overflow: hidden; background: #fafafa; }
+  .cli-bottom-left .cli-panel { height: 100%; }
+  .cli-bottom-right .cli-panel { flex: 1; min-height: 0; }
+  .cli-panel-cap { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.06em; color: #2aa67c; text-transform: uppercase; padding: 5px 8px; border-bottom: 1px solid #e8ebee; background: #fff; }
+  .cli-panel-body { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 6px; }
+  .cli-panel-body > img { max-width: 100%; max-height: 100%; object-fit: contain; image-rendering: auto; }
+  .cli-empty { color: #8895a4; font-style: italic; font-size: 0.74rem; }
 
   @media print {
-    body { padding: 14px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .cli-row { gap: 2px; }
+    .cli-bottom { break-inside: avoid; }
     .cli-tooth, .cli-tooth-cross::before, .cli-tooth-cross::after,
     .cli-tooth-restoration, .cli-tooth-extraction-arrow, .cli-tooth-tilt,
-    .cli-tooth-rootstump-label {
+    .cli-tooth-rootstump-label, .cli-status {
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
   }
 </style></head>
 <body>
-  ${(() => {
-    const metaHtml = `
+  <div class="cli-sheet">
+  <h1 class="cli-report-title">Design Report</h1>
+  <header class="cli-top">
     <div class="cli-meta">
-      ${reportFieldRow("Customer", ownerName)}
-      ${reportFieldRow("Creation Date", creationDate).replace("cli-field", "cli-field cli-field-creation")}
       ${reportFieldRow("Case Number", caseLabel)}
+      ${reportFieldRow("Creation Date", creationDate).replace("cli-field", "cli-field cli-field-creation")}
+      ${reportFieldRow("Customer", ownerName)}
       ${reportFieldRow("Date Required", caseNote.dateRequired || "")}
       ${reportFieldRow("Tooth Shade", caseNote.toothShade || "")}
       ${reportFieldRow("Work Category", workCategoryLabel)}
-    </div>`;
-    return `
-  <section class="cli-page">
-    ${metaHtml}
+    </div>
+    <div class="cli-status-wrap">
+      <div class="cli-status-title">Case Status</div>
+      <div class="cli-status" style="background:${status.bg};color:${status.fg};">${escapeHtml(status.label)}</div>
+    </div>
+  </header>
 
-    <section class="cli-chart">
-      <div class="cli-chart-label">BUCCAL</div>
-      <div class="cli-row">${upperRow}</div>
-      <div class="cli-chart-label">LINGUAL</div>
-      <div class="cli-row">${lowerRow}</div>
-      <div class="cli-chart-label">BUCCAL</div>
-    </section>
+  <section class="cli-chart">
+    <div class="cli-chart-label">BUCCAL</div>
+    <div class="cli-row">${upperRow}</div>
+    <div class="cli-chart-label">LINGUAL</div>
+    <div class="cli-row">${lowerRow}</div>
+    <div class="cli-chart-label">BUCCAL</div>
+  </section>
 
-    <div class="cli-legend-title">LEGEND</div>
-    ${legend}
+  <div class="cli-legend-title">LEGEND</div>
+  ${legend}
 
-    <div class="cli-field" style="margin-top:18px;">
-      <span class="cli-field-label">Additional Comments :</span>
-      <span class="cli-field-value" style="white-space:pre-wrap;">${escapeHtml(caseNote.comment || "")}</span>
+  <div class="cli-comment">
+    <span class="cli-field-label">Additional Comments :</span>
+    <span class="cli-field-value">${escapeHtml(caseNote.comment || "")}</span>
+  </div>
+
+  <section class="cli-bottom">
+    <div class="cli-bottom-left">
+      <div class="cli-panel">
+        <div class="cli-panel-cap">2D Design</div>
+        <div class="cli-panel-body">
+          ${jaw2dSrc ? `<img src="${jaw2dSrc}" alt="2D design" />` : `<span class="cli-empty">No 2D design available.</span>`}
+        </div>
+      </div>
+    </div>
+    <div class="cli-bottom-right">
+      <div class="cli-panel">
+        <div class="cli-panel-cap">3D Upper Jaw</div>
+        <div class="cli-panel-body">
+          ${jaw3dUpper ? `<img src="${escapeHtml(jaw3dUpper)}" alt="3D upper jaw" />` : `<span class="cli-empty">No upper jaw render.</span>`}
+        </div>
+      </div>
+      <div class="cli-panel">
+        <div class="cli-panel-cap">3D Lower Jaw</div>
+        <div class="cli-panel-body">
+          ${jaw3dLower ? `<img src="${escapeHtml(jaw3dLower)}" alt="3D lower jaw" />` : `<span class="cli-empty">No lower jaw render.</span>`}
+        </div>
+      </div>
     </div>
   </section>
-
-  <section class="cli-page cli-3d-page">
-    ${metaHtml}
-    ${jaw2dSrc ? `<img src="${jaw2dSrc}" alt="2D design" />` : `<div class="cli-empty">No 2D design available.</div>`}
-  </section>
-
-  <section class="cli-page cli-3d-page">
-    ${metaHtml}
-    ${previewSrc ? `<img src="${escapeHtml(previewSrc)}" alt="3D preview" />` : `<div class="cli-empty">No 3D preview available.</div>`}
-  </section>`;
-  })()}
+  </div>
 
   <script>window.addEventListener("load", () => setTimeout(() => window.print(), 400));<\/script>
 </body></html>`;

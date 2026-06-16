@@ -23,6 +23,7 @@ import {
   COMPONENT_BY_ID,
   ensureMajorConnectorPlacementsOnSupportedTeethInJaws,
   isMajorConnectorComponent,
+  syncReciprocatingPlatesToMajorConnector,
 } from "../src/js/2D/components.js";
 import { syncToothComponentsFromPlacements } from "../src/js/2D/annotationTeethModel.js";
 import { TOOTH_ORDER } from "../src/js/2D/constants.js";
@@ -55,6 +56,8 @@ function switchLowerMajor(state, componentId) {
     );
   }
   ensureMajorConnectorPlacementsOnSupportedTeethInJaws(state.teeth, componentId, COMPONENT_BY_ID, ["lower"]);
+  // Mirror the catalog handler: keep per-tooth plate-prox in step with the connector type.
+  syncReciprocatingPlatesToMajorConnector(state.teeth, componentId, ["lower"]);
   for (const toothId of TOOTH_ORDER.lower) {
     if (state.teeth[toothId]) syncToothComponentsFromPlacements(state.teeth[toothId]);
   }

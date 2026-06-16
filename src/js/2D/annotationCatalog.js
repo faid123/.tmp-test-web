@@ -17,6 +17,7 @@ import {
   ensureMajorConnectorPlacementsOnSupportedTeethInJaws,
   ensurePalatalBarPlacementsOnConnectorTeeth,
   removeMajorPlacementsFromPalatalBarExcludedUpperTeeth,
+  syncReciprocatingPlatesToMajorConnector,
 } from "./components.js";
 import { COMPONENT_GROUPS, forEachTooth, TOOTH_ORDER } from "./constants.js";
 import {
@@ -304,15 +305,16 @@ export function handleDesignComponentSelect(componentId) {
       }
     }
 
+    const jawKeys = String(componentId).startsWith("major-lower-")
+      ? ["lower"]
+      : String(componentId).startsWith("major-upper-")
+        ? ["upper"]
+        : ["upper", "lower"];
+
     if (isPalatalBarMajorComponent(componentId)) {
       ensurePalatalBarPlacementsOnConnectorTeeth(state.teeth, COMPONENT_BY_ID);
       removeMajorPlacementsFromPalatalBarExcludedUpperTeeth(state.teeth);
     } else {
-      const jawKeys = String(componentId).startsWith("major-lower-")
-        ? ["lower"]
-        : String(componentId).startsWith("major-upper-")
-          ? ["upper"]
-          : ["upper", "lower"];
       // Clear major connectors from the target arch only so the new connector replaces
       // whatever was there without disturbing the opposite arch.
       for (const jawKey of jawKeys) {
@@ -332,6 +334,11 @@ export function handleDesignComponentSelect(componentId) {
         jawKeys
       );
     }
+
+    // Keep the per-tooth plate-prox in step with the new connector: a plate/strap/horseshoe
+    // plates the teeth it covers (real, erasable plate-prox); a bar plates none. This is what
+    // flips the plating on a plate<->bar switch and keeps the plate data-driven.
+    syncReciprocatingPlatesToMajorConnector(state.teeth, componentId, jawKeys);
 
     forEachTooth((toothId) => {
       const tooth = state.teeth[toothId];

@@ -24,6 +24,7 @@ import {
   COMPONENT_BY_ID,
   ensureMajorConnectorPlacementsOnSupportedTeethInJaws,
   isMajorConnectorComponent,
+  syncReciprocatingPlatesToMajorConnector,
 } from "../src/js/2D/components.js";
 import { syncToothComponentsFromPlacements } from "../src/js/2D/annotationTeethModel.js";
 import { TOOTH_ORDER } from "../src/js/2D/constants.js";
@@ -52,6 +53,8 @@ function switchLowerMajor(state, componentId) {
     if (rec?.componentPlacements) rec.componentPlacements = rec.componentPlacements.filter((e) => !isMajorConnectorComponent(e.componentId));
   }
   ensureMajorConnectorPlacementsOnSupportedTeethInJaws(state.teeth, componentId, COMPONENT_BY_ID, ["lower"]);
+  // Mirror the catalog handler: keep per-tooth plate-prox in step with the connector type.
+  syncReciprocatingPlatesToMajorConnector(state.teeth, componentId, ["lower"]);
   for (const t of TOOTH_ORDER.lower) if (state.teeth[t]) syncToothComponentsFromPlacements(state.teeth[t]);
 }
 
@@ -73,15 +76,21 @@ describe("lower lingual plate: web reproduces desktop geometry", () => {
     expect(d).toEqual([]);
   });
 
-  // Regression: a loaded lingual plate must not spawn per-tooth plate-prox
-  // (reciprocating=2 noise) that renders as proximal plates overlapping the plate.
-  it("loading a lingual PLATE creates no overlapping reciprocating plate-prox", () => {
+  // Data-driven plating: a loaded lingual plate stamps reciprocating=2 on every present tooth,
+  // and each now decodes into a real, per-tooth (erasable) plate-prox. The renderer draws these
+  // as the single plate fill (no double-draw / overlap); this asserts they are materialized.
+  it("loading a lingual PLATE creates one plate-prox per present tooth", () => {
     const design = resolveJawStructDesign(parseJawStructText(plateText));
     expect(design.major).toBe("major-lower-lingual-plate");
-    const plateProx = Object.values(design.teeth)
-      .flatMap((t) => t.placements || [])
-      .filter((p) => p.componentId === "plate-prox").length;
-    expect(plateProx).toBe(0);
+    const teeth = Object.values(design.teeth);
+    const presentCount = teeth.filter((t) => t.present).length;
+    const plateProxTeeth = teeth.filter((t) =>
+      (t.placements || []).some((p) => p.componentId === "plate-prox")
+    );
+    expect(presentCount).toBeGreaterThan(0);
+    expect(plateProxTeeth.length).toBe(presentCount);
+    // No missing tooth carries a plate-prox.
+    expect(plateProxTeeth.every((t) => t.present)).toBe(true);
   });
 
   // Regression: load a PLATE (decodes reciprocating=2 into plate-prox on teeth),

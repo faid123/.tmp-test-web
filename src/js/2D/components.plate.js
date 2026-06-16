@@ -1,5 +1,11 @@
 import { isAutoMeshPlacementExcludedToothId, TOOTH_ORDER } from "./constants.js";
 import { COMPONENT_ASSET_BASE, getComponentTemplateToothId } from "./components.mesh.js";
+import { isReciprocatingClaspComponent } from "./components.clasp.js";
+
+/** Major connectors that are BARS (band-only) — they plate no teeth. */
+const BAR_MAJOR_CONNECTOR_IDS = Object.freeze(
+  new Set(["major-lower-lingual-bar", "major-upper-palatal-bar"])
+);
 
 /** Default plate when entering design mode (both arches locked) if no plate is selected in the catalog. */
 const DEFAULT_PLATE_ID_FOR_LOCK_DESIGN_MODE = "plate-prox";
@@ -277,4 +283,48 @@ export function ensurePlatePlacementsOnPresentTeethInJaws(
 // Ensure present teeth have default plate on both jaws.
 export function ensurePlatePlacementsOnPresentTeeth(teeth, plateComponentId, componentById) {
   ensurePlatePlacementsOnPresentTeethInJaws(teeth, plateComponentId, componentById, Object.keys(TOOTH_ORDER));
+}
+
+/**
+ * Keep each tooth's `plate-prox` (the per-tooth plating element — the desktop's
+ * `Reciprocating.Tooth Type = 2`) in step with the jaw's major connector after a switch:
+ *  - a PLATE / strap / horseshoe plates every present tooth it actually covers, giving each a
+ *    real, erasable `plate-prox` component (matches the desktop's blanket plating, and the
+ *    renderer draws that as the tooth's plate fill);
+ *  - a BAR plates none.
+ * A tooth carrying a reciprocating clasp keeps that as its reciprocal (clasp XOR plate), and a
+ * tooth the connector excludes loses its plate. This is what makes the plate data-driven and
+ * removable while a plate<->bar switch correctly flips the plating.
+ */
+// Sync per-tooth plate-prox to the jaw's major connector type.
+export function syncReciprocatingPlatesToMajorConnector(teeth, majorComponentId, jawKeys) {
+  if (!teeth || typeof teeth !== "object" || !Array.isArray(jawKeys)) {
+    return;
+  }
+  const isBar = BAR_MAJOR_CONNECTOR_IDS.has(String(majorComponentId));
+  for (const jaw of jawKeys) {
+    const ids = TOOTH_ORDER[jaw];
+    if (!Array.isArray(ids)) {
+      continue;
+    }
+    for (const toothId of ids) {
+      const tooth = teeth[toothId];
+      if (!tooth || !Array.isArray(tooth.componentPlacements)) {
+        continue;
+      }
+      const hasPlate = tooth.componentPlacements.some((e) => e.componentId === "plate-prox");
+      const covered =
+        !isBar &&
+        tooth.isPresent &&
+        tooth.componentPlacements.some((e) => e.componentId === majorComponentId) &&
+        !tooth.componentPlacements.some((e) => isReciprocatingClaspComponent(e.componentId));
+      if (covered && !hasPlate) {
+        tooth.componentPlacements.push({ componentId: "plate-prox", surface: null });
+      } else if (!covered && hasPlate) {
+        tooth.componentPlacements = tooth.componentPlacements.filter(
+          (e) => e.componentId !== "plate-prox"
+        );
+      }
+    }
+  }
 }

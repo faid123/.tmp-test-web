@@ -10,6 +10,37 @@ function getLoggedInUser() {
   return user ? JSON.parse(user) : null;
 }
 
+// Per-user cache of the last case list so the table can paint instantly on load
+// instead of waiting on /case/user/findall/get — which can lag when the API host
+// is briefly busy (right after the 2D page's request burst, or while the chat's
+// heavy notes query is still being served by the backend). The network result
+// replaces it as soon as it lands. Keyed by uuid so one account never sees
+// another's list on the instant paint.
+function caseListCacheKey() {
+  const u = getLoggedInUser();
+  return u?.uuid ? `caseList_cache_${u.uuid}` : null;
+}
+function saveCachedCases(list) {
+  const key = caseListCacheKey();
+  if (!key || !Array.isArray(list)) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(list));
+  } catch {
+    try { localStorage.removeItem(key); } catch { /* ignore */ }
+  }
+}
+function loadCachedCases() {
+  const key = caseListCacheKey();
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 let currentSortColumn = "recent";
 let currentSortOrder = "desc";
 let currentCases = [];
@@ -872,6 +903,70 @@ function updateThumbnail() {
   area?.classList.add("has-image");
 }
 
+// Lightbox preview for the case thumbnail carousel: clicking the thumbnail opens
+// the current image enlarged over a dark overlay, with prev/next + a counter that
+// stay in sync with the small carousel. Close via the × button, a click on the
+// backdrop, or Escape. The overlay is built once and reused.
+function openThumbnailPreview() {
+  if (currentThumbnails.length === 0) return;
+  let overlay = document.getElementById("thumbPreviewOverlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "thumbPreviewOverlay";
+    overlay.className = "thumb-preview-overlay hidden";
+    overlay.innerHTML = `
+      <button type="button" class="thumb-preview-close" aria-label="Close preview">&times;</button>
+      <button type="button" class="thumb-preview-nav thumb-preview-prev" aria-label="Previous image"><i class="fa fa-chevron-left"></i></button>
+      <img class="thumb-preview-img" alt="Case thumbnail preview" />
+      <button type="button" class="thumb-preview-nav thumb-preview-next" aria-label="Next image"><i class="fa fa-chevron-right"></i></button>
+      <span class="thumb-preview-counter"></span>`;
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.classList.add("hidden");
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+    overlay.querySelector(".thumb-preview-close").addEventListener("click", close);
+    overlay.querySelector(".thumb-preview-prev").addEventListener("click", (e) => {
+      e.stopPropagation();
+      stepThumbnailPreview(-1);
+    });
+    overlay.querySelector(".thumb-preview-next").addEventListener("click", (e) => {
+      e.stopPropagation();
+      stepThumbnailPreview(1);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (overlay.classList.contains("hidden")) return;
+      if (e.key === "Escape") close();
+      else if (e.key === "ArrowLeft") stepThumbnailPreview(-1);
+      else if (e.key === "ArrowRight") stepThumbnailPreview(1);
+    });
+  }
+  renderThumbnailPreview();
+  overlay.classList.remove("hidden");
+}
+
+function stepThumbnailPreview(delta) {
+  if (currentThumbnails.length === 0) return;
+  currentImageIndex =
+    (currentImageIndex + delta + currentThumbnails.length) % currentThumbnails.length;
+  updateThumbnail(); // keep the small carousel in sync with the lightbox
+  renderThumbnailPreview();
+}
+
+function renderThumbnailPreview() {
+  const overlay = document.getElementById("thumbPreviewOverlay");
+  if (!overlay || currentThumbnails.length === 0) return;
+  const img = overlay.querySelector(".thumb-preview-img");
+  const counter = overlay.querySelector(".thumb-preview-counter");
+  const multi = currentThumbnails.length > 1;
+  img.src = "data:image/png;base64," + currentThumbnails[currentImageIndex];
+  counter.textContent = `IMAGE ${currentImageIndex + 1} OF ${currentThumbnails.length}`;
+  overlay.querySelectorAll(".thumb-preview-nav").forEach((b) => {
+    b.style.display = multi ? "" : "none";
+  });
+}
+
 // 判断2D图像逻辑（白底 + 宽高比）
 function classifyThumbnails(images) {
   const is2D = (base64) => {
@@ -895,6 +990,31 @@ function classifyThumbnails(images) {
     const threeD = results.filter((r) => !r.is2D).map((r) => r.base64);
     return [...twoD, ...threeD];
   });
+}
+
+// Pull the storage slot off a /thumbnails/get row (0 = composite 2D, 1 = upper
+// jaw, 2 = lower jaw). Tolerates a couple of field-name variants; returns null
+// when the row carries no usable slot.
+function thumbnailSlot(row) {
+  const v = row?.slot ?? row?.slot_index ?? row?.slot_id;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Order case thumbnails so the carousel is always 2D -> upper jaw -> lower jaw,
+// matching their stored slots, no matter what order the API returns them in.
+// Older cases whose rows predate slot tagging fall back to the legacy
+// aspect-ratio grouping (2D-shaped first, then 3D).
+async function orderThumbnailsBySlot(rows) {
+  const withData = rows.filter((r) => r && r.data);
+  const haveSlots = withData.some((r) => thumbnailSlot(r) != null);
+  if (!haveSlots) {
+    return classifyThumbnails(withData.map((r) => r.data));
+  }
+  return withData
+    .slice()
+    .sort((a, b) => (thumbnailSlot(a) ?? 999) - (thumbnailSlot(b) ?? 999))
+    .map((r) => r.data);
 }
 
 // 获取缩略图
@@ -939,8 +1059,7 @@ async function fetchThumbnails(caseId) {
     }
 
     const data = await res.json();
-    const rawImages = data.map((img) => img.data).filter(Boolean);
-    currentThumbnails = await classifyThumbnails(rawImages);
+    currentThumbnails = await orderThumbnailsBySlot(Array.isArray(data) ? data : []);
     currentImageIndex = 0;
     updateThumbnail();
   } catch (err) {
@@ -953,6 +1072,23 @@ async function fetchThumbnails(caseId) {
 
 // 初始化页面
 document.addEventListener("DOMContentLoaded", async () => {
+  // Instant paint FIRST — before any other setup (connectivity / sidebar /
+  // thumbnail, any of which could be slow or throw) and before the network call —
+  // so the table shows the last-known list immediately instead of staying blank
+  // while /case/user/findall/get is in flight. That request can lag when the API
+  // host is busy (e.g. right after the chat's heavy notes query); the fetch below
+  // replaces this paint as soon as it lands.
+  try {
+    const cachedForPaint = loadCachedCases();
+    if (cachedForPaint && cachedForPaint.length) {
+      currentCases = cachedForPaint;
+      populateTable(currentCases);
+      applyClientFilters();
+    }
+  } catch (err) {
+    console.warn("[caseList] instant cached paint failed", err);
+  }
+
   const footerUserName = document.getElementById("footerUserName");
   if (footerUserName) {
     const u = getLoggedInUser();
@@ -965,6 +1101,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const cases = await fetchCases();
 
   if (cases) {
+    // Persist for the next load's instant paint.
+    saveCachedCases(cases);
     // Paint the base list immediately. The per-case enrichment below fires
     // 2×N requests (additional details + co-owners, capped at 5 in flight);
     // gating the first paint on all of them left the table blank until every
@@ -992,6 +1130,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentCases = cases;
         populateTable(currentCases);
         applyClientFilters();
+        // Cache the enriched list (co-owners + details) so the next instant
+        // paint is complete, not just the bare base rows.
+        saveCachedCases(currentCases);
       })
       .catch((err) => {
         // Enrichment is best-effort; the base list is already on screen.
@@ -1040,6 +1181,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         variant: "info",
       });
       if (!confirmed) return;
+      // Drop the cached case list (compute the key while the user is still known)
+      // so the next account doesn't briefly see this one's list on instant paint.
+      const cacheKey = caseListCacheKey();
+      if (cacheKey) { try { localStorage.removeItem(cacheKey); } catch { /* ignore */ } }
       localStorage.removeItem("loggedInUser");
       window.location.href = "../../index.html";
     });
@@ -1148,6 +1293,11 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         currentImageIndex = (currentImageIndex + 1) % currentThumbnails.length;
         updateThumbnail();
       }
+    });
+
+    // Click the thumbnail to open it enlarged in a lightbox preview.
+    document.getElementById("caseImage")?.addEventListener("click", () => {
+      openThumbnailPreview();
     });
   }
 

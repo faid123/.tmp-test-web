@@ -224,13 +224,27 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
     // gets the bar band crossing it but NO plate fill. Draw the plate fill first so
     // the bar band sits on top of it. The lingual bar (and other majors) render the
     // band only.
-    // The lingual-plate fill IS that tooth's reciprocal/plating element. If the
-    // tooth already carries a reciprocating clasp, that is its reciprocal — drawing
-    // the plate fill on top would overlap it (clasp XOR plate per tooth), so skip
-    // the fill there and let the clasp show. Other present teeth still get filled.
+    // The plate fill IS that tooth's reciprocal/plating element. If the tooth
+    // already carries a reciprocating clasp, that is its reciprocal — drawing the
+    // plate fill on top would overlap it (clasp XOR plate per tooth), so skip the
+    // fill there and let the clasp show. Other present teeth still get filled.
+    //
+    // Every major connector attaches to the teeth via this per-tooth plate fill BY
+    // DEFAULT — the only exceptions are the *bars* (lower lingual bar / upper
+    // palatal bar), which are band-only: a bar rides clear of the tissue/palate and
+    // touches teeth only at its minor connectors. For the upper arch this fill is
+    // complementary to the palate arch overlay: the overlay covers the palate body,
+    // the per-tooth fill covers where the plate climbs each tooth's palatal surface.
+    // The plate fill is gated on the tooth's own plate-prox component (the per-tooth plating
+    // element loaded from / saved to the data), so it is data-driven and per-tooth removable:
+    // erasing a tooth's plate-prox drops its fill (and encodes reciprocating=0). On load every
+    // present tooth under a plating connector carries a plate-prox, so the default visual is
+    // unchanged. This is also the single source for the plate visual (the dedicated plate pass
+    // skips plate-prox under a non-bar major), so there is no double-draw / anterior overlap.
     if (
-      majorId === "major-lower-lingual-plate" &&
+      majorId !== "major-lower-lingual-bar" &&
       tooth.isPresent &&
+      tooth.components.includes("plate-prox") &&
       !tooth.components.some((id) => isReciprocatingClaspComponent(id))
     ) {
       const plate = createComponentVisual("plate-prox", toothId, jaw);
@@ -286,8 +300,20 @@ function appendToothPlateComponentVisuals(group, tooth, toothId, jaw) {
         .filter((x) => x.def)
     : [];
 
+  // The connector pass (appendToothComponentVisuals) already draws the plate-prox fill for any
+  // major connector except the lower lingual bar, so re-drawing it here would stack two plates
+  // per tooth (the anterior overlap). Only draw plate-prox here when there is no such connector
+  // (a standalone plate, e.g. RPI under a lingual bar). Mesh plates (plate-crossmesh) are always
+  // drawn here — the connector pass never draws those.
+  const drawnByConnectorFill = tooth.components.some(
+    (id) => isMajorConnectorComponent(id) && id !== "major-lower-lingual-bar"
+  );
+
   for (const { id } of catalogEntries) {
     if (!isPlateComponentId(id)) {
+      continue;
+    }
+    if (id === "plate-prox" && drawnByConnectorFill) {
       continue;
     }
     const visual = createComponentVisual(id, toothId, jaw);
@@ -1192,9 +1218,14 @@ function appendRetainerClaspSuggestionPoints(group, tooth, toothId, jaw) {
 
   let points = getRetainerClaspSuggestionPointsForTooth(toothId, jaw);
   if (isReciprocating) {
-    const retainerSurface = getPlacedClaspSurface(tooth, isRetainerClaspComponent);
-    if (retainerSurface) {
-      points = points.filter((p) => normalizeSurface(p.surface) !== retainerSurface);
+    // The reciprocating arm sits on the arch-side OPPOSITE the retentive
+    // component: a buccal clasp → lingual reci, a lingual clasp → buccal reci,
+    // a bar (buccal-approaching) → lingual reci. Offer only the two points
+    // (mesial + distal) on that side. With no retentive clasp/bar yet, fall back
+    // to all four anchors so a standalone reci clasp can still be placed.
+    const reciSide = getReciprocatingArchSide(tooth);
+    if (reciSide) {
+      points = points.filter((p) => normalizeSurface(p.surface).includes(reciSide));
     }
   }
   const radius = getRetainerClaspSuggestionRadius();
@@ -1256,6 +1287,23 @@ function getPlacedClaspSurface(tooth, classifier) {
   ensureToothPlacementState(tooth);
   const found = tooth.componentPlacements.find((entry) => classifier(entry.componentId));
   return normalizeSurface(found?.surface);
+}
+
+// The arch-side a reciprocating clasp should occupy on this tooth: opposite the
+// retentive clasp/ring (buccal <-> lingual), or lingual when a bar is present
+// (bars approach from the buccal). Returns "buccal", "lingual", or null when the
+// tooth carries no retentive component to reciprocate.
+function getReciprocatingArchSide(tooth) {
+  ensureToothPlacementState(tooth);
+  if (tooth.componentPlacements.some((entry) => isBarComponent(entry.componentId))) {
+    return "lingual";
+  }
+  const retentiveSurface =
+    getPlacedClaspSurface(tooth, isRetainerClaspComponent) ||
+    getPlacedClaspSurface(tooth, isRingClaspComponent);
+  if (retentiveSurface?.includes("buccal")) return "lingual";
+  if (retentiveSurface?.includes("lingual")) return "buccal";
+  return null;
 }
 
 function hasRetainerClaspPlacementAtSurface(tooth, surface) {
