@@ -5,6 +5,10 @@ export class ApiClient {
     this.baseUrl = baseUrl;
   }
 
+  async ensureSession() {
+    await getSessionLogin();
+  }
+
   async post(endpoint, data, test,what) {
     const url = `${this.baseUrl}${endpoint}`;
     console.log(what)
@@ -13,11 +17,8 @@ export class ApiClient {
     {
       that = '';
     }
-    else
-    {
-      that = `Downloading: ${what} | `
-    }
-    const buffer = await login();
+    const downloadLabel = what === undefined ? '' : `Downloading: ${what} | `;
+    await getSessionLogin();
 
 
     const response = await fetch(url, {
@@ -41,44 +42,41 @@ export class ApiClient {
 
     const contentLength = response.headers.get('content-length');
     if (!contentLength) {
-      throw new Error('Content-Length response header unavailable');
+      // Server used chunked transfer encoding — no progress bar possible.
+      if (container) document.body.removeChild(container);
+      return response.json();
     }
 
     const totalBytes = parseInt(contentLength, 10);
     let loadedBytes = 0;
+    const els = window.viewerLoadingEls;
 
-    // Create and style elements
-    const container = document.createElement('div');
-    container.style.display = 'flex';
-    container.style.flexDirection = 'column';
-    container.style.alignItems = 'center';
-    container.style.justifyContent = 'center';
-    container.style.height = '100vh';
-    container.style.textAlign = 'center';
+    // Shared UI state for the fallback local overlay
+    let container = null, progressBar = null, percentage = null, displayBox = null;
 
-    const progressBar = document.createElement('progress');
-    progressBar.max = totalBytes;
-    progressBar.style.width = '80%';
-    progressBar.style.marginBottom = '10px';
-
-    const percentage = document.createElement('span');
-    percentage.style.display = 'block';
-    percentage.style.marginBottom = '10px';
-
-    const displayBox = document.createElement('div');
-    displayBox.style.width = '80%';
-    displayBox.style.padding = '10px';
-    displayBox.style.border = 'transparent';
-    displayBox.style.borderRadius = '5px';
-    displayBox.style.backgroundColor = 'transparent'; // Transparent background
-    displayBox.style.textAlign = 'center';
-    displayBox.style.minHeight = '100px';
-    displayBox.style.boxSizing = 'border-box'; // Include padding in width
-
-    container.appendChild(progressBar);
-    container.appendChild(percentage);
-    container.appendChild(displayBox);
-    document.body.appendChild(container);
+    if (els) {
+      // Use the centralized loading screen — identical update pattern to main branch
+      progressBar = els.progressBar;
+      percentage  = els.percentage;
+      displayBox  = els.displayBox;
+      progressBar.max = totalBytes;
+      progressBar.value = 0;
+      progressBar.style.display = 'block';
+    } else {
+      container = document.createElement('div');
+      container.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;text-align:center;';
+      progressBar = document.createElement('progress');
+      progressBar.max = totalBytes;
+      progressBar.style.cssText = 'width:80%;margin-bottom:10px;';
+      percentage = document.createElement('span');
+      percentage.style.cssText = 'display:block;margin-bottom:10px;';
+      displayBox = document.createElement('div');
+      displayBox.style.cssText = 'width:80%;padding:10px;border:transparent;border-radius:5px;background:transparent;text-align:center;min-height:100px;box-sizing:border-box;';
+      container.appendChild(progressBar);
+      container.appendChild(percentage);
+      container.appendChild(displayBox);
+      document.body.appendChild(container);
+    }
 
     const reader = response.body.getReader();
     const stream = new ReadableStream({
@@ -92,14 +90,12 @@ export class ApiClient {
             loadedBytes += value.length;
             progressBar.value = loadedBytes;
 
-            // Calculate percentage
             const percent = ((loadedBytes / totalBytes) * 100).toFixed(2);
             percentage.textContent = `${percent}%`;
 
-            // Calculate download speed in MB/s
-            const timeElapsed = performance.now() / 1000; // in seconds
-            const downloadSpeedMBps = (loadedBytes / (1024 * 1024 * timeElapsed)).toFixed(1); // Convert bytes to MB and round to 1 decimal place
-            displayBox.textContent = `${that}   Download speed: ${downloadSpeedMBps} MB/s`;
+            const timeElapsed = performance.now() / 1000;
+            const downloadSpeedMBps = (loadedBytes / (1024 * 1024 * timeElapsed)).toFixed(1);
+            displayBox.textContent = `${downloadLabel}   Download speed: ${downloadSpeedMBps} MB/s`;
 
             controller.enqueue(value);
             push();
@@ -112,11 +108,22 @@ export class ApiClient {
     const responseStream = new Response(stream);
     const jsonResponse = await responseStream.json();
 
-    // Remove the container after the download is complete
-    document.body.removeChild(container);
+    if (container) document.body.removeChild(container);
 
     return jsonResponse;
   }
+}
+
+let sessionLoginPromise = null;
+
+function getSessionLogin() {
+  if (!sessionLoginPromise) {
+    sessionLoginPromise = login().catch((error) => {
+      sessionLoginPromise = null;
+      throw error;
+    });
+  }
+  return sessionLoginPromise;
 }
 
 

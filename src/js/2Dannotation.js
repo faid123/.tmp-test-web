@@ -293,7 +293,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("saveBtn")?.addEventListener("click", async () => {
   try {
     /* ---------- 0. 校验登录 ---------- */
-    const user = JSON.parse(localStorage.getItem("loggedInUser"));
+    const user = getLoggedInUser();
     if (!user?.uuid) return alert("Login info not found, please log in again.");
 
     /* ---------- 1. 基本变量 ---------- */

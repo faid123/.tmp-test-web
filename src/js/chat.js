@@ -193,6 +193,7 @@ async function fetchNotes() {
             if (pendingImageBase64) messages.push(buildPendingPreviewMessage());
             displayMessages();
         } else {
+            if (firstLoad) chatBox.innerHTML = '';
             console.error('❌ Failed to fetch notes:', await response.text());
         }
     } catch (err) {
