@@ -82,13 +82,6 @@ body {
   background: var(--bg);
   color: var(--ink);
   overflow: hidden;
-html,
-body {
-  width: 100%;
-  height: 100%;
-  background: var(--bg);
-  color: var(--ink);
-  overflow: hidden;
 }
 
 button {
@@ -106,36 +99,8 @@ button {
   grid-template-rows: 1fr auto;
   height: 100vh;
   background: var(--bg);
-button {
-  font-family: inherit;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: inherit;
 }
 
-/* ============ page layout ============ */
-.cm-page {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 400px;
-  grid-template-rows: 1fr auto;
-  height: 100vh;
-  background: var(--bg);
-}
-
-/* ============ bottom status footer ============ */
-.cm-footer {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  height: 35px;
-  padding: 0 16px;
-  background: var(--primary);
-  border-top: 1px solid var(--primary-dark);
-  font-size: 13px;
-  color: #fff;
 /* ============ bottom status footer ============ */
 .cm-footer {
   grid-column: 1 / -1;
@@ -448,50 +413,8 @@ button {
   align-items: center;
   gap: 12px;
   position: relative; /* anchor for the notification popup */
-.cm-header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  position: relative; /* anchor for the notification popup */
 }
 
-/* ----- notification popup (overrides legacy notification.css) ----- */
-.notification-popup {
-  position: absolute;
-  top: calc(100% + 10px);
-  /* Anchor the popup to the BELL specifically. The bell sits to the left of
-     the logout avatar inside .cm-header-right; offsetting the right edge by
-     `(avatar 40px + gap 12px)` lines the popup's right edge up with the
-     bell instead of with the logout button. */
-  right: 0;
-  left: auto;
-  width: 340px;
-  max-width: calc(100vw - 32px);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-  z-index: 1000;
-  overflow: hidden;
-}
-
-.notification-popup.hidden { display: none !important; }
-
-.notification-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--line-soft);
-  background: var(--panel);
-}
-
-.notification-header > span {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--ink);
 /* ----- notification popup (overrides legacy notification.css) ----- */
 .notification-popup {
   position: absolute;
@@ -974,13 +897,6 @@ button {
   background: #eef2f7;
   border-radius: var(--radius);
   border: 1px solid var(--line);
-.cm-image-area {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 11;
-  background: #eef2f7;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1250,19 +1166,64 @@ button {
   flex-direction: column;
   gap: 10px;
   margin-top: auto;
-.dropdown-item:hover { background: var(--line-soft); }
-.dropdown-item:last-child:hover { background: var(--status-danger-bg); color: var(--danger); }
-
-/* ============ detail CTA ============ */
-.cm-detail-cta {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: auto;
 }
 
-/* ============ back-to-list (mobile only) ============ */
-.back-to-list {
+/* ============ 3D viewer link ============ */
+.cm-3d-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cm-3d-link-anchor {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--primary-dark);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.cm-3d-link-anchor:hover {
+  background: var(--line-soft);
+  border-color: var(--primary);
+}
+.cm-3d-link-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.cm-3d-link-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cm-3d-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.cm-3d-copy-btn:hover {
+  background: var(--line-soft);
+  color: var(--primary-dark);
+  border-color: var(--primary);
+}
+
 /* ============ back-to-list (mobile only) ============ */
 .back-to-list {
   display: none;

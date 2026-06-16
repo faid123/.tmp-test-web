@@ -746,9 +746,26 @@ async function fireLastOpenedBump(caseId, detail, user) {
   }
 }
 
+// Build the 3D viewer URL for a case (ThreeDViewer.html reads ?id=<encryptedId>).
+// Mirrors the Start Case navigation: encrypts the id and respects the
+// GitHub-Pages base path so the link works locally and when deployed.
+function buildThreeDViewerUrl(caseId) {
+  if (!caseId) return "";
+  const encryptedId = lol(caseId);
+  const isGitHubPages = window.location.hostname.includes("github.io");
+  const basePath = isGitHubPages
+    ? `/${window.location.pathname.split("/").filter(Boolean)[0] || ""}`
+    : "";
+  return `${window.location.origin}${basePath}/src/pages/ThreeDViewer.html?id=${encryptedId}`;
+}
+
 // 显示基本信息
 function displayCaseDetails(data) {
   const caseIntId = data.id ?? data.case_int_id;
+
+  const view3dLink = document.getElementById("view3dLink");
+  if (view3dLink) view3dLink.href = buildThreeDViewerUrl(caseIntId) || "#";
+
   const displayName = data.case_id
     ? caseIntId != null
       ? `UID ${caseIntId}-${data.case_id}`
@@ -1322,6 +1339,25 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
 
       const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}`;
       window.location.href = targetURL;
+    });
+  }
+
+  // Copy the selected case's 3D viewer link to the clipboard.
+  const copy3dLinkBtn = document.getElementById("copy3dLinkBtn");
+  if (copy3dLinkBtn) {
+    copy3dLinkBtn.addEventListener("click", async () => {
+      const url3d = buildThreeDViewerUrl(window.selectedCaseId);
+      if (!url3d) {
+        toast.warning("Please select a case first.");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(url3d);
+        toast.success("3D viewer link copied.");
+      } catch (err) {
+        console.warn("Failed to copy 3D viewer link", err);
+        toast.error("Couldn't copy the link.");
+      }
     });
   }
 
