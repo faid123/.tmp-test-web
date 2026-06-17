@@ -14,7 +14,7 @@ html, body {
 
 
 #main-container {
-  /* display: flex; */
+  display: flex;
   flex-direction: row;
   align-items: flex-start;
   padding: 70px;
@@ -23,6 +23,7 @@ html, body {
 }
 
 #image-preview-area {
+  position: relative;
   height: 100%;                  /* 高度占满容器 */
   margin-right: 40px;
   border: 2px solid #ccc;

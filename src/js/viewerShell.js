@@ -1,7 +1,6 @@
 import { lol } from "../crypt.js";
 import { setupAppSidebar } from "./appSidebar.js";
 import { setupConnectivityIndicator } from "./connectivityIndicator.js";
-import { setupDrawingLayer } from "./drawingLayer.js";
 
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
@@ -126,31 +125,7 @@ function wireDrawingTools() {
     if (el) el.src = `${basePath}/assets/${name}.png`;
   });
 
-  const drawing = setupDrawingLayer("container3D");
-  if (!drawing) return;
-
-  const penBtn = document.getElementById("footerPenBtn");
-  const eraserBtn = document.getElementById("footerEraserBtn");
-  const undoBtn = document.getElementById("footerDrawUndoBtn");
-  const redoBtn = document.getElementById("footerDrawRedoBtn");
-
-  function updateDrawingButtons() {
-    const mode = drawing.getMode();
-    if (penBtn) penBtn.setAttribute("aria-pressed", String(mode === "pen"));
-    if (eraserBtn) eraserBtn.setAttribute("aria-pressed", String(mode === "eraser"));
-    if (undoBtn) undoBtn.disabled = drawing.getUndoCount() === 0;
-    if (redoBtn) redoBtn.disabled = drawing.getRedoCount() === 0;
-  }
-
-  drawing.setOnModeChange(updateDrawingButtons);
-  drawing.setOnUndoRedoChange(updateDrawingButtons);
-
-  penBtn?.addEventListener("click", () => drawing.setMode("pen"));
-  eraserBtn?.addEventListener("click", () => drawing.setMode("eraser"));
-  undoBtn?.addEventListener("click", () => drawing.undo());
-  redoBtn?.addEventListener("click", () => drawing.redo());
-
-  updateDrawingButtons();
+  // Drawing layer removed — buttons are present in the UI but not wired up.
 }
 
 function wireNotesPopup() {

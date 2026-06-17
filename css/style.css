@@ -43,6 +43,7 @@ main {
 }
 
 header {
+  position: relative;
   margin-top: 3em;
   text-align: center;
   color: white;
@@ -479,6 +480,13 @@ header h1 {
   pointer-events: none;
 }
 
+.cm-footer-nav-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+}
+
 .cm-footer-tool-btn[aria-pressed="true"] {
   background: rgba(255, 255, 255, 0.28);
   outline: 1px solid rgba(255, 255, 255, 0.55);
@@ -661,6 +669,7 @@ header h1 {
   border-radius: 10px;
   background: rgba(22, 28, 36, 0.97);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   overflow: hidden;
 }

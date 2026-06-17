@@ -170,7 +170,7 @@
         <div class="cc-form-pane hidden" id="createCaseForm">
           <div class="cc-form-grid">
             <div class="cc-field">
-              <label class="input-label" for="caseName">Case Name <span style="color:red">*</span></label>
+              <label class="input-label" for="caseName">Case Name <span class="cm-required">*</span></label>
               <input type="text" id="caseName" class="modal-input" placeholder="New case name" required />
             </div>
             <div class="cc-field">
@@ -334,7 +334,7 @@
                 <span class="cc-jaw-label">Lower Jaw</span>
               </div>
             </div>
-            <input type="file" id="jawUploadInput" accept=".stl" style="display: none" />
+            <input type="file" id="jawUploadInput" accept=".stl" class="cm-file-input-hidden" aria-label="Upload jaw STL file" />
           </div>
 
           <div class="cc-ref-section">
@@ -342,7 +342,7 @@
               <span class="cc-ref-label">Upload Reference Image</span>
             </button>
             <div id="uploadedReferenceImages" class="cc-ref-grid"></div>
-            <input type="file" id="refImageInput" accept="image/png,image/jpeg" style="display: none" />
+            <input type="file" id="refImageInput" accept="image/png,image/jpeg" class="cm-file-input-hidden" aria-label="Upload reference image" />
           </div>
 
           <div class="cc-actions">

@@ -2,32 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>2D Annotate</title>
   <link rel="preconnect" href="https://live.api.smartrpdai.com">
   <link rel="icon" href="/assets/favicon.ico" type="image/x-icon">
 </head>
 <body>
-  <div id="main-container" style="display: flex; align-items: flex-start;">
-    <div id="image-preview-area" style="position: relative;">
-    <!-- <canvas id="fabric-canvas" width="800" height="1000"
-    style="position: absolute; top: 0; left: 0; z-index: 10;"></canvas> -->
-      <!-- 合成图像将插入在此处 --> 
-       
+  <div id="main-container">
+    <div id="image-preview-area">
+      <!-- 合成图像将插入在此处 -->
     </div>
     <div id="annotation-panel">
-      <button id="cancelBtn">❌ CANCEL</button>
-      <button id="saveBtn">✅ SAVE AND CLOSE</button>
+      <button type="button" id="cancelBtn">❌ CANCEL</button>
+      <button type="button" id="saveBtn">✅ SAVE AND CLOSE</button>
 
       <div class="section-title">Currently Drawing</div>
 
-      <button id="arrowBtn">🔗 Connector</button>
-      <button id="textBtn">💬 Text Box</button>
-      <button id="clearBtn">🗑 Clear</button>
-      <button id="undoBtn">⤺ Undo</button>
-      <button id="redoBtn">⤻ Redo</button>
-      <button id="brushBtn">🖌 Brush</button>
-      <button id="penBtn">✏ Pen</button>
-      <button id="eraserBtn">🧼 Eraser</button>
+      <button type="button" id="arrowBtn">🔗 Connector</button>
+      <button type="button" id="textBtn">💬 Text Box</button>
+      <button type="button" id="clearBtn">🗑 Clear</button>
+      <button type="button" id="undoBtn">⤺ Undo</button>
+      <button type="button" id="redoBtn">⤻ Redo</button>
+      <button type="button" id="brushBtn">🖌 Brush</button>
+      <button type="button" id="penBtn">✏ Pen</button>
+      <button type="button" id="eraserBtn">🧼 Eraser</button>
 
       <label for="sizeSlider">🪄 Size</label>
       <input type="range" id="sizeSlider" min="1" max="50" value="10">

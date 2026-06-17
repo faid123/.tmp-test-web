@@ -1290,3 +1290,6 @@ button {
   color: var(--muted);
 }
 #renameCaseModal .close-btn:hover { color: var(--ink); }
+
+.cm-required { color: red; }
+.cm-file-input-hidden { display: none; }
