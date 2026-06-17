@@ -1342,10 +1342,10 @@ function initAnnFooter() {
     window.dispatchEvent(new CustomEvent("request-download-jaw-profile"));
   });
 
-  // Load Proposal is a placeholder — the action isn't implemented yet, so we
-  // just surface a status message rather than wire it to a noop button.
+  // Load Template Jaw is a placeholder — the action isn't implemented yet, so
+  // we just surface a status message rather than wire it to a noop button.
   document.getElementById("loadProposalBtn")?.addEventListener("click", () => {
-    setMessage("Load Proposal — coming soon.", false);
+    setMessage("Load Template Jaw — coming soon.", false);
   });
 
   initSidebar();

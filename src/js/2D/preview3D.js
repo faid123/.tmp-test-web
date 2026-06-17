@@ -1,5 +1,6 @@
 import { state, setMessage, fetchCaseDetail } from "./2DAnnotation.js";
 import { addViewcaptureFromImage } from "./noticeboard.js";
+import { saveAsJpeg } from "./annotationLocks.js";
 import { confirmModal } from "../confirmModal.js";
 
 let THREE = null;
@@ -205,6 +206,7 @@ export function teardown3DPreview() {
   preview3DState.area = null;
   preview3DState.topControls = null;
   closeUpload3dModal();
+  closeDownloadJawProfileModal();
   preview3DState.caseData = null;
   preview3DState.heatmapEnabled = false;
   preview3DState.heatmapToggleBtn = null;
@@ -854,6 +856,160 @@ function closeUpload3dModal() {
   }
 }
 
+// ---- Download Jaw Profile (STL zip / JPEG) -------------------------------
+// The footer "Download jaw profile" button (and the noticeboard one) dispatch
+// `request-download-jaw-profile`, which opens this two-option menu:
+//   • Download STL file → bundle the upper + lower jaw STLs into one .zip
+//   • Download as JPEG  → reuse the existing "Save as JPEG" arch export
+function ensureDownloadJawProfileModal() {
+  if (preview3DState.downloadJawModal) return preview3DState.downloadJawModal;
+
+  const overlay = document.createElement("div");
+  overlay.className = "jaw-dl-modal is-hidden";
+  overlay.setAttribute("aria-hidden", "true");
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "jaw-dl-backdrop";
+  backdrop.addEventListener("click", closeDownloadJawProfileModal);
+
+  const panel = document.createElement("div");
+  panel.className = "jaw-dl-panel";
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-modal", "true");
+  panel.setAttribute("aria-label", "Download jaw profile");
+
+  const header = document.createElement("div");
+  header.className = "jaw-dl-header";
+  const title = document.createElement("h2");
+  title.className = "jaw-dl-title";
+  title.textContent = "Download Jaw Profile";
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "jaw-dl-close";
+  closeBtn.setAttribute("aria-label", "Close");
+  closeBtn.innerHTML = '<i class="fa fa-xmark" aria-hidden="true"></i>';
+  closeBtn.addEventListener("click", closeDownloadJawProfileModal);
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+
+  const options = document.createElement("div");
+  options.className = "jaw-dl-options";
+
+  const stlBtn = document.createElement("button");
+  stlBtn.type = "button";
+  stlBtn.className = "jaw-dl-option";
+  stlBtn.innerHTML =
+    '<i class="fa fa-cube" aria-hidden="true"></i>' +
+    '<span class="jaw-dl-option-title">Download STL file</span>' +
+    '<span class="jaw-dl-option-sub">Upper &amp; lower jaws as a .zip</span>';
+  stlBtn.addEventListener("click", () => {
+    closeDownloadJawProfileModal();
+    downloadJawStlsAsZip();
+  });
+
+  const jpegBtn = document.createElement("button");
+  jpegBtn.type = "button";
+  jpegBtn.className = "jaw-dl-option";
+  jpegBtn.innerHTML =
+    '<i class="fa fa-image" aria-hidden="true"></i>' +
+    '<span class="jaw-dl-option-title">Download as JPEG</span>' +
+    '<span class="jaw-dl-option-sub">Arch annotation image</span>';
+  jpegBtn.addEventListener("click", () => {
+    closeDownloadJawProfileModal();
+    // Reuse the existing "Save as JPEG" flow (also re-uploads the 2D thumbnail).
+    saveAsJpeg();
+  });
+
+  options.appendChild(stlBtn);
+  options.appendChild(jpegBtn);
+  panel.appendChild(header);
+  panel.appendChild(options);
+  overlay.appendChild(backdrop);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  preview3DState.downloadJawModal = { overlay };
+  return preview3DState.downloadJawModal;
+}
+
+function openDownloadJawProfileMenu() {
+  const modal = ensureDownloadJawProfileModal();
+  modal.overlay.classList.remove("is-hidden");
+  modal.overlay.setAttribute("aria-hidden", "false");
+  if (!preview3DState.downloadJawKeyHandler) {
+    preview3DState.downloadJawKeyHandler = (e) => {
+      if (e.key === "Escape") closeDownloadJawProfileModal();
+    };
+    document.addEventListener("keydown", preview3DState.downloadJawKeyHandler);
+  }
+}
+
+function closeDownloadJawProfileModal() {
+  const modal = preview3DState.downloadJawModal;
+  if (modal) {
+    modal.overlay.classList.add("is-hidden");
+    modal.overlay.setAttribute("aria-hidden", "true");
+  }
+  if (preview3DState.downloadJawKeyHandler) {
+    document.removeEventListener("keydown", preview3DState.downloadJawKeyHandler);
+    preview3DState.downloadJawKeyHandler = null;
+  }
+}
+
+// Collect upper + lower jaw STLs as { jaw, data(base64), filename }. Prefers the
+// jaws currently shown in the 3D preview; falls back to a backend fetch.
+async function collectJawStlFiles() {
+  const fromState = ["upper", "lower"]
+    .map((jaw) => {
+      const f = preview3DState.jawFiles?.[jaw];
+      return f?.data ? { jaw, data: f.data, filename: f.filename } : null;
+    })
+    .filter(Boolean);
+  if (fromState.length) return fromState;
+
+  const files = await fetchJawFilesForCase();
+  const byJaw = {};
+  files.forEach((item) => {
+    const jaw = getJawKeyFromFile(item);
+    if (jaw && !byJaw[jaw] && item?.data) {
+      byJaw[jaw] = { jaw, data: item.data, filename: item.filename };
+    }
+  });
+  return Object.values(byJaw);
+}
+
+async function downloadJawStlsAsZip() {
+  if (typeof window.JSZip === "undefined") {
+    setMessage("ZIP library failed to load — cannot download STL files.", true);
+    return;
+  }
+  try {
+    setMessage("Preparing STL download…", false);
+    const jaws = await collectJawStlFiles();
+    if (!jaws.length) {
+      setMessage("No jaw STL files found for this case.", true);
+      return;
+    }
+    const zip = new window.JSZip();
+    jaws.forEach(({ jaw, data }) => {
+      zip.file(`${jaw}.stl`, base64ToArrayBuffer(data));
+    });
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `case_${state.caseIntID ?? "unknown"}_jaw_profile.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setMessage(`Downloaded ${jaws.length} jaw STL file(s) as ZIP.`, false);
+  } catch (err) {
+    console.error("[preview3D] STL zip download failed", err);
+    setMessage("Failed to download STL files.", true);
+  }
+}
+
 // Toggle the modal's busy (uploading) state and drive the progress bar.
 // `frac` is the 0..1 upload fraction; at 1 the server is still processing.
 function setUpload3dBusy(busy, frac) {
@@ -1210,11 +1366,11 @@ function init3DPreview(area) {
   });
 
   // Download Jaw Profile was moved to the app footer, which dispatches
-  // `request-download-jaw-profile`; we forward it to the save action here so
-  // the screen-capture pattern stays consistent. (The "Upload other 3D files"
+  // `request-download-jaw-profile`; we open a small two-option menu here
+  // (Download STL file / Download as JPEG). (The "Upload other 3D files"
   // footer button dispatches `request-open-upload-3d`, wired below.)
   const handleDownloadJawProfileRequest = () => {
-    document.getElementById("saveAnnotationBtn")?.click();
+    openDownloadJawProfileMenu();
   };
   preview3DState.downloadJawCleanup?.();
   window.addEventListener("request-download-jaw-profile", handleDownloadJawProfileRequest);

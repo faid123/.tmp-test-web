@@ -1346,7 +1346,10 @@ export function initNoticeboard() {
   document.getElementById("addInstructionBtn")?.addEventListener("click", addInstruction);
   document.getElementById("addViewcaptureBtn")?.addEventListener("click", addViewcapture);
   document.getElementById("downloadJawProfileBtn")?.addEventListener("click", () => {
-    document.getElementById("saveAnnotationBtn")?.click();
+    // Close the noticeboard so the download menu (STL / JPEG) isn't hidden
+    // behind it, then trigger the same flow as the footer button.
+    closeNoticeboard();
+    window.dispatchEvent(new CustomEvent("request-download-jaw-profile"));
   });
   document.getElementById("drawFromScratchModalBtn")?.addEventListener("click", () => {
     closeNoticeboard();

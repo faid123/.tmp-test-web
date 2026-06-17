@@ -360,6 +360,13 @@ export function updateEditModeUI() {
   if (clearTop) clearTop.classList.toggle("is-hidden", active);
   if (clearBottom) clearBottom.classList.toggle("is-hidden", active);
 
+  // Draw from Scratch / Load Template Jaw are design-mode actions — hide them
+  // in tooth-selection mode.
+  const drawScratch = document.getElementById("drawFromScratchBtn");
+  const loadTemplate = document.getElementById("loadProposalBtn");
+  if (drawScratch) drawScratch.classList.toggle("is-hidden", !active);
+  if (loadTemplate) loadTemplate.classList.toggle("is-hidden", !active);
+
   const eraser = document.getElementById("removeComponentModeBtn");
   const rangeBtn = document.getElementById("teethRangeMissingBtn");
 
