@@ -140,19 +140,30 @@ document.addEventListener("DOMContentLoaded", async () => {
     const placeholder = document.createElement("div");
     placeholder.className = "upload-placeholder cc-jaw-tile";
     placeholder.dataset.jaw = jawType;
+    placeholder.dataset.short = jawType === "upper" ? "Upper Jaw" : "Lower Jaw";
 
     const bgImg = document.createElement("img");
     bgImg.className = "jaw-bg";
-    bgImg.alt = jawType === "upper" ? "Upper Jaw" : "Lower Jaw";
-    bgImg.src =
-      jawType === "upper" ? "../../assets/upper.svg" : "../../assets/lower.svg";
+    bgImg.alt = jawType === "upper" ? "Upload Upper Jaw" : "Upload Lower Jaw";
+    bgImg.src = "../../assets/cloud_upload.svg";
 
-    const label = document.createElement("span");
-    label.className = "cc-jaw-label";
-    label.textContent = jawType === "upper" ? "Upper Jaw" : "Lower Jaw";
+    const text = document.createElement("span");
+    text.className = "cc-jaw-text";
+    text.textContent =
+      jawType === "upper" ? "Drag&Drop UpperJaw Here" : "Drag&Drop LowerJaw Here";
+
+    const or = document.createElement("span");
+    or.className = "cc-jaw-or";
+    or.textContent = "or";
+
+    const browse = document.createElement("span");
+    browse.className = "cc-jaw-browse";
+    browse.textContent = "Browse Files";
 
     placeholder.appendChild(bgImg);
-    placeholder.appendChild(label);
+    placeholder.appendChild(text);
+    placeholder.appendChild(or);
+    placeholder.appendChild(browse);
 
     placeholder.addEventListener("click", () => {
       activeTarget = placeholder;

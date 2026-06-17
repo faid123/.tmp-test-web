@@ -343,21 +343,28 @@
         <div class="cc-upload-pane hidden" id="createCaseUpload">
           <div class="cc-jaw-row">
             <div id="uploadedJawModels" class="uploaded-models cc-jaw-models">
-              <div class="upload-placeholder cc-jaw-tile" data-jaw="upper">
-                <img src="../../assets/upper.svg" class="jaw-bg" alt="Upper Jaw" />
-                <span class="cc-jaw-label">Upper Jaw</span>
+              <div class="upload-placeholder cc-jaw-tile" data-jaw="upper" data-short="Upper">
+                <img src="../../assets/cloud_upload.svg" class="jaw-bg" alt="Upload Upper Jaw" />
+                <span class="cc-jaw-text">Drag&amp;Drop UpperJaw Here</span>
+                <span class="cc-jaw-or">or</span>
+                <span class="cc-jaw-browse">Browse Files</span>
               </div>
-              <div class="upload-placeholder cc-jaw-tile" data-jaw="lower">
-                <img src="../../assets/lower.svg" class="jaw-bg" alt="Lower Jaw" />
-                <span class="cc-jaw-label">Lower Jaw</span>
+              <div class="upload-placeholder cc-jaw-tile" data-jaw="lower" data-short="Lower">
+                <img src="../../assets/cloud_upload.svg" class="jaw-bg" alt="Upload Lower Jaw" />
+                <span class="cc-jaw-text">Drag&amp;Drop LowerJaw Here</span>
+                <span class="cc-jaw-or">or</span>
+                <span class="cc-jaw-browse">Browse Files</span>
               </div>
             </div>
             <input type="file" id="jawUploadInput" accept=".stl" style="display: none" />
           </div>
 
           <div class="cc-ref-section">
-            <button type="button" class="upload-placeholder cc-ref-tile" id="addRefImageBtn">
-              <span class="cc-ref-label">Upload Reference Image</span>
+            <button type="button" class="upload-placeholder cc-ref-tile" id="addRefImageBtn" data-short="Reference Images">
+              <img src="../../assets/cloud_upload.svg" class="jaw-bg" alt="Upload Reference Image" />
+              <span class="cc-jaw-text">Drag&amp;Drop Reference Image Here</span>
+              <span class="cc-jaw-or">or</span>
+              <span class="cc-jaw-browse">Browse Files</span>
             </button>
             <div id="uploadedReferenceImages" class="cc-ref-grid"></div>
             <input type="file" id="refImageInput" accept="image/png,image/jpeg" style="display: none" />
