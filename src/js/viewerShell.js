@@ -55,7 +55,7 @@ async function populateCaseName() {
     });
     if (!response.ok) return;
     const detail = await response.json();
-    const label = detail?.case_id ? `UID_${caseId} — ${detail.case_id}` : `UID_${caseId}`;
+    const label = detail?.case_id ? `UID_${caseId} : ${detail.case_id}` : `UID_${caseId}`;
     footerCaseName.textContent = label;
   } catch (error) {
     console.warn("Failed to resolve viewer case label.", error);
