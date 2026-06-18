@@ -25,13 +25,8 @@ let existingUsers = []; // shared users currently on the case (loaded via role/a
 let pendingInvites = []; // usernames queued in the inline create-case view
 
 document.addEventListener("DOMContentLoaded", async () => {
-  try {
-    await loadThreeDeps();
-  } catch (err) {
-    console.error("createCase: dependency load failed", err);
-  }
-
   const openBtn = document.getElementById("createCaseBtn");
+  if (!openBtn) return;
   const formPane = document.getElementById("createCaseForm");
   const uploadPane = document.getElementById("createCaseUpload");
   const pageEl = document.querySelector(".cm-page");
@@ -227,8 +222,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     jawUploadInput.value = "";
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        await loadThreeDeps();
         const loader = new STLLoader();
         const geometry = loader.parse(e.target.result);
         const material = new THREE.MeshStandardMaterial({
