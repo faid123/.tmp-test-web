@@ -4,6 +4,7 @@ import { confirmModal } from "./confirmModal.js";
 import { logApi } from "./apiLog.js";
 import { setupConnectivityIndicator } from "./connectivityIndicator.js";
 import { setupAppSidebar } from "./appSidebar.js";
+import { VIEWER_UUID, LOGIN_CREDENTIALS } from "../config.js";
 
 function getLoggedInUser() {
   const user = localStorage.getItem("loggedInUser");
@@ -764,7 +765,12 @@ function displayCaseDetails(data) {
   const caseIntId = data.id ?? data.case_int_id;
 
   const view3dLink = document.getElementById("view3dLink");
-  if (view3dLink) view3dLink.href = buildThreeDViewerUrl(caseIntId) || "#";
+  if (view3dLink) {
+    const url = buildThreeDViewerUrl(caseIntId) || "#";
+    view3dLink.href = url;
+    const textEl = view3dLink.querySelector(".cm-3d-link-text");
+    if (textEl) textEl.textContent = url;
+  }
 
   const displayName = data.case_id
     ? caseIntId != null
@@ -1338,7 +1344,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         : "";
 
       const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}`;
-      window.location.href = targetURL;
+      window.open(targetURL, "_blank");
     });
   }
 
@@ -1358,6 +1364,26 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         console.warn("Failed to copy 3D viewer link", err);
         toast.error("Couldn't copy the link.");
       }
+    });
+  }
+
+  // Open 3D viewer pre-logged-in as the faid account.
+  const export3dLinkBtn = document.getElementById("export3dLinkBtn");
+  if (export3dLinkBtn) {
+    export3dLinkBtn.addEventListener("click", () => {
+      const url3d = buildThreeDViewerUrl(window.selectedCaseId);
+      if (!url3d) {
+        toast.warning("Please select a case first.");
+        return;
+      }
+      const exportUser = {
+        uuid: VIEWER_UUID,
+        username: LOGIN_CREDENTIALS.username,
+        email: LOGIN_CREDENTIALS.email || "",
+        isAdmin: Boolean(LOGIN_CREDENTIALS.is_admin),
+      };
+      const token = encodeURIComponent(btoa(JSON.stringify(exportUser)));
+      window.open(`${url3d}&auto_user=${token}`, "_blank");
     });
   }
 

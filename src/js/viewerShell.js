@@ -1,7 +1,6 @@
 import { lol } from "../crypt.js";
 import { setupAppSidebar } from "./appSidebar.js";
 import { setupConnectivityIndicator } from "./connectivityIndicator.js";
-import { setupDrawingLayer } from "./drawingLayer.js";
 
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
@@ -110,48 +109,6 @@ function wireChatButton() {
   });
 }
 
-function wireDrawingTools() {
-  const basePath = getBasePath();
-
-  // Set icon srcs
-  const iconMap = {
-    footerPenIcon: "Icon_stylus",
-    footerEraserIcon: "Icon_eraser",
-    footerDrawUndoIcon: "Icon_undo2",
-    footerDrawRedoIcon: "Icon_redo2",
-    footerNotesIcon: "Icon_notes",
-  };
-  Object.entries(iconMap).forEach(([id, name]) => {
-    const el = document.getElementById(id);
-    if (el) el.src = `${basePath}/assets/${name}.png`;
-  });
-
-  const drawing = setupDrawingLayer("container3D");
-  if (!drawing) return;
-
-  const penBtn = document.getElementById("footerPenBtn");
-  const eraserBtn = document.getElementById("footerEraserBtn");
-  const undoBtn = document.getElementById("footerDrawUndoBtn");
-  const redoBtn = document.getElementById("footerDrawRedoBtn");
-
-  function updateDrawingButtons() {
-    const mode = drawing.getMode();
-    if (penBtn) penBtn.setAttribute("aria-pressed", String(mode === "pen"));
-    if (eraserBtn) eraserBtn.setAttribute("aria-pressed", String(mode === "eraser"));
-    if (undoBtn) undoBtn.disabled = drawing.getUndoCount() === 0;
-    if (redoBtn) redoBtn.disabled = drawing.getRedoCount() === 0;
-  }
-
-  drawing.setOnModeChange(updateDrawingButtons);
-  drawing.setOnUndoRedoChange(updateDrawingButtons);
-
-  penBtn?.addEventListener("click", () => drawing.setMode("pen"));
-  eraserBtn?.addEventListener("click", () => drawing.setMode("eraser"));
-  undoBtn?.addEventListener("click", () => drawing.undo());
-  redoBtn?.addEventListener("click", () => drawing.redo());
-
-  updateDrawingButtons();
-}
 
 function wireNotesPopup() {
   const notesBtn = document.getElementById("footerNotesBtn");
@@ -205,15 +162,27 @@ function mountViewerPopupsIntoScene() {
   }
 }
 
+function wireSidebarReturn() {
+  const btn = document.getElementById("sidebarReturnBtn");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    if (window.opener && !window.opener.closed) {
+      window.opener.focus();
+    } else {
+      const isGitHubPages = window.location.hostname.includes("github.io");
+      const basePath = isGitHubPages ? "/.tmp-test-web" : "";
+      window.location.href = `${basePath}/src/pages/case_list.html`;
+    }
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   mountViewerPopupsIntoScene();
   populateUserMeta();
   populateCaseName();
   wireChatButton();
   wireRightNavButton();
-  // TODO: not ready yet
-  // wireDrawingTools();
-  // wireNotesPopup();
+  wireSidebarReturn();
   setupAppSidebar({
     triggerId: "footerMenuBtn",
     indexHref: "../../index.html",
