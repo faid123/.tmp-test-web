@@ -1517,7 +1517,7 @@ function ensureShapePanel() {
   let row = '<div class="ie-shape-row">';
   for (const name of SHAPE_ORDER) {
     row +=
-      `<button type="button" class="ie-shape-btn" data-shape="${name}" aria-label="${name}" data-tooltip="${name}">` +
+      `<button type="button" class="ie-shape-btn" data-shape="${name}" aria-label="${name}" data-tooltip="${name}" title="${name[0].toUpperCase() + name.slice(1)}">` +
       SHAPE_ICONS[name] +
       "</button>";
   }
