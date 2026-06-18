@@ -14,17 +14,20 @@
     rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
   />
-  <!-- Start the three.js CDN download on HTML parse so it overlaps everything
-       else, instead of only beginning deep in the load chain (module import →
-       loadPreviewImage → ensureThreeDeps). Same versions/URLs the 3D preview
-       imports; absolute so the addons' bare `three` import resolves to a warm
-       cache entry. -->
-  <link rel="modulepreload" crossorigin href="https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js" />
-  <link rel="modulepreload" crossorigin href="https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/TrackballControls.js" />
-  <link rel="modulepreload" crossorigin href="https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/STLLoader.js" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+      }
+    }
+  </script>
   <!-- Used by "Download Jaw Profile → Download STL file" to bundle the upper +
        lower jaw STLs into a single .zip. -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <link rel="modulepreload" crossorigin href="https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js" />
+  <link rel="modulepreload" crossorigin href="https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/TrackballControls.js" />
+  <link rel="modulepreload" crossorigin href="https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/STLLoader.js" />
 </head>
 <body>
   <main class="annotation-shell">
@@ -658,14 +661,6 @@
     </nav>
   </aside>
 
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
-      }
-    }
-  </script>
   <!-- Case chat (notes) — slide-in side panel toggled by the footer chat button -->
   <div id="chat-widget" class="chat-sidebar is-hidden" aria-hidden="true">
     <div class="chat-sidebar-backdrop" data-chat-close></div>

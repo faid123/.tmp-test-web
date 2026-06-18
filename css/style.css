@@ -427,8 +427,8 @@ html, body {
   gap: 16px;
   height: 35px;
   padding: 0 16px;
-  background: #2f4f4f;
-  border-top: 1px solid #223b3b;
+  background: #3BAE95;
+  border-top: 1px solid #25735f;
   font-size: 13px;
   color: #fff;
 }
@@ -488,7 +488,7 @@ html, body {
   background: transparent;
   border-radius: 6px;
   color: #fff;
-  font-size: 14px;
+  font-size: 15px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -536,7 +536,7 @@ html, body {
 
 .cm-footer-case-label {
   margin-left: 8px;
-  font-size: 10px;
+  font-size: 15px;
   color: rgba(255, 255, 255, 0.85);
   white-space: nowrap;
   overflow: hidden;
@@ -549,7 +549,7 @@ html, body {
 }
 
 .cm-footer-user {
-  font-size: 11px;
+  font-size: 15px;
   color: #fff;
   font-weight: 500;
 }
