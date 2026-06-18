@@ -162,6 +162,19 @@ function restSurfaceFromConfig(f) {
   return "mesial";
 }
 
+/**
+ * Pr Config triple (value 0 = that position is present) for a posterior rest surface.
+ * Inverse of {@link restSurfaceFromConfig}; an unknown surface falls back to mesial to
+ * match its default. The posterior rest surface is web-owned (the user picks
+ * mesial/distal/lingual), so Save derives Pr Config from the live placement rather than
+ * the loaded raw value — otherwise a surface edit (e.g. mesial -> lingual) is dropped.
+ */
+function prConfigFromSurface(surface) {
+  const idx = REST_POSITION_SURFACE.indexOf(String(surface ?? "").toLowerCase());
+  const present = idx >= 0 ? idx : 0;
+  return REST_POSITION_SURFACE.map((_, i) => (i === present ? 0 : 1));
+}
+
 /** Clasp anchor surface from a Retainer Clasp/Ring Type field (default mesial_buccal). */
 function claspSurfaceFromField(f, field) {
   return CLASP_ORIENT_SURFACE[Number(f[field])] || "mesial_buccal";
@@ -478,6 +491,18 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
     }
   }
 
+  // Pr Config (rest position flags). For a posterior non-full rest the surface is
+  // web-owned, so derive the triple live from the placement surface; otherwise keep
+  // the loaded raw value (or the from-scratch default) for round-trip fidelity.
+  const prConfig =
+    posteriorRest === 2 && restPl
+      ? prConfigFromSurface(restPl.surface)
+      : [
+          rawOr("Tooth Main.Tooth Rest.Pr Config 0", posteriorRest === 2 ? 0 : 1),
+          rawOr("Tooth Main.Tooth Rest.Pr Config 1", 1),
+          rawOr("Tooth Main.Tooth Rest.Pr Config 2", 1),
+        ];
+
   // Retainer: type + bar shape (category) are web-owned (derived live). The bar
   // mesial/distal side, clasp/ring orientation come from the loaded data.
   let retainerType = 0;
@@ -527,9 +552,9 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
     ["Tooth Main.Tooth Rest.Anterior Cingulum Rest Type", antCingulum],
     ["Tooth Main.Tooth Rest.Anterior Incisal Rest Type", antIncisal],
     ["Tooth Main.Tooth Rest.Posterior Rest Type", posteriorRest],
-    ["Tooth Main.Tooth Rest.Pr Config 0", rawOr("Tooth Main.Tooth Rest.Pr Config 0", posteriorRest === 2 ? 0 : 1)],
-    ["Tooth Main.Tooth Rest.Pr Config 1", rawOr("Tooth Main.Tooth Rest.Pr Config 1", 1)],
-    ["Tooth Main.Tooth Rest.Pr Config 2", rawOr("Tooth Main.Tooth Rest.Pr Config 2", 1)],
+    ["Tooth Main.Tooth Rest.Pr Config 0", prConfig[0]],
+    ["Tooth Main.Tooth Rest.Pr Config 1", prConfig[1]],
+    ["Tooth Main.Tooth Rest.Pr Config 2", prConfig[2]],
     ["Tooth Main.Tooth Retainer.Retainer Type", retainerType],
     ["Tooth Main.Tooth Retainer.Retainer Clasp Type", rawOr(RETAINER_CLASP_TYPE_FIELD, 0)],
     ["Tooth Main.Tooth Retainer.Retainer Ring Type", rawOr(RETAINER_RING_TYPE_FIELD, 0)],

@@ -991,7 +991,7 @@ function renderSharedUserList() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify([
                 { machine_id, uuid, caseIntID },
-                { case_id: caseIntID, uuid: user.uuid },
+                { case_int_id: caseIntID, uuid: user.uuid },
               ]),
             }
           );

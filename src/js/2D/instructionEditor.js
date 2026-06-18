@@ -6,19 +6,23 @@ const state = {
   redoStack: [],
   currentStroke: null,
   isDrawing: false,
-  tool: "pen",
+  tool: "none", // "none" = idle (no drawing); brush mode sets pen/spray/eraser
   shape: "rectangle", // active shape when tool === "shape"
+  brushStyle: "pen", // brush mode flavour: "pen" | "spray"
   color: "#7B3FF2",
   size: 6,
-  textAlign: "left", // text mode: "left" | "center" | "right"
+  textAlign: "center", // text mode: "left" | "center" | "right"
   textBg: "transparent", // text mode: "transparent" | "white" | "black"
+  textBold: false,
+  textItalic: false,
+  textUnderline: false,
   resolveSave: null,
   linePending: null,
   caseLabel: null, // { text, point: {x,y}, color, size } — draggable case-ID label
   // Crop & rotate mode. rect is the crop frame in CSS px relative to the canvas
   // wrap; rotation = base (0/90/180/270 from the rotate button) + fine (the
   // ±45° dial). Total applied angle = base + fine.
-  crop: { active: false, rect: null, base: 0, fine: 0 },
+  crop: { active: false, rect: null, base: 0, fine: 0, source: null },
 };
 
 let canvas = null;
@@ -145,14 +149,31 @@ function cropAngleDeg() {
 
 // Fit size (canvas px) for the bg image at the current crop angle, so the whole
 // rotated image stays visible within the canvas ("contain", rotation-aware).
+// The image the crop tool operates on: while cropping it's the flattened
+// composite (background + drawings) so edits ride along; otherwise the bg.
+function cropImage() {
+  return state.crop.source || state.bgImage;
+}
+
+// Snapshot the current (normal-mode) composite — bg + all strokes — so cropping
+// keeps the user's drawings (they're baked into this source image).
+function flattenCanvas() {
+  const off = document.createElement("canvas");
+  off.width = canvas.width;
+  off.height = canvas.height;
+  off.getContext("2d").drawImage(canvas, 0, 0);
+  return off;
+}
+
 function getCropFitSize() {
   const cw = canvas.width;
   const ch = canvas.height;
   const pad = Math.min(cw, ch) * 0.06;
   const availW = Math.max(1, cw - pad * 2);
   const availH = Math.max(1, ch - pad * 2);
-  const iw = state.bgImage.width;
-  const ih = state.bgImage.height;
+  const src = cropImage();
+  const iw = src.width;
+  const ih = src.height;
   const rad = (cropAngleDeg() * Math.PI) / 180;
   const cos = Math.abs(Math.cos(rad));
   const sin = Math.abs(Math.sin(rad));
@@ -168,7 +189,7 @@ function drawRotatedBg() {
   ctx.save();
   ctx.translate(canvas.width / 2, canvas.height / 2);
   ctx.rotate((cropAngleDeg() * Math.PI) / 180);
-  ctx.drawImage(state.bgImage, -w / 2, -h / 2, w, h);
+  ctx.drawImage(cropImage(), -w / 2, -h / 2, w, h);
   ctx.restore();
 }
 
@@ -304,8 +325,8 @@ function closeAspectMenu() {
 function setCropAspect(token) {
   const area = defaultCropRect();
   let ratio = null;
-  if (token === "original" && state.bgImage) {
-    ratio = state.bgImage.width / state.bgImage.height;
+  if (token === "original" && cropImage()) {
+    ratio = cropImage().width / cropImage().height;
   } else if (token !== "fit") {
     ratio = parseFloat(token);
   }
@@ -417,6 +438,10 @@ function endDialDrag() {
 
 function enterCropMode() {
   if (!canvas || !state.bgImage) return;
+  // Flatten the current composite (bg + drawings) and crop THAT, so the user's
+  // edits are preserved (and rotate together with the image).
+  redraw();
+  state.crop.source = flattenCanvas();
   state.crop.active = true;
   state.crop.base = 0;
   state.crop.fine = 0;
@@ -431,13 +456,15 @@ function enterCropMode() {
 
 function exitCropMode() {
   state.crop.active = false;
+  state.crop.source = null;
   cropUI()?.classList.add("is-hidden");
   getModal()?.classList.remove("is-cropping");
   redraw();
 }
 
-// Done: copy the framed region straight off the canvas (which already shows the
-// rotated, stroke-free background) into a new image, then leave crop mode.
+// Done: copy the framed region straight off the canvas (which shows the rotated
+// flattened composite — bg + baked-in drawings) into a new background image,
+// then leave crop mode. Strokes are cleared because they're now baked in.
 function applyCrop() {
   if (!canvas || !state.crop.rect) {
     exitCropMode();
@@ -458,7 +485,8 @@ function applyCrop() {
   octx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
   const dataUrl = out.toDataURL("image/png");
   loadBgImage(dataUrl).then(() => {
-    // Geometry changed — existing strokes would no longer line up, so drop them.
+    // Drawings are now baked into the cropped background, so clear the live
+    // strokes (keeping them would double-draw and they'd no longer line up).
     state.strokes = [];
     state.redoStack = [];
     updateUndoRedoButtons();
@@ -622,7 +650,11 @@ function drawStrokeOn(c, stroke, ratio) {
     const fontSize = stroke.fontSize
       ? Math.max(8, stroke.fontSize)
       : Math.max(10, stroke.size * 2);
-    c.font = `600 ${fontSize * ratio}px "Montserrat", "Segoe UI", sans-serif`;
+    // 500 vs 800 so bold lands on a heavier face than normal even with the
+    // Helvetica fallback (which would otherwise map both 600 and 800 → 700).
+    const weight = stroke.bold ? "800" : "500";
+    const slant = stroke.italic ? "italic " : "";
+    c.font = `${slant}${weight} ${fontSize * ratio}px "Montserrat", "Segoe UI", sans-serif`;
     c.textBaseline = "top";
     const padX = TEXT_PAD_X * ratio;
     const padY = TEXT_PAD_Y * ratio;
@@ -659,6 +691,24 @@ function drawStrokeOn(c, stroke, ratio) {
     let ty = y0 + padY;
     for (const line of lines) {
       c.fillText(line, tx, ty);
+      // Canvas has no text-decoration, so underline is drawn manually,
+      // positioned per the active alignment.
+      if (stroke.underline && line) {
+        const lw = c.measureText(line).width;
+        let ux1;
+        if (align === "center") ux1 = tx - lw / 2;
+        else if (align === "right") ux1 = tx - lw;
+        else ux1 = tx;
+        const uy = ty + fontSize * ratio * 0.96;
+        c.save();
+        c.strokeStyle = stroke.color;
+        c.lineWidth = Math.max(1, fontSize * ratio * 0.07);
+        c.beginPath();
+        c.moveTo(ux1, uy);
+        c.lineTo(ux1 + lw, uy);
+        c.stroke();
+        c.restore();
+      }
       ty += lineH;
     }
     c.restore();
@@ -666,6 +716,10 @@ function drawStrokeOn(c, stroke, ratio) {
   }
   if (stroke.tool === "shape") {
     drawShape(c, stroke, ratio);
+    return;
+  }
+  if (stroke.tool === "spray") {
+    drawSpray(c, stroke, ratio);
     return;
   }
   if (!stroke.points || stroke.points.length === 0) return;
@@ -692,6 +746,47 @@ function drawStrokeOn(c, stroke, ratio) {
     }
   }
   c.stroke();
+  c.restore();
+}
+
+// Small deterministic PRNG so the spray scatter is identical on every redraw.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Airbrush: scatter dots in a disc around each path point. Spread is tied to
+// the stroke size; the per-point seed (derived from its coords + index) keeps
+// the pattern stable across redraws.
+function drawSpray(c, stroke, ratio) {
+  const pts = stroke.points;
+  if (!pts || !pts.length) return;
+  c.save();
+  c.globalCompositeOperation = "source-over";
+  c.fillStyle = stroke.color;
+  const spread = Math.max(8, stroke.size * 2.2) * ratio;
+  const dots = 14;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    const seed =
+      (i * 2654435761) ^ (Math.round(p.x * 8.5) * 40503) ^ (Math.round(p.y * 8.5) * 73)
+    ;
+    const rand = mulberry32(seed);
+    for (let d = 0; d < dots; d++) {
+      const ang = rand() * Math.PI * 2;
+      const rr = Math.sqrt(rand()) * spread; // uniform over the disc
+      const dotR = (0.5 + rand() * 1.1) * ratio;
+      c.globalAlpha = 0.35 + rand() * 0.4;
+      c.beginPath();
+      c.arc(p.x * ratio + Math.cos(ang) * rr, p.y * ratio + Math.sin(ang) * rr, dotR, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
   c.restore();
 }
 
@@ -767,7 +862,7 @@ function pointFromEvent(event) {
 }
 
 function isFreehandTool(t) {
-  return t === "pen" || t === "brush" || t === "eraser";
+  return t === "pen" || t === "brush" || t === "eraser" || t === "spray";
 }
 
 function onPointerDown(event) {
@@ -986,6 +1081,9 @@ function commitTextInput() {
   const align = textInputEl.dataset.align || state.textAlign;
   const bg = textInputEl.dataset.bg || state.textBg;
   const width = textInputEl.clientWidth || undefined;
+  const bold = textInputEl.dataset.bold === "1";
+  const italic = textInputEl.dataset.italic === "1";
+  const underline = textInputEl.dataset.underline === "1";
 
   removeTextInput();
   const wasEditing = editingOriginal;
@@ -1009,6 +1107,9 @@ function commitTextInput() {
     align,
     bg,
     width,
+    bold,
+    italic,
+    underline,
   };
 
   if (wasEditing?.caseLabel) {
@@ -1036,16 +1137,39 @@ function applyTextBoxBg(div, bg) {
   }
 }
 
-function spawnTextInput(point, prefill = null) {
+// Sync a text box's live font styling (bold / italic / underline).
+// Normal=500, bold=800: deliberately on opposite sides of the system fallback
+// font's faces so bold is visibly heavier even when Montserrat isn't loaded
+// (Helvetica Neue collapses 600–900 → 700, so a 600 "normal" looked bold).
+function applyTextBoxStyle(div, { bold, italic, underline }) {
+  div.dataset.bold = bold ? "1" : "0";
+  div.dataset.italic = italic ? "1" : "0";
+  div.dataset.underline = underline ? "1" : "0";
+  div.style.fontWeight = bold ? "800" : "500";
+  div.style.fontStyle = italic ? "italic" : "normal";
+  div.style.textDecoration = underline ? "underline" : "none";
+}
+
+function spawnTextInput(point, prefill = null, options = {}) {
   if (textInputEl) commitTextInput();
   const parent = canvas.parentElement;
   if (!parent) return;
 
+  // Resizing (drag-corner to scale the font) is only offered when re-opening
+  // an already-saved text — fresh entry stays a clean, borderless caret.
+  const resizable = !!options.resizable;
   const initialFontPx = prefill?.fontSize || INITIAL_TEXT_FONT_PX;
-  const initialWidth = prefill?.width || Math.max(120, Math.round(initialFontPx * 6));
+  // Fresh boxes can't be widened while typing, so start wide enough that normal
+  // text doesn't wrap into a narrow column (capped to the framed canvas width).
+  const available = canvas?.clientWidth || 320;
+  const defaultWidth = Math.min(Math.max(200, Math.round(initialFontPx * 9)), available - 24);
+  const initialWidth = prefill?.width || defaultWidth;
   const color = prefill?.color || state.color;
   const align = prefill?.align || state.textAlign;
   const bg = prefill?.bg || state.textBg;
+  const bold = prefill ? !!prefill.bold : state.textBold;
+  const italic = prefill ? !!prefill.italic : state.textItalic;
+  const underline = prefill ? !!prefill.underline : state.textUnderline;
 
   // Wrap holds the contenteditable + the × remove button so positioning the
   // remove button doesn't fight with the resize handle on the editor itself.
@@ -1073,13 +1197,17 @@ function spawnTextInput(point, prefill = null) {
   div.className = "instruction-editor-text-input";
   div.contentEditable = "true";
   div.setAttribute("role", "textbox");
-  div.setAttribute("aria-label", "Type text — drag corner to resize");
+  div.setAttribute("aria-label", resizable ? "Edit text — drag corner to resize" : "Type text");
   div.dataset.placeholder = "Type…";
   div.style.color = color;
   div.style.fontSize = `${initialFontPx}px`;
   div.style.width = `${initialWidth}px`;
   div.style.minHeight = `${initialFontPx + 8}px`;
-  div.style.resize = "both";
+  // No resize handle / border while typing fresh text; both appear only when
+  // re-editing a saved text so it can be made bigger/smaller after save.
+  div.style.resize = resizable ? "both" : "none";
+  div.style.border = resizable ? "1px dashed var(--rose-500)" : "none";
+  div.style.boxShadow = resizable ? "" : "none";
   div.style.overflow = "hidden";
   div.style.whiteSpace = "pre-wrap";
   div.style.wordBreak = "break-word";
@@ -1088,13 +1216,15 @@ function spawnTextInput(point, prefill = null) {
   div.dataset.fontSize = String(initialFontPx);
   div.dataset.align = align;
   applyTextBoxBg(div, bg);
+  applyTextBoxStyle(div, { bold, italic, underline });
 
   if (prefill?.text) div.textContent = prefill.text;
 
   // Scale font-size proportionally with WIDTH (not height) — width is set by
   // the corner-drag and isn't affected by typing line-wraps, so the font
-  // only changes when the user explicitly resizes the box.
-  if (typeof ResizeObserver !== "undefined") {
+  // only changes when the user explicitly resizes the box. Only active for
+  // resizable (re-edit) boxes.
+  if (resizable && typeof ResizeObserver !== "undefined") {
     let lastFontPx = initialFontPx;
     const ro = new ResizeObserver(() => {
       const w = div.clientWidth;
@@ -1167,14 +1297,21 @@ function editExistingText(target) {
   }
 
   const fontPx = target.fontSize || Math.max(10, target.size * 2);
-  spawnTextInput({ x: target.point.x, y: target.point.y }, {
-    text: target.text,
-    fontSize: fontPx,
-    color: target.color,
-    align: target.align,
-    bg: target.bg,
-    width: target.width,
-  });
+  spawnTextInput(
+    { x: target.point.x, y: target.point.y },
+    {
+      text: target.text,
+      fontSize: fontPx,
+      color: target.color,
+      align: target.align,
+      bg: target.bg,
+      width: target.width,
+      bold: target.bold,
+      italic: target.italic,
+      underline: target.underline,
+    },
+    { resizable: true }
+  );
   redraw();
 }
 
@@ -1228,6 +1365,7 @@ function applyCanvasCursor() {
   if (!canvas) return;
   if (state.tool === "eraser") canvas.style.cursor = eraserCursor(state.size);
   else if (state.tool === "text") canvas.style.cursor = "text";
+  else if (state.tool === "none") canvas.style.cursor = "default";
   else canvas.style.cursor = "crosshair";
 }
 
@@ -1282,6 +1420,10 @@ const SHAPE_ICONS = {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg>',
 };
 const SHAPE_ORDER = ["line", "curve", "square", "rectangle", "triangle", "circle"];
+
+// Shared undo (back-arrow) glyph used by the shape / text / brush mode UIs.
+const UNDO_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l-4-4 4-4"/><path d="M5 10h9a6 6 0 0 1 0 12h-3"/></svg>';
 
 function shapePanel() {
   return document.getElementById("ieShapeUI");
@@ -1364,7 +1506,9 @@ function wireColorBar(bar, thumb, onPick) {
 function ensureShapePanel() {
   let ui = shapePanel();
   if (ui) return ui;
-  const host = getModal()?.querySelector(".instruction-editor-panel");
+  const host =
+    getModal()?.querySelector(".ie-frame") ||
+    getModal()?.querySelector(".instruction-editor-panel");
   if (!host) return null;
 
   ui = document.createElement("div");
@@ -1388,6 +1532,12 @@ function ensureShapePanel() {
     `<div class="ie-colorbar" id="ieColorBar" style="background:${COLORBAR_CSS}">` +
     '<span class="ie-colorbar-thumb" id="ieColorThumb"></span>' +
     "</div>" +
+    '<div class="ie-brush-presets">' +
+    SHAPE_SIZES.map(
+      (s) =>
+        `<button type="button" class="ie-brush-preset" data-shapesize="${s}" aria-label="${s}px line" title="${s}px">${SHAPE_SIZE_ICONS[s]}</button>`
+    ).join("") +
+    "</div>" +
     '<div class="ie-shape-bar">' +
     '<button type="button" class="ie-shape-text" id="ieShapeCancel">Cancel</button>' +
     '<button type="button" class="ie-shape-text ie-shape-done" id="ieShapeDone">Done</button>' +
@@ -1397,11 +1547,35 @@ function ensureShapePanel() {
   ui.querySelectorAll(".ie-shape-btn").forEach((btn) => {
     btn.addEventListener("click", () => setShape(btn.dataset.shape));
   });
+  ui.querySelectorAll("[data-shapesize]").forEach((btn) => {
+    btn.addEventListener("click", () => setShapeSize(Number(btn.dataset.shapesize)));
+  });
   ui.querySelector("#ieShapeUndo").addEventListener("click", () => undo());
   ui.querySelector("#ieShapeCancel").addEventListener("click", () => exitShapeMode(false));
   ui.querySelector("#ieShapeDone").addEventListener("click", () => exitShapeMode(true));
   wireColorBar(ui.querySelector("#ieColorBar"), ui.querySelector("#ieColorThumb"));
   return ui;
+}
+
+const SHAPE_SIZE_ICONS = {
+  2: '<svg viewBox="0 0 28 28"><rect x="4" y="13" width="20" height="2" rx="1" fill="currentColor"/></svg>',
+  4: '<svg viewBox="0 0 28 28"><rect x="4" y="12" width="20" height="4" rx="2" fill="currentColor"/></svg>',
+  6: '<svg viewBox="0 0 28 28"><rect x="4" y="11" width="20" height="6" rx="3" fill="currentColor"/></svg>',
+  10: '<svg viewBox="0 0 28 28"><rect x="4" y="9" width="20" height="10" rx="5" fill="currentColor"/></svg>',
+};
+const SHAPE_SIZES = ["2", "4", "6", "10"];
+
+function setShapeSize(px) {
+  setSize(px);
+  highlightActiveShapeSize();
+}
+
+function highlightActiveShapeSize() {
+  shapePanel()
+    ?.querySelectorAll("[data-shapesize]")
+    .forEach((btn) => {
+      btn.classList.toggle("is-active", state.size === Number(btn.dataset.shapesize));
+    });
 }
 
 function highlightActiveShape() {
@@ -1435,8 +1609,11 @@ function enterShapeMode() {
   ui.classList.remove("is-hidden");
   getModal()?.classList.add("is-shaping");
   document.querySelector('[data-ie-tool="icon"]')?.classList.add("is-active");
+  // Snap to a preset stroke width so one is highlighted.
+  if (![2, 4, 6, 10].includes(state.size)) setSize(6);
   setShape(state.shape);
   setColor(state.color);
+  highlightActiveShapeSize();
 }
 
 function exitShapeMode(commit) {
@@ -1450,7 +1627,7 @@ function exitShapeMode(commit) {
   shapePanel()?.classList.add("is-hidden");
   getModal()?.classList.remove("is-shaping");
   document.querySelector('[data-ie-tool="icon"]')?.classList.remove("is-active");
-  setTool("pen");
+  setTool("none");
 }
 
 // ===================== Text mode =====================
@@ -1474,7 +1651,9 @@ function textUI() {
 function ensureTextUI() {
   let ui = textUI();
   if (ui) return ui;
-  const host = getModal()?.querySelector(".instruction-editor-panel");
+  const host =
+    getModal()?.querySelector(".ie-frame") ||
+    getModal()?.querySelector(".instruction-editor-panel");
   if (!host) return null;
 
   ui = document.createElement("div");
@@ -1482,6 +1661,9 @@ function ensureTextUI() {
   ui.className = "ie-textui is-hidden";
   ui.innerHTML =
     '<div class="ie-text-top">' +
+    '<button type="button" class="ie-shape-undo" id="ieTextUndo" aria-label="Undo" title="Undo">' +
+    UNDO_SVG +
+    "</button>" +
     '<div class="ie-text-row">' +
     '<button type="button" class="ie-text-ctl" id="ieTextAlign" aria-label="Align text" title="Align"></button>' +
     '<button type="button" class="ie-text-ctl" id="ieTextBg" aria-label="Text background" title="Background">' +
@@ -1491,6 +1673,11 @@ function ensureTextUI() {
     "</div>" +
     `<div class="ie-colorbar" id="ieTextColorBar" style="background:${COLORBAR_CSS}">` +
     '<span class="ie-colorbar-thumb" id="ieTextColorThumb"></span>' +
+    "</div>" +
+    '<div class="ie-brush-presets">' +
+    '<button type="button" class="ie-brush-preset" data-textstyle="bold" aria-label="Bold" title="Bold"><span style="font-weight:800">B</span></button>' +
+    '<button type="button" class="ie-brush-preset" data-textstyle="italic" aria-label="Italic" title="Italic"><span style="font-style:italic;font-weight:700">I</span></button>' +
+    '<button type="button" class="ie-brush-preset" data-textstyle="underline" aria-label="Underline" title="Underline"><span style="text-decoration:underline;font-weight:700">U</span></button>' +
     "</div>" +
     '<div class="ie-shape-bar">' +
     '<button type="button" class="ie-shape-text" id="ieTextCancel">Cancel</button>' +
@@ -1505,8 +1692,12 @@ function ensureTextUI() {
     el.addEventListener("pointerdown", (e) => e.preventDefault());
   });
 
+  ui.querySelector("#ieTextUndo").addEventListener("click", () => undo());
   ui.querySelector("#ieTextAlign").addEventListener("click", () => cycleTextAlign());
   ui.querySelector("#ieTextBg").addEventListener("click", () => cycleTextBg());
+  ui.querySelectorAll("[data-textstyle]").forEach((btn) => {
+    btn.addEventListener("click", () => toggleTextStyle(btn.dataset.textstyle));
+  });
   ui.querySelector("#ieTextCancel").addEventListener("click", () => exitTextMode(false));
   ui.querySelector("#ieTextDone").addEventListener("click", () => exitTextMode(true));
   wireColorBar(
@@ -1552,13 +1743,51 @@ function cycleTextBg() {
   setTextBg(TEXTBG_ORDER[(i + 1) % TEXTBG_ORDER.length]);
 }
 
+// Bold / Italic / Underline are independent toggles; "normal" clears all.
+function toggleTextStyle(s) {
+  if (s === "normal") {
+    state.textBold = false;
+    state.textItalic = false;
+    state.textUnderline = false;
+  } else if (s === "bold") {
+    state.textBold = !state.textBold;
+  } else if (s === "italic") {
+    state.textItalic = !state.textItalic;
+  } else if (s === "underline") {
+    state.textUnderline = !state.textUnderline;
+  }
+  if (textInputEl) {
+    applyTextBoxStyle(textInputEl, {
+      bold: state.textBold,
+      italic: state.textItalic,
+      underline: state.textUnderline,
+    });
+  }
+  highlightActiveTextStyle();
+}
+
+function highlightActiveTextStyle() {
+  const ui = textUI();
+  if (!ui) return;
+  ui.querySelectorAll("[data-textstyle]").forEach((btn) => {
+    const s = btn.dataset.textstyle;
+    let active = false;
+    if (s === "bold") active = state.textBold;
+    else if (s === "italic") active = state.textItalic;
+    else if (s === "underline") active = state.textUnderline;
+    btn.classList.toggle("is-active", active);
+  });
+}
+
 // Drop a fresh, empty text box in the middle of the canvas so the user can
 // start typing immediately on entering text mode.
 function spawnCenteredTextInput() {
   if (!canvas) return;
-  const x = Math.max(0, canvas.clientWidth / 2 - 60);
+  const available = canvas.clientWidth || 320;
+  const boxW = Math.min(Math.max(200, INITIAL_TEXT_FONT_PX * 9), available - 24);
+  const x = Math.max(12, (available - boxW) / 2);
   const y = Math.max(0, canvas.clientHeight / 2 - 20);
-  spawnTextInput({ x, y });
+  spawnTextInput({ x, y }, { width: boxW });
 }
 
 function enterTextMode() {
@@ -1570,6 +1799,7 @@ function enterTextMode() {
   document.querySelector('[data-ie-tool="text"]')?.classList.add("is-active");
   setTextAlign(state.textAlign);
   setTextBg(state.textBg);
+  highlightActiveTextStyle();
   setColor(state.color);
   applyCanvasCursor();
   spawnCenteredTextInput();
@@ -1584,7 +1814,154 @@ function exitTextMode(commit) {
   textUI()?.classList.add("is-hidden");
   getModal()?.classList.remove("is-texting");
   document.querySelector('[data-ie-tool="text"]')?.classList.remove("is-active");
-  setTool("pen");
+  setTool("none");
+}
+
+// ===================== Brush mode =====================
+// Opens from the pencil toolbar icon. Like the other modes it takes over the
+// editor and offers a brush/eraser toggle, the colour bar, undo and
+// Cancel/Done. Drawing uses the existing freehand stroke pipeline.
+const BRUSH_ICONS = {
+  pen: '<img src="../../assets/instruction%20editor/pencil.png" alt="" class="ie-brush-icon" />',
+  eraser: '<img src="../../assets/instruction%20editor/eraser.png" alt="" class="ie-brush-icon" />',
+};
+// Bottom-row presets: thin / medium / thick pen strokes (squiggle at 3 widths)
+// + a spray. The squiggle path is shared; only the stroke-width changes.
+const SQUIGGLE = "M4 17C8 8 11 9 14 14s6 5 10 -4";
+const BRUSH_PRESET_ICONS = {
+  2: `<svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6"><path d="${SQUIGGLE}"/></svg>`,
+  5: `<svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.4"><path d="${SQUIGGLE}"/></svg>`,
+  10: `<svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="6.4"><path d="${SQUIGGLE}"/></svg>`,
+  spray:
+    '<svg viewBox="0 0 28 28" fill="currentColor"><circle cx="9" cy="10" r="1.1"/><circle cx="13" cy="7" r="1.1"/><circle cx="14" cy="13" r="1.4"/><circle cx="18" cy="10" r="1.1"/><circle cx="10" cy="15" r="1.1"/><circle cx="17" cy="16" r="1.2"/><circle cx="21" cy="14" r="1"/><circle cx="13" cy="19" r="1.1"/><circle cx="8" cy="20" r="1"/><circle cx="20" cy="20" r="1"/></svg>',
+};
+const BRUSH_PRESETS = ["2", "5", "10", "spray"];
+let brushBackup = null;
+
+function brushUI() {
+  return document.getElementById("ieBrushUI");
+}
+
+function ensureBrushUI() {
+  let ui = brushUI();
+  if (ui) return ui;
+  const host =
+    getModal()?.querySelector(".ie-frame") ||
+    getModal()?.querySelector(".instruction-editor-panel");
+  if (!host) return null;
+
+  ui = document.createElement("div");
+  ui.id = "ieBrushUI";
+  ui.className = "ie-brushui is-hidden";
+  ui.innerHTML =
+    '<div class="ie-shape-top">' +
+    '<button type="button" class="ie-shape-undo" id="ieBrushUndo" aria-label="Undo" title="Undo">' +
+    UNDO_SVG +
+    "</button>" +
+    '<div class="ie-shape-row">' +
+    `<button type="button" class="ie-shape-btn" data-brush="pen" aria-label="Brush" title="Brush">${BRUSH_ICONS.pen}</button>` +
+    `<button type="button" class="ie-shape-btn" data-brush="eraser" aria-label="Eraser" title="Eraser">${BRUSH_ICONS.eraser}</button>` +
+    "</div>" +
+    "</div>" +
+    `<div class="ie-colorbar" id="ieBrushColorBar" style="background:${COLORBAR_CSS}">` +
+    '<span class="ie-colorbar-thumb" id="ieBrushColorThumb"></span>' +
+    "</div>" +
+    '<div class="ie-brush-presets">' +
+    BRUSH_PRESETS.map(
+      (p) =>
+        `<button type="button" class="ie-brush-preset" data-preset="${p}" aria-label="${
+          p === "spray" ? "Spray" : p + "px brush"
+        }" title="${p === "spray" ? "Spray" : p + "px"}">${BRUSH_PRESET_ICONS[p]}</button>`
+    ).join("") +
+    "</div>" +
+    '<div class="ie-shape-bar">' +
+    '<button type="button" class="ie-shape-text" id="ieBrushCancel">Cancel</button>' +
+    '<button type="button" class="ie-shape-text ie-shape-done" id="ieBrushDone">Done</button>' +
+    "</div>";
+  host.appendChild(ui);
+
+  ui.querySelectorAll("[data-brush]").forEach((btn) => {
+    btn.addEventListener("click", () => setBrushTool(btn.dataset.brush));
+  });
+  ui.querySelectorAll("[data-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => setBrushPreset(btn.dataset.preset));
+  });
+  ui.querySelector("#ieBrushUndo").addEventListener("click", () => undo());
+  ui.querySelector("#ieBrushCancel").addEventListener("click", () => exitBrushMode(false));
+  ui.querySelector("#ieBrushDone").addEventListener("click", () => exitBrushMode(true));
+  // Eraser has no colour; the bar drives the brush colour only.
+  wireColorBar(ui.querySelector("#ieBrushColorBar"), ui.querySelector("#ieBrushColorThumb"));
+  return ui;
+}
+
+function highlightActiveBrush() {
+  const ui = brushUI();
+  if (!ui) return;
+  const erasing = state.tool === "eraser";
+  // Top toggle: Brush vs Eraser.
+  ui.querySelectorAll("[data-brush]").forEach((btn) => {
+    const isErase = btn.dataset.brush === "eraser";
+    btn.classList.toggle("is-active", isErase ? erasing : !erasing);
+  });
+  // Bottom presets: matched against the active brush flavour + size.
+  ui.querySelectorAll("[data-preset]").forEach((btn) => {
+    const p = btn.dataset.preset;
+    let active = false;
+    if (!erasing) {
+      if (p === "spray") active = state.tool === "spray";
+      else active = state.tool === "pen" && state.size === Number(p);
+    }
+    btn.classList.toggle("is-active", active);
+  });
+}
+
+// Top toggle: "Brush" resumes the current flavour (pen or spray); "Eraser"
+// switches to erasing.
+function setBrushTool(t) {
+  setTool(t === "eraser" ? "eraser" : state.brushStyle);
+  highlightActiveBrush();
+}
+
+// Bottom presets: 2/5/10 = pen at that width; "spray" = airbrush.
+function setBrushPreset(p) {
+  if (p === "spray") {
+    state.brushStyle = "spray";
+    setTool("spray");
+  } else {
+    state.brushStyle = "pen";
+    setSize(Number(p));
+    setTool("pen");
+  }
+  highlightActiveBrush();
+}
+
+function enterBrushMode() {
+  const ui = ensureBrushUI();
+  if (!ui) return;
+  // Snapshot so Cancel can drop everything drawn during this session.
+  brushBackup = JSON.stringify(state.strokes);
+  ui.classList.remove("is-hidden");
+  getModal()?.classList.add("is-brushing");
+  document.querySelector('[data-ie-tool="pencil"]')?.classList.add("is-active");
+  // Start on a brush (never eraser), with a size that matches a preset.
+  if (state.brushStyle === "pen" && ![2, 5, 10].includes(state.size)) setSize(5);
+  setTool(state.brushStyle);
+  setColor(state.color);
+  highlightActiveBrush();
+}
+
+function exitBrushMode(commit) {
+  if (!commit && brushBackup != null) {
+    state.strokes = JSON.parse(brushBackup);
+    state.redoStack = [];
+    updateUndoRedoButtons();
+    redraw();
+  }
+  brushBackup = null;
+  brushUI()?.classList.add("is-hidden");
+  getModal()?.classList.remove("is-brushing");
+  document.querySelector('[data-ie-tool="pencil"]')?.classList.remove("is-active");
+  setTool("none");
 }
 
 function exportComposedDataUrl() {
@@ -1630,6 +2007,10 @@ function bindOnce() {
   document
     .querySelector('[data-ie-tool="text"]')
     ?.addEventListener("click", () => enterTextMode());
+  // Pencil toolbar icon → enter brush mode (freehand draw + eraser).
+  document
+    .querySelector('[data-ie-tool="pencil"]')
+    ?.addEventListener("click", () => enterBrushMode());
   document.querySelectorAll("[data-instruction-color]").forEach((btn) => {
     btn.addEventListener("click", () => setColor(btn.dataset.instructionColor));
   });
@@ -1712,7 +2093,7 @@ export async function openInstructionEditor(options = {}) {
   state.linePending = null;
   state.caseLabel = null;
   // Make sure we never re-open straight into a stale crop session.
-  state.crop = { active: false, rect: null, base: 0, fine: 0 };
+  state.crop = { active: false, rect: null, base: 0, fine: 0, source: null };
   cropUI()?.classList.add("is-hidden");
   getModal()?.classList.remove("is-cropping");
   // Close the shapes picker, drop any shape-mode takeover, and clear its
@@ -1725,8 +2106,13 @@ export async function openInstructionEditor(options = {}) {
   textUI()?.classList.add("is-hidden");
   getModal()?.classList.remove("is-texting");
   document.querySelector('[data-ie-tool="text"]')?.classList.remove("is-active");
+  // …and any brush-mode takeover.
+  brushBackup = null;
+  brushUI()?.classList.add("is-hidden");
+  getModal()?.classList.remove("is-brushing");
+  document.querySelector('[data-ie-tool="pencil"]')?.classList.remove("is-active");
   removeTextInput();
-  setTool("pen");
+  setTool("none");
   setColor(state.color);
   setSize(state.size);
   const sizeInput = document.getElementById("strokeSizeInput");

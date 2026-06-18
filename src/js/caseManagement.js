@@ -1741,7 +1741,7 @@ function renderSharedUserList() {
         const { caseIntID, uuid, machine_id } = window._inviteContext;
         const payload = [
           { machine_id, uuid, caseIntID },
-          { case_id: caseIntID, uuid: user.uuid },
+          { case_int_id: caseIntID, uuid: user.uuid },
         ];
 
         const res = await fetch(

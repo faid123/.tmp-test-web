@@ -392,36 +392,45 @@
       aria-modal="true"
       aria-label="Instruction drawing editor"
     >
-      <div class="instruction-editor-canvas-wrap">
-        <canvas id="instructionEditorCanvas" class="instruction-editor-canvas"></canvas>
-      </div>
-
-      <!-- Top-center editing toolbar. Each icon's action is wired up later. -->
-      <div class="ie-toolbar" role="toolbar" aria-label="Editing tools">
-        <button type="button" class="ie-tool-btn" data-ie-tool="crop" aria-label="Crop" data-tooltip="Crop">
-          <img src="../../assets/instruction%20editor/crop.png" alt="" class="ie-tool-icon" />
-        </button>
-        <button type="button" class="ie-tool-btn" data-ie-tool="icon" aria-label="Sticker" data-tooltip="Sticker">
-          <img src="../../assets/instruction%20editor/icon.png" alt="" class="ie-tool-icon" />
-        </button>
-        <button type="button" class="ie-tool-btn" data-ie-tool="text" aria-label="Text" data-tooltip="Text">
-          <img src="../../assets/instruction%20editor/text.png" alt="" class="ie-tool-icon" />
-        </button>
-        <button type="button" class="ie-tool-btn" data-ie-tool="pencil" aria-label="Draw" data-tooltip="Draw">
-          <img src="../../assets/instruction%20editor/pencil.png" alt="" class="ie-tool-icon" />
-        </button>
-      </div>
-
+      <!-- Close (×) sits at the screen corner, outside the framed photo. -->
       <button type="button" id="instructionEditorCancelBtn" class="instruction-editor-btn" aria-label="Close">
         CANCEL
       </button>
+
+      <!-- Phone-shaped frame: on desktop it's centred with a light border
+           (like the 3D preview card) and a black surround; on mobile it fills
+           the screen. The photo, tools and colour bar live inside so they stay
+           aligned to the frame; Close (×) and Save sit outside it. -->
+      <div class="ie-frame">
+        <div class="instruction-editor-canvas-wrap">
+          <canvas id="instructionEditorCanvas" class="instruction-editor-canvas"></canvas>
+        </div>
+
+        <!-- Top-center editing toolbar. Each icon's action is wired up later. -->
+        <div class="ie-toolbar" role="toolbar" aria-label="Editing tools">
+          <button type="button" class="ie-tool-btn" data-ie-tool="crop" aria-label="Crop" data-tooltip="Crop">
+            <img src="../../assets/instruction%20editor/crop.png" alt="" class="ie-tool-icon" />
+          </button>
+          <button type="button" class="ie-tool-btn" data-ie-tool="icon" aria-label="Sticker" data-tooltip="Sticker">
+            <img src="../../assets/instruction%20editor/icon.png" alt="" class="ie-tool-icon" />
+          </button>
+          <button type="button" class="ie-tool-btn" data-ie-tool="text" aria-label="Text" data-tooltip="Text">
+            <img src="../../assets/instruction%20editor/text.png" alt="" class="ie-tool-icon" />
+          </button>
+          <button type="button" class="ie-tool-btn" data-ie-tool="pencil" aria-label="Draw" data-tooltip="Draw">
+            <img src="../../assets/instruction%20editor/pencil.png" alt="" class="ie-tool-icon" />
+          </button>
+        </div>
+      </div>
+
+      <!-- Save sits OUTSIDE the frame, at the screen's lower-right corner. -->
       <button
         type="button"
         id="instructionEditorSaveBtn"
         class="instruction-editor-btn instruction-editor-btn-primary"
         aria-label="Save and close"
       >
-        SAVE AND CLOSE
+        Save
       </button>
     </div>
   </div>

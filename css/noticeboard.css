@@ -861,8 +861,20 @@
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  background: #fff;
+  /* Black surround so the centred white photo frame stands out on desktop.
+     On mobile the frame fills the screen, so the black isn't visible. */
+  background: #000;
   display: block;
+}
+
+/* Frame holding the photo + tools + colour bar + save. Mobile-first: fills the
+   screen. Desktop turns it into a centred, bordered phone-shaped card (see the
+   min-width rule at the end of the file). */
+.ie-frame {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  overflow: hidden;
 }
 
 .instruction-editor-canvas-wrap {
@@ -870,6 +882,7 @@
   inset: 0;
   border: 0;
   background: #fff;
+  overflow: hidden;
 }
 
 /* Top-center toolbar: white pill holding circular icon buttons. */
@@ -911,7 +924,8 @@
 /* Teal icons flip to white when their tool is the active one. */
 .ie-tool-btn.is-active .ie-tool-icon { filter: brightness(0) invert(1); }
 
-/* Close — top-left circle */
+/* Close — top-left circle. Dark disc + white glyph so it reads on both the
+   black desktop surround and the white photo on mobile. */
 #instructionEditorCancelBtn {
   position: absolute;
   top: max(14px, env(safe-area-inset-top, 14px));
@@ -921,8 +935,8 @@
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.06);
-  color: #1a1a1a;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
   font-size: 0;
   cursor: pointer;
   z-index: 3;
@@ -932,29 +946,32 @@
   font-size: 1.7rem;
   line-height: 1;
 }
-#instructionEditorCancelBtn:hover { background: rgba(0, 0, 0, 0.12); }
+#instructionEditorCancelBtn:hover { background: rgba(0, 0, 0, 0.6); }
 
-/* Save — green circular send button, bottom-right */
+/* Save — labelled green pill, OUTSIDE the frame at the screen's lower-right.
+   top/left forced to auto so the legacy mobile rule (which sets top:12px)
+   can't stretch it into a full-height bar. */
 #instructionEditorSaveBtn {
   position: absolute;
+  top: auto;
+  left: auto;
   right: 22px;
   bottom: 22px;
-  width: 56px;
-  height: 56px;
-  padding: 0;
+  width: auto;
+  height: auto;
+  min-width: 92px;
+  padding: 12px 26px;
   border: 0;
-  border-radius: 50%;
+  border-radius: 10px;
   background: #25d366;
   color: #fff;
-  font-size: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-family: inherit;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   cursor: pointer;
   z-index: 3;
-}
-#instructionEditorSaveBtn::before {
-  content: "\27A4";
-  font-size: 1.35rem;
-  line-height: 1;
 }
 #instructionEditorSaveBtn:hover { background: #1ebe5b; }
 
@@ -964,6 +981,7 @@
 .instruction-editor-modal.is-cropping .ie-toolbar,
 .instruction-editor-modal.is-cropping .ie-shapeui,
 .instruction-editor-modal.is-cropping .ie-textui,
+.instruction-editor-modal.is-cropping .ie-brushui,
 .instruction-editor-modal.is-cropping #instructionEditorCancelBtn,
 .instruction-editor-modal.is-cropping #instructionEditorSaveBtn {
   display: none;
@@ -985,17 +1003,27 @@
   display: none;
 }
 
+/* Brush mode takes over the editor like shape mode does. */
+.instruction-editor-modal.is-brushing .ie-toolbar,
+.instruction-editor-modal.is-brushing #instructionEditorCancelBtn,
+.instruction-editor-modal.is-brushing #instructionEditorSaveBtn {
+  display: none;
+}
+
 /* ---- Shapes UI (opens from the square toolbar icon) ----------------------
    Full-overlay container; only its controls catch input so the canvas stays
    drawable underneath. Holds the shapes row (top-center), an undo button
-   (top-left, next to Close), and a vertical rainbow colour bar (right). */
-.ie-shapeui {
+   (top-left, next to Close), and a vertical rainbow colour bar (right).
+   .ie-brushui (brush mode) reuses the same overlay + shape sub-classes. */
+.ie-shapeui,
+.ie-brushui {
   position: absolute;
   inset: 0;
   z-index: 3;
   pointer-events: none;
 }
-.ie-shapeui.is-hidden { display: none; }
+.ie-shapeui.is-hidden,
+.ie-brushui.is-hidden { display: none; }
 
 /* Shape controls cluster — parked in the top-right corner (undo sits beside
    the shape row) so it stays clear of the jaw's anterior teeth. The editor's
@@ -1163,6 +1191,56 @@
     linear-gradient(-45deg, transparent 75%, #ccc 75%);
   background-size: 8px 8px;
   background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
+
+/* ---- Brush mode -----------------------------------------------------------
+   Top brush/eraser toggle uses PNG icons; the bottom-centre row holds the four
+   size/style presets (2px / 5px / 10px / spray), just above Cancel·Done. */
+.ie-brush-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+}
+.ie-shape-btn.is-active .ie-brush-icon {
+  filter: brightness(0) invert(1);
+}
+.ie-brush-presets {
+  position: absolute;
+  left: 50%;
+  bottom: 76px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  padding: 8px 12px;
+  background: transparent;
+  border-radius: 14px;
+  pointer-events: auto;
+}
+.ie-brush-preset {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--rose-700);
+  cursor: pointer;
+  padding: 0;
+}
+.ie-brush-preset:hover { background: rgba(255, 255, 255, 0.5); }
+.ie-brush-preset.is-active {
+  background: var(--rose-500);
+  border-color: var(--rose-500);
+  color: #fff;
+}
+.ie-brush-preset svg { width: 26px; height: 26px; }
+/* Letter labels (text-style presets B / I / U / N). */
+.ie-brush-preset span {
+  font-family: inherit;
+  font-size: 1.05rem;
+  line-height: 1;
 }
 
 .ie-crop {
@@ -1459,5 +1537,22 @@
     width: 36px;
     height: 36px;
     font-size: 22px;
+  }
+}
+
+/* ---- Instruction editor: tablet/desktop frame the photo like the 3D preview
+   On screens ≥600px (tablets incl. iPad Mini portrait at 768, and desktop) the
+   photo sits in a centred, phone-shaped card with a light border (matching
+   .preview-frame) and a black surround. The tools, colour bar and presets live
+   inside this frame so they stay aligned to the photo; only Close (×) and Save
+   sit outside. On phones (<600px) the frame fills the screen (base rule). */
+@media (min-width: 600px) {
+  .ie-frame {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: min(100%, 430px);
+    border: 1px solid var(--line);
+    border-radius: 14px;
   }
 }
