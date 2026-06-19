@@ -1320,6 +1320,12 @@ async function initSidebar() {
       document.getElementById("saveAnnotationBtn")?.click();
     }
   });
+
+  document.getElementById("sidebarVersionHistoryBtn")?.addEventListener("click", async () => {
+    handle.close();
+    const { openVersionHistory } = await import("../versionHistory.js");
+    openVersionHistory();
+  });
 }
 
 function initAnnFooter() {

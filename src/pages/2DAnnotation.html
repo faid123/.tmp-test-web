@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="../../css/clinicalInformation.css" />
   <link rel="stylesheet" href="../../css/toast.css" />
   <link rel="stylesheet" href="../../css/chat.css" />
+  <link rel="stylesheet" href="../../css/versionHistory.css" />
   <link rel="icon" href="../../assets/profile.png" type="image/png" />
   <link
     rel="stylesheet"
@@ -590,6 +591,16 @@
     </div>
   </div>
 
+  <div id="versionHistoryModal" class="modal hidden">
+    <div class="modal-content version-modal">
+      <span class="close-btn" id="closeVersionModal">&times;</span>
+      <div class="vh-header"><h3 class="modal-title">Version History</h3></div>
+      <div class="vh-body">
+        <ul id="versionList" class="vh-list"></ul>
+      </div>
+    </div>
+  </div>
+
   <aside id="appSidebar" class="app-sidebar is-hidden" aria-hidden="true" aria-label="Navigation">
     <div class="app-sidebar-backdrop" data-sidebar-close></div>
     <nav class="app-sidebar-panel" role="navigation">
@@ -618,6 +629,12 @@
           <button type="button" id="sidebarReturnBtn" class="app-sidebar-item">
             <i class="fa fa-angles-left app-sidebar-item-icon" aria-hidden="true"></i>
             <span>Return to Case Selection</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" id="sidebarVersionHistoryBtn" class="app-sidebar-item">
+            <i class="fa fa-clock-rotate-left app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Version History</span>
           </button>
         </li>
         <li>
@@ -683,5 +700,6 @@
   </div>
 
   <script type="module" src="../js/2D/2DAnnotation.js"></script>
+  <script type="module" src="../js/versionHistory.js"></script>
 </body>
 </html>

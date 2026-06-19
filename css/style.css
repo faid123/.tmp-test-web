@@ -73,193 +73,6 @@ html, body {
   margin: 0;
 }
 
-#chat-widget {
-  position: fixed;
-  top: 84px;
-  right: 150px;
-  width: 250px; /* 可根据需要调整 */
-  height: 250px; /* 可根据需要调整 */
-  background-color: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  border-radius: 12px;
-  padding: 10px;
-  z-index: 9999;
-  font-family: Arial, sans-serif;
-  display: none;
-  flex-direction: column;
-}
-
-#chat-box {
-  flex: 1;
-  overflow-y: auto;
-  margin-bottom: 10px;
-  padding: 6px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  background-color: #f9f9f9;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
-}
-
-/* 消息气泡样式 */
-#chat-box .message {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-
-#chat-box .message p {
-  background-color: #A7C7E7;
-  color: white;
-  padding: 8px 12px;
-  border-radius: 16px;
-  max-width: 80%;
-  word-wrap: break-word;
-  margin: 0;
-  align-self: flex-end;
-}
-
-#chat-box .message img {
-  max-width: 100%;
-  max-height: 150px;
-  border-radius: 8px;
-  margin-top: 4px;
-}
-
-#chat-input-area {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: nowrap;
-}
-
-#uploadBtn {
-  flex: 0 0 36px;
-  background-color: #eee;
-  border: none;
-  border-radius: 8px;
-  width: 36px;
-  height: 36px;
-  font-size: 20px;
-  cursor: pointer;
-}
-
-#textInput {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-}
-
-#sendBtn {
-  flex: 0 0 60px;
-  background-color: blue;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-/* 修改你的实际消息容器 chat-message */
-.chat-message {
-  background-color: #DCF8C6; /* WhatsApp气泡绿色 */
-  border-radius: 16px;
-  padding: 8px 12px;
-  max-width: 80%;
-  align-self: flex-end;
-  word-wrap: break-word;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
-  font-size: 14px;
-  color: #333;
-}
-
-/* 时间戳样式 */
-.chat-message .timestamp {
-  font-size: 10px;
-  color: #888;
-  margin-top: 4px;
-  text-align: right;
-}
-
-/* 作者样式 */
-.chat-message .author {
-  font-size: 11px;
-  color: #999;
-  text-align: right;
-}
-
-.chat-message img {
-  max-width: 120px;
-  max-height: 120px;
-  border-radius: 8px;
-  cursor: pointer; /* 鼠标悬浮变手势 */
-  transition: transform 0.2s ease;
-}
-
-/* 放大图层容器 */
-.image-modal {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0,0,0,0.8);
-  justify-content: center;
-  align-items: center;
-  z-index: 99999;
-}
-
-/* 放大的图片样式 */
-.image-modal img {
-  max-width: 90%;
-  max-height: 90%;
-  border-radius: 12px;
-  box-shadow: 0 0 20px rgba(255,255,255,0.3);
-  transition: transform 0.3s ease;
-  transform: scale(1);
-  cursor: zoom-out;
-}
-
-
-/* 聊天图标样式（只移动端显示） */
-#chat-icon {
-  position: fixed;
-  top: 14px;
-  right: 150px;
-  width: 60px;
-  height: 60px;
-  z-index: 9999;
-  cursor: pointer;
-  display: none; /* 默认隐藏，由 JS 决定显示 */
-}
-
-/* 移动端展开聊天框样式 */
-#chat-widget.active {
-  display: flex !important;
-  flex-direction: column;
-  position: fixed;
-  top: auto;
-  right: auto;
-  bottom: 82px;
-  left: 10px;
-  transform: none;
-  width: min(360px, calc(100vw - 20px));
-  height: min(420px, calc(100vh - 102px));
-  max-width: none;
-  max-height: none;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.2);
-  z-index: 9999;
-}
 
 #viewer-meta-bar {
   position: absolute;
@@ -325,10 +138,6 @@ html, body {
     grid-template-columns: minmax(0, 250px) 56px;
   }
 
-  #chat-widget.active {
-    bottom: calc(198px + env(safe-area-inset-bottom, 0px));
-    height: min(420px, calc(100dvh - 218px - env(safe-area-inset-bottom, 0px)));
-  }
 }
 
 @media (max-width: 768px) {
@@ -361,17 +170,6 @@ html, body {
     font-size: 13px !important;
   }
 
-  #viewer-meta-bar #chat-icon {
-    flex-basis: 52px;
-    width: 52px !important;
-    height: 52px !important;
-  }
-
-  #chat-widget.active {
-    bottom: calc(180px + env(safe-area-inset-bottom, 0px));
-    width: calc(100vw - 20px);
-    height: min(420px, calc(100dvh - 200px - env(safe-area-inset-bottom, 0px)));
-  }
 }
 
 .viewer-shell {
@@ -383,24 +181,6 @@ html, body {
   overflow: hidden;
 }
 
-.viewer-header {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 52px;
-  padding: 0 16px;
-  background: rgba(15, 23, 42, 0.88);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  color: #fff;
-  flex-shrink: 0;
-}
-
-.viewer-header h1 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0;
-}
 
 .viewer-main {
   position: relative;
@@ -643,6 +423,7 @@ html, body {
   border-radius: 10px;
   background: rgba(22, 28, 36, 0.97);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   overflow: hidden;
 }
@@ -881,33 +662,9 @@ html, body {
   outline: none;
 }
 
-#chat-widget.chat-sidebar {
-  display: block;
-  top: 0;
-  right: 0;
-  width: auto;
-  height: auto;
-  background: transparent;
-  box-shadow: none;
-  border-radius: 0;
-  padding: 0;
-}
 
-.viewer-main > #chat-widget.chat-sidebar {
-  position: absolute;
-  inset: 0;
-}
 
 @media (max-width: 768px) {
-  .viewer-header {
-    min-height: 46px;
-    padding: 0 12px;
-  }
-
-  .viewer-header h1 {
-    font-size: 16px;
-  }
-
   .cm-footer {
     height: 42px;
     padding: 0 10px calc(env(safe-area-inset-bottom, 0px));

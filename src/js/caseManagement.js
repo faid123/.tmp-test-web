@@ -1361,6 +1361,17 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
     });
   }
 
+  // Open 3D viewer link — guard against clicking when no case is selected.
+  const view3dLink = document.getElementById("view3dLink");
+  if (view3dLink) {
+    view3dLink.addEventListener("click", (e) => {
+      if (!window.selectedCaseId) {
+        e.preventDefault();
+        toast.warning("Please select a case first.");
+      }
+    });
+  }
+
   // Copy the selected case's 3D viewer link to the clipboard.
   const copy3dLinkBtn = document.getElementById("copy3dLinkBtn");
   if (copy3dLinkBtn) {

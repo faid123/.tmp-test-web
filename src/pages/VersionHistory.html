@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Version History</title>
+    <link rel="icon" href="../../assets/profile.png" type="image/png" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #222; min-height: 100vh; }
+      .vh-page { max-width: 560px; margin: 0 auto; padding: 24px 16px; }
+      .vh-page-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 20px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid #e9e9e9;
+      }
+      .vh-back-btn {
+        background: none;
+        border: 1px solid #d4d4d4;
+        border-radius: 6px;
+        padding: 5px 12px;
+        font-size: 13px;
+        cursor: pointer;
+        color: #555;
+      }
+      .vh-back-btn:hover { background: #f0f0f0; }
+      .vh-page-title { font-size: 18px; font-weight: 600; flex: 1; }
+      .vh-case-label { font-size: 13px; color: #888; }
+    </style>
+  </head>
+  <body>
+    <div class="vh-page">
+      <header class="vh-page-header">
+        <button class="vh-back-btn" id="backBtn">&#8592; Back</button>
+        <h1 class="vh-page-title">Version History</h1>
+        <span class="vh-case-label" id="caseLabel"></span>
+      </header>
+      <main>
+        <ul id="versionList" class="vh-list">
+          <!-- Filled dynamically via JS -->
+        </ul>
+      </main>
+    </div>
+
+    <script>
+      const hostname = window.location.hostname;
+      const isGitHubPages = hostname.includes("github.io");
+      const basePath = isGitHubPages ? "/.tmp-test-web" : "";
+
+      document.write(`
+        <link rel="stylesheet" href="${basePath}/css/versionHistory.css" />
+        <script type="module" src="${basePath}/src/js/VersionHistoryPage.js"></` + `script>
+      `);
+    </script>
+  </body>
+</html>
