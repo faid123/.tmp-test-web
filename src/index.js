@@ -4193,6 +4193,7 @@ btnContainer.appendChild(edit2DStatic); */
       ) {
         responseData = "stl";
         console.log("[viewer3D] STL source selected: /stl/get (parameterisation fallback)");
+        const rawStlStartedAt = performance.now();
         responseData = await apiClient.post(
           "/stl/get",
           [data],
