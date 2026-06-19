@@ -39,6 +39,9 @@ const draggingText = {
 };
 // Dragging a placed shape (line/curve/square/…) to reposition it.
 const draggingShape = { active: false, target: null, lastX: 0, lastY: 0 };
+// No-mode (idle) editing: drag ANY element by delta + show a trash button.
+const draggingElement = { active: false, target: null, lastX: 0, lastY: 0, moved: false };
+let selectedStroke = null;
 
 function getModal() {
   return document.getElementById("instructionEditorModal");
@@ -211,6 +214,19 @@ function defaultCropRect() {
   const cssH = h / ratio;
   const ws = wrapSizeCss();
   return { x: (ws.w - cssW) / 2, y: (ws.h - cssH) / 2, w: cssW, h: cssH };
+}
+
+// Starting crop frame when entering crop mode: a touch smaller than the full
+// image and nudged upward, so the user begins from a tighter, slightly higher
+// selection (the full image is still reachable by dragging the handles).
+function initialCropRect() {
+  const full = defaultCropRect();
+  const scale = 0.9;
+  const w = full.w * scale;
+  const h = full.h * scale;
+  const x = full.x + (full.w - w) / 2;
+  const y = Math.max(0, full.y + (full.h - h) / 2 - full.h * 0.06);
+  return { x, y, w, h };
 }
 
 function layoutCropFrame() {
@@ -446,7 +462,7 @@ function enterCropMode() {
   state.crop.base = 0;
   state.crop.fine = 0;
   ensureCropUI();
-  state.crop.rect = defaultCropRect();
+  state.crop.rect = initialCropRect();
   layoutCropFrame();
   updateDialValue();
   cropUI()?.classList.remove("is-hidden");
@@ -489,6 +505,7 @@ function applyCrop() {
     // strokes (keeping them would double-draw and they'd no longer line up).
     state.strokes = [];
     state.redoStack = [];
+    clearSelection();
     updateUndoRedoButtons();
     exitCropMode();
   });
@@ -606,6 +623,118 @@ function findShapeAtPoint(point) {
     }
   }
   return null;
+}
+
+// Bounding box (CSS px, canvas-relative) for any element type — used both to
+// hit-test in no-mode and to position the selection overlay + trash button.
+function strokeBoundsCss(s) {
+  if (!s) return null;
+  if (s.tool === "text") return textBoundsForStroke(s);
+  if (s.tool === "shape" && s.start && s.end) {
+    return {
+      x: Math.min(s.start.x, s.end.x),
+      y: Math.min(s.start.y, s.end.y),
+      w: Math.abs(s.end.x - s.start.x),
+      h: Math.abs(s.end.y - s.start.y),
+    };
+  }
+  if (Array.isArray(s.points) && s.points.length) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of s.points) {
+      minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+    }
+    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+  }
+  return null;
+}
+
+function pointInBounds(p, b, tol) {
+  return (
+    p.x >= b.x - tol && p.x <= b.x + b.w + tol &&
+    p.y >= b.y - tol && p.y <= b.y + b.h + tol
+  );
+}
+
+// Top-most element (text / shape / freehand / line) under the point. Used by
+// no-mode to pick something to drag or trash. The case-ID watermark lives in
+// state.caseLabel (not state.strokes), so it's naturally excluded.
+function findStrokeAtPoint(point) {
+  for (let i = state.strokes.length - 1; i >= 0; i--) {
+    const s = state.strokes[i];
+    const b = strokeBoundsCss(s);
+    if (!b) continue;
+    const tol = s.tool === "text" ? 0 : Math.max(10, s.size || 0);
+    if (pointInBounds(point, b, tol)) return s;
+  }
+  return null;
+}
+
+// Move any element by a delta (CSS px). Each element type carries its own
+// geometry (text: point, shape: start/end, freehand/line: points).
+function translateStroke(s, dx, dy) {
+  if (!s) return;
+  if (s.point) s.point = { x: s.point.x + dx, y: s.point.y + dy };
+  if (s.start) s.start = { x: s.start.x + dx, y: s.start.y + dy };
+  if (s.end) s.end = { x: s.end.x + dx, y: s.end.y + dy };
+  if (Array.isArray(s.points)) s.points = s.points.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+}
+
+// Lazily build the no-mode selection overlay: a dashed outline + a trash button.
+// It's a DOM overlay in the canvas wrap (same coord space as the text boxes) so
+// it never bakes into the exported canvas image.
+function ensureSelectOverlay() {
+  let box = document.getElementById("ieSelectBox");
+  if (box) return box;
+  const parent = canvas?.parentElement;
+  if (!parent) return null;
+  box = document.createElement("div");
+  box.id = "ieSelectBox";
+  box.className = "ie-select-box is-hidden";
+  const trash = document.createElement("button");
+  trash.type = "button";
+  trash.className = "ie-select-trash";
+  trash.setAttribute("aria-label", "Delete element");
+  trash.title = "Delete";
+  trash.innerHTML =
+    '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M5 7h14M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m1 0v12a2 2 0 01-2 2h-6a2 2 0 01-2-2V7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  // Don't let the trash press start a canvas drag / deselect.
+  trash.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); });
+  trash.addEventListener("click", (e) => { e.stopPropagation(); deleteSelectedStroke(); });
+  box.appendChild(trash);
+  parent.appendChild(box);
+  return box;
+}
+
+function positionSelectOverlay() {
+  if (!selectedStroke) return;
+  const box = ensureSelectOverlay();
+  const b = strokeBoundsCss(selectedStroke);
+  if (!box || !b) { clearSelection(); return; }
+  box.style.left = `${b.x}px`;
+  box.style.top = `${b.y}px`;
+  box.style.width = `${Math.max(8, b.w)}px`;
+  box.style.height = `${Math.max(8, b.h)}px`;
+  box.classList.remove("is-hidden");
+}
+
+function selectStroke(s) {
+  selectedStroke = s;
+  positionSelectOverlay();
+}
+
+function clearSelection() {
+  selectedStroke = null;
+  document.getElementById("ieSelectBox")?.classList.add("is-hidden");
+}
+
+function deleteSelectedStroke() {
+  if (!selectedStroke) return;
+  const idx = state.strokes.indexOf(selectedStroke);
+  if (idx >= 0) state.strokes.splice(idx, 1);
+  clearSelection();
+  redraw();
+  updateUndoRedoButtons();
 }
 
 function drawLinePendingMarker(point) {
@@ -870,15 +999,15 @@ function onPointerDown(event) {
   if (state.crop.active) return; // crop overlay handles its own input
   const point = pointFromEvent(event);
 
-  // Text tool: click on existing text → edit it; click empty → new text.
+  // Text tool: a single fixed text box sits at the canvas center (spawned on
+  // entering text mode). Clicking an existing saved text edits it in place;
+  // empty clicks do nothing — clicking no longer spawns new text boxes.
   if (state.tool === "text") {
     const hit = findTextAtPoint(point);
     if (hit) {
       editExistingText(hit);
       event.preventDefault();
-      return;
     }
-    spawnTextInput(point);
     return;
   }
 
@@ -908,6 +1037,26 @@ function onPointerDown(event) {
     canvas.setPointerCapture?.(event.pointerId ?? 0);
     redraw();
     updateUndoRedoButtons();
+    return;
+  }
+
+  // No-mode (idle): drag any element to reposition it and show a trash button to
+  // delete it. Clicking empty space deselects.
+  if (state.tool === "none") {
+    const hit = findStrokeAtPoint(point);
+    if (hit) {
+      selectStroke(hit);
+      draggingElement.active = true;
+      draggingElement.target = hit;
+      draggingElement.lastX = point.x;
+      draggingElement.lastY = point.y;
+      draggingElement.moved = false;
+      canvas.setPointerCapture?.(event.pointerId ?? 0);
+      canvas.style.cursor = "grabbing";
+      event.preventDefault();
+      return;
+    }
+    clearSelection();
     return;
   }
 
@@ -945,6 +1094,16 @@ function onPointerDown(event) {
 }
 
 function onPointerMove(event) {
+  if (draggingElement.active && draggingElement.target) {
+    const point = pointFromEvent(event);
+    translateStroke(draggingElement.target, point.x - draggingElement.lastX, point.y - draggingElement.lastY);
+    draggingElement.lastX = point.x;
+    draggingElement.lastY = point.y;
+    draggingElement.moved = true;
+    positionSelectOverlay();
+    redraw();
+    return;
+  }
   if (draggingShape.active && draggingShape.target) {
     const point = pointFromEvent(event);
     const dx = point.x - draggingShape.lastX;
@@ -978,6 +1137,15 @@ function onPointerMove(event) {
 }
 
 function onPointerUp(event) {
+  if (draggingElement.active) {
+    try { canvas.releasePointerCapture?.(event.pointerId ?? 0); } catch {}
+    draggingElement.active = false;
+    draggingElement.target = null;
+    applyCanvasCursor();
+    positionSelectOverlay();
+    redraw();
+    return;
+  }
   if (draggingShape.active) {
     try { canvas.releasePointerCapture?.(event.pointerId ?? 0); } catch {}
     draggingShape.active = false;
@@ -1060,13 +1228,6 @@ function cancelTextInput() {
 }
 
 // × button: throw away both the live box AND the original (if editing).
-function deleteTextInput() {
-  removeTextInput();
-  editingOriginal = null;
-  redraw();
-  updateUndoRedoButtons();
-}
-
 function commitTextInput() {
   if (!textInputEl || !textInputPoint) {
     removeTextInput();
@@ -1171,27 +1332,14 @@ function spawnTextInput(point, prefill = null, options = {}) {
   const italic = prefill ? !!prefill.italic : state.textItalic;
   const underline = prefill ? !!prefill.underline : state.textUnderline;
 
-  // Wrap holds the contenteditable + the × remove button so positioning the
-  // remove button doesn't fight with the resize handle on the editor itself.
+  // Wrap holds the contenteditable text box. The × remove button was removed —
+  // text mode now uses a single fixed box; Cancel discards it instead.
   const wrap = document.createElement("div");
   wrap.className = "instruction-editor-text-wrap";
   wrap.style.position = "absolute";
   wrap.style.left = `${point.x}px`;
   wrap.style.top = `${point.y}px`;
   wrap.style.zIndex = "10";
-
-  const removeBtn = document.createElement("button");
-  removeBtn.type = "button";
-  removeBtn.className = "instruction-editor-text-remove";
-  removeBtn.setAttribute("aria-label", "Remove text box");
-  removeBtn.title = "Remove";
-  removeBtn.innerHTML = "&times;";
-  // Stop blur on mousedown so the editor doesn't commit before our click fires.
-  removeBtn.addEventListener("mousedown", (e) => e.preventDefault());
-  removeBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    deleteTextInput();
-  });
 
   const div = document.createElement("div");
   div.className = "instruction-editor-text-input";
@@ -1240,7 +1388,6 @@ function spawnTextInput(point, prefill = null, options = {}) {
     div._resizeObserver = ro;
   }
 
-  wrap.appendChild(removeBtn);
   wrap.appendChild(div);
   parent.appendChild(wrap);
 
@@ -1337,6 +1484,7 @@ function clearAll() {
   state.currentStroke = null;
   state.linePending = null;
   removeTextInput();
+  clearSelection();
   redraw();
   updateUndoRedoButtons();
 }
@@ -1373,6 +1521,7 @@ function setTool(tool) {
   if (state.tool !== tool) {
     state.linePending = null;
     if (textInputEl) commitTextInput();
+    clearSelection();
   }
   state.tool = tool;
   document.querySelectorAll("[data-instruction-tool]").forEach((btn) => {
@@ -2060,6 +2209,7 @@ function closeEditor(result) {
   const modal = getModal();
   if (!modal) return;
   removeTextInput();
+  clearSelection();
   state.linePending = null;
   modal.classList.add("is-hidden");
   modal.setAttribute("aria-hidden", "true");

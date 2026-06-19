@@ -291,6 +291,62 @@ async function uploadLatest3DCapture(dataUrl) {
   setMessage(`3D capture saved (noticeboard + ${labels} thumbnail).`, false);
 }
 
+// Capture a single jaw on its own and upsert it into that jaw's case-thumbnail
+// slot (1=upper, 2=lower). Called after a jaw STL upload so the case tile picks
+// up the new model without the user having to hit the capture button. The other
+// jaw is hidden for the shot, then prior visibility is restored. Best-effort.
+async function uploadJawThumbnail(jaw) {
+  const { renderer, scene, camera } = preview3DState;
+  const caseIntID = state.caseIntID;
+  const user = getLoggedInUser();
+  if (!renderer || !scene || !camera || !caseIntID || !user?.uuid) return;
+  if (!preview3DState.groups?.[jaw]) return;
+
+  const slot = jaw === "upper" ? JAW_UPPER_THUMBNAIL_SLOT : JAW_LOWER_THUMBNAIL_SLOT;
+
+  // Isolate the target jaw for the capture, then restore the prior visibility so
+  // the on-screen view is left exactly as it was.
+  const prev = {
+    upper: preview3DState.groups?.upper?.visible,
+    lower: preview3DState.groups?.lower?.visible,
+  };
+  if (preview3DState.groups?.upper) preview3DState.groups.upper.visible = jaw === "upper";
+  if (preview3DState.groups?.lower) preview3DState.groups.lower.visible = jaw === "lower";
+
+  let base64 = "";
+  try {
+    renderer.render(scene, camera);
+    const dataUrl = renderer.domElement.toDataURL("image/png");
+    const commaIdx = dataUrl.indexOf(",");
+    base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+  } catch (err) {
+    console.warn(`[preview3D] thumbnail capture (${jaw}) failed`, err);
+  } finally {
+    if (preview3DState.groups?.upper) preview3DState.groups.upper.visible = !!prev.upper;
+    if (preview3DState.groups?.lower) preview3DState.groups.lower.visible = !!prev.lower;
+    renderer.render(scene, camera);
+  }
+  if (!base64) return;
+
+  try {
+    const res = await fetch(`${SMARTRPD_API_BASE}/thumbnails`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        { machine_id: PREVIEW_MACHINE_ID, uuid: user.uuid, caseIntID },
+        { case_id: caseIntID, slot, data: base64 },
+      ]),
+    });
+    if (res.ok) {
+      console.log(`[preview3D] ✓ thumbnail slot ${slot} (${jaw}) updated`);
+    } else {
+      console.error(`[preview3D] ✕ thumbnail slot ${slot} (${jaw}) status=${res.status}`);
+    }
+  } catch (err) {
+    console.error(`[preview3D] thumbnail slot ${slot} (${jaw}) fetch failed`, err);
+  }
+}
+
 async function fetchJawFilesForCase() {
   if (!state.caseIntID) return [];
   const user = getLoggedInUser();
@@ -659,29 +715,46 @@ async function uploadJawStl(jaw, file) {
   const caseId = preview3DState.caseData?.case_id || state.caseIntID;
 
   setMessage?.(`Uploading ${jaw} jaw...`);
+  setJawRowUploading(jaw, true);
 
-  // POST one endpoint and log the exact outcome (status + body on failure) so
-  // an asymmetric upper/lower problem is visible in the console.
-  const postStl = async (path, payloadBody) => {
-    try {
-      const res = await fetch(`${SMARTRPD_API_BASE}${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([auth, payloadBody]),
-      });
-      if (res.ok) {
-        console.log(`[preview3D] ✓ POST ${path} (${jaw}) status=${res.status} type=${JSON.stringify(payloadBody.type)} case_id=${JSON.stringify(payloadBody.case_id)}`);
-        return true;
+  // Combined upload progress across both buckets (each tracked 0..1), surfaced
+  // as a single % in the row's SET SURVEY ANGLE slot.
+  const frac = { raw: 0, stl: 0 };
+  const reportProgress = () =>
+    setJawRowUploadProgress(jaw, ((frac.raw + frac.stl) / 2) * 100);
+
+  // POST one endpoint via XHR (so we get real upload-progress events) and log
+  // the exact outcome (status + body on failure) so an asymmetric upper/lower
+  // problem is visible in the console.
+  const postStl = (path, payloadBody, key) =>
+    new Promise((resolve) => {
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `${SMARTRPD_API_BASE}${path}`);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) { frac[key] = e.loaded / e.total; reportProgress(); }
+        };
+        xhr.upload.onload = () => { frac[key] = 1; reportProgress(); };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            console.log(`[preview3D] ✓ POST ${path} (${jaw}) status=${xhr.status} type=${JSON.stringify(payloadBody.type)} case_id=${JSON.stringify(payloadBody.case_id)}`);
+            resolve(true);
+          } else {
+            console.error(`[preview3D] ✕ POST ${path} (${jaw}) status=${xhr.status} type=${JSON.stringify(payloadBody.type)} case_id=${JSON.stringify(payloadBody.case_id)} body=${(xhr.responseText || "").slice(0, 300)}`);
+            resolve(false);
+          }
+        };
+        xhr.onerror = () => {
+          console.error(`[preview3D] ✕ POST ${path} (${jaw}) network error`);
+          resolve(false);
+        };
+        xhr.send(JSON.stringify([auth, payloadBody]));
+      } catch (err) {
+        console.error(`[preview3D] ✕ POST ${path} (${jaw}) threw`, err);
+        resolve(false);
       }
-      let body = "";
-      try { body = await res.text(); } catch {}
-      console.error(`[preview3D] ✕ POST ${path} (${jaw}) status=${res.status} type=${JSON.stringify(payloadBody.type)} case_id=${JSON.stringify(payloadBody.case_id)} body=${body.slice(0, 300)}`);
-      return false;
-    } catch (err) {
-      console.error(`[preview3D] ✕ POST ${path} (${jaw}) threw`, err);
-      return false;
-    }
-  };
+    });
 
   try {
     const base64 = await fileToBase64(file);
@@ -689,8 +762,8 @@ async function uploadJawStl(jaw, file) {
     // Both buckets are attempted independently — a failure in one must not skip
     // the other (the desktop client and the web preview read different tables).
     const [rawOk, stlOk] = await Promise.all([
-      postStl("/stl/raw", { case_id: caseId, type: jawType, data: base64, filename: file.name }),
-      postStl("/stl", { case_id: state.caseIntID, type: dbType, data: base64, filename: file.name }),
+      postStl("/stl/raw", { case_id: caseId, type: jawType, data: base64, filename: file.name }, "raw"),
+      postStl("/stl", { case_id: state.caseIntID, type: dbType, data: base64, filename: file.name }, "stl"),
     ]);
 
     if (!rawOk && !stlOk) {
@@ -699,6 +772,9 @@ async function uploadJawStl(jaw, file) {
     }
 
     await renderJawStl(jaw, { data: base64, type: jawType, filename: file.name });
+    // Auto-refresh this jaw's case thumbnail from the freshly rendered model so
+    // the case tile updates without a manual capture. Best-effort.
+    await uploadJawThumbnail(jaw);
     if (rawOk && stlOk) {
       setMessage?.(`${jaw[0].toUpperCase() + jaw.slice(1)} jaw uploaded.`);
     } else {
@@ -707,6 +783,8 @@ async function uploadJawStl(jaw, file) {
   } catch (err) {
     console.error(`[preview3D] ✕ jaw upload (${jaw}) failed`, err);
     setMessage?.("Upload failed. Please try again.");
+  } finally {
+    setJawRowUploading(jaw, false);
   }
 }
 
@@ -2399,12 +2477,21 @@ function buildJawRow({ jaw, icon, label }) {
   uploadBtn.title = `Upload ${jaw} 3D file`;
   uploadBtn.innerHTML = '<i class="fa fa-arrow-up-from-bracket" aria-hidden="true"></i>';
 
+  // Inline progress shown in the SET SURVEY ANGLE slot while a freshly picked
+  // jaw STL is uploading. Hidden until the row gets `is-uploading-jaw`.
+  const surveyLoading = document.createElement("div");
+  surveyLoading.className = "jaw-preview-survey-loading";
+  surveyLoading.innerHTML =
+    '<span class="jaw-preview-survey-loading-label">UPLOADING…</span>' +
+    '<span class="jaw-preview-survey-loading-track"><span class="jaw-preview-survey-loading-bar"></span></span>';
+
   row.appendChild(iconEl);
   row.appendChild(allowWrap);
   row.appendChild(deleteBtn);
   row.appendChild(surveyBtn);
   row.appendChild(uploadBtn);
-  return { row, toggle, deleteBtn, surveyBtn, uploadBtn, iconEl };
+  row.appendChild(surveyLoading);
+  return { row, toggle, deleteBtn, surveyBtn, uploadBtn, surveyLoading, iconEl };
 }
 
 // Switch a jaw's row between its "loaded" controls (trash + SET SURVEY ANGLE)
@@ -2421,6 +2508,29 @@ function setJawRowMode(jaw, hasStl) {
   ctrl.row.classList.toggle("is-empty-jaw", !hasStl);
   ctrl.toggle.checked = hasStl;
   ctrl.toggle.disabled = !hasStl;
+}
+
+// Show/hide the inline upload progress bar in a jaw row's SET SURVEY ANGLE slot.
+// While set, the survey/trash/upload controls are replaced by the loading bar.
+function setJawRowUploading(jaw, uploading) {
+  const rowKey = jaw === "upper" ? "rowUpper" : "rowLower";
+  const ctrl = preview3DState.topControls?.[rowKey];
+  if (!ctrl) return;
+  ctrl.row.classList.toggle("is-uploading-jaw", uploading);
+  if (uploading) setJawRowUploadProgress(jaw, 0);
+}
+
+// Update the inline upload progress (0..100) shown in a jaw row's SET SURVEY
+// ANGLE slot — drives both the "UPLOADING… N%" label and the bar width.
+function setJawRowUploadProgress(jaw, pct) {
+  const rowKey = jaw === "upper" ? "rowUpper" : "rowLower";
+  const wrap = preview3DState.topControls?.[rowKey]?.surveyLoading;
+  if (!wrap) return;
+  const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+  const label = wrap.querySelector(".jaw-preview-survey-loading-label");
+  const bar = wrap.querySelector(".jaw-preview-survey-loading-bar");
+  if (label) label.textContent = `UPLOADING… ${clamped}%`;
+  if (bar) bar.style.width = `${clamped}%`;
 }
 
 

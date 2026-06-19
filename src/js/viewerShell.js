@@ -167,7 +167,10 @@ function wireSidebarReturn() {
   if (!btn) return;
   btn.addEventListener("click", () => {
     if (window.opener && !window.opener.closed) {
+      // This viewer was opened in its own tab from the case list; close it on
+      // return so editor tabs don't pile up instead of leaving an orphan tab.
       window.opener.focus();
+      window.close();
     } else {
       const isGitHubPages = window.location.hostname.includes("github.io");
       const basePath = isGitHubPages ? "/.tmp-test-web" : "";

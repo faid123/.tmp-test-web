@@ -65,7 +65,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   let activeTarget = null;
   const uploadLimit = 2;
 
-  const formatToday = () => new Date().toISOString().slice(0, 10);
+  // Display today as dd/mm/yyyy to match the request-date <input>'s shown format.
+  const formatTodayDisplay = () => {
+    const d = new Date();
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    return `${dd}/${mm}/${d.getFullYear()}`;
+  };
+
+  // Format `today + days` as YYYY-MM-DD (for <input type="date"> values).
+  const formatTodayPlusDays = (days) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
 
   const showInlineView = () => {
     if (!formPane || !uploadPane || !pageEl) return;
@@ -75,7 +88,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       caseOwnerDisplay.textContent = loggedInUser?.username || "—";
     }
     if (caseCreateDateDisplay) {
-      caseCreateDateDisplay.textContent = formatToday();
+      caseCreateDateDisplay.textContent = formatTodayDisplay();
+    }
+    // Default the request date to 10 days out from the create date (today).
+    if (requestDateInput) {
+      requestDateInput.value = formatTodayPlusDays(10);
     }
     pageEl.classList.add("creating");
     document.body.classList.add("creating-case");

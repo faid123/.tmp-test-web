@@ -681,6 +681,53 @@ button.upload3d-row {
   color: var(--rose-800);
 }
 
+/* Inline upload progress shown in the SET SURVEY ANGLE slot while a freshly
+   picked jaw STL uploads. The `is-uploading-jaw` row class swaps the survey/
+   trash/upload controls for this bar until the upload settles. */
+.jaw-preview-survey-loading {
+  display: none;
+  grid-column: 4;
+  align-items: center;
+  gap: 10px;
+}
+
+.jaw-preview-row.is-uploading-jaw .jaw-preview-survey-loading {
+  display: flex;
+}
+
+.jaw-preview-row.is-uploading-jaw .jaw-preview-survey-btn,
+.jaw-preview-row.is-uploading-jaw .jaw-preview-delete-btn,
+.jaw-preview-row.is-uploading-jaw .jaw-preview-upload-btn {
+  display: none;
+}
+
+.jaw-preview-survey-loading-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--rose-700);
+  white-space: nowrap;
+}
+
+.jaw-preview-survey-loading-track {
+  flex: 1 1 auto;
+  max-width: 160px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--rose-050);
+  overflow: hidden;
+}
+
+/* Determinate fill — width is set inline by setJawRowUploadProgress(). */
+.jaw-preview-survey-loading-bar {
+  display: block;
+  width: 0%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--rose-500), var(--rose-700));
+  transition: width 160ms ease;
+}
+
 .jaw-preview-3d-mount {
   width: 100%;
   min-height: 0;

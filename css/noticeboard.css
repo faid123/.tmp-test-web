@@ -593,6 +593,43 @@
   display: inline-block;
 }
 
+/* No-mode selection overlay: a dashed outline around the picked element with a
+   trash button at its top-right. A DOM overlay (not drawn on canvas) so it
+   never bakes into the exported image. The box is click-through so the element
+   under it stays draggable; only the trash button captures clicks. */
+.ie-select-box {
+  position: absolute;
+  border: 1.5px dashed var(--rose-500);
+  border-radius: 4px;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 12;
+}
+.ie-select-box.is-hidden { display: none; }
+.ie-select-trash {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--rose-700);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  pointer-events: auto;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.ie-select-trash:hover {
+  background: var(--rose-100);
+  color: var(--rose-800);
+  border-color: var(--rose-500);
+}
+
 .instruction-editor-text-input {
   background: rgba(255, 255, 255, 0.95);
   border: 1px dashed var(--rose-500);
@@ -607,33 +644,6 @@
   /* Resize handle is drawn at the bottom-right by `resize: both`; the dashed
      border + light background acts as the visible "text box" the user drags. */
   line-height: 1.1;
-}
-
-.instruction-editor-text-remove {
-  position: absolute;
-  top: -10px;
-  right: -10px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1px solid #b48daa;
-  background: #fff;
-  color: #b48daa;
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  z-index: 11;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-}
-.instruction-editor-text-remove:hover {
-  background: #fee2e2;
-  color: #b91c1c;
-  border-color: #ef4444;
 }
 
 /* Empty-box placeholder so the user knows to type before resizing */
@@ -893,8 +903,8 @@
   transform: translateX(-50%);
   display: flex;
   gap: 12px;
-  padding: 8px 12px;
-  background: #fff;
+  padding: 1px 12px;
+  background: transparent;
   border-radius: 999px;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.14);
   z-index: 3;
@@ -916,8 +926,8 @@
 .ie-tool-btn.is-active { background: var(--rose-500); }
 .ie-tool-btn svg { width: 22px; height: 22px; }
 .ie-tool-icon {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   object-fit: contain;
   display: block;
 }

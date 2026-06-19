@@ -1206,6 +1206,18 @@ function bindBackNavigationDialog(locks) {
     modal.setAttribute("aria-hidden", "true");
   };
 
+  // Return to the case list. When this editor was opened in its own tab from the
+  // case list (window.opener present), close the tab instead of navigating so
+  // editor tabs don't pile up; otherwise fall back to in-tab navigation.
+  const returnToCaseList = () => {
+    if (window.opener && !window.opener.closed) {
+      window.opener.focus();
+      window.close();
+    } else {
+      window.location.href = targetHref;
+    }
+  };
+
   const openModal = () => {
     modal.classList.remove("is-hidden");
     modal.setAttribute("aria-hidden", "false");
@@ -1228,7 +1240,7 @@ function bindBackNavigationDialog(locks) {
 
   cancelBtn.addEventListener("click", closeModal);
   backBtn.addEventListener("click", () => {
-    window.location.href = targetHref;
+    returnToCaseList();
   });
   // Persist the current annotation locally + upload the jaw thumbnail. The
   // boolean indicates whether the save part succeeded; thumbnail failures
@@ -1268,7 +1280,7 @@ function bindBackNavigationDialog(locks) {
     if (posted) flashToast("Saved successfully", "success");
     else if (saved) flashToast("Saved locally; server save failed — see console.", "warning");
     else flashToast("Could not save. Going back anyway.", "warning");
-    window.location.href = targetHref;
+    returnToCaseList();
   });
 
   modal.addEventListener("click", (event) => {

@@ -563,7 +563,8 @@ button {
   background: var(--panel);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
-  flex-wrap: wrap;
+  /* Desktop: keep every control on one line. Tablet (≤860) re-enables wrap. */
+  flex-wrap: nowrap;
 }
 
 .cm-chip {
@@ -701,8 +702,6 @@ button {
   transition: background 0.15s ease;
 }
 .cm-icon-btn:hover { background: var(--line-soft); }
-
-.cm-toolbar .cm-btn-primary { margin-left: auto; }
 
 /* ============ case table ============ */
 .cm-table-wrap {
@@ -1257,8 +1256,7 @@ button {
   .cm-page { grid-template-columns: 1fr; }
   .cm-main { padding: 20px 18px 14px; gap: 14px; }
   .cm-titles h1 { font-size: 22px; }
-  .cm-toolbar { padding: 8px; gap: 8px; }
-  .cm-toolbar .cm-btn-primary { margin-left: 0; }
+  .cm-toolbar { padding: 8px; gap: 8px; flex-wrap: wrap; }
   .cm-detail {
     position: fixed;
     inset: 0;
@@ -1293,7 +1291,7 @@ button {
   .cm-detail { padding: 18px 14px 22px; }
 
   /* Toolbar as a 2-column grid pairs the six items into three even rows:
-     All Cases | Search by Date, Filter by Status | Sort by, Create New | Refresh.
+     All Cases | Search by Date, Filter by Status | Sort by, Refresh | Create New.
      min-width: 0 + ellipsis lets the inner selects/inputs shrink to the cell
      width rather than overflowing. */
   .cm-toolbar {
