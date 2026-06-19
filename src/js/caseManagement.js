@@ -770,6 +770,19 @@ function displayCaseDetails(data) {
     view3dLink.href = url;
     const textEl = view3dLink.querySelector(".cm-3d-link-text");
     if (textEl) textEl.textContent = url;
+    // Open the viewer via window.open (not the anchor's default target=_blank,
+    // which carries rel="noopener" → a null opener and a non-closeable tab).
+    // window.open keeps the opener back-reference and makes the tab
+    // script-closeable, so the viewer's Return button can window.close() it.
+    if (!view3dLink.dataset.scriptOpenBound) {
+      view3dLink.dataset.scriptOpenBound = "1";
+      view3dLink.addEventListener("click", (e) => {
+        const href = view3dLink.getAttribute("href");
+        if (!href || href === "#") return;
+        e.preventDefault();
+        window.open(href, "_blank");
+      });
+    }
   }
 
   const displayName = data.case_id
