@@ -3376,11 +3376,15 @@ btnContainer.appendChild(edit2DStatic); */
     controls.rotateSpeed = 4.0;
     orb_controls.zoomSpeed = 2;
     orb_controls.enableRotate = false;
-    orb_controls.enabelePan = true;
+    // Lock the jaw at the centre: disable panning on BOTH controls so the right
+    // mouse button can't drag the model off-centre. TrackballControls pans via
+    // noPan; OrbitControls pans on right-click unless enablePan is false (the
+    // previous `enabelePan` was a typo, so Orbit panning was never disabled).
+    orb_controls.enablePan = false;
 
     controls.panSpeed = 30;
     controls.noZoom = true;
-    controls.noPan = false;
+    controls.noPan = true;
     controls.staticMoving = true;
     controls.dynamicDampingFactor = 0.3;
 
