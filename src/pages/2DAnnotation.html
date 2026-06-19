@@ -14,6 +14,20 @@
     rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
   />
+  <!-- The import map MUST be parsed before any modulepreload/module that relies
+       on it. The addons (TrackballControls/STLLoader) do a bare `import ... from
+       "three"`; if the modulepreload below resolves its dependency graph before
+       this map is seen, the bare specifier fails ("Failed to resolve module
+       specifier three") — an intermittent race that only shows under network
+       latency. Keeping it first in <head> guarantees the mapping is registered. -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+      }
+    }
+  </script>
   <!-- Start the three.js CDN download on HTML parse so it overlaps everything
        else, instead of only beginning deep in the load chain (module import →
        loadPreviewImage → ensureThreeDeps). Same versions/URLs the 3D preview
@@ -814,14 +828,6 @@
     </nav>
   </aside>
 
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
-      }
-    }
-  </script>
   <!-- Case chat (notes) — slide-in side panel toggled by the footer chat button -->
   <div id="chat-widget" class="chat-sidebar is-hidden" aria-hidden="true">
     <div class="chat-sidebar-backdrop" data-chat-close></div>
