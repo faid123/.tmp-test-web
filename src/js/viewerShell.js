@@ -157,9 +157,18 @@ function mountViewerPopupsIntoScene() {
     viewerMain.appendChild(appSidebar);
   }
 
-  if (chatWidget && chatWidget.parentElement !== viewerMain) {
-    viewerMain.appendChild(chatWidget);
-  }
+  // Chat stays at viewer-shell level so position:fixed (from chat.css) covers
+  // the full viewport — same as 2D annotation. Moving it into viewer-main would
+  // clip it to the viewer-main area and push it below any top inset.
+}
+
+function wireSidebarVersionHistory() {
+  const btn = document.getElementById("sidebarVersionHistoryBtn");
+  if (!btn) return;
+  btn.addEventListener("click", async () => {
+    const { openVersionHistory } = await import("./versionHistory.js");
+    openVersionHistory();
+  });
 }
 
 function wireSidebarReturn() {
@@ -182,6 +191,7 @@ document.addEventListener("DOMContentLoaded", () => {
   populateCaseName();
   wireChatButton();
   wireRightNavButton();
+  wireSidebarVersionHistory();
   wireSidebarReturn();
   setupAppSidebar({
     triggerId: "footerMenuBtn",

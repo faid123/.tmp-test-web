@@ -3264,65 +3264,6 @@ function attachPolylineDragHandlers(domElement) {
   });
 }
 
-function setupChatToggle() {
-  const chatWidget = document.getElementById("chat-widget");
-  const chatIcon = document.getElementById("chat-icon");
-  if (!chatWidget || !chatIcon || chatIcon.dataset.viewerChatBound === "true") {
-    return;
-  }
-
-  chatIcon.dataset.viewerChatBound = "true";
-  const isMobile =
-    /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent
-    );
-
-  let hideChatButton = document.getElementById("hide-chat-button");
-  if (!hideChatButton) {
-    hideChatButton = document.createElement("button");
-    hideChatButton.id = "hide-chat-button";
-    hideChatButton.type = "button";
-    hideChatButton.textContent = "Hide Chat";
-    hideChatButton.style.alignSelf = "flex-end";
-    hideChatButton.style.marginBottom = "8px";
-    hideChatButton.style.border = "none";
-    hideChatButton.style.borderRadius = "6px";
-    hideChatButton.style.background = "#1d4ed8";
-    hideChatButton.style.color = "white";
-    hideChatButton.style.padding = "6px 10px";
-    hideChatButton.style.fontSize = "12px";
-    hideChatButton.style.cursor = "pointer";
-    chatWidget.prepend(hideChatButton);
-  }
-
-  chatIcon.style.display = "block";
-  chatIcon.style.position = "static";
-  chatIcon.style.width = "56px";
-  chatIcon.style.height = "56px";
-  chatIcon.style.zIndex = "1003";
-  chatIcon.style.alignSelf = "center";
-  getViewerMetaBar().appendChild(chatIcon);
-
-  chatWidget.classList.remove("active");
-  chatWidget.style.display = "none";
-  chatWidget.style.zIndex = "1003";
-  chatIcon.style.display = "block";
-
-  chatIcon.addEventListener("click", (event) => {
-    event.stopPropagation();
-    const isOpen = chatWidget.style.display === "flex";
-    chatWidget.classList.toggle("active", !isOpen);
-    chatWidget.style.display = isOpen ? "none" : "flex";
-    chatIcon.style.display = isOpen ? "block" : "none";
-  });
-
-  hideChatButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    chatWidget.classList.remove("active");
-    chatWidget.style.display = "none";
-    chatIcon.style.display = "block";
-  });
-}
 
 function createViewerLoadingScreen() {
   if (document.getElementById("viewer-loading-screen")) return;
@@ -3796,41 +3737,6 @@ btnContainer.appendChild(edit2DStatic); */
             // 插入按钮
             btnContainer2D.appendChild(annotateBtn);
 
-            // const historyBtn = document.createElement('button');
-            // historyBtn.className = 'smart-btn history';
-            // historyBtn.textContent = 'History';
-            // historyBtn.addEventListener('click', (e) => e.stopPropagation()); // 防止冒泡
-            // // 逻辑在别的文件里绑定
-            // btnContainer2D.appendChild(historyBtn);
-            const historyBtn = document.createElement("button");
-            historyBtn.className = "smart-btn history";
-            historyBtn.setAttribute("aria-label", "History");
-            historyBtn.title = "History";
-            historyBtn.innerHTML = `<img src="${basePath}/assets/Icon_history.png" alt="History">`;
-
-            historyBtn.addEventListener("click", (e) => {
-              e.stopPropagation();
-
-              const params = new URLSearchParams(window.location.search);
-              const encryptedId = params.get("id");
-
-              if (!encryptedId) {
-                alert("❌ 缺少参数，无法跳转 History 页面");
-                return;
-              }
-
-              const isGitHubPages =
-                window.location.hostname.includes("github.io");
-              // const isLocal = window.location.hostname === "localhost";
-              const queryConnector = "?";
-              const basePath = isGitHubPages ? "/.tmp-test-web" : "";
-
-              const targetURL = `${window.location.origin}${basePath}/src/pages/AnnotationHistory.html${queryConnector}id=${encryptedId}`;
-              console.log("🔁 正在跳转到 History 页:", targetURL);
-              window.open(targetURL, "_blank");
-            });
-
-            btnContainer2D.appendChild(historyBtn);
 
             twodGroup.appendChild(btnContainer2D);
             overlay.appendChild(twodGroup);
@@ -5847,7 +5753,7 @@ btnContainer.appendChild(edit2DStatic); */
       caseIntID: paramValue,
     };
 
-    // 🧹 Clear previous meshes
+    // Clear all scene content: jaw meshes, polylines, and artificial teeth.
     while (parentObject.children.length > 0) {
       const child = parentObject.children[0];
       parentObject.remove(child);
@@ -5855,6 +5761,7 @@ btnContainer.appendChild(edit2DStatic); */
       if (child.material) child.material.dispose();
     }
     clearPolylineOverlay();
+    artificialTeethRenderer.clear();
 
     // Remove previous GUI controls if any
     const oldGui = document.querySelector(".dg.ac");
@@ -5966,26 +5873,15 @@ btnContainer.appendChild(edit2DStatic); */
             : "Upper Arch",
         };
 
-        // 👇 Match logic like close.off for centering and rotation
-        /*  mesh.geometry.computeBoundingBox();
-            const center = new THREE.Vector3();
-            mesh.geometry.boundingBox.getCenter(center);
-            mesh.geometry.translate(-center.x, -center.y, -center.z); */
-
-        // 🟢 Default origin and slight shift like upper jaw logic
-        //mesh.position.set(0, 5, 0);
-        //mesh.rotation.set(THREE.MathUtils.degToRad(1), THREE.MathUtils.degToRad(1), THREE.MathUtils.degToRad(180));
-        /* 			mesh.position.set(0, 0, 0);      // Reset position
-			mesh.rotation.set(0, 0, 0);      // Reset rotation
-			mesh.scale.set(1, 1, 1);         // Reset scale */
+        // Apply the same transform as the original OFF upper jaw so slot STLs
+        // land in the same orientation. Lower jaw is already axis-aligned.
+        if (!isLower) {
+          changeMeshRotation(mesh, 1, 1, 180);
+          mesh.position.y += 5;
+        }
 
         enforceOpaqueJawMesh(mesh);
         parentObject.add(mesh);
-        updateViewerRotationOrigin();
-        syncPolylineFocusMode();
-
-        controls.update();
-        //render();
 
         console.log(`✅ Loaded STL from slot ${slot}`);
         anyLoaded = true;
@@ -5993,6 +5889,14 @@ btnContainer.appendChild(edit2DStatic); */
         console.warn(`⚠️ Slot ${slot} failed:`, error.message || error);
       }
     }
+
+    // Recalculate orbit target and sync polyline focus once, after all slots loaded.
+    if (anyLoaded) {
+      updateViewerRotationOrigin();
+      syncPolylineFocusMode();
+      controls.update();
+    }
+
     endViewerLoadTimer("viewer: framework/denture mesh loading");
     addViewerLoadTiming(
       "framework/denture mesh loading",
@@ -6154,6 +6058,26 @@ btnContainer.appendChild(edit2DStatic); */
   updateViewerRotationOrigin();
   //console.log(all_mesh_mat);
 
+  // Show "No STL/3D Scan File Found!" when the API returned no jaw mesh data.
+  const hasJawFiles = responseDatas.some(
+    (f) => f.filename && !f.filename.includes("surface")
+  );
+  if (!hasJawFiles) {
+    const noScanOverlay = document.createElement("div");
+    noScanOverlay.id = "no-scan-overlay";
+    noScanOverlay.style.cssText =
+      "position:absolute;inset:0;display:flex;align-items:center;" +
+      "justify-content:center;z-index:100;pointer-events:none;";
+    const noScanMsg = document.createElement("div");
+    noScanMsg.style.cssText =
+      "background:rgba(0,0,0,0.65);color:#fff;font-family:Arial,sans-serif;" +
+      "font-size:18px;font-weight:600;padding:24px 36px;border-radius:12px;" +
+      "letter-spacing:0.3px;text-align:center;";
+    noScanMsg.textContent = "No STL/3D Scan File Found!";
+    noScanOverlay.appendChild(noScanMsg);
+    (viewerContainer || document.body).appendChild(noScanOverlay);
+  }
+
   function changeMeshRotation(mesh, x, y, z) {
     mesh.rotation.set(
       THREE.MathUtils.degToRad(x),
@@ -6294,9 +6218,16 @@ btnContainer.appendChild(edit2DStatic); */
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
-    anchorViewerRotationTarget(controls);
-    if (!isViewerLeftButtonRotating) {
-      clampViewerControlTarget(controls);
+    // Hard position lock: snap orbit target back to jaw centre every frame.
+    // Rotation and zoom still work; panning is fully suppressed.
+    if (hasViewerRotationOrigin && controls?.target) {
+      const _snapDelta = viewerRotationOrigin.clone().sub(controls.target);
+      if (_snapDelta.lengthSq() > 1e-10) {
+        controls.target.copy(viewerRotationOrigin);
+        camera.position.add(_snapDelta);
+        if (orb_controls?.target) orb_controls.target.copy(viewerRotationOrigin);
+        camera.updateProjectionMatrix();
+      }
     }
     artificialTeethRenderer.syncToJawMeshes();
 
@@ -6330,7 +6261,6 @@ btnContainer.appendChild(edit2DStatic); */
   });
   createPresetViewControls();
   createHamburgerButton();
-  setupChatToggle();
   //console.log(camera)
 
   // Start the 3D rendering
@@ -6579,36 +6509,14 @@ window.addEventListener("load", () => {
                 popupImg.style.width = "auto";
                 popupImg.style.height = "auto";
 
-                // ✅ 隐藏 chatbox 和 icon
+                // Close the chat sidebar if it's open during image zoom
                 const chatWidget = document.getElementById("chat-widget");
-                const chatIcon = document.getElementById("chat-icon");
-                if (chatWidget) chatWidget.style.display = "none";
-                if (chatIcon) chatIcon.style.display = "none";
+                if (chatWidget && chatWidget.classList.contains("is-open")) {
+                  chatWidget.classList.remove("is-open");
+                  setTimeout(() => chatWidget.classList.add("is-hidden"), 220);
+                }
 
-                // ✅ 点击浮层退出，并根据设备恢复
-                div.addEventListener(
-                  "click",
-                  () => {
-                    div.remove();
-
-                    const isMobile =
-                      /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-                        navigator.userAgent
-                      );
-
-                    if (chatWidget && chatIcon) {
-                      if (isMobile) {
-                        chatWidget.classList.remove("active");
-                        chatWidget.style.display = "none";
-                        chatIcon.style.display = "block";
-                      } else {
-                        chatWidget.style.display = "flex";
-                        chatIcon.style.display = "none";
-                      }
-                    }
-                  },
-                  { once: true }
-                );
+                div.addEventListener("click", () => div.remove(), { once: true });
 
                 break;
               }

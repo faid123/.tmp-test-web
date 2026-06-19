@@ -768,8 +768,6 @@ function displayCaseDetails(data) {
   if (view3dLink) {
     const url = buildThreeDViewerUrl(caseIntId) || "#";
     view3dLink.href = url;
-    const textEl = view3dLink.querySelector(".cm-3d-link-text");
-    if (textEl) textEl.textContent = url;
   }
 
   const displayName = data.case_id
@@ -1345,6 +1343,17 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
 
       const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}`;
       window.open(targetURL, "_blank");
+    });
+  }
+
+  // Open 3D viewer link — guard against clicking when no case is selected.
+  const view3dLink = document.getElementById("view3dLink");
+  if (view3dLink) {
+    view3dLink.addEventListener("click", (e) => {
+      if (!window.selectedCaseId) {
+        e.preventDefault();
+        toast.warning("Please select a case first.");
+      }
     });
   }
 

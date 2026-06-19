@@ -4,23 +4,11 @@ import { logApi } from "./apiLog.js";
 
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
-// ---------- Utils ----------
 function getLoggedInUser() {
   try {
     const s = localStorage.getItem("loggedInUser");
     return s ? JSON.parse(s) : null;
   } catch { return null; }
-}
-
-function getActiveCaseId() {
-  // Case management: selected row or explicit window value
-  if (window.selectedCaseId) return window.selectedCaseId;
-  const tr = document.querySelector(".table-body-wrapper .case-table tbody tr.active");
-  const id = tr?.dataset?.caseId;
-  if (id) return Number(id);
-  // Viewer pages: decrypt from URL ?id=
-  const enc = new URLSearchParams(window.location.search).get("id");
-  return enc ? lol(enc) : null;
 }
 
 function initialsFrom(name = "") {
@@ -56,7 +44,6 @@ const TYPE_ICON = {
   other:    `<svg ${ICON_STYLE}><circle cx="12" cy="12" r="3"/></svg>`
 };
 
-// ---------- Fetch helpers ----------
 async function fetchUserIndexForCase(caseIntID, uuid) {
   try {
     const res = await fetch("https://live.api.smartrpdai.com/api/smartrpd/role/all/get", {
@@ -100,7 +87,6 @@ async function fetchCaseHistory(caseIntID, uuid) {
   return Array.isArray(data) ? data : [];
 }
 
-// ---------- Render ----------
 function resolveActor(userIndex, rawUserId) {
   if (rawUserId === null || rawUserId === undefined || rawUserId === "") {
     return { name: "Unknown", initials: "?" };
@@ -114,7 +100,7 @@ function resolveActor(userIndex, rawUserId) {
   return { name: String(rawUserId), initials: initialsFrom(String(rawUserId)) };
 }
 
-function renderVersionList(items, userIndex) {
+function renderList(items, userIndex) {
   const listEl = document.getElementById("versionList");
   if (!listEl) return;
 
@@ -137,9 +123,9 @@ function renderVersionList(items, userIndex) {
   }
 
   listEl.innerHTML = items.map(it => {
-    const key    = actionToKey(it.action || "");
-    const icon   = TYPE_ICON[key] || TYPE_ICON.other;
-    const actor  = resolveActor(userIndex, it.user_id);
+    const key   = actionToKey(it.action || "");
+    const icon  = TYPE_ICON[key] || TYPE_ICON.other;
+    const actor = resolveActor(userIndex, it.user_id);
     const timeTx = formatMs(it.datetime);
 
     return `
@@ -164,90 +150,50 @@ function renderVersionList(items, userIndex) {
   }).join("");
 }
 
-// ---------- Modal ----------
-function openModal() {
-  const m = document.getElementById("versionHistoryModal");
-  m?.classList.remove("hidden"); m?.classList.add("show");
-}
-
-function closeModal() {
-  const m = document.getElementById("versionHistoryModal");
-  m?.classList.remove("show"); m?.classList.add("hidden");
-}
-
-// ---------- Public: open + fetch ----------
-export async function openVersionHistory() {
-  const caseId = getActiveCaseId();
-  const user   = getLoggedInUser();
+function showState(label, sub) {
   const listEl = document.getElementById("versionList");
+  if (!listEl) return;
+  listEl.innerHTML = `<li class="vh-item">
+    <div class="vh-row">
+      <div class="vh-op">…</div>
+      <div class="vh-col">
+        <div class="vh-line1"><span class="vh-op-label">${label}</span></div>
+        <div class="vh-line2">
+          <span class="vh-user"><span class="vh-user-name">${sub}</span></span>
+          <time class="vh-timestamp">—</time>
+        </div>
+      </div>
+    </div>
+  </li>`;
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  const params = new URLSearchParams(window.location.search);
+  const encryptedId = params.get("id");
+  const caseId = encryptedId ? lol(encryptedId) : null;
+  const user   = getLoggedInUser();
+
+  document.getElementById("backBtn")?.addEventListener("click", () => history.back());
 
   if (!caseId || !user?.uuid) {
-    toast.warning("Please select a case first.");
+    toast.warning("No case selected. Please go back and select a case.");
+    showState("No case selected", "Return to case list and try again");
     return;
   }
 
-  if (listEl) {
-    listEl.innerHTML = `<li class="vh-item">
-      <div class="vh-row">
-        <div class="vh-op">…</div>
-        <div class="vh-col">
-          <div class="vh-line1"><span class="vh-op-label">Loading…</span></div>
-          <div class="vh-line2">
-            <span class="vh-user"><span class="vh-user-name">Please wait</span></span>
-            <time class="vh-timestamp">—</time>
-          </div>
-        </div>
-      </div>
-    </li>`;
-  }
-  openModal();
+  const caseLabel = document.getElementById("caseLabel");
+  if (caseLabel) caseLabel.textContent = `Case #${caseId}`;
+
+  showState("Loading…", "Please wait");
 
   try {
     const [hist, userIndex] = await Promise.all([
       fetchCaseHistory(caseId, user.uuid),
       fetchUserIndexForCase(caseId, user.uuid)
     ]);
-    renderVersionList(hist, userIndex);
+    renderList(hist, userIndex);
   } catch (e) {
-    console.error("❌ Version history error:", e);
-    if (listEl) {
-      listEl.innerHTML = `<li class="vh-item">
-        <div class="vh-row">
-          <div class="vh-op">!</div>
-          <div class="vh-col">
-            <div class="vh-line1"><span class="vh-op-label">Failed to load history</span></div>
-            <div class="vh-line2">
-              <span class="vh-user"><span class="vh-user-name">Try again later</span></span>
-              <time class="vh-timestamp">—</time>
-            </div>
-          </div>
-        </div>
-      </li>`;
-    }
+    console.error("Version history error:", e);
+    showState("Failed to load history", "Try again later");
   }
-}
-
-// ---------- Bind ----------
-document.addEventListener("DOMContentLoaded", () => {
-  const modal    = document.getElementById("versionHistoryModal");
-  const closeBtn = document.getElementById("closeVersionModal");
-
-  // Modal close gestures — work on all pages that carry the modal HTML
-  if (modal) {
-    closeBtn?.addEventListener("click", closeModal);
-    modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
-    document.addEventListener("keydown", e => {
-      if (e.key === "Escape" && modal.classList.contains("show")) closeModal();
-    });
-  }
-
-  // Trigger button — case management only
-  const btn    = document.getElementById("viewVersionBtn");
-  const listEl = document.getElementById("versionList");
-  if (!btn || !listEl) return;
-
-  btn.addEventListener("click", async () => {
-    document.getElementById("caseDropdown")?.classList.add("hidden");
-    await openVersionHistory();
-  });
 });
