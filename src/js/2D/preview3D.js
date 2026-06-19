@@ -1284,7 +1284,10 @@ function init3DPreview(area) {
   controls.panSpeed = 0.8;
   controls.noRotate = false;
   controls.noZoom = false;
-  controls.noPan = false;
+  // Lock the jaw at the centre: disable panning so the right mouse button can't
+  // drag the model off-centre. Rotation (left) and zoom (wheel/middle) stay on;
+  // the target is pinned to the model centre by the framing code below.
+  controls.noPan = true;
   controls.staticMoving = false;
   controls.dynamicDampingFactor = 0.18;
   controls.minDistance = 35;
