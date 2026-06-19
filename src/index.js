@@ -730,7 +730,12 @@ function bindViewerRotationTargetAnchor(domElement) {
     }
   };
 
+  // Jaw is locked at the centre: panning is disabled so the right mouse button
+  // (and middle / shift-drag / two-finger touch pan) can't drag the model
+  // off-centre. Rotation (left-drag) and zoom (wheel / pinch) stay active.
+  const VIEWER_PAN_LOCKED = true;
   const panViewerTargetByScreenDelta = (deltaX, deltaY) => {
+    if (VIEWER_PAN_LOCKED) return;
     if (!camera || !controls?.target) return;
     const right = new THREE.Vector3();
     const up = new THREE.Vector3();
