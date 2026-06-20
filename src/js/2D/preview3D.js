@@ -1,7 +1,7 @@
 import { state, setMessage, fetchCaseDetail } from "./2DAnnotation.js";
-import { addViewcaptureFromImage } from "./noticeboard.js";
 import { saveAsJpeg } from "./annotationLocks.js";
 import { confirmModal } from "../confirmModal.js";
+import { toast } from "../toast.js";
 
 let THREE = null;
 let TrackballControls = null;
@@ -239,11 +239,14 @@ function getLoggedInUser() {
 // slot based on which jaw is currently visible. POST /thumbnails upserts by
 // (case_int_id, slot), so the upper slot keeps only the latest upper capture
 // and the lower slot keeps only the latest lower capture — they don't stomp
-// each other. Best-effort: failure here doesn't block the noticeboard save.
+// each other. Best-effort: failure here is surfaced but non-blocking.
 async function uploadLatest3DCapture(dataUrl) {
   const caseIntID = state.caseIntID;
   const user = getLoggedInUser();
-  if (!caseIntID || !user?.uuid || !dataUrl) return;
+  if (!caseIntID || !user?.uuid || !dataUrl) {
+    toast.error("Screen capture failed — please reload and try again.");
+    return;
+  }
 
   // Visibility is the user's intent: hidden jaws aren't in the captured pixels,
   // so writing the capture into their slot would replace a good render with a
@@ -253,7 +256,10 @@ async function uploadLatest3DCapture(dataUrl) {
   const slots = [];
   if (upperVisible) slots.push(JAW_UPPER_THUMBNAIL_SLOT);
   if (lowerVisible) slots.push(JAW_LOWER_THUMBNAIL_SLOT);
-  if (!slots.length) return;
+  if (!slots.length) {
+    toast.warning("No jaw is visible to capture.");
+    return;
+  }
 
   const commaIdx = dataUrl.indexOf(",");
   const base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
@@ -279,16 +285,16 @@ async function uploadLatest3DCapture(dataUrl) {
   const failed = results.filter((r) => !r.ok);
   if (failed.length) {
     console.error("[preview3D] failed thumbnail slots:", failed);
-    setMessage(
-      `3D capture saved to noticeboard, but case thumbnail update failed for slot${failed.length > 1 ? "s" : ""} ${failed.map((r) => r.slot).join(", ")}.`,
-      true
-    );
+    const msg = `Case thumbnail update failed for slot${failed.length > 1 ? "s" : ""} ${failed.map((r) => r.slot).join(", ")}.`;
+    setMessage(msg, true);
+    toast.error(msg);
     return;
   }
   const labels = slots
     .map((s) => (s === JAW_UPPER_THUMBNAIL_SLOT ? "upper" : "lower"))
     .join(" + ");
-  setMessage(`3D capture saved (noticeboard + ${labels} thumbnail).`, false);
+  setMessage(`${labels} thumbnail updated.`, false);
+  toast.success(`Screen capture saved to ${labels} thumbnail.`);
 }
 
 // Capture a single jaw on its own and upsert it into that jaw's case-thumbnail
@@ -825,9 +831,10 @@ async function renderJawStl(jaw, file) {
   fitPreviewCamera();
 }
 
-// ---- Upload modal --------------------------------------------------------
-
-// Lazily build the modal once; cache element refs on preview3DState.
+// ---- Upload popover ------------------------------------------------------
+// The footer "Upload other 3D files" icon opens this as a drop-up popover
+// anchored to the icon (not a centered modal). Lazily built once; element refs
+// cached on preview3DState.
 function ensureUpload3dModal() {
   if (preview3DState.upload3dModal) return preview3DState.upload3dModal;
 
@@ -905,7 +912,7 @@ function ensureUpload3dModal() {
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
 
-  preview3DState.upload3dModal = { overlay, list, uploadBtn, fileInput, progress, progressFill, progressLabel };
+  preview3DState.upload3dModal = { overlay, panel, list, uploadBtn, fileInput, progress, progressFill, progressLabel };
   return preview3DState.upload3dModal;
 }
 
@@ -914,12 +921,39 @@ function openUpload3dModal() {
   renderUpload3dList();
   modal.overlay.classList.remove("is-hidden");
   modal.overlay.setAttribute("aria-hidden", "false");
+  positionUpload3dPanel();
   if (!preview3DState.upload3dKeyHandler) {
     preview3DState.upload3dKeyHandler = (e) => {
       if (e.key === "Escape") closeUpload3dModal();
     };
     document.addEventListener("keydown", preview3DState.upload3dKeyHandler);
   }
+  // Keep the popover glued to the icon if the window resizes while it's open.
+  if (!preview3DState.upload3dRepositionHandler) {
+    preview3DState.upload3dRepositionHandler = () => positionUpload3dPanel();
+    window.addEventListener("resize", preview3DState.upload3dRepositionHandler);
+  }
+}
+
+// Anchor the popover so it emerges upward from the footer "Upload other 3D
+// files" icon (drop-up), left-aligned to the icon and clamped to the viewport.
+function positionUpload3dPanel() {
+  const modal = preview3DState.upload3dModal;
+  if (!modal) return;
+  const anchor = document.getElementById("footerUpload3dBtn");
+  if (!anchor) return;
+  const r = anchor.getBoundingClientRect();
+  const gap = 10;
+  const margin = 8;
+  const panel = modal.panel;
+  // bottom is measured from the viewport bottom, so this sits `gap` px above
+  // the icon's top edge.
+  panel.style.bottom = `${Math.round(window.innerHeight - r.top + gap)}px`;
+  const w = panel.offsetWidth || 340;
+  let left = r.left;
+  if (left + w > window.innerWidth - margin) left = window.innerWidth - margin - w;
+  if (left < margin) left = margin;
+  panel.style.left = `${Math.round(left)}px`;
 }
 
 function closeUpload3dModal() {
@@ -931,6 +965,10 @@ function closeUpload3dModal() {
   if (preview3DState.upload3dKeyHandler) {
     document.removeEventListener("keydown", preview3DState.upload3dKeyHandler);
     preview3DState.upload3dKeyHandler = null;
+  }
+  if (preview3DState.upload3dRepositionHandler) {
+    window.removeEventListener("resize", preview3DState.upload3dRepositionHandler);
+    preview3DState.upload3dRepositionHandler = null;
   }
 }
 
@@ -1128,17 +1166,48 @@ function renderUpload3dList() {
   modal.uploadBtn.classList.toggle("is-disabled", !hasFree);
 }
 
-// One populated file row: file icon w/ slot number, X delete, filename.
+// Toggle a SINGLE uploaded extra STL's visibility in the 3D view (clicking its
+// own file icon). Each slot has its own THREE.Group in extraGroups[slot], so
+// this only ever shows/hides that one file — never all of them. Mirrors the
+// jaw-row icon toggle: flip the group's `visible` flag (the render loop
+// repaints) and dim just this icon when hidden.
+function toggleExtraStlVisibility(slot, iconEl) {
+  const entry = preview3DState.extraGroups?.[slot];
+  if (!entry?.group) {
+    setMessage?.("That 3D file isn't loaded in the view.");
+    return;
+  }
+  entry.group.visible = !entry.group.visible;
+  iconEl?.classList.toggle("is-hidden-extra", !entry.group.visible);
+}
+
+// One populated file row: file icon w/ slot number (click to show/hide just
+// this file in the 3D view), X delete, filename.
 function buildUpload3dFileRow(slot, filename) {
   const row = document.createElement("div");
   row.className = "upload3d-row";
 
   const icon = document.createElement("span");
   icon.className = "upload3d-file-icon";
+  icon.setAttribute("role", "button");
+  icon.setAttribute("tabindex", "0");
+  icon.title = "Show / hide in 3D view";
+  icon.setAttribute("aria-label", `Show or hide ${filename} in the 3D view`);
   icon.innerHTML =
     '<i class="fa fa-file" aria-hidden="true"></i><span class="upload3d-file-badge">' +
     slot +
     "</span>";
+  // Reflect this slot's current visibility, then wire per-file toggling.
+  if (preview3DState.extraGroups?.[slot]?.group?.visible === false) {
+    icon.classList.add("is-hidden-extra");
+  }
+  icon.addEventListener("click", () => toggleExtraStlVisibility(slot, icon));
+  icon.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleExtraStlVisibility(slot, icon);
+    }
+  });
 
   const xBtn = document.createElement("button");
   xBtn.type = "button";
@@ -1544,13 +1613,13 @@ function init3DPreview(area) {
     try {
       renderer.render(scene, camera);
       const dataUrl = renderer.domElement.toDataURL("image/png");
-      // Noticeboard save (local cache) + case-thumbnail upload (server) run in
-      // parallel — both keyed off the same dataUrl, neither depends on the
-      // other completing first.
-      addViewcaptureFromImage(dataUrl);
+      // Footer capture is thumbnails-only: upsert the upper/lower case-thumbnail
+      // slots from this render. Adding to the noticeboard is now exclusively the
+      // noticeboard's own "Add Viewcapture" button.
       await uploadLatest3DCapture(dataUrl);
     } catch (err) {
       console.error("Failed to capture 3D preview screenshot:", err);
+      toast.error("Screen capture failed.");
     } finally {
       setTimeout(() => { preview3DState.capturing = false; }, 400);
     }
@@ -2166,7 +2235,10 @@ function fitPreviewCamera() {
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z, 1);
-  const fitDist = maxDim / (2 * Math.tan((camera.fov * Math.PI) / 360));
+  // Distance at which the model's largest dimension just fills the vertical FOV,
+  // padded out so the loaded jaws don't start uncomfortably close to the camera.
+  const FIT_PADDING = 1.5;
+  const fitDist = (maxDim / (2 * Math.tan((camera.fov * Math.PI) / 360))) * FIT_PADDING;
   camera.up.set(0, 1, 0);
   camera.position.set(center.x, center.y + fitDist * 0.35, center.z + fitDist * 1.25);
   controls.target.copy(center);

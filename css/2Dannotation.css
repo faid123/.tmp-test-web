@@ -109,6 +109,32 @@ body.is-panel-resizing {
   background: var(--rose-050);
 }
 
+/* Screen capture button, lower-left of the 3D preview panel. Mirrors the
+   maximize button (top-right) and is shown only once the 3D view is ready. */
+.preview-3d-capture-btn {
+  position: absolute;
+  left: 28px;
+  bottom: 28px;
+  z-index: 10;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  display: none;
+  place-items: center;
+  box-shadow: 0 1px 4px rgba(26, 77, 63, 0.08);
+}
+.preview-frame.is-3d-ready .preview-3d-capture-btn { display: grid; }
+.preview-3d-capture-btn:hover {
+  border-color: var(--rose-500);
+  color: var(--rose-700);
+  background: var(--rose-050);
+}
+
 .annotation-shell.preview-maximized {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -284,12 +310,13 @@ body.is-panel-resizing {
 }
 
 /* ===== Upload other 3D files modal ===== */
+/* Drop-up popover that emerges from the footer "Upload other 3D files" icon.
+   The overlay is just a positioning/click-catch layer; the panel is placed
+   next to the icon by positionUpload3dPanel() in preview3D.js. */
 .upload3d-modal {
   position: fixed;
   inset: 0;
   z-index: 4200;
-  display: grid;
-  place-items: center;
   pointer-events: none;
 }
 
@@ -297,27 +324,35 @@ body.is-panel-resizing {
   display: none;
 }
 
+/* Transparent full-screen catcher: a click anywhere outside the panel closes
+   the popover, but the screen isn't dimmed like a modal. */
 .upload3d-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  background: transparent;
   pointer-events: auto;
 }
 
 .upload3d-modal-panel {
-  position: relative;
+  position: absolute;
   z-index: 1;
-  width: min(520px, calc(100vw - 32px));
-  max-height: min(80vh, 640px);
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(60vh, 460px);
   display: flex;
   flex-direction: column;
   background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
-  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.22);
+  padding: 14px;
   pointer-events: auto;
+  transform-origin: bottom left;
+  animation: upload3d-emerge 0.14s ease-out;
+}
+
+@keyframes upload3d-emerge {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .upload3d-modal-header {
@@ -512,6 +547,15 @@ button.upload3d-row {
 .upload3d-file-icon.is-empty {
   color: #8b95a3;
 }
+
+/* The populated file icon is a per-file show/hide toggle for the 3D view. */
+.upload3d-file-icon[role="button"] {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+.upload3d-file-icon[role="button"]:hover { background: #eef1f4; }
+.upload3d-file-icon.is-hidden-extra { opacity: 0.35; }
 
 .upload3d-file-badge {
   position: absolute;

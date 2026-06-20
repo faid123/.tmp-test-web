@@ -1206,16 +1206,26 @@ function bindBackNavigationDialog(locks) {
     modal.setAttribute("aria-hidden", "true");
   };
 
-  // Return to the case list. When this editor was opened in its own tab from the
-  // case list (window.opener present), close the tab instead of navigating so
-  // editor tabs don't pile up; otherwise fall back to in-tab navigation.
+  // Return should always land on the MAIN case list. If this editor was opened
+  // directly from the case-list tab, hop back to it and close this one (so
+  // editor tabs don't pile up). Otherwise — a deeper chain of opened tabs (the
+  // opener is another editor, not the case list) or a direct load — navigate
+  // straight to the case list instead of focusing whatever opened this tab.
   const returnToCaseList = () => {
-    if (window.opener && !window.opener.closed) {
-      window.opener.focus();
-      window.close();
-    } else {
-      window.location.href = targetHref;
+    try {
+      if (
+        window.opener &&
+        !window.opener.closed &&
+        window.opener.location?.pathname?.includes("case_list")
+      ) {
+        window.opener.focus();
+        window.close();
+        return;
+      }
+    } catch (err) {
+      // Cross-context access to opener.location can throw; fall through to nav.
     }
+    window.location.href = targetHref;
   };
 
   const openModal = () => {
@@ -1296,6 +1306,11 @@ function bindBackNavigationDialog(locks) {
 
 function start() {
   if (ui.hasInitialized) return;
+  // This module graph (noticeboard → clinicalInfo → 2DAnnotation) is also
+  // imported by the case list to build the report for the bulk download. There,
+  // the annotation DOM isn't present, so the DOMContentLoaded auto-init must be
+  // a no-op — gate it on the annotation-page root element.
+  if (!document.querySelector(".annotation-shell")) return;
   ui.hasInitialized = true;
   initAnnFooter();
   init();
@@ -1339,7 +1354,8 @@ function initAnnFooter() {
     setupConnectivityIndicator(document.getElementById("footerConnection"));
   });
 
-  document.getElementById("footerScreenCaptureBtn")?.addEventListener("click", () => {
+  // Screen capture lives at the lower-left of the 3D preview panel.
+  document.getElementById("preview3dCaptureBtn")?.addEventListener("click", () => {
     window.dispatchEvent(new CustomEvent("request-3d-capture"));
   });
 

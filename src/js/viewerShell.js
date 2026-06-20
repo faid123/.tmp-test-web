@@ -174,17 +174,29 @@ function wireSidebarVersionHistory() {
 function wireSidebarReturn() {
   const btn = document.getElementById("sidebarReturnBtn");
   if (!btn) return;
+  const isGitHubPages = window.location.hostname.includes("github.io");
+  const basePath = isGitHubPages ? "/.tmp-test-web" : "";
+  const caseListUrl = `${basePath}/src/pages/case_list.html`;
   btn.addEventListener("click", () => {
-    if (window.opener && !window.opener.closed) {
-      // This viewer was opened in its own tab from the case list; close it on
-      // return so editor tabs don't pile up instead of leaving an orphan tab.
-      window.opener.focus();
-      window.close();
-    } else {
-      const isGitHubPages = window.location.hostname.includes("github.io");
-      const basePath = isGitHubPages ? "/.tmp-test-web" : "";
-      window.location.href = `${basePath}/src/pages/case_list.html`;
+    // Return should always land on the MAIN case list. If this viewer was opened
+    // directly from the case-list tab, hop back to it and close this one (so
+    // viewer tabs don't pile up). Otherwise — a deeper chain of opened tabs, or a
+    // direct load — navigate straight to the case list instead of focusing
+    // whatever opened this tab.
+    try {
+      if (
+        window.opener &&
+        !window.opener.closed &&
+        window.opener.location?.pathname?.includes("case_list")
+      ) {
+        window.opener.focus();
+        window.close();
+        return;
+      }
+    } catch (err) {
+      // Cross-context access to opener.location can throw; fall through to nav.
     }
+    window.location.href = caseListUrl;
   });
 }
 

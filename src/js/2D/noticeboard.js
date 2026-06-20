@@ -110,6 +110,64 @@ async function saveNoticeboardEdited(caseIntID, uuid, filenames, data) {
   return res.json().catch(() => null);
 }
 
+// Merge local filename/data arrays over a capture table's current server arrays:
+// local entries win by filename; server-only entries are preserved so a save
+// can't delete something another session or the desktop client wrote. Shared by
+// the editedview save and the per-bucket view/drawnview mirrors.
+function mergeCaptureArrays(localFilenames, localData, serverRow) {
+  const server = readEditedViewArrays(serverRow);
+  const filenames = [...localFilenames];
+  const data = [...localData];
+  const seen = new Set(filenames);
+  for (let i = 0; i < server.filenames.length; i += 1) {
+    const name = server.filenames[i];
+    if (!name || seen.has(name)) continue;
+    filenames.push(name);
+    data.push(server.data[i] || "");
+    seen.add(name);
+  }
+  return { filenames, data };
+}
+
+// Generic create POST for any noticeboard capture table (view / drawnview).
+// Columns are stored as plain JSON arrays (the web's own format); the read-back
+// path falls back to the desktop BinaryFormatter blob when JSON parsing fails,
+// so rows still round-trip. Throws on non-2xx so the caller can log + continue.
+async function postNoticeboardCapture(createPath, caseIntID, uuid, filenames, data) {
+  const payload = [
+    { machine_id: MACHINE_ID, uuid, caseIntID },
+    { case_id: caseIntID, filenames: JSON.stringify(filenames), data: JSON.stringify(data) },
+  ];
+  const res = await fetch(`${API_BASE}${createPath}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    let body = ""; try { body = await res.text(); } catch {}
+    throw new Error(`noticeboard ${createPath} save failed: ${res.status} ${body.slice(0, 120)}`);
+  }
+  return res.json().catch(() => null);
+}
+
+// Mirror one bucket into its dedicated capture table (3D → /view, 2D →
+// /drawnview) alongside the combined editedview blob. Fetch-merge-save so we
+// don't clobber rows the desktop client wrote there. Best-effort: editedview
+// stays the source of truth for read-back, so a mirror failure doesn't fail
+// the overall save.
+async function mirrorCaptureTable(createPath, getPath, caseIntID, uuid, filenames, data) {
+  try {
+    const existing = await postNoticeboardEndpoint(getPath, noticeboardPayload(caseIntID, uuid));
+    const merged = mergeCaptureArrays(filenames, data, normalizeApiRow(existing));
+    await postNoticeboardCapture(createPath, caseIntID, uuid, merged.filenames, merged.data);
+    console.log(`[noticeboard] ✓ mirrored ${merged.data.length} item(s) → ${createPath}`);
+    return true;
+  } catch (err) {
+    console.warn(`[noticeboard] mirror → ${createPath} failed`, err);
+    return false;
+  }
+}
+
 function coerceArray(value) {
   if (Array.isArray(value)) return value;
   if (typeof value === "string" && value.trim()) {
@@ -313,32 +371,30 @@ async function syncInstructionsToEditedView() {
     // were saved by another session or by the desktop client.
     const existing = await fetchNoticeboardEdited(state.caseIntID, user.uuid);
     const row = normalizeApiRow(existing);
-    const server = readEditedViewArrays(row);
 
     // 2) Serialize our local buckets (instructions + viewcaptures) with the
     // 2D_/3D_ prefix convention so they round-trip back into the right panel.
     const dataModel = ensureCache();
-    const local = serializeForEditedView(
-      dataModel.instructions || [],
-      dataModel.viewcaptures || []
-    );
+    const instructions = dataModel.instructions || [];
+    const viewcaptures = dataModel.viewcaptures || [];
+    const local = serializeForEditedView(instructions, viewcaptures);
 
-    // 3) Merge: local entries win (by filename); server-only entries are
-    // preserved so a save here can't delete something only the desktop client
-    // knows about.
-    const filenames = [...local.filenames];
-    const data = [...local.data];
-    const seen = new Set(filenames);
-    for (let i = 0; i < server.filenames.length; i += 1) {
-      const name = server.filenames[i];
-      if (!name || seen.has(name)) continue;
-      filenames.push(name);
-      data.push(server.data[i] || "");
-      seen.add(name);
-    }
+    // 3) Merge over the server's current editedview arrays (local wins by
+    // filename; server-only entries preserved) and 4) POST back to /editedview,
+    // which stays the source of truth for read-back.
+    const merged = mergeCaptureArrays(local.filenames, local.data, row);
+    await saveNoticeboardEdited(state.caseIntID, user.uuid, merged.filenames, merged.data);
 
-    // 4) POST the merged arrays back to /editedview.
-    await saveNoticeboardEdited(state.caseIntID, user.uuid, filenames, data);
+    // 5) Additionally mirror each bucket into its dedicated capture table:
+    // 3D viewcaptures → /noticeboard/view, 2D instructions → /noticeboard/drawnview.
+    // Best-effort, run in parallel; failures are logged but don't fail the save.
+    const vc = serializeForEditedView([], viewcaptures);
+    const inst = serializeForEditedView(instructions, []);
+    await Promise.all([
+      mirrorCaptureTable("/noticeboard/view", "/noticeboard/view/get", state.caseIntID, user.uuid, vc.filenames, vc.data),
+      mirrorCaptureTable("/noticeboard/drawnview", "/noticeboard/drawnview/get", state.caseIntID, user.uuid, inst.filenames, inst.data),
+    ]);
+
     setMessage("Noticeboard saved to server.", false);
     return true;
   } catch (err) {
@@ -743,24 +799,6 @@ function addViewcapture() {
   });
 }
 
-export function addViewcaptureFromImage(dataUrl) {
-  if (!dataUrl) {
-    setMessage("Capture failed: empty image.", true);
-    return false;
-  }
-  const data = ensureCache();
-  data.viewcaptures.push({
-    id: `vc_${Date.now()}`,
-    title: `Viewcapture ${data.viewcaptures.length + 1}`,
-    preview: dataUrl,
-    createdAt: new Date().toISOString(),
-  });
-  saveData(data);
-  renderGrids();
-  setMessage("3D screenshot added to noticeboard.", false);
-  return true;
-}
-
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (ch) => (
     { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
@@ -1074,16 +1112,54 @@ async function fetchCaseThumbnailSlots(caseIntID, caseIdStr) {
   }
 }
 
-async function generateReport() {
-  // Prefer the full "UID {id}:{name}" label rendered in the topbar so the
-  // report matches what the user sees on screen.
-  const topbarLabelEl = document.getElementById("caseLabel");
-  const topbarLabel = (topbarLabelEl?.textContent || "").replace(/^Case:\s*/i, "").trim();
-  const caseLabel = topbarLabel || (state.caseIntID ?? "Unknown");
+// Fetch a case's detail row by id (the report needs the case_id string + status
+// without relying on the live annotation page's cached fetch).
+async function fetchCaseDetailById(caseIntID) {
+  const user = getLoggedInUser();
+  if (!caseIntID || !user?.uuid) return null;
+  try {
+    const res = await fetch(`${API_BASE}/case/get/${caseIntID}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([{ machine_id: MACHINE_ID, uuid: user.uuid, caseIntID }]),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.warn("[noticeboard] case detail fetch failed", err);
+    return null;
+  }
+}
+
+// Pull the most recent 2D design (2D_* instruction) for a case straight from the
+// server editedview blob — used when building the report off the annotation page
+// (the case-list download), where the local noticeboard cache isn't populated.
+async function fetchTwoDPreviewSrc(caseIntID) {
+  const user = getLoggedInUser();
+  if (!caseIntID || !user?.uuid) return "";
+  try {
+    const row = normalizeApiRow(await fetchNoticeboardEdited(caseIntID, user.uuid));
+    const { instructions } = buildServerEntries(row);
+    return instructions.at(-1)?.preview || "";
+  } catch (err) {
+    console.warn("[noticeboard] 2D preview fetch failed", err);
+    return "";
+  }
+}
+
+// Build the full standalone report HTML for a case, gathering every input by
+// caseIntID so it also works off the live annotation page (e.g. the case-list
+// bulk download). Pass `twoDPreviewSrc` to reuse an already-loaded 2D design;
+// omit it and the last 2D instruction is fetched from the server editedview.
+// `autoPrint` appends the print-on-load script used by the noticeboard button.
+export async function buildReportHtml(
+  caseIntID,
+  { caseLabel, caseOwner, twoDPreviewSrc, autoPrint = false } = {}
+) {
   const assetBase = new URL("../../assets/clinicalInfo", window.location.href).href;
   const creationDate = new Date().toLocaleString("sv-SE").replace("T", " ").slice(0, 19);
-  const caseNote = loadCaseNote(state.caseIntID);
-  const ownerName = state.caseOwner || caseNote.caseOwner || "";
+  const caseNote = loadCaseNote(caseIntID);
+  const ownerName = caseOwner || caseNote.caseOwner || "";
   const workCategoryLabel =
     WORK_CATEGORY_LABELS[caseNote.workCategory] || caseNote.workCategory || "";
 
@@ -1092,35 +1168,42 @@ async function generateReport() {
   // The viewcaptures bucket is the separate "3D Design" column (3D screenshots),
   // so it is deliberately NOT used here: only genuine 2D designs belong in this
   // panel. Cases with no 2D design show the "No 2D design available" placeholder.
-  const boardData = ensureCache();
-  const lastInstruction = (boardData.instructions || []).at(-1);
-  const twoDPreviewSrc = lastInstruction?.preview || "";
+  let twoDSrc = twoDPreviewSrc;
+  if (twoDSrc == null) twoDSrc = await fetchTwoDPreviewSrc(caseIntID);
 
   // Case detail gives the string case id needed to look up the upper/lower 3D
   // jaw renders (thumbnail slots 1/2) and the status for the top-right badge.
-  const detail = await fetchCaseDetail();
+  const detail = await fetchCaseDetailById(caseIntID);
   const status = reportStatusBadge(detail?.new_status);
-  const caseIdStr = detail?.case_id ?? state.caseName ?? state.caseIntID;
+  const caseIdStr = detail?.case_id ?? caseLabel ?? caseIntID;
+  const label =
+    caseLabel ||
+    (detail?.id != null && detail?.case_id
+      ? `UID ${detail.id} : ${detail.case_id}`
+      : caseIdStr ?? "Unknown");
 
   // The 2D preview is exported at the editor's on-screen aspect ratio, which
   // letterboxes the design with wide white margins. Trim those so the design
   // itself — not the padding — fills its panel. The 3D jaw renders come from
   // the case thumbnail slots (1 = upper, 2 = lower).
   const [jaw2dSrc, jaws] = await Promise.all([
-    trimImageMargins(twoDPreviewSrc),
-    fetchCaseThumbnailSlots(state.caseIntID, caseIdStr),
+    trimImageMargins(twoDSrc),
+    fetchCaseThumbnailSlots(caseIntID, caseIdStr),
   ]);
   const jaw3dUpper = jaws.upper;
   const jaw3dLower = jaws.lower;
 
-  const notes = await getClinicalNotesForCase(state.caseIntID);
+  const notes = await getClinicalNotesForCase(caseIntID);
   const upperRow = buildReportRowHtml(UPPER_TEETH, assetBase, notes);
   const lowerRow = buildReportRowHtml(LOWER_TEETH, assetBase, notes);
   const legend = buildReportLegendHtml(assetBase);
+  const printScript = autoPrint
+    ? `<script>window.addEventListener("load", () => setTimeout(() => window.print(), 400));<\/script>`
+    : "";
 
   const html = `<!doctype html>
 <html><head><meta charset="utf-8" />
-<title>SmartRPD Report — Case ${escapeHtml(caseLabel)}</title>
+<title>SmartRPD Report — Case ${escapeHtml(label)}</title>
 <style>
   @page { size: A4 portrait; margin: 10mm; }
   * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -1235,7 +1318,7 @@ async function generateReport() {
   <h1 class="cli-report-title">Design Report</h1>
   <header class="cli-top">
     <div class="cli-meta">
-      ${reportFieldRow("Case Number", caseLabel)}
+      ${reportFieldRow("Case Number", label)}
       ${reportFieldRow("Creation Date", creationDate).replace("cli-field", "cli-field cli-field-creation")}
       ${reportFieldRow("Customer", ownerName)}
       ${reportFieldRow("Date Required", caseNote.dateRequired || "")}
@@ -1290,8 +1373,31 @@ async function generateReport() {
   </section>
   </div>
 
-  <script>window.addEventListener("load", () => setTimeout(() => window.print(), 400));<\/script>
+  ${printScript}
 </body></html>`;
+
+  return html;
+}
+
+// Noticeboard "Generate Report" button: build the report from the live
+// annotation page state and open it in a new window for printing (the original
+// behavior). The case-list bulk download instead calls buildReportHtml directly
+// and renders it to a PDF.
+async function generateReport() {
+  // Prefer the full "UID {id}:{name}" label rendered in the topbar so the
+  // report matches what the user sees on screen.
+  const topbarLabel = (document.getElementById("caseLabel")?.textContent || "")
+    .replace(/^Case:\s*/i, "")
+    .trim();
+  const caseLabel = topbarLabel || (state.caseIntID ?? "Unknown");
+  const twoDPreviewSrc = (ensureCache().instructions || []).at(-1)?.preview || "";
+
+  const html = await buildReportHtml(state.caseIntID, {
+    caseLabel,
+    caseOwner: state.caseOwner,
+    twoDPreviewSrc,
+    autoPrint: true,
+  });
 
   const win = window.open("", "_blank");
   if (!win) {

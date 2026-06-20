@@ -49,6 +49,15 @@
             <path d="M6 2v4H2M2 6l4-4M12 2v4h4M16 6l-4-4M6 16v-4H2M2 12l4 4M12 16v-4h4M16 12l-4 4"/>
           </svg>
         </button>
+        <button
+          type="button"
+          id="preview3dCaptureBtn"
+          class="preview-3d-capture-btn"
+          aria-label="Screen capture"
+          title="Screen capture"
+        >
+          <i class="fa fa-camera" aria-hidden="true"></i>
+        </button>
         <img id="previewImage" alt="Composed dental preview" />
         <p id="previewFallback" class="preview-fallback">
           No preview image found. Open from the 3D page after generating the composed image.
@@ -217,9 +226,8 @@
       <button type="button" class="ann-footer-btn" id="openNoticeboardBtn" aria-label="Noticeboard" data-tooltip="Noticeboard">
         <i class="fa fa-clipboard" aria-hidden="true"></i>
       </button>
-      <button type="button" class="ann-footer-btn" id="footerScreenCaptureBtn" aria-label="Screen capture" data-tooltip="Screen capture">
-        <i class="fa fa-camera" aria-hidden="true"></i>
-      </button>
+      <!-- Screen capture moved to the lower-left of the 3D preview panel
+           (#preview3dCaptureBtn); it still dispatches `request-3d-capture`. -->
       <!-- Upload other 3D files: stored in jaw_stls_extra_slot_1..4 via
            POST /stl/slot/ (up to 4 extra STLs per case). The handler in
            2DAnnotation.js opens the picker and hands the file to preview3D.js. -->

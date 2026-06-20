@@ -5,6 +5,8 @@ import { logApi } from "./apiLog.js";
 import { setupConnectivityIndicator } from "./connectivityIndicator.js";
 import { setupAppSidebar } from "./appSidebar.js";
 import { VIEWER_UUID, LOGIN_CREDENTIALS } from "../config.js";
+import { buildReportHtml } from "./2D/noticeboard.js";
+import { reportHtmlToDocxBytes } from "./reportDocx.js";
 
 function getLoggedInUser() {
   const user = localStorage.getItem("loggedInUser");
@@ -327,86 +329,156 @@ function triggerBlobDownload(bytes, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function downloadCaseFiles(caseIntId, caseLabel) {
-  const user = getLoggedInUser();
-  if (!user?.uuid || caseIntId == null) {
-    toast.warning("Unable to download: missing case info or login.");
-    return;
-  }
+const DL_API = "https://live.api.smartrpdai.com/api/smartrpd";
+const DL_MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
+// Fetch the case's STL files, preferring processed STLs and falling back to raw.
+async function fetchCaseStls(caseIntId, uuid) {
   const payload = [
-    {
-      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
-      uuid: user.uuid,
-      caseIntID: caseIntId,
-    },
+    { machine_id: DL_MACHINE_ID, uuid, caseIntID: caseIntId },
     { case_int_id: caseIntId },
   ];
-
-  const endpoints = [
-    "https://live.api.smartrpdai.com/api/smartrpd/stl/get",
-    "https://live.api.smartrpdai.com/api/smartrpd/stl/raw/get",
-  ];
-
-  let files = [];
-  for (const endpoint of endpoints) {
+  for (const endpoint of [`${DL_API}/stl/get`, `${DL_API}/stl/raw/get`]) {
     try {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      logApi(res, `POST ${endpoint.replace('https://live.api.smartrpdai.com/api/smartrpd', '')}`);
+      logApi(res, `POST ${endpoint.replace(DL_API, "")}`);
       if (!res.ok) continue;
       const data = await res.json();
-      const list = Array.isArray(data) ? data : [data];
-      files = list.filter((item) => item && item.data);
-      if (files.length) {
-        console.log(
-          `[case/download] STL source selected: ${endpoint.replace('https://live.api.smartrpdai.com/api/smartrpd', '')} (${files.length} file(s))`
-        );
-        break;
-      }
+      const files = (Array.isArray(data) ? data : [data]).filter((i) => i && i.data);
+      if (files.length) return files;
     } catch (err) {
-      console.warn("[case/download] endpoint failed", endpoint, err);
+      console.warn("[case/download] STL endpoint failed", endpoint, err);
     }
   }
+  return [];
+}
 
-  if (!files.length) {
-    toast.info("No uploaded files found for this case.");
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+// Re-encode an image data URL (or raw base64 PNG) to JPEG bytes for the zip.
+async function dataUrlToJpegBytes(data) {
+  const src = String(data).startsWith("data:") ? data : `data:image/png;base64,${data}`;
+  const img = await loadImage(src);
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth || img.width;
+  canvas.height = img.naturalHeight || img.height;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0);
+  return base64ToBytes(canvas.toDataURL("image/jpeg", 0.92).split(",")[1]);
+}
+
+// The case's 2D design image (thumbnail slot 0 = composite 2D) as JPEG bytes.
+async function fetchCase2dJpegBytes(caseIntId, uuid) {
+  try {
+    const res = await fetch(`${DL_API}/thumbnails/get`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        { machine_id: DL_MACHINE_ID, uuid, caseIntID: caseIntId },
+        { case_id: caseIntId },
+      ]),
+    });
+    logApi(res, "POST /thumbnails/get");
+    if (!res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const slot0 = rows.find((r) => Number(r?.slot) === 0) || rows[0];
+    if (!slot0?.data) return null;
+    return await dataUrlToJpegBytes(slot0.data);
+  } catch (err) {
+    console.warn("[case/download] 2D thumbnail fetch failed", err);
+    return null;
+  }
+}
+
+// Action-column "Download files": bundle the case's STL files, its 2D design
+// JPEG, and the design report (.docx) into one zip. Each part is best-effort —
+// whatever's available goes in; only an empty result aborts.
+async function downloadCaseFiles(caseIntId, caseLabel) {
+  const user = getLoggedInUser();
+  if (!user?.uuid || caseIntId == null) {
+    toast.warning("Unable to download: missing case info or login.");
     return;
   }
-
   if (typeof window.JSZip !== "function") {
     toast.error("Zip library failed to load. Please refresh and try again.");
     return;
   }
 
+  toast.info("Preparing download…");
   const base = String(caseLabel || `case_${caseIntId}`).replace(/[^a-z0-9_\-]+/gi, "_");
   const zip = new window.JSZip();
-  const usedNames = new Set();
+  let added = 0;
 
-  files.forEach((file, idx) => {
-    const type = String(file.type || file.jaw_type || "").toLowerCase();
-    const suffix = type || `file_${idx + 1}`;
-    let name = file.filename || `${base}_${suffix}.stl`;
-    if (usedNames.has(name)) {
-      const dot = name.lastIndexOf(".");
-      const stem = dot > 0 ? name.slice(0, dot) : name;
-      const ext = dot > 0 ? name.slice(dot) : "";
-      name = `${stem}_${idx + 1}${ext}`;
+  // 1) STL files.
+  try {
+    const files = await fetchCaseStls(caseIntId, user.uuid);
+    const usedNames = new Set();
+    files.forEach((file, idx) => {
+      const type = String(file.type || file.jaw_type || "").toLowerCase();
+      const suffix = type || `file_${idx + 1}`;
+      let name = file.filename || `${base}_${suffix}.stl`;
+      if (usedNames.has(name)) {
+        const dot = name.lastIndexOf(".");
+        const stem = dot > 0 ? name.slice(0, dot) : name;
+        const ext = dot > 0 ? name.slice(dot) : "";
+        name = `${stem}_${idx + 1}${ext}`;
+      }
+      usedNames.add(name);
+      try {
+        zip.file(name, base64ToBytes(file.data));
+        added += 1;
+      } catch (err) {
+        console.error("❌ Failed to add STL to zip:", name, err);
+      }
+    });
+  } catch (err) {
+    console.warn("[case/download] STL bundling failed", err);
+  }
+
+  // 2) 2D design JPEG (thumbnail slot 0).
+  try {
+    const jpeg = await fetchCase2dJpegBytes(caseIntId, user.uuid);
+    if (jpeg) {
+      zip.file(`${base}_2D.jpg`, jpeg);
+      added += 1;
     }
-    usedNames.add(name);
-    try {
-      zip.file(name, base64ToBytes(file.data));
-    } catch (err) {
-      console.error("❌ Failed to add file to zip:", name, err);
-    }
-  });
+  } catch (err) {
+    console.warn("[case/download] 2D JPEG failed", err);
+  }
+
+  // 3) Design report as a Word .docx.
+  try {
+    const html = await buildReportHtml(caseIntId, { caseLabel });
+    const docx = await reportHtmlToDocxBytes(html);
+    zip.file(`${base}_report.docx`, docx);
+    added += 1;
+  } catch (err) {
+    console.warn("[case/download] report .docx failed", err);
+  }
+
+  if (!added) {
+    toast.info("No files available to download for this case.");
+    return;
+  }
 
   try {
     const blob = await zip.generateAsync({ type: "uint8array" });
     triggerBlobDownload(blob, `${base}.zip`);
+    toast.success("Download ready.");
   } catch (err) {
     console.error("❌ Failed to generate zip:", err);
     toast.error(`Failed to generate zip: ${err.message || err}`);
@@ -673,6 +745,11 @@ async function handleRowClick(caseId) {
         co_owners: extra.co_owners,
       });
     }
+
+    // Stash the merged row so the dashboard ("View Dashboard", opened later) can
+    // read the real new_status / expected_date — /case/get/:id omits them, which
+    // is why those fields are merged from the cached list row (`extra`) here.
+    window.selectedCaseStub = detail;
 
     displayCaseDetails(detail);
     await fetchThumbnails(caseId);

@@ -1,7 +1,7 @@
 /* Case Dashboard overlay — full-screen "View Dashboard" view opened from the
    case list detail pane. A white top bar, then three columns: Processing Steps
    (left, with progress), View Captures (centre, click-to-preview), and Case
-   Access + 3D Preview (right). Built/owned by src/js/dashboard.js. */
+   Access + Viewcaptures (right). Built/owned by src/js/dashboard.js. */
 
 .dash-overlay {
   position: fixed;
@@ -55,17 +55,37 @@
 }
 .dash-topmeta b { color: #0f172a; font-weight: 600; }
 .dash-topright { display: flex; align-items: center; gap: 14px; }
-.dash-done-pill {
+.dash-status-pill {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   font-size: 13px;
   font-weight: 700;
-  color: var(--primary-dark, #25735f);
-  background: var(--primary-soft, #d4f0e8);
-  border: 1px solid var(--primary, #3BAE95);
   border-radius: 999px;
   padding: 6px 14px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.dash-status-completed {
+  color: var(--primary-dark, #25735f);
+  background: var(--primary-soft, #d4f0e8);
+  border-color: var(--primary, #3BAE95);
+}
+.dash-status-pending {
+  color: #b45309;
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+.dash-status-progress {
+  color: #1e40af;
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+.dash-status-draft,
+.dash-status-na {
+  color: #475569;
+  background: #e2e8f0;
+  border-color: #cbd5e1;
 }
 .dash-close {
   border: 0;
@@ -142,23 +162,23 @@
 .dash-step {
   display: flex;
   gap: 14px;
-  align-items: flex-start;
-  padding: 14px 2px;
+  align-items: center;
+  padding: 20px 2px;
 }
 .dash-step + .dash-step { border-top: 1px solid rgba(15, 23, 42, 0.06); }
 .dash-step-icon-tile {
   flex: 0 0 auto;
-  width: 50px;
-  height: 50px;
+  width: 80px;
+  height: 80px;
   border-radius: 12px;
-  background: #ffffff;
+  background: transparent;
   border: 1px solid var(--line, #e2e8f0);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
 }
-.dash-step-icon-tile img { width: 40px; height: 40px; object-fit: contain; }
+.dash-step-icon-tile img { width: 80px; height: 80px; object-fit: contain; }
 .dash-step-body { min-width: 0; flex: 1; }
 .dash-step-head {
   display: flex;
@@ -275,7 +295,7 @@
 }
 .dash-capture.is-active .dash-capture-label { color: var(--primary-dark, #25735f); }
 
-/* ---------- access + 3D column ---------- */
+/* ---------- access + viewcaptures column ---------- */
 .dash-access-table { width: 100%; border-collapse: collapse; }
 .dash-access-table th {
   text-align: left;
@@ -310,37 +330,24 @@
 .dash-access-role:not(.is-owner) { background: #dbeafe; color: #1e40af; }
 .dash-access-empty { color: #94a3b8; font-style: italic; font-size: 13px; font-weight: 400; }
 
-.dash-col-head-3d { margin-top: 24px; }
-.dash-3d-card {
+.dash-col-head-vc { margin-top: 24px; }
+.dash-viewcaptures {
   flex: 1;
-  min-height: 180px;
-  border: 1px solid var(--line, #e2e8f0);
-  border-radius: 14px;
-  background: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.dash-3d-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  min-height: 120px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-auto-rows: min-content;
   gap: 14px;
+  align-content: start;
+  overflow-y: auto;
+}
+.dash-viewcaptures-empty {
+  grid-column: 1 / -1;
   color: #94a3b8;
-  text-align: center;
+  font-style: italic;
+  font-size: 13px;
+  padding: 8px 2px;
 }
-.dash-3d-placeholder i {
-  font-size: 26px;
-  color: #cbd5e1;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: #f1f5f9;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.dash-3d-placeholder span { font-size: 13px; line-height: 1.5; }
 
 .dash-foot {
   margin-top: 16px;
@@ -370,9 +377,112 @@
 }
 .dash-help:hover { background: #0f172a; }
 
+/* ---------- mobile-only bits (hidden on desktop) ---------- */
+.dash-mobile-head { display: none; }
+
+/* Mobile-only "Case Details" panel. On desktop the topbar meta (created /
+   request / last edit), the status pill, and the Case Access column already
+   cover this, so it stays hidden; the mobile media query reveals it. */
+.dash-details { display: none; }
+.dash-details-list { display: flex; flex-direction: column; }
+.dash-details-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  font-size: 13.5px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+.dash-details-row:last-child { border-bottom: 0; }
+.dash-details-row dt { color: #94a3b8; font-weight: 600; }
+.dash-details-row dd { margin: 0; color: #334155; font-weight: 700; text-align: right; }
+.dash-vc-toggle,
+.dash-steps-toggle {
+  display: none; /* desktop: lists are always shown, no toggle */
+  margin-left: auto;
+  border: 1px solid var(--line, #e2e8f0);
+  background: #fff;
+  color: var(--primary-dark, #25735f);
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+.dash-vc-toggle:hover,
+.dash-steps-toggle:hover { background: #f1f5f9; }
+
+/* ---------- full-screen capture lightbox (mobile/tablet preview) ---------- */
+.dash-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.92);
+}
+.dash-lightbox-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.dash-lightbox-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+}
+.dash-lightbox-close:hover { background: rgba(255, 255, 255, 0.3); }
+
 @media (max-width: 1080px) {
-  .dash-body { grid-template-columns: 1fr; overflow-y: auto; }
-  .dash-col { overflow: visible; }
-  .dash-col + .dash-col { border-left: 0; border-top: 1px solid var(--line, #e2e8f0); }
   .dash-topmeta { display: none; }
+  /* Status now lives in the Case Details panel; drop the topbar pill so it isn't
+     shown twice. The close (×) button stays. */
+  .dash-topright .dash-status-pill { display: none; }
+
+  /* Flatten the 3 desktop columns into one ordered column:
+     Case Details (with Case Access) -> Processing Steps -> Thumbnails -> View
+     Captures. The columns become display:contents so their children participate
+     directly in the body flexbox and can be reordered across column boundaries;
+     the Case Details panel is a separate non-column child shown only here. */
+  .dash-body { display: flex; flex-direction: column; overflow-y: auto; padding: 8px 0 24px; }
+  .dash-col { display: contents; }
+  .dash-col > * { padding-left: 18px; padding-right: 18px; }
+
+  /* 1) Case Details — mobile-only panel (case_id / created / request / last
+     edit / status), with the Case Access table folded in directly below it. */
+  .dash-details { display: block; order: 1; padding: 0 18px; }
+  .dash-col-access > .dash-col-head:not(.dash-col-head-vc) { order: 1; margin-top: 18px; }
+  .dash-access-table { order: 1; }
+
+  /* 2) Processing Steps — collapsible, default hidden (matches View Captures);
+     the header chip + progress bar stay visible as a compact summary. */
+  .dash-col-steps > * { order: 2; }
+  .dash-col-steps > .dash-col-head { margin-top: 18px; }
+  .dash-steps.is-collapsed { display: none; }
+  .dash-steps-toggle { display: inline-flex; }
+
+  /* 3) Thumbnails — the inline preview panel is hidden; captures pop full-screen */
+  .dash-col-captures > .dash-col-head:not(.dash-mobile-head) { display: none; }
+  .dash-preview { display: none; }
+  .dash-mobile-head { display: flex; order: 3; margin-top: 18px; }
+  .dash-captures { order: 3; }
+
+  /* 4) View Captures — collapsible, default hidden */
+  .dash-col-head-vc { order: 4; margin-top: 18px; }
+  .dash-viewcaptures { order: 4; }
+  .dash-viewcaptures.is-collapsed { display: none; }
+  .dash-vc-toggle { display: inline-flex; }
 }

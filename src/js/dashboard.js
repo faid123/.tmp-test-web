@@ -1,10 +1,13 @@
 // Case Dashboard — the "View Dashboard" view opened from the case list detail
 // pane. Recreates the SmartRPD desktop dashboard for the selected case: a left
 // column of process steps (per jaw), a centre "View Captures" area (2D / 3D
-// upper / 3D lower thumbnails), and a right "Case Access" panel (roles).
+// upper / 3D lower thumbnails from /thumbnails/get), and a right column with a
+// "Case Access" panel (roles) above a "Viewcaptures" gallery (the noticeboard
+// 3D viewcapture photos from /noticeboard/view/get).
 //
 // The overlay is built once on first open and reused; openCaseDashboard()
-// repopulates it from the selected case's detail, thumbnails and roles.
+// repopulates it from the selected case's detail, thumbnails, viewcaptures and
+// roles.
 
 import { toast } from "./toast.js";
 import { logApi } from "./apiLog.js";
@@ -175,6 +178,62 @@ export function resolveCaptureSlots(rows) {
   return bySlot;
 }
 
+// Case status (`new_status`) → display label + pill kind. Mirrors the case
+// list's mapping (apiStatusToValue/statusDisplayText/statusPillClass) compactly
+// so the dashboard doesn't have to import from caseManagement.js (which imports
+// this module — a cycle). Pure; exported for unit testing.
+export function caseStatusLabel(apiStatus) {
+  const v = apiStatus ? String(apiStatus).toLowerCase().replace(/ /g, "_") : "na";
+  if (v === "na") return "N/A"; // unset — exactly what the case list shows
+  if (v === "draft") return "draft";
+  if (v.endsWith("_pending")) {
+    if (v.startsWith("2d_")) return "pending (2D)";
+    if (v.startsWith("3d_")) return "pending (3D)";
+    return "pending";
+  }
+  if (v.endsWith("_drafted") || v.endsWith("_approved")) {
+    if (v.startsWith("2d_")) return "in-progress (2D)";
+    if (v.startsWith("3d_")) return "in-progress (3D)";
+    return "in-progress";
+  }
+  if (v === "in_production") return "in-progress";
+  if (v === "out_for_delivery") return "out for delivery";
+  if (v === "delivered") return "delivered";
+  if (v === "completed") return "completed";
+  return v.replace(/_/g, " ");
+}
+
+export function caseStatusKind(apiStatus) {
+  const v = apiStatus ? String(apiStatus).toLowerCase().replace(/ /g, "_") : "na";
+  if (v === "na") return "na"; // unset — neutral grey pill, like the case list
+  if (v === "draft") return "draft";
+  if (v === "completed" || v === "delivered") return "completed";
+  if (v.endsWith("_pending") || v === "pending") return "pending";
+  return "progress"; // in_production / out_for_delivery / *_drafted / *_approved
+}
+
+// Set every meta target carrying a matching [data-field] inside the overlay, so
+// one call paints both the desktop topbar meta and the mobile "Case Details"
+// panel (which mirror the same data under different layouts).
+function setField(field, value) {
+  document
+    .querySelectorAll(`#caseDashboardOverlay [data-field="${field}"]`)
+    .forEach((el) => { el.textContent = value; });
+}
+
+function renderStatusPill(apiStatus) {
+  const cls = `dash-status-pill dash-status-${caseStatusKind(apiStatus)}`;
+  const label = caseStatusLabel(apiStatus);
+  document.querySelectorAll("#caseDashboardOverlay [data-status-pill]").forEach((pill) => {
+    pill.className = cls;
+    pill.textContent = label;
+  });
+}
+
+function renderRequestDate(ts) {
+  setField("request", formatDateTime(ts));
+}
+
 let overlayEl = null;
 
 function buildOverlay() {
@@ -189,27 +248,41 @@ function buildOverlay() {
         <span class="dash-brand-case" id="dashCaseName">—</span>
       </div>
       <div class="dash-topmeta">
-        <span>Created by: <b id="dashCreatedBy">—</b> · <span id="dashCreatedAt">—</span></span>
-        <span>Last Edited: <b id="dashLastEdited">—</b></span>
+        <span>Created by: <b data-field="createdBy">—</b> · <span data-field="created">—</span></span>
+        <span>Request Date: <b data-field="request">—</b></span>
+        <span>Last Edited: <b data-field="lastEdit">—</b></span>
       </div>
       <div class="dash-topright">
-        <span class="dash-done-pill"><i class="fa-regular fa-circle-check"></i><span id="dashDoneText">0/5 done</span></span>
+        <span class="dash-status-pill dash-status-na" data-status-pill>—</span>
         <button type="button" class="dash-close" id="dashCloseBtn" aria-label="Close dashboard">&times;</button>
       </div>
     </header>
     <div class="dash-body">
+      <section class="dash-details" id="dashDetails">
+        <div class="dash-col-head">
+          <span class="dash-col-title"><i class="fa-solid fa-circle-info"></i> CASE DETAILS</span>
+        </div>
+        <dl class="dash-details-list">
+          <div class="dash-details-row"><dt>Case ID</dt><dd data-field="caseId">—</dd></div>
+          <div class="dash-details-row"><dt>Created</dt><dd data-field="created">—</dd></div>
+          <div class="dash-details-row"><dt>Date Request</dt><dd data-field="request">—</dd></div>
+          <div class="dash-details-row"><dt>Last Edit</dt><dd data-field="lastEdit">—</dd></div>
+          <div class="dash-details-row"><dt>Status</dt><dd><span class="dash-status-pill dash-status-na" data-status-pill>—</span></dd></div>
+        </dl>
+      </section>
       <section class="dash-col dash-col-steps">
         <div class="dash-col-head">
           <span class="dash-col-title"><i class="fa-solid fa-wave-square"></i> PROCESSING STEPS</span>
           <span class="dash-chip" id="dashStepsChip">0/5</span>
+          <button type="button" class="dash-steps-toggle" id="dashStepsToggle" aria-expanded="false">Show</button>
         </div>
         <div class="dash-progress"><div class="dash-progress-fill" id="dashProgressFill"></div></div>
-        <div class="dash-steps" id="dashSteps"></div>
+        <div class="dash-steps is-collapsed" id="dashSteps"></div>
       </section>
 
       <section class="dash-col dash-col-captures">
         <div class="dash-col-head">
-          <span class="dash-col-title"><i class="fa-regular fa-eye"></i> View Captures</span>
+          <span class="dash-col-title"><i class="fa-regular fa-eye"></i> Preview Panel</span>
           <span class="dash-col-sub" id="dashCaptureSub">—</span>
         </div>
         <div class="dash-preview" id="dashPreview">
@@ -219,6 +292,9 @@ function buildOverlay() {
             <span>2D · 3D Upper · 3D Lower</span>
           </div>
           <img class="dash-preview-img hidden" id="dashPreviewImg" alt="Selected capture" />
+        </div>
+        <div class="dash-col-head dash-mobile-head">
+          <span class="dash-col-title"><i class="fa-regular fa-images"></i> Thumbnails</span>
         </div>
         <div class="dash-captures" id="dashCaptures"></div>
       </section>
@@ -231,17 +307,17 @@ function buildOverlay() {
           <thead><tr><th>User Name</th><th>Role</th></tr></thead>
           <tbody id="dashAccessBody"></tbody>
         </table>
-        <div class="dash-col-head dash-col-head-3d">
-          <span class="dash-col-title"><i class="fa-solid fa-cube"></i> 3D Preview</span>
+        <div class="dash-col-head dash-col-head-vc">
+          <span class="dash-col-title"><i class="fa-regular fa-images"></i> View Captures</span>
+          <span class="dash-col-sub" id="dashViewcaptureSub">—</span>
+          <button type="button" class="dash-vc-toggle" id="dashViewcaptureToggle" aria-expanded="false">Show</button>
         </div>
-        <div class="dash-3d-card">
-          <div class="dash-3d-placeholder">
-            <i class="fa-solid fa-cube"></i>
-            <span>3D model viewer<br>will appear here</span>
-          </div>
-        </div>
-        <div class="dash-foot">Case: <b id="dashFootCase">—</b></div>
+        <div class="dash-viewcaptures is-collapsed" id="dashViewcaptures"></div>
       </section>
+    </div>
+    <div class="dash-lightbox hidden" id="dashLightbox" aria-hidden="true">
+      <button type="button" class="dash-lightbox-close" id="dashLightboxClose" aria-label="Close preview">&times;</button>
+      <img class="dash-lightbox-img" id="dashLightboxImg" alt="Capture preview" />
     </div>
     <button type="button" class="dash-help" id="dashHelpBtn" aria-label="Help">?</button>`;
   document.body.appendChild(overlay);
@@ -251,8 +327,41 @@ function buildOverlay() {
   overlay.querySelector("#dashHelpBtn").addEventListener("click", () => {
     toast.info("Each step reflects per-jaw progress. Click a capture below to preview it.");
   });
+
+  // Full-screen capture preview (used on phones/tablets where the inline preview
+  // panel is hidden): close on the X or a backdrop tap.
+  overlay.querySelector("#dashLightboxClose")?.addEventListener("click", closeLightbox);
+  overlay.querySelector("#dashLightbox")?.addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeLightbox();
+  });
+
+  // View Captures show/hide (mobile only; the gallery starts collapsed).
+  const vcToggle = overlay.querySelector("#dashViewcaptureToggle");
+  vcToggle?.addEventListener("click", () => {
+    const gallery = overlay.querySelector("#dashViewcaptures");
+    const collapsed = gallery.classList.toggle("is-collapsed");
+    vcToggle.textContent = collapsed ? "Show" : "Hide";
+    vcToggle.setAttribute("aria-expanded", String(!collapsed));
+  });
+
+  // Processing Steps show/hide (mobile only; the step list starts collapsed —
+  // the header chip and progress bar stay as a compact summary).
+  const stepsToggle = overlay.querySelector("#dashStepsToggle");
+  stepsToggle?.addEventListener("click", () => {
+    const list = overlay.querySelector("#dashSteps");
+    const collapsed = list.classList.toggle("is-collapsed");
+    stepsToggle.textContent = collapsed ? "Show" : "Hide";
+    stepsToggle.setAttribute("aria-expanded", String(!collapsed));
+  });
+
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !overlay.classList.contains("hidden")) close();
+    if (e.key !== "Escape") return;
+    const lb = document.getElementById("dashLightbox");
+    if (lb && !lb.classList.contains("hidden")) {
+      closeLightbox();
+      return;
+    }
+    if (!overlay.classList.contains("hidden")) close();
   });
   return overlay;
 }
@@ -267,8 +376,6 @@ function updateProgress(done, total) {
   const pct = total ? Math.round((done / total) * 100) : 0;
   const chip = document.getElementById("dashStepsChip");
   if (chip) chip.textContent = `${done}/${total}`;
-  const doneText = document.getElementById("dashDoneText");
-  if (doneText) doneText.textContent = `${done}/${total} done`;
   const fill = document.getElementById("dashProgressFill");
   if (fill) fill.style.width = `${pct}%`;
 }
@@ -310,6 +417,13 @@ function renderSteps(upperStatus, lowerStatus) {
   }).join("");
 }
 
+// Clear the active highlight on every capture/viewcapture tile in the overlay.
+function clearActiveCaptures() {
+  document
+    .querySelectorAll(".dash-capture.is-active")
+    .forEach((c) => c.classList.remove("is-active"));
+}
+
 // Reset the big preview area to its "select a capture" empty state and clear any
 // active capture tile.
 function resetPreview() {
@@ -320,23 +434,48 @@ function resetPreview() {
     img.removeAttribute("src");
   }
   if (empty) empty.classList.remove("hidden");
-  document
-    .querySelectorAll("#dashCaptures .dash-capture")
-    .forEach((c) => c.classList.remove("is-active"));
+  clearActiveCaptures();
 }
 
-// Show a capture's image enlarged in the central preview area.
-function showPreview(data, tileEl) {
+// Phones/tablets share the desktop's stacked single-column layout, where the
+// inline preview panel is hidden — captures pop full-screen instead.
+const MOBILE_MQ = window.matchMedia("(max-width: 1080px)");
+
+function openLightbox(src) {
+  const lb = document.getElementById("dashLightbox");
+  const img = document.getElementById("dashLightboxImg");
+  if (!lb || !img || !src) return;
+  img.src = src;
+  lb.classList.remove("hidden");
+  lb.setAttribute("aria-hidden", "false");
+}
+
+function closeLightbox() {
+  const lb = document.getElementById("dashLightbox");
+  const img = document.getElementById("dashLightboxImg");
+  if (!lb) return;
+  lb.classList.add("hidden");
+  lb.setAttribute("aria-hidden", "true");
+  if (img) img.removeAttribute("src");
+}
+
+// Show a capture's image enlarged. `src` is a full <img> src (data: URL) so both
+// thumbnail tiles and viewcapture tiles can reuse this. On mobile/tablet the
+// inline preview is hidden, so the capture opens in a full-screen lightbox.
+function showPreview(src, tileEl) {
+  if (!src) return;
+  clearActiveCaptures();
+  tileEl?.classList.add("is-active");
+  if (MOBILE_MQ.matches) {
+    openLightbox(src);
+    return;
+  }
   const img = document.getElementById("dashPreviewImg");
   const empty = document.getElementById("dashPreviewEmpty");
   if (!img) return;
-  img.src = "data:image/png;base64," + data;
+  img.src = src;
   img.classList.remove("hidden");
   empty?.classList.add("hidden");
-  document
-    .querySelectorAll("#dashCaptures .dash-capture")
-    .forEach((c) => c.classList.remove("is-active"));
-  tileEl?.classList.add("is-active");
 }
 
 function renderCaptures(rows) {
@@ -366,7 +505,56 @@ function renderCaptures(rows) {
 
   host.querySelectorAll(".dash-capture").forEach((btn) => {
     const data = bySlot.get(Number(btn.dataset.slot));
-    if (data) btn.addEventListener("click", () => showPreview(data, btn));
+    if (data) btn.addEventListener("click", () => showPreview("data:image/png;base64," + data, btn));
+  });
+}
+
+// Pure: pull image src strings out of a /noticeboard/view/get row. The web
+// writes `data` as a JSON array of preview strings (data: URLs, or raw base64);
+// desktop BinaryFormatter blobs aren't decoded here and yield an empty list.
+// Exported (DOM-free) for unit testing.
+export function parseViewcaptureImages(row) {
+  if (!row) return [];
+  let arr = row.data;
+  if (typeof arr === "string") {
+    try { arr = JSON.parse(arr); } catch { return []; }
+  }
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .filter((v) => typeof v === "string" && v.trim())
+    .map((v) => (v.startsWith("data:") ? v : "data:image/png;base64," + v));
+}
+
+// getViewCapture returns a single row (or an array wrapping one). Normalize.
+function firstRow(apiResult) {
+  if (!apiResult) return null;
+  return Array.isArray(apiResult) ? apiResult[0] || null : apiResult;
+}
+
+// Render the viewcapture photos (from /noticeboard/view/get) as clickable tiles
+// that enlarge into the shared central preview. Separate source from the three
+// thumbnail tiles above, which come from /thumbnails/get.
+function renderViewcaptures(apiResult) {
+  const host = document.getElementById("dashViewcaptures");
+  if (!host) return;
+  const images = parseViewcaptureImages(firstRow(apiResult));
+  const sub = document.getElementById("dashViewcaptureSub");
+  if (sub) sub.textContent = images.length ? `${images.length} photo${images.length === 1 ? "" : "s"}` : "—";
+
+  if (!images.length) {
+    host.innerHTML = `<div class="dash-viewcaptures-empty">No viewcaptures yet.</div>`;
+    return;
+  }
+  host.innerHTML = images
+    .map((src, i) => `
+      <button type="button" class="dash-capture" data-vc="${i}">
+        <div class="dash-capture-frame"><img src="${src}" alt="Viewcapture ${i + 1}" /></div>
+        <div class="dash-capture-label">Viewcapture ${i + 1}</div>
+      </button>`)
+    .join("");
+  host.querySelectorAll(".dash-capture").forEach((btn) => {
+    const src = images[Number(btn.dataset.vc)];
+    btn.addEventListener("click", () => showPreview(src, btn));
   });
 }
 
@@ -417,15 +605,20 @@ export async function openCaseDashboard(caseId, caseStub = null) {
 
   // Paint what we already know immediately so the overlay isn't blank.
   const nameEl = document.getElementById("dashCaseName");
-  if (nameEl) nameEl.textContent = caseStub?.case_id || `Case ${caseId}`;
+  const stubName = caseStub?.case_id || `Case ${caseId}`;
+  if (nameEl) nameEl.textContent = stubName;
+  setField("caseId", `UID_${caseId} : ${stubName}`); // UID + case_id label, like the case list
+  renderStatusPill(caseStub?.new_status);
+  renderRequestDate(caseStub?.expected_date ?? caseStub?.due_date);
   renderSteps(caseStub?.upper_status, caseStub?.lower_status);
   renderCaptures([]);
+  renderViewcaptures(null);
   renderAccess([]);
 
   const auth = { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: caseId };
   const caseIdStr = caseStub?.case_id ?? caseId;
 
-  const [detail, thumbs, roles] = await Promise.all([
+  const [detail, thumbs, viewcaptures, roles] = await Promise.all([
     postJson(`${API}/case/get/${caseId}`, [auth], "POST /case/get/:id").catch(
       (err) => {
         console.warn("[dashboard] case detail failed", err);
@@ -436,6 +629,13 @@ export async function openCaseDashboard(caseId, caseStub = null) {
       (err) => {
         console.warn("[dashboard] thumbnails failed", err);
         return [];
+      }
+    ),
+    postJson(`${API}/noticeboard/view/get`, [auth, { case_id: caseId }], "POST /noticeboard/view/get").catch(
+      (err) => {
+        // 404 = no viewcaptures saved yet; treat as empty, not an error.
+        console.warn("[dashboard] viewcaptures failed", err);
+        return null;
       }
     ),
     postJson(`${API}/role/all/get`, [auth, { case_int_id: caseId }], "POST /role/all/get").catch(
@@ -452,19 +652,25 @@ export async function openCaseDashboard(caseId, caseStub = null) {
   const name = detail.case_id || caseStub?.case_id || `Case ${caseId}`;
   const caseIntId = detail.id ?? caseId;
   if (nameEl) nameEl.textContent = name;
-  const createdBy = document.getElementById("dashCreatedBy");
-  if (createdBy) createdBy.textContent = detail.assigned_to || detail.username || "—";
-  const createdAt = document.getElementById("dashCreatedAt");
-  if (createdAt) createdAt.textContent = formatDateTime(detail.creation_date);
-  const lastEdited = document.getElementById("dashLastEdited");
-  if (lastEdited) lastEdited.textContent = formatDateTime(detail.last_updated);
+  setField("caseId", `UID_${caseIntId} : ${name}`); // UID + case_id label, like the case list
+  setField("createdBy", caseStub?.assigned_to || detail.assigned_to || detail.username || "—");
+  setField("created", formatDateTime(detail.creation_date));
+  setField("lastEdit", formatDateTime(detail.last_updated));
+  // Prefer the cached list row: /case/get/:id returns an unreliable new_status /
+  // expected_date (the case list overwrites them from the list row too), so the
+  // stub is authoritative and keeps the dashboard in sync with the case list.
+  renderStatusPill(caseStub?.new_status ?? detail.new_status);
+  renderRequestDate(
+    caseStub?.expected_date ?? caseStub?.due_date ?? detail.expected_date ?? detail.due_date
+  );
   const captureSub = document.getElementById("dashCaptureSub");
-  if (captureSub) captureSub.textContent = `UID ${caseIntId} · ${name}`;
-  const footCase = document.getElementById("dashFootCase");
-  if (footCase) footCase.textContent = name;
+  if (captureSub) {
+    captureSub.innerHTML = `UID <b>${escapeHtml(String(caseIntId))}</b> · ${escapeHtml(name)}`;
+  }
 
   renderSteps(detail.upper_status, detail.lower_status);
   renderCaptures(Array.isArray(thumbs) ? thumbs : []);
+  renderViewcaptures(viewcaptures);
   renderAccess(Array.isArray(roles) ? roles : []);
 }
 
@@ -472,6 +678,9 @@ export async function openCaseDashboard(caseId, caseStub = null) {
 document.addEventListener("DOMContentLoaded", () => {
   const btn = document.getElementById("viewDashboardBtn");
   btn?.addEventListener("click", () => {
-    openCaseDashboard(window.selectedCaseId);
+    // Pass the cached list row (stashed by the case list on selection) so the
+    // dashboard has the real new_status / expected_date — /case/get/:id omits
+    // them, so without this the status would always fall back to N/A.
+    openCaseDashboard(window.selectedCaseId, window.selectedCaseStub || null);
   });
 });
