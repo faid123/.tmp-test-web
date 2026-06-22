@@ -36,8 +36,14 @@ import {
 import {
   WORK_CATEGORY_OPTIONS,
   loadCaseNote,
+  loadCaseDueDate,
+  saveCaseDueDate,
   saveCaseNote,
+  toDateInputValue,
+  fetchAdditionalCaseDetails,
+  updateCaseDueDate,
 } from "./caseNote.js";
+import { toast } from "../toast.js";
 
 // Build component tabs and initialize the first visible catalog view.
 export function initComponentCatalog() {
@@ -500,8 +506,32 @@ function createCaseNoteForm() {
   form.appendChild(buildReadonlyRow("Case Owner", ownerName));
   form.appendChild(buildReadonlyRow("Case Number", String(caseNumber)));
 
-  const dateInput = buildInputRow("Date Required", "date", "case-note-date", saved.dateRequired || "");
+  // "Date Required" IS the case's request/due date (the case-list "Due" column).
+  // Its source of truth is the backend (additionalcasedetails.due_date). Seed the
+  // field instantly from the localStorage stash written when the case was opened,
+  // then replace it with the live server value once it loads — unless the user has
+  // started editing — so we don't prefer a possibly-stale local copy.
+  const dueDateDefault = loadCaseDueDate(state.caseIntID);
+  const dateInput = buildInputRow(
+    "Date Required",
+    "date",
+    "case-note-date",
+    saved.dateRequired || dueDateDefault || ""
+  );
   form.appendChild(dateInput.row);
+
+  let userTouchedDate = false;
+  dateInput.input.addEventListener("input", () => {
+    userTouchedDate = true;
+  });
+  fetchAdditionalCaseDetails(state.caseIntID).then(({ ok, detail }) => {
+    if (!ok || userTouchedDate) return;
+    const live = toDateInputValue(detail?.due_date);
+    if (live && live !== dateInput.input.value) {
+      dateInput.input.value = live;
+      saveCaseDueDate(state.caseIntID, live);
+    }
+  });
 
   const shadeInput = buildInputRow("Tooth Shade", "text", "case-note-shade", saved.toothShade || "", {
     placeholder: "e.g. A2",
@@ -529,24 +559,46 @@ function createCaseNoteForm() {
   status.className = "case-note-status";
   status.setAttribute("aria-live", "polite");
 
-  saveBtn.addEventListener("click", () => {
+  saveBtn.addEventListener("click", async () => {
+    const dateRequired = dateInput.input.value;
     const note = {
       caseOwner: ownerName,
       caseNumber,
-      dateRequired: dateInput.input.value,
+      dateRequired,
       toothShade: shadeInput.input.value,
       workCategory: categorySelect.input.value,
       comment: commentField.input.value,
       updatedAt: new Date().toISOString(),
     };
-    const ok = saveCaseNote(state.caseIntID, note);
-    status.textContent = ok ? "Saved." : "Save failed.";
-    status.classList.toggle("is-error", !ok);
-    if (ok) {
+    // The other fields have no API yet, so they stay in localStorage. The request
+    // date is written through to the backend (additionalcasedetails.due_date) so
+    // it shows up in the case-list "Due" column and is shared across devices —
+    // not just kept locally.
+    const localOk = saveCaseNote(state.caseIntID, note);
+    saveBtn.disabled = true;
+    status.textContent = "Saving…";
+    status.classList.remove("is-error");
+    const remoteOk = await updateCaseDueDate(state.caseIntID, dateRequired);
+    if (remoteOk) saveCaseDueDate(state.caseIntID, dateRequired);
+    saveBtn.disabled = false;
+
+    // The Case Note has its own Save button: it persists on its own and surfaces
+    // its own toast, independent of the back-dialog's "Save & Return" action.
+    if (remoteOk) {
+      status.textContent = "Saved.";
+      toast.success("Saved successfully");
       setMessage("Case note saved.", false);
       setTimeout(() => {
         if (status.textContent === "Saved.") status.textContent = "";
       }, 2000);
+    } else if (localOk) {
+      status.textContent = "Saved locally.";
+      status.classList.add("is-error");
+      toast.warning("Saved locally — couldn't update the request date on the server.");
+    } else {
+      status.textContent = "Save failed.";
+      status.classList.add("is-error");
+      toast.error("Save failed.");
     }
   });
 

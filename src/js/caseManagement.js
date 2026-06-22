@@ -7,6 +7,7 @@ import { setupAppSidebar } from "./appSidebar.js";
 import { VIEWER_UUID, LOGIN_CREDENTIALS } from "../config.js";
 import { buildReportHtml } from "./2D/noticeboard.js";
 import { reportHtmlToDocxBytes } from "./reportDocx.js";
+import { saveCaseDueDate, toDateInputValue } from "./2D/caseNote.js";
 
 function getLoggedInUser() {
   const user = localStorage.getItem("loggedInUser");
@@ -407,7 +408,7 @@ async function fetchCase2dJpegBytes(caseIntId, uuid) {
 // Action-column "Download files": bundle the case's STL files, its 2D design
 // JPEG, and the design report (.docx) into one zip. Each part is best-effort —
 // whatever's available goes in; only an empty result aborts.
-async function downloadCaseFiles(caseIntId, caseLabel) {
+async function downloadCaseFiles(caseIntId, caseLabel, apiStatus) {
   const user = getLoggedInUser();
   if (!user?.uuid || caseIntId == null) {
     toast.warning("Unable to download: missing case info or login.");
@@ -462,7 +463,7 @@ async function downloadCaseFiles(caseIntId, caseLabel) {
 
   // 3) Design report as a Word .docx.
   try {
-    const html = await buildReportHtml(caseIntId, { caseLabel });
+    const html = await buildReportHtml(caseIntId, { caseLabel, apiStatus });
     const docx = await reportHtmlToDocxBytes(html);
     zip.file(`${base}_report.docx`, docx);
     added += 1;
@@ -654,7 +655,7 @@ function populateTable(cases) {
       <td class="cm-td-date" data-label="Created">${formatDateTime(caseItem.creation_date)}</td>
       <td class="cm-td-date" data-label="Due">${dueDate ? formatDateTime(dueDate) : "N/A"}</td>
       <td class="cm-td-owner" data-label="Owner">
-        <i class="fa-regular fa-circle-user"></i><span class="cm-owner-name">${escapeAttr(assignedTo)}</span>${coOwnersHtml}
+        <i class="fa-regular fa-circle-user"></i><span class="cm-owner-name" title="${escapeAttr(assignedTo)}">${escapeAttr(assignedTo)}</span>${coOwnersHtml}
       </td>
       <td class="cm-td-actions">
         <button class="cm-row-icon" type="button" title="Rename" aria-label="Rename" data-action="rename"><i class="fa-regular fa-pen-to-square"></i></button>
@@ -680,7 +681,10 @@ function populateTable(cases) {
 
     row.querySelector('[data-action="download"]').addEventListener("click", async (e) => {
       e.stopPropagation();
-      await downloadCaseFiles(resolvedCaseId, caseItem.case_id);
+      // Pass the case's authoritative status (from additionalcasedetails, merged
+      // into the list row) so the report's status badge matches the case list /
+      // dashboard — /case/get/:id, which the report would otherwise read, omits it.
+      await downloadCaseFiles(resolvedCaseId, caseItem.case_id, caseItem.new_status ?? null);
     });
 
     row.querySelector('[data-action="rename"]').addEventListener("click", (e) => {
@@ -750,6 +754,19 @@ async function handleRowClick(caseId) {
     // read the real new_status / expected_date — /case/get/:id omits them, which
     // is why those fields are merged from the cached list row (`extra`) here.
     window.selectedCaseStub = detail;
+
+    // Persist this case's Due Date (same value/fallback as the list "Due" column)
+    // so the 2D design's Case Note can default "Date Required" to it. The 2D page
+    // is a separate tab that can't read window.selectedCaseStub; localStorage is
+    // shared same-origin. Keyed by caseId (= the 2D page's state.caseIntID).
+    saveCaseDueDate(
+      caseId,
+      toDateInputValue(
+        detail.expected_date ||
+          detail.due_date ||
+          computeDefaultDueDate(detail.creation_date)
+      )
+    );
 
     displayCaseDetails(detail);
     await fetchThumbnails(caseId);

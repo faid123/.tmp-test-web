@@ -10,7 +10,7 @@ import {
   getClinicalNotesForCase,
   tiltArrowFor,
 } from "./clinicalInfo.js";
-import { WORK_CATEGORY_LABELS, loadCaseNote } from "./caseNote.js";
+import { WORK_CATEGORY_LABELS, loadCaseNote, fetchAdditionalCaseDetails } from "./caseNote.js";
 
 //Add constants
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
@@ -1033,15 +1033,17 @@ function reportStatusBadge(apiStatus) {
   const v = apiStatus ? String(apiStatus).toLowerCase().replace(/ /g, "_") : "na";
   const jaw = v.startsWith("2d_") ? " (2D)" : v.startsWith("3d_") ? " (3D)" : "";
 
+  // Labels are kept lowercase to match the dashboard's caseStatusLabel and the
+  // case list's statusDisplayText verbatim, so the report's status reads the same.
   let label;
   if (!v || v === "na") label = "N/A";
-  else if (v === "draft") label = "Draft";
-  else if (v.endsWith("_pending") || v === "pending") label = `Pending${jaw}`;
-  else if (v.endsWith("_drafted") || v.endsWith("_approved")) label = `In-progress${jaw}`;
-  else if (v === "in_production") label = "In-progress";
-  else if (v === "out_for_delivery") label = "Out for delivery";
-  else if (v === "delivered") label = "Delivered";
-  else if (v === "completed") label = "Completed";
+  else if (v === "draft") label = "draft";
+  else if (v.endsWith("_pending") || v === "pending") label = `pending${jaw}`;
+  else if (v.endsWith("_drafted") || v.endsWith("_approved")) label = `in-progress${jaw}`;
+  else if (v === "in_production") label = "in-progress";
+  else if (v === "out_for_delivery") label = "out for delivery";
+  else if (v === "delivered") label = "delivered";
+  else if (v === "completed") label = "completed";
   else label = v.replace(/_/g, " ");
 
   // Follow statusPillClass's precedence so the color matches the case list.
@@ -1154,7 +1156,7 @@ async function fetchTwoDPreviewSrc(caseIntID) {
 // `autoPrint` appends the print-on-load script used by the noticeboard button.
 export async function buildReportHtml(
   caseIntID,
-  { caseLabel, caseOwner, twoDPreviewSrc, autoPrint = false } = {}
+  { caseLabel, caseOwner, twoDPreviewSrc, apiStatus, autoPrint = false } = {}
 ) {
   const assetBase = new URL("../../assets/clinicalInfo", window.location.href).href;
   const creationDate = new Date().toLocaleString("sv-SE").replace("T", " ").slice(0, 19);
@@ -1172,9 +1174,18 @@ export async function buildReportHtml(
   if (twoDSrc == null) twoDSrc = await fetchTwoDPreviewSrc(caseIntID);
 
   // Case detail gives the string case id needed to look up the upper/lower 3D
-  // jaw renders (thumbnail slots 1/2) and the status for the top-right badge.
-  const detail = await fetchCaseDetailById(caseIntID);
-  const status = reportStatusBadge(detail?.new_status);
+  // jaw renders (thumbnail slots 1/2). For the top-right status badge, /case/get/:id
+  // does NOT reliably carry new_status — the case list and dashboard both read it
+  // from additionalcasedetails instead. Use that same authoritative source so the
+  // report's status matches the dashboard. Callers that already hold the status
+  // (the case-list row) pass `apiStatus` to skip the extra request.
+  const [detail, addlRes] = await Promise.all([
+    fetchCaseDetailById(caseIntID),
+    apiStatus === undefined ? fetchAdditionalCaseDetails(caseIntID) : Promise.resolve(null),
+  ]);
+  const resolvedStatus =
+    apiStatus !== undefined ? apiStatus : addlRes?.detail?.new_status ?? detail?.new_status;
+  const status = reportStatusBadge(resolvedStatus);
   const caseIdStr = detail?.case_id ?? caseLabel ?? caseIntID;
   const label =
     caseLabel ||

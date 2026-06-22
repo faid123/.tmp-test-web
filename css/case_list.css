@@ -789,7 +789,17 @@ button {
 
 .cm-td-owner { white-space: nowrap; }
 .cm-td-owner > i { color: var(--muted); margin-right: 6px; }
-.cm-owner-name { color: var(--ink-soft); }
+/* Keep a long owner name on a single line: truncate to ~10 characters with an
+   ellipsis instead of wrapping (full name is in the title tooltip). */
+.cm-owner-name {
+  color: var(--ink-soft);
+  display: inline-block;
+  max-width: 10ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
 .cm-row-coowners {
   display: inline-flex;
   align-items: center;
