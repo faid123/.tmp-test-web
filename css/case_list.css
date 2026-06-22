@@ -1176,6 +1176,12 @@ button {
   gap: 10px;
   margin-top: auto;
 }
+.cm-detail-cta > .cm-btn {
+  width: 100%;
+}
+.cm-detail-cta .cm-3d-link {
+  width: 100%;
+}
 
 /* ============ 3D viewer link ============ */
 .cm-3d-link {
@@ -1203,10 +1209,17 @@ button {
   background: var(--line-soft);
   border-color: var(--primary);
 }
+.cm-3d-link-icon-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 6px;
+  justify-content: center;
+}
 .cm-3d-link-icon {
-  width: 18px;
-  height: 18px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
+  object-fit: contain;
 }
 .cm-3d-link-text {
   overflow: hidden;

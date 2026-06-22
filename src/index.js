@@ -490,6 +490,8 @@ function getViewerMetaBar() {
   metaBar = document.createElement("div");
   metaBar.id = "viewer-meta-bar";
   metaBar.setAttribute("aria-label", "Case information and chat");
+  metaBar.style.top = "8px";
+  metaBar.style.bottom = "auto";
   (viewerContainer || document.body).appendChild(metaBar);
   return metaBar;
 }
@@ -3352,22 +3354,23 @@ function createViewerLoadingScreen() {
       align-items: center;
       gap: 8px;
     }
+    #vls-display {
+      font-family: "Montserrat", sans-serif;
+      font-size: 14px;
+      color: rgba(26,58,92,0.75);
+      text-align: left;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     #vls-percent {
       font-family: "Montserrat", sans-serif;
       font-size: 15px;
       font-weight: 700;
       color: #1a3a5c;
       min-width: 46px;
-    }
-    #vls-display {
-      font-family: "Montserrat", sans-serif;
-      font-size: 14px;
-      color: rgba(26,58,92,0.75);
       text-align: right;
-      flex: 1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
     .vls-status {
       font-family: "Montserrat", sans-serif;
@@ -3386,12 +3389,11 @@ function createViewerLoadingScreen() {
   screen.innerHTML = `
     <div class="vls-card">
       <img class="vls-logo" src="../../assets/profile.png" alt="SmartRPD">
-      <div class="vls-bar-track"><div class="vls-bar-fill"></div></div>
       <div class="vls-status" id="vls-status">Initialising…</div>
       <progress id="vls-progress" value="0" max="100"></progress>
       <div class="vls-info-row">
-        <span id="vls-percent"></span>
         <span id="vls-display"></span>
+        <span id="vls-percent"></span>
       </div>
     </div>`;
   (viewerContainer || document.body).appendChild(screen);
@@ -3601,11 +3603,11 @@ btnContainer.appendChild(edit2DStatic); */
             watermark.textContent = `🦷 Case: ${window.caseID || "N/A"}`;
             watermark.className = "case-title-watermark";
             watermark.style.position = "absolute";
-            watermark.style.top = "50%";
+            watermark.style.top = "8px";
             watermark.style.left = "50%";
-            watermark.style.transform = "translate(-50%, -50%)"; // true center
-            watermark.style.color = "white";
-            watermark.style.fontSize = "32px";
+            watermark.style.transform = "translateX(-50%)";
+            watermark.style.color = "black";
+            watermark.style.fontSize = "16px";
             watermark.style.fontWeight = "bold";
             watermark.style.textShadow = "0px 0px 10px rgba(0, 0, 0, 0.8)";
             watermark.style.pointerEvents = "none";
@@ -5573,11 +5575,11 @@ btnContainer.appendChild(edit2DStatic); */
 
   .case-title {
       position: absolute;
-      top: 60%;
+      top: 8px;
       left: 50%;
       font-size: 22px;
       font-weight: bold;
-      color: rgba(255, 255, 255, 0.8);
+      color: black;
       text-shadow: 0px 0px 8px rgba(0, 0, 0, 0.7);
       z-index: 10;
       pointer-events: none;
@@ -6153,9 +6155,7 @@ btnContainer.appendChild(edit2DStatic); */
       /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
         navigator.userAgent
       );
-    caseTitle.style.transform = isMobile
-      ? "translate(-50%, 2500%)"
-      : "translate(-50%, 1000%)";
+    caseTitle.style.transform = "translateX(-50%)";
 
     // Insert it into container3D
     container.appendChild(caseTitle);
@@ -6350,10 +6350,11 @@ function displayFullScreenImage(img) {
   const watermark = document.createElement("div");
   watermark.textContent = `🦷 Case: ${window.caseID || "N/A"}`;
   watermark.style.position = "absolute";
+  watermark.style.top = "8px";
   watermark.style.left = "50%";
-  watermark.style.transform = "translateX(-50%)"; // only X-axis initially
-  watermark.style.color = "white";
-  watermark.style.fontSize = "32px";
+  watermark.style.transform = "translateX(-50%)";
+  watermark.style.color = "black";
+  watermark.style.fontSize = "16px";
   watermark.style.fontWeight = "bold";
   watermark.style.textShadow = "0px 0px 10px rgba(0, 0, 0, 0.8)";
   watermark.style.pointerEvents = "none";
@@ -6361,27 +6362,7 @@ function displayFullScreenImage(img) {
 
   fullscreenContainer.appendChild(watermark);
 
-  // Dynamically position vertically based on image
-  const centerWatermark = () => {
-    const img = fullscreenContainer.querySelector("img");
-    if (!img) return;
-
-    const imgRect = img.getBoundingClientRect();
-    const containerRect = fullscreenContainer.getBoundingClientRect();
-    const verticalCenter = imgRect.top + imgRect.height / 2 - containerRect.top;
-
-    watermark.style.top = `${verticalCenter}px`;
-  };
-
-  // Run after image is loaded and on resize
-  const imgElement = fullscreenContainer.querySelector("img");
-  if (imgElement && !imgElement.complete) {
-    imgElement.onload = centerWatermark;
-  } else {
-    centerWatermark();
-  }
-
-  window.addEventListener("resize", centerWatermark);
+  // watermark stays pinned to top: 8px — no dynamic centering needed
 
   // Calculate maximum dimensions for the fullscreen image
   const screenWidth = window.innerWidth;
