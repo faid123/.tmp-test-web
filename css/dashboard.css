@@ -358,25 +358,6 @@
 }
 .dash-foot b { color: #0f172a; font-weight: 700; }
 
-/* ---------- floating help ---------- */
-.dash-help {
-  position: fixed;
-  right: 22px;
-  bottom: 22px;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  border: 0;
-  background: #1f2937;
-  color: #fff;
-  font-size: 18px;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: var(--shadow-md, 0 4px 12px rgba(15, 23, 42, 0.18));
-  transition: background 0.15s ease;
-}
-.dash-help:hover { background: #0f172a; }
-
 /* ---------- mobile-only bits (hidden on desktop) ---------- */
 .dash-mobile-head { display: none; }
 
@@ -412,6 +393,11 @@
 }
 .dash-vc-toggle:hover,
 .dash-steps-toggle:hover { background: #f1f5f9; }
+/* Chevron points down when collapsed, flips up when the list is open. */
+.dash-vc-toggle i,
+.dash-steps-toggle i { transition: transform 0.2s ease; }
+.dash-vc-toggle.is-open i,
+.dash-steps-toggle.is-open i { transform: rotate(180deg); }
 
 /* ---------- full-screen capture lightbox (mobile/tablet preview) ---------- */
 .dash-lightbox {
@@ -473,6 +459,9 @@
   .dash-col-steps > .dash-col-head { margin-top: 18px; }
   .dash-steps.is-collapsed { display: none; }
   .dash-steps-toggle { display: inline-flex; }
+  /* The whole header bar is tappable to expand/collapse the list. */
+  .dash-col-steps > .dash-col-head,
+  .dash-col-head-vc { cursor: pointer; user-select: none; -webkit-user-select: none; }
 
   /* 3) Thumbnails — the inline preview panel is hidden; captures pop full-screen */
   .dash-col-captures > .dash-col-head:not(.dash-mobile-head) { display: none; }

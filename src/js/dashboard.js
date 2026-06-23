@@ -274,7 +274,7 @@ function buildOverlay() {
         <div class="dash-col-head">
           <span class="dash-col-title"><i class="fa-solid fa-wave-square"></i> PROCESSING STEPS</span>
           <span class="dash-chip" id="dashStepsChip">0/5</span>
-          <button type="button" class="dash-steps-toggle" id="dashStepsToggle" aria-expanded="false">Show</button>
+          <button type="button" class="dash-steps-toggle" id="dashStepsToggle" aria-expanded="false" aria-label="Toggle processing steps"><i class="fa fa-chevron-down" aria-hidden="true"></i></button>
         </div>
         <div class="dash-progress"><div class="dash-progress-fill" id="dashProgressFill"></div></div>
         <div class="dash-steps is-collapsed" id="dashSteps"></div>
@@ -310,7 +310,7 @@ function buildOverlay() {
         <div class="dash-col-head dash-col-head-vc">
           <span class="dash-col-title"><i class="fa-regular fa-images"></i> View Captures</span>
           <span class="dash-col-sub" id="dashViewcaptureSub">—</span>
-          <button type="button" class="dash-vc-toggle" id="dashViewcaptureToggle" aria-expanded="false">Show</button>
+          <button type="button" class="dash-vc-toggle" id="dashViewcaptureToggle" aria-expanded="false" aria-label="Toggle view captures"><i class="fa fa-chevron-down" aria-hidden="true"></i></button>
         </div>
         <div class="dash-viewcaptures is-collapsed" id="dashViewcaptures"></div>
       </section>
@@ -318,15 +318,11 @@ function buildOverlay() {
     <div class="dash-lightbox hidden" id="dashLightbox" aria-hidden="true">
       <button type="button" class="dash-lightbox-close" id="dashLightboxClose" aria-label="Close preview">&times;</button>
       <img class="dash-lightbox-img" id="dashLightboxImg" alt="Capture preview" />
-    </div>
-    <button type="button" class="dash-help" id="dashHelpBtn" aria-label="Help">?</button>`;
+    </div>`;
   document.body.appendChild(overlay);
 
   const close = () => closeDashboard();
   overlay.querySelector("#dashCloseBtn").addEventListener("click", close);
-  overlay.querySelector("#dashHelpBtn").addEventListener("click", () => {
-    toast.info("Each step reflects per-jaw progress. Click a capture below to preview it.");
-  });
 
   // Full-screen capture preview (used on phones/tablets where the inline preview
   // panel is hidden): close on the X or a backdrop tap.
@@ -335,24 +331,36 @@ function buildOverlay() {
     if (e.target === e.currentTarget) closeLightbox();
   });
 
-  // View Captures show/hide (mobile only; the gallery starts collapsed).
-  const vcToggle = overlay.querySelector("#dashViewcaptureToggle");
-  vcToggle?.addEventListener("click", () => {
-    const gallery = overlay.querySelector("#dashViewcaptures");
-    const collapsed = gallery.classList.toggle("is-collapsed");
-    vcToggle.textContent = collapsed ? "Show" : "Hide";
-    vcToggle.setAttribute("aria-expanded", String(!collapsed));
-  });
+  // Collapsible sections (mobile only; lists start collapsed). The whole header
+  // bar is the tap target; the chevron button is just a visual affordance that
+  // rotates to point up when the list is open.
+  const wireCollapsible = (headerEl, panelEl, toggleBtn) => {
+    if (!headerEl || !panelEl) return;
+    const sync = () => {
+      const open = !panelEl.classList.contains("is-collapsed");
+      toggleBtn?.classList.toggle("is-open", open);
+      toggleBtn?.setAttribute("aria-expanded", String(open));
+    };
+    headerEl.addEventListener("click", () => {
+      panelEl.classList.toggle("is-collapsed");
+      sync();
+    });
+    sync();
+  };
 
-  // Processing Steps show/hide (mobile only; the step list starts collapsed —
-  // the header chip and progress bar stay as a compact summary).
-  const stepsToggle = overlay.querySelector("#dashStepsToggle");
-  stepsToggle?.addEventListener("click", () => {
-    const list = overlay.querySelector("#dashSteps");
-    const collapsed = list.classList.toggle("is-collapsed");
-    stepsToggle.textContent = collapsed ? "Show" : "Hide";
-    stepsToggle.setAttribute("aria-expanded", String(!collapsed));
-  });
+  // Processing Steps — the header chip and progress bar stay as a compact summary.
+  wireCollapsible(
+    overlay.querySelector(".dash-col-steps > .dash-col-head"),
+    overlay.querySelector("#dashSteps"),
+    overlay.querySelector("#dashStepsToggle")
+  );
+
+  // View Captures gallery.
+  wireCollapsible(
+    overlay.querySelector(".dash-col-head-vc"),
+    overlay.querySelector("#dashViewcaptures"),
+    overlay.querySelector("#dashViewcaptureToggle")
+  );
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
@@ -570,10 +578,13 @@ function renderAccess(roles) {
     .map((r) => {
       const role = r.role || "—";
       const isOwner = String(role).toLowerCase() === "owner";
+      // "coowner" reads better hyphenated in the UI.
+      const roleLabel =
+        String(role).toLowerCase() === "coowner" ? "co-owner" : role;
       return `
       <tr>
         <td>${escapeHtml(r.username)}</td>
-        <td><span class="dash-access-role${isOwner ? " is-owner" : ""}">${escapeHtml(role)}</span></td>
+        <td><span class="dash-access-role${isOwner ? " is-owner" : ""}">${escapeHtml(roleLabel)}</span></td>
       </tr>`;
     })
     .join("");

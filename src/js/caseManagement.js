@@ -1102,6 +1102,53 @@ function updateThumbnail() {
   area?.classList.add("has-image");
 }
 
+// Move the inline carousel by delta (wraps around) and re-render.
+function stepThumbnail(delta) {
+  if (currentThumbnails.length === 0) return;
+  currentImageIndex =
+    (currentImageIndex + delta + currentThumbnails.length) % currentThumbnails.length;
+  updateThumbnail();
+}
+
+// Attach left/right swipe navigation to an element for mobile photo browsing.
+// onSwipe(1) for a left swipe (next), onSwipe(-1) for a right swipe (previous).
+// Vertical drags and taps are ignored so scrolling and click-to-zoom still work.
+function attachSwipeNav(el, onSwipe) {
+  if (!el || el.dataset.swipeBound) return;
+  el.dataset.swipeBound = "1";
+  const THRESHOLD = 40; // min horizontal travel (px) to count as a swipe
+  let startX = 0;
+  let startY = 0;
+  let tracking = false;
+  el.addEventListener(
+    "touchstart",
+    (e) => {
+      if (e.touches.length !== 1) {
+        tracking = false;
+        return;
+      }
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      tracking = true;
+    },
+    { passive: true }
+  );
+  el.addEventListener(
+    "touchend",
+    (e) => {
+      if (!tracking) return;
+      tracking = false;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      // Require a mostly-horizontal gesture past the threshold.
+      if (Math.abs(dx) < THRESHOLD || Math.abs(dx) <= Math.abs(dy)) return;
+      onSwipe(dx < 0 ? 1 : -1);
+    },
+    { passive: true }
+  );
+}
+
 // Lightbox preview for the case thumbnail carousel: clicking the thumbnail opens
 // the current image enlarged over a dark overlay, with prev/next + a counter that
 // stay in sync with the small carousel. Close via the × button, a click on the
@@ -1140,6 +1187,9 @@ function openThumbnailPreview() {
       else if (e.key === "ArrowLeft") stepThumbnailPreview(-1);
       else if (e.key === "ArrowRight") stepThumbnailPreview(1);
     });
+
+    // Swipe left/right on the enlarged image to move between photos (mobile).
+    attachSwipeNav(overlay.querySelector(".thumb-preview-img"), stepThumbnailPreview);
   }
   renderThumbnailPreview();
   overlay.classList.remove("hidden");
@@ -1478,21 +1528,11 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
     syncSortUi();
 
     // 缩略图切换按钮绑定
-    document.getElementById("prevBtn").addEventListener("click", () => {
-      if (currentThumbnails.length > 0) {
-        currentImageIndex =
-          (currentImageIndex - 1 + currentThumbnails.length) %
-          currentThumbnails.length;
-        updateThumbnail();
-      }
-    });
+    document.getElementById("prevBtn").addEventListener("click", () => stepThumbnail(-1));
+    document.getElementById("nextBtn").addEventListener("click", () => stepThumbnail(1));
 
-    document.getElementById("nextBtn").addEventListener("click", () => {
-      if (currentThumbnails.length > 0) {
-        currentImageIndex = (currentImageIndex + 1) % currentThumbnails.length;
-        updateThumbnail();
-      }
-    });
+    // Swipe left/right on the preview to move between photos (mobile devices).
+    attachSwipeNav(document.querySelector(".cm-image-area"), stepThumbnail);
 
     // Click the thumbnail to open it enlarged in a lightbox preview.
     document.getElementById("caseImage")?.addEventListener("click", () => {

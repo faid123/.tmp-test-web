@@ -903,6 +903,12 @@ button {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 11;
+  /* Keep the 16:11 shape on every screen. As a flex child of the scrolling
+     .cm-detail column it defaults to flex-shrink:1, so on shorter viewports
+     (Windows display scaling, mobile portrait) flexbox squished it below the
+     aspect-ratio height — making the box the wrong shape. flex:0 0 auto pins
+     it to its aspect-ratio size and lets the panel scroll instead. */
+  flex: 0 0 auto;
   background: #eef2f7;
   border-radius: var(--radius);
   border: 1px solid var(--line);
