@@ -10,7 +10,7 @@
 // roles.
 
 import { toast } from "./toast.js";
-import { logApi } from "./apiLog.js";
+import { logApi, statusLabel } from "./apiLog.js";
 
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 const API = "https://live.api.smartrpdai.com/api/smartrpd";
@@ -182,25 +182,10 @@ export function resolveCaptureSlots(rows) {
 // list's mapping (apiStatusToValue/statusDisplayText/statusPillClass) compactly
 // so the dashboard doesn't have to import from caseManagement.js (which imports
 // this module — a cycle). Pure; exported for unit testing.
+// Exact status titles come from the shared apiLog.js (same source as the
+// case list and report). Re-exported as caseStatusLabel for existing callers.
 export function caseStatusLabel(apiStatus) {
-  const v = apiStatus ? String(apiStatus).toLowerCase().replace(/ /g, "_") : "na";
-  if (v === "na") return "N/A"; // unset — exactly what the case list shows
-  if (v === "draft") return "draft";
-  if (v.endsWith("_pending")) {
-    if (v.startsWith("2d_")) return "pending (2D)";
-    if (v.startsWith("3d_")) return "pending (3D)";
-    return "pending";
-  }
-  if (v.endsWith("_drafted") || v.endsWith("_approved")) {
-    if (v.startsWith("2d_")) return "in-progress (2D)";
-    if (v.startsWith("3d_")) return "in-progress (3D)";
-    return "in-progress";
-  }
-  if (v === "in_production") return "in-progress";
-  if (v === "out_for_delivery") return "out for delivery";
-  if (v === "delivered") return "delivered";
-  if (v === "completed") return "completed";
-  return v.replace(/_/g, " ");
+  return statusLabel(apiStatus);
 }
 
 export function caseStatusKind(apiStatus) {

@@ -11,6 +11,7 @@ import {
   tiltArrowFor,
 } from "./clinicalInfo.js";
 import { WORK_CATEGORY_LABELS, loadCaseNote, fetchAdditionalCaseDetails } from "./caseNote.js";
+import { statusLabel } from "../apiLog.js";
 
 //Add constants
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
@@ -1031,20 +1032,10 @@ function trimImageMargins(dataUrl) {
 // and the --status-* palette in case_list.css. Drives the top-right status badge.
 function reportStatusBadge(apiStatus) {
   const v = apiStatus ? String(apiStatus).toLowerCase().replace(/ /g, "_") : "na";
-  const jaw = v.startsWith("2d_") ? " (2D)" : v.startsWith("3d_") ? " (3D)" : "";
 
-  // Labels are kept lowercase to match the dashboard's caseStatusLabel and the
-  // case list's statusDisplayText verbatim, so the report's status reads the same.
-  let label;
-  if (!v || v === "na") label = "N/A";
-  else if (v === "draft") label = "draft";
-  else if (v.endsWith("_pending") || v === "pending") label = `pending${jaw}`;
-  else if (v.endsWith("_drafted") || v.endsWith("_approved")) label = `in-progress${jaw}`;
-  else if (v === "in_production") label = "in-progress";
-  else if (v === "out_for_delivery") label = "out for delivery";
-  else if (v === "delivered") label = "delivered";
-  else if (v === "completed") label = "completed";
-  else label = v.replace(/_/g, " ");
+  // Full status title verbatim from the shared apiLog.js, matching the
+  // case list and dashboard.
+  const label = statusLabel(apiStatus);
 
   // Follow statusPillClass's precedence so the color matches the case list.
   let bg = "#e2e8f0";

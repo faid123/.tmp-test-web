@@ -1,12 +1,11 @@
 import { lol } from "../crypt.js";
 import { toast } from "./toast.js";
 import { confirmModal } from "./confirmModal.js";
-import { logApi } from "./apiLog.js";
-import { setupConnectivityIndicator } from "./connectivityIndicator.js";
+import { logApi, statusLabel } from "./apiLog.js";
+import { setupConnectivityIndicator, reportHtmlToDocxBytes } from "./accessibility.js";
 import { setupAppSidebar } from "./appSidebar.js";
 import { VIEWER_UUID, LOGIN_CREDENTIALS } from "../config.js";
 import { buildReportHtml } from "./2D/noticeboard.js";
-import { reportHtmlToDocxBytes } from "./reportDocx.js";
 import { saveCaseDueDate, toDateInputValue } from "./2D/caseNote.js";
 
 function getLoggedInUser() {
@@ -573,25 +572,10 @@ function statusPillClass(apiStatus) {
   return "cm-pill-progress";
 }
 
+// Exact status titles live in apiLog.js (shared with the dashboard and the
+// generated report) so the pill reads identically everywhere.
 function statusDisplayText(apiStatus) {
-  const v = apiStatusToValue(apiStatus);
-  if (!v || v === "na") return "N/A";
-  if (v === "draft") return "draft";
-  if (v.endsWith("_pending")) {
-    if (v.startsWith("2d_")) return "pending (2D)";
-    if (v.startsWith("3d_")) return "pending (3D)";
-    return "pending";
-  }
-  if (v.endsWith("_drafted") || v.endsWith("_approved")) {
-    if (v.startsWith("2d_")) return "in-progress (2D)";
-    if (v.startsWith("3d_")) return "in-progress (3D)";
-    return "in-progress";
-  }
-  if (v === "in_production") return "in-progress";
-  if (v === "out_for_delivery") return "out for delivery";
-  if (v === "delivered") return "delivered";
-  if (v === "completed") return "completed";
-  return v.replace(/_/g, " ");
+  return statusLabel(apiStatus);
 }
 
 function applyStatusPillToSelect(apiStatus) {

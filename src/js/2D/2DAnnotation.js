@@ -1350,7 +1350,7 @@ function initAnnFooter() {
   const userEl = document.getElementById("footerUserName");
   if (userEl) userEl.textContent = footerUser?.username || "—";
 
-  import("../connectivityIndicator.js").then(({ setupConnectivityIndicator }) => {
+  import("../accessibility.js").then(({ setupConnectivityIndicator }) => {
     setupConnectivityIndicator(document.getElementById("footerConnection"));
   });
 
