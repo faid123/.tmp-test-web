@@ -90,23 +90,22 @@ async function sendOTP() {
       };
       localStorage.setItem("loggedInUser", JSON.stringify(userInfo));
 
-      // --- OTP DISABLED (temp) ---
-      // // Trigger OTP generation / email.
-      // const otpRes = await fetch(`${API_BASE}/otp`, {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify([{ machine_id: MACHINE_ID, uuid: currentUUID }])
-      // });
-      // logApi(otpRes, "POST /otp");
-      //
-      // if (!otpRes.ok) {
-      //   setError("error-message", "Login succeeded but OTP generation failed.");
-      //   return false;
-      // }
-      //
-      // // Move to OTP view and show where the code was sent.
-      // const target = document.getElementById("otp-target");
-      // if (target) target.textContent = data.email || username || "your account";
+      // Trigger OTP generation / email.
+      const otpRes = await fetch(`${API_BASE}/otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([{ machine_id: MACHINE_ID, uuid: currentUUID }])
+      });
+      logApi(otpRes, "POST /otp");
+      
+      if (!otpRes.ok) {
+        setError("error-message", "Login succeeded but OTP generation failed.");
+        return false;
+      }
+      
+      // Move to OTP view and show where the code was sent.
+      const target = document.getElementById("otp-target");
+      if (target) target.textContent = data.email || username || "your account";
       return true;
     }
 
@@ -220,9 +219,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (btn) btn.disabled = true;
       const ok = await sendOTP();
       if (btn) btn.disabled = false;
-      // --- OTP DISABLED (temp) --- skip OTP view and go straight to the case list.
-      // if (ok) showView("otp");
-      if (ok) window.location.href = "./src/pages/case_list.html";
+      if (ok) showView("otp");
     });
   }
 
