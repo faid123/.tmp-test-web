@@ -586,7 +586,7 @@ function createComponentPanel(groups) {
     const allVisible = groups.every(
       (g) => g.hasContent?.() === false || (g.getVisible?.() ?? true)
     );
-    const icon = allVisible ? "Icon_layers4" : "Icon_layers3";
+    const icon = allVisible ? "Icon_layers3" : "Icon_layers4";
     const altText = allVisible ? "Hide All" : "Show All";
     const label = allVisible ? "Hide all objects" : "Show all available objects";
     title.innerHTML = `<img src="${basePath}/assets/${icon}.png" alt="${altText}" style="width:24px;height:24px;object-fit:contain;display:block;margin:auto;pointer-events:none;">`;

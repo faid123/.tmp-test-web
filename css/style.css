@@ -77,7 +77,7 @@ html, body {
 #viewer-meta-bar {
   position: absolute;
   left: 10px;
-  bottom: 10px;
+  top: 8px;
   z-index: 1002;
   display: grid;
   grid-template-columns: minmax(0, 250px) 56px;
@@ -133,7 +133,8 @@ html, body {
   }
 
   #viewer-meta-bar {
-    bottom: calc(124px + env(safe-area-inset-bottom, 0px));
+    top: 8px;
+    bottom: auto;
     max-width: calc(100vw - 20px);
     grid-template-columns: minmax(0, 250px) 56px;
   }
@@ -157,11 +158,12 @@ html, body {
   }
 
   #viewer-meta-bar {
-    bottom: calc(116px + env(safe-area-inset-bottom, 0px));
+    top: 8px;
+    bottom: auto;
     gap: 6px;
     max-width: calc(100vw - 20px);
     grid-template-columns: minmax(0, min(220px, 64vw)) 52px;
-    padding-bottom: 2px;
+    padding-bottom: 0;
   }
 
   .viewer-meta-bubble {

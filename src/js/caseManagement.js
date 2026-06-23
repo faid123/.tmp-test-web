@@ -206,6 +206,69 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
   }
 }
 
+// Pop-up progress bar for operations whose duration we can't measure precisely
+// (the duplicate runs server-side behind a single POST). Animates a percentage
+// that creeps toward 90% while the work is in flight, then snaps to 100% on
+// completion. Reuses the .cc-loading-* card/bar styles from createCase.css via a
+// fixed-viewport overlay built on the fly (no markup needed in case_list.html).
+function createProgressOverlay(label = "Working…") {
+  const overlay = document.createElement("div");
+  overlay.className = "cc-loading-overlay cc-loading-overlay--fixed";
+  overlay.setAttribute("role", "status");
+  overlay.setAttribute("aria-live", "polite");
+  overlay.innerHTML = `
+    <div class="cc-loading-card">
+      <div class="cc-loading-header">
+        <span class="cc-loading-label"></span>
+        <span class="cc-loading-percent">0%</span>
+      </div>
+      <div class="cc-loading-bar" aria-hidden="true">
+        <div class="cc-loading-bar-fill"></div>
+      </div>
+    </div>`;
+  const labelEl = overlay.querySelector(".cc-loading-label");
+  const percentEl = overlay.querySelector(".cc-loading-percent");
+  const fillEl = overlay.querySelector(".cc-loading-bar-fill");
+  labelEl.textContent = label;
+  document.body.appendChild(overlay);
+
+  let pct = 0;
+  const render = () => {
+    const r = Math.round(pct);
+    fillEl.style.width = `${r}%`;
+    percentEl.textContent = `${r}%`;
+  };
+  render();
+
+  // Ease toward 90% (asymptotic, so it never claims to be finished early) to
+  // keep the bar feeling alive during the single duplicate request.
+  const timer = setInterval(() => {
+    if (pct < 90) {
+      pct += (90 - pct) * 0.12;
+      render();
+    }
+  }, 220);
+
+  return {
+    setLabel(text) {
+      labelEl.textContent = text;
+    },
+    // Snap to 100%, hold briefly so the user sees completion, then remove.
+    async finish() {
+      clearInterval(timer);
+      pct = 100;
+      render();
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      overlay.remove();
+    },
+    // Tear down immediately (e.g. on error).
+    destroy() {
+      clearInterval(timer);
+      overlay.remove();
+    },
+  };
+}
+
 // Duplicate a case by id. Mirrors the C# RestAPI.DuplicateCase flow: POST
 // [authData, {case_id: caseIntID}] to /case/duplicate/{id}; the server creates
 // a new case and returns an InsertID payload. We reload the list so the new
@@ -241,6 +304,8 @@ async function duplicateCaseById(caseId, { skipConfirm = false } = {}) {
     { case_id: String(caseIdForApi) },
   ]);
 
+  const progress = createProgressOverlay("Duplicating case…");
+
   try {
     const response = await fetch(
       "https://live.api.smartrpdai.com/api/smartrpd/case/duplicate",
@@ -272,11 +337,15 @@ async function duplicateCaseById(caseId, { skipConfirm = false } = {}) {
         : "Case duplicated successfully."
     );
 
-    // Mirror SessionManager.RefreshCaseList — reload so the new case appears
+    // Snap the bar to 100% and hold briefly so the user sees it complete, then
+    // mirror SessionManager.RefreshCaseList — reload so the new case appears
     // with its full server-side detail/thumbnail set, same as refreshListBtn.
-    setTimeout(() => window.location.reload(), 400);
+    progress.setLabel("Finalizing…");
+    await progress.finish();
+    window.location.reload();
     return true;
   } catch (err) {
+    progress.destroy();
     console.error("❌ Duplicate failed:", err);
     toast.error(`Failed to duplicate case. ${err.message || err}`);
     return false;

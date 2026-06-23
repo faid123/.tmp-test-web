@@ -3020,6 +3020,17 @@ button.upload3d-row {
 /* ============ bottom status footer ============ */
 body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
 
+/* Mobile/tablet stacked layout scrolls the body under the fixed 40px footer, so
+   reserve space at the bottom of the shell — otherwise the last controls (Draw
+   from Scratch / Select Teeth / catalog buttons) sit flush against (and get
+   clipped by) the footer. Desktop locks the shell to the viewport instead, so
+   it doesn't need this. env() adds the notch inset on phones that have one. */
+@media (max-width: 1200px) {
+  body.has-ann-footer .annotation-shell {
+    padding-bottom: calc(40px + 20px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* Desktop: lock the shell to the viewport (minus the fixed 40px footer) so the
    page fits the screen without body scroll. `min-height` alone is just a floor
    that lets the shell grow past 100vh — e.g. when the action list loses a row

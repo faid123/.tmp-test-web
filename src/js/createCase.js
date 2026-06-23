@@ -1087,6 +1087,13 @@ async function uploadReferenceImage(
           console.log(`✅ Uploaded reference image: ${file.name}`);
         }
 
+        // Also save the reference image into a thumbnail slot so it shows up in
+        // the case detail carousel (which reads /thumbnails by slot). Slots 0–2
+        // are reserved for the 2D composite + upper/lower jaw renders, so
+        // reference images take the slots after them (3, 4, …). `index` is
+        // 1-based, giving ref image 1 → slot 3.
+        await uploadCaseThumbnail(machine_id, uuid, caseIntID, 2 + index, base64data);
+
         resolve();
       } catch (err) {
         console.error(`❌ Error uploading reference image ${file.name}:`, err);
@@ -1102,7 +1109,7 @@ async function uploadReferenceImage(
 // Body shape per API spec: [authData, caseData] where caseData carries the
 // integer case id, the slot index, and the base64 image payload (no data URL
 // prefix). slot 0 = composite 2D annotation, 1 = upper STL render,
-// 2 = lower STL render.
+// 2 = lower STL render, 3+ = reference images.
 async function uploadCaseThumbnail(machine_id, uuid, caseIntID, slot, dataUrl) {
   if (!caseIntID || !dataUrl) return;
   const commaIdx = dataUrl.indexOf(",");

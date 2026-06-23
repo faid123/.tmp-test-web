@@ -133,6 +133,15 @@
 
 .cc-loading-overlay.hidden { display: none !important; }
 
+/* Fixed full-viewport variant. The base overlay is absolute (scoped to the
+   create-case pane); duplication is triggered from the case list, so its
+   progress pop-up must cover the whole screen instead. */
+.cc-loading-overlay--fixed {
+  position: fixed;
+  border-radius: 0;
+  z-index: 1000;
+}
+
 .cc-loading-card {
   width: min(360px, 80%);
   padding: 20px 24px;
