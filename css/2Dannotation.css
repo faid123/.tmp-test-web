@@ -109,6 +109,32 @@ body.is-panel-resizing {
   background: var(--rose-050);
 }
 
+/* Screen capture button, lower-left of the 3D preview panel. Mirrors the
+   maximize button (top-right) and is shown only once the 3D view is ready. */
+.preview-3d-capture-btn {
+  position: absolute;
+  left: 28px;
+  bottom: 28px;
+  z-index: 10;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  display: none;
+  place-items: center;
+  box-shadow: 0 1px 4px rgba(26, 77, 63, 0.08);
+}
+.preview-frame.is-3d-ready .preview-3d-capture-btn { display: grid; }
+.preview-3d-capture-btn:hover {
+  border-color: var(--rose-500);
+  color: var(--rose-700);
+  background: var(--rose-050);
+}
+
 .annotation-shell.preview-maximized {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -284,12 +310,13 @@ body.is-panel-resizing {
 }
 
 /* ===== Upload other 3D files modal ===== */
+/* Drop-up popover that emerges from the footer "Upload other 3D files" icon.
+   The overlay is just a positioning/click-catch layer; the panel is placed
+   next to the icon by positionUpload3dPanel() in preview3D.js. */
 .upload3d-modal {
   position: fixed;
   inset: 0;
   z-index: 4200;
-  display: grid;
-  place-items: center;
   pointer-events: none;
 }
 
@@ -297,27 +324,35 @@ body.is-panel-resizing {
   display: none;
 }
 
+/* Transparent full-screen catcher: a click anywhere outside the panel closes
+   the popover, but the screen isn't dimmed like a modal. */
 .upload3d-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  background: transparent;
   pointer-events: auto;
 }
 
 .upload3d-modal-panel {
-  position: relative;
+  position: absolute;
   z-index: 1;
-  width: min(520px, calc(100vw - 32px));
-  max-height: min(80vh, 640px);
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(60vh, 460px);
   display: flex;
   flex-direction: column;
   background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
-  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.22);
+  padding: 14px;
   pointer-events: auto;
+  transform-origin: bottom left;
+  animation: upload3d-emerge 0.14s ease-out;
+}
+
+@keyframes upload3d-emerge {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .upload3d-modal-header {
@@ -351,6 +386,119 @@ body.is-panel-resizing {
 .upload3d-modal-close:hover {
   background: #f1f3f5;
   color: var(--ink, #2b3440);
+}
+
+/* ---- Download Jaw Profile menu (STL zip / JPEG) ------------------------- */
+.jaw-dl-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 4200;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.jaw-dl-modal.is-hidden {
+  display: none;
+}
+
+.jaw-dl-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  pointer-events: auto;
+}
+
+.jaw-dl-panel {
+  position: relative;
+  z-index: 1;
+  width: min(420px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  padding: 18px;
+  pointer-events: auto;
+}
+
+.jaw-dl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.jaw-dl-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--ink, #2b3440);
+}
+
+.jaw-dl-close {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 1.05rem;
+  color: var(--muted, #6b7280);
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+}
+
+.jaw-dl-close:hover {
+  background: #f1f3f5;
+  color: var(--ink, #2b3440);
+}
+
+.jaw-dl-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.jaw-dl-option {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 14px;
+  align-items: center;
+  text-align: left;
+  padding: 14px 16px;
+  border: 1px solid #d2d7df;
+  border-radius: 12px;
+  background: #f6f8fa;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.jaw-dl-option:hover {
+  border-color: var(--primary, #3BAE95);
+  background: #eef7f4;
+}
+
+.jaw-dl-option i {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  font-size: 1.25rem;
+  color: var(--primary, #3BAE95);
+}
+
+.jaw-dl-option-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink, #2b3440);
+}
+
+.jaw-dl-option-sub {
+  font-size: 0.8rem;
+  color: var(--muted, #6b7280);
 }
 
 /* The grey card that holds the file rows + upload button. */
@@ -399,6 +547,15 @@ button.upload3d-row {
 .upload3d-file-icon.is-empty {
   color: #8b95a3;
 }
+
+/* The populated file icon is a per-file show/hide toggle for the 3D view. */
+.upload3d-file-icon[role="button"] {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+.upload3d-file-icon[role="button"]:hover { background: #eef1f4; }
+.upload3d-file-icon.is-hidden-extra { opacity: 0.35; }
 
 .upload3d-file-badge {
   position: absolute;
@@ -566,6 +723,53 @@ button.upload3d-row {
   background: var(--rose-050);
   border-color: var(--rose-600);
   color: var(--rose-800);
+}
+
+/* Inline upload progress shown in the SET SURVEY ANGLE slot while a freshly
+   picked jaw STL uploads. The `is-uploading-jaw` row class swaps the survey/
+   trash/upload controls for this bar until the upload settles. */
+.jaw-preview-survey-loading {
+  display: none;
+  grid-column: 4;
+  align-items: center;
+  gap: 10px;
+}
+
+.jaw-preview-row.is-uploading-jaw .jaw-preview-survey-loading {
+  display: flex;
+}
+
+.jaw-preview-row.is-uploading-jaw .jaw-preview-survey-btn,
+.jaw-preview-row.is-uploading-jaw .jaw-preview-delete-btn,
+.jaw-preview-row.is-uploading-jaw .jaw-preview-upload-btn {
+  display: none;
+}
+
+.jaw-preview-survey-loading-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--rose-700);
+  white-space: nowrap;
+}
+
+.jaw-preview-survey-loading-track {
+  flex: 1 1 auto;
+  max-width: 160px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--rose-050);
+  overflow: hidden;
+}
+
+/* Determinate fill — width is set inline by setJawRowUploadProgress(). */
+.jaw-preview-survey-loading-bar {
+  display: block;
+  width: 0%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--rose-500), var(--rose-700));
+  transition: width 160ms ease;
 }
 
 .jaw-preview-3d-mount {
@@ -2196,19 +2400,21 @@ button.upload3d-row {
      sits. The topbar collapse on desktop already gives the jaws ~40px more
      room than before, so the visual size is bigger even at the same scale. */
   #upperArchSvg.arch-svg {
-    transform: translateY(40px) scale(1.25);
+    transform: translateY(30px) scale(1.12);
     transform-origin: center;
   }
 
   #lowerArchSvg.arch-svg {
-    transform: translateY(100px) scale(1.25);
+    /* Scaled down a touch and lifted (was 100px / 1.25) so the lower anterior
+       teeth clear the fixed footer instead of being clipped behind it. */
+    transform: translateY(68px) scale(1.12);
     transform-origin: center;
   }
 
   /* Re-center the lock / undo / redo button row visually between
      the two transformed jaws. Layout position is unchanged. */
   .jaw-lock-strip {
-    transform: translateY(65px);
+    transform: translateY(46px);
     position: relative;
     z-index: 2;
   }
@@ -2813,6 +3019,38 @@ button.upload3d-row {
 
 /* ============ bottom status footer ============ */
 body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
+
+/* Mobile/tablet stacked layout scrolls the body under the fixed 40px footer, so
+   reserve space at the bottom of the shell — otherwise the last controls (Draw
+   from Scratch / Select Teeth / catalog buttons) sit flush against (and get
+   clipped by) the footer. Desktop locks the shell to the viewport instead, so
+   it doesn't need this. env() adds the notch inset on phones that have one. */
+@media (max-width: 1200px) {
+  body.has-ann-footer .annotation-shell {
+    padding-bottom: calc(40px + 20px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Desktop: lock the shell to the viewport (minus the fixed 40px footer) so the
+   page fits the screen without body scroll. `min-height` alone is just a floor
+   that lets the shell grow past 100vh — e.g. when the action list loses a row
+   and the `minmax(0,1fr)` jaw area expands — pushing the body into a scroll. A
+   fixed height makes that inner row shrink to fit instead. Declared after the
+   rule above so it wins the same-specificity tie on desktop; the mobile/tablet
+   stacked layout (≤1200px) keeps the growable `min-height` and scrolls. */
+@media (min-width: 1201px) {
+  body.has-ann-footer .annotation-shell {
+    min-height: 0;
+    height: calc(100vh - 40px);
+    /* Clip at the shell. The lower arch is transformed down (translateY +
+       scale) and deliberately allowed to spill below its canvas box; in design
+       mode the jaw row grows (the Clear buttons hide, shrinking the action
+       row) and that spill reaches past the shell bottom. Transformed overflow
+       still extends the page's scroll area, so without this the body scrolls
+       even though the shell box is a fixed height. */
+    overflow: hidden;
+  }
+}
 .ann-footer {
   position: fixed;
   left: 0;

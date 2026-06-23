@@ -23,11 +23,19 @@ let lastNotesSignature = null;
 // case list never leaves a chat fetch running and competing with its load.
 let pollTimer = null;        // setInterval handle while the chat is live
 let pollInFlight = false;    // guards against overlapping polls
+let notesInFlight = false;   // a /notes/get request is currently running
 let notesAbort = null;       // AbortController for the in-flight notes fetch
 let lifecycleBound = false;  // visibilitychange/pagehide bound once
 
 // Poll cadence while the chat is open and the tab is focused.
 const CHAT_POLL_MS = 3000;
+
+// Per-case localStorage cache of the last rendered conversation. The notes
+// endpoint returns every note's full base64 image inline, so the first fetch on
+// open is payload-heavy and slow; painting this cache first makes reopening feel
+// instant while the network refresh lands in the background.
+const CHAT_CACHE_PREFIX = 'chat_cache_';
+const cacheKey = (id) => `${CHAT_CACHE_PREFIX}${id}`;
 
 // Author tag used for the local-only "pending upload" preview bubble.
 const PREVIEW_AUTHOR = 'Click send to upload image';
@@ -67,14 +75,66 @@ function detectImageMime(base64) {
     return 'image/jpeg';
 }
 
+// Persist the conversation for instant paint on the next open. Base64 images can
+// blow the localStorage quota, so on failure fall back to a text-only cache (so
+// at least the text renders instantly), and give up quietly if even that fails.
+function saveCachedMessages(id, msgs) {
+    if (!id || !Array.isArray(msgs)) return;
+    const key = cacheKey(id);
+    try {
+        localStorage.setItem(key, JSON.stringify(msgs));
+    } catch {
+        try {
+            const textOnly = msgs.map((m) => ({
+                ...m,
+                content: String(m.content || '').replace(/<img\b[^>]*>/gi, ''),
+            }));
+            localStorage.setItem(key, JSON.stringify(textOnly));
+        } catch {
+            try { localStorage.removeItem(key); } catch { /* ignore */ }
+        }
+    }
+}
+
+function loadCachedMessages(id) {
+    if (!id) return null;
+    try {
+        const raw = localStorage.getItem(cacheKey(id));
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : null;
+    } catch {
+        return null;
+    }
+}
+
+// Paint the last-known conversation immediately (before the network lands) so
+// reopening a chat feels instant. fetchNotes overwrites it once data arrives.
+function renderCachedMessages() {
+    if (!chatBox || !caseId || messages.length) return;
+    const cached = loadCachedMessages(caseId);
+    if (cached && cached.length) {
+        messages = cached;
+        displayMessages();
+    }
+}
+
 // 获取历史记录
 async function fetchNotes() {
     if (!caseId || !chatBox) return;
-    // Single-flight: abort any previous notes request so a slow one can't land
-    // after a newer one — and so stopChatLive()/page-leave can cancel it.
+    // True single-flight: if a notes request is already running, SKIP rather than
+    // abort-and-restart it. The payload is large (every note's full base64 image)
+    // and slow (tens of seconds), so a poll/visibility refresh firing mid-flight
+    // used to cancel the in-flight request and immediately start an identical one
+    // — multiplying that heavy query on the server and tying up several
+    // connections to the API host. That is what left the case list waiting right
+    // after the chat was used. stopChatLive() still aborts on close / page-leave.
+    if (notesInFlight) return;
     notesAbort?.abort();
     const ctrl = new AbortController();
     notesAbort = ctrl;
+    notesInFlight = true;
+    const t0 = performance.now();
     try {
         const response = await fetch(`https://live.api.smartrpdai.com/api/smartrpd/notes/get/${caseId}`, {
             method: 'POST',
@@ -84,7 +144,18 @@ async function fetchNotes() {
         });
         logApi(response, 'POST /notes/get/:id');
         if (response.ok) {
+            const tNet = performance.now();
             const notes = await response.json();
+            const tParse = performance.now();
+            // Surface where the time goes: network (download) vs JSON.parse. The
+            // payload is dominated by inline base64 images, so a big parse number
+            // means the list is image-heavy (the case for an image-URL endpoint).
+            const lenKB = Number(response.headers.get('content-length') || 0) / 1024;
+            console.log(
+                `[chat] notes/get: ${notes.length} notes` +
+                (lenKB ? `, ${lenKB.toFixed(0)}KB` : '') +
+                `, net ${Math.round(tNet - t0)}ms, parse ${Math.round(tParse - tNet)}ms`
+            );
             notes.reverse();
             // Only re-render when the server data actually changed, so the
             // auto-refresh poll doesn't yank the user's scroll position or
@@ -104,7 +175,7 @@ async function fetchNotes() {
                 let content = '';
                 if (note.image_base64) {
                     const mimeType = detectImageMime(note.image_base64);
-                    content += `<img src="data:${mimeType};base64,${note.image_base64}" alt="Note Image" class="uploaded-image" />`;
+                    content += `<img src="data:${mimeType};base64,${note.image_base64}" alt="Note Image" class="uploaded-image" loading="lazy" decoding="async" />`;
                 }
                 if (note.content) {
                     content += `<div class="msg-text">${note.content}</div>`;
@@ -115,10 +186,14 @@ async function fetchNotes() {
                     timestamp: new Date(note.created_at).toLocaleString(),
                 };
             });
+            // Cache the server conversation (without the local-only preview bubble)
+            // for an instant paint on the next open.
+            saveCachedMessages(caseId, messages);
             // Keep any in-progress image preview visible across refreshes.
             if (pendingImageBase64) messages.push(buildPendingPreviewMessage());
             displayMessages();
         } else {
+            if (firstLoad) chatBox.innerHTML = '';
             console.error('❌ Failed to fetch notes:', await response.text());
         }
     } catch (err) {
@@ -126,7 +201,12 @@ async function fetchNotes() {
         if (err?.name === 'AbortError') return;
         console.error('❌ Error fetching notes:', err);
     } finally {
-        if (notesAbort === ctrl) notesAbort = null;
+        // Only the current request clears the flags — an older request that was
+        // aborted by a forced restart must not reset state owned by the new one.
+        if (notesAbort === ctrl) {
+            notesAbort = null;
+            notesInFlight = false;
+        }
     }
 }
 
@@ -165,6 +245,7 @@ function bindChatLifecycle() {
 function startChatLive() {
     bindChatLifecycle();
     stopChatLive();                 // never run two timers
+    renderCachedMessages();         // instant paint from the last-known cache
     fetchNotes();                   // immediate refresh on open
     pollTimer = setInterval(pollTick, CHAT_POLL_MS);
 }
@@ -175,6 +256,7 @@ function stopChatLive() {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     if (notesAbort) { notesAbort.abort(); notesAbort = null; }
     pollInFlight = false;
+    notesInFlight = false;
 }
 
 // 渲染消息
@@ -265,7 +347,7 @@ async function handleSendMessage() {
     // so the pre-wrapped text doesn't render blank lines above/below it.
     removePendingPreview();
     let echo = '';
-    if (sentImage) echo += `<img src="data:${sentMime};base64,${sentImage}" alt="Image" class="uploaded-image" />`;
+    if (sentImage) echo += `<img src="data:${sentMime};base64,${sentImage}" alt="Image" class="uploaded-image" loading="lazy" decoding="async" />`;
     if (message) echo += `<div class="msg-text">${message}</div>`;
     messages.push({
         content: echo,
@@ -289,7 +371,7 @@ function buildPendingPreviewMessage() {
     return {
         content: `
         <div class="upload-preview-wrap">
-            <img src="data:${pendingImageMime};base64,${pendingImageBase64}" alt="Preview" class="uploaded-image" />
+            <img src="data:${pendingImageMime};base64,${pendingImageBase64}" alt="Preview" class="uploaded-image" decoding="async" />
             <button type="button" class="upload-preview-remove" onclick="clearImage()" aria-label="Remove image">&times;</button>
         </div>
     `,

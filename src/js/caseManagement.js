@@ -4,10 +4,45 @@ import { confirmModal } from "./confirmModal.js";
 import { logApi } from "./apiLog.js";
 import { setupConnectivityIndicator } from "./connectivityIndicator.js";
 import { setupAppSidebar } from "./appSidebar.js";
+import { VIEWER_UUID, LOGIN_CREDENTIALS } from "../config.js";
+import { buildReportHtml } from "./2D/noticeboard.js";
+import { reportHtmlToDocxBytes } from "./reportDocx.js";
+import { saveCaseDueDate, toDateInputValue } from "./2D/caseNote.js";
 
 function getLoggedInUser() {
   const user = localStorage.getItem("loggedInUser");
   return user ? JSON.parse(user) : null;
+}
+
+// Per-user cache of the last case list so the table can paint instantly on load
+// instead of waiting on /case/user/findall/get — which can lag when the API host
+// is briefly busy (right after the 2D page's request burst, or while the chat's
+// heavy notes query is still being served by the backend). The network result
+// replaces it as soon as it lands. Keyed by uuid so one account never sees
+// another's list on the instant paint.
+function caseListCacheKey() {
+  const u = getLoggedInUser();
+  return u?.uuid ? `caseList_cache_${u.uuid}` : null;
+}
+function saveCachedCases(list) {
+  const key = caseListCacheKey();
+  if (!key || !Array.isArray(list)) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(list));
+  } catch {
+    try { localStorage.removeItem(key); } catch { /* ignore */ }
+  }
+}
+function loadCachedCases() {
+  const key = caseListCacheKey();
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 let currentSortColumn = "recent";
@@ -171,6 +206,69 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
   }
 }
 
+// Pop-up progress bar for operations whose duration we can't measure precisely
+// (the duplicate runs server-side behind a single POST). Animates a percentage
+// that creeps toward 90% while the work is in flight, then snaps to 100% on
+// completion. Reuses the .cc-loading-* card/bar styles from createCase.css via a
+// fixed-viewport overlay built on the fly (no markup needed in case_list.html).
+function createProgressOverlay(label = "Working…") {
+  const overlay = document.createElement("div");
+  overlay.className = "cc-loading-overlay cc-loading-overlay--fixed";
+  overlay.setAttribute("role", "status");
+  overlay.setAttribute("aria-live", "polite");
+  overlay.innerHTML = `
+    <div class="cc-loading-card">
+      <div class="cc-loading-header">
+        <span class="cc-loading-label"></span>
+        <span class="cc-loading-percent">0%</span>
+      </div>
+      <div class="cc-loading-bar" aria-hidden="true">
+        <div class="cc-loading-bar-fill"></div>
+      </div>
+    </div>`;
+  const labelEl = overlay.querySelector(".cc-loading-label");
+  const percentEl = overlay.querySelector(".cc-loading-percent");
+  const fillEl = overlay.querySelector(".cc-loading-bar-fill");
+  labelEl.textContent = label;
+  document.body.appendChild(overlay);
+
+  let pct = 0;
+  const render = () => {
+    const r = Math.round(pct);
+    fillEl.style.width = `${r}%`;
+    percentEl.textContent = `${r}%`;
+  };
+  render();
+
+  // Ease toward 90% (asymptotic, so it never claims to be finished early) to
+  // keep the bar feeling alive during the single duplicate request.
+  const timer = setInterval(() => {
+    if (pct < 90) {
+      pct += (90 - pct) * 0.12;
+      render();
+    }
+  }, 220);
+
+  return {
+    setLabel(text) {
+      labelEl.textContent = text;
+    },
+    // Snap to 100%, hold briefly so the user sees completion, then remove.
+    async finish() {
+      clearInterval(timer);
+      pct = 100;
+      render();
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      overlay.remove();
+    },
+    // Tear down immediately (e.g. on error).
+    destroy() {
+      clearInterval(timer);
+      overlay.remove();
+    },
+  };
+}
+
 // Duplicate a case by id. Mirrors the C# RestAPI.DuplicateCase flow: POST
 // [authData, {case_id: caseIntID}] to /case/duplicate/{id}; the server creates
 // a new case and returns an InsertID payload. We reload the list so the new
@@ -206,6 +304,8 @@ async function duplicateCaseById(caseId, { skipConfirm = false } = {}) {
     { case_id: String(caseIdForApi) },
   ]);
 
+  const progress = createProgressOverlay("Duplicating case…");
+
   try {
     const response = await fetch(
       "https://live.api.smartrpdai.com/api/smartrpd/case/duplicate",
@@ -237,11 +337,15 @@ async function duplicateCaseById(caseId, { skipConfirm = false } = {}) {
         : "Case duplicated successfully."
     );
 
-    // Mirror SessionManager.RefreshCaseList — reload so the new case appears
+    // Snap the bar to 100% and hold briefly so the user sees it complete, then
+    // mirror SessionManager.RefreshCaseList — reload so the new case appears
     // with its full server-side detail/thumbnail set, same as refreshListBtn.
-    setTimeout(() => window.location.reload(), 400);
+    progress.setLabel("Finalizing…");
+    await progress.finish();
+    window.location.reload();
     return true;
   } catch (err) {
+    progress.destroy();
     console.error("❌ Duplicate failed:", err);
     toast.error(`Failed to duplicate case. ${err.message || err}`);
     return false;
@@ -295,86 +399,156 @@ function triggerBlobDownload(bytes, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function downloadCaseFiles(caseIntId, caseLabel) {
-  const user = getLoggedInUser();
-  if (!user?.uuid || caseIntId == null) {
-    toast.warning("Unable to download: missing case info or login.");
-    return;
-  }
+const DL_API = "https://live.api.smartrpdai.com/api/smartrpd";
+const DL_MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
+// Fetch the case's STL files, preferring processed STLs and falling back to raw.
+async function fetchCaseStls(caseIntId, uuid) {
   const payload = [
-    {
-      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
-      uuid: user.uuid,
-      caseIntID: caseIntId,
-    },
+    { machine_id: DL_MACHINE_ID, uuid, caseIntID: caseIntId },
     { case_int_id: caseIntId },
   ];
-
-  const endpoints = [
-    "https://live.api.smartrpdai.com/api/smartrpd/stl/get",
-    "https://live.api.smartrpdai.com/api/smartrpd/stl/raw/get",
-  ];
-
-  let files = [];
-  for (const endpoint of endpoints) {
+  for (const endpoint of [`${DL_API}/stl/get`, `${DL_API}/stl/raw/get`]) {
     try {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      logApi(res, `POST ${endpoint.replace('https://live.api.smartrpdai.com/api/smartrpd', '')}`);
+      logApi(res, `POST ${endpoint.replace(DL_API, "")}`);
       if (!res.ok) continue;
       const data = await res.json();
-      const list = Array.isArray(data) ? data : [data];
-      files = list.filter((item) => item && item.data);
-      if (files.length) {
-        console.log(
-          `[case/download] STL source selected: ${endpoint.replace('https://live.api.smartrpdai.com/api/smartrpd', '')} (${files.length} file(s))`
-        );
-        break;
-      }
+      const files = (Array.isArray(data) ? data : [data]).filter((i) => i && i.data);
+      if (files.length) return files;
     } catch (err) {
-      console.warn("[case/download] endpoint failed", endpoint, err);
+      console.warn("[case/download] STL endpoint failed", endpoint, err);
     }
   }
+  return [];
+}
 
-  if (!files.length) {
-    toast.info("No uploaded files found for this case.");
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+// Re-encode an image data URL (or raw base64 PNG) to JPEG bytes for the zip.
+async function dataUrlToJpegBytes(data) {
+  const src = String(data).startsWith("data:") ? data : `data:image/png;base64,${data}`;
+  const img = await loadImage(src);
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth || img.width;
+  canvas.height = img.naturalHeight || img.height;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0);
+  return base64ToBytes(canvas.toDataURL("image/jpeg", 0.92).split(",")[1]);
+}
+
+// The case's 2D design image (thumbnail slot 0 = composite 2D) as JPEG bytes.
+async function fetchCase2dJpegBytes(caseIntId, uuid) {
+  try {
+    const res = await fetch(`${DL_API}/thumbnails/get`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        { machine_id: DL_MACHINE_ID, uuid, caseIntID: caseIntId },
+        { case_id: caseIntId },
+      ]),
+    });
+    logApi(res, "POST /thumbnails/get");
+    if (!res.ok) return null;
+    const rows = await res.json();
+    if (!Array.isArray(rows) || !rows.length) return null;
+    const slot0 = rows.find((r) => Number(r?.slot) === 0) || rows[0];
+    if (!slot0?.data) return null;
+    return await dataUrlToJpegBytes(slot0.data);
+  } catch (err) {
+    console.warn("[case/download] 2D thumbnail fetch failed", err);
+    return null;
+  }
+}
+
+// Action-column "Download files": bundle the case's STL files, its 2D design
+// JPEG, and the design report (.docx) into one zip. Each part is best-effort —
+// whatever's available goes in; only an empty result aborts.
+async function downloadCaseFiles(caseIntId, caseLabel, apiStatus) {
+  const user = getLoggedInUser();
+  if (!user?.uuid || caseIntId == null) {
+    toast.warning("Unable to download: missing case info or login.");
     return;
   }
-
   if (typeof window.JSZip !== "function") {
     toast.error("Zip library failed to load. Please refresh and try again.");
     return;
   }
 
+  toast.info("Preparing download…");
   const base = String(caseLabel || `case_${caseIntId}`).replace(/[^a-z0-9_\-]+/gi, "_");
   const zip = new window.JSZip();
-  const usedNames = new Set();
+  let added = 0;
 
-  files.forEach((file, idx) => {
-    const type = String(file.type || file.jaw_type || "").toLowerCase();
-    const suffix = type || `file_${idx + 1}`;
-    let name = file.filename || `${base}_${suffix}.stl`;
-    if (usedNames.has(name)) {
-      const dot = name.lastIndexOf(".");
-      const stem = dot > 0 ? name.slice(0, dot) : name;
-      const ext = dot > 0 ? name.slice(dot) : "";
-      name = `${stem}_${idx + 1}${ext}`;
+  // 1) STL files.
+  try {
+    const files = await fetchCaseStls(caseIntId, user.uuid);
+    const usedNames = new Set();
+    files.forEach((file, idx) => {
+      const type = String(file.type || file.jaw_type || "").toLowerCase();
+      const suffix = type || `file_${idx + 1}`;
+      let name = file.filename || `${base}_${suffix}.stl`;
+      if (usedNames.has(name)) {
+        const dot = name.lastIndexOf(".");
+        const stem = dot > 0 ? name.slice(0, dot) : name;
+        const ext = dot > 0 ? name.slice(dot) : "";
+        name = `${stem}_${idx + 1}${ext}`;
+      }
+      usedNames.add(name);
+      try {
+        zip.file(name, base64ToBytes(file.data));
+        added += 1;
+      } catch (err) {
+        console.error("❌ Failed to add STL to zip:", name, err);
+      }
+    });
+  } catch (err) {
+    console.warn("[case/download] STL bundling failed", err);
+  }
+
+  // 2) 2D design JPEG (thumbnail slot 0).
+  try {
+    const jpeg = await fetchCase2dJpegBytes(caseIntId, user.uuid);
+    if (jpeg) {
+      zip.file(`${base}_2D.jpg`, jpeg);
+      added += 1;
     }
-    usedNames.add(name);
-    try {
-      zip.file(name, base64ToBytes(file.data));
-    } catch (err) {
-      console.error("❌ Failed to add file to zip:", name, err);
-    }
-  });
+  } catch (err) {
+    console.warn("[case/download] 2D JPEG failed", err);
+  }
+
+  // 3) Design report as a Word .docx.
+  try {
+    const html = await buildReportHtml(caseIntId, { caseLabel, apiStatus });
+    const docx = await reportHtmlToDocxBytes(html);
+    zip.file(`${base}_report.docx`, docx);
+    added += 1;
+  } catch (err) {
+    console.warn("[case/download] report .docx failed", err);
+  }
+
+  if (!added) {
+    toast.info("No files available to download for this case.");
+    return;
+  }
 
   try {
     const blob = await zip.generateAsync({ type: "uint8array" });
     triggerBlobDownload(blob, `${base}.zip`);
+    toast.success("Download ready.");
   } catch (err) {
     console.error("❌ Failed to generate zip:", err);
     toast.error(`Failed to generate zip: ${err.message || err}`);
@@ -550,7 +724,7 @@ function populateTable(cases) {
       <td class="cm-td-date" data-label="Created">${formatDateTime(caseItem.creation_date)}</td>
       <td class="cm-td-date" data-label="Due">${dueDate ? formatDateTime(dueDate) : "N/A"}</td>
       <td class="cm-td-owner" data-label="Owner">
-        <i class="fa-regular fa-circle-user"></i><span class="cm-owner-name">${escapeAttr(assignedTo)}</span>${coOwnersHtml}
+        <i class="fa-regular fa-circle-user"></i><span class="cm-owner-name" title="${escapeAttr(assignedTo)}">${escapeAttr(assignedTo)}</span>${coOwnersHtml}
       </td>
       <td class="cm-td-actions">
         <button class="cm-row-icon" type="button" title="Rename" aria-label="Rename" data-action="rename"><i class="fa-regular fa-pen-to-square"></i></button>
@@ -576,7 +750,10 @@ function populateTable(cases) {
 
     row.querySelector('[data-action="download"]').addEventListener("click", async (e) => {
       e.stopPropagation();
-      await downloadCaseFiles(resolvedCaseId, caseItem.case_id);
+      // Pass the case's authoritative status (from additionalcasedetails, merged
+      // into the list row) so the report's status badge matches the case list /
+      // dashboard — /case/get/:id, which the report would otherwise read, omits it.
+      await downloadCaseFiles(resolvedCaseId, caseItem.case_id, caseItem.new_status ?? null);
     });
 
     row.querySelector('[data-action="rename"]').addEventListener("click", (e) => {
@@ -641,6 +818,24 @@ async function handleRowClick(caseId) {
         co_owners: extra.co_owners,
       });
     }
+
+    // Stash the merged row so the dashboard ("View Dashboard", opened later) can
+    // read the real new_status / expected_date — /case/get/:id omits them, which
+    // is why those fields are merged from the cached list row (`extra`) here.
+    window.selectedCaseStub = detail;
+
+    // Persist this case's Due Date (same value/fallback as the list "Due" column)
+    // so the 2D design's Case Note can default "Date Required" to it. The 2D page
+    // is a separate tab that can't read window.selectedCaseStub; localStorage is
+    // shared same-origin. Keyed by caseId (= the 2D page's state.caseIntID).
+    saveCaseDueDate(
+      caseId,
+      toDateInputValue(
+        detail.expected_date ||
+          detail.due_date ||
+          computeDefaultDueDate(detail.creation_date)
+      )
+    );
 
     displayCaseDetails(detail);
     await fetchThumbnails(caseId);
@@ -715,9 +910,44 @@ async function fireLastOpenedBump(caseId, detail, user) {
   }
 }
 
+// Build the 3D viewer URL for a case (ThreeDViewer.html reads ?id=<encryptedId>).
+// Mirrors the Start Case navigation: encrypts the id and respects the
+// GitHub-Pages base path so the link works locally and when deployed.
+function buildThreeDViewerUrl(caseId) {
+  if (!caseId) return "";
+  const encryptedId = lol(caseId);
+  const isGitHubPages = window.location.hostname.includes("github.io");
+  const basePath = isGitHubPages
+    ? `/${window.location.pathname.split("/").filter(Boolean)[0] || ""}`
+    : "";
+  return `${window.location.origin}${basePath}/src/pages/ThreeDViewer.html?id=${encryptedId}`;
+}
+
 // 显示基本信息
 function displayCaseDetails(data) {
   const caseIntId = data.id ?? data.case_int_id;
+
+  const view3dLink = document.getElementById("view3dLink");
+  if (view3dLink) {
+    const url = buildThreeDViewerUrl(caseIntId) || "#";
+    view3dLink.href = url;
+    const textEl = view3dLink.querySelector(".cm-3d-link-text");
+    if (textEl) textEl.textContent = url;
+    // Open the viewer via window.open (not the anchor's default target=_blank,
+    // which carries rel="noopener" → a null opener and a non-closeable tab).
+    // window.open keeps the opener back-reference and makes the tab
+    // script-closeable, so the viewer's Return button can window.close() it.
+    if (!view3dLink.dataset.scriptOpenBound) {
+      view3dLink.dataset.scriptOpenBound = "1";
+      view3dLink.addEventListener("click", (e) => {
+        const href = view3dLink.getAttribute("href");
+        if (!href || href === "#") return;
+        e.preventDefault();
+        window.open(href, "_blank");
+      });
+    }
+  }
+
   const displayName = data.case_id
     ? caseIntId != null
       ? `UID ${caseIntId}-${data.case_id}`
@@ -872,6 +1102,70 @@ function updateThumbnail() {
   area?.classList.add("has-image");
 }
 
+// Lightbox preview for the case thumbnail carousel: clicking the thumbnail opens
+// the current image enlarged over a dark overlay, with prev/next + a counter that
+// stay in sync with the small carousel. Close via the × button, a click on the
+// backdrop, or Escape. The overlay is built once and reused.
+function openThumbnailPreview() {
+  if (currentThumbnails.length === 0) return;
+  let overlay = document.getElementById("thumbPreviewOverlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "thumbPreviewOverlay";
+    overlay.className = "thumb-preview-overlay hidden";
+    overlay.innerHTML = `
+      <button type="button" class="thumb-preview-close" aria-label="Close preview">&times;</button>
+      <button type="button" class="thumb-preview-nav thumb-preview-prev" aria-label="Previous image"><i class="fa fa-chevron-left"></i></button>
+      <img class="thumb-preview-img" alt="Case thumbnail preview" />
+      <button type="button" class="thumb-preview-nav thumb-preview-next" aria-label="Next image"><i class="fa fa-chevron-right"></i></button>
+      <span class="thumb-preview-counter"></span>`;
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.classList.add("hidden");
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+    overlay.querySelector(".thumb-preview-close").addEventListener("click", close);
+    overlay.querySelector(".thumb-preview-prev").addEventListener("click", (e) => {
+      e.stopPropagation();
+      stepThumbnailPreview(-1);
+    });
+    overlay.querySelector(".thumb-preview-next").addEventListener("click", (e) => {
+      e.stopPropagation();
+      stepThumbnailPreview(1);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (overlay.classList.contains("hidden")) return;
+      if (e.key === "Escape") close();
+      else if (e.key === "ArrowLeft") stepThumbnailPreview(-1);
+      else if (e.key === "ArrowRight") stepThumbnailPreview(1);
+    });
+  }
+  renderThumbnailPreview();
+  overlay.classList.remove("hidden");
+}
+
+function stepThumbnailPreview(delta) {
+  if (currentThumbnails.length === 0) return;
+  currentImageIndex =
+    (currentImageIndex + delta + currentThumbnails.length) % currentThumbnails.length;
+  updateThumbnail(); // keep the small carousel in sync with the lightbox
+  renderThumbnailPreview();
+}
+
+function renderThumbnailPreview() {
+  const overlay = document.getElementById("thumbPreviewOverlay");
+  if (!overlay || currentThumbnails.length === 0) return;
+  const img = overlay.querySelector(".thumb-preview-img");
+  const counter = overlay.querySelector(".thumb-preview-counter");
+  const multi = currentThumbnails.length > 1;
+  img.src = "data:image/png;base64," + currentThumbnails[currentImageIndex];
+  counter.textContent = `IMAGE ${currentImageIndex + 1} OF ${currentThumbnails.length}`;
+  overlay.querySelectorAll(".thumb-preview-nav").forEach((b) => {
+    b.style.display = multi ? "" : "none";
+  });
+}
+
 // 判断2D图像逻辑（白底 + 宽高比）
 function classifyThumbnails(images) {
   const is2D = (base64) => {
@@ -895,6 +1189,31 @@ function classifyThumbnails(images) {
     const threeD = results.filter((r) => !r.is2D).map((r) => r.base64);
     return [...twoD, ...threeD];
   });
+}
+
+// Pull the storage slot off a /thumbnails/get row (0 = composite 2D, 1 = upper
+// jaw, 2 = lower jaw). Tolerates a couple of field-name variants; returns null
+// when the row carries no usable slot.
+function thumbnailSlot(row) {
+  const v = row?.slot ?? row?.slot_index ?? row?.slot_id;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Order case thumbnails so the carousel is always 2D -> upper jaw -> lower jaw,
+// matching their stored slots, no matter what order the API returns them in.
+// Older cases whose rows predate slot tagging fall back to the legacy
+// aspect-ratio grouping (2D-shaped first, then 3D).
+async function orderThumbnailsBySlot(rows) {
+  const withData = rows.filter((r) => r && r.data);
+  const haveSlots = withData.some((r) => thumbnailSlot(r) != null);
+  if (!haveSlots) {
+    return classifyThumbnails(withData.map((r) => r.data));
+  }
+  return withData
+    .slice()
+    .sort((a, b) => (thumbnailSlot(a) ?? 999) - (thumbnailSlot(b) ?? 999))
+    .map((r) => r.data);
 }
 
 // 获取缩略图
@@ -939,8 +1258,7 @@ async function fetchThumbnails(caseId) {
     }
 
     const data = await res.json();
-    const rawImages = data.map((img) => img.data).filter(Boolean);
-    currentThumbnails = await classifyThumbnails(rawImages);
+    currentThumbnails = await orderThumbnailsBySlot(Array.isArray(data) ? data : []);
     currentImageIndex = 0;
     updateThumbnail();
   } catch (err) {
@@ -953,6 +1271,23 @@ async function fetchThumbnails(caseId) {
 
 // 初始化页面
 document.addEventListener("DOMContentLoaded", async () => {
+  // Instant paint FIRST — before any other setup (connectivity / sidebar /
+  // thumbnail, any of which could be slow or throw) and before the network call —
+  // so the table shows the last-known list immediately instead of staying blank
+  // while /case/user/findall/get is in flight. That request can lag when the API
+  // host is busy (e.g. right after the chat's heavy notes query); the fetch below
+  // replaces this paint as soon as it lands.
+  try {
+    const cachedForPaint = loadCachedCases();
+    if (cachedForPaint && cachedForPaint.length) {
+      currentCases = cachedForPaint;
+      populateTable(currentCases);
+      applyClientFilters();
+    }
+  } catch (err) {
+    console.warn("[caseList] instant cached paint failed", err);
+  }
+
   const footerUserName = document.getElementById("footerUserName");
   if (footerUserName) {
     const u = getLoggedInUser();
@@ -965,6 +1300,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const cases = await fetchCases();
 
   if (cases) {
+    // Persist for the next load's instant paint.
+    saveCachedCases(cases);
     // Paint the base list immediately. The per-case enrichment below fires
     // 2×N requests (additional details + co-owners, capped at 5 in flight);
     // gating the first paint on all of them left the table blank until every
@@ -992,6 +1329,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         currentCases = cases;
         populateTable(currentCases);
         applyClientFilters();
+        // Cache the enriched list (co-owners + details) so the next instant
+        // paint is complete, not just the bare base rows.
+        saveCachedCases(currentCases);
       })
       .catch((err) => {
         // Enrichment is best-effort; the base list is already on screen.
@@ -1040,6 +1380,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         variant: "info",
       });
       if (!confirmed) return;
+      // Drop the cached case list (compute the key while the user is still known)
+      // so the next account doesn't briefly see this one's list on instant paint.
+      const cacheKey = caseListCacheKey();
+      if (cacheKey) { try { localStorage.removeItem(cacheKey); } catch { /* ignore */ } }
       localStorage.removeItem("loggedInUser");
       window.location.href = "../../index.html";
     });
@@ -1149,6 +1493,11 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         updateThumbnail();
       }
     });
+
+    // Click the thumbnail to open it enlarged in a lightbox preview.
+    document.getElementById("caseImage")?.addEventListener("click", () => {
+      openThumbnailPreview();
+    });
   }
 
   // ✅ START CASE 按钮绑定逻辑（使用 class 绑定方案 B）
@@ -1171,7 +1520,57 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         : "";
 
       const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}`;
-      window.location.href = targetURL;
+      window.open(targetURL, "_blank");
+    });
+  }
+
+  // Open 3D viewer link — guard against clicking when no case is selected.
+  const view3dLink = document.getElementById("view3dLink");
+  if (view3dLink) {
+    view3dLink.addEventListener("click", (e) => {
+      if (!window.selectedCaseId) {
+        e.preventDefault();
+        toast.warning("Please select a case first.");
+      }
+    });
+  }
+
+  // Copy the selected case's 3D viewer link to the clipboard.
+  const copy3dLinkBtn = document.getElementById("copy3dLinkBtn");
+  if (copy3dLinkBtn) {
+    copy3dLinkBtn.addEventListener("click", async () => {
+      const url3d = buildThreeDViewerUrl(window.selectedCaseId);
+      if (!url3d) {
+        toast.warning("Please select a case first.");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(url3d);
+        toast.success("3D viewer link copied.");
+      } catch (err) {
+        console.warn("Failed to copy 3D viewer link", err);
+        toast.error("Couldn't copy the link.");
+      }
+    });
+  }
+
+  // Open 3D viewer pre-logged-in as the faid account.
+  const export3dLinkBtn = document.getElementById("export3dLinkBtn");
+  if (export3dLinkBtn) {
+    export3dLinkBtn.addEventListener("click", () => {
+      const url3d = buildThreeDViewerUrl(window.selectedCaseId);
+      if (!url3d) {
+        toast.warning("Please select a case first.");
+        return;
+      }
+      const exportUser = {
+        uuid: VIEWER_UUID,
+        username: LOGIN_CREDENTIALS.username,
+        email: LOGIN_CREDENTIALS.email || "",
+        isAdmin: Boolean(LOGIN_CREDENTIALS.is_admin),
+      };
+      const token = encodeURIComponent(btoa(JSON.stringify(exportUser)));
+      window.open(`${url3d}&auto_user=${token}`, "_blank");
     });
   }
 
@@ -1555,7 +1954,7 @@ function renderSharedUserList() {
         const { caseIntID, uuid, machine_id } = window._inviteContext;
         const payload = [
           { machine_id, uuid, caseIntID },
-          { case_id: caseIntID, uuid: user.uuid },
+          { case_int_id: caseIntID, uuid: user.uuid },
         ];
 
         const res = await fetch(

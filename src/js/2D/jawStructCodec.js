@@ -57,6 +57,14 @@ const REST_POSITION_SURFACE = ["mesial", "distal", "lingual"];
 // Retainer_Clasp_type / Retainer_Ring_type (0..3) -> clasp anchor surface.
 const CLASP_ORIENT_SURFACE = ["mesial_buccal", "mesial_lingual", "distal_buccal", "distal_lingual"];
 
+// NOTE on "implied plating": a plate / strap / horseshoe major connector stamps
+// reciprocating=2 on EVERY present tooth (confirmed vs sample data — upper horseshoe(2) and
+// lower lingual plate(7) plate all present teeth; lower lingual bar(6) plates none). Those are
+// now decoded into real per-tooth plate-prox components (data-driven, removable) rather than
+// being dropped; the renderer draws exactly one plate per tooth and the major-connector switch
+// adds/removes the plate-prox so a plate<->bar switch still flips the plating. See
+// annotationVisuals.js (plate-fill gating) and annotationCatalog.js (switch).
+
 const JAW_TYPE_KEY = "Jaw Type";
 const MAJOR_CONNECTOR_KEY = "Major Connector Type";
 
@@ -154,9 +162,38 @@ function restSurfaceFromConfig(f) {
   return "mesial";
 }
 
+/**
+ * Pr Config triple (value 0 = that position is present) for a posterior rest surface.
+ * Inverse of {@link restSurfaceFromConfig}; an unknown surface falls back to mesial to
+ * match its default. The posterior rest surface is web-owned (the user picks
+ * mesial/distal/lingual), so Save derives Pr Config from the live placement rather than
+ * the loaded raw value — otherwise a surface edit (e.g. mesial -> lingual) is dropped.
+ */
+function prConfigFromSurface(surface) {
+  const idx = REST_POSITION_SURFACE.indexOf(String(surface ?? "").toLowerCase());
+  const present = idx >= 0 ? idx : 0;
+  return REST_POSITION_SURFACE.map((_, i) => (i === present ? 0 : 1));
+}
+
 /** Clasp anchor surface from a Retainer Clasp/Ring Type field (default mesial_buccal). */
 function claspSurfaceFromField(f, field) {
   return CLASP_ORIENT_SURFACE[Number(f[field])] || "mesial_buccal";
+}
+
+// The reciprocating clasp sits on the arch-surface OPPOSITE the retentive clasp
+// (buccal <-> lingual) at the SAME mesial/distal corner. The desktop stores no
+// reciprocating orientation field, so it's derived from the retainer this way.
+// Do NOT add a quadrant / mesial-distal flip here: the 2D renderer already mirrors
+// quadrants 2 & 3 (getToothAssetSpec) exactly as it does for the retentive clasp,
+// so the decoder only needs the anatomical surface. A decode-side flip would cancel
+// the render mirror on the left side, leaving both sides identical (the "nothing
+// changed" symptom). Example: retentive mesial_buccal -> reci mesial_lingual, which
+// renders mesio-lingual on 48 (Q4) and, via the mirror, disto-lingual on 38 (Q3).
+function reciprocalClaspSurface(retainerSurface) {
+  let s = String(retainerSurface);
+  if (s.includes("buccal")) s = s.replace("buccal", "lingual");
+  else if (s.includes("lingual")) s = s.replace("lingual", "buccal");
+  return s;
 }
 
 /**
@@ -225,9 +262,6 @@ export function resolveJawStructDesign(parsed) {
   };
   if (!parsed?.teeth) return design;
 
-  // Jaw major connector type, read up-front so per-tooth decode can reference it.
-  const jawMcCode = Number(parsed?.other?.[MAJOR_CONNECTOR_KEY]);
-
   // array index (0..15) -> FDI, derived from the data itself (robust vs hardcoding).
   const idxToFdi = {};
   for (const [idx, tooth] of Object.entries(parsed.teeth)) {
@@ -280,14 +314,25 @@ export function resolveJawStructDesign(parsed) {
 
     // Reciprocating element (Reciprocating.Tooth Type): 1=reciprocating-clasp, 2=plate-prox,
     // 3=plate-crossmesh. Plate uses a null surface; a reciprocating clasp gets a lingual anchor.
-    // EXCEPTION: under a lower lingual PLATE (mc 7) the desktop stamps reciprocating=2 on every
-    // present tooth as implied plating — decoding each into a plate-prox draws proximal plates
-    // that overlap the plate body. Skip those (the plate already represents the plating); real
-    // reciprocating clasps (1) and crossmesh plates (3) are still kept. The encoder re-derives
-    // reciprocating=2 for a lingual plate from the connector type, so this round-trips.
+    // DATA-DRIVEN: every reciprocating value becomes a real component so it round-trips AND can
+    // be removed via the erase list. Under a PLATING major connector the desktop stamps
+    // reciprocating=2 ("implied plating") on every present tooth — those now decode into a real
+    // plate-prox each, which is the per-tooth plate the connector draws (the renderer gates that
+    // connector plate-fill on the plate-prox component, so there is exactly one plate per tooth —
+    // no double-draw / anterior overlap — and removing the plate-prox removes that tooth's plate).
     const recipId = RECIPROCATING_TYPE.get(Number(f[RECIPROCATING_FIELD]));
-    if (recipId && !(jawMcCode === 7 && recipId === "plate-prox")) {
-      const surface = recipId === "reciprocating-clasp" ? "mesial_lingual" : null;
+    if (recipId) {
+      // Derive the reciprocating clasp's surface from the tooth's retentive clasp
+      // (opposite arch-side + quadrant mirror correction — see reciprocalClaspSurface)
+      // rather than hardcoding mesial_lingual, which made every loaded reci clasp
+      // read as linguo-mesial even when the desktop placed it disto-lingual. A plate
+      // keeps a null surface.
+      let surface = null;
+      if (recipId === "reciprocating-clasp") {
+        const orientField =
+          Number(f[RETAINER_TYPE_FIELD]) === 2 ? RETAINER_RING_TYPE_FIELD : RETAINER_CLASP_TYPE_FIELD;
+        surface = reciprocalClaspSurface(claspSurfaceFromField(f, orientField));
+      }
       entry.placements.push({ componentId: recipId, surface });
     }
   }
@@ -402,7 +447,7 @@ function normalizeLingualGridForType(tail, mcCode) {
   return out;
 }
 
-function encodeToothLines(arrayIdx, fdi, rec, hasMesh, jawMajorCode) {
+function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
   // Loaded per-tooth fields (set on load by applyJawStructDesign). The web 2D
   // model doesn't carry tooth positions, Pr Config, bar mesial/distal side,
   // clasp/ring orientation or the reciprocating framework flag, so for those we
@@ -446,6 +491,18 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh, jawMajorCode) {
     }
   }
 
+  // Pr Config (rest position flags). For a posterior non-full rest the surface is
+  // web-owned, so derive the triple live from the placement surface; otherwise keep
+  // the loaded raw value (or the from-scratch default) for round-trip fidelity.
+  const prConfig =
+    posteriorRest === 2 && restPl
+      ? prConfigFromSurface(restPl.surface)
+      : [
+          rawOr("Tooth Main.Tooth Rest.Pr Config 0", posteriorRest === 2 ? 0 : 1),
+          rawOr("Tooth Main.Tooth Rest.Pr Config 1", 1),
+          rawOr("Tooth Main.Tooth Rest.Pr Config 2", 1),
+        ];
+
   // Retainer: type + bar shape (category) are web-owned (derived live). The bar
   // mesial/distal side, clasp/ring orientation come from the loaded data.
   let retainerType = 0;
@@ -464,25 +521,18 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh, jawMajorCode) {
     barType = barPl && String(barPl.surface || "").includes("distal") ? 1 : 0;
   }
 
-  // Reciprocating: web-owned, derived from the placed reciprocating clasp / plate so it
-  // round-trips on save (previously only preserved from raw, so web-placed reciprocating
-  // clasps and plates were lost). Falls back to the loaded value / desktop default when no
-  // reciprocating component is placed. Decode pairs this with a retainer on the same tooth.
-  // Explicit reciprocating-clasp / plate-crossmesh placements are distinct user
-  // intent and win first. Then the LOWER lingual connector decides proximal
-  // plating: a PLATE plates every present tooth (=2), a BAR plates none (=0) —
-  // verified vs desktop case 1923. Deriving this from the connector TYPE (rather
-  // than a placed plate-prox component) is what lets a plate->bar switch drop the
-  // plate's per-tooth plating: loading a lingual plate decodes reciprocating=2
-  // into plate-prox components, and without this they'd survive the switch and
-  // reopen as a plate. Otherwise fall back to a placed plate-prox, then raw, else 0.
+  // Reciprocating element (single slot): derived PURELY from the placed component so the
+  // per-tooth plate is data-driven and removals persist. 1=reciprocating-clasp, 3=plate-crossmesh,
+  // 2=plate-prox, 0=none. Decode creates one of these for every non-zero reciprocating value
+  // (including the "implied plating" =2 a plating connector stamps on every present tooth), so a
+  // loaded design round-trips byte-for-byte; removing a tooth's plate-prox makes it encode 0.
+  // The major-connector switch keeps the components in step: switching to a PLATING connector
+  // adds plate-prox to present teeth, switching to a BAR removes them (see annotationCatalog.js).
   let reciprocatingType;
   if (comps.includes("reciprocating-clasp")) reciprocatingType = 1;
   else if (comps.includes("plate-crossmesh")) reciprocatingType = 3;
-  else if (jawMajorCode === 7 && rec?.isPresent) reciprocatingType = 2;
-  else if (jawMajorCode === 6 && rec?.isPresent) reciprocatingType = 0;
   else if (comps.includes("plate-prox")) reciprocatingType = 2;
-  else reciprocatingType = Number(rawOr(RECIPROCATING_FIELD, 0));
+  else reciprocatingType = 0;
 
   const fields = [
     ["Tooth Main.Tooth Index.Major Index", maj],
@@ -502,9 +552,9 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh, jawMajorCode) {
     ["Tooth Main.Tooth Rest.Anterior Cingulum Rest Type", antCingulum],
     ["Tooth Main.Tooth Rest.Anterior Incisal Rest Type", antIncisal],
     ["Tooth Main.Tooth Rest.Posterior Rest Type", posteriorRest],
-    ["Tooth Main.Tooth Rest.Pr Config 0", rawOr("Tooth Main.Tooth Rest.Pr Config 0", posteriorRest === 2 ? 0 : 1)],
-    ["Tooth Main.Tooth Rest.Pr Config 1", rawOr("Tooth Main.Tooth Rest.Pr Config 1", 1)],
-    ["Tooth Main.Tooth Rest.Pr Config 2", rawOr("Tooth Main.Tooth Rest.Pr Config 2", 1)],
+    ["Tooth Main.Tooth Rest.Pr Config 0", prConfig[0]],
+    ["Tooth Main.Tooth Rest.Pr Config 1", prConfig[1]],
+    ["Tooth Main.Tooth Rest.Pr Config 2", prConfig[2]],
     ["Tooth Main.Tooth Retainer.Retainer Type", retainerType],
     ["Tooth Main.Tooth Retainer.Retainer Clasp Type", rawOr(RETAINER_CLASP_TYPE_FIELD, 0)],
     ["Tooth Main.Tooth Retainer.Retainer Ring Type", rawOr(RETAINER_RING_TYPE_FIELD, 0)],
@@ -537,7 +587,7 @@ export function encodeJawStructText(state, jawSide) {
   lines.push("Jaw Material: 0");
 
   fdiOrder.forEach((fdi, arrayIdx) => {
-    lines.push(...encodeToothLines(arrayIdx, fdi, state.teeth?.[fdi], meshFdi.has(fdi), mcCode));
+    lines.push(...encodeToothLines(arrayIdx, fdi, state.teeth?.[fdi], meshFdi.has(fdi)));
   });
 
   lines.push(`Mesh Number: ${meshSpans.length}`);

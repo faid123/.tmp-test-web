@@ -97,12 +97,12 @@ async function sendOTP() {
         body: JSON.stringify([{ machine_id: MACHINE_ID, uuid: currentUUID }])
       });
       logApi(otpRes, "POST /otp");
-
+      
       if (!otpRes.ok) {
         setError("error-message", "Login succeeded but OTP generation failed.");
         return false;
       }
-
+      
       // Move to OTP view and show where the code was sent.
       const target = document.getElementById("otp-target");
       if (target) target.textContent = data.email || username || "your account";

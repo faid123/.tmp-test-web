@@ -593,6 +593,43 @@
   display: inline-block;
 }
 
+/* No-mode selection overlay: a dashed outline around the picked element with a
+   trash button at its top-right. A DOM overlay (not drawn on canvas) so it
+   never bakes into the exported image. The box is click-through so the element
+   under it stays draggable; only the trash button captures clicks. */
+.ie-select-box {
+  position: absolute;
+  border: 1.5px dashed var(--rose-500);
+  border-radius: 4px;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 12;
+}
+.ie-select-box.is-hidden { display: none; }
+.ie-select-trash {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--rose-700);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  pointer-events: auto;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.ie-select-trash:hover {
+  background: var(--rose-100);
+  color: var(--rose-800);
+  border-color: var(--rose-500);
+}
+
 .instruction-editor-text-input {
   background: rgba(255, 255, 255, 0.95);
   border: 1px dashed var(--rose-500);
@@ -607,33 +644,6 @@
   /* Resize handle is drawn at the bottom-right by `resize: both`; the dashed
      border + light background acts as the visible "text box" the user drags. */
   line-height: 1.1;
-}
-
-.instruction-editor-text-remove {
-  position: absolute;
-  top: -10px;
-  right: -10px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1px solid #b48daa;
-  background: #fff;
-  color: #b48daa;
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  z-index: 11;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-}
-.instruction-editor-text-remove:hover {
-  background: #fee2e2;
-  color: #b91c1c;
-  border-color: #ef4444;
 }
 
 /* Empty-box placeholder so the user knows to type before resizing */
@@ -849,6 +859,572 @@
   }
 }
 
+/* ---- Instruction editor: floating circular toolbar ----------------------
+   Replaces the old tool sidebar/panel: a full-screen white editing surface
+   with a centered top toolbar of circular icon buttons (their actions are
+   wired up later), a close button top-left, and a green circular send/save
+   button bottom-right. This block is intentionally LAST in the file so it
+   overrides the legacy editor rules above (whose target elements no longer
+   exist) at every width — no media query needed. */
+.instruction-editor-panel {
+  inset: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  /* Black surround so the centred white photo frame stands out on desktop.
+     On mobile the frame fills the screen, so the black isn't visible. */
+  background: #000;
+  display: block;
+}
+
+/* Frame holding the photo + tools + colour bar + save. Mobile-first: fills the
+   screen. Desktop turns it into a centred, bordered phone-shaped card (see the
+   min-width rule at the end of the file). */
+.ie-frame {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  overflow: hidden;
+}
+
+.instruction-editor-canvas-wrap {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: #fff;
+  overflow: hidden;
+}
+
+/* Top-center toolbar: white pill holding circular icon buttons. */
+.ie-toolbar {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top, 14px));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  padding: 1px 12px;
+  background: transparent;
+  border-radius: 999px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.14);
+  z-index: 3;
+}
+
+.ie-tool-btn {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #3BAE95;
+  cursor: pointer;
+}
+.ie-tool-btn:hover { background: var(--rose-050); }
+.ie-tool-btn.is-active { background: var(--rose-500); }
+.ie-tool-btn svg { width: 22px; height: 22px; }
+.ie-tool-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  display: block;
+}
+/* Teal icons flip to white when their tool is the active one. */
+.ie-tool-btn.is-active .ie-tool-icon { filter: brightness(0) invert(1); }
+
+/* Close — top-left circle. Dark disc + white glyph so it reads on both the
+   black desktop surround and the white photo on mobile. */
+#instructionEditorCancelBtn {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top, 14px));
+  left: 16px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 0;
+  cursor: pointer;
+  z-index: 3;
+}
+#instructionEditorCancelBtn::before {
+  content: "\00D7";
+  font-size: 1.7rem;
+  line-height: 1;
+}
+#instructionEditorCancelBtn:hover { background: rgba(0, 0, 0, 0.6); }
+
+/* Save — labelled green pill, OUTSIDE the frame at the screen's lower-right.
+   top/left forced to auto so the legacy mobile rule (which sets top:12px)
+   can't stretch it into a full-height bar. */
+#instructionEditorSaveBtn {
+  position: absolute;
+  top: auto;
+  left: auto;
+  right: 22px;
+  bottom: 22px;
+  width: auto;
+  height: auto;
+  min-width: 92px;
+  padding: 12px 26px;
+  border: 0;
+  border-radius: 10px;
+  background: #25d366;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-family: inherit;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  z-index: 3;
+}
+#instructionEditorSaveBtn:hover { background: #1ebe5b; }
+
+/* ---- Crop & rotate mode -------------------------------------------------- */
+/* While cropping, the editor's own chrome is hidden — the crop bar has its own
+   Cancel / Done. */
+.instruction-editor-modal.is-cropping .ie-toolbar,
+.instruction-editor-modal.is-cropping .ie-shapeui,
+.instruction-editor-modal.is-cropping .ie-textui,
+.instruction-editor-modal.is-cropping .ie-brushui,
+.instruction-editor-modal.is-cropping #instructionEditorCancelBtn,
+.instruction-editor-modal.is-cropping #instructionEditorSaveBtn {
+  display: none;
+}
+
+/* Shape mode takes over the editor the same way crop does: the editor's own
+   toolbar and × / send chrome are hidden, and the shapes UI shows its own
+   Cancel / Done at the bottom. */
+.instruction-editor-modal.is-shaping .ie-toolbar,
+.instruction-editor-modal.is-shaping #instructionEditorCancelBtn,
+.instruction-editor-modal.is-shaping #instructionEditorSaveBtn {
+  display: none;
+}
+
+/* Text mode takes over the editor like shape mode does. */
+.instruction-editor-modal.is-texting .ie-toolbar,
+.instruction-editor-modal.is-texting #instructionEditorCancelBtn,
+.instruction-editor-modal.is-texting #instructionEditorSaveBtn {
+  display: none;
+}
+
+/* Brush mode takes over the editor like shape mode does. */
+.instruction-editor-modal.is-brushing .ie-toolbar,
+.instruction-editor-modal.is-brushing #instructionEditorCancelBtn,
+.instruction-editor-modal.is-brushing #instructionEditorSaveBtn {
+  display: none;
+}
+
+/* ---- Shapes UI (opens from the square toolbar icon) ----------------------
+   Full-overlay container; only its controls catch input so the canvas stays
+   drawable underneath. Holds the shapes row (top-center), an undo button
+   (top-left, next to Close), and a vertical rainbow colour bar (right).
+   .ie-brushui (brush mode) reuses the same overlay + shape sub-classes. */
+.ie-shapeui,
+.ie-brushui {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.ie-shapeui.is-hidden,
+.ie-brushui.is-hidden { display: none; }
+
+/* Shape controls cluster — parked in the top-right corner (undo sits beside
+   the shape row) so it stays clear of the jaw's anterior teeth. The editor's
+   × / send chrome is hidden in shape mode, so the corner is free. */
+.ie-shape-top {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top, 14px));
+  right: max(14px, env(safe-area-inset-right, 14px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+.ie-shape-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
+}
+.ie-shape-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--rose-700);
+  cursor: pointer;
+}
+.ie-shape-btn:hover { background: var(--rose-050); }
+.ie-shape-btn.is-active {
+  background: var(--rose-500);
+  border-color: var(--rose-500);
+  color: #fff;
+}
+.ie-shape-btn svg { width: 22px; height: 22px; }
+
+/* Undo — circular button sitting just left of the shape row in the cluster. */
+.ie-shape-undo {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+}
+.ie-shape-undo:hover { background: rgba(0, 0, 0, 0.7); }
+.ie-shape-undo svg { width: 22px; height: 22px; }
+
+/* Vertical rainbow colour bar (right edge). */
+.ie-colorbar {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: min(360px, 60vh);
+  border-radius: 9px;
+  box-shadow: 0 0 0 2px #fff, 0 2px 10px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
+}
+.ie-colorbar-thumb {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Bottom Cancel / Done bar — mirrors the crop bar's bottom row. */
+.ie-shape-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px max(20px, env(safe-area-inset-bottom, 20px));
+  pointer-events: auto;
+}
+.ie-shape-text {
+  background: transparent;
+  border: 0;
+  color: #1a1a1a;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 4px;
+  font-family: inherit;
+}
+.ie-shape-done { color: #1a9d4e; }
+
+/* ---- Text UI (opens from the text toolbar icon) --------------------------
+   Same overlay pattern as the shapes UI: a top-right pill with an alignment
+   toggle + a background toggle, the rainbow colour bar (right) and the bottom
+   Cancel / Done bar. The live text box is a contenteditable placed over the
+   canvas. */
+.ie-textui {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.ie-textui.is-hidden { display: none; }
+
+.ie-text-top {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top, 14px));
+  right: max(14px, env(safe-area-inset-right, 14px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+.ie-text-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
+}
+.ie-text-ctl {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--rose-700);
+  cursor: pointer;
+  padding: 0;
+}
+.ie-text-ctl:hover { background: var(--rose-050); }
+.ie-text-ctl svg { width: 22px; height: 22px; }
+/* Background-toggle swatch: shows the current text-plate colour. */
+.ie-text-bg-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: transparent;
+}
+.ie-text-bg-swatch.is-transparent {
+  background-image: linear-gradient(45deg, #ccc 25%, transparent 25%),
+    linear-gradient(-45deg, #ccc 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ccc 75%),
+    linear-gradient(-45deg, transparent 75%, #ccc 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
+
+/* ---- Brush mode -----------------------------------------------------------
+   Top brush/eraser toggle uses PNG icons; the bottom-centre row holds the four
+   size/style presets (2px / 5px / 10px / spray), just above Cancel·Done. */
+.ie-brush-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+}
+.ie-shape-btn.is-active .ie-brush-icon {
+  filter: brightness(0) invert(1);
+}
+.ie-brush-presets {
+  position: absolute;
+  left: 50%;
+  bottom: 76px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  padding: 8px 12px;
+  background: transparent;
+  border-radius: 14px;
+  pointer-events: auto;
+}
+.ie-brush-preset {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--rose-700);
+  cursor: pointer;
+  padding: 0;
+}
+.ie-brush-preset:hover { background: rgba(255, 255, 255, 0.5); }
+.ie-brush-preset.is-active {
+  background: var(--rose-500);
+  border-color: var(--rose-500);
+  color: #fff;
+}
+.ie-brush-preset svg { width: 26px; height: 26px; }
+/* Letter labels (text-style presets B / I / U / N). */
+.ie-brush-preset span {
+  font-family: inherit;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.ie-crop {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  touch-action: none;
+}
+.ie-crop.is-hidden { display: none; }
+
+/* The frame's huge spread box-shadow dims everything outside the crop rect. */
+.ie-crop-frame {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+  cursor: move;
+}
+
+/* Rule-of-thirds grid (lines at 33% / 66%). */
+.ie-crop-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.35) 1px, transparent 1px);
+  background-size: 100% 33.333%, 33.333% 100%;
+}
+
+/* Corner handles drawn as small white L-brackets. */
+.ie-crop-handle {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+}
+.ie-crop-handle::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 3px solid #fff;
+}
+.ie-crop-handle-nw { top: -2px; left: -2px; cursor: nwse-resize; }
+.ie-crop-handle-nw::before { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+.ie-crop-handle-ne { top: -2px; right: -2px; cursor: nesw-resize; }
+.ie-crop-handle-ne::before { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+.ie-crop-handle-sw { bottom: -2px; left: -2px; cursor: nesw-resize; }
+.ie-crop-handle-sw::before { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+.ie-crop-handle-se { bottom: -2px; right: -2px; cursor: nwse-resize; }
+.ie-crop-handle-se::before { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+
+/* Bottom bar (rotation dial + Cancel/Done), floating over the dimmed area. */
+.ie-crop-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 24px max(20px, env(safe-area-inset-bottom, 20px));
+}
+.ie-crop-bar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+/* Rotate-90 (left) + aspect-ratio (right) corner icon buttons. */
+.ie-crop-iconbtn {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #1a1a1a;
+  cursor: pointer;
+}
+.ie-crop-iconbtn:hover { background: rgba(0, 0, 0, 0.08); }
+.ie-crop-iconbtn svg { width: 24px; height: 24px; }
+.ie-crop-iconimg { width: 24px; height: 24px; object-fit: contain; display: block; }
+.ie-crop-dial {
+  position: relative;
+  flex: 1 1 auto;
+  max-width: min(360px, 60vw);
+  height: 40px;
+  cursor: ew-resize;
+}
+.ie-crop-dial-track {
+  position: absolute;
+  inset: 12px 0;
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.45) 0 1px,
+    transparent 1px 14px
+  );
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+}
+.ie-crop-dial-pointer {
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: #25d366;
+  transform: translateX(-50%);
+}
+.ie-crop-dial-value {
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #111;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.ie-crop-bar-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ie-crop-text {
+  background: transparent;
+  border: 0;
+  color: #1a1a1a;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 4px;
+  font-family: inherit;
+}
+.ie-crop-done { color: #1a9d4e; }
+
+/* Aspect-ratio action sheet (opened from the right corner button). */
+.ie-crop-aspect-menu {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.25);
+}
+.ie-crop-aspect-menu.is-hidden { display: none; }
+.ie-crop-aspect-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(300px, 80vw);
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(40, 40, 40, 0.72);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.ie-crop-aspect-sheet button {
+  border: 0;
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.ie-crop-aspect-sheet button:hover { background: rgba(255, 255, 255, 0.22); }
+.ie-crop-aspect-cancel { color: #ff6b6b !important; }
+
 
 /* ============ noticeboard thumbnail preview lightbox ============ */
 .noticeboard-thumb-preview {
@@ -971,5 +1547,22 @@
     width: 36px;
     height: 36px;
     font-size: 22px;
+  }
+}
+
+/* ---- Instruction editor: tablet/desktop frame the photo like the 3D preview
+   On screens ≥600px (tablets incl. iPad Mini portrait at 768, and desktop) the
+   photo sits in a centred, phone-shaped card with a light border (matching
+   .preview-frame) and a black surround. The tools, colour bar and presets live
+   inside this frame so they stay aligned to the photo; only Close (×) and Save
+   sit outside. On phones (<600px) the frame fills the screen (base rule). */
+@media (min-width: 600px) {
+  .ie-frame {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: min(100%, 430px);
+    border: 1px solid var(--line);
+    border-radius: 14px;
   }
 }

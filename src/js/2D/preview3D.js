@@ -1,6 +1,7 @@
 import { state, setMessage, fetchCaseDetail } from "./2DAnnotation.js";
-import { addViewcaptureFromImage } from "./noticeboard.js";
+import { saveAsJpeg } from "./annotationLocks.js";
 import { confirmModal } from "../confirmModal.js";
+import { toast } from "../toast.js";
 
 let THREE = null;
 let TrackballControls = null;
@@ -205,6 +206,7 @@ export function teardown3DPreview() {
   preview3DState.area = null;
   preview3DState.topControls = null;
   closeUpload3dModal();
+  closeDownloadJawProfileModal();
   preview3DState.caseData = null;
   preview3DState.heatmapEnabled = false;
   preview3DState.heatmapToggleBtn = null;
@@ -237,11 +239,14 @@ function getLoggedInUser() {
 // slot based on which jaw is currently visible. POST /thumbnails upserts by
 // (case_int_id, slot), so the upper slot keeps only the latest upper capture
 // and the lower slot keeps only the latest lower capture — they don't stomp
-// each other. Best-effort: failure here doesn't block the noticeboard save.
+// each other. Best-effort: failure here is surfaced but non-blocking.
 async function uploadLatest3DCapture(dataUrl) {
   const caseIntID = state.caseIntID;
   const user = getLoggedInUser();
-  if (!caseIntID || !user?.uuid || !dataUrl) return;
+  if (!caseIntID || !user?.uuid || !dataUrl) {
+    toast.error("Screen capture failed — please reload and try again.");
+    return;
+  }
 
   // Visibility is the user's intent: hidden jaws aren't in the captured pixels,
   // so writing the capture into their slot would replace a good render with a
@@ -251,7 +256,10 @@ async function uploadLatest3DCapture(dataUrl) {
   const slots = [];
   if (upperVisible) slots.push(JAW_UPPER_THUMBNAIL_SLOT);
   if (lowerVisible) slots.push(JAW_LOWER_THUMBNAIL_SLOT);
-  if (!slots.length) return;
+  if (!slots.length) {
+    toast.warning("No jaw is visible to capture.");
+    return;
+  }
 
   const commaIdx = dataUrl.indexOf(",");
   const base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
@@ -277,16 +285,72 @@ async function uploadLatest3DCapture(dataUrl) {
   const failed = results.filter((r) => !r.ok);
   if (failed.length) {
     console.error("[preview3D] failed thumbnail slots:", failed);
-    setMessage(
-      `3D capture saved to noticeboard, but case thumbnail update failed for slot${failed.length > 1 ? "s" : ""} ${failed.map((r) => r.slot).join(", ")}.`,
-      true
-    );
+    const msg = `Case thumbnail update failed for slot${failed.length > 1 ? "s" : ""} ${failed.map((r) => r.slot).join(", ")}.`;
+    setMessage(msg, true);
+    toast.error(msg);
     return;
   }
   const labels = slots
     .map((s) => (s === JAW_UPPER_THUMBNAIL_SLOT ? "upper" : "lower"))
     .join(" + ");
-  setMessage(`3D capture saved (noticeboard + ${labels} thumbnail).`, false);
+  setMessage(`${labels} thumbnail updated.`, false);
+  toast.success(`Screen capture saved to ${labels} thumbnail.`);
+}
+
+// Capture a single jaw on its own and upsert it into that jaw's case-thumbnail
+// slot (1=upper, 2=lower). Called after a jaw STL upload so the case tile picks
+// up the new model without the user having to hit the capture button. The other
+// jaw is hidden for the shot, then prior visibility is restored. Best-effort.
+async function uploadJawThumbnail(jaw) {
+  const { renderer, scene, camera } = preview3DState;
+  const caseIntID = state.caseIntID;
+  const user = getLoggedInUser();
+  if (!renderer || !scene || !camera || !caseIntID || !user?.uuid) return;
+  if (!preview3DState.groups?.[jaw]) return;
+
+  const slot = jaw === "upper" ? JAW_UPPER_THUMBNAIL_SLOT : JAW_LOWER_THUMBNAIL_SLOT;
+
+  // Isolate the target jaw for the capture, then restore the prior visibility so
+  // the on-screen view is left exactly as it was.
+  const prev = {
+    upper: preview3DState.groups?.upper?.visible,
+    lower: preview3DState.groups?.lower?.visible,
+  };
+  if (preview3DState.groups?.upper) preview3DState.groups.upper.visible = jaw === "upper";
+  if (preview3DState.groups?.lower) preview3DState.groups.lower.visible = jaw === "lower";
+
+  let base64 = "";
+  try {
+    renderer.render(scene, camera);
+    const dataUrl = renderer.domElement.toDataURL("image/png");
+    const commaIdx = dataUrl.indexOf(",");
+    base64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+  } catch (err) {
+    console.warn(`[preview3D] thumbnail capture (${jaw}) failed`, err);
+  } finally {
+    if (preview3DState.groups?.upper) preview3DState.groups.upper.visible = !!prev.upper;
+    if (preview3DState.groups?.lower) preview3DState.groups.lower.visible = !!prev.lower;
+    renderer.render(scene, camera);
+  }
+  if (!base64) return;
+
+  try {
+    const res = await fetch(`${SMARTRPD_API_BASE}/thumbnails`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        { machine_id: PREVIEW_MACHINE_ID, uuid: user.uuid, caseIntID },
+        { case_id: caseIntID, slot, data: base64 },
+      ]),
+    });
+    if (res.ok) {
+      console.log(`[preview3D] ✓ thumbnail slot ${slot} (${jaw}) updated`);
+    } else {
+      console.error(`[preview3D] ✕ thumbnail slot ${slot} (${jaw}) status=${res.status}`);
+    }
+  } catch (err) {
+    console.error(`[preview3D] thumbnail slot ${slot} (${jaw}) fetch failed`, err);
+  }
 }
 
 async function fetchJawFilesForCase() {
@@ -657,29 +721,46 @@ async function uploadJawStl(jaw, file) {
   const caseId = preview3DState.caseData?.case_id || state.caseIntID;
 
   setMessage?.(`Uploading ${jaw} jaw...`);
+  setJawRowUploading(jaw, true);
 
-  // POST one endpoint and log the exact outcome (status + body on failure) so
-  // an asymmetric upper/lower problem is visible in the console.
-  const postStl = async (path, payloadBody) => {
-    try {
-      const res = await fetch(`${SMARTRPD_API_BASE}${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([auth, payloadBody]),
-      });
-      if (res.ok) {
-        console.log(`[preview3D] ✓ POST ${path} (${jaw}) status=${res.status} type=${JSON.stringify(payloadBody.type)} case_id=${JSON.stringify(payloadBody.case_id)}`);
-        return true;
+  // Combined upload progress across both buckets (each tracked 0..1), surfaced
+  // as a single % in the row's SET SURVEY ANGLE slot.
+  const frac = { raw: 0, stl: 0 };
+  const reportProgress = () =>
+    setJawRowUploadProgress(jaw, ((frac.raw + frac.stl) / 2) * 100);
+
+  // POST one endpoint via XHR (so we get real upload-progress events) and log
+  // the exact outcome (status + body on failure) so an asymmetric upper/lower
+  // problem is visible in the console.
+  const postStl = (path, payloadBody, key) =>
+    new Promise((resolve) => {
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `${SMARTRPD_API_BASE}${path}`);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) { frac[key] = e.loaded / e.total; reportProgress(); }
+        };
+        xhr.upload.onload = () => { frac[key] = 1; reportProgress(); };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            console.log(`[preview3D] ✓ POST ${path} (${jaw}) status=${xhr.status} type=${JSON.stringify(payloadBody.type)} case_id=${JSON.stringify(payloadBody.case_id)}`);
+            resolve(true);
+          } else {
+            console.error(`[preview3D] ✕ POST ${path} (${jaw}) status=${xhr.status} type=${JSON.stringify(payloadBody.type)} case_id=${JSON.stringify(payloadBody.case_id)} body=${(xhr.responseText || "").slice(0, 300)}`);
+            resolve(false);
+          }
+        };
+        xhr.onerror = () => {
+          console.error(`[preview3D] ✕ POST ${path} (${jaw}) network error`);
+          resolve(false);
+        };
+        xhr.send(JSON.stringify([auth, payloadBody]));
+      } catch (err) {
+        console.error(`[preview3D] ✕ POST ${path} (${jaw}) threw`, err);
+        resolve(false);
       }
-      let body = "";
-      try { body = await res.text(); } catch {}
-      console.error(`[preview3D] ✕ POST ${path} (${jaw}) status=${res.status} type=${JSON.stringify(payloadBody.type)} case_id=${JSON.stringify(payloadBody.case_id)} body=${body.slice(0, 300)}`);
-      return false;
-    } catch (err) {
-      console.error(`[preview3D] ✕ POST ${path} (${jaw}) threw`, err);
-      return false;
-    }
-  };
+    });
 
   try {
     const base64 = await fileToBase64(file);
@@ -687,8 +768,8 @@ async function uploadJawStl(jaw, file) {
     // Both buckets are attempted independently — a failure in one must not skip
     // the other (the desktop client and the web preview read different tables).
     const [rawOk, stlOk] = await Promise.all([
-      postStl("/stl/raw", { case_id: caseId, type: jawType, data: base64, filename: file.name }),
-      postStl("/stl", { case_id: state.caseIntID, type: dbType, data: base64, filename: file.name }),
+      postStl("/stl/raw", { case_id: caseId, type: jawType, data: base64, filename: file.name }, "raw"),
+      postStl("/stl", { case_id: state.caseIntID, type: dbType, data: base64, filename: file.name }, "stl"),
     ]);
 
     if (!rawOk && !stlOk) {
@@ -697,6 +778,9 @@ async function uploadJawStl(jaw, file) {
     }
 
     await renderJawStl(jaw, { data: base64, type: jawType, filename: file.name });
+    // Auto-refresh this jaw's case thumbnail from the freshly rendered model so
+    // the case tile updates without a manual capture. Best-effort.
+    await uploadJawThumbnail(jaw);
     if (rawOk && stlOk) {
       setMessage?.(`${jaw[0].toUpperCase() + jaw.slice(1)} jaw uploaded.`);
     } else {
@@ -705,6 +789,8 @@ async function uploadJawStl(jaw, file) {
   } catch (err) {
     console.error(`[preview3D] ✕ jaw upload (${jaw}) failed`, err);
     setMessage?.("Upload failed. Please try again.");
+  } finally {
+    setJawRowUploading(jaw, false);
   }
 }
 
@@ -745,9 +831,10 @@ async function renderJawStl(jaw, file) {
   fitPreviewCamera();
 }
 
-// ---- Upload modal --------------------------------------------------------
-
-// Lazily build the modal once; cache element refs on preview3DState.
+// ---- Upload popover ------------------------------------------------------
+// The footer "Upload other 3D files" icon opens this as a drop-up popover
+// anchored to the icon (not a centered modal). Lazily built once; element refs
+// cached on preview3DState.
 function ensureUpload3dModal() {
   if (preview3DState.upload3dModal) return preview3DState.upload3dModal;
 
@@ -825,7 +912,7 @@ function ensureUpload3dModal() {
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
 
-  preview3DState.upload3dModal = { overlay, list, uploadBtn, fileInput, progress, progressFill, progressLabel };
+  preview3DState.upload3dModal = { overlay, panel, list, uploadBtn, fileInput, progress, progressFill, progressLabel };
   return preview3DState.upload3dModal;
 }
 
@@ -834,12 +921,39 @@ function openUpload3dModal() {
   renderUpload3dList();
   modal.overlay.classList.remove("is-hidden");
   modal.overlay.setAttribute("aria-hidden", "false");
+  positionUpload3dPanel();
   if (!preview3DState.upload3dKeyHandler) {
     preview3DState.upload3dKeyHandler = (e) => {
       if (e.key === "Escape") closeUpload3dModal();
     };
     document.addEventListener("keydown", preview3DState.upload3dKeyHandler);
   }
+  // Keep the popover glued to the icon if the window resizes while it's open.
+  if (!preview3DState.upload3dRepositionHandler) {
+    preview3DState.upload3dRepositionHandler = () => positionUpload3dPanel();
+    window.addEventListener("resize", preview3DState.upload3dRepositionHandler);
+  }
+}
+
+// Anchor the popover so it emerges upward from the footer "Upload other 3D
+// files" icon (drop-up), left-aligned to the icon and clamped to the viewport.
+function positionUpload3dPanel() {
+  const modal = preview3DState.upload3dModal;
+  if (!modal) return;
+  const anchor = document.getElementById("footerUpload3dBtn");
+  if (!anchor) return;
+  const r = anchor.getBoundingClientRect();
+  const gap = 10;
+  const margin = 8;
+  const panel = modal.panel;
+  // bottom is measured from the viewport bottom, so this sits `gap` px above
+  // the icon's top edge.
+  panel.style.bottom = `${Math.round(window.innerHeight - r.top + gap)}px`;
+  const w = panel.offsetWidth || 340;
+  let left = r.left;
+  if (left + w > window.innerWidth - margin) left = window.innerWidth - margin - w;
+  if (left < margin) left = margin;
+  panel.style.left = `${Math.round(left)}px`;
 }
 
 function closeUpload3dModal() {
@@ -851,6 +965,164 @@ function closeUpload3dModal() {
   if (preview3DState.upload3dKeyHandler) {
     document.removeEventListener("keydown", preview3DState.upload3dKeyHandler);
     preview3DState.upload3dKeyHandler = null;
+  }
+  if (preview3DState.upload3dRepositionHandler) {
+    window.removeEventListener("resize", preview3DState.upload3dRepositionHandler);
+    preview3DState.upload3dRepositionHandler = null;
+  }
+}
+
+// ---- Download Jaw Profile (STL zip / JPEG) -------------------------------
+// The footer "Download jaw profile" button (and the noticeboard one) dispatch
+// `request-download-jaw-profile`, which opens this two-option menu:
+//   • Download STL file → bundle the upper + lower jaw STLs into one .zip
+//   • Download as JPEG  → reuse the existing "Save as JPEG" arch export
+function ensureDownloadJawProfileModal() {
+  if (preview3DState.downloadJawModal) return preview3DState.downloadJawModal;
+
+  const overlay = document.createElement("div");
+  overlay.className = "jaw-dl-modal is-hidden";
+  overlay.setAttribute("aria-hidden", "true");
+
+  const backdrop = document.createElement("div");
+  backdrop.className = "jaw-dl-backdrop";
+  backdrop.addEventListener("click", closeDownloadJawProfileModal);
+
+  const panel = document.createElement("div");
+  panel.className = "jaw-dl-panel";
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-modal", "true");
+  panel.setAttribute("aria-label", "Download jaw profile");
+
+  const header = document.createElement("div");
+  header.className = "jaw-dl-header";
+  const title = document.createElement("h2");
+  title.className = "jaw-dl-title";
+  title.textContent = "Download Jaw Profile";
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "jaw-dl-close";
+  closeBtn.setAttribute("aria-label", "Close");
+  closeBtn.innerHTML = '<i class="fa fa-xmark" aria-hidden="true"></i>';
+  closeBtn.addEventListener("click", closeDownloadJawProfileModal);
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+
+  const options = document.createElement("div");
+  options.className = "jaw-dl-options";
+
+  const stlBtn = document.createElement("button");
+  stlBtn.type = "button";
+  stlBtn.className = "jaw-dl-option";
+  stlBtn.innerHTML =
+    '<i class="fa fa-cube" aria-hidden="true"></i>' +
+    '<span class="jaw-dl-option-title">Download STL file</span>' +
+    '<span class="jaw-dl-option-sub">Upper &amp; lower jaws as a .zip</span>';
+  stlBtn.addEventListener("click", () => {
+    closeDownloadJawProfileModal();
+    downloadJawStlsAsZip();
+  });
+
+  const jpegBtn = document.createElement("button");
+  jpegBtn.type = "button";
+  jpegBtn.className = "jaw-dl-option";
+  jpegBtn.innerHTML =
+    '<i class="fa fa-image" aria-hidden="true"></i>' +
+    '<span class="jaw-dl-option-title">Download as JPEG</span>' +
+    '<span class="jaw-dl-option-sub">Arch annotation image</span>';
+  jpegBtn.addEventListener("click", () => {
+    closeDownloadJawProfileModal();
+    // Reuse the existing "Save as JPEG" flow (also re-uploads the 2D thumbnail).
+    saveAsJpeg();
+  });
+
+  options.appendChild(stlBtn);
+  options.appendChild(jpegBtn);
+  panel.appendChild(header);
+  panel.appendChild(options);
+  overlay.appendChild(backdrop);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  preview3DState.downloadJawModal = { overlay };
+  return preview3DState.downloadJawModal;
+}
+
+function openDownloadJawProfileMenu() {
+  const modal = ensureDownloadJawProfileModal();
+  modal.overlay.classList.remove("is-hidden");
+  modal.overlay.setAttribute("aria-hidden", "false");
+  if (!preview3DState.downloadJawKeyHandler) {
+    preview3DState.downloadJawKeyHandler = (e) => {
+      if (e.key === "Escape") closeDownloadJawProfileModal();
+    };
+    document.addEventListener("keydown", preview3DState.downloadJawKeyHandler);
+  }
+}
+
+function closeDownloadJawProfileModal() {
+  const modal = preview3DState.downloadJawModal;
+  if (modal) {
+    modal.overlay.classList.add("is-hidden");
+    modal.overlay.setAttribute("aria-hidden", "true");
+  }
+  if (preview3DState.downloadJawKeyHandler) {
+    document.removeEventListener("keydown", preview3DState.downloadJawKeyHandler);
+    preview3DState.downloadJawKeyHandler = null;
+  }
+}
+
+// Collect upper + lower jaw STLs as { jaw, data(base64), filename }. Prefers the
+// jaws currently shown in the 3D preview; falls back to a backend fetch.
+async function collectJawStlFiles() {
+  const fromState = ["upper", "lower"]
+    .map((jaw) => {
+      const f = preview3DState.jawFiles?.[jaw];
+      return f?.data ? { jaw, data: f.data, filename: f.filename } : null;
+    })
+    .filter(Boolean);
+  if (fromState.length) return fromState;
+
+  const files = await fetchJawFilesForCase();
+  const byJaw = {};
+  files.forEach((item) => {
+    const jaw = getJawKeyFromFile(item);
+    if (jaw && !byJaw[jaw] && item?.data) {
+      byJaw[jaw] = { jaw, data: item.data, filename: item.filename };
+    }
+  });
+  return Object.values(byJaw);
+}
+
+async function downloadJawStlsAsZip() {
+  if (typeof window.JSZip === "undefined") {
+    setMessage("ZIP library failed to load — cannot download STL files.", true);
+    return;
+  }
+  try {
+    setMessage("Preparing STL download…", false);
+    const jaws = await collectJawStlFiles();
+    if (!jaws.length) {
+      setMessage("No jaw STL files found for this case.", true);
+      return;
+    }
+    const zip = new window.JSZip();
+    jaws.forEach(({ jaw, data }) => {
+      zip.file(`${jaw}.stl`, base64ToArrayBuffer(data));
+    });
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `case_${state.caseIntID ?? "unknown"}_jaw_profile.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setMessage(`Downloaded ${jaws.length} jaw STL file(s) as ZIP.`, false);
+  } catch (err) {
+    console.error("[preview3D] STL zip download failed", err);
+    setMessage("Failed to download STL files.", true);
   }
 }
 
@@ -894,17 +1166,48 @@ function renderUpload3dList() {
   modal.uploadBtn.classList.toggle("is-disabled", !hasFree);
 }
 
-// One populated file row: file icon w/ slot number, X delete, filename.
+// Toggle a SINGLE uploaded extra STL's visibility in the 3D view (clicking its
+// own file icon). Each slot has its own THREE.Group in extraGroups[slot], so
+// this only ever shows/hides that one file — never all of them. Mirrors the
+// jaw-row icon toggle: flip the group's `visible` flag (the render loop
+// repaints) and dim just this icon when hidden.
+function toggleExtraStlVisibility(slot, iconEl) {
+  const entry = preview3DState.extraGroups?.[slot];
+  if (!entry?.group) {
+    setMessage?.("That 3D file isn't loaded in the view.");
+    return;
+  }
+  entry.group.visible = !entry.group.visible;
+  iconEl?.classList.toggle("is-hidden-extra", !entry.group.visible);
+}
+
+// One populated file row: file icon w/ slot number (click to show/hide just
+// this file in the 3D view), X delete, filename.
 function buildUpload3dFileRow(slot, filename) {
   const row = document.createElement("div");
   row.className = "upload3d-row";
 
   const icon = document.createElement("span");
   icon.className = "upload3d-file-icon";
+  icon.setAttribute("role", "button");
+  icon.setAttribute("tabindex", "0");
+  icon.title = "Show / hide in 3D view";
+  icon.setAttribute("aria-label", `Show or hide ${filename} in the 3D view`);
   icon.innerHTML =
     '<i class="fa fa-file" aria-hidden="true"></i><span class="upload3d-file-badge">' +
     slot +
     "</span>";
+  // Reflect this slot's current visibility, then wire per-file toggling.
+  if (preview3DState.extraGroups?.[slot]?.group?.visible === false) {
+    icon.classList.add("is-hidden-extra");
+  }
+  icon.addEventListener("click", () => toggleExtraStlVisibility(slot, icon));
+  icon.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleExtraStlVisibility(slot, icon);
+    }
+  });
 
   const xBtn = document.createElement("button");
   xBtn.type = "button";
@@ -1210,11 +1513,11 @@ function init3DPreview(area) {
   });
 
   // Download Jaw Profile was moved to the app footer, which dispatches
-  // `request-download-jaw-profile`; we forward it to the save action here so
-  // the screen-capture pattern stays consistent. (The "Upload other 3D files"
+  // `request-download-jaw-profile`; we open a small two-option menu here
+  // (Download STL file / Download as JPEG). (The "Upload other 3D files"
   // footer button dispatches `request-open-upload-3d`, wired below.)
   const handleDownloadJawProfileRequest = () => {
-    document.getElementById("saveAnnotationBtn")?.click();
+    openDownloadJawProfileMenu();
   };
   preview3DState.downloadJawCleanup?.();
   window.addEventListener("request-download-jaw-profile", handleDownloadJawProfileRequest);
@@ -1285,8 +1588,7 @@ function init3DPreview(area) {
   controls.noRotate = false;
   controls.noZoom = false;
   // Lock the jaw at the centre: disable panning so the right mouse button can't
-  // drag the model off-centre. Rotation (left) and zoom (wheel/middle) stay on;
-  // the target is pinned to the model centre by the framing code below.
+  // drag the model off-centre. Rotation (left) and zoom (wheel) stay active.
   controls.noPan = true;
   controls.staticMoving = false;
   controls.dynamicDampingFactor = 0.18;
@@ -1311,13 +1613,13 @@ function init3DPreview(area) {
     try {
       renderer.render(scene, camera);
       const dataUrl = renderer.domElement.toDataURL("image/png");
-      // Noticeboard save (local cache) + case-thumbnail upload (server) run in
-      // parallel — both keyed off the same dataUrl, neither depends on the
-      // other completing first.
-      addViewcaptureFromImage(dataUrl);
+      // Footer capture is thumbnails-only: upsert the upper/lower case-thumbnail
+      // slots from this render. Adding to the noticeboard is now exclusively the
+      // noticeboard's own "Add Viewcapture" button.
       await uploadLatest3DCapture(dataUrl);
     } catch (err) {
       console.error("Failed to capture 3D preview screenshot:", err);
+      toast.error("Screen capture failed.");
     } finally {
       setTimeout(() => { preview3DState.capturing = false; }, 400);
     }
@@ -1933,7 +2235,10 @@ function fitPreviewCamera() {
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z, 1);
-  const fitDist = maxDim / (2 * Math.tan((camera.fov * Math.PI) / 360));
+  // Distance at which the model's largest dimension just fills the vertical FOV,
+  // padded out so the loaded jaws don't start uncomfortably close to the camera.
+  const FIT_PADDING = 1.5;
+  const fitDist = (maxDim / (2 * Math.tan((camera.fov * Math.PI) / 360))) * FIT_PADDING;
   camera.up.set(0, 1, 0);
   camera.position.set(center.x, center.y + fitDist * 0.35, center.z + fitDist * 1.25);
   controls.target.copy(center);
@@ -2246,12 +2551,21 @@ function buildJawRow({ jaw, icon, label }) {
   uploadBtn.title = `Upload ${jaw} 3D file`;
   uploadBtn.innerHTML = '<i class="fa fa-arrow-up-from-bracket" aria-hidden="true"></i>';
 
+  // Inline progress shown in the SET SURVEY ANGLE slot while a freshly picked
+  // jaw STL is uploading. Hidden until the row gets `is-uploading-jaw`.
+  const surveyLoading = document.createElement("div");
+  surveyLoading.className = "jaw-preview-survey-loading";
+  surveyLoading.innerHTML =
+    '<span class="jaw-preview-survey-loading-label">UPLOADING…</span>' +
+    '<span class="jaw-preview-survey-loading-track"><span class="jaw-preview-survey-loading-bar"></span></span>';
+
   row.appendChild(iconEl);
   row.appendChild(allowWrap);
   row.appendChild(deleteBtn);
   row.appendChild(surveyBtn);
   row.appendChild(uploadBtn);
-  return { row, toggle, deleteBtn, surveyBtn, uploadBtn, iconEl };
+  row.appendChild(surveyLoading);
+  return { row, toggle, deleteBtn, surveyBtn, uploadBtn, surveyLoading, iconEl };
 }
 
 // Switch a jaw's row between its "loaded" controls (trash + SET SURVEY ANGLE)
@@ -2268,6 +2582,29 @@ function setJawRowMode(jaw, hasStl) {
   ctrl.row.classList.toggle("is-empty-jaw", !hasStl);
   ctrl.toggle.checked = hasStl;
   ctrl.toggle.disabled = !hasStl;
+}
+
+// Show/hide the inline upload progress bar in a jaw row's SET SURVEY ANGLE slot.
+// While set, the survey/trash/upload controls are replaced by the loading bar.
+function setJawRowUploading(jaw, uploading) {
+  const rowKey = jaw === "upper" ? "rowUpper" : "rowLower";
+  const ctrl = preview3DState.topControls?.[rowKey];
+  if (!ctrl) return;
+  ctrl.row.classList.toggle("is-uploading-jaw", uploading);
+  if (uploading) setJawRowUploadProgress(jaw, 0);
+}
+
+// Update the inline upload progress (0..100) shown in a jaw row's SET SURVEY
+// ANGLE slot — drives both the "UPLOADING… N%" label and the bar width.
+function setJawRowUploadProgress(jaw, pct) {
+  const rowKey = jaw === "upper" ? "rowUpper" : "rowLower";
+  const wrap = preview3DState.topControls?.[rowKey]?.surveyLoading;
+  if (!wrap) return;
+  const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+  const label = wrap.querySelector(".jaw-preview-survey-loading-label");
+  const bar = wrap.querySelector(".jaw-preview-survey-loading-bar");
+  if (label) label.textContent = `UPLOADING… ${clamped}%`;
+  if (bar) bar.style.width = `${clamped}%`;
 }
 
 

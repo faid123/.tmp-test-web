@@ -1,10 +1,16 @@
 import {
   COMPONENT_BY_ID,
-  ensureMajorConnectorPlacementsOnSupportedTeeth,
+  ensureMajorConnectorPlacementsOnSupportedTeethInJaws,
+  ensureMeshPlacementsOnMissingTeeth,
+  ensurePlatePlacementsOnPresentTeeth,
   getDefaultMajorConnectorIdForDesignMode,
+  getDefaultMeshIdForDesignMode,
+  getDefaultPlateIdForDesignMode,
   isBarComponent,
   isBarPlacementSurface,
   isMajorConnectorComponent,
+  isPlateComponentId,
+  meshSelectionContextFromState,
 } from "./components.js";
 import { forEachTooth, TOOTH_ORDER } from "./constants.js";
 import {
@@ -354,6 +360,13 @@ export function updateEditModeUI() {
   if (clearTop) clearTop.classList.toggle("is-hidden", active);
   if (clearBottom) clearBottom.classList.toggle("is-hidden", active);
 
+  // Draw from Scratch / Load Template Jaw are design-mode actions — hide them
+  // in tooth-selection mode.
+  const drawScratch = document.getElementById("drawFromScratchBtn");
+  const loadTemplate = document.getElementById("loadProposalBtn");
+  if (drawScratch) drawScratch.classList.toggle("is-hidden", !active);
+  if (loadTemplate) loadTemplate.classList.toggle("is-hidden", !active);
+
   const eraser = document.getElementById("removeComponentModeBtn");
   const rangeBtn = document.getElementById("teethRangeMissingBtn");
 
@@ -403,15 +416,52 @@ export function syncDesignModeWithLocks(notify) {
   state.designMode = next;
 
   if (next && !prev) {
-    // Mesh and plate are no longer auto-placed on locking (user directive) — they come from
-    // the loaded design or are placed by hand. Only the major connector is auto-seeded.
-    const majorId =
+    // Auto-fill the default design on lock: mesh on the missing teeth, a plate on
+    // the present teeth, then the major connector seeded onto those anchors (the
+    // connector's run only starts on a tooth that already carries mesh/plate/clasp).
+    // Each ensure* call is gap-filling — it skips teeth that already carry that
+    // element, so a loaded design's own components are preserved.
+    const meshId = getDefaultMeshIdForDesignMode(
+      meshSelectionContextFromState(state),
+      COMPONENT_BY_ID
+    );
+    ensureMeshPlacementsOnMissingTeeth(state.teeth, meshId, COMPONENT_BY_ID);
+
+    const plateId =
       state.selectedComponentId &&
-      isMajorConnectorComponent(state.selectedComponentId) &&
+      isPlateComponentId(state.selectedComponentId) &&
       COMPONENT_BY_ID.has(state.selectedComponentId)
         ? state.selectedComponentId
+        : getDefaultPlateIdForDesignMode(COMPONENT_BY_ID);
+    ensurePlatePlacementsOnPresentTeeth(state.teeth, plateId, COMPONENT_BY_ID);
+
+    // Default major connector is per arch: horseshoe (upper) / lingual plate
+    // (lower). A major connector picked in the catalog overrides the default for
+    // its own arch only; the opposite arch keeps its default.
+    const selected = COMPONENT_BY_ID.get(state.selectedComponentId || "");
+    const selectedMajorId =
+      selected && isMajorConnectorComponent(selected) ? selected.id : null;
+    const upperMajorId =
+      selectedMajorId && selectedMajorId.startsWith("major-upper-")
+        ? selectedMajorId
         : getDefaultMajorConnectorIdForDesignMode(COMPONENT_BY_ID);
-    ensureMajorConnectorPlacementsOnSupportedTeeth(state.teeth, majorId, COMPONENT_BY_ID);
+    const lowerMajorId =
+      selectedMajorId && selectedMajorId.startsWith("major-lower-")
+        ? selectedMajorId
+        : "major-lower-lingual-plate";
+    ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
+      state.teeth,
+      upperMajorId,
+      COMPONENT_BY_ID,
+      ["upper"]
+    );
+    ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
+      state.teeth,
+      lowerMajorId,
+      COMPONENT_BY_ID,
+      ["lower"]
+    );
+
     forEachTooth((toothId) => {
       const t = state.teeth[toothId];
       if (t && !t.isPresent) {

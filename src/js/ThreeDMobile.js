@@ -9,8 +9,9 @@ window.addEventListener("DOMContentLoaded", () => {
   if (!chatWidget || !chatIcon) return;
 
   // 默认桌面端显示聊天框
-  chatWidget.style.display = "flex";
-  chatIcon.style.display = "none";
+  chatWidget.classList.remove("active");
+  chatWidget.style.display = "none";
+  chatIcon.style.display = "block";
 
   if (isMobileDevice()) {
       // ✅ 插入移动端专属样式：放大字体 & 图片
@@ -42,6 +43,7 @@ window.addEventListener("DOMContentLoaded", () => {
       chatIcon.addEventListener("click", () => {
           const isActive = chatWidget.classList.toggle("active");
           chatWidget.style.display = isActive ? "flex" : "none";
+          chatIcon.style.display = isActive ? "none" : "block";
       });
 
       document.addEventListener("click", (e) => {

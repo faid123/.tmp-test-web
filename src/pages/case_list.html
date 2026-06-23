@@ -9,12 +9,15 @@
     <link rel="stylesheet" href="../../css/notification.css" />
     <link rel="stylesheet" href="../../css/versionHistory.css" />
     <link rel="stylesheet" href="../../css/toast.css" />
+    <link rel="stylesheet" href="../../css/dashboard.css" />
     <link rel="icon" href="../../assets/profile.png" type="image/png" />
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
     />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Rasterizes the case report for the bulk-download .docx (reportDocx.js). -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   </head>
   <body>
     <div class="cm-page container">
@@ -117,15 +120,6 @@
           </div>
 
           <button
-            id="createCaseBtn"
-            class="cm-btn cm-btn-primary"
-            type="button"
-          >
-            <i class="fa fa-plus" aria-hidden="true"></i>
-            <span>Create New Case</span>
-          </button>
-
-          <button
             id="refreshListBtn"
             class="cm-icon-btn"
             type="button"
@@ -133,6 +127,15 @@
             title="Refresh list"
           >
             <i class="fa fa-arrows-rotate" aria-hidden="true"></i>
+          </button>
+
+          <button
+            id="createCaseBtn"
+            class="cm-btn cm-btn-primary"
+            type="button"
+          >
+            <i class="fa fa-plus" aria-hidden="true"></i>
+            <span>Create New Case</span>
           </button>
         </div>
 
@@ -318,26 +321,62 @@
           >
             View Dashboard
           </button>
+          <div class="cm-3d-link" id="view3dLinkRow">
+            <a id="view3dLink" class="cm-3d-link-anchor cm-3d-link-icon-btn" href="#" target="_blank" rel="noopener noreferrer" title="Open 3D Viewer" aria-label="Open 3D Viewer">
+              <img
+                src="../../assets/Icon_objects2.png"
+                class="cm-3d-link-icon"
+                alt=""
+                aria-hidden="true"
+              />
+              <span class="cm-3d-link-text" hidden>Open 3D Viewer</span>
+            </a>
+            <button
+              type="button"
+              id="copy3dLinkBtn"
+              class="cm-3d-copy-btn"
+              aria-label="Copy 3D viewer link"
+              data-tooltip="Copy link"
+            >
+              <i class="fa-regular fa-copy" aria-hidden="true"></i>
+            </button>
+            <button
+              type="button"
+              id="export3dLinkBtn"
+              class="cm-3d-copy-btn"
+              aria-label="Export 3D viewer"
+              data-tooltip="Export (open as faid)"
+            >
+              <i class="fa-regular fa-share-from-square" aria-hidden="true"></i>
+            </button>
+          </div>
         </div>
 
         <div class="cc-upload-pane hidden" id="createCaseUpload">
           <div class="cc-jaw-row">
             <div id="uploadedJawModels" class="uploaded-models cc-jaw-models">
-              <div class="upload-placeholder cc-jaw-tile" data-jaw="upper">
-                <img src="../../assets/upper.svg" class="jaw-bg" alt="Upper Jaw" />
-                <span class="cc-jaw-label">Upper Jaw</span>
+              <div class="upload-placeholder cc-jaw-tile" data-jaw="upper" data-short="Upper">
+                <img src="../../assets/cloud_upload.svg" class="jaw-bg" alt="Upload Upper Jaw" />
+                <span class="cc-jaw-text">Drag&amp;Drop UpperJaw Here</span>
+                <span class="cc-jaw-or">or</span>
+                <span class="cc-jaw-browse">Browse Files</span>
               </div>
-              <div class="upload-placeholder cc-jaw-tile" data-jaw="lower">
-                <img src="../../assets/lower.svg" class="jaw-bg" alt="Lower Jaw" />
-                <span class="cc-jaw-label">Lower Jaw</span>
+              <div class="upload-placeholder cc-jaw-tile" data-jaw="lower" data-short="Lower">
+                <img src="../../assets/cloud_upload.svg" class="jaw-bg" alt="Upload Lower Jaw" />
+                <span class="cc-jaw-text">Drag&amp;Drop LowerJaw Here</span>
+                <span class="cc-jaw-or">or</span>
+                <span class="cc-jaw-browse">Browse Files</span>
               </div>
             </div>
             <input type="file" id="jawUploadInput" accept=".stl" style="display: none" />
           </div>
 
           <div class="cc-ref-section">
-            <button type="button" class="upload-placeholder cc-ref-tile" id="addRefImageBtn">
-              <span class="cc-ref-label">Upload Reference Image</span>
+            <button type="button" class="upload-placeholder cc-ref-tile" id="addRefImageBtn" data-short="Reference Images">
+              <img src="../../assets/cloud_upload.svg" class="jaw-bg" alt="Upload Reference Image" />
+              <span class="cc-jaw-text">Drag&amp;Drop Reference Image Here</span>
+              <span class="cc-jaw-or">or</span>
+              <span class="cc-jaw-browse">Browse Files</span>
             </button>
             <div id="uploadedReferenceImages" class="cc-ref-grid"></div>
             <input type="file" id="refImageInput" accept="image/png,image/jpeg" style="display: none" />
@@ -521,6 +560,7 @@
       }
     </script>
     <script type="module" src="../js/caseManagement.js"></script>
+    <script type="module" src="../js/dashboard.js"></script>
     <script type="module" src="../js/createCase.js"></script>
     <script type="module" src="../js/notifications.js"></script>
     <script type="module" src="../js/versionHistory.js"></script>

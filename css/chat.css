@@ -50,6 +50,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 2px 2px 12px;
+  margin: 0;
 }
 .chat-sidebar-title {
   font-weight: 700;

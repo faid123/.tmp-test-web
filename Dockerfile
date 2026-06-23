@@ -11,6 +11,9 @@ COPY assets/ /usr/share/nginx/html/assets/
 COPY dist/ /usr/share/nginx/html/dist/
 COPY src/ /usr/share/nginx/html/src/
 
+# Custom nginx config (gzip + cache headers)
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 # 开放 nginx 默认端口
 EXPOSE 80
 

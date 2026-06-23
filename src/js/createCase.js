@@ -25,13 +25,8 @@ let existingUsers = []; // shared users currently on the case (loaded via role/a
 let pendingInvites = []; // usernames queued in the inline create-case view
 
 document.addEventListener("DOMContentLoaded", async () => {
-  try {
-    await loadThreeDeps();
-  } catch (err) {
-    console.error("createCase: dependency load failed", err);
-  }
-
   const openBtn = document.getElementById("createCaseBtn");
+  if (!openBtn) return;
   const formPane = document.getElementById("createCaseForm");
   const uploadPane = document.getElementById("createCaseUpload");
   const pageEl = document.querySelector(".cm-page");
@@ -70,7 +65,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   let activeTarget = null;
   const uploadLimit = 2;
 
-  const formatToday = () => new Date().toISOString().slice(0, 10);
+  // Display today as dd/mm/yyyy to match the request-date <input>'s shown format.
+  const formatTodayDisplay = () => {
+    const d = new Date();
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    return `${dd}/${mm}/${d.getFullYear()}`;
+  };
+
+  // Format `today + days` as YYYY-MM-DD (for <input type="date"> values).
+  const formatTodayPlusDays = (days) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
 
   const showInlineView = () => {
     if (!formPane || !uploadPane || !pageEl) return;
@@ -80,7 +88,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       caseOwnerDisplay.textContent = loggedInUser?.username || "—";
     }
     if (caseCreateDateDisplay) {
-      caseCreateDateDisplay.textContent = formatToday();
+      caseCreateDateDisplay.textContent = formatTodayDisplay();
+    }
+    // Default the request date to 10 days out from the create date (today).
+    if (requestDateInput) {
+      requestDateInput.value = formatTodayPlusDays(10);
     }
     pageEl.classList.add("creating");
     document.body.classList.add("creating-case");
@@ -140,19 +152,30 @@ document.addEventListener("DOMContentLoaded", async () => {
     const placeholder = document.createElement("div");
     placeholder.className = "upload-placeholder cc-jaw-tile";
     placeholder.dataset.jaw = jawType;
+    placeholder.dataset.short = jawType === "upper" ? "Upper Jaw" : "Lower Jaw";
 
     const bgImg = document.createElement("img");
     bgImg.className = "jaw-bg";
-    bgImg.alt = jawType === "upper" ? "Upper Jaw" : "Lower Jaw";
-    bgImg.src =
-      jawType === "upper" ? "../../assets/upper.svg" : "../../assets/lower.svg";
+    bgImg.alt = jawType === "upper" ? "Upload Upper Jaw" : "Upload Lower Jaw";
+    bgImg.src = "../../assets/cloud_upload.svg";
 
-    const label = document.createElement("span");
-    label.className = "cc-jaw-label";
-    label.textContent = jawType === "upper" ? "Upper Jaw" : "Lower Jaw";
+    const text = document.createElement("span");
+    text.className = "cc-jaw-text";
+    text.textContent =
+      jawType === "upper" ? "Drag&Drop UpperJaw Here" : "Drag&Drop LowerJaw Here";
+
+    const or = document.createElement("span");
+    or.className = "cc-jaw-or";
+    or.textContent = "or";
+
+    const browse = document.createElement("span");
+    browse.className = "cc-jaw-browse";
+    browse.textContent = "Browse Files";
 
     placeholder.appendChild(bgImg);
-    placeholder.appendChild(label);
+    placeholder.appendChild(text);
+    placeholder.appendChild(or);
+    placeholder.appendChild(browse);
 
     placeholder.addEventListener("click", () => {
       activeTarget = placeholder;
@@ -216,8 +239,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     jawUploadInput.value = "";
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        await loadThreeDeps();
         const loader = new STLLoader();
         const geometry = loader.parse(e.target.result);
         const material = new THREE.MeshStandardMaterial({
@@ -980,7 +1004,7 @@ function renderSharedUserList() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify([
                 { machine_id, uuid, caseIntID },
-                { case_id: caseIntID, uuid: user.uuid },
+                { case_int_id: caseIntID, uuid: user.uuid },
               ]),
             }
           );
@@ -1063,6 +1087,13 @@ async function uploadReferenceImage(
           console.log(`✅ Uploaded reference image: ${file.name}`);
         }
 
+        // Also save the reference image into a thumbnail slot so it shows up in
+        // the case detail carousel (which reads /thumbnails by slot). Slots 0–2
+        // are reserved for the 2D composite + upper/lower jaw renders, so
+        // reference images take the slots after them (3, 4, …). `index` is
+        // 1-based, giving ref image 1 → slot 3.
+        await uploadCaseThumbnail(machine_id, uuid, caseIntID, 2 + index, base64data);
+
         resolve();
       } catch (err) {
         console.error(`❌ Error uploading reference image ${file.name}:`, err);
@@ -1078,7 +1109,7 @@ async function uploadReferenceImage(
 // Body shape per API spec: [authData, caseData] where caseData carries the
 // integer case id, the slot index, and the base64 image payload (no data URL
 // prefix). slot 0 = composite 2D annotation, 1 = upper STL render,
-// 2 = lower STL render.
+// 2 = lower STL render, 3+ = reference images.
 async function uploadCaseThumbnail(machine_id, uuid, caseIntID, slot, dataUrl) {
   if (!caseIntID || !dataUrl) return;
   const commaIdx = dataUrl.indexOf(",");

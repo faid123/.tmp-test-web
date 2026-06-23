@@ -29,7 +29,7 @@
 
 .cc-form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 2fr 1fr;
   gap: 18px 32px;
 }
 
@@ -112,7 +112,7 @@
 .cc-upload-pane {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   flex: 1;
   min-height: 0;
   position: relative;
@@ -132,6 +132,15 @@
 }
 
 .cc-loading-overlay.hidden { display: none !important; }
+
+/* Fixed full-viewport variant. The base overlay is absolute (scoped to the
+   create-case pane); duplication is triggered from the case list, so its
+   progress pop-up must cover the whole screen instead. */
+.cc-loading-overlay--fixed {
+  position: fixed;
+  border-radius: 0;
+  z-index: 1000;
+}
 
 .cc-loading-card {
   width: min(360px, 80%);
@@ -238,6 +247,9 @@
   }
   .cm-page.creating .back-to-list { display: none; }
   .cm-page.creating .cc-form-pane { overflow: visible; }
+  /* The list toolbar (All Cases / filters / Create) is irrelevant while
+     creating a case on mobile — hide it to give the form room. */
+  .cm-page.creating .cm-toolbar { display: none !important; }
 }
 
 .cc-jaw-row .cc-jaw-models {
@@ -252,58 +264,94 @@
   width: 100%;
 }
 
-.cc-jaw-tile {
+/* Shared dashed drop-zone styling for the three upload cards
+   (upper jaw, lower jaw, reference image). */
+.cc-jaw-tile,
+.cc-ref-tile {
   width: 100%;
-  height: 96px;
-  background: #fdf3f3;
-  border: 1px solid var(--line, #e2e8f0);
+  min-height: 132px;
+  background: #fff;
+  border: 1.5px dashed #cbd5e1;
   border-radius: 10px;
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+  padding: 16px;
   cursor: pointer;
   overflow: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
-.cc-jaw-tile .jaw-bg {
-  position: absolute;
-  width: 22%;
-  height: 70%;
-  opacity: 0.18;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+/* Jaw cards are taller than the reference card. */
+.cc-jaw-tile {
+  min-height: 180px;
+}
+.cc-jaw-tile:hover,
+.cc-ref-tile:hover {
+  border-color: var(--primary, #3BAE95);
+}
+.cc-jaw-tile .jaw-bg,
+.cc-ref-tile .jaw-bg {
+  width: 34px;
+  height: auto;
+  opacity: 0.85;
   pointer-events: none;
 }
-.cc-jaw-label {
-  position: relative;
-  z-index: 1;
-  font-size: 14px;
+.cc-jaw-text {
+  font-size: 13px;
   font-weight: 500;
-  color: var(--ink, #0f172a);
+  color: #94a3b8;
+}
+.cc-jaw-or {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.cc-jaw-browse {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary, #3BAE95);
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  padding: 4px 14px;
+  line-height: 1.2;
 }
 
 .cc-ref-section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-.cc-ref-tile {
-  width: 100%;
-  height: 96px;
-  background: #fdf3f3;
-  border: 1px solid var(--line, #e2e8f0);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.cc-ref-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--ink, #0f172a);
+/* ---- Mobile upload tiles ---------------------------------------------------
+   Placed after the base tile rules so these overrides win inside the breakpoint.
+   - Jaw cards sit side by side.
+   - Drop everything except the icon + a short one-word label (data-short). */
+@media (max-width: 860px) {
+  .cc-jaw-row .cc-jaw-models {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .cc-jaw-tile,
+  .cc-ref-tile {
+    min-height: 120px;
+  }
+  .cc-jaw-models .uploaded-model {
+    height: 120px;
+  }
+  .cc-jaw-text,
+  .cc-jaw-or,
+  .cc-jaw-browse {
+    display: none;
+  }
+  .cc-jaw-tile::after,
+  .cc-ref-tile::after {
+    content: attr(data-short);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink, #0f172a);
+  }
 }
 
 .cc-ref-grid {
@@ -345,8 +393,8 @@
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-top: 16px;
+  gap: 8px;
+  padding-top: 10px;
 }
 
 .cc-actions .cm-btn { width: 100%; }
@@ -363,7 +411,7 @@
 .cc-jaw-models .uploaded-model {
   position: relative;
   width: 100%;
-  height: 96px;
+  height: 180px;
   background: #fdf3f3;
   border: 1px solid var(--line, #e2e8f0);
   border-radius: 10px;

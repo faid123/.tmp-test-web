@@ -36,6 +36,43 @@
   --radius-sm: 10px;
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
   --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  --bg: #f5f6fa;
+  --panel: #ffffff;
+  --ink: #0f172a;
+  --ink-soft: #475569;
+  --muted: #94a3b8;
+  --line: #e2e8f0;
+  --line-soft: #f1f5f9;
+
+  --primary: #3BAE95;
+  --primary-soft: #d4f0e8;
+  --primary-dark: #25735f;
+
+  --status-pending-bg: #fef3c7;
+  --status-pending-fg: #92400e;
+  --status-progress-bg: #dbeafe;
+  --status-progress-fg: #1e40af;
+  --status-completed-bg: #d1fae5;
+  --status-completed-fg: #047857;
+  --status-na-bg: #e2e8f0;
+  --status-na-fg: #475569;
+  --status-danger-bg: #fee2e2;
+  --status-danger-fg: #b91c1c;
+
+  --danger: #ef4444;
+  --warning: #f59e0b;
+
+  --radius: 14px;
+  --radius-sm: 10px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
 }
 
 html,
@@ -526,7 +563,8 @@ button {
   background: var(--panel);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
-  flex-wrap: wrap;
+  /* Desktop: keep every control on one line. Tablet (≤860) re-enables wrap. */
+  flex-wrap: nowrap;
 }
 
 .cm-chip {
@@ -665,8 +703,6 @@ button {
 }
 .cm-icon-btn:hover { background: var(--line-soft); }
 
-.cm-toolbar .cm-btn-primary { margin-left: auto; }
-
 /* ============ case table ============ */
 .cm-table-wrap {
   flex: 1;
@@ -753,7 +789,17 @@ button {
 
 .cm-td-owner { white-space: nowrap; }
 .cm-td-owner > i { color: var(--muted); margin-right: 6px; }
-.cm-owner-name { color: var(--ink-soft); }
+/* Keep a long owner name on a single line: truncate to ~10 characters with an
+   ellipsis instead of wrapping (full name is in the title tooltip). */
+.cm-owner-name {
+  color: var(--ink-soft);
+  display: inline-block;
+  max-width: 10ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
 .cm-row-coowners {
   display: inline-flex;
   align-items: center;
@@ -896,6 +942,69 @@ button {
 }
 
 .cm-image-area.has-image .cm-image-placeholder { display: none; }
+.cm-image-area.has-image img { cursor: zoom-in; }
+
+/* Thumbnail lightbox preview (opened by clicking the carousel image). */
+.thumb-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5vh 5vw;
+  background: rgba(15, 23, 42, 0.85);
+}
+.thumb-preview-overlay.hidden { display: none !important; }
+.thumb-preview-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+}
+.thumb-preview-close,
+.thumb-preview-nav {
+  position: absolute;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.thumb-preview-close:hover,
+.thumb-preview-nav:hover { background: rgba(255, 255, 255, 0.32); }
+.thumb-preview-close {
+  top: 20px;
+  right: 26px;
+  width: 40px;
+  height: 40px;
+  font-size: 1.7rem;
+  line-height: 1;
+}
+.thumb-preview-nav {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 46px;
+  height: 46px;
+  font-size: 1.2rem;
+}
+.thumb-preview-prev { left: 26px; }
+.thumb-preview-next { right: 26px; }
+.thumb-preview-counter {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #e2e8f0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
 
 .cm-image-nav {
   display: flex;
@@ -1034,10 +1143,23 @@ button {
   box-shadow: var(--shadow-md);
   padding: 6px;
   z-index: 50;
+  top: calc(100% + 6px);
+  min-width: 180px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  padding: 6px;
+  z-index: 50;
 }
+.dropdown-menu.hidden { display: none; }
 .dropdown-menu.hidden { display: none; }
 
 .dropdown-item {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--ink);
   padding: 8px 12px;
   border-radius: 8px;
   font-size: 13px;
@@ -1053,6 +1175,75 @@ button {
   flex-direction: column;
   gap: 10px;
   margin-top: auto;
+}
+.cm-detail-cta > .cm-btn {
+  width: 100%;
+}
+.cm-detail-cta .cm-3d-link {
+  width: 100%;
+}
+
+/* ============ 3D viewer link ============ */
+.cm-3d-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cm-3d-link-anchor {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--primary-dark);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.cm-3d-link-anchor:hover {
+  background: var(--line-soft);
+  border-color: var(--primary);
+}
+.cm-3d-link-icon-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 6px;
+  justify-content: center;
+}
+.cm-3d-link-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+.cm-3d-link-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cm-3d-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.cm-3d-copy-btn:hover {
+  background: var(--line-soft);
+  color: var(--primary-dark);
+  border-color: var(--primary);
 }
 
 /* ============ back-to-list (mobile only) ============ */
@@ -1088,8 +1279,7 @@ button {
   .cm-page { grid-template-columns: 1fr; }
   .cm-main { padding: 20px 18px 14px; gap: 14px; }
   .cm-titles h1 { font-size: 22px; }
-  .cm-toolbar { padding: 8px; gap: 8px; }
-  .cm-toolbar .cm-btn-primary { margin-left: 0; }
+  .cm-toolbar { padding: 8px; gap: 8px; flex-wrap: wrap; }
   .cm-detail {
     position: fixed;
     inset: 0;
@@ -1124,7 +1314,7 @@ button {
   .cm-detail { padding: 18px 14px 22px; }
 
   /* Toolbar as a 2-column grid pairs the six items into three even rows:
-     All Cases | Search by Date, Filter by Status | Sort by, Create New | Refresh.
+     All Cases | Search by Date, Filter by Status | Sort by, Refresh | Create New.
      min-width: 0 + ellipsis lets the inner selects/inputs shrink to the cell
      width rather than overflowing. */
   .cm-toolbar {
@@ -1283,5 +1473,22 @@ button {
   top: 14px;
   right: 18px;
   color: var(--muted);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
+#renameCaseModal .modal-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 174, 149, 0.18);
+}
+#renameCaseModal .rename-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+#renameCaseModal .close-btn {
+  top: 14px;
+  right: 18px;
+  color: var(--muted);
+}
+#renameCaseModal .close-btn:hover { color: var(--ink); }
 #renameCaseModal .close-btn:hover { color: var(--ink); }

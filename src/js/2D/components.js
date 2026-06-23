@@ -481,6 +481,7 @@ export {
   getPlatePlacementOffset,
   getPlatePlacementRenderScale,
   isPlateComponentId,
+  syncReciprocatingPlatesToMajorConnector,
 } from "./components.plate.js";
 
 export {

@@ -1206,6 +1206,28 @@ function bindBackNavigationDialog(locks) {
     modal.setAttribute("aria-hidden", "true");
   };
 
+  // Return should always land on the MAIN case list. If this editor was opened
+  // directly from the case-list tab, hop back to it and close this one (so
+  // editor tabs don't pile up). Otherwise — a deeper chain of opened tabs (the
+  // opener is another editor, not the case list) or a direct load — navigate
+  // straight to the case list instead of focusing whatever opened this tab.
+  const returnToCaseList = () => {
+    try {
+      if (
+        window.opener &&
+        !window.opener.closed &&
+        window.opener.location?.pathname?.includes("case_list")
+      ) {
+        window.opener.focus();
+        window.close();
+        return;
+      }
+    } catch (err) {
+      // Cross-context access to opener.location can throw; fall through to nav.
+    }
+    window.location.href = targetHref;
+  };
+
   const openModal = () => {
     modal.classList.remove("is-hidden");
     modal.setAttribute("aria-hidden", "false");
@@ -1228,7 +1250,7 @@ function bindBackNavigationDialog(locks) {
 
   cancelBtn.addEventListener("click", closeModal);
   backBtn.addEventListener("click", () => {
-    window.location.href = targetHref;
+    returnToCaseList();
   });
   // Persist the current annotation locally + upload the jaw thumbnail. The
   // boolean indicates whether the save part succeeded; thumbnail failures
@@ -1268,7 +1290,7 @@ function bindBackNavigationDialog(locks) {
     if (posted) flashToast("Saved successfully", "success");
     else if (saved) flashToast("Saved locally; server save failed — see console.", "warning");
     else flashToast("Could not save. Going back anyway.", "warning");
-    window.location.href = targetHref;
+    returnToCaseList();
   });
 
   modal.addEventListener("click", (event) => {
@@ -1284,6 +1306,11 @@ function bindBackNavigationDialog(locks) {
 
 function start() {
   if (ui.hasInitialized) return;
+  // This module graph (noticeboard → clinicalInfo → 2DAnnotation) is also
+  // imported by the case list to build the report for the bulk download. There,
+  // the annotation DOM isn't present, so the DOMContentLoaded auto-init must be
+  // a no-op — gate it on the annotation-page root element.
+  if (!document.querySelector(".annotation-shell")) return;
   ui.hasInitialized = true;
   initAnnFooter();
   init();
@@ -1308,6 +1335,12 @@ async function initSidebar() {
       document.getElementById("saveAnnotationBtn")?.click();
     }
   });
+
+  document.getElementById("sidebarVersionHistoryBtn")?.addEventListener("click", async () => {
+    handle.close();
+    const { openVersionHistory } = await import("../versionHistory.js");
+    openVersionHistory();
+  });
 }
 
 function initAnnFooter() {
@@ -1321,7 +1354,8 @@ function initAnnFooter() {
     setupConnectivityIndicator(document.getElementById("footerConnection"));
   });
 
-  document.getElementById("footerScreenCaptureBtn")?.addEventListener("click", () => {
+  // Screen capture lives at the lower-left of the 3D preview panel.
+  document.getElementById("preview3dCaptureBtn")?.addEventListener("click", () => {
     window.dispatchEvent(new CustomEvent("request-3d-capture"));
   });
 
@@ -1342,10 +1376,10 @@ function initAnnFooter() {
     window.dispatchEvent(new CustomEvent("request-download-jaw-profile"));
   });
 
-  // Load Proposal is a placeholder — the action isn't implemented yet, so we
-  // just surface a status message rather than wire it to a noop button.
+  // Load Template Jaw is a placeholder — the action isn't implemented yet, so
+  // we just surface a status message rather than wire it to a noop button.
   document.getElementById("loadProposalBtn")?.addEventListener("click", () => {
-    setMessage("Load Proposal — coming soon.", false);
+    setMessage("Load Template Jaw — coming soon.", false);
   });
 
   initSidebar();
