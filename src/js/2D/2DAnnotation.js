@@ -1461,6 +1461,12 @@ function init() {
       locks.updateEditModeUI();
       bindBackNavigationDialog(locks);
       noticeboard.initNoticeboard();
+      // Deep-link straight to the noticeboard: the 2D Annotate button in the 3D
+      // viewer routes here with ?view=noticeboard so it opens the noticeboard
+      // directly instead of just landing on the annotation editor.
+      if (new URLSearchParams(window.location.search).get("view") === "noticeboard") {
+        noticeboard.openNoticeboard();
+      }
       clinicalInfo.initClinicalInfo();
       history.past = [cloneStateForHistory()];
       history.future = [];

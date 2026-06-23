@@ -3733,7 +3733,7 @@ btnContainer.appendChild(edit2DStatic); */
                 const queryConnector = "?";
                 const basePath = isGitHubPages ? "/.tmp-test-web" : "";
 
-                const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}`;
+                const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}&view=noticeboard`;
                 console.log("🔁 正在跳转到 Annotate 页:", targetURL);
                 window.open(targetURL, "_blank");
               };
