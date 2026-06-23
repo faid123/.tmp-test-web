@@ -695,7 +695,7 @@ function bindViewerRotationTargetAnchor(domElement) {
     lastDistance: 0,
   };
   const minTouchZoom = 2;
-  const maxTouchZoom = 20;
+  const maxTouchZoom = 50;
 
   const releaseRotationAnchor = () => {
     isViewerLeftButtonRotating = false;
@@ -994,6 +994,17 @@ function syncPresetViewToolbarSelection(viewKey) {
   });
 }
 
+function computeFitZoom() {
+  const box = getPresetViewBounds();
+  if (!box) return 7;
+  const size = box.getSize(new THREE.Vector3());
+  const { width, height } = getViewerStageSize();
+  const padding = 1.5;
+  const zoomX = width / Math.max(size.x * padding, 1);
+  const zoomY = height / Math.max(size.y * padding, 1);
+  return Math.min(zoomX, zoomY);
+}
+
 function getPresetViewBounds() {
   const jawBox = getJawMeshBoundingBox();
   if (jawBox) return jawBox;
@@ -1037,7 +1048,6 @@ function setPresetCameraView(viewKey) {
   camera.position.copy(target).addScaledVector(direction, distance);
   camera.up.copy(view.up);
   camera.lookAt(target);
-  camera.zoom = 7;
   camera.updateProjectionMatrix();
 
   if (controls?.target) {
@@ -1078,7 +1088,6 @@ function setCenterCameraView() {
   hasViewerRotationOrigin = true;
   camera.position.copy(target).addScaledVector(direction, distance);
   camera.lookAt(target);
-  camera.zoom = 7;
   camera.updateProjectionMatrix();
 
   if (controls?.target) {
@@ -6248,15 +6257,34 @@ btnContainer.appendChild(edit2DStatic); */
     }
   }
 
+  function applyFitZoomIfLoaded() {
+    if (!getPresetViewBounds()) return;
+    camera.zoom = computeFitZoom();
+    camera.updateProjectionMatrix();
+  }
+
   // Add a listener to the window, so we can resize the window and the camera
   window.addEventListener("resize", function () {
     resizeViewerStage(renderer);
     clampViewerControlTarget(controls);
+    applyFitZoomIfLoaded();
   });
-  new ResizeObserver(() => resizeViewerStage(renderer)).observe(container);
+  new ResizeObserver(() => {
+    resizeViewerStage(renderer);
+    applyFitZoomIfLoaded();
+  }).observe(container);
 
-  camera.zoom = 7;
+  camera.zoom = computeFitZoom();
   camera.updateProjectionMatrix();
+
+  const VIEWER_MAX_ZOOM = 50;
+  window.setViewerZoom = (zoom) => {
+    if (!camera) return;
+    camera.zoom = zoom;
+    camera.updateProjectionMatrix();
+  };
+  window.VIEWER_MAX_ZOOM = VIEWER_MAX_ZOOM;
+
   const clonedCamera = camera.clone();
   addResetButton(camera, clonedCamera, controls, () => {
     const target = hasViewerRotationOrigin
