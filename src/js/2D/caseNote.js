@@ -135,21 +135,27 @@ export async function fetchAdditionalCaseDetails(caseIntID) {
   }
 }
 
-// Update the case's request/due date on the backend (the case-list "Due" column).
-// Reads the current additionalcasedetails first and re-posts them with only
-// due_date changed, so status/assignee/comments are preserved. Bails out if that
-// read fails, rather than risk nulling the other fields. Returns true on success.
-export async function updateCaseDueDate(caseIntID, isoDate) {
+// Update the case's request/due date on the backend (the case-list "Due" column),
+// and optionally its comment. additional_case_details is append-only (POST/create
+// INSERTs a new row) and the frontend treats the latest row as current, so we read
+// that row and re-post it with the changed fields — carrying assigned_to /
+// new_status forward so they aren't lost. Bails out if the read fails, rather than
+// risk nulling the other fields. `comment`: pass a string to write it through to
+// additional_case_details.comments (shared with the case-level comment); omit
+// (undefined) to preserve the existing comment. Returns true on success.
+export async function updateCaseDueDate(caseIntID, isoDate, comment) {
   const user = getLoggedInUser();
   if (!user?.uuid || caseIntID == null) return false;
   const { ok, detail } = await fetchAdditionalCaseDetails(caseIntID);
   if (!ok) return false;
+  const comments =
+    comment !== undefined ? (comment?.trim() ? comment : null) : detail?.comments ?? null;
   const res = await postJson("additionalcasedetails", [
     { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID },
     {
       assigned_to: detail?.assigned_to ?? null,
       due_date: dateInputToEpochSeconds(isoDate),
-      comments: detail?.comments ?? null,
+      comments,
       new_status: detail?.new_status ?? null,
     },
   ]);

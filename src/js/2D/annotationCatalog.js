@@ -578,7 +578,13 @@ export function createCaseNoteForm() {
     saveBtn.disabled = true;
     status.textContent = "Saving…";
     status.classList.remove("is-error");
-    const remoteOk = await updateCaseDueDate(state.caseIntID, dateRequired);
+    // Write the date through to additionalcasedetails.due_date and the comment
+    // through to additionalcasedetails.comments (shared case-level comment).
+    const remoteOk = await updateCaseDueDate(
+      state.caseIntID,
+      dateRequired,
+      commentField.input.value
+    );
     if (remoteOk) saveCaseDueDate(state.caseIntID, dateRequired);
     saveBtn.disabled = false;
 

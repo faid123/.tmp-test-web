@@ -700,8 +700,9 @@ function populateTable(cases) {
       ? `<span class="cm-row-coowners" title="Shared with ${escapeAttr(caseItem.co_owners.join(", "))}"><i class="fa-solid fa-user-group"></i>+${caseItem.co_owners.length}</span>`
       : "";
 
-    // Urgency bar shown at the left of the row, colored by the created→due span.
-    const dueInd = dueDateIndicator(caseItem.creation_date, dueDate);
+    // Urgency bar shown at the left of the row, colored by days remaining
+    // until the due date (compared with today).
+    const dueInd = dueDateIndicator(dueDate);
     const dueBarHtml = dueInd
       ? `<span class="cm-due-bar ${dueInd.cls}" title="${escapeAttr(dueInd.label)}" aria-hidden="true"></span>`
       : "";
@@ -1064,25 +1065,27 @@ function toDayMidnight(ts) {
 }
 
 // Urgency classifier shared by the desktop left bar and the mobile DUE-date
-// text: buckets a case by the span (in whole calendar days) between its creation
-// and due dates — gap = due - created. Buckets: gap < 0 = is-overdue, 0 = is-due,
-// 1-5 = is-soon, 6-14 = is-ok, > 14 = none. Returns { cls, label } or null
-// (missing dates / gap > 14). The actual colors per cls are defined in CSS —
-// the bar and the mobile text differ only there (e.g. is-overdue: black vs grey).
-function dueDateIndicator(creationTs, dueTs) {
-  const createdMid = toDayMidnight(creationTs);
+// text: buckets a case by how many whole calendar days remain until its due
+// date (gap = due - today, so "due today" is 0 regardless of time). Buckets:
+// gap < 0 = is-overdue, 0 = is-due, 1-5 = is-soon, 6-14 = is-ok, > 14 = none.
+// Returns { cls, label } or null (no due date / due > 14 days out). The actual
+// colors per cls are defined in CSS — the bar and the mobile text differ only
+// there (e.g. is-overdue: black vs grey).
+function dueDateIndicator(dueTs) {
   const dueMid = toDayMidnight(dueTs);
-  if (createdMid == null || dueMid == null) return null;
+  if (dueMid == null) return null;
 
+  const now = new Date();
+  const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const DAY = 86400000;
-  const gap = Math.round((dueMid - createdMid) / DAY);
+  const gap = Math.round((dueMid - todayMid) / DAY); // days remaining until due
 
   const days = (d) => `${d} day${Math.abs(d) === 1 ? "" : "s"}`;
-  if (gap < 0) return { cls: "is-overdue", label: `Due ${days(-gap)} before creation` };
-  if (gap === 0) return { cls: "is-due", label: "Due on creation date" };
-  if (gap <= 5) return { cls: "is-soon", label: `Due ${days(gap)} after creation` };
-  if (gap <= 14) return { cls: "is-ok", label: `Due ${days(gap)} after creation` };
-  return null; // gap > 14 days — no indicator
+  if (gap < 0) return { cls: "is-overdue", label: `Overdue by ${days(-gap)}` };
+  if (gap === 0) return { cls: "is-due", label: "Due today" };
+  if (gap <= 5) return { cls: "is-soon", label: `Due in ${days(gap)}` };
+  if (gap <= 14) return { cls: "is-ok", label: `Due in ${days(gap)}` };
+  return null; // due more than 14 days out — no indicator
 }
 
 // Map a case + sort column to a comparable value. Numeric columns (dates,

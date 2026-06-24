@@ -1294,6 +1294,12 @@ button {
   .cm-detail { padding: 22px 18px; }
   .cm-table thead th,
   .cm-table tbody td { padding: 12px 12px; }
+
+  /* iPad mini landscape (~1024) still reserves the 340px detail column, so the
+     toolbar can't keep all chips on one line. Let it wrap to a second row
+     instead of squishing each chip's label onto two lines. */
+  .cm-toolbar { flex-wrap: wrap; }
+  .cm-chip { white-space: nowrap; }
 }
 
 /* Tablet portrait / iPad mini portrait (~744). Single column with the detail
