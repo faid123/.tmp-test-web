@@ -95,7 +95,7 @@ button {
 /* ============ page layout ============ */
 .cm-page {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 350px;
+  grid-template-columns: minmax(0, 1fr) 320px;
   grid-template-rows: 1fr auto;
   height: 100vh;
   background: var(--bg);
@@ -380,7 +380,7 @@ button {
 
 .cm-main {
   min-width: 0;
-  padding: 28px 28px 20px;
+  padding: 28px 16px 20px 28px;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -910,7 +910,7 @@ button {
 .cm-detail {
   border-left: 1px solid var(--line);
   background: var(--bg);
-  padding: 28px 24px;
+  padding: 28px 24px 28px 16px;
   display: flex;
   flex-direction: column;
   gap: 20px;
