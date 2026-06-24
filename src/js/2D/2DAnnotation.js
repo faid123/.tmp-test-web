@@ -1365,6 +1365,22 @@ function initAnnFooter() {
     toggleChat();
   });
 
+  // Case Note: on mobile the form is reached from the footer (a bottom sheet)
+  // instead of the components tab strip. Reuse annotationCatalog's
+  // createCaseNoteForm so it's the identical form (server sync, toast, etc.).
+  const caseNoteSheet = document.getElementById("caseNoteSheet");
+  document.getElementById("footerCaseNoteBtn")?.addEventListener("click", async () => {
+    const body = document.getElementById("caseNoteSheetBody");
+    if (!caseNoteSheet || !body) return;
+    const { createCaseNoteForm } = await import("./annotationCatalog.js");
+    body.innerHTML = "";
+    body.appendChild(createCaseNoteForm());
+    caseNoteSheet.classList.remove("is-hidden");
+  });
+  caseNoteSheet?.querySelectorAll("[data-cn-close]").forEach((el) =>
+    el.addEventListener("click", () => caseNoteSheet.classList.add("is-hidden"))
+  );
+
   // "Upload other 3D files": open the upload modal (managed in preview3D.js),
   // which lists the case's extra STLs (jaw_stls_extra_slot_1..4) and handles
   // upload + delete.

@@ -2944,7 +2944,15 @@ button.upload3d-row {
    it so users don't have to scroll past it to reach the canvas controls.
    The DOM stays intact for renderComponentCatalog() to keep mutating
    state-tracked nodes; only the visual is suppressed. */
-@media (pointer: coarse) {
+/* Hide on phones (any orientation) and on tablets held in portrait. EXCEPTION:
+   landscape tablets (iPad 11"+ ≥1024px wide) have room for the tab strip, so we
+   DON'T force-hide there — #editModePanel falls back to its normal design-mode
+   toggle (visible once both arches are locked). We avoid `display: block`
+   !important on purpose: that would show the panel even when design mode is off. */
+@media (pointer: coarse) and (orientation: portrait) {
+  #editModePanel { display: none !important; }
+}
+@media (pointer: coarse) and (max-width: 1023px) {
   #editModePanel { display: none !important; }
 }
 
@@ -3051,6 +3059,50 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
     overflow: hidden;
   }
 }
+/* ---- footer Case Note button (mobile only) ---- */
+/* Two-class selector so this wins over .ann-footer-btn's display regardless of
+   source order (both are single-class otherwise → later one would win). */
+.ann-footer-btn.ann-footer-note-btn { display: none; }
+@media (max-width: 1200px) {
+  .ann-footer-btn.ann-footer-note-btn { display: inline-flex; }
+  /* On mobile the Case Note lives in the footer sheet only, so drop the
+     CASE NOTE tab (the lone is-form-tab) from the components strip. */
+  .component-tab.is-form-tab { display: none; }
+}
+
+/* ---- Case Note bottom sheet (reuses .case-note-form styles inside) ---- */
+.cn-sheet { position: fixed; inset: 0; z-index: 1000; }
+.cn-sheet.is-hidden { display: none; }
+.cn-sheet-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); }
+.cn-sheet-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  animation: cnSlideUp 0.2s ease-out;
+}
+@keyframes cnSlideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.cn-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid #eee;
+}
+.cn-sheet-title { margin: 0; font-size: 16px; font-weight: 600; color: #222; }
+.cn-sheet-close { font-size: 18px; color: #555; width: 32px; height: 32px; }
+.cn-sheet-body { padding: 12px 16px; }
+
 .ann-footer {
   position: fixed;
   left: 0;

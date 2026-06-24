@@ -251,11 +251,27 @@
     <div class="ann-footer-right">
       <span class="ann-footer-user" id="footerUserName">—</span>
       <span class="ann-footer-conn" id="footerConnection"></span>
+      <button type="button" class="ann-footer-btn ann-footer-note-btn" id="footerCaseNoteBtn" aria-label="Case note" data-tooltip="Case Note">
+        <i class="fa-regular fa-note-sticky" aria-hidden="true"></i>
+      </button>
       <button type="button" class="ann-footer-btn ann-footer-chat-btn" id="footerChatBtn" aria-label="Open chat" data-tooltip="Chat">
         <i class="fa-regular fa-comment" aria-hidden="true"></i>
       </button>
     </div>
   </footer>
+
+  <div id="caseNoteSheet" class="cn-sheet is-hidden" role="dialog" aria-modal="true" aria-labelledby="cnSheetTitle">
+  <div class="cn-sheet-backdrop" data-cn-close></div>
+  <div class="cn-sheet-panel">
+    <header class="cn-sheet-header">
+      <h3 id="cnSheetTitle" class="cn-sheet-title">Case Note</h3>
+      <button type="button" class="cn-sheet-close" data-cn-close aria-label="Close">
+        <i class="fa fa-xmark" aria-hidden="true"></i>
+      </button>
+    </header>
+    <div id="caseNoteSheetBody" class="cn-sheet-body"></div>
+  </div>
+</div>
 
   <div id="removeComponentDialog" class="remove-component-dialog is-hidden" aria-hidden="true">
     <div class="remove-component-dialog-backdrop" aria-hidden="true"></div>

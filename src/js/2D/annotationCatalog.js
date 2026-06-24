@@ -493,7 +493,7 @@ export function ensureMajorCatalogPickForTooth(toothId) {
 }
 
 // Build the Case Note form (renders inside the catalog area when the case-note tab is active).
-function createCaseNoteForm() {
+export function createCaseNoteForm() {
   const saved = loadCaseNote(state.caseIntID);
 
   const form = document.createElement("form");
