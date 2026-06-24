@@ -700,13 +700,19 @@ function populateTable(cases) {
       ? `<span class="cm-row-coowners" title="Shared with ${escapeAttr(caseItem.co_owners.join(", "))}"><i class="fa-solid fa-user-group"></i>+${caseItem.co_owners.length}</span>`
       : "";
 
+    // Urgency bar shown at the left of the row, colored by the created→due span.
+    const dueInd = dueDateIndicator(caseItem.creation_date, dueDate);
+    const dueBarHtml = dueInd
+      ? `<span class="cm-due-bar ${dueInd.cls}" title="${escapeAttr(dueInd.label)}" aria-hidden="true"></span>`
+      : "";
+
     row.innerHTML = `
       <td class="cm-td-name">
-        <span class="cm-row-name">${escapeAttr(caseDisplayName)}</span>${pinned ? '<i class="fa-solid fa-flag cm-row-pin" title="Pinned"></i>' : ""}
+        <span class="cm-row-name">${escapeAttr(caseDisplayName)}</span>${pinned ? '<i class="fa-solid fa-flag cm-row-pin" title="Pinned"></i>' : ""}${dueBarHtml}
       </td>
       <td class="cm-td-status"><span class="cm-pill ${statusPillClass(caseItem.new_status)}">${escapeAttr(statusDisplayText(caseItem.new_status))}</span></td>
       <td class="cm-td-date" data-label="Created">${formatDateTime(caseItem.creation_date)}</td>
-      <td class="cm-td-date" data-label="Due">${dueDate ? formatDateTime(dueDate) : "N/A"}</td>
+      <td class="cm-td-date cm-due-date ${dueInd ? dueInd.cls : ""}" data-label="Due">${dueDate ? formatDateTime(dueDate) : "N/A"}</td>
       <td class="cm-td-owner" data-label="Owner">
         <i class="fa-regular fa-circle-user"></i><span class="cm-owner-name" title="${escapeAttr(assignedTo)}">${escapeAttr(assignedTo)}</span>${coOwnersHtml}
       </td>
@@ -1035,6 +1041,48 @@ function formatDateTime(ts) {
   // (e.g. API returning "0" for missing due_date).
   if (ms < 946684800000) return "N/A";
   return new Date(ms).toLocaleString();
+}
+
+// Normalize a timestamp (Unix seconds/ms, or a date string) to the local
+// calendar-day midnight in ms, mirroring formatDateTime. Returns null for
+// missing / invalid / pre-2000 (unset) values.
+function toDayMidnight(ts) {
+  if (ts == null || ts === "" || ts === 0 || ts === "0") return null;
+  const n = Number(ts);
+  let ms;
+  if (Number.isFinite(n)) {
+    if (n <= 0) return null;
+    ms = String(n).length >= 13 ? n : n * 1000;
+  } else {
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return null;
+    ms = d.getTime();
+  }
+  if (ms < 946684800000) return null;
+  const d = new Date(ms);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+// Urgency classifier shared by the desktop left bar and the mobile DUE-date
+// text: buckets a case by the span (in whole calendar days) between its creation
+// and due dates — gap = due - created. Buckets: gap < 0 = is-overdue, 0 = is-due,
+// 1-5 = is-soon, 6-14 = is-ok, > 14 = none. Returns { cls, label } or null
+// (missing dates / gap > 14). The actual colors per cls are defined in CSS —
+// the bar and the mobile text differ only there (e.g. is-overdue: black vs grey).
+function dueDateIndicator(creationTs, dueTs) {
+  const createdMid = toDayMidnight(creationTs);
+  const dueMid = toDayMidnight(dueTs);
+  if (createdMid == null || dueMid == null) return null;
+
+  const DAY = 86400000;
+  const gap = Math.round((dueMid - createdMid) / DAY);
+
+  const days = (d) => `${d} day${Math.abs(d) === 1 ? "" : "s"}`;
+  if (gap < 0) return { cls: "is-overdue", label: `Due ${days(-gap)} before creation` };
+  if (gap === 0) return { cls: "is-due", label: "Due on creation date" };
+  if (gap <= 5) return { cls: "is-soon", label: `Due ${days(gap)} after creation` };
+  if (gap <= 14) return { cls: "is-ok", label: `Due ${days(gap)} after creation` };
+  return null; // gap > 14 days — no indicator
 }
 
 // Map a case + sort column to a comparable value. Numeric columns (dates,
