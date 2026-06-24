@@ -95,7 +95,7 @@ button {
 /* ============ page layout ============ */
 .cm-page {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-columns: minmax(0, 1fr) 350px;
   grid-template-rows: 1fr auto;
   height: 100vh;
   background: var(--bg);
@@ -902,7 +902,7 @@ button {
 .cm-image-area {
   position: relative;
   width: 100%;
-  aspect-ratio: 12 / 6;
+  aspect-ratio: 10 / 6;
   /* Keep the 12:6 shape on every screen. As a flex child of the scrolling
      .cm-detail column it defaults to flex-shrink:1, so on shorter viewports
      (Windows display scaling, mobile portrait) flexbox squished it below the

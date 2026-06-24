@@ -90,6 +90,10 @@ async function sendOTP() {
       };
       localStorage.setItem("loggedInUser", JSON.stringify(userInfo));
 
+      // --- TEMP: OTP disabled. Skip OTP generation/email; the caller redirects
+      // straight to the case list. Remove this return + uncomment below to restore. ---
+      return true;
+      /* TEMP-OTP-DISABLED
       // Trigger OTP generation / email.
       const otpRes = await fetch(`${API_BASE}/otp`, {
         method: "POST",
@@ -97,16 +101,17 @@ async function sendOTP() {
         body: JSON.stringify([{ machine_id: MACHINE_ID, uuid: currentUUID }])
       });
       logApi(otpRes, "POST /otp");
-      
+
       if (!otpRes.ok) {
         setError("error-message", "Login succeeded but OTP generation failed.");
         return false;
       }
-      
+
       // Move to OTP view and show where the code was sent.
       const target = document.getElementById("otp-target");
       if (target) target.textContent = data.email || username || "your account";
       return true;
+      */
     }
 
     setError("error-message", "Login failed. Please check your username and password.");
@@ -219,7 +224,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (btn) btn.disabled = true;
       const ok = await sendOTP();
       if (btn) btn.disabled = false;
-      if (ok) showView("otp");
+      // TEMP: OTP disabled — go straight to the case list on successful login.
+      if (ok) window.location.href = "./src/pages/case_list.html";
+      // if (ok) showView("otp");
     });
   }
 
