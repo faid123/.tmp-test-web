@@ -1,7 +1,6 @@
 import { state, setMessage, fetchCaseDetail } from "./2DAnnotation.js";
 import { saveAsJpeg } from "./annotationLocks.js";
-import { confirmModal } from "../confirmModal.js";
-import { toast } from "../toast.js";
+import { toast, confirmModal } from "../toast.js";
 
 let THREE = null;
 let TrackballControls = null;

@@ -14,7 +14,6 @@ import { ApiClient } from "./ApiClient.js";
 
 import { addResetButton } from "./resetButton.js";
 import { lol } from "./crypt.js";
-import "./js/sidebar.js";
 import "./js/createCase";
 import { logApi } from "./js/apiLog.js";
 import {

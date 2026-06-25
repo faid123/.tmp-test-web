@@ -96,3 +96,108 @@ if (typeof document !== "undefined") {
     consumeFlash();
   }
 }
+
+// ---------------------------------------------------------------------------
+// Confirmation modal (formerly src/js/confirmModal.js). Promise-based, drop-in
+// replacement for window.confirm(): non-blocking, styled to match the app, with
+// a "danger" variant for destructive actions. Lazily injects its own DOM.
+// Lives here so confirm-dialogs and toasts share one module (reusing escapeHtml).
+// ---------------------------------------------------------------------------
+
+const CONFIRM_ICONS = {
+  danger:  "fa-triangle-exclamation",
+  warning: "fa-triangle-exclamation",
+  info:    "fa-circle-question",
+};
+
+let activeConfirmOverlay = null;
+
+function buildConfirmOverlay() {
+  const overlay = document.createElement("div");
+  overlay.className = "app-confirm-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.innerHTML = `
+    <div class="app-confirm-box">
+      <div class="app-confirm-head">
+        <span class="app-confirm-icon"><i class="fa" aria-hidden="true"></i></span>
+        <h3 class="app-confirm-title"></h3>
+      </div>
+      <p class="app-confirm-message"></p>
+      <div class="app-confirm-actions">
+        <button type="button" class="app-confirm-btn app-confirm-cancel"></button>
+        <button type="button" class="app-confirm-btn app-confirm-ok"></button>
+      </div>
+    </div>
+  `;
+  return overlay;
+}
+
+export function confirmModal({
+  title = "Are you sure?",
+  message = "",
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  variant = "info", // "info" | "warning" | "danger"
+} = {}) {
+  return new Promise((resolve) => {
+    // If a previous prompt is still open, dismiss it so the new one isn't
+    // hidden behind the old overlay.
+    if (activeConfirmOverlay) {
+      activeConfirmOverlay.remove();
+      activeConfirmOverlay = null;
+    }
+
+    const overlay = buildConfirmOverlay();
+    const box = overlay.querySelector(".app-confirm-box");
+    const iconEl = overlay.querySelector(".app-confirm-icon i");
+    const titleEl = overlay.querySelector(".app-confirm-title");
+    const msgEl = overlay.querySelector(".app-confirm-message");
+    const okBtn = overlay.querySelector(".app-confirm-ok");
+    const cancelBtn = overlay.querySelector(".app-confirm-cancel");
+
+    box.classList.add(`app-confirm-${variant}`);
+    iconEl.classList.add(CONFIRM_ICONS[variant] || CONFIRM_ICONS.info);
+    titleEl.textContent = title;
+    // Support a multi-line message via plain text (escape for safety).
+    msgEl.innerHTML = escapeHtml(message).replace(/\n/g, "<br>");
+    okBtn.textContent = confirmText;
+    cancelBtn.textContent = cancelText;
+
+    document.body.appendChild(overlay);
+    activeConfirmOverlay = overlay;
+    requestAnimationFrame(() => overlay.classList.add("is-visible"));
+
+    // Confirm button gets focus so Enter/Space activates it for keyboard users.
+    setTimeout(() => okBtn.focus(), 0);
+
+    const cleanup = (result) => {
+      overlay.classList.remove("is-visible");
+      const remove = () => {
+        overlay.remove();
+        if (activeConfirmOverlay === overlay) activeConfirmOverlay = null;
+        document.removeEventListener("keydown", onKey, true);
+      };
+      overlay.addEventListener("transitionend", remove, { once: true });
+      setTimeout(remove, 250);
+      resolve(result);
+    };
+
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cleanup(false);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        cleanup(true);
+      }
+    };
+
+    okBtn.addEventListener("click", () => cleanup(true));
+    cancelBtn.addEventListener("click", () => cleanup(false));
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) cleanup(false);
+    });
+    document.addEventListener("keydown", onKey, true);
+  });
+}

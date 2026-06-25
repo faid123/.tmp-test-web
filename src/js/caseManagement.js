@@ -1,6 +1,5 @@
 import { lol } from "../crypt.js";
-import { toast } from "./toast.js";
-import { confirmModal } from "./confirmModal.js";
+import { toast, confirmModal } from "./toast.js";
 import { logApi, statusLabel } from "./apiLog.js";
 import { setupConnectivityIndicator, reportHtmlToDocxBytes } from "./accessibility.js";
 import { setupAppSidebar } from "./appSidebar.js";

@@ -1,7 +1,6 @@
 // 顶部引入模块
 import { lol } from "../crypt.js";
-import { toast, flashToast } from "./toast.js";
-import { confirmModal } from "./confirmModal.js";
+import { toast, flashToast, confirmModal } from "./toast.js";
 import { logApi } from "./apiLog.js";
 
 let THREE;
