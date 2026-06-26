@@ -20,6 +20,25 @@ const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
 let currentUUID = null;
 
+// Where to send the user after a successful login. A guest who hit the
+// noticeboard's "Login" button stashes the case page URL in localStorage
+// (postLoginRedirect) so we can return them there; otherwise default to the
+// case list. Only same-origin targets are honored to avoid an open redirect,
+// and the stash is consumed (one-shot) so it can't leak into later logins.
+function postLoginTarget() {
+  try {
+    const stored = localStorage.getItem("postLoginRedirect");
+    if (stored) {
+      localStorage.removeItem("postLoginRedirect");
+      const url = new URL(stored, window.location.href);
+      if (url.origin === window.location.origin) return url.href;
+    }
+  } catch (e) {
+    /* ignore malformed/absent value */
+  }
+  return "./src/pages/case_list.html";
+}
+
 // --- view switching -------------------------------------------------------
 
 function showView(view) {
@@ -166,7 +185,7 @@ async function verifyAndLogin() {
     const data = await response.json();
 
     if (response.ok && data.successful) {
-      window.location.href = "./src/pages/case_list.html";
+      window.location.href = postLoginTarget();
     } else {
       setError("otp-error-message", "Invalid or expired OTP.");
     }
@@ -224,8 +243,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (btn) btn.disabled = true;
       const ok = await sendOTP();
       if (btn) btn.disabled = false;
-      // TEMP: OTP disabled — go straight to the case list on successful login.
-      if (ok) window.location.href = "./src/pages/case_list.html";
+      // TEMP: OTP disabled — go straight to the post-login target on success.
+      if (ok) window.location.href = postLoginTarget();
       // if (ok) showView("otp");
     });
   }

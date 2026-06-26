@@ -1202,6 +1202,29 @@ button.upload3d-row {
   white-space: nowrap;
 }
 
+/* Case Note button relocated into the topbar's upper-left, mirroring the
+   clinical-info button pinned at the right (which uses an <img> logo too).
+   Visibility (mobile-only) is still governed by the
+   .ann-footer-btn.ann-footer-note-btn rules. */
+.arch-topbar .arch-note-btn {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding-top: 8px;
+  width: auto;
+  height: auto;
+}
+.arch-topbar .arch-note-btn:hover {
+  opacity: 0.75;
+  background: transparent;
+}
+.arch-note-logo {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  display: block;
+}
+
 .lock-btn {
   grid-column: 1 / 2;
   border: 1px solid var(--line);

@@ -27,6 +27,23 @@ function getLoggedInUser(){
   }
 }
 
+// A "guest" is anyone who reached this page via a shared link without signing
+// in (no logged-in uuid). Guests can't write to the server endpoints, so their
+// noticeboard is mirrored to localStorage instead. See openNoticeboard().
+function isGuest(){
+  return !getLoggedInUser()?.uuid;
+}
+
+// sessionStorage flag: the guest already chose "Continue as guest" this tab
+// session, so don't re-prompt on every noticeboard open.
+const GUEST_ACK_KEY = "noticeboardGuestAck";
+
+// Per-case localStorage key holding a guest's in-memory noticeboard cache so
+// their instructions survive a reload (logged-in users use the server blob).
+function guestStorageKey(){
+  return state.caseIntID ? `noticeboardGuest_${state.caseIntID}` : null;
+}
+
 //Add a common payload builder
 function noticeboardPayload(caseIntID, uuid){
   return [
@@ -455,12 +472,50 @@ function emptyData() {
   return { instructions: [], viewcaptures: [] };
 }
 
-// `saveData` is kept as a no-op so existing call sites don't have to be
-// rewritten. The cache is a live object — mutations to it already persist
-// for the rest of the session, and the server is updated via
+// For logged-in users `saveData` is a no-op: the cache is a live object whose
+// mutations already persist for the session, and the server is updated via
 // syncInstructionsToEditedView when items are added or edited.
-function saveData(_data) {
-  /* intentionally empty — see emptyData() comment above */
+//
+// Guests have no uuid, so the server save is skipped — instead mirror the cache
+// to localStorage (keyed by case) so their instructions survive a reload. This
+// is the "Continue as guest" path: edits are kept on this device only.
+function saveData(data) {
+  if (!isGuest()) return;
+  const key = guestStorageKey();
+  if (!key) return;
+  try {
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        instructions: data?.instructions || [],
+        viewcaptures: data?.viewcaptures || [],
+      })
+    );
+  } catch (err) {
+    // Most likely the ~5 MB quota (data URLs are large). Keep the in-memory
+    // cache working and let the caller's "saved locally" message stand.
+    console.warn("[noticeboard] guest localStorage save failed", err);
+  }
+}
+
+// Guest counterpart to hydrateNoticeboardFromServer: rebuild the cache from the
+// per-case localStorage mirror written by saveData.
+function hydrateNoticeboardFromLocal() {
+  const key = guestStorageKey();
+  if (!key) return false;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    const data = ensureCache();
+    data.instructions = Array.isArray(parsed?.instructions) ? parsed.instructions : [];
+    data.viewcaptures = Array.isArray(parsed?.viewcaptures) ? parsed.viewcaptures : [];
+    renderGrids();
+    return true;
+  } catch (err) {
+    console.warn("[noticeboard] guest localStorage hydrate failed", err);
+    return false;
+  }
 }
 
 let cache = null;
@@ -1414,13 +1469,85 @@ async function generateReport() {
 export function openNoticeboard() {
   const modal = getModal();
   if (!modal) return;
+
+  // Guests reach this page via a shared link without signing in. They can't
+  // save to the server, so the first time they open the noticeboard per tab
+  // session, gate it behind a Login / Continue-as-guest prompt.
+  if (isGuest() && sessionStorage.getItem(GUEST_ACK_KEY) !== "1") {
+    openGuestGate();
+    return;
+  }
+
   ensureCache();
   renderGrids();
   modal.classList.remove("is-hidden");
   modal.setAttribute("aria-hidden", "false");
-  // Re-fetch from server every time the panel opens so newly saved
-  // instructions from other sessions/devices show up without a reload.
-  hydrateNoticeboardFromServer();
+  // Logged-in: re-fetch from the server every open so saves from other
+  // sessions/devices show up. Guest: rehydrate from their local mirror.
+  if (isGuest()) hydrateNoticeboardFromLocal();
+  else hydrateNoticeboardFromServer();
+}
+
+// ============ guest gate (Login / Continue as guest) ============
+function ensureGuestGateModal() {
+  let modal = document.getElementById("noticeboardGuestGate");
+  if (modal) return modal;
+  modal = document.createElement("div");
+  modal.id = "noticeboardGuestGate";
+  modal.className = "noticeboard-guestgate-modal is-hidden";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.innerHTML = `
+    <div class="noticeboard-guestgate-backdrop" data-gate-close></div>
+    <div class="noticeboard-guestgate-card" role="document">
+      <h2 class="noticeboard-guestgate-title">Sign in to continue</h2>
+      <p class="noticeboard-guestgate-text">
+        Log in to save your noticeboard instructions to this case. You can also
+        continue as a guest &mdash; your edits will be kept on this device only.
+      </p>
+      <div class="noticeboard-guestgate-actions">
+        <button type="button" class="noticeboard-guestgate-btn is-primary" data-gate-login>Login</button>
+        <button type="button" class="noticeboard-guestgate-btn is-ghost" data-gate-guest>Continue as guest</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal
+    .querySelectorAll("[data-gate-close]")
+    .forEach((el) => el.addEventListener("click", closeGuestGate));
+  modal.querySelector("[data-gate-login]").addEventListener("click", goToLoginFromGate);
+  modal.querySelector("[data-gate-guest]").addEventListener("click", continueAsGuest);
+  return modal;
+}
+
+function openGuestGate() {
+  const modal = ensureGuestGateModal();
+  modal.classList.remove("is-hidden");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeGuestGate() {
+  const modal = document.getElementById("noticeboardGuestGate");
+  if (!modal) return;
+  modal.classList.add("is-hidden");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function continueAsGuest() {
+  // Remember the choice for the rest of this tab session, then open for real.
+  try { sessionStorage.setItem(GUEST_ACK_KEY, "1"); } catch {}
+  closeGuestGate();
+  openNoticeboard();
+}
+
+function goToLoginFromGate() {
+  // Remember this case's URL so login.js can bring the user straight back here
+  // after a successful sign-in (instead of the default case list).
+  try { localStorage.setItem("postLoginRedirect", window.location.href); } catch {}
+  closeGuestGate();
+  // Login lives at the repo root (index.html); the annotation page sits two
+  // levels deep under src/pages/, so resolve back up to it.
+  window.location.href = new URL("../../index.html", window.location.href).href;
 }
 
 export function closeNoticeboard() {

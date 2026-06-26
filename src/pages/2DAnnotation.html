@@ -81,6 +81,13 @@
              the top-right of the jaw cell. On mobile/tablet the topbar
              stays as the centered case label + clinical info row. -->
         <div class="arch-topbar">
+          <!-- Case Note button (tablet/mobile only) — pinned to the topbar's
+               upper-left, beside the case ID, mirroring the clinical-info
+               button on the right. Keeps the ann-footer-note-btn class so its
+               desktop-hidden / mobile-shown visibility rules still apply. -->
+          <button type="button" class="ann-footer-btn ann-footer-note-btn arch-note-btn" id="footerCaseNoteBtn" aria-label="Case note" data-tooltip="Case Note">
+            <img class="arch-note-logo" src="../../assets/case_note.png" alt="Case Note" width="30" height="30" />
+          </button>
           <div id="caseLabel" class="case-label">Case: Unknown</div>
           <button
             type="button"
@@ -251,9 +258,6 @@
     <div class="ann-footer-right">
       <span class="ann-footer-user" id="footerUserName">—</span>
       <span class="ann-footer-conn" id="footerConnection"></span>
-      <button type="button" class="ann-footer-btn ann-footer-note-btn" id="footerCaseNoteBtn" aria-label="Case note" data-tooltip="Case Note">
-        <i class="fa-regular fa-note-sticky" aria-hidden="true"></i>
-      </button>
       <button type="button" class="ann-footer-btn ann-footer-chat-btn" id="footerChatBtn" aria-label="Open chat" data-tooltip="Chat">
         <i class="fa-regular fa-comment" aria-hidden="true"></i>
       </button>
