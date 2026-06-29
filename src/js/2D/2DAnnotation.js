@@ -21,6 +21,7 @@ import { decodeJawStructResponse, resolveJawStructDesign } from "./jawStructCode
 import { applyJawStructDesign } from "./jawStructApply.js";
 import { logApi } from "../apiLog.js";
 import { toast, flashToast } from "../toast.js";
+import { VIEWER_UUID } from "../../config.js";
 
 /**
  * The Save button is the chosen trigger for writing the 2D design back to the
@@ -1429,9 +1430,16 @@ function init() {
   // their original order — only the network start is hoisted.
   fetchCaseDetail(); // shared /case/get — also reused by preview3D
   const loggedInUser = getLoggedInUser();
+  // Guests (shared-link visitors with no login) still need the latest 2D
+  // design loaded — otherwise the arch renders empty and any noticeboard
+  // instruction they capture would be a blank jaw. Fall back to the shared
+  // viewer account (VIEWER_UUID), the same read-only identity the 3D viewer
+  // uses for non-authenticated viewers. Guests still can't SAVE (that path is
+  // gated on loggedInUser.uuid), so this is read-only.
+  const designUuid = loggedInUser?.uuid || VIEWER_UUID;
   const jawStructRecordsPromise =
-    state.caseIntID && loggedInUser?.uuid
-      ? apiFetchJawStruct(state.caseIntID, loggedInUser.uuid).catch((err) => {
+    state.caseIntID && designUuid
+      ? apiFetchJawStruct(state.caseIntID, designUuid).catch((err) => {
           console.warn("Failed to fetch jawstruct:", err);
           return null;
         })

@@ -1507,7 +1507,8 @@ function ensureGuestGateModal() {
       </p>
       <div class="noticeboard-guestgate-actions">
         <button type="button" class="noticeboard-guestgate-btn is-primary" data-gate-login>Login</button>
-        <button type="button" class="noticeboard-guestgate-btn is-ghost" data-gate-guest>Continue as guest</button>
+        <!-- TEMP: "Continue as guest" hidden for now — remove style="display:none" to restore. -->
+        <button type="button" class="noticeboard-guestgate-btn is-ghost" data-gate-guest style="display:none">Continue as guest</button>
       </div>
     </div>
   `;

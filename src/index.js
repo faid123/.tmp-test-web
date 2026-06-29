@@ -345,6 +345,39 @@ function saveAnnotationBackground(storageKey, dataUrl) {
   }
 }
 
+// Gate shown when a non-logged-in viewer clicks "Annotate" in the 3D viewer.
+// Login -> full 2D annotation noticeboard; Continue as guest -> the read-only
+// Annotation History. Styled inline since the 3D viewer doesn't load
+// noticeboard.css.
+function openAnnotateGate({ onLogin, onGuest }) {
+  const gate = document.createElement("div");
+  gate.style.cssText =
+    "position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,0.78);";
+  gate.innerHTML = `
+    <div style="width:min(92vw,420px);background:#fff;border-radius:14px;padding:28px 26px 24px;box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center;font-family:system-ui,-apple-system,sans-serif;">
+      <h2 style="margin:0 0 10px;font-size:20px;font-weight:700;color:#0f172a;">Sign in to continue</h2>
+      <p style="margin:0 0 22px;font-size:14px;line-height:1.5;color:#475569;">Log in to open the 2D annotation noticeboard, or continue as a guest to view the annotation history.</p>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button type="button" data-gate-login style="width:100%;padding:12px 16px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;border:1px solid transparent;background:#3BAE95;color:#fff;">Login</button>
+        <!-- TEMP: "Continue as guest" hidden for now — remove display:none to restore. -->
+        <button type="button" data-gate-guest style="display:none;width:100%;padding:12px 16px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;border:1px solid #cbd5e1;background:#fff;color:#334155;">Continue as guest</button>
+      </div>
+    </div>`;
+  document.body.appendChild(gate);
+  const close = () => gate.remove();
+  gate.addEventListener("click", (ev) => {
+    if (ev.target === gate) close();
+  });
+  gate.querySelector("[data-gate-login]").addEventListener("click", () => {
+    close();
+    onLogin?.();
+  });
+  gate.querySelector("[data-gate-guest]").addEventListener("click", () => {
+    close();
+    onGuest?.();
+  });
+}
+
 // ── Hamburger menu ──────────────────────────────────────────────────────────
 
 function createHamburgerButton() {
@@ -3697,56 +3730,84 @@ btnContainer.appendChild(edit2DStatic); */
                 return;
               }
 
-              // ✅ 重新生成图像并保存
-              const enlargedImg = document.querySelector(
-                ".twod-fullscreen-image"
-              );
-              if (!enlargedImg) {
-                alert("❌ 未找到图像，无法生成截图");
+              const isGitHubPages =
+                window.location.hostname.includes("github.io");
+              const basePath = isGitHubPages ? "/.tmp-test-web" : "";
+
+              // Pathway 1 (logged in): compose the annotation background, then
+              // open the full 2D annotation noticeboard. `then` lets the login
+              // flow reuse the same compose+save before redirecting to login.
+              const composeBackgroundThen = (then) => {
+                const enlargedImg = document.querySelector(
+                  ".twod-fullscreen-image"
+                );
+                if (!enlargedImg) {
+                  alert("❌ 未找到图像，无法生成截图");
+                  return;
+                }
+                const canvas = document.createElement("canvas");
+                canvas.width = enlargedImg.naturalWidth;
+                canvas.height = enlargedImg.naturalHeight;
+                const ctx = canvas.getContext("2d");
+                const baseImage = new Image();
+                baseImage.onload = () => {
+                  ctx.drawImage(baseImage, 0, 0);
+                  const text = `🦷 Case: ${caseID}`;
+                  const fontSize = canvas.width * 0.034;
+                  ctx.font = `bold ${fontSize}px sans-serif`;
+                  ctx.fillStyle = "white";
+                  ctx.textAlign = "center";
+                  ctx.textBaseline = "middle";
+                  ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+                  ctx.shadowBlur = 10;
+                  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+                  const storageKey = `annotateBackground_${encryptedId}`;
+                  const composedDataURL = canvas.toDataURL("image/jpeg", 0.82);
+                  if (!saveAnnotationBackground(storageKey, composedDataURL)) {
+                    alert("Could not prepare the annotation image. Please try again.");
+                    return;
+                  }
+                  then();
+                };
+                baseImage.src = enlargedImg.src;
+              };
+
+              const noticeboardURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html?id=${encryptedId}&view=noticeboard`;
+              const openNoticeboard = () =>
+                composeBackgroundThen(() => window.open(noticeboardURL, "_blank"));
+              const openHistory = () =>
+                window.open(
+                  `${window.location.origin}${basePath}/src/pages/AnnotationHistory.html?id=${encryptedId}`,
+                  "_blank"
+                );
+
+              let loggedIn = false;
+              try {
+                loggedIn = !!JSON.parse(
+                  localStorage.getItem("loggedInUser") || "null"
+                )?.uuid;
+              } catch (_) {}
+
+              // Logged-in users skip the gate (pathway 1).
+              if (loggedIn) {
+                openNoticeboard();
                 return;
               }
 
-              const canvas = document.createElement("canvas");
-              canvas.width = enlargedImg.naturalWidth;
-              canvas.height = enlargedImg.naturalHeight;
-              const ctx = canvas.getContext("2d");
-
-              const baseImage = new Image();
-              baseImage.onload = () => {
-                ctx.drawImage(baseImage, 0, 0);
-
-                const text = `🦷 Case: ${caseID}`;
-                const fontSize = canvas.width * 0.034; // 相当于 3% 宽度
-                ctx.font = `bold ${fontSize}px sans-serif`;
-                ctx.fillStyle = "white";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
-                ctx.shadowBlur = 10;
-                ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
-                const storageKey = `annotateBackground_${encryptedId}`;
-                const composedDataURL = canvas.toDataURL("image/jpeg", 0.82);
-                if (!saveAnnotationBackground(storageKey, composedDataURL)) {
-                  alert("Could not prepare the annotation image. Please try again.");
-                  return;
-                }
-                console.log(`✅ 已保存 annotateBackground_${encryptedId}`);
-
-                // 🟢 跳转
-                // 🟢 跳转（确保使用 URL 中的加密 ID）
-                const isGitHubPages =
-                  window.location.hostname.includes("github.io");
-                //const isLocal = window.location.hostname === "localhost";
-                const queryConnector = "?";
-                const basePath = isGitHubPages ? "/.tmp-test-web" : "";
-
-                const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}&view=noticeboard`;
-                console.log("🔁 正在跳转到 Annotate 页:", targetURL);
-                window.open(targetURL, "_blank");
-              };
-
-              baseImage.src = enlargedImg.src;
+              // Guests get the gate: Login -> 2D noticeboard (pathway 1, after
+              // signing in), or Continue as guest -> Annotation History
+              // (pathway 2, no login).
+              openAnnotateGate({
+                onLogin: () =>
+                  composeBackgroundThen(() => {
+                    // Return to the 2D noticeboard after a successful login.
+                    try {
+                      localStorage.setItem("postLoginRedirect", noticeboardURL);
+                    } catch (_) {}
+                    window.location.href = `${window.location.origin}${basePath}/index.html`;
+                  }),
+                onGuest: openHistory,
+              });
             });
 
             // 插入按钮

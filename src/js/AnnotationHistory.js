@@ -1,6 +1,7 @@
 import { lol } from "../crypt.js";
 import { logApi } from "./apiLog.js";
 import { setupAppSidebar } from "./appSidebar.js";
+import { VIEWER_UUID } from "../config.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   initFooter();
@@ -48,8 +49,10 @@ async function loadHistory() {
   if (caseLabel)  caseLabel.textContent  = `Case #${caseIntID}`;
   if (footerCase) footerCase.textContent = `${caseIntID}`;
 
-  let uuid = "";
-  try { uuid = getLoggedInUser()?.uuid || ""; } catch (_) {}
+  // Read with the logged-in uuid when present, else the shared viewer account
+  // so a guest (no login) still loads the case's annotations standalone.
+  let uuid = VIEWER_UUID;
+  try { uuid = getLoggedInUser()?.uuid || VIEWER_UUID; } catch (_) {}
 
   const payload = [
     { machine_id: MACHINE_ID, uuid, caseIntID },
