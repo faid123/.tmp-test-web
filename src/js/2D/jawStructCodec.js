@@ -229,6 +229,32 @@ function jawSideFromParsed(parsed) {
   return null;
 }
 
+// Map the saved major-connector span (array-slot ranges) to the FDIs it covers.
+// Unions both connectors (1 & 2); `idxToFdi` is the data-derived slot->FDI map.
+// Returns undefined when neither range is present/valid (from-scratch designs).
+function majorSpanFdisFromParsed(other, idxToFdi) {
+  if (!other || !idxToFdi) return undefined;
+  const ranges = [
+    [other["Major Connector 1 Start"], other["Major Connector 1 End"]],
+    [other["Major Connector 2 Start"], other["Major Connector 2 End"]],
+  ];
+  const slots = new Set();
+  let sawRange = false;
+  for (const [s, e] of ranges) {
+    const start = Number(s);
+    const end = Number(e);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+    sawRange = true;
+    for (let i = Math.min(start, end); i <= Math.max(start, end); i += 1) {
+      slots.add(String(i));
+    }
+  }
+  if (!sawRange) return undefined;
+  const fdis = [];
+  for (const slot of slots) if (idxToFdi[slot]) fdis.push(idxToFdi[slot]);
+  return fdis.length ? fdis : undefined;
+}
+
 /** Track unmapped codes so we can catalog what's missing from jawStructCodes.js. */
 const _unmappedSeen = new Set();
 function reportUnmapped(fieldPath, code) {
@@ -369,6 +395,16 @@ export function resolveJawStructDesign(parsed) {
     else reportUnmapped(MAJOR_CONNECTOR_KEY, mcCode);
   }
 
+  // Exact major-connector coverage straight from the saved span. The desktop
+  // writes the connector's extent as array-slot ranges (Major Connector 1/2
+  // Start/End); map both ranges to FDIs (via idxToFdi) and union them. The apply
+  // step places the major on exactly these teeth, so a loaded design's connector
+  // follows the data instead of the arch-fill rule re-deriving it. Absent ->
+  // undefined, so from-scratch designs still fall back to the rule.
+  if (design.major) {
+    design.majorSpanFdis = majorSpanFdisFromParsed(parsed?.other, idxToFdi);
+  }
+
   return design;
 }
 
@@ -419,6 +455,31 @@ function majorConnectorCode(state, fdiOrder) {
     if (majId) return inverseOf(MAJOR_CONNECTOR_TYPE).get(majId) ?? 0;
   }
   return 0;
+}
+
+// Compute the connector-1 / connector-2 array-slot spans from the teeth that
+// carry a major-* component. Contiguous slot runs become the two connectors so
+// the loader (majorSpanFdisFromParsed) reads back exactly the placed teeth.
+// No major -> 0/0. See the call site for the run -> connector mapping.
+function majorConnectorSpans(state, fdiOrder) {
+  const slots = [];
+  fdiOrder.forEach((fdi, idx) => {
+    if (componentList(state.teeth?.[fdi]).some((id) => String(id).startsWith("major-"))) {
+      slots.push(idx);
+    }
+  });
+  if (!slots.length) return { c1: [0, 0], c2: [0, 0] };
+  const runs = [];
+  for (const s of slots) {
+    const last = runs[runs.length - 1];
+    if (last && s === last[1] + 1) last[1] = s;
+    else runs.push([s, s]);
+  }
+  if (runs.length === 1) return { c1: runs[0], c2: runs[0] };
+  if (runs.length === 2) return { c1: runs[0], c2: runs[1] };
+  // >2 runs: can't represent exactly in two connectors — use the overall span.
+  const bound = [slots[0], slots[slots.length - 1]];
+  return { c1: bound, c2: bound };
 }
 
 // The lower lingual connector's plate-vs-bar SHAPE lives in the 16x16 Minor
@@ -561,6 +622,10 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
     ["Tooth Main.Tooth Retainer.Retainer Bar Type", barType],
     ["Tooth Main.Tooth Retainer.Retainer Bar Category", barCategory],
     ["Tooth Main.Tooth Reciprocating.Tooth Type", reciprocatingType],
+    // Native emits a Pattern Type after the reciprocating Tooth Type. The web
+    // doesn't model it, so preserve the loaded value (round-trips for free) and
+    // default 0 for from-scratch. Omitting it desynced the per-tooth parse.
+    ["Tooth Main.Tooth Reciprocating.Tooth Pattern Type", rawOr("Tooth Main.Tooth Reciprocating.Tooth Pattern Type", 0)],
   ];
   return fields.map(([k, v]) => `Tooth ${arrayIdx}: ${k}: ${v}`);
 }
@@ -586,6 +651,14 @@ export function encodeJawStructText(state, jawSide) {
   lines.push(`Jaw Type: ${isUpper ? 0 : 1}`);
   lines.push("Jaw Material: 0");
 
+  // Header pattern types (immediately after Jaw Material). The native parser
+  // reads every field positionally, so omitting these desynced the entire parse
+  // and the desktop loaded a blank jaw (output: 0). Preserve the loaded values
+  // when present; default 0 for from-scratch web designs.
+  const header = state?.jawStructTail?.[jawSide] || {};
+  lines.push(`Palatal Pattern Type: ${header["Palatal Pattern Type"] ?? 0}`);
+  lines.push(`Arch Ridge Pattern Type: ${header["Arch Ridge Pattern Type"] ?? 0}`);
+
   fdiOrder.forEach((fdi, arrayIdx) => {
     lines.push(...encodeToothLines(arrayIdx, fdi, state.teeth?.[fdi], meshFdi.has(fdi)));
   });
@@ -599,6 +672,17 @@ export function encodeJawStructText(state, jawSide) {
   }
 
   lines.push(`Major Connector Type: ${mcCode}`);
+  // Major connector span indices (immediately after the type), COMPUTED from the
+  // teeth that actually carry the major component — so a connector edited on the
+  // web round-trips (the loader reads these spans back via majorSpanFdis). The
+  // covered array slots are grouped into contiguous runs: run 1 -> connector 1,
+  // run 2 -> connector 2 (a single run duplicates into both so the loader's union
+  // is exact). >2 runs (rare) fall back to the overall [min,max] bounding span.
+  const span = majorConnectorSpans(state, fdiOrder);
+  lines.push(`Major Connector 1 Start: ${span.c1[0]}`);
+  lines.push(`Major Connector 1 End: ${span.c1[1]}`);
+  lines.push(`Major Connector 2 Start: ${span.c2[0]}`);
+  lines.push(`Major Connector 2 End: ${span.c2[1]}`);
   // Minor-connector path grid + ball connectors aren't modeled by the web, so
   // emit the loaded values when available (preserved on state.jawStructTail),
   // falling back to the desktop init defaults (paths 1, balls 0). For a lower

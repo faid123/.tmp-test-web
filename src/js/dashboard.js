@@ -432,7 +432,13 @@ function resetPreview() {
 
 // Phones/tablets share the desktop's stacked single-column layout, where the
 // inline preview panel is hidden — captures pop full-screen instead.
-const MOBILE_MQ = window.matchMedia("(max-width: 1080px)");
+// matchMedia is browser-only; guard it so importing this module under jsdom/SSR
+// (e.g. the unit tests, which only use the pure functions below) doesn't throw.
+// Falls back to the desktop (non-mobile) layout.
+const MOBILE_MQ =
+  typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia("(max-width: 1080px)")
+    : { matches: false };
 
 function openLightbox(src) {
   const lb = document.getElementById("dashLightbox");

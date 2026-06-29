@@ -373,6 +373,15 @@ function getMinorConnectorSupportSides(tooth) {
   if (!tooth || !Array.isArray(tooth.componentPlacements)) return sides;
   for (const placement of tooth.componentPlacements) {
     const id = placement?.componentId;
+    // A mesh plate (cross-mesh) spans the tooth proximally and joins the major
+    // connector on both embrasures, so it carries a minor connector even though
+    // it has no anchor surface. (A plate-prox under a major connector is already
+    // joined by the connector fill, so it's intentionally not added here.)
+    if (id === "plate-crossmesh") {
+      sides.mesial = true;
+      sides.distal = true;
+      continue;
+    }
     const surface = normalizeSurface(placement?.surface);
     if (!surface) continue;
     if (isRestComponent(id) || isBarComponent(id)) {

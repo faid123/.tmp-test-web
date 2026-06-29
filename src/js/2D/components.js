@@ -555,6 +555,8 @@ export {
   isPalatalBarMajorComponent,
   isPalatalHoleMajorComponent,
   isPalatalStrapMajorComponent,
+  majorConnectorRunsToMidline,
+  placeMajorConnectorOnExactTeeth,
   PALATAL_BAR_ARCH_OVERLAY,
   PALATAL_BAR_CONNECTOR_TOOTH_IDS,
   PALATAL_BAR_MAJOR_COMPONENT_ID,

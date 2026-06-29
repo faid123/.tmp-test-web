@@ -291,9 +291,10 @@ export function ensurePlatePlacementsOnPresentTeeth(teeth, plateComponentId, com
  *  - a PLATE / strap / horseshoe plates every present tooth it actually covers, giving each a
  *    real, erasable `plate-prox` component (matches the desktop's blanket plating, and the
  *    renderer draws that as the tooth's plate fill);
- *  - a BAR leaves the existing per-tooth plating untouched: it neither blanket-adds nor
- *    blanket-removes `plate-prox`, so selecting a bar does not wipe reciprocating plates the
- *    user already placed (plates stay individually erasable per tooth).
+ *  - a BAR plates nothing, so it CLEARS every per-tooth `plate-prox`. This matters most after
+ *    loading a PLATE (which stamps `plate-prox` on every present tooth): switching to a bar must
+ *    drop those, otherwise the bar encodes `Reciprocating.Tooth Type = 2` on each tooth and the
+ *    desktop / a reopen re-materializes the plate — i.e. the bar comes back as a plate.
  * A tooth carrying a reciprocating clasp keeps that as its reciprocal (clasp XOR plate), and a
  * tooth the connector excludes loses its plate. This is what makes the plate data-driven and
  * removable.
@@ -303,12 +304,9 @@ export function syncReciprocatingPlatesToMajorConnector(teeth, majorComponentId,
   if (!teeth || typeof teeth !== "object" || !Array.isArray(jawKeys)) {
     return;
   }
+  // For a bar, `covered` below is forced false (the `!isBar` term), so every tooth
+  // with a plate falls into the removal branch — clearing the plating a bar can't carry.
   const isBar = BAR_MAJOR_CONNECTOR_IDS.has(String(majorComponentId));
-  // A bar leaves the per-tooth plating exactly as it is — don't strip reciprocating
-  // plates the user placed when switching to a bar.
-  if (isBar) {
-    return;
-  }
   for (const jaw of jawKeys) {
     const ids = TOOTH_ORDER[jaw];
     if (!Array.isArray(ids)) {

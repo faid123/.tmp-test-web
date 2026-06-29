@@ -18,6 +18,8 @@ import {
   COMPONENT_BY_ID,
   getBarPlacementSurfaceForTooth,
   ensureMajorConnectorPlacementsOnSupportedTeethInJaws,
+  majorConnectorRunsToMidline,
+  placeMajorConnectorOnExactTeeth,
 } from "./components.js";
 import { addPlacement, hasPlacement } from "./annotationTeethModel.js";
 
@@ -80,14 +82,33 @@ export function applyJawStructDesign(design, state) {
     }
   }
 
-  // 4. Major connector auto-placement (option a). Needs the mesh placements above.
+  // 4. Major connector. For midline-reaching majors (plate / horseshoe / hole /
+  //    kennedy / strap) the web's arch-fill rule re-derived the span and could
+  //    over-cover vs the desktop. When the loaded data carries an explicit span
+  //    (Major Connector Start/End -> design.majorSpanFdis), place the major on
+  //    EXACTLY those teeth instead — coverage follows the data, not the rule.
+  //    Bars/straps and spanless (from-scratch) designs keep the rule.
   if (design.major && jawSide) {
-    ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
-      state.teeth,
-      design.major,
-      COMPONENT_BY_ID,
-      [jawSide]
-    );
+    if (
+      majorConnectorRunsToMidline(design.major) &&
+      Array.isArray(design.majorSpanFdis) &&
+      design.majorSpanFdis.length
+    ) {
+      placeMajorConnectorOnExactTeeth(
+        state.teeth,
+        design.major,
+        COMPONENT_BY_ID,
+        jawSide,
+        design.majorSpanFdis
+      );
+    } else {
+      ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
+        state.teeth,
+        design.major,
+        COMPONENT_BY_ID,
+        [jawSide]
+      );
+    }
   }
 
   // Diagnostic: what the resolver produced + what actually landed on this jaw's

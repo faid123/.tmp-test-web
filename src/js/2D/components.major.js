@@ -905,6 +905,38 @@ function fillMajorConnectorSpanInArch(teeth, majorComponentId, componentById, ja
 }
 
 /**
+ * Place `majorComponentId` on EXACTLY the given teeth — used by the load path to
+ * honor a saved design's major-connector span (`Major Connector Start/End`)
+ * instead of re-deriving it with {@link fillMajorConnectorSpanInArch}. Teeth with
+ * no connector art (can't render) or that the connector excludes are skipped; no
+ * gap-filling between teeth, so the coverage matches the data, not the rule.
+ */
+export function placeMajorConnectorOnExactTeeth(
+  teeth,
+  majorComponentId,
+  componentById,
+  jawKey,
+  fdiList
+) {
+  if (
+    !majorComponentId ||
+    !componentById.has(majorComponentId) ||
+    !isMajorConnectorComponent(majorComponentId) ||
+    !Array.isArray(fdiList)
+  ) {
+    return;
+  }
+  for (const fdi of fdiList) {
+    const toothId = String(fdi);
+    if (!getMajorConnectorAssetReference(toothId, jawKey)) continue;
+    if (isMajorConnectorToothExcluded(majorComponentId, toothId)) continue;
+    const tooth = teeth[toothId];
+    if (!tooth) continue;
+    placeMajorConnectorOnce(tooth, majorComponentId);
+  }
+}
+
+/**
  * When both arches lock, drop a default major connector on every tooth that already has
  * mesh (missing) or plate (present) **where** {@link getMajorConnectorAssetReference} returns art
  * for that jaw (upper 11–28; lower 31–48 using `41`–`48` basenames; Q3 mirrored like upper Q2).
