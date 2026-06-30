@@ -1,6 +1,7 @@
 import { isAutoMeshPlacementExcludedToothId, TOOTH_ORDER } from "./constants.js";
 import { COMPONENT_ASSET_BASE, getComponentTemplateToothId } from "./components.mesh.js";
 import { isReciprocatingClaspComponent } from "./components.clasp.js";
+import { PALATAL_BAR_MAJOR_COMPONENT_ID } from "./components.major.js";
 
 /** Major connectors that are BARS (band-only) — they plate no teeth. */
 const BAR_MAJOR_CONNECTOR_IDS = Object.freeze(
@@ -291,10 +292,13 @@ export function ensurePlatePlacementsOnPresentTeeth(teeth, plateComponentId, com
  *  - a PLATE / strap / horseshoe plates every present tooth it actually covers, giving each a
  *    real, erasable `plate-prox` component (matches the desktop's blanket plating, and the
  *    renderer draws that as the tooth's plate fill);
- *  - a BAR plates nothing, so it CLEARS every per-tooth `plate-prox`. This matters most after
- *    loading a PLATE (which stamps `plate-prox` on every present tooth): switching to a bar must
- *    drop those, otherwise the bar encodes `Reciprocating.Tooth Type = 2` on each tooth and the
- *    desktop / a reopen re-materializes the plate — i.e. the bar comes back as a plate.
+ *  - the LOWER lingual BAR plates nothing, so it CLEARS every per-tooth `plate-prox`. This matters
+ *    most after loading a PLATE (which stamps `plate-prox` on every present tooth): switching to a
+ *    bar must drop those, otherwise the bar encodes `Reciprocating.Tooth Type = 2` on each tooth
+ *    and the desktop / a reopen re-materializes the plate — i.e. the bar comes back as a plate.
+ *  - the UPPER PALATAL BAR is the exception: its per-tooth plate components are user-managed (same
+ *    as the other palatal majors), so it neither auto-adds nor auto-removes `plate-prox`. This is
+ *    what lets an anterior plate be placed and kept while a palatal bar is the major connector.
  * A tooth carrying a reciprocating clasp keeps that as its reciprocal (clasp XOR plate), and a
  * tooth the connector excludes loses its plate. This is what makes the plate data-driven and
  * removable.
@@ -302,6 +306,11 @@ export function ensurePlatePlacementsOnPresentTeeth(teeth, plateComponentId, com
 // Sync per-tooth plate-prox to the jaw's major connector type.
 export function syncReciprocatingPlatesToMajorConnector(teeth, majorComponentId, jawKeys) {
   if (!teeth || typeof teeth !== "object" || !Array.isArray(jawKeys)) {
+    return;
+  }
+  // The upper palatal bar leaves plate components untouched (user-managed), so a switch to it
+  // never strips an anterior — or any — plate. Other majors fall through to the sync below.
+  if (String(majorComponentId) === PALATAL_BAR_MAJOR_COMPONENT_ID) {
     return;
   }
   // For a bar, `covered` below is forced false (the `!isBar` term), so every tooth

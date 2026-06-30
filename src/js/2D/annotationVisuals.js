@@ -305,9 +305,20 @@ function appendToothPlateComponentVisuals(group, tooth, toothId, jaw) {
   // per tooth (the anterior overlap). Only draw plate-prox here when there is no such connector
   // (a standalone plate, e.g. RPI under a lingual bar). Mesh plates (plate-crossmesh) are always
   // drawn here — the connector pass never draws those.
-  const drawnByConnectorFill = tooth.components.some(
-    (id) => isMajorConnectorComponent(id) && id !== "major-lower-lingual-bar"
-  );
+  //
+  // EXCEPTION: under a palatal bar the connector pass SUPPRESSES the anterior teeth
+  // (PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS) from its majorId loop, so it never draws their
+  // fill — even when a loaded design left the bar major sitting on those anteriors alongside a
+  // plate-prox. Treat those as NOT drawn-by-connector so the anterior plate renders here instead.
+  const suppressedFromConnectorFill =
+    jaw === "upper" &&
+    shouldShowPalatalBarArchOverlay() &&
+    PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS.has(String(toothId));
+  const drawnByConnectorFill =
+    !suppressedFromConnectorFill &&
+    tooth.components.some(
+      (id) => isMajorConnectorComponent(id) && id !== "major-lower-lingual-bar"
+    );
 
   for (const { id } of catalogEntries) {
     if (!isPlateComponentId(id)) {

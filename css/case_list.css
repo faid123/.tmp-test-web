@@ -774,10 +774,16 @@ button {
 }
 .cm-row.is-active:hover { background: #e6f5ef; }
 
-.cm-td-name { min-width: 300px; position: relative; }
+.cm-td-name { min-width: 160px; max-width: 240px; position: relative; }
 .cm-row-name {
   font-weight: 600;
   color: var(--ink);
+  /* Wrap a long name onto multiple lines instead of stretching the column. */
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: middle;
 }
 
 /* Due-date urgency bar: vertical indicator at the far-left edge of the row
@@ -803,6 +809,10 @@ button {
   font-size: 11px;
 }
 
+/* Give the status pill room to stay on one line (e.g. "3D design pending"). */
+.cm-td-status { min-width: 150px; }
+.cm-td-status .cm-pill { white-space: nowrap; }
+
 .cm-td-date { white-space: nowrap; }
 
 .cm-td-owner { white-space: nowrap; }
@@ -818,18 +828,19 @@ button {
   white-space: nowrap;
   vertical-align: middle;
 }
-.cm-row-coowners {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: 8px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: var(--primary-soft);
-  color: var(--primary-dark);
-  font-size: 11px;
-  font-weight: 600;
+/* Shared With column: truncate a long co-owner list to a single line with an
+   ellipsis (full list is in the title tooltip). */
+.cm-td-shared { white-space: nowrap; }
+.cm-shared-names {
+  color: var(--ink-soft);
+  display: inline-block;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
+.cm-td-shared .cm-shared-empty { color: var(--muted); }
 
 .cm-td-actions { text-align: right; white-space: nowrap; }
 .cm-row-icon {
@@ -1411,9 +1422,12 @@ button {
   /* Field rows: small label prefix from the data-label attribute, then value.
      `white-space: normal` lets long dates wrap instead of push the card wide. */
   .cm-td-date,
-  .cm-td-owner { white-space: normal; }
+  .cm-td-owner,
+  .cm-td-shared { white-space: normal; }
+  .cm-td-shared .cm-shared-names { max-width: none; white-space: normal; }
   .cm-td-date::before,
-  .cm-td-owner::before {
+  .cm-td-owner::before,
+  .cm-td-shared::before {
     content: attr(data-label) ": ";
     color: var(--muted);
     font-size: 11px;

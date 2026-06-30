@@ -356,7 +356,7 @@ function openAnnotateGate({ onLogin, onGuest }) {
   gate.innerHTML = `
     <div style="width:min(92vw,420px);background:#fff;border-radius:14px;padding:28px 26px 24px;box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center;font-family:system-ui,-apple-system,sans-serif;">
       <h2 style="margin:0 0 10px;font-size:20px;font-weight:700;color:#0f172a;">Sign in to continue</h2>
-      <p style="margin:0 0 22px;font-size:14px;line-height:1.5;color:#475569;">Log in to open the 2D annotation noticeboard, or continue as a guest to view the annotation history.</p>
+      <p style="margin:0 0 22px;font-size:14px;line-height:1.5;color:#475569;">Log in to open the 2D annotation noticeboard.</p>
       <div style="display:flex;flex-direction:column;gap:10px;">
         <button type="button" data-gate-login style="width:100%;padding:12px 16px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;border:1px solid transparent;background:#3BAE95;color:#fff;">Login</button>
         <!-- TEMP: "Continue as guest" hidden for now — remove display:none to restore. -->

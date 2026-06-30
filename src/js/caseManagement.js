@@ -659,7 +659,7 @@ function populateTable(cases) {
 
   if (!cases || cases.length === 0) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td class="cm-list-empty" colspan="6">No cases found.</td>`;
+    tr.innerHTML = `<td class="cm-list-empty" colspan="7">No cases found.</td>`;
     body.appendChild(tr);
     return;
   }
@@ -672,10 +672,11 @@ function populateTable(cases) {
       caseItem.due_date ||
       computeDefaultDueDate(caseItem.creation_date);
     const caseIntId = caseItem.id ?? caseItem.case_int_id;
-    const caseDisplayName = caseItem.case_id
+    const caseName = caseItem.case_id ? truncateWords(caseItem.case_id, 10) : null;
+    const caseDisplayName = caseName
       ? caseIntId != null
-        ? `UID_${caseIntId} : ${caseItem.case_id}`
-        : caseItem.case_id
+        ? `UID_${caseIntId} : ${caseName}`
+        : caseName
       : "N/A";
 
     const pinned = pinnedSet.has(String(resolvedCaseId));
@@ -695,10 +696,6 @@ function populateTable(cases) {
     row.setAttribute("role", "button");
     row.tabIndex = 0;
 
-    const coOwnersHtml = caseItem.co_owners?.length
-      ? `<span class="cm-row-coowners" title="Shared with ${escapeAttr(caseItem.co_owners.join(", "))}"><i class="fa-solid fa-user-group"></i>+${caseItem.co_owners.length}</span>`
-      : "";
-
     // Urgency bar shown at the left of the row, colored by days remaining
     // until the due date (compared with today).
     const dueInd = dueDateIndicator(dueDate);
@@ -708,13 +705,18 @@ function populateTable(cases) {
 
     row.innerHTML = `
       <td class="cm-td-name">
-        <span class="cm-row-name">${escapeAttr(caseDisplayName)}</span>${pinned ? '<i class="fa-solid fa-flag cm-row-pin" title="Pinned"></i>' : ""}${dueBarHtml}
+        <span class="cm-row-name" title="${escapeAttr(caseItem.case_id || "")}">${escapeAttr(caseDisplayName)}</span>${pinned ? '<i class="fa-solid fa-flag cm-row-pin" title="Pinned"></i>' : ""}${dueBarHtml}
       </td>
       <td class="cm-td-status"><span class="cm-pill ${statusPillClass(caseItem.new_status)}">${escapeAttr(statusDisplayText(caseItem.new_status))}</span></td>
       <td class="cm-td-date" data-label="Created">${formatDateTime(caseItem.creation_date)}</td>
-      <td class="cm-td-date cm-due-date ${dueInd ? dueInd.cls : ""}" data-label="Due">${dueDate ? formatDateTime(dueDate) : "N/A"}</td>
+      <td class="cm-td-date cm-due-date ${dueInd ? dueInd.cls : ""}" data-label="Due">${dueDate ? formatDateOnly(dueDate) : "N/A"}</td>
       <td class="cm-td-owner" data-label="Owner">
-        <i class="fa-regular fa-circle-user"></i><span class="cm-owner-name" title="${escapeAttr(assignedTo)}">${escapeAttr(assignedTo)}</span>${coOwnersHtml}
+        <i class="fa-regular fa-circle-user"></i><span class="cm-owner-name" title="${escapeAttr(assignedTo)}">${escapeAttr(assignedTo)}</span>
+      </td>
+      <td class="cm-td-shared" data-label="Shared With">
+        ${caseItem.co_owners?.length
+          ? `<span class="cm-shared-names" title="${escapeAttr(caseItem.co_owners.join(", "))}">${escapeAttr(caseItem.co_owners.join(", "))}</span>`
+          : '<span class="cm-shared-empty">—</span>'}
       </td>
       <td class="cm-td-actions">
         <button class="cm-row-icon" type="button" title="Rename" aria-label="Rename" data-action="rename"><i class="fa-regular fa-pen-to-square"></i></button>
@@ -1022,6 +1024,32 @@ function computeDefaultDueDate(creationTs) {
   if (!Number.isFinite(n) || n <= 0) return null;
   const ms = String(n).length >= 13 ? n : n * 1000;
   return ms + 14 * 24 * 60 * 60 * 1000;
+}
+
+// Date-only formatter (no hh:mm:ss). Same parsing/guards as formatDateTime,
+// used by the Due Date column where the time of day is noise.
+function formatDateOnly(ts) {
+  if (ts == null || ts === "" || ts === 0 || ts === "0") return "N/A";
+  const n = Number(ts);
+  let ms;
+  if (Number.isFinite(n)) {
+    if (n <= 0) return "N/A";
+    ms = String(n).length >= 13 ? n : n * 1000;
+  } else {
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return "N/A";
+    ms = d.getTime();
+  }
+  if (ms < 946684800000) return "N/A";
+  return new Date(ms).toLocaleDateString();
+}
+
+// Truncate a string to at most `max` whole words, appending an ellipsis when
+// it's clipped. Used to keep the Case Name column compact.
+function truncateWords(str, max) {
+  const words = String(str).trim().split(/\s+/);
+  if (words.length <= max) return String(str);
+  return words.slice(0, max).join(" ") + "…";
 }
 
 // 日期格式化
@@ -1408,7 +1436,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         cases.forEach((c) => {
           const key = String(c.id ?? c.case_int_id);
           Object.assign(c, extraMap?.[key] || {});
-          c.co_owners = coOwnerMap?.[key] || [];
+          const roleInfo = coOwnerMap?.[key];
+          c.co_owners = roleInfo?.names || [];
+          // SwiftRPD-created cases store the owner as a uuid in `assigned_to`;
+          // map it back to the username via the case's role rows. SmartRPD cases
+          // already store the username (no uuid match) so they're left as-is.
+          if (c.assigned_to && roleInfo?.byUuid?.[c.assigned_to]) {
+            c.assigned_to = roleInfo.byUuid[c.assigned_to];
+          }
         });
         currentCases = cases;
         populateTable(currentCases);
@@ -2177,7 +2212,14 @@ async function fetchCoOwners(caseList) {
     const names = rows
       .filter((r) => r && r.role === "coowner" && r.username)
       .map((r) => r.username);
-    if (names.length) map[String(id)] = names;
+    // uuid -> username for every role on the case (owner + co-owners). Used to
+    // resolve an `assigned_to` that the backend stored as a uuid (SwiftRPD-created
+    // cases) back to the username (SmartRPD-created cases already store the name).
+    const byUuid = {};
+    for (const r of rows) {
+      if (r && r.uuid && r.username) byUuid[r.uuid] = r.username;
+    }
+    map[String(id)] = { names, byUuid };
   });
   return map;
 }
