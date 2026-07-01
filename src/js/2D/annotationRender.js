@@ -62,6 +62,7 @@ const SVG_TINT_FILTERS = {
   "tint-tooth-base": { color: "#1f1f1f", shadow: true },
   "tint-tooth-abutment": { color: "#1565c0", shadow: true },
   "tint-tooth-compromised": { color: "#558b2f", shadow: true },
+  "tint-tooth-missing": { color: "#bdbdbd", shadow: true },
   "tint-tooth-bar-suggestible": { color: "#7cb342", shadow: true },
   "tint-mesh": { color: "#5b21b6" },
   "tint-rpd-gray": { color: "#8a8a8a" },

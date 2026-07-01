@@ -586,13 +586,71 @@ export function augmentTeethForPalatalBarConnectorNeighbors(teeth) {
 }
 
 /**
- * Positions in upper jaw SVG viewBox space (`0 0 600 420`). Tune to align with the palate template.
- * Native ratios: AP_Strap01 ~294×92, AP_Strap02 ~241×153.
+ * Anterior AP strap — always drawn for a palatal-hole connector. Position in the
+ * upper jaw SVG viewBox space (`0 0 600 420`). Native ratio ~294×92.
+ * Kept exported (barrel re-export in components.js); the posterior straps are now
+ * selected dynamically per side by {@link getPalatalHoleArchOverlayLayers}.
  */
 export const PALATAL_HOLE_ARCH_OVERLAY_LAYERS = Object.freeze([
   { file: "AP_Strap01.svg", x: 248, y: 138, width: 140, height: 74 },
-  { file: "AP_Strap02.svg", x: 212, y: 255, width: 210, height: 127 },
 ]);
+
+/**
+ * Posterior AP strap, selected per side by the terminal MOLAR the palatal-hole
+ * connector reaches on that side: unit 6/7/8 → AP-Strap_6/7/8. A side whose
+ * connector ends before the molars (premolar or earlier) gets no posterior
+ * strap; a symmetric design shows both. `left` = Q1 (image-left, teeth 1x,
+ * as-authored asset); `right` = Q2 (image-right, teeth 2x, mirrored asset).
+ * Frames in the 600×420 upper viewBox — 7 is verified against case 2511; 6/8
+ * frames are best-effort starting points pending a case that exercises them.
+ */
+// One asset per terminal molar (a single as-authored half). Each frame places
+// the Q1 (image-left) half; the Q2 (image-right) side reuses the SAME asset,
+// shifted one half-width right and mirrored in place by the renderer — so no
+// separate left/right asset files are needed. `width` is one half-width.
+const PALATAL_HOLE_POSTERIOR_STRAP_BY_UNIT = Object.freeze({
+  6: { file: "AP-Strap_6.svg", x: 209, y: 220, width: 108, height: 150 },
+  7: { file: "AP-Strap_7.svg", x: 212, y: 254, width: 105, height: 127 },
+  8: { file: "AP-Strap_8.svg", x: 212, y: 268.5, width: 105, height: 165 },
+});
+
+// Most-distal-first, so the first molar carrying the connector is the terminal.
+const PALATAL_HOLE_Q1_MOLARS = Object.freeze(["18", "17", "16"]);
+const PALATAL_HOLE_Q2_MOLARS = Object.freeze(["28", "27", "26"]);
+
+function palatalHoleTerminalMolarUnit(teeth, molars) {
+  for (const id of molars) {
+    if (
+      teeth?.[id]?.componentPlacements?.some((e) =>
+        isPalatalHoleMajorComponent(e.componentId)
+      )
+    ) {
+      return Number(id[1]); // 8 | 7 | 6
+    }
+  }
+  return null;
+}
+
+/**
+ * Overlay layers for the current palatal-hole design: the anterior strap plus,
+ * for each side whose connector reaches a molar, that side's posterior strap
+ * sized to its terminal molar (AP-Strap_6/7/8). The Q2 (image-right) half is the
+ * same asset placed one half-width to the right with `mirror: true`, which the
+ * renderer flips horizontally in place.
+ */
+export function getPalatalHoleArchOverlayLayers(teeth) {
+  const layers = [...PALATAL_HOLE_ARCH_OVERLAY_LAYERS];
+  const q1 = palatalHoleTerminalMolarUnit(teeth, PALATAL_HOLE_Q1_MOLARS);
+  if (q1 && PALATAL_HOLE_POSTERIOR_STRAP_BY_UNIT[q1]) {
+    layers.push({ ...PALATAL_HOLE_POSTERIOR_STRAP_BY_UNIT[q1], mirror: false });
+  }
+  const q2 = palatalHoleTerminalMolarUnit(teeth, PALATAL_HOLE_Q2_MOLARS);
+  if (q2 && PALATAL_HOLE_POSTERIOR_STRAP_BY_UNIT[q2]) {
+    const s = PALATAL_HOLE_POSTERIOR_STRAP_BY_UNIT[q2];
+    layers.push({ ...s, x: s.x + s.width, mirror: true });
+  }
+  return layers;
+}
 
 /** Any upper tooth carries a palatal-hole placement — drives arch overlay visibility. */
 export function hasPalatalHolePlacementOnUpperArch(teeth) {

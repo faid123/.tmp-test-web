@@ -244,6 +244,12 @@ function majorSpanFdisFromParsed(other, idxToFdi) {
     const start = Number(s);
     const end = Number(e);
     if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+    // A [0,0] range is the desktop's "no connector" sentinel for an unused
+    // second major connector (Major Connector 2 Start/End = 0/0), NOT a real
+    // span covering array slot 0 (the terminal 3rd molar 18/38). Treating it as
+    // real added a spurious connector segment onto the 3rd molar — visible on
+    // the lower as an extra arm onto 38 even though that tooth has no component.
+    if (start === 0 && end === 0) continue;
     sawRange = true;
     for (let i = Math.min(start, end); i <= Math.max(start, end); i += 1) {
       slots.add(String(i));

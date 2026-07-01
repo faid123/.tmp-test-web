@@ -12,6 +12,7 @@ import {
 } from "./clinicalInfo.js";
 import { WORK_CATEGORY_LABELS, loadCaseNote, fetchAdditionalCaseDetails } from "./caseNote.js";
 import { statusLabel } from "../apiLog.js";
+import { encodeEditedViewColumns } from "./dotnetBinaryFormatter.js";
 
 //Add constants
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
@@ -91,20 +92,26 @@ async function fetchNoticeboardEdited(caseIntID, uuid) {
 async function saveNoticeboardEdited(caseIntID, uuid, filenames, data) {
   const names = Array.isArray(filenames) ? filenames : [];
   const datas = Array.isArray(data) ? data : [];
-  // Store the columns as plain JSON arrays (the web app's own format). The
-  // read-back path (buildServerEntries/readEditedViewArrays) prefers JSON and
-  // only falls back to the desktop's BinaryFormatter blob when JSON parsing
-  // fails, so web-saved rows still round-trip here.
+  // Encode in the desktop's .NET BinaryFormatter byte[][] layout so the SmartRPD
+  // desktop client can deserialize web-saved editedview rows. Writing plain JSON
+  // here is what made desktop login wipe web uploads: the desktop fails to parse
+  // the JSON, shows an empty noticeboard, then overwrites the row on its next
+  // save — destroying the web's post. (Encoder verified byte-for-byte against
+  // desktop-written production records; see dotnetBinaryFormatter.js.) The web's
+  // own read-back (buildServerEntries) recovers PNG bytes + filenames from this
+  // blob via its BinaryFormatter-fallback scanners, so rows still round-trip.
+  const { filenames: filenamesBlob, data: dataBlob, count } =
+    await encodeEditedViewColumns(names, datas);
   const payload = [
     { machine_id: MACHINE_ID, uuid, caseIntID },
     {
       case_id: caseIntID,
-      filenames: JSON.stringify(names),
-      data: JSON.stringify(datas),
+      filenames: filenamesBlob,
+      data: dataBlob,
     },
   ];
   console.log(
-    `[noticeboard] → POST /noticeboard/editedview  caseIntID=${caseIntID}  items=${datas.length}`,
+    `[noticeboard] → POST /noticeboard/editedview  caseIntID=${caseIntID}  items=${count}`,
     { filenames: names }
   );
   const t0 = performance.now();
@@ -148,13 +155,18 @@ function mergeCaptureArrays(localFilenames, localData, serverRow) {
 }
 
 // Generic create POST for any noticeboard capture table (view / drawnview).
-// Columns are stored as plain JSON arrays (the web's own format); the read-back
-// path falls back to the desktop BinaryFormatter blob when JSON parsing fails,
-// so rows still round-trip. Throws on non-2xx so the caller can log + continue.
+// Columns are encoded in the desktop's .NET BinaryFormatter byte[][] layout so
+// the desktop client can read them; the web read-back recovers them via its
+// BinaryFormatter-fallback scanners. Throws on non-2xx so the caller can log +
+// continue.
 async function postNoticeboardCapture(createPath, caseIntID, uuid, filenames, data) {
+  // Same desktop .NET BinaryFormatter byte[][] layout as editedview, so the
+  // per-bucket 3D (/view) and 2D (/drawnview) tables are desktop-readable too.
+  const { filenames: filenamesBlob, data: dataBlob } =
+    await encodeEditedViewColumns(filenames, data);
   const payload = [
     { machine_id: MACHINE_ID, uuid, caseIntID },
-    { case_id: caseIntID, filenames: JSON.stringify(filenames), data: JSON.stringify(data) },
+    { case_id: caseIntID, filenames: filenamesBlob, data: dataBlob },
   ];
   const res = await fetch(`${API_BASE}${createPath}`, {
     method: "POST",

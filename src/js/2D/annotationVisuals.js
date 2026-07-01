@@ -66,7 +66,7 @@ import {
   PALATAL_BAR_CONNECTOR_TOOTH_IDS,
   PALATAL_BAR_MAJOR_COMPONENT_ID,
   PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS,
-  PALATAL_HOLE_ARCH_OVERLAY_LAYERS,
+  getPalatalHoleArchOverlayLayers,
   getPalatalPlateArchOverlayFrame,
   shouldMajorConnectorIgnoreMeshPlateAnchor,
   shouldUsePalatalBarSecondMolarDistalTemplate,
@@ -1394,20 +1394,26 @@ function appendPalatalHoleArchOverlay(svg) {
     return;
   }
   const g = svgEl("g", { class: "palatal-hole-arch-overlay" });
-  for (const layer of PALATAL_HOLE_ARCH_OVERLAY_LAYERS) {
+  // Anterior strap + the posterior strap on each side, sized to that side's
+  // terminal molar (AP-Strap_6/7/8); a side ending before the molars gets none.
+  for (const layer of getPalatalHoleArchOverlayLayers(state.teeth)) {
     const href = `../../assets/RPD_Component/MajorConnector/${layer.file}`;
-    g.appendChild(
-      svgEl("image", {
-        href,
-        x: String(layer.x),
-        y: String(layer.y),
-        width: String(layer.width),
-        height: String(layer.height),
-        preserveAspectRatio: "xMidYMid meet",
-        class: "palatal-hole-arch-image",
-        "pointer-events": "none",
-      })
-    );
+    const attrs = {
+      href,
+      x: String(layer.x),
+      y: String(layer.y),
+      width: String(layer.width),
+      height: String(layer.height),
+      preserveAspectRatio: "xMidYMid meet",
+      class: "palatal-hole-arch-image",
+      "pointer-events": "none",
+    };
+    // The Q2 (image-right) strap reuses the Q1 asset, flipped horizontally in
+    // place (mirror about the image's own centre x = layer.x + width/2).
+    if (layer.mirror) {
+      attrs.transform = `translate(${2 * layer.x + layer.width} 0) scale(-1 1)`;
+    }
+    g.appendChild(svgEl("image", attrs));
   }
   svg.appendChild(g);
 }

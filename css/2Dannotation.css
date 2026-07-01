@@ -17,7 +17,7 @@
 
 body {
   margin: 0;
-  font-family: "Montserrat", "Segoe UI", sans-serif;
+  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
   background: linear-gradient(180deg, hsl(0, 0%, 100%) 0%, var(--bg) 100%);
   color: var(--ink);
 }
@@ -2090,7 +2090,11 @@ button.upload3d-row {
   filter: url(#tint-tooth-compromised);
 }
 
-.tooth.is-missing .tooth-image { opacity: 0.02; }
+.tooth.is-missing .tooth-image {
+  opacity: 1;
+  -webkit-filter: url(#tint-tooth-missing);
+  filter: url(#tint-tooth-missing);
+}
 .tooth.is-locked { opacity: 0.88; }
 
 .tooth.tooth-range-selected .tooth-image {
