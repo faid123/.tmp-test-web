@@ -833,6 +833,8 @@ button.upload3d-row {
   width: 100%;
   height: 100%;
   display: block;
+  position: relative;
+  z-index: 1;
 }
 
 .jp-confirm-overlay {
@@ -908,6 +910,7 @@ button.upload3d-row {
   position: absolute;
   left: 16px;
   top: 16px;
+  z-index: 8;
   background: #ffffff;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -1022,7 +1025,7 @@ button.upload3d-row {
   color: var(--muted);
 }
 .jaw-preview-undercut.is-off .jaw-preview-undercut-body {
-  opacity: 0.4;
+  opacity: 0.85;
 }
 
 .jaw-preview-undercut-body {
@@ -1052,6 +1055,124 @@ button.upload3d-row {
 .jaw-preview-undercut-labels span {
   display: flex;
   align-items: center;
+}
+
+.jaw-preview-quality-prompt {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(241, 246, 249, 0.62);
+}
+
+.jaw-preview-quality-panel {
+  width: min(360px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 26px rgba(26, 77, 63, 0.16);
+  padding: 14px;
+}
+
+.jaw-preview-quality-panel-loading {
+  width: min(380px, 100%);
+}
+
+.jaw-preview-quality-title {
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.jaw-preview-quality-status {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.jaw-preview-quality-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.jaw-preview-quality-btn {
+  min-height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  place-items: center;
+  font-family: inherit;
+  transition: transform 0.12s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.jaw-preview-quality-btn span {
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.jaw-preview-quality-btn small {
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 700;
+}
+
+.jaw-preview-quality-btn:hover {
+  border-color: var(--rose-700, #25735f);
+  box-shadow: 0 5px 14px rgba(37, 115, 95, 0.14);
+  transform: translateY(-1px);
+}
+
+.jaw-preview-quality-btn.is-primary {
+  background: #e9f7f3;
+  border-color: rgba(59, 174, 149, 0.5);
+}
+
+.jaw-preview-progress {
+  width: 100%;
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dfe8e5;
+  border: 1px solid rgba(37, 115, 95, 0.18);
+}
+
+.jaw-preview-progress-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3bae95, #25735f);
+  transition: width 0.16s ease;
+}
+
+.jaw-preview-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  color: var(--ink);
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.jaw-preview-progress-jaw {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jaw-preview-progress-percent {
+  flex: 0 0 auto;
+  color: var(--rose-700, #25735f);
 }
 
 .jaw-preview-footer {

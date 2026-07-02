@@ -23,6 +23,11 @@ const JAW_UPPER_THUMBNAIL_SLOT = 1;
 const JAW_LOWER_THUMBNAIL_SLOT = 2;
 // Default RPD jaw color used as the "no undercut" base in vertex-color renders.
 const DEFAULT_TOOTH_COLOR = [208 / 255, 190 / 255, 141 / 255];
+const PREVIEW_DESKTOP_PIXEL_RATIO_CAP = 1.25;
+const PREVIEW_EDGE_DESKTOP_PIXEL_RATIO_CAP = 1;
+const PREVIEW_MOBILE_PIXEL_RATIO_CAP = 1.5;
+const PREVIEW_MAX_DISPLAY_TRIANGLES = 120000;
+const PREVIEW_MIN_SIMPLIFY_TRIANGLES = 160000;
 const preview3DState = {
   renderer: null,
   scene: null,
@@ -55,6 +60,13 @@ const preview3DState = {
   heatmapEnabled: false,
   heatmapToggleBtn: null,
   heatmapBoard: null,
+  meshQuality: null,
+  meshQualityPromptCleanup: null,
+  meshQualityPromptResolve: null,
+  meshQualityOverlay: null,
+  meshQualityProgressFill: null,
+  meshQualityProgressPercent: null,
+  meshQualityProgressJaw: null,
   // Flat view-navigation gizmo (bottom-right of the preview).
   previewNav: null,
 };
@@ -86,11 +98,21 @@ export async function loadInteractiveJawPreview(area) {
       return false;
     }
 
+    init3DPreview(area);
+    hidePreviewLoading(area);
+    const meshQualityPromise = promptMeshQualityChoice();
+
     const meshFiles = await fetchParameterisedMeshForCase();
     if (meshFiles.length) {
-      const undercut = await undercutPromise;
-      init3DPreview(area);
-      await populateJawPreviewFromOFF(meshFiles, undercut);
+      const [undercut, meshQuality] = await Promise.all([undercutPromise, meshQualityPromise]);
+      await waitForPreviewPaint();
+      try {
+        await populateJawPreviewFromOFF(meshFiles, undercut, meshQuality);
+        await finishMeshQualityProgress();
+      } catch (err) {
+        clearMeshQualityProgress();
+        throw err;
+      }
       // Extra STLs are secondary — load them in the background so the spinner
       // clears as soon as the jaws are painted.
       loadExtraStlsIntoPreview().catch((err) =>
@@ -100,11 +122,18 @@ export async function loadInteractiveJawPreview(area) {
     }
 
     const jawFiles = await jawFilesPromise;
-    const undercut = await undercutPromise;
-    init3DPreview(area);
     if (jawFiles.length) {
-      await populateJawPreview(jawFiles, undercut);
+      const [undercut, meshQuality] = await Promise.all([undercutPromise, meshQualityPromise]);
+      await waitForPreviewPaint();
+      try {
+        await populateJawPreview(jawFiles, undercut, meshQuality);
+        await finishMeshQualityProgress();
+      } catch (err) {
+        clearMeshQualityProgress();
+        throw err;
+      }
     } else {
+      dismissMeshQualityPrompt();
       // No jaw STLs yet (or all removed): keep the panel up with both rows in
       // their empty/upload state so the user can still add 3D files.
       showEmptyJawPanel();
@@ -138,9 +167,152 @@ async function ensureThreeDeps() {
   }
 }
 
+function getPreviewPixelRatioCap() {
+  const ua = navigator.userAgent || "";
+  const isEdge = /\bEdg\//.test(ua);
+  const isMobile =
+    /Android|iPhone|iPad|iPod/i.test(ua) ||
+    window.matchMedia?.("(pointer: coarse)")?.matches;
+  if (isMobile) return PREVIEW_MOBILE_PIXEL_RATIO_CAP;
+  return isEdge ? PREVIEW_EDGE_DESKTOP_PIXEL_RATIO_CAP : PREVIEW_DESKTOP_PIXEL_RATIO_CAP;
+}
+
+function dismissMeshQualityPrompt(defaultQuality = "low") {
+  if (preview3DState.meshQualityPromptCleanup) {
+    preview3DState.meshQualityPromptCleanup(defaultQuality);
+    preview3DState.meshQualityPromptCleanup = null;
+  }
+  clearMeshQualityProgress();
+}
+
+function promptMeshQualityChoice() {
+  const mount = preview3DState.mount;
+  if (!mount) {
+    preview3DState.meshQuality = "low";
+    return Promise.resolve("low");
+  }
+
+  dismissMeshQualityPrompt("low");
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const overlay = document.createElement("div");
+    overlay.className = "jaw-preview-quality-prompt";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-label", "Choose mesh quality");
+    preview3DState.meshQualityOverlay = overlay;
+    overlay.innerHTML = `
+      <div class="jaw-preview-quality-panel">
+        <div class="jaw-preview-quality-title">Choose mesh quality</div>
+        <div class="jaw-preview-quality-actions">
+          <button type="button" class="jaw-preview-quality-btn is-primary" data-quality="low">
+            <span>Low Quality</span>
+            <small>Faster</small>
+          </button>
+          <button type="button" class="jaw-preview-quality-btn" data-quality="high">
+            <span>High Quality</span>
+            <small>Original</small>
+          </button>
+        </div>
+      </div>
+    `;
+
+    const choose = (quality, { showProgress = true } = {}) => {
+      if (settled) return;
+      settled = true;
+      const normalized = quality === "high" ? "high" : "low";
+      preview3DState.meshQuality = normalized;
+      preview3DState.meshQualityPromptResolve = null;
+      preview3DState.meshQualityPromptCleanup = null;
+      if (showProgress) {
+        showMeshQualityProgress(overlay, normalized);
+        requestAnimationFrame(() => resolve(normalized));
+      } else {
+        overlay.remove();
+        clearMeshQualityProgress();
+        resolve(normalized);
+      }
+    };
+
+    overlay.querySelectorAll("[data-quality]").forEach((btn) => {
+      btn.addEventListener("click", () => choose(btn.dataset.quality));
+    });
+
+    preview3DState.meshQualityPromptResolve = choose;
+    preview3DState.meshQualityPromptCleanup = (defaultQuality = "low") =>
+      choose(defaultQuality, { showProgress: false });
+    mount.appendChild(overlay);
+  });
+}
+
+function showMeshQualityProgress(overlay, meshQuality) {
+  const label = meshQuality === "high" ? "High Quality" : "Low Quality";
+  overlay.setAttribute("aria-label", "Loading 3D jaw mesh");
+  overlay.innerHTML = `
+    <div class="jaw-preview-quality-panel jaw-preview-quality-panel-loading">
+      <div class="jaw-preview-quality-title">Loading ${label} Mesh</div>
+      <div class="jaw-preview-quality-status">Preparing jaw mesh...</div>
+      <div class="jaw-preview-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="jaw-preview-progress-fill"></div>
+      </div>
+      <div class="jaw-preview-progress-meta">
+        <span class="jaw-preview-progress-jaw">Waiting for jaw data</span>
+        <span class="jaw-preview-progress-percent">0%</span>
+      </div>
+    </div>
+  `;
+  preview3DState.meshQualityOverlay = overlay;
+  preview3DState.meshQualityProgressFill = overlay.querySelector(".jaw-preview-progress-fill");
+  preview3DState.meshQualityProgressPercent = overlay.querySelector(".jaw-preview-progress-percent");
+  preview3DState.meshQualityProgressJaw = overlay.querySelector(".jaw-preview-progress-jaw");
+  updateMeshQualityProgress(4, "Waiting for jaw data");
+}
+
+function updateMeshQualityProgress(percent, jawLabel = "Loading jaw mesh") {
+  const overlay = preview3DState.meshQualityOverlay;
+  const fill = preview3DState.meshQualityProgressFill;
+  const percentEl = preview3DState.meshQualityProgressPercent;
+  const jawEl = preview3DState.meshQualityProgressJaw;
+  if (!overlay || !fill || !percentEl || !jawEl) return;
+  const value = Math.max(0, Math.min(100, Math.round(percent)));
+  fill.style.width = `${value}%`;
+  percentEl.textContent = `${value}%`;
+  jawEl.textContent = jawLabel;
+  overlay.querySelector(".jaw-preview-progress")?.setAttribute("aria-valuenow", String(value));
+}
+
+async function updateJawMeshProgress(index, total, stage, upper, action) {
+  const jawName = upper ? "Upper jaw" : "Lower jaw";
+  const safeTotal = Math.max(total || 1, 1);
+  const safeIndex = Math.max(index || 0, 0);
+  const stageRatio = Math.max(0, Math.min(1, stage || 0));
+  const percent = 8 + ((safeIndex + stageRatio) / safeTotal) * 86;
+  updateMeshQualityProgress(percent, `${action} ${jawName}`);
+  await waitForPreviewPaint();
+}
+
+async function finishMeshQualityProgress() {
+  if (!preview3DState.meshQualityOverlay) return;
+  updateMeshQualityProgress(100, "3D jaw mesh ready");
+  await waitForPreviewPaint();
+  clearMeshQualityProgress();
+}
+
+function clearMeshQualityProgress() {
+  preview3DState.meshQualityOverlay?.remove();
+  preview3DState.meshQualityOverlay = null;
+  preview3DState.meshQualityProgressFill = null;
+  preview3DState.meshQualityProgressPercent = null;
+  preview3DState.meshQualityProgressJaw = null;
+}
+
+function waitForPreviewPaint() {
+  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
+
 // Snapshot the current 3D view as a data URL. We re-render immediately before
-// reading the canvas because WebGL's drawing buffer is cleared after the swap
-// unless `preserveDrawingBuffer: true` (we don't set that, for perf).
+// reading the canvas because WebGL's drawing buffer is not preserved between
+// frames; keeping preserveDrawingBuffer off is much faster on Windows/Edge.
 export function capture3DPreviewDataUrl() {
   const { renderer, scene, camera } = preview3DState;
   if (!renderer || !scene || !camera) return "";
@@ -208,9 +380,15 @@ export function teardown3DPreview() {
   closeUpload3dModal();
   closeDownloadJawProfileModal();
   preview3DState.caseData = null;
+  if (preview3DState.meshQualityPromptCleanup) {
+    preview3DState.meshQualityPromptCleanup();
+    preview3DState.meshQualityPromptCleanup = null;
+  }
+  clearMeshQualityProgress();
   preview3DState.heatmapEnabled = false;
   preview3DState.heatmapToggleBtn = null;
   preview3DState.heatmapBoard = null;
+  preview3DState.meshQuality = null;
   if (preview3DState.captureCleanup) {
     preview3DState.captureCleanup();
     preview3DState.captureCleanup = null;
@@ -559,6 +737,7 @@ async function renderExtraStl({ slotNumber, filename, data }) {
   const loader = new STLLoader();
   let geometry = loader.parse(base64ToArrayBuffer(data));
   geometry = mergeStlVertices(geometry);
+  geometry = getDisplayGeometryForQuality(geometry, filename || `slot ${slotNumber}`);
   geometry.computeVertexNormals();
 
   const material = new THREE.MeshStandardMaterial({
@@ -808,6 +987,7 @@ async function renderJawStl(jaw, file) {
   const loader = new STLLoader();
   let geometry = loader.parse(base64ToArrayBuffer(file.data));
   geometry = mergeStlVertices(geometry);
+  geometry = getDisplayGeometryForQuality(geometry, file.filename || `${jaw}.stl`);
   geometry.computeVertexNormals();
 
   const flatMat = new THREE.MeshStandardMaterial({
@@ -1539,15 +1719,18 @@ function init3DPreview(area) {
   area.appendChild(shell);
 
   const renderer = new THREE.WebGLRenderer({
-    antialias: true,
+    antialias: false,
     alpha: false,
-    preserveDrawingBuffer: true,
+    preserveDrawingBuffer: false,
+    powerPreference: "high-performance",
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, getPreviewPixelRatioCap()));
   renderer.setClearColor(0xdce3e8, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.85;
+  renderer.domElement.style.touchAction = "none";
+  renderer.domElement.style.willChange = "transform";
   mount.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -1590,8 +1773,8 @@ function init3DPreview(area) {
   // Lock the jaw at the centre: disable panning so the right mouse button can't
   // drag the model off-centre. Rotation (left) and zoom (wheel) stay active.
   controls.noPan = true;
-  controls.staticMoving = false;
-  controls.dynamicDampingFactor = 0.18;
+  controls.staticMoving = true;
+  controls.dynamicDampingFactor = 0;
   controls.minDistance = 35;
   controls.maxDistance = 700;
   controls.target.set(0, 0, 0);
@@ -1701,7 +1884,7 @@ function init3DPreview(area) {
   animate();
 }
 
-async function populateJawPreview(jawFiles, undercut) {
+async function populateJawPreview(jawFiles, undercut, meshQuality = "low") {
   const loader = new STLLoader();
   const upperGroup = new THREE.Group();
   const lowerGroup = new THREE.Group();
@@ -1727,8 +1910,11 @@ async function populateJawPreview(jawFiles, undercut) {
 
   preview3DState.jawFiles = {};
 
-  for (const file of jawFiles) {
+  const totalFiles = Math.max(jawFiles.length, 1);
+  for (let i = 0; i < jawFiles.length; i += 1) {
+    const file = jawFiles[i];
     const upper = isUpper(file);
+    await updateJawMeshProgress(i, totalFiles, 0.05, upper, "Reading");
     const primarySurface = upper ? undercut?.upper : undercut?.lower;
     const secondarySurface = upper ? undercut?.lower : undercut?.upper;
 
@@ -1741,6 +1927,7 @@ async function populateJawPreview(jawFiles, undercut) {
     const stlBuffer = base64ToArrayBuffer(file.data);
     const payloadInfo = file.__payloadInfo || inspectMeshPayload(stlBuffer);
     const sourcePath = file.__sourcePath || "selected STL source";
+    await updateJawMeshProgress(i, totalFiles, 0.2, upper, "Parsing");
     console.log(`[preview3D] ${sourcePath} parse check for ${file?.filename || "unknown"}`, payloadInfo);
     if (!["binary-stl", "ascii-stl", "off"].includes(payloadInfo.format)) {
       console.warn(
@@ -1761,12 +1948,14 @@ async function populateJawPreview(jawFiles, undercut) {
       }
       applyUndercutVertexColors(geometry, primarySurface);
       useHeatmap = true;
+      await updateJawMeshProgress(i, totalFiles, 0.55, upper, "Applying undercut heatmap");
       console.log(`[preview3D] OFF mesh rendered for ${file?.filename || "unknown"}`, {
         source: sourcePath,
         vertices: geometry.attributes.position.count,
       });
     } else {
       geometry = loader.parse(stlBuffer);
+      await updateJawMeshProgress(i, totalFiles, 0.35, upper, "Matching undercut vertices");
 
     // Determine which heatmap surface to use, then dedup the mesh to match
     // its vertex count so the backend's first-occurrence vertex indices align
@@ -1808,7 +1997,14 @@ async function populateJawPreview(jawFiles, undercut) {
       geometry = mergeStlVertices(geometry);
     }
     }
+    await updateJawMeshProgress(i, totalFiles, 0.7, upper, meshQuality === "high" ? "Keeping original mesh" : "Building low quality display mesh");
+    geometry = getDisplayGeometryForQuality(
+      geometry,
+      file?.filename || (upper ? "upper jaw" : "lower jaw"),
+      meshQuality
+    );
     geometry.computeVertexNormals();
+    await updateJawMeshProgress(i, totalFiles, 0.88, upper, "Adding to viewport");
 
     const heatMat = heatmapMaterial.clone();
     const flatMat = (upper ? flatUpper : flatLower).clone();
@@ -1824,10 +2020,13 @@ async function populateJawPreview(jawFiles, undercut) {
       type: file.type ?? file.jaw_type ?? (upper ? "upper_jaw" : "lower_jaw"),
       filename: file.filename || file.name || `${upper ? "upper" : "lower"}.stl`,
     };
+    await updateJawMeshProgress(i, totalFiles, 0.98, upper, "Loaded");
   }
 
   const root = preview3DState.modelRoot;
   if (!root) return;
+  updateMeshQualityProgress(94, "Positioning jaw mesh");
+  await waitForPreviewPaint();
   root.clear();
   if (upperGroup.children.length) root.add(upperGroup);
   if (lowerGroup.children.length) root.add(lowerGroup);
@@ -1840,6 +2039,8 @@ async function populateJawPreview(jawFiles, undercut) {
   setJawRowMode("lower", !!preview3DState.groups.lower);
   applyJawVisibility();
   fitPreviewCamera();
+  updateMeshQualityProgress(98, "Finalizing viewport");
+  await waitForPreviewPaint();
 }
 
 // Put both jaw rows into their empty/upload state for a case with no jaw STLs.
@@ -1851,7 +2052,7 @@ function showEmptyJawPanel() {
   setJawRowMode("lower", false);
 }
 
-async function populateJawPreviewFromOFF(meshFiles, undercut) {
+async function populateJawPreviewFromOFF(meshFiles, undercut, meshQuality = "low") {
   const upperGroup = new THREE.Group();
   const lowerGroup = new THREE.Group();
 
@@ -1875,14 +2076,26 @@ async function populateJawPreviewFromOFF(meshFiles, undercut) {
     side: THREE.DoubleSide,
   });
 
-  for (const file of meshFiles) {
+  const totalFiles = Math.max(meshFiles.length, 1);
+  for (let i = 0; i < meshFiles.length; i += 1) {
+    const file = meshFiles[i];
+    const upper = isUpper(file);
+    await updateJawMeshProgress(i, totalFiles, 0.08, upper, "Reading parameterized mesh");
     const offText = atob(file.data);
-    const geometry = parseOFFToGeometry(offText);
+    let geometry = parseOFFToGeometry(offText);
     if (!geometry) continue;
 
-    const upper = isUpper(file);
     const surface = upper ? undercut?.upper : undercut?.lower;
+    await updateJawMeshProgress(i, totalFiles, 0.35, upper, "Applying undercut heatmap");
     applyUndercutVertexColors(geometry, surface);
+    await updateJawMeshProgress(i, totalFiles, 0.68, upper, meshQuality === "high" ? "Keeping original mesh" : "Building low quality display mesh");
+    geometry = getDisplayGeometryForQuality(
+      geometry,
+      file?.filename || (upper ? "upper OFF mesh" : "lower OFF mesh"),
+      meshQuality
+    );
+    geometry.computeVertexNormals();
+    await updateJawMeshProgress(i, totalFiles, 0.86, upper, "Adding to viewport");
 
     const heatMat = meshMaterial.clone();
     const flatMat = flatBase.clone();
@@ -1891,10 +2104,13 @@ async function populateJawPreviewFromOFF(meshFiles, undercut) {
     mesh.userData.flatMaterial = flatMat;
     if (upper) upperGroup.add(mesh);
     else lowerGroup.add(mesh);
+    await updateJawMeshProgress(i, totalFiles, 0.98, upper, "Loaded");
   }
 
   const root = preview3DState.modelRoot;
   if (!root) return;
+  updateMeshQualityProgress(94, "Positioning jaw mesh");
+  await waitForPreviewPaint();
   root.clear();
   if (upperGroup.children.length) root.add(upperGroup);
   if (lowerGroup.children.length) root.add(lowerGroup);
@@ -1907,6 +2123,8 @@ async function populateJawPreviewFromOFF(meshFiles, undercut) {
   setJawRowMode("lower", !!preview3DState.groups.lower);
   applyJawVisibility();
   fitPreviewCamera();
+  updateMeshQualityProgress(98, "Finalizing viewport");
+  await waitForPreviewPaint();
 }
 
 function parseOFFToGeometry(text) {
@@ -2077,12 +2295,11 @@ function buildDualDedupGeometry(rawGeometry, surface, targetBackendCount) {
     let b = DEFAULT_TOOTH_COLOR[2];
     const bIdx = ourVertToBackendIdx[i];
     if (heatmap && bIdx >= 0 && bIdx < heatmapVerts) {
-      let rr = heatmap[bIdx * 4];
-      let gg = heatmap[bIdx * 4 + 1];
-      let bb = heatmap[bIdx * 4 + 2];
-      if (rr !== 1) r = rr;
-      if (gg !== 1) g = gg;
-      if (bb !== 1) b = bb;
+      [r, g, b] = normalizeUndercutColor(
+        heatmap[bIdx * 4],
+        heatmap[bIdx * 4 + 1],
+        heatmap[bIdx * 4 + 2]
+      );
     }
     colors[i * 3] = r;
     colors[i * 3 + 1] = g;
@@ -2194,12 +2411,11 @@ function applyUndercutVertexColors(geometry, surface, options = {}) {
     // prefix and leave the rest as default — better than skipping the heatmap entirely.
     const limit = Math.max(0, Math.min(vertexCount, heatmapVerts) - trimTail);
     for (let i = 0; i < limit; i += 1) {
-      let r = heatmap[i * 4];
-      let g = heatmap[i * 4 + 1];
-      let b = heatmap[i * 4 + 2];
-      if (r === 1) r = DEFAULT_TOOTH_COLOR[0];
-      if (g === 1) g = DEFAULT_TOOTH_COLOR[1];
-      if (b === 1) b = DEFAULT_TOOTH_COLOR[2];
+      const [r, g, b] = normalizeUndercutColor(
+        heatmap[i * 4],
+        heatmap[i * 4 + 1],
+        heatmap[i * 4 + 2]
+      );
       colors[i * 3] = r;
       colors[i * 3 + 1] = g;
       colors[i * 3 + 2] = b;
@@ -2207,6 +2423,197 @@ function applyUndercutVertexColors(geometry, surface, options = {}) {
   }
 
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+}
+
+function normalizeUndercutColor(r, g, b) {
+  // The backend uses pure white as "no undercut". Real yellow/red heatmap
+  // colors may still contain a 1.0 channel, so only full white maps to tooth tan.
+  if (r === 1 && g === 1 && b === 1) {
+    return DEFAULT_TOOTH_COLOR;
+  }
+  return [r, g, b];
+}
+
+function getUndercutColorSeverity(r, g, b) {
+  const dr = r - DEFAULT_TOOTH_COLOR[0];
+  const dg = g - DEFAULT_TOOTH_COLOR[1];
+  const db = b - DEFAULT_TOOTH_COLOR[2];
+  return dr * dr + dg * dg + db * db;
+}
+
+function getDisplayGeometryForQuality(geometry, label, meshQuality = preview3DState.meshQuality) {
+  if (meshQuality === "high") {
+    console.log(`[preview3D] high quality mesh selected for ${label}; decimation skipped`);
+    return geometry;
+  }
+  return createDisplayGeometry(geometry, label);
+}
+
+function getGeometryTriangleCount(geometry) {
+  const index = geometry?.getIndex?.();
+  const position = geometry?.getAttribute?.("position");
+  if (index) return Math.floor(index.count / 3);
+  return position ? Math.floor(position.count / 3) : 0;
+}
+
+function buildClusteredGeometry(geometry, cellSize) {
+  const positionAttr = geometry.getAttribute("position");
+  if (!positionAttr || positionAttr.count < 3 || !Number.isFinite(cellSize) || cellSize <= 0) {
+    return null;
+  }
+
+  const colorAttr = geometry.getAttribute("color");
+  const hasColors = colorAttr && colorAttr.count === positionAttr.count;
+  const positions = positionAttr.array;
+  const colors = hasColors ? colorAttr.array : null;
+  const indexAttr = geometry.getIndex();
+  const sourceIndex = indexAttr?.array || null;
+  const vertexCount = positionAttr.count;
+  const sourceToCluster = new Uint32Array(vertexCount);
+  const clusters = new Map();
+
+  const keyFor = (x, y, z) =>
+    `${Math.round(x / cellSize)},${Math.round(y / cellSize)},${Math.round(z / cellSize)}`;
+
+  for (let v = 0; v < vertexCount; v += 1) {
+    const p = v * 3;
+    const x = positions[p];
+    const y = positions[p + 1];
+    const z = positions[p + 2];
+    const key = keyFor(x, y, z);
+    let cluster = clusters.get(key);
+    if (!cluster) {
+      cluster = {
+        out: clusters.size,
+        count: 0,
+        x: 0,
+        y: 0,
+        z: 0,
+        r: 0,
+        g: 0,
+        b: 0,
+        heatR: DEFAULT_TOOTH_COLOR[0],
+        heatG: DEFAULT_TOOTH_COLOR[1],
+        heatB: DEFAULT_TOOTH_COLOR[2],
+        heatSeverity: -1,
+      };
+      clusters.set(key, cluster);
+    }
+    cluster.count += 1;
+    cluster.x += x;
+    cluster.y += y;
+    cluster.z += z;
+    if (hasColors) {
+      const r = colors[p];
+      const g = colors[p + 1];
+      const b = colors[p + 2];
+      cluster.r += r;
+      cluster.g += g;
+      cluster.b += b;
+      const severity = getUndercutColorSeverity(r, g, b);
+      if (severity > cluster.heatSeverity) {
+        cluster.heatR = r;
+        cluster.heatG = g;
+        cluster.heatB = b;
+        cluster.heatSeverity = severity;
+      }
+    }
+    sourceToCluster[v] = cluster.out;
+  }
+
+  const outputVertexCount = clusters.size;
+  if (outputVertexCount < 3 || outputVertexCount >= vertexCount) return null;
+
+  const outputPositions = new Float32Array(outputVertexCount * 3);
+  const outputColors = hasColors ? new Float32Array(outputVertexCount * 3) : null;
+  for (const cluster of clusters.values()) {
+    const p = cluster.out * 3;
+    const inv = 1 / cluster.count;
+    outputPositions[p] = cluster.x * inv;
+    outputPositions[p + 1] = cluster.y * inv;
+    outputPositions[p + 2] = cluster.z * inv;
+    if (hasColors) {
+      if (cluster.heatSeverity > 1e-6) {
+        outputColors[p] = cluster.heatR;
+        outputColors[p + 1] = cluster.heatG;
+        outputColors[p + 2] = cluster.heatB;
+      } else {
+        outputColors[p] = cluster.r * inv;
+        outputColors[p + 1] = cluster.g * inv;
+        outputColors[p + 2] = cluster.b * inv;
+      }
+    }
+  }
+
+  const sourceIndexCount = sourceIndex ? sourceIndex.length : vertexCount;
+  const outputIndices = [];
+  const seenTriangles = new Set();
+  const getSourceVertex = sourceIndex ? (i) => sourceIndex[i] : (i) => i;
+  for (let i = 0; i + 2 < sourceIndexCount; i += 3) {
+    const a = sourceToCluster[getSourceVertex(i)];
+    const b = sourceToCluster[getSourceVertex(i + 1)];
+    const c = sourceToCluster[getSourceVertex(i + 2)];
+    if (a === b || b === c || a === c) continue;
+    const sorted = [a, b, c].sort((left, right) => left - right);
+    const key = `${sorted[0]},${sorted[1]},${sorted[2]}`;
+    if (seenTriangles.has(key)) continue;
+    seenTriangles.add(key);
+    outputIndices.push(a, b, c);
+  }
+
+  if (outputIndices.length < 3) return null;
+
+  const out = new THREE.BufferGeometry();
+  out.setAttribute("position", new THREE.BufferAttribute(outputPositions, 3));
+  if (outputColors) out.setAttribute("color", new THREE.BufferAttribute(outputColors, 3));
+  out.setIndex(outputVertexCount > 65535
+    ? new THREE.Uint32BufferAttribute(outputIndices, 1)
+    : new THREE.Uint16BufferAttribute(outputIndices, 1));
+  return out;
+}
+
+function createDisplayGeometry(geometry, label = "mesh") {
+  const sourceTriangles = getGeometryTriangleCount(geometry);
+  if (sourceTriangles < PREVIEW_MIN_SIMPLIFY_TRIANGLES) return geometry;
+
+  geometry.computeBoundingBox();
+  const size = geometry.boundingBox.getSize(new THREE.Vector3());
+  const longest = Math.max(size.x, size.y, size.z);
+  if (!Number.isFinite(longest) || longest <= 0) return geometry;
+
+  const targetVertices = Math.max(5000, Math.floor(PREVIEW_MAX_DISPLAY_TRIANGLES * 0.7));
+  const baseDivisions = Math.max(8, Math.round(Math.cbrt(targetVertices)));
+  const baseCellSize = longest / baseDivisions;
+  let best = null;
+  let bestTriangles = sourceTriangles;
+
+  for (const factor of [1, 1.25, 1.6, 2.05, 2.65, 3.4]) {
+    const candidate = buildClusteredGeometry(geometry, baseCellSize * factor);
+    const triangles = getGeometryTriangleCount(candidate);
+    if (!candidate || triangles < 1000) continue;
+    if (!best || Math.abs(triangles - PREVIEW_MAX_DISPLAY_TRIANGLES) < Math.abs(bestTriangles - PREVIEW_MAX_DISPLAY_TRIANGLES)) {
+      best?.dispose?.();
+      best = candidate;
+      bestTriangles = triangles;
+    } else {
+      candidate.dispose();
+    }
+    if (triangles <= PREVIEW_MAX_DISPLAY_TRIANGLES) break;
+  }
+
+  if (!best || bestTriangles >= sourceTriangles) {
+    best?.dispose?.();
+    return geometry;
+  }
+
+  best.computeVertexNormals();
+  console.log(`[preview3D] display mesh simplified for ${label}`, {
+    sourceTriangles,
+    displayTriangles: bestTriangles,
+    reductionPct: Math.round((1 - bestTriangles / sourceTriangles) * 100),
+  });
+  geometry.dispose();
+  return best;
 }
 
 function centerRootOnCombinedBounds(root) {
