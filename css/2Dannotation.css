@@ -336,15 +336,15 @@ body.is-panel-resizing {
 .upload3d-modal-panel {
   position: absolute;
   z-index: 1;
-  width: min(340px, calc(100vw - 24px));
+  width: min(560px, calc(100vw - 24px));
   max-height: min(60vh, 460px);
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: transparent;
   border: 1px solid var(--line);
   border-radius: 12px;
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.22);
-  padding: 14px;
+  padding: 10px;
   pointer-events: auto;
   transform-origin: bottom left;
   animation: upload3d-emerge 0.14s ease-out;
@@ -359,12 +359,12 @@ body.is-panel-resizing {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 }
 
 .upload3d-modal-title {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: 800;
   letter-spacing: 0.02em;
   color: var(--ink, #2b3440);
@@ -506,34 +506,44 @@ body.is-panel-resizing {
   background: #e6e9ee;
   border: 1px solid #d2d7df;
   border-radius: 14px;
-  padding: 16px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 3px;
   overflow-y: auto;
 }
 
 .upload3d-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .upload3d-row {
   display: grid;
   grid-template-columns: 34px 28px 1fr;
   align-items: center;
-  column-gap: 16px;
+  column-gap: 10px;
   width: 100%;
   text-align: left;
-  background: none;
-  border: none;
-  padding: 0;
+  background: #fff;
+  border: 1px solid #c3cad4;
+  border-radius: 10px;
+  padding: 9px 12px;
   font-family: inherit;
+  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
 }
 
 button.upload3d-row {
   cursor: pointer;
+}
+
+/* Drop-zone affordance for empty slots (mirrors the create-case tiles). */
+.upload3d-slot-row.is-dragover {
+  background: #d4f0e8;
+  border-color: var(--primary, #3BAE95);
+  border-style: dashed;
+  box-shadow: inset 0 0 0 1px var(--primary, #3BAE95);
 }
 
 .upload3d-file-icon {
@@ -609,7 +619,7 @@ button.upload3d-row {
 
 .upload3d-row-name {
   color: #3f5168;
-  font-size: 0.92rem;
+  font-size: 0.72rem;
   font-weight: 600;
   word-break: break-all;
   line-height: 1.3;
@@ -622,6 +632,37 @@ button.upload3d-row {
 
 .upload3d-placeholder:hover .upload3d-row-name.is-muted {
   color: #5f6b7a;
+}
+
+/* Named-slot rows: icon | text (name + status/filename) | upload button. */
+.upload3d-slot-row {
+  grid-template-columns: 34px 1fr auto;
+}
+
+.upload3d-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.upload3d-slot-name {
+  color: #2b3440;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+/* "Upload" hyperlink shown inline in the empty-slot sentence. */
+.upload3d-upload-link {
+  color: var(--primary, #3BAE95);
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.upload3d-upload-link:hover {
+  color: var(--rose-700, #c2255c);
 }
 
 .upload3d-upload-btn {

@@ -815,6 +815,33 @@ button {
 
 .cm-td-date { white-space: nowrap; }
 
+/* Inline "Edit due date" affordance in the Due column. The pencil sits next to
+   the date and stays subtle until the row is hovered. */
+.cm-due-date { position: relative; }
+.cm-due-edit {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 2px 4px;
+  margin-left: 4px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.cm-row:hover .cm-due-edit,
+.cm-due-edit:focus-visible { opacity: 1; }
+.cm-due-edit:hover { background: var(--line); color: var(--ink); }
+
+.cm-due-input {
+  font: inherit;
+  padding: 3px 6px;
+  border: 1px solid var(--primary, #3BAE95);
+  border-radius: 6px;
+  color: var(--ink);
+  background: #fff;
+}
+
 .cm-td-owner { white-space: nowrap; }
 .cm-td-owner > i { color: var(--muted); margin-right: 6px; }
 /* Keep a long owner name on a single line: truncate to ~10 characters with an
@@ -1449,6 +1476,8 @@ button {
   .cm-due-date.is-due { color: var(--danger, #ef4444); }
   .cm-due-date.is-soon { color: #2563eb; }
   .cm-due-date.is-ok { color: #16a34a; }
+  /* No hover on touch — keep the edit pencil visible. */
+  .cm-due-edit { opacity: 1; }
 
   /* Actions in their own row, divider above, right-aligned. */
   .cm-td-actions {

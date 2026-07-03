@@ -92,14 +92,11 @@ async function fetchNoticeboardEdited(caseIntID, uuid) {
 async function saveNoticeboardEdited(caseIntID, uuid, filenames, data) {
   const names = Array.isArray(filenames) ? filenames : [];
   const datas = Array.isArray(data) ? data : [];
-  // Encode in the desktop's .NET BinaryFormatter byte[][] layout so the SmartRPD
-  // desktop client can deserialize web-saved editedview rows. Writing plain JSON
-  // here is what made desktop login wipe web uploads: the desktop fails to parse
-  // the JSON, shows an empty noticeboard, then overwrites the row on its next
-  // save — destroying the web's post. (Encoder verified byte-for-byte against
-  // desktop-written production records; see dotnetBinaryFormatter.js.) The web's
-  // own read-back (buildServerEntries) recovers PNG bytes + filenames from this
-  // blob via its BinaryFormatter-fallback scanners, so rows still round-trip.
+  // Encode in the desktop's .NET BinaryFormatter byte[][] layout so SmartRPD can
+  // deserialize web-saved editedview rows. Plain JSON here made desktop login wipe
+  // web uploads (desktop fails to parse → empty noticeboard → overwrites the row).
+  // Verified byte-for-byte (dotnetBinaryFormatter.js); the web read-back recovers
+  // PNGs + filenames from this blob, so rows round-trip.
   const { filenames: filenamesBlob, data: dataBlob, count } =
     await encodeEditedViewColumns(names, datas);
   const payload = [
@@ -154,11 +151,9 @@ function mergeCaptureArrays(localFilenames, localData, serverRow) {
   return { filenames, data };
 }
 
-// Generic create POST for any noticeboard capture table (view / drawnview).
-// Columns are encoded in the desktop's .NET BinaryFormatter byte[][] layout so
-// the desktop client can read them; the web read-back recovers them via its
-// BinaryFormatter-fallback scanners. Throws on non-2xx so the caller can log +
-// continue.
+// Generic create POST for any noticeboard capture table (view / drawnview). Columns
+// use the desktop's .NET BinaryFormatter byte[][] layout (desktop-readable; web read-back
+// recovers them). Throws on non-2xx so the caller can log + continue.
 async function postNoticeboardCapture(createPath, caseIntID, uuid, filenames, data) {
   // Same desktop .NET BinaryFormatter byte[][] layout as editedview, so the
   // per-bucket 3D (/view) and 2D (/drawnview) tables are desktop-readable too.
@@ -180,11 +175,10 @@ async function postNoticeboardCapture(createPath, caseIntID, uuid, filenames, da
   return res.json().catch(() => null);
 }
 
-// Mirror one bucket into its dedicated capture table (3D → /view, 2D →
-// /drawnview) alongside the combined editedview blob. Fetch-merge-save so we
-// don't clobber rows the desktop client wrote there. Best-effort: editedview
-// stays the source of truth for read-back, so a mirror failure doesn't fail
-// the overall save.
+// Mirror one bucket into its dedicated capture table (3D → /view, 2D → /drawnview)
+// alongside the editedview blob. Fetch-merge-save so we don't clobber desktop rows.
+// Best-effort: editedview stays the read-back source of truth, so a mirror failure
+// doesn't fail the save.
 async function mirrorCaptureTable(createPath, getPath, caseIntID, uuid, filenames, data) {
   try {
     const existing = await postNoticeboardEndpoint(getPath, noticeboardPayload(caseIntID, uuid));
@@ -232,11 +226,9 @@ function safeAtob(b64) {
   }
 }
 
-// The desktop client stores noticeboard captures by serializing a list of
-// images with .NET BinaryFormatter, then base64-encoding the whole blob. The
-// result isn't JSON, so JSON.parse silently fails. This scans the decoded
-// bytes for embedded PNG signatures (or base64-encoded PNG strings as a
-// fallback) and rebuilds usable data URLs.
+// The desktop stores captures as a .NET BinaryFormatter list of images, base64'd —
+// not JSON, so JSON.parse fails. This scans the decoded bytes for embedded PNG
+// signatures (or base64 PNG strings as fallback) and rebuilds data URLs.
 function extractPngsFromBinaryFormatter(outerBase64) {
   const decoded = safeAtob(outerBase64);
   if (!decoded) return [];
@@ -484,13 +476,9 @@ function emptyData() {
   return { instructions: [], viewcaptures: [] };
 }
 
-// For logged-in users `saveData` is a no-op: the cache is a live object whose
-// mutations already persist for the session, and the server is updated via
-// syncInstructionsToEditedView when items are added or edited.
-//
-// Guests have no uuid, so the server save is skipped — instead mirror the cache
-// to localStorage (keyed by case) so their instructions survive a reload. This
-// is the "Continue as guest" path: edits are kept on this device only.
+// Logged-in: `saveData` is a no-op — the cache is live and the server is updated via
+// syncInstructionsToEditedView on add/edit. Guests have no uuid, so mirror the cache
+// to localStorage (keyed by case) so their instructions survive a reload (device-only).
 function saveData(data) {
   if (!isGuest()) return;
   const key = guestStorageKey();
@@ -580,11 +568,12 @@ function renderGrid(elId, items, kind) {
     const editBtn = document.createElement("button");
     editBtn.type = "button";
     editBtn.className = "noticeboard-thumb-edit";
-    editBtn.setAttribute("aria-label", "Edit or delete");
+    editBtn.setAttribute("aria-label", "Edit");
+    editBtn.title = "Edit";
     editBtn.textContent = "✎";
     editBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      openThumbActionMenu(editBtn, items, idx, kind);
+      editInstructionItem(items, idx, kind);
     });
     card.appendChild(editBtn);
     grid.appendChild(card);
@@ -676,100 +665,35 @@ function onPreviewKeydown(e) {
   else if (e.key === "ArrowRight") { e.preventDefault(); navigatePreview(1); }
 }
 
-let openMenu = null;
-
-function closeThumbActionMenu() {
-  if (!openMenu) return;
-  openMenu.remove();
-  openMenu = null;
-  document.removeEventListener("mousedown", onDocClickForMenu, true);
-  document.removeEventListener("keydown", onKeydownForMenu, true);
-}
-
-function onDocClickForMenu(e) {
-  if (openMenu && !openMenu.contains(e.target)) {
-    closeThumbActionMenu();
+// The thumbnail pencil opens the instruction editor directly (no Edit/Delete
+// menu). Deletion isn't offered because the server editedview blob retains
+// items and the next hydrate resurrects them, so a delete never sticks.
+async function editInstructionItem(items, idx, kind) {
+  const item = items[idx];
+  if (!item) return;
+  const result = await openInstructionEditor({
+    initialImage: item.baseImage || item.preview,
+    initialStrokes: Array.isArray(item.strokes) ? item.strokes : [],
+  });
+  if (!result) return;
+  item.preview = result.dataUrl;
+  item.strokes = result.strokes;
+  // Legacy/server items had no separate baseImage; treat the (then-flat)
+  // preview as the base so re-edits keep the original behind any new strokes.
+  if (!item.baseImage) item.baseImage = item.preview;
+  item.updatedAt = new Date().toISOString();
+  // Once a server item is edited locally, it's no longer a pure server
+  // mirror — clear the marker so the next hydrate doesn't wipe it out.
+  if (item.source === "server") delete item.source;
+  saveData(cache);
+  const synced = await syncInstructionsToEditedView();
+  renderGrids();
+  if (!synced) {
+    setMessage(
+      kind === "instruction" ? "Instruction updated locally." : "Viewcapture updated locally.",
+      false
+    );
   }
-}
-
-function onKeydownForMenu(e) {
-  if (e.key === "Escape") closeThumbActionMenu();
-}
-
-function openThumbActionMenu(anchor, items, idx, kind) {
-  closeThumbActionMenu();
-  const menu = document.createElement("div");
-  menu.className = "noticeboard-thumb-menu";
-  menu.setAttribute("role", "menu");
-
-  const editBtn = document.createElement("button");
-  editBtn.type = "button";
-  editBtn.className = "noticeboard-thumb-menu-item";
-  editBtn.textContent = "Edit";
-  editBtn.addEventListener("click", async (e) => {
-    e.stopPropagation();
-    closeThumbActionMenu();
-    const item = items[idx];
-    if (!item) return;
-    const result = await openInstructionEditor({
-      initialImage: item.baseImage || item.preview,
-      initialStrokes: Array.isArray(item.strokes) ? item.strokes : [],
-    });
-    if (!result) return;
-    item.preview = result.dataUrl;
-    item.strokes = result.strokes;
-    // Legacy/server items had no separate baseImage; treat the (then-flat)
-    // preview as the base so re-edits keep the original behind any new strokes.
-    if (!item.baseImage) item.baseImage = item.preview;
-    item.updatedAt = new Date().toISOString();
-    // Once a server item is edited locally, it's no longer a pure server
-    // mirror — clear the marker so the next hydrate doesn't wipe it out.
-    if (item.source === "server") delete item.source;
-    saveData(cache);
-    const synced = await syncInstructionsToEditedView();
-    renderGrids();
-    if (!synced) {
-      setMessage(
-        kind === "instruction" ? "Instruction updated locally." : "Viewcapture updated locally.",
-        false
-      );
-    }
-  });
-  menu.appendChild(editBtn);
-
-  const deleteBtn = document.createElement("button");
-  deleteBtn.type = "button";
-  deleteBtn.className = "noticeboard-thumb-menu-item noticeboard-thumb-menu-item-danger";
-  deleteBtn.textContent = "Delete";
-  deleteBtn.addEventListener("click", async (e) => {
-    e.stopPropagation();
-    closeThumbActionMenu();
-    items.splice(idx, 1);
-    saveData(cache);
-    renderGrids();
-    setMessage(`${kind === "instruction" ? "Instruction" : "Viewcapture"} deleted.`, false);
-    // Without syncing, the server's editedview blob still contains the item
-    // and the next hydrate will resurrect it.
-    await syncInstructionsToEditedView();
-  });
-  menu.appendChild(deleteBtn);
-
-  document.body.appendChild(menu);
-  openMenu = menu;
-
-  const rect = anchor.getBoundingClientRect();
-  const menuRect = menu.getBoundingClientRect();
-  let left = rect.right - menuRect.width;
-  let top = rect.top - menuRect.height - 6;
-  if (top < 8) top = rect.bottom + 6;
-  left = Math.max(8, Math.min(left, window.innerWidth - menuRect.width - 8));
-  menu.style.left = `${Math.round(left)}px`;
-  menu.style.top = `${Math.round(top)}px`;
-
-  setTimeout(() => {
-    document.addEventListener("mousedown", onDocClickForMenu, true);
-    document.addEventListener("keydown", onKeydownForMenu, true);
-  }, 0);
 }
 
 function renderGrids() {
@@ -1115,11 +1039,9 @@ function reportStatusBadge(apiStatus) {
   return { label, bg, fg };
 }
 
-// Fetch the case's upper (slot 1) and lower (slot 2) 3D jaw renders for the
-// report's bottom-right panel. POST /thumbnails/get returns one row per slot
-// (slot 0 = composite 2D, 1 = upper STL render, 2 = lower STL render). Prefer
-// the explicit slot field; if the API omits it, fall back to classifying the
-// landscape (3D) images by aspect ratio the way the case-list carousel does.
+// Fetch the case's upper (slot 1) / lower (slot 2) 3D jaw renders for the report.
+// POST /thumbnails/get returns one row per slot (0 = composite 2D, 1/2 = upper/lower
+// STL). Prefer the slot field; if absent, classify by aspect ratio like the carousel.
 async function fetchCaseThumbnailSlots(caseIntID, caseIdStr) {
   const user = getLoggedInUser();
   if (!caseIntID || !user?.uuid) return { upper: "", lower: "" };
@@ -1207,11 +1129,10 @@ async function fetchTwoDPreviewSrc(caseIntID) {
   }
 }
 
-// Build the full standalone report HTML for a case, gathering every input by
-// caseIntID so it also works off the live annotation page (e.g. the case-list
-// bulk download). Pass `twoDPreviewSrc` to reuse an already-loaded 2D design;
-// omit it and the last 2D instruction is fetched from the server editedview.
-// `autoPrint` appends the print-on-load script used by the noticeboard button.
+// Build the standalone report HTML for a case, gathering every input by caseIntID so
+// it works off the live page too (e.g. case-list bulk download). `twoDPreviewSrc`
+// reuses a loaded 2D design (else fetched from editedview); `autoPrint` appends the
+// print-on-load script.
 export async function buildReportHtml(
   caseIntID,
   { caseLabel, caseOwner, twoDPreviewSrc, apiStatus, autoPrint = false } = {}
@@ -1223,20 +1144,16 @@ export async function buildReportHtml(
   const workCategoryLabel =
     WORK_CATEGORY_LABELS[caseNote.workCategory] || caseNote.workCategory || "";
 
-  // Bottom-left "2D Design" panel shows the noticeboard's "2D Setup & Design"
-  // column only — the most recent 2D instruction (2D_*) and its edited .preview.
-  // The viewcaptures bucket is the separate "3D Design" column (3D screenshots),
-  // so it is deliberately NOT used here: only genuine 2D designs belong in this
-  // panel. Cases with no 2D design show the "No 2D design available" placeholder.
+  // Bottom-left "2D Design" panel shows only the "2D Setup & Design" column — the most
+  // recent 2D instruction (2D_*) and its edited .preview. The viewcaptures bucket (3D
+  // screenshots) is deliberately NOT used here. No 2D design → placeholder.
   let twoDSrc = twoDPreviewSrc;
   if (twoDSrc == null) twoDSrc = await fetchTwoDPreviewSrc(caseIntID);
 
-  // Case detail gives the string case id needed to look up the upper/lower 3D
-  // jaw renders (thumbnail slots 1/2). For the top-right status badge, /case/get/:id
-  // does NOT reliably carry new_status — the case list and dashboard both read it
-  // from additionalcasedetails instead. Use that same authoritative source so the
-  // report's status matches the dashboard. Callers that already hold the status
-  // (the case-list row) pass `apiStatus` to skip the extra request.
+  // Case detail gives the string case id for the upper/lower 3D renders (slots 1/2).
+  // For the status badge, /case/get/:id doesn't reliably carry new_status — read it
+  // from additionalcasedetails (same authoritative source as the dashboard). Callers
+  // holding the status (case-list row) pass `apiStatus` to skip the request.
   const [detail, addlRes] = await Promise.all([
     fetchCaseDetailById(caseIntID),
     apiStatus === undefined ? fetchAdditionalCaseDetails(caseIntID) : Promise.resolve(null),

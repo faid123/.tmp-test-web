@@ -1,12 +1,9 @@
 /**
- * Jaw-struct fetch/save wrappers — mirrors the shape of clinicalInfo.js
- * and noticeboard.js: same API base, same MACHINE_ID, same
- * [{machine_id, uuid, caseIntID}, {case_id, ...}] payload envelope.
- *
- * Both endpoints are live: fetch via POST /jawstruct/l2/getall, save via
- * POST /jawstruct/l2 (returns {"successful":true}, upsert per case+type).
- * The save endpoint + payload shape were verified against the backend with
- * put_jawstruct_debug.sh. The Save button (saveAnnotation) drives the write.
+ * Jaw-struct fetch/save wrappers — mirrors clinicalInfo.js / noticeboard.js:
+ * same API base, MACHINE_ID, and [{machine_id, uuid, caseIntID}, {case_id, ...}]
+ * payload. Both endpoints live: fetch POST /jawstruct/l2/getall, save POST
+ * /jawstruct/l2 (returns {"successful":true}, upsert per case+type, verified).
+ * The Save button drives the write.
  */
 import { encodeJawStructBase64 } from "./jawStructCodec.js";
 
@@ -43,16 +40,13 @@ async function postJson(path, payload) {
 }
 
 /**
- * Fetch the jaw struct (upper + lower) for a case.
- * Returns the raw API body on success (which the caller decodes), or null when
- * the request *fails* after retries.
+ * Fetch the jaw struct (upper + lower) for a case. Returns the raw API body on
+ * success (caller decodes), or null when the request fails after retries.
  *
- * The first cross-origin POST on a freshly opened tab (cold TLS + CORS preflight,
- * no warm connection) can fail transiently. Callers treat a null/empty result as
- * "no server design" and reset to a clean arch, so a single transient failure
- * would silently blank a real design until the user refreshes. Retry the read so
- * that doesn't happen. A *successful* response (even an empty design) is returned
- * as-is and never retried — a genuinely empty case must stay empty.
+ * The first cross-origin POST on a fresh tab can fail transiently (cold TLS +
+ * CORS preflight). Callers treat null/empty as "no server design" and reset to a
+ * clean arch, so retry the read to avoid silently blanking a real design. A
+ * successful (even empty) response is returned as-is and never retried.
  */
 export async function fetchJawStruct(caseIntID, uuid, { retries = 2, retryDelayMs = 600 } = {}) {
   const payload = buildPayload(caseIntID, uuid);

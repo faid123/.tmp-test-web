@@ -63,9 +63,7 @@ export function getComponentAssetReference(componentId, toothId) {
   return getPlateAssetReference(componentId, toothId);
 }
 
-/**
- * Fallback `<image>` width/height when a template tooth has no row in {@link MESH_PLACEMENT_IMAGE_SIZE_BY_TOOTH}.
- */
+/** Fallback `<image>` size when a template tooth has no MESH_PLACEMENT_IMAGE_SIZE_BY_TOOTH row. */
 const MESH_IMAGE_SIZE_BY_COMPONENT = Object.freeze({
   "mesh-hole": { width: 154, height: 246 },
   "mesh-tori": { width: 154, height: 246 },
@@ -75,10 +73,9 @@ const MESH_IMAGE_SIZE_BY_COMPONENT = Object.freeze({
 });
 
 /**
- * Mesh SVG logical size by **template tooth** only (quadrants 1 & 4: `11`–`18`, `41`–`48`), like `REST_PLACEMENT_IMAGE_SIZE_BY_TOOTH`.
- * Teeth `21`–`28` / `31`–`38` resolve via {@link getComponentTemplateToothId} so the mirrored arch reuses the same `width`/`height`.
- * Define **`mesh-hole`** per tooth; `mesh-tori`, `mesh-stripe`, `mesh-cross`, and `mesh-flange` reuse that box unless you add a per-type override.
- * Teeth with no row fall back to {@link MESH_IMAGE_SIZE_BY_COMPONENT}.
+ * Mesh SVG size by template tooth (11-18 / 41-48); quadrants 2/3 resolve via
+ * getComponentTemplateToothId. Define `mesh-hole` per tooth; other mesh ids reuse
+ * that box unless overridden. No row → falls back to MESH_IMAGE_SIZE_BY_COMPONENT.
  */
 const MESH_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
   "11": {
@@ -176,8 +173,8 @@ const MESH_TOOTH_IDS = Object.freeze([
 ]);
 
 /**
- * Default mesh translation in tooth-local units (before scale).
- * Seed {@link MESH_POSITION_OFFSET_OVERRIDE_SEED_BY_TOOTH} with **`mesh-hole`** per tooth; other mesh ids copy that offset unless given their own entry.
+ * Default mesh translation in tooth-local units (before scale). Seed the override
+ * table with `mesh-hole` per tooth; other mesh ids copy it unless given their own.
  */
 const MESH_POSITION_OFFSET_BY_COMPONENT = Object.freeze({
   "mesh-hole": { x: 0, y: 0 },
@@ -416,11 +413,10 @@ function syncToothComponentsFromPlacementsMap(tooth, componentById) {
 }
 
 /**
- * Mesh id for new sites when the catalog selection is not a mesh (design list or {@link MESH_PLACEMENT_FALLBACK_ID}).
+ * Mesh id for new sites when the catalog pick isn't a mesh (design list or MESH_PLACEMENT_FALLBACK_ID).
  * @param {{ selectedComponentId: string | null | undefined, components: string[] }} ctx
  * @param {Map<string, object>} componentById
  */
-// Pick default mesh component when entering design mode.
 export function getDefaultMeshIdForDesignMode(ctx, componentById) {
   const catalogPick = componentById.get(ctx.selectedComponentId || "");
   if (catalogPick && isMeshComponent(catalogPick)) {
@@ -434,10 +430,9 @@ export function getDefaultMeshIdForDesignMode(ctx, componentById) {
 }
 
 /**
- * Replace mesh component ids on one tooth; updates `tooth.components` when anything changed.
+ * Replace mesh component ids on one tooth; updates `tooth.components` if changed.
  * @returns {{ changed: boolean, hadMesh: boolean }}
  */
-// Replace existing mesh placements on one tooth with selected mesh id.
 export function replaceMeshPlacementsOnToothWithMeshId(tooth, newMeshId, componentById) {
   ensureToothComponentPlacementsForMesh(tooth);
   const hadMesh = tooth.componentPlacements.some((e) => isMeshComponent(e.componentId));
@@ -458,8 +453,7 @@ export function replaceMeshPlacementsOnToothWithMeshId(tooth, newMeshId, compone
   return { changed, hadMesh };
 }
 
-/** Set every tooth’s mesh placements to `meshComponentId` where a mesh exists. */
-// Migrate all missing-tooth mesh placements to one mesh type.
+/** Set every tooth's mesh placement to `meshComponentId` where a mesh exists. */
 export function migrateAllMeshPlacementsToMeshId(teeth, meshComponentId, componentById) {
   if (!isMeshComponent(meshComponentId) || !componentById.has(meshComponentId)) {
     return;
@@ -475,8 +469,7 @@ export function migrateAllMeshPlacementsToMeshId(teeth, meshComponentId, compone
   }
 }
 
-/** Add default mesh to missing teeth that have no mesh yet (entering design mode). */
-// Auto-place mesh on missing teeth that currently have none.
+/** Add default mesh to missing teeth that have none yet (entering design mode). */
 export function ensureMeshPlacementsOnMissingTeeth(teeth, meshId, componentById) {
   if (!componentById.has(meshId) || !isMeshComponent(meshId)) {
     return;
@@ -501,10 +494,8 @@ export function ensureMeshPlacementsOnMissingTeeth(teeth, meshId, componentById)
   }
 }
 
-/**
- * Defer mesh single-click briefly so double-click (catalog “apply all” or tooth mesh swap) can cancel.
- * 200ms balances responsiveness vs accidental double-click leakage.
- */
+/** Defer mesh single-click briefly so a double-click (catalog "apply all" or tooth
+ *  swap) can cancel it. 200ms balances responsiveness vs double-click leakage. */
 export const MESH_CLICK_DEFER_MS = 200;
 
 const meshInteractionDeferTimers = new Map();
@@ -531,7 +522,6 @@ export function deferMeshInteraction(key, fn, ms = MESH_CLICK_DEFER_MS) {
 }
 
 /** @param {{ selectedComponentId?: string | null, components: string[] }} state */
-// Build mesh-selection context from shared annotation state.
 export function meshSelectionContextFromState(state) {
   return { selectedComponentId: state.selectedComponentId, components: state.components };
 }
@@ -549,7 +539,6 @@ export function meshSelectionContextFromState(state) {
  */
 
 /** Double-click mesh catalog icon: set every mesh site to this type. */
-// Dblclick mesh in catalog: apply selected mesh arch-wide.
 export function handleMeshCatalogDoubleClickApplyAll(env, componentId) {
   if (!env.designMode) {
     env.notify("Lock both arches to use the component catalog.", true);
@@ -570,8 +559,7 @@ export function handleMeshCatalogDoubleClickApplyAll(env, componentId) {
   env.notify(`All mesh sites now use ${def.label}.`, false);
 }
 
-/** Double-click tooth in design mode with mesh tool: swap mesh or place if none. */
-// Dblclick mesh on tooth: swap this tooth mesh type.
+/** Double-click tooth in design mode with mesh tool: swap mesh, or place if none. */
 export function handleMeshToolDoubleClick(env, jaw, toothId) {
   const selected = env.componentById.get(env.state.selectedComponentId || "");
   if (!selected || !isMeshComponent(selected)) {

@@ -1,9 +1,7 @@
 /**
- * 2D arch annotation — entry point.
- *
- * Note: This file also hosts shared 2D annotation state + UI helpers to reduce file count.
- * Other modules import from here; to avoid circular-import TDZ issues we load most feature
- * modules via dynamic import during init.
+ * 2D arch annotation — entry point. Also hosts shared 2D state + UI helpers.
+ * Feature modules load via dynamic import during init to dodge circular-import
+ * TDZ issues.
  */
 
 import { lol } from "../../crypt.js";
@@ -23,12 +21,8 @@ import { logApi } from "../apiLog.js";
 import { toast, flashToast } from "../toast.js";
 import { VIEWER_UUID } from "../../config.js";
 
-/**
- * The Save button is the chosen trigger for writing the 2D design back to the
- * server (saveAnnotation → postJawStructToServer). This flag additionally
- * enables autosave-on-every-edit via the history hook; kept off to avoid a POST
- * per placement. The endpoint itself (POST /jawstruct/l2) is verified.
- */
+/** Autosave on every edit (history hook). Off by default: Save button is the
+ *  trigger, avoids a POST per placement. POST /jawstruct/l2 verified. */
 const ENABLE_JAW_STRUCT_AUTOSAVE = false;
 
 /** Calibrated tooth-image scale (SVG tooth-local units). */
@@ -62,7 +56,7 @@ export const state = {
   rangeMissingStartToothId: null,
 };
 
-/** Attach transient UI refs here so other modules can mutate without import reassignment issues. */
+/** Transient UI refs — mutated by other modules (avoids import-reassignment issues). */
 export const ui = {
   /** @type {HTMLElement | null} */
   presentToothRadialHost: null,
@@ -392,10 +386,8 @@ async function applyQuickPickSelection(tabId, componentId, options = {}) {
 
     const placeOnToothId = options?.placeOnToothId ? String(options.placeOnToothId) : null;
 
-    // Desktop RECIP MESH / RECIP PLATE quick-picks: place plate-crossmesh /
-    // plate-prox directly on the tapped tooth. This shortcut bypasses the
-    // generic catalog handler because those two components have a one-tooth
-    // placement story that doesn't match the catalog's auto-place-on-arch flow.
+    // RECIP MESH/PLATE quick-picks place plate-crossmesh/plate-prox on the tapped
+    // tooth directly — one-tooth, unlike the catalog's auto-place-on-arch flow.
     if (placeOnToothId && (id === "plate-crossmesh" || id === "plate-prox")) {
       state.selectedComponentId = id;
       const tooth = state.teeth[placeOnToothId];
@@ -420,15 +412,10 @@ async function applyQuickPickSelection(tabId, componentId, options = {}) {
       }
     }
 
-    // Everything else (majors, meshes, plates picked from the category list,
-    // rests, clasps, bars) defers to the catalog's own click handler so each
-    // type gets its proper treatment — majors get parts placed on supported
-    // teeth via ensureMajorConnectorPlacementsOnSupportedTeethInJaws, meshes
-    // join state.components, plates set up the plate-toggle suggestions, etc.
-    // Without this, picking a major from the mobile popup only set
-    // state.selectedComponentId — the overlay rendered as a preview, and a
-    // subsequent whitespace click cleared the selection and made the
-    // "appeared" connector vanish because nothing was actually placed.
+    // Everything else defers to the catalog's click handler so each type gets its
+    // proper treatment (majors place parts on supported teeth, meshes join
+    // state.components, plates set up toggle suggestions). Selecting alone isn't
+    // enough — without a real placement the preview vanishes on the next click.
     const { handleDesignComponentSelect } = await import("./annotationCatalog.js");
     handleDesignComponentSelect(id);
   } catch (error) {
@@ -442,17 +429,13 @@ async function applyQuickPickSelection(tabId, componentId, options = {}) {
 
 /**
  * Present-tooth quick picker: Rest / Bar / Recip / Clasp.
- *
- * Touch devices (phones, tablets) get a centered popup sheet with full-size
- * tap targets — the 50%-corner radial wheel has 8.5px labels and tiny hit
- * areas that are unusable with a finger. Mouse-driven desktops keep the
- * compact radial wheel anchored at the click point.
+ * Touch → centered sheet with big tap targets; mouse → compact radial wheel at
+ * the click point (the wheel's tiny labels are unusable with a finger).
  */
 export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
   closePresentToothRadialQuickPick();
 
-  // Desktop radial: the original 4 hand-curated quick-picks with a RECIP
-  // submenu. Tight footprint anchored at the click point.
+  // Desktop radial: 4 hand-curated quick-picks + a RECIP submenu, anchored at the click.
   const radialMain = [
     { label: "REST", tab: "rests", componentId: "rest-seat", pos: "top-left" },
     { label: "BAR", tab: "bars", componentId: "bar-i", pos: "top-right" },
@@ -471,11 +454,9 @@ export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
     { label: "BACK", menu: "main", pos: "bottom-right", icon: "../../back.png" },
   ];
 
-  // Mobile sheet: every component category from COMPONENT_TABS (excluding the
-  // CASE NOTE form). Tapping a category opens a second view showing every
-  // catalog item in that category — tapping an item commits it. The bottom
-  // #componentTabs strip is hidden on touch devices since this sheet replaces
-  // it (see 2Dannotation.css `@media (pointer: coarse)`).
+  // Mobile sheet: all COMPONENT_TABS categories (minus CASE NOTE form). Tap a
+  // category → its items → an item commits. Replaces the #componentTabs strip,
+  // hidden on touch (see 2Dannotation.css `@media (pointer: coarse)`).
   const sheetCategories = COMPONENT_TABS
     .filter((tab) => tab.kind !== "form")
     .map((tab) => ({
@@ -484,15 +465,12 @@ export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
       icon: COMPONENT_BY_ID.get(firstCatalogIdForTab(tab.id))?.icon || null,
     }));
 
-  // `(pointer: coarse)` matches touch/stylus primary input — phones, tablets,
-  // and any desktop with a touchscreen as its main pointer. Anything with a
-  // mouse keeps the radial wheel.
+  // `(pointer: coarse)` = touch/stylus primary input; mouse keeps the radial wheel.
   const useMobileSheet =
     typeof window.matchMedia === "function" &&
     window.matchMedia("(pointer: coarse)").matches;
 
-  // Commit a picked component: select it (and place it directly if it's one
-  // of the plate-on-tooth variants the catalog handles specially) then close.
+  // Commit a pick: select it (place directly for the plate-on-tooth variants), then close.
   const commit = async (action) => {
     const placeOnToothId =
       action.componentId === "plate-crossmesh" || action.componentId === "plate-prox"
@@ -502,9 +480,7 @@ export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
     closePresentToothRadialQuickPick();
   };
 
-  // Desktop radial uses its own submenu pattern (RECIP → reciprocating items
-  // → BACK). The mobile sheet has its own internal two-view nav, so it
-  // doesn't need this wrapper.
+  // Desktop radial submenu nav (RECIP → items → BACK); the mobile sheet navigates itself.
   const runActionOrNavigate = async (action, renderMenu) => {
     if (action.menu === "recip") return renderMenu("recip");
     if (action.menu === "main") return renderMenu("main");
@@ -527,8 +503,7 @@ export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
   ui.presentToothRadialHost = backdrop;
 
   if (!useMobileSheet) {
-    // Anchor the radial wheel at the click point so it appears under the
-    // user's cursor; the mobile sheet is centered via CSS instead.
+    // Anchor the wheel at the click point; the mobile sheet is centered via CSS.
     const left = Math.max(
       8,
       Math.min(clientX - QUICK_PICK_SIZE / 2, window.innerWidth - QUICK_PICK_SIZE - 8)
@@ -594,8 +569,7 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
   const sheet = document.createElement("div");
   sheet.className = "tooth-quickpick-sheet";
 
-  // Header: [back] [title] [close]. Back is hidden in the categories view and
-  // appears when the user drills into a category's items.
+  // Header: [back] [title] [close]. Back shows only when drilled into a category.
   const header = document.createElement("div");
   header.className = "tooth-quickpick-header";
 
@@ -628,11 +602,8 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
   grid.className = "tooth-quickpick-grid";
   sheet.appendChild(grid);
 
-  // Build one tile (button with icon + label). The click handler is supplied
-  // by the caller so the same tile shape works for both category and item
-  // rendering. `options.iconAsMask` renders the icon as a CSS mask so mesh
-  // SVGs can be recolored (the bundled assets are black-on-transparent, and
-  // we want them in the mesh tint).
+  // Build one tile (icon + label). Caller supplies onClick so the shape works for
+  // categories and items. `iconAsMask` renders via CSS mask to tint mesh SVGs.
   const buildTile = (label, iconPath, onClick, options = {}) => {
     const tile = document.createElement("button");
     tile.type = "button";
@@ -645,8 +616,7 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
         maskEl.className = "tooth-quickpick-tile-icon tooth-quickpick-tile-icon--mask";
         const maskUrl = `url("${iconPath}")`;
         maskEl.style.setProperty("--tile-icon-mask", maskUrl);
-        // iOS Safari needs the prefixed property and is unreliable resolving a
-        // var() inside -webkit-mask-image, so set the mask URL directly too.
+        // iOS Safari: set the mask URL directly (unreliable via var() in -webkit-mask-image).
         maskEl.style.webkitMaskImage = maskUrl;
         maskEl.style.maskImage = maskUrl;
         tile.appendChild(maskEl);
@@ -676,8 +646,7 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
     grid.classList.remove("is-items-view");
     grid.innerHTML = "";
     for (const cat of categories) {
-      // The mesh category icon is a black/transparent PNG; render it as a mask
-      // so it picks up the violet mesh tint (matches the drill-in mesh items).
+      // Mesh icon is black/transparent PNG — mask it to pick up the violet mesh tint.
       const opts =
         cat.tabId === "mesh"
           ? { iconAsMask: true, tileClass: "tooth-quickpick-tile--mesh" }
@@ -756,8 +725,8 @@ export async function openRemoveComponentPicker(toothId, jaw, anchorEvent) {
 
   const teethModel = await import("./annotationTeethModel.js");
   teethModel.ensureToothPlacementState(tooth);
-  // Source of truth is `componentPlacements`, but some older/partial states may still only
-  // have `components`. Ensure the remove list includes those so the user can recover.
+  // Source of truth is `componentPlacements`; also include legacy `components`-only
+  // entries so the user can still remove them.
   const placements = (tooth.componentPlacements || []).map((entry, idx) => ({
     ...entry,
     _index: idx,
@@ -891,11 +860,9 @@ function initializeCaseIds() {
   if (label) label.textContent = `Case: ${state.caseIntID ?? "Unknown"}`;
 }
 
-// Single shared GET of the case detail (POST /case/get/:id), memoized on
-// `state`. Both fetchCaseOwner (label/owner) and preview3D's SET-SURVEY-ANGLE
-// path need this row; without the cache they each fire the same request on
-// load. The promise is started early in init() so it overlaps the JS module
-// downloads. Resolves to the detail object, or null on any failure.
+// Shared, memoized POST /case/get/:id. Reused by fetchCaseOwner and preview3D's
+// SET-SURVEY-ANGLE path (one request, not two). Started early in init() to overlap
+// module downloads. Resolves the detail object, or null on any failure.
 export function fetchCaseDetail() {
   if (state.__caseDetailPromise) return state.__caseDetailPromise;
   if (!state.caseIntID) return Promise.resolve(null);
@@ -944,16 +911,13 @@ async function fetchCaseOwner() {
   }
 }
 
-// Fetch the jaw struct (L2) for this case and apply it to state.
-// Parsing / state-merging / encoding live in ./jawStructCodec.js;
-// HTTP transport lives in ./jawStructApi.js. window.__jawStruct is preserved
-// for inspection in the browser console.
+// Fetch the case's L2 jaw struct and apply it to state. Codec in jawStructCodec.js,
+// HTTP in jawStructApi.js. window.__jawStruct kept for console inspection.
 async function fetchJawStruct(recordsPromise = null) {
   if (!state.caseIntID) return;
   const loggedInUser = getLoggedInUser();
 
-  // Prefer the request started early in init() (so it ran concurrently with the
-  // module downloads). Fall back to firing it here if no promise was supplied.
+  // Prefer the request started early in init(); fall back to firing it here.
   let records = null;
   if (recordsPromise) {
     records = await recordsPromise;
@@ -968,8 +932,7 @@ async function fetchJawStruct(recordsPromise = null) {
   if (Array.isArray(records) && records.length) {
     const decoded = decodeJawStructResponse(records);
     window.__jawStruct = decoded.raw;
-    // Apply each jaw independently so a failure in one doesn't skip the other
-    // (or the renderJaws / history re-seed below).
+    // Apply each jaw independently so one failing doesn't skip the other.
     try {
       if (decoded.upper) applyJawStructDesign(resolveJawStructDesign(decoded.upper), state);
     } catch (err) {
@@ -982,40 +945,32 @@ async function fetchJawStruct(recordsPromise = null) {
     }
     setMessage("Loaded 2D design from server.", false);
   } else {
-    // Backend is authoritative for the 2D design. With no server design we must
-    // NOT keep the localStorage-restored one: that snapshot has the placed
-    // components but not the raw desktop fields (bar side, reciprocating flag,
-    // Pr Config, the 16x16 minor-connector grid, ...), so a Save would silently
-    // emit defaults for them. Reset to a clean arch instead — a genuine
-    // from-scratch design encodes correctly (defaults are right when nothing
-    // was loaded), and we never export a degraded reload.
+    // Backend is authoritative. With no server design, don't keep the localStorage
+    // one — it lacks raw desktop fields (bar side, reciprocating flag, Pr Config,
+    // the 16x16 minor grid), so a Save would emit defaults for them. Reset to a
+    // clean arch, which encodes correctly from scratch.
     await resetJawStructDesignToBaseline();
     setMessage("No server 2D design for this case — starting from a clean arch.", false);
   }
 
   renderJaws();
-  // The server design (or the clean reset) is the working baseline now — re-seed
-  // undo history so the load itself isn't an undoable step.
+  // This load is the working baseline — re-seed undo history so it isn't undoable.
   history.past = [cloneStateForHistory()];
   history.future = [];
   updateUndoRedoButtons();
 }
 
-// Reset the 2D design to a clean baseline (all teeth present, no components, no
-// loaded raw fields, no jaw-level tail). Used when the backend has no design so
-// a stale localStorage-restored design can't drive a degraded Save.
+// Reset to a clean baseline (all teeth present, no components/raw fields/tail).
+// Used when the backend has no design, so stale localStorage can't drive a Save.
 async function resetJawStructDesignToBaseline() {
   const teethModel = await import("./annotationTeethModel.js");
   teethModel.initializeTeethState();
   state.jawStructTail = {};
 }
 
-// Post the current 2D design (both jaws) to the backend.
-// Returns saveJawStructFromState's { upper, lower } per-jaw result, or
-// { ok: false, reason } when it can't run (no case / not logged in).
-// Endpoint + payload shape verified against the live backend (POST
-// /jawstruct/l2 → {"successful":true}; see put_jawstruct_debug.sh).
-// Used by the Save button and by the (off-by-default) autosave hook below.
+// Post the current 2D design (both jaws). Returns { upper, lower } per-jaw, or
+// { ok: false, reason } when it can't run (no case / not logged in). Endpoint
+// POST /jawstruct/l2 verified. Used by Save and the off-by-default autosave hook.
 export async function postJawStructToServer() {
   if (!state.caseIntID) {
     console.warn("[2D-post] skipped — no caseIntID");
@@ -1035,8 +990,7 @@ export async function postJawStructToServer() {
   return res;
 }
 
-// Autosave hook — off by default; the Save button is the chosen trigger.
-// See ENABLE_JAW_STRUCT_AUTOSAVE at the top of this file.
+// Autosave hook — off by default (see ENABLE_JAW_STRUCT_AUTOSAVE up top).
 async function saveJawStructAutosave() {
   if (!ENABLE_JAW_STRUCT_AUTOSAVE) return;
   try {
@@ -1196,8 +1150,7 @@ function bindBackNavigationDialog(locks) {
   const saveBackBtn = document.getElementById("backConfirmSaveBack");
   if (!modal || !cancelBtn || !backBtn || !saveBackBtn || !locks) return;
 
-  // The original topbar Back link was removed; the Return menu item in the
-  // sidebar now triggers this confirm dialog.
+  // Topbar Back link is gone; the sidebar Return item triggers this confirm dialog.
   const sidebarReturnBtn = document.getElementById("sidebarReturnBtn");
   const backLink = document.getElementById("backToCaseListBtn");
   const targetHref = backLink?.getAttribute("href") || "case_list.html";
@@ -1207,11 +1160,8 @@ function bindBackNavigationDialog(locks) {
     modal.setAttribute("aria-hidden", "true");
   };
 
-  // Return should always land on the MAIN case list. If this editor was opened
-  // directly from the case-list tab, hop back to it and close this one (so
-  // editor tabs don't pile up). Otherwise — a deeper chain of opened tabs (the
-  // opener is another editor, not the case list) or a direct load — navigate
-  // straight to the case list instead of focusing whatever opened this tab.
+  // Always land on the MAIN case list. If opened from the case-list tab, refocus
+  // it and close this one (don't pile up editor tabs); otherwise navigate there.
   const returnToCaseList = () => {
     try {
       if (
@@ -1223,8 +1173,8 @@ function bindBackNavigationDialog(locks) {
         window.close();
         return;
       }
-    } catch (err) {
-      // Cross-context access to opener.location can throw; fall through to nav.
+    } catch {
+      // Cross-context opener.location access can throw; fall through to nav.
     }
     window.location.href = targetHref;
   };
@@ -1253,11 +1203,8 @@ function bindBackNavigationDialog(locks) {
   backBtn.addEventListener("click", () => {
     returnToCaseList();
   });
-  // Persist the current annotation locally + upload the jaw thumbnail. The
-  // boolean indicates whether the save part succeeded; thumbnail failures
-  // log but don't fail the operation. Shared between the modal's Save &
-  // Return button and the sidebar's Save action (which just saves and
-  // stays on the page).
+  // Save locally + post to backend + upload the jaw thumbnail. Returns { saved,
+  // posted }; thumbnail failures only log. Shared by the modal and sidebar Save.
   const saveCurrent = async () => {
     let saved = true;
     try {
@@ -1307,10 +1254,8 @@ function bindBackNavigationDialog(locks) {
 
 function start() {
   if (ui.hasInitialized) return;
-  // This module graph (noticeboard → clinicalInfo → 2DAnnotation) is also
-  // imported by the case list to build the report for the bulk download. There,
-  // the annotation DOM isn't present, so the DOMContentLoaded auto-init must be
-  // a no-op — gate it on the annotation-page root element.
+  // This module graph is also imported by the case list (bulk-download report),
+  // where the annotation DOM is absent — so auto-init must no-op there. Gate on root.
   if (!document.querySelector(".annotation-shell")) return;
   ui.hasInitialized = true;
   initAnnFooter();
@@ -1321,9 +1266,8 @@ async function initSidebar() {
   const { setupAppSidebar } = await import("../appSidebar.js");
   const handle = setupAppSidebar({ indexHref: "../../index.html" });
 
-  // Sidebar Save: just runs the save pipeline (no navigation). The full
-  // save fn is wired by bindBackNavigationDialog onto window.__ann2dSaveCurrent;
-  // try that first, otherwise fall back to clicking the main Save button.
+  // Sidebar Save: run the save pipeline (no nav). Prefer window.__ann2dSaveCurrent
+  // (wired by bindBackNavigationDialog); else click the main Save button.
   document.getElementById("sidebarSaveBtn")?.addEventListener("click", async () => {
     handle.close();
     const saveFn = window.__ann2dSaveCurrent;
@@ -1360,15 +1304,13 @@ function initAnnFooter() {
     window.dispatchEvent(new CustomEvent("request-3d-capture"));
   });
 
-  // Footer chat: this page already carries the encrypted case id in its URL
-  // (?id=), so chat.js resolves the case itself — just toggle the widget.
+  // Footer chat: URL already has ?id=, so chat.js resolves the case — just toggle.
   document.getElementById("footerChatBtn")?.addEventListener("click", () => {
     toggleChat();
   });
 
-  // Case Note: on mobile the form is reached from the footer (a bottom sheet)
-  // instead of the components tab strip. Reuse annotationCatalog's
-  // createCaseNoteForm so it's the identical form (server sync, toast, etc.).
+  // Case Note: mobile reaches the form from the footer (bottom sheet). Reuse
+  // annotationCatalog's createCaseNoteForm for the identical form.
   const caseNoteSheet = document.getElementById("caseNoteSheet");
   document.getElementById("footerCaseNoteBtn")?.addEventListener("click", async () => {
     const body = document.getElementById("caseNoteSheetBody");
@@ -1382,9 +1324,7 @@ function initAnnFooter() {
     el.addEventListener("click", () => caseNoteSheet.classList.add("is-hidden"))
   );
 
-  // "Upload other 3D files": open the upload modal (managed in preview3D.js),
-  // which lists the case's extra STLs (jaw_stls_extra_slot_1..4) and handles
-  // upload + delete.
+  // "Upload other 3D files": open preview3D.js's upload modal (extra STL slots 1..4).
   document.getElementById("footerUpload3dBtn")?.addEventListener("click", () => {
     window.dispatchEvent(new CustomEvent("request-open-upload-3d"));
   });
@@ -1393,17 +1333,15 @@ function initAnnFooter() {
     window.dispatchEvent(new CustomEvent("request-download-jaw-profile"));
   });
 
-  // Load Template Jaw is a placeholder — the action isn't implemented yet, so
-  // we just surface a status message rather than wire it to a noop button.
+  // Load Template Jaw: placeholder — surface a status message (not implemented yet).
   document.getElementById("loadProposalBtn")?.addEventListener("click", () => {
     setMessage("Load Template Jaw — coming soon.", false);
   });
 
   initSidebar();
 
-  // Mirror the existing #caseLabel into the footer's case name slot. The
-  // caseLabel text is updated by fetchCaseOwner() asynchronously, so use a
-  // MutationObserver instead of patching every write site.
+  // Mirror #caseLabel into the footer's case-name slot. Its text updates async
+  // (fetchCaseOwner), so observe it rather than patch every write site.
   const caseLabel = document.getElementById("caseLabel");
   const footerCaseName = document.getElementById("footerCaseName");
   if (caseLabel && footerCaseName) {
@@ -1421,21 +1359,15 @@ function init() {
   bindPreviewPanelToggle();
   bindPanelSplitter();
 
-  // Kick off the case-independent network work *now*, before the feature
-  // modules below are downloaded. These requests only need state.caseIntID
-  // (set synchronously by initializeCaseIds()) and the logged-in user, so
-  // starting them here lets them run concurrently with the module imports
-  // instead of waiting behind them (the module-load → fetch waterfall). The
-  // apply/render steps still happen inside the Promise.all .then() below, in
-  // their original order — only the network start is hoisted.
+  // Start the network work now, before the feature modules download, so requests
+  // run concurrently with the imports (avoids a module-load → fetch waterfall).
+  // They only need state.caseIntID + the user. Apply/render still happen in the
+  // Promise.all .then() below — only the network start is hoisted.
   fetchCaseDetail(); // shared /case/get — also reused by preview3D
   const loggedInUser = getLoggedInUser();
-  // Guests (shared-link visitors with no login) still need the latest 2D
-  // design loaded — otherwise the arch renders empty and any noticeboard
-  // instruction they capture would be a blank jaw. Fall back to the shared
-  // viewer account (VIEWER_UUID), the same read-only identity the 3D viewer
-  // uses for non-authenticated viewers. Guests still can't SAVE (that path is
-  // gated on loggedInUser.uuid), so this is read-only.
+  // Guests (shared-link, no login) still need the design loaded, else the arch
+  // renders empty. Fall back to VIEWER_UUID (the 3D viewer's read-only identity);
+  // Save stays gated on loggedInUser.uuid, so guests remain read-only.
   const designUuid = loggedInUser?.uuid || VIEWER_UUID;
   const jawStructRecordsPromise =
     state.caseIntID && designUuid
@@ -1471,13 +1403,9 @@ function init() {
           catalog.renderComponentCatalog();
         }
       });
-      // Load the live 2D design from the backend. Runs after the localStorage
-      // restore + first paint; the backend is authoritative — when it returns
-      // data it replaces local state and re-baselines undo history, and when it
-      // returns nothing it resets to a clean arch (the localStorage-restored
-      // design lacks raw desktop fields, so we don't let it drive a Save).
-      // Fire-and-forget so first paint isn't blocked on the network. Consumes
-      // the request started up front in init() (already in flight by now).
+      // Load the live 2D design (authoritative): replaces local state + re-baselines
+      // history, or resets to a clean arch if the backend has none. Fire-and-forget
+      // so first paint isn't blocked; consumes the request started up top in init().
       fetchJawStruct(jawStructRecordsPromise);
       locks.loadPreviewImage();
       locks.syncDesignModeWithLocks(false);
@@ -1485,9 +1413,8 @@ function init() {
       locks.updateEditModeUI();
       bindBackNavigationDialog(locks);
       noticeboard.initNoticeboard();
-      // Deep-link straight to the noticeboard: the 2D Annotate button in the 3D
-      // viewer routes here with ?view=noticeboard so it opens the noticeboard
-      // directly instead of just landing on the annotation editor.
+      // Deep-link: ?view=noticeboard (from the 3D viewer's Annotate button) opens
+      // the noticeboard directly instead of just the editor.
       if (new URLSearchParams(window.location.search).get("view") === "noticeboard") {
         noticeboard.openNoticeboard();
       }

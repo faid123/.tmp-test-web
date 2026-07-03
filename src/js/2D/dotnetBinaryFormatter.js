@@ -1,13 +1,10 @@
-// .NET BinaryFormatter (MS-NRBF) serializer — just enough to reproduce the
-// exact byte layout the SmartRPD desktop client writes for noticeboard
-// `filenames`/`data` columns, so web-saved editedview rows are readable by the
-// desktop. Verified byte-for-byte against desktop-written production records
-// (case 697 view/info, cases 1199/1374/1665/2270 editedview).
+// .NET BinaryFormatter (MS-NRBF) serializer — just enough to reproduce the exact
+// byte layout the SmartRPD desktop writes for noticeboard `filenames`/`data`
+// columns, so web-saved editedview rows are desktop-readable. Verified byte-for-
+// byte against production records (case 697, cases 1199/1374/1665/2270).
 //
-// Column shape: the root object is a jagged byte[][].
-//   - filenames: each inner byte[] is itself a BinaryFormatter stream wrapping
-//     a single string (the filename).
-//   - data: each inner byte[] is the raw PNG file bytes (no data-URL prefix).
+// Column shape: root is a jagged byte[][]. filenames: each inner byte[] is a
+// BinaryFormatter stream wrapping one string. data: each inner byte[] is raw PNG bytes.
 
 const REC_HEADER = 0x00; // SerializationHeaderRecord
 const REC_BIN_ARRAY = 0x07; // BinaryArray

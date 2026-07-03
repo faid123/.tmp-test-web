@@ -303,8 +303,7 @@ export function getRestSuggestionRadius() {
   return REST_SUGGESTION_CONFIG.radius;
 }
 
-/** Positions for {@link REST_CINGULUM_AC_POINT_BY_TOOTH}; maps to ac_mesial / ac_distal assets. */
-// Return cingulum AC suggestion points for anterior teeth.
+// Cingulum AC suggestion points for anterior teeth (maps to ac_mesial/ac_distal assets).
 export function getCingulumAcSuggestionPointsForTooth(toothId) {
   if (getRestVariantForTooth(toothId) !== "anterior") return null;
   const row = REST_CINGULUM_AC_POINT_BY_TOOTH[String(toothId)];

@@ -593,6 +593,17 @@
   display: inline-block;
 }
 
+/* While the box is being dragged: move cursor, no text selection, and disable
+   touch panning so the drag tracks the finger. */
+.instruction-editor-text-input.is-dragging {
+  cursor: move;
+  user-select: none;
+  caret-color: transparent;
+}
+.instruction-editor-text-input {
+  touch-action: none;
+}
+
 /* No-mode selection overlay: a dashed outline around the picked element with a
    trash button at its top-right. A DOM overlay (not drawn on canvas) so it
    never bakes into the exported image. The box is click-through so the element

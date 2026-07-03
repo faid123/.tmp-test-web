@@ -20,8 +20,8 @@ const CLASP_ASSET_BASE = "../../assets/RPD_Component";
 const CLASP_CIRC_SUGGESTION_RADIUS = 7;
 
 /**
- * Per-template (Q1: 11–18, Q4: 41–48) clasp anchor quad in tooth-local space.
- * Intentionally **not** derived from rest M/D/L suggestion points — separate layout for clasp arms.
+ * Per-template (Q1: 11-18, Q4: 41-48) clasp anchor quad in tooth-local space.
+ * Deliberately separate from rest M/D/L suggestion points (own layout for clasp arms).
  */
 const CLASP_QUAD_BY_TEMPLATE = Object.freeze({
  "11": {
@@ -152,13 +152,11 @@ function buildRetainerClaspPointOverrides() {
 /** FDI tooth id → four clasp suggestion anchors (independent of rest suggestion geometry). */
 export const CLASP_CIRC_POINT_OVERRIDES = buildRetainerClaspPointOverrides();
 
-/** Fallback `<image>` box when a template tooth has no `retainer-clasp` row in {@link CLASP_CIRC_PLACEMENT_IMAGE_SIZE_BY_TOOTH}. */
+/** Fallback `<image>` box when a template tooth has no retainer-clasp size row. */
 const CLASP_CIRC_IMAGE_DEFAULT = Object.freeze({ width: 40, height: 40 });
 
-/**
- * Placed clasp SVG logical size by **template tooth** (`11`–`18`, `41`–`48`).
- * Teeth `21`–`28` / `31`–`38` resolve via {@link getComponentTemplateToothId}.
- */
+/** Placed clasp SVG size by template tooth (11-18 / 41-48); 21-28 / 31-38 resolve
+ *  via getComponentTemplateToothId. */
 const CLASP_CIRC_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
   "11": {
     distal_buccal: { width: 155, height: 140 },
@@ -273,8 +271,9 @@ const CLASP_CIRC_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
   },
 });
 /**
- * Nudge placed clasp art on top of the suggestion anchor. Use **`retainer-clasp`** for all four surfaces, or set per-surface keys to override.
- * Template teeth `11`–`18` / `41`–`48` only; `21`–`28` / `31`–`38` mirror **x** unless you add an explicit FDI row.
+ * Nudge placed clasp art onto the suggestion anchor. `retainer-clasp` covers all four
+ * surfaces; add per-surface keys to override. Template teeth only (11-18 / 41-48);
+ * 21-28 / 31-38 mirror x unless given an explicit FDI row.
  */
 const CLASP_CIRC_POSITION_OFFSET_OVERRIDE_SEED_BY_TOOTH = Object.freeze({
 "11": {

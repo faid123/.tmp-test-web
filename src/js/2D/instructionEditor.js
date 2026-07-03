@@ -999,15 +999,26 @@ function onPointerDown(event) {
   if (state.crop.active) return; // crop overlay handles its own input
   const point = pointFromEvent(event);
 
-  // Text tool: a single fixed text box sits at the canvas center (spawned on
-  // entering text mode). Clicking an existing saved text edits it in place;
-  // empty clicks do nothing — clicking no longer spawns new text boxes.
+  // Text tool: entering text mode spawns a box at the canvas center so the user
+  // can start typing right away. Clicking an existing saved text edits it in
+  // place; clicking an empty spot drops a fresh text box THERE, so a comment can
+  // be placed at a specific location instead of only the middle.
   if (state.tool === "text") {
     const hit = findTextAtPoint(point);
     if (hit) {
       editExistingText(hit);
       event.preventDefault();
+      return;
     }
+    // Place a new (empty) text box at the clicked point. spawnTextInput commits
+    // any current box first — an empty centered default is simply discarded, so
+    // this effectively moves the caret to where the user clicked.
+    const available = canvas.clientWidth || 320;
+    const boxW = textBoxMaxWidth(INITIAL_TEXT_FONT_PX);
+    const x = Math.min(Math.max(0, point.x), Math.max(0, available - boxW));
+    const y = Math.max(0, point.y);
+    spawnTextInput({ x, y }, { width: boxW });
+    event.preventDefault();
     return;
   }
 
@@ -1285,6 +1296,27 @@ function commitTextInput() {
 
 const INITIAL_TEXT_FONT_PX = 22;
 
+// Fresh text box width — kept short so comments wrap onto new lines instead of
+// stretching across the image. Sized to ~5 words then reduced 4× per feedback
+// that the box was too long. Measured from the real font, clamped to the canvas.
+const TEXT_BOX_MAX_WORDS = 5;
+const TEXT_BOX_WIDTH_DIVISOR = 4;
+
+function textBoxMaxWidth(fontPx) {
+  const available = (canvas?.clientWidth || 320) - 24;
+  let width = fontPx * 8; // fallback if the canvas context isn't ready
+  if (ctx) {
+    ctx.save();
+    ctx.font = `600 ${fontPx}px "Montserrat","Segoe UI",sans-serif`;
+    // Representative 5-char words separated by spaces.
+    const sample = Array(TEXT_BOX_MAX_WORDS).fill("widths").join(" ");
+    width = Math.ceil(ctx.measureText(sample).width) + TEXT_PAD_X * 2;
+    ctx.restore();
+  }
+  const reduced = Math.round(width / TEXT_BOX_WIDTH_DIVISOR);
+  return Math.max(70, Math.min(reduced, available));
+}
+
 // Sync a text box's live background to the chosen mode. Transparent keeps the
 // dashed editing border; white/black fill behind the glyphs.
 function applyTextBoxBg(div, bg) {
@@ -1322,8 +1354,7 @@ function spawnTextInput(point, prefill = null, options = {}) {
   const initialFontPx = prefill?.fontSize || INITIAL_TEXT_FONT_PX;
   // Fresh boxes can't be widened while typing, so start wide enough that normal
   // text doesn't wrap into a narrow column (capped to the framed canvas width).
-  const available = canvas?.clientWidth || 320;
-  const defaultWidth = Math.min(Math.max(200, Math.round(initialFontPx * 9)), available - 24);
+  const defaultWidth = textBoxMaxWidth(initialFontPx);
   const initialWidth = prefill?.width || defaultWidth;
   const color = prefill?.color || state.color;
   const align = prefill?.align || state.textAlign;
@@ -1354,8 +1385,10 @@ function spawnTextInput(point, prefill = null, options = {}) {
   // No resize handle / border while typing fresh text; both appear only when
   // re-editing a saved text so it can be made bigger/smaller after save.
   div.style.resize = resizable ? "both" : "none";
-  div.style.border = resizable ? "1px dashed var(--rose-500)" : "none";
-  div.style.boxShadow = resizable ? "" : "none";
+  // Visible border so the box reads as an editable field. Resizable (re-edit)
+  // boxes keep the dashed style; fresh boxes get a solid accent border.
+  div.style.border = resizable ? "1px dashed var(--rose-500)" : "1.5px solid var(--rose-500)";
+  div.style.boxShadow = resizable ? "" : "0 2px 8px rgba(26, 77, 63, 0.15)";
   div.style.overflow = "hidden";
   div.style.whiteSpace = "pre-wrap";
   div.style.wordBreak = "break-word";
@@ -1388,6 +1421,63 @@ function spawnTextInput(point, prefill = null, options = {}) {
     div._resizeObserver = ro;
   }
 
+  // Move by clicking and dragging the box itself. A small movement threshold
+  // distinguishes a plain click (place the caret / type) from a drag (move the
+  // box). Dragging updates textInputPoint so the committed stroke lands where
+  // it's dropped; text selection is suppressed while a drag is in progress.
+  let dragging = false;
+  let dragStart = null;
+  const DRAG_THRESHOLD = 4; // CSS px before a press becomes a drag
+  div.addEventListener("pointerdown", (e) => {
+    // Leave the bottom-right resize corner (re-edit boxes) to the browser.
+    if (resizable) {
+      const r = div.getBoundingClientRect();
+      if (e.clientX > r.right - 18 && e.clientY > r.bottom - 18) return;
+    }
+    dragStart = {
+      x: e.clientX,
+      y: e.clientY,
+      ox: textInputPoint.x,
+      oy: textInputPoint.y,
+      id: e.pointerId,
+      started: false,
+    };
+  });
+  div.addEventListener("pointermove", (e) => {
+    if (!dragStart) return;
+    const dx = e.clientX - dragStart.x;
+    const dy = e.clientY - dragStart.y;
+    if (!dragStart.started) {
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return; // still just a click
+      dragStart.started = true;
+      dragging = true;
+      div.setPointerCapture?.(dragStart.id ?? 0);
+      div.classList.add("is-dragging");
+    }
+    const availW = canvas?.clientWidth || 320;
+    const availH = canvas?.clientHeight || 320;
+    let nx = Math.min(Math.max(0, dragStart.ox + dx), Math.max(0, availW - div.offsetWidth));
+    let ny = Math.min(Math.max(0, dragStart.oy + dy), Math.max(0, availH - div.offsetHeight));
+    wrap.style.left = `${nx}px`;
+    wrap.style.top = `${ny}px`;
+    textInputPoint = { x: nx, y: ny };
+    window.getSelection()?.removeAllRanges(); // don't select text while moving
+    e.preventDefault();
+  });
+  const endBoxDrag = () => {
+    if (!dragStart) return;
+    const wasDragging = dragStart.started;
+    div.releasePointerCapture?.(dragStart.id ?? 0);
+    dragStart = null;
+    if (wasDragging) {
+      dragging = false;
+      div.classList.remove("is-dragging");
+      div.focus();
+    }
+  };
+  div.addEventListener("pointerup", endBoxDrag);
+  div.addEventListener("pointercancel", endBoxDrag);
+
   wrap.appendChild(div);
   parent.appendChild(wrap);
 
@@ -1408,6 +1498,9 @@ function spawnTextInput(point, prefill = null, options = {}) {
 
   div.addEventListener("blur", () => {
     setTimeout(() => {
+      // Don't commit while the user is dragging the box by its handle (the
+      // contentEditable loses focus on handle pointerdown).
+      if (dragging) return;
       if (textInputEl === div && document.activeElement !== div) {
         commitTextInput();
       }
@@ -1933,7 +2026,7 @@ function highlightActiveTextStyle() {
 function spawnCenteredTextInput() {
   if (!canvas) return;
   const available = canvas.clientWidth || 320;
-  const boxW = Math.min(Math.max(200, INITIAL_TEXT_FONT_PX * 9), available - 24);
+  const boxW = textBoxMaxWidth(INITIAL_TEXT_FONT_PX);
   const x = Math.max(12, (available - boxW) / 2);
   const y = Math.max(0, canvas.clientHeight / 2 - 20);
   spawnTextInput({ x, y }, { width: boxW });

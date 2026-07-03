@@ -68,9 +68,8 @@ export function bindJawControls() {
   refreshRangeMissingButton();
 }
 
-// Desktop selected-mode learning tooltip: the Remove-multiple-teeth button is
-// hidden at >=1201px, so teach users about the Shift-range shortcut by showing
-// a hint on tooth hover.
+// Desktop learning tooltip: the Remove-multiple-teeth button is hidden at ≥1201px,
+// so teach the Shift-range shortcut via a hint on tooth hover.
 const RANGE_HINT_TEXT =
   "Tip: Hold Shift, select one tooth, then click another tooth to remove the entire range.";
 
@@ -396,9 +395,8 @@ export function syncDesignModeWithLocks(notify) {
     closePresentToothRadialQuickPick();
     state.removeComponentMode = false;
     refreshRangeMissingButton();
-    // Auto-exit the bars tab/component when the jaws are unlocked.
-    // Bar suggestions only render in design mode, so leaving the user
-    // parked on a bar component after unlocking is confusing.
+    // Auto-exit the bars tab/component on unlock — bar suggestions only render in
+    // design mode, so staying parked on a bar component is confusing.
     const sel = COMPONENT_BY_ID.get(state.selectedComponentId || "");
     if (sel && isBarComponent(sel)) {
       state.selectedComponentId = DEFAULT_COMPONENT_ID;
@@ -416,11 +414,10 @@ export function syncDesignModeWithLocks(notify) {
   state.designMode = next;
 
   if (next && !prev) {
-    // Auto-fill the default design on lock: mesh on the missing teeth, a plate on
-    // the present teeth, then the major connector seeded onto those anchors (the
-    // connector's run only starts on a tooth that already carries mesh/plate/clasp).
-    // Each ensure* call is gap-filling — it skips teeth that already carry that
-    // element, so a loaded design's own components are preserved.
+    // Auto-fill the default design on lock: mesh on missing teeth, plate on present
+    // teeth, then the major connector seeded onto those anchors. Each ensure* call is
+    // gap-filling (skips teeth already carrying that element), so a loaded design's
+    // own components are preserved.
     const meshId = getDefaultMeshIdForDesignMode(
       meshSelectionContextFromState(state),
       COMPONENT_BY_ID
@@ -435,9 +432,8 @@ export function syncDesignModeWithLocks(notify) {
         : getDefaultPlateIdForDesignMode(COMPONENT_BY_ID);
     ensurePlatePlacementsOnPresentTeeth(state.teeth, plateId, COMPONENT_BY_ID);
 
-    // Default major connector is per arch: horseshoe (upper) / lingual plate
-    // (lower). A major connector picked in the catalog overrides the default for
-    // its own arch only; the opposite arch keeps its default.
+    // Default major connector per arch: horseshoe (upper) / lingual plate (lower).
+    // A catalog-picked major overrides the default for its own arch only.
     const selected = COMPONENT_BY_ID.get(state.selectedComponentId || "");
     const selectedMajorId =
       selected && isMajorConnectorComponent(selected) ? selected.id : null;
@@ -767,10 +763,8 @@ async function composeJawCanvas(scale = 1) {
   // Outer aesthetic margin around the composed image.
   const padX = 10;
   const padY = 20;
-  // ViewBox expansion (in viewBox units): individual tooth images placed
-  // near the edge of each SVG extend past the original viewBox and get
-  // clipped by SVG's default overflow. Expand the cloned SVG's viewBox
-  // so those teeth render in full.
+  // ViewBox expansion: edge teeth extend past the original viewBox and get clipped,
+  // so expand the cloned SVG's viewBox to render them in full.
   const vbPad = 80;
   const baseW = Math.max(upperDims.w, lowerDims.w) + vbPad * 2;
   const baseH = upperDims.h + lowerDims.h + vbPad * 4 + gap;
@@ -810,9 +804,8 @@ async function composeJawCanvas(scale = 1) {
     svgToImage(upperInlined, upperRenderW * scale, upperRenderH * scale),
     svgToImage(lowerInlined, lowerRenderW * scale, lowerRenderH * scale),
   ]);
-  // Center each jaw horizontally within the padded canvas; the canvas has
-  // no header band now, so the upper jaw starts at the top padding and the
-  // lower jaw sits a `gap` below it.
+  // Center each jaw horizontally in the padded canvas; upper starts at the top
+  // padding, lower sits a `gap` below it (no header band).
   const upperX = (padX + (baseW - upperRenderW) / 2) * scale;
   const upperY = padY * scale;
   const lowerX = (padX + (baseW - lowerRenderW) / 2) * scale;
@@ -820,10 +813,8 @@ async function composeJawCanvas(scale = 1) {
   ctx.drawImage(upperImg, upperX, upperY, upperRenderW * scale, upperRenderH * scale);
   ctx.drawImage(lowerImg, lowerX, lowerY, lowerRenderW * scale, lowerRenderH * scale);
 
-  // Case-ID watermark — sit in the *visible* gap between jaws (between the
-  // bottom of the upper jaw's content and the top of the lower jaw's
-  // content). Computing it from the actual jaw positions keeps it visually
-  // centered even when one jaw is taller than the other.
+  // Case-ID watermark — sit in the visible gap between the jaws' content. Computed
+  // from actual jaw positions so it stays centered even when one jaw is taller.
   const labelText = getCaseLabelTextForExport();
   if (labelText) {
     const watermarkText = labelText.startsWith("🦷") ? labelText : `🦷 ${labelText}`;
@@ -874,15 +865,13 @@ export async function captureJawPngDataUrl(scale = 3) {
   return canvas.toDataURL("image/png");
 }
 
-// Thumbnail slot index for the composite 2D arch render. The case-detail
-// panel (and legacy 2D viewer in index.js) treats slot 0 as the primary 2D
-// thumbnail.
+// Thumbnail slot for the composite 2D arch render. The case-detail panel (and
+// legacy 2D viewer) treats slot 0 as the primary 2D thumbnail.
 const THUMBNAIL_SLOT_2D = 0;
 
-// Capture jaws as PNG and upload to the case's 2D thumbnail slot. Returns
-// true on success, false if anything in the capture/upload chain failed.
-// Uses scale=2 so the payload stays comfortably under server body limits
-// (scale=3 PNGs frequently push past 5 MB for two-arch composites).
+// Capture jaws as PNG and upload to the case's 2D thumbnail slot. Returns true on
+// success. Uses scale=2 to keep the payload under server body limits (scale=3
+// two-arch PNGs often exceed 5 MB).
 export async function uploadJawPngThumbnail() {
   const pngUrl = await captureJawPngDataUrl(2);
   if (!pngUrl) return false;
@@ -922,9 +911,8 @@ export async function saveAsJpeg() {
   }
 }
 
-// POST /thumbnails — save a thumbnail into a specific slot for the current
-// case. Per the API spec the body is a 2-element array of {authData, caseData}
-// and `data` is the raw base64 payload (no `data:image/png;base64,` prefix).
+// POST /thumbnails — save a thumbnail into a slot for the current case. Body is a
+// 2-element array [{authData, caseData}]; `data` is raw base64 (no data-URL prefix).
 async function uploadCaseThumbnail(dataUrl, slot) {
   if (!state.caseIntID) {
     console.warn("[uploadCaseThumbnail] Skipped: no caseIntID");

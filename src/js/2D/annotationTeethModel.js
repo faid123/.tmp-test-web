@@ -4,9 +4,8 @@ import { state } from "./2DAnnotation.js";
 import { normalizeSurface } from "./toothUtils.js";
 export { normalizeSurface } from "./toothUtils.js";
 
-// Mesh placements only make sense on missing teeth; clear them when a
-// tooth flips back to present so the "removable list" UI stays in sync
-// with the visual (which already hides mesh on present teeth).
+// Mesh placements only make sense on missing teeth; clear them when a tooth
+// flips to present so the removable-list UI matches the visual.
 function clearMeshPlacementsIfPresent(tooth) {
   if (!tooth || !tooth.isPresent) return;
   if (!Array.isArray(tooth.componentPlacements)) return;
@@ -100,10 +99,9 @@ export function hasPlacement(tooth, componentId, surface) {
 }
 
 // A tooth's reciprocating element is a single slot (Reciprocating.Tooth Type):
-// a reciprocating clasp OR a proximal/mesh plate — never more than one. This is
-// the universal choke point, so enforcing it here also covers the compound
-// clasp/bar assembly placements (which call addPlacement directly and bypass the
-// catalog's conflictsWith check) and prevents an overlapping clasp + plate.
+// a reciprocating clasp OR a proximal/mesh plate, never both. Enforced here (the
+// universal choke point) so compound clasp/bar assemblies that call addPlacement
+// directly are covered too.
 const RECIPROCATING_SLOT_IDS = new Set(["reciprocating-clasp", "plate-prox", "plate-crossmesh"]);
 
 // Add one component placement on tooth.

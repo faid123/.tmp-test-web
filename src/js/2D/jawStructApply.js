@@ -1,18 +1,14 @@
 /**
  * Apply a normalized jaw-struct design (from jawStructCodec.resolveJawStructDesign)
- * onto the 2D annotation state. This is the browser-side half of the load path —
- * it reuses the real placement primitives so loaded designs behave exactly like
- * hand-placed ones.
- *
- * Kept separate from jawStructCodec.js so the codec stays DOM-free / testable;
- * this module pulls in the annotation + geometry helpers the codec must not.
+ * onto the 2D annotation state. Browser-side half of the load path — reuses the
+ * real placement primitives so loaded designs behave like hand-placed ones.
+ * Kept separate from jawStructCodec.js so the codec stays DOM-free.
  *
  * Apply order matters:
- *   1. presence + reset      (clears each tooth's placements)
- *   2. mesh spans            (mesh placements must exist before 3 and 4)
- *   3. present-tooth rests/clasps, then bars (bar surface is geometry-derived
- *      from nearby mesh-bearing teeth)
- *   4. major connector       (auto-places on mesh/plate-bearing supported teeth)
+ *   1. presence + reset  (clears each tooth's placements)
+ *   2. mesh spans        (must exist before 3 and 4)
+ *   3. rests/clasps, then bars (bar surface is geometry-derived from mesh teeth)
+ *   4. major connector   (auto-places on mesh/plate-bearing supported teeth)
  */
 import {
   COMPONENT_BY_ID,
@@ -31,9 +27,8 @@ export function applyJawStructDesign(design, state) {
   if (!design || !state?.teeth) return;
   const { jawSide } = design;
 
-  // Stash the loaded jaw-level data (minor-connector path grid, ball connectors)
-  // so Save can re-emit it — the web doesn't model the 16x16 grid, so it can
-  // only be preserved from the loaded state, not regenerated.
+  // Stash loaded jaw-level data (minor-connector grid, ball connectors) so Save
+  // can re-emit it — the web can't regenerate the 16x16 grid, only preserve it.
   if (jawSide) {
     state.jawStructTail = state.jawStructTail || {};
     state.jawStructTail[jawSide] = design.rawOther || {};
@@ -82,12 +77,10 @@ export function applyJawStructDesign(design, state) {
     }
   }
 
-  // 4. Major connector. For midline-reaching majors (plate / horseshoe / hole /
-  //    kennedy / strap) the web's arch-fill rule re-derived the span and could
-  //    over-cover vs the desktop. When the loaded data carries an explicit span
-  //    (Major Connector Start/End -> design.majorSpanFdis), place the major on
-  //    EXACTLY those teeth instead — coverage follows the data, not the rule.
-  //    Bars/straps and spanless (from-scratch) designs keep the rule.
+  // 4. Major connector. Midline-reaching majors (plate/horseshoe/hole/kennedy/
+  //    strap) could over-cover if the web re-derives the span, so when the data
+  //    carries an explicit span (design.majorSpanFdis) place on EXACTLY those
+  //    teeth. Bars/straps and from-scratch designs keep the arch-fill rule.
   if (design.major && jawSide) {
     if (
       majorConnectorRunsToMidline(design.major) &&

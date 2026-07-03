@@ -52,12 +52,10 @@ import {
   showBarSuggestions,
 } from "./annotationVisuals.js";
 
-// Safari/iOS WebKit drops CSS `filter:` color chains (brightness/invert/hue-rotate/...) on SVG
-// <image> elements that load external .svg files. SVG-native <filter> defs work cross-browser,
-// so each tint color used by the stylesheet is published here as a named filter and referenced
-// from CSS via `filter: url(#tint-...)`. Tooth tints also bake the drop-shadow in so the CSS
-// `filter` declaration is a single `url(...)` (chained `url() drop-shadow()` is unreliable in
-// Safari when the target <image> sits inside a transformed <g>).
+// Safari/iOS drops CSS `filter:` color chains on SVG <image> elements loading external
+// .svg files. SVG-native <filter> defs work cross-browser, so each tint is published here
+// as a named filter, referenced from CSS via `filter: url(#tint-...)`. Tooth tints bake the
+// drop-shadow in (chained url()+drop-shadow() is unreliable in Safari inside a transformed <g>).
 const SVG_TINT_FILTERS = {
   "tint-tooth-base": { color: "#1f1f1f", shadow: true },
   "tint-tooth-abutment": { color: "#1565c0", shadow: true },
@@ -302,12 +300,10 @@ export function renderJaw(jaw) {
         return;
       }
 
-      // Empty-hand tap on any tooth (present OR missing/mesh) opens the
-      // picker popup. On touch devices the bottom #editModePanel is hidden
-      // (see 2Dannotation.css), so this is the only way to pick a component
-      // from the canvas; on desktop it's a convenience entry point that
-      // complements the catalog. Limited to `!catalogPick` so an in-progress
-      // mesh/bar/major placement workflow isn't disrupted by accidental taps.
+      // Empty-hand tap (present OR missing/mesh) opens the picker popup. On touch
+      // the bottom #editModePanel is hidden, so this is the only canvas entry point;
+      // on desktop it complements the catalog. Gated on `!catalogPick` so an
+      // in-progress mesh/bar/major workflow isn't disrupted by accidental taps.
       if (!catalogPick) {
         showPresentToothRadialQuickPick(toothId, event.clientX, event.clientY);
         if (hadSuppressedHints) renderJaw(jaw);

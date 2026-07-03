@@ -315,10 +315,9 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
   const criteriaResult = assessPlacementCriteria(tooth, selectedComponent, COMPONENT_BY_ID);
   if (criteriaResult.pass) {
     addPlacement(tooth, selectedComponent.id, targetSurface);
-    // A bar needs reciprocation: auto-place a reciprocating clasp on the lingual
-    // side of the bar, unless the tooth already carries a reciprocating element
-    // (clasp or plate) we shouldn't clobber. Mirrors the bar assemblies, which
-    // already pair a bar with a reciprocating clasp.
+    // A bar needs reciprocation: auto-place a reciprocating clasp on the bar's
+    // lingual side, unless the tooth already has a reciprocating element (clasp/
+    // plate). Mirrors the bar assemblies.
     if (isBarComponent(selectedComponent) && !toothHasReciprocatingElement(tooth)) {
       addPlacement(tooth, "reciprocating-clasp", reciprocatingSurfaceForBarSurface(targetSurface));
     }

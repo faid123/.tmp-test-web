@@ -5,7 +5,7 @@ import { setupConnectivityIndicator, reportHtmlToDocxBytes } from "./accessibili
 import { setupAppSidebar } from "./appSidebar.js";
 import { VIEWER_UUID, LOGIN_CREDENTIALS } from "../config.js";
 import { buildReportHtml } from "./2D/noticeboard.js";
-import { saveCaseDueDate, toDateInputValue } from "./2D/caseNote.js";
+import { saveCaseDueDate, toDateInputValue, updateCaseDueDate } from "./2D/caseNote.js";
 
 function getLoggedInUser() {
   const user = localStorage.getItem("loggedInUser");
@@ -709,7 +709,10 @@ function populateTable(cases) {
       </td>
       <td class="cm-td-status"><span class="cm-pill ${statusPillClass(caseItem.new_status)}">${escapeAttr(statusDisplayText(caseItem.new_status))}</span></td>
       <td class="cm-td-date" data-label="Created">${formatDateTime(caseItem.creation_date)}</td>
-      <td class="cm-td-date cm-due-date ${dueInd ? dueInd.cls : ""}" data-label="Due">${dueDate ? formatDateOnly(dueDate) : "N/A"}</td>
+      <td class="cm-td-date cm-due-date ${dueInd ? dueInd.cls : ""}" data-label="Due">
+        <span class="cm-due-text">${dueDate ? formatDateOnly(dueDate) : "N/A"}</span>
+        <button class="cm-due-edit" type="button" title="Edit due date" aria-label="Edit due date" data-action="edit-due"><i class="fa-regular fa-pen-to-square"></i></button>
+      </td>
       <td class="cm-td-owner" data-label="Owner">
         <i class="fa-regular fa-circle-user"></i><span class="cm-owner-name" title="${escapeAttr(assignedTo)}">${escapeAttr(assignedTo)}</span>
       </td>
@@ -764,6 +767,14 @@ function populateTable(cases) {
       e.stopPropagation();
       const ok = await deleteCaseById(resolvedCaseId);
       if (ok) toast.success("Case deleted successfully.");
+    });
+
+    // Inline "Edit due date" straight from the list (user feedback: allow
+    // editing the Due Date on the main case-management page).
+    const dueTd = row.querySelector(".cm-due-date");
+    row.querySelector('[data-action="edit-due"]')?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openDueDateEditor(dueTd, caseItem, resolvedCaseId, dueDate);
     });
 
     body.appendChild(row);
@@ -1014,6 +1025,78 @@ function applyClientFilters() {
   });
 
   populateTable(base);
+}
+
+// Replace the Due cell's text with a date input so the due date can be edited
+// straight from the list. Commits through updateCaseDueDate (writes the backend
+// additionalcasedetails row that the list, dashboard and 2D "Date Required"
+// field all read), mirrors it to localStorage for the 2D page, then re-renders.
+function openDueDateEditor(td, caseItem, caseId, currentDue) {
+  if (!td || td.querySelector(".cm-due-input")) return;
+
+  const input = document.createElement("input");
+  input.type = "date";
+  input.className = "cm-due-input";
+  input.value = toDateInputValue(currentDue) || "";
+
+  td.innerHTML = "";
+  td.appendChild(input);
+  input.focus();
+  try {
+    input.showPicker?.();
+  } catch {
+    /* showPicker may throw if not user-activated; ignore */
+  }
+
+  let settled = false;
+
+  // Restore the list without changing anything (Escape / empty / failure).
+  const restore = () => {
+    if (settled) return;
+    settled = true;
+    applyClientFilters();
+  };
+
+  const commit = async () => {
+    if (settled) return;
+    const iso = input.value;
+    if (!iso) {
+      restore();
+      return;
+    }
+    settled = true;
+    input.disabled = true;
+    const ok = await updateCaseDueDate(caseId, iso);
+    if (ok) {
+      // additionalcasedetails.due_date is stored in Unix *seconds*; mirror that
+      // so the in-memory row (and the redraw) show the new date immediately.
+      const ms = Date.parse(`${iso}T00:00:00`);
+      const epochSec = Number.isNaN(ms) ? null : Math.floor(ms / 1000);
+      if (epochSec != null) {
+        caseItem.expected_date = epochSec;
+        caseItem.due_date = epochSec;
+      }
+      saveCaseDueDate(caseId, iso);
+      toast.success("Due date updated.");
+    } else {
+      toast.error("Failed to update due date. Please try again.");
+    }
+    applyClientFilters();
+  };
+
+  input.addEventListener("change", commit);
+  input.addEventListener("blur", () => commit());
+  input.addEventListener("click", (e) => e.stopPropagation());
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      restore();
+    }
+  });
 }
 
 // Compute a default due-date timestamp (ms) that's 14 days after the

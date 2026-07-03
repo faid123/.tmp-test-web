@@ -2,11 +2,9 @@ import { TOOTH_ORDER, TOOTH_POSITION_MAP } from "./constants.js";
 
 const MAJOR_TAB = "major";
 
-// No major connector excludes the third molars (*8: 18/28/38/48) anymore — per
-// user directive, every connector may run onto / span the *8 teeth when those
-// teeth anchor it (plate when present, mesh when missing). The only remaining
-// exclusions are the palatal-strap's *anterior* teeth (11–13 / 21–23), which is
-// a separate rule unrelated to *8.
+// No major connector excludes the third molars (*8) anymore — every connector may
+// span them when those teeth anchor it. The only remaining exclusion is the palatal
+// strap's anterior teeth (11-13 / 21-23), a separate rule.
 const MAJOR_CONNECTOR_EXCLUDED_TOOTH_IDS_BY_COMPONENT = Object.freeze({
   "major-upper-palatal-strap": Object.freeze(new Set(["11", "12", "13", "21", "22", "23"])),
   "major-upper-horseshoe": Object.freeze(new Set([])),
@@ -77,9 +75,9 @@ function strapAttachPoints(toothId, archCenter) {
 }
 
 /**
- * Computes 8 polygon points for the palatal strap overlay based on which teeth have placements.
- * Each pair of points (palatal + buccal) attaches to an associated major connector tooth.
- * Left and right sides each use their most-anterior and most-posterior placed tooth.
+ * 8 polygon points for the palatal strap overlay from the placed teeth. Each pair
+ * (palatal + buccal) attaches to a connector tooth; each side uses its most-anterior
+ * and most-posterior placed tooth.
  */
 export function computePalatalStrapPolygonPoints(teeth) {
   const has = (id) => teeth?.[id]?.componentPlacements?.some((e) => e.componentId === PALATAL_STRAP_MAJOR_COMPONENT_ID);
@@ -455,10 +453,8 @@ function isUpperLeftToothId(toothId) {
 }
 
 /**
- * Select Plate_{n} from palatal-plate major endpoints.
- * Right side endpoint: largest unit among 11..18 with palatal-plate placement (most posterior).
- * Left side endpoint: largest unit among 21..28 with palatal-plate placement (most posterior).
- * Chosen n = max(rightUnit, leftUnit), with single-side fallback.
+ * Select Plate_{n} from palatal-plate endpoints: the most-posterior placed unit on each
+ * side (11-18 and 21-28); n = max(rightUnit, leftUnit), single-side fallback.
  */
 export function getPalatalPlateOverlayIndexFromUpperPlacements(teeth) {
   if (!teeth || typeof teeth !== "object") {
@@ -532,11 +528,11 @@ function toothHasPalatalBarPlacementOnTooth(tooth) {
 }
 
 /**
- * Palatal bar: distal second-molar caps (`17_distal.svg` / mirrored on `27`) only while **18** / **28**
- * have no real palatal-bar placement—same idea as palatal hole. After tagging 18–28, use augmented
- * neighbors so {@link getMajorConnectorAssetReference} returns body art and segments connect.
+ * Palatal bar: distal second-molar caps (17_distal / mirrored 27) only while 18/28
+ * have no real palatal-bar placement. After tagging 18/28, augmented neighbors make
+ * getMajorConnectorAssetReference return body art so segments connect.
  * @param {string} toothId
- * @param {Record<string, unknown> | null | undefined} teeth Un-augmented arch state ({@link state.teeth}).
+ * @param {Record<string, unknown> | null | undefined} teeth Un-augmented arch state.
  */
 export function shouldUsePalatalBarSecondMolarDistalTemplate(toothId, teeth) {
   const id = String(toothId);
@@ -553,8 +549,8 @@ export function shouldUsePalatalBarSecondMolarDistalTemplate(toothId, teeth) {
 }
 
 /**
- * Mirrors Unity palatal-bar connector **span** continuity: both posterior runs use virtual palatal-bar
- * placements so internal teeth prefer straight templates over `{base}_mesial.svg` / `{base}_distal.svg` at run ends.
+ * Mirrors Unity palatal-bar span continuity: both posterior runs get virtual bar
+ * placements so internal teeth prefer straight templates over `_mesial`/`_distal` at run ends.
  * @param {Record<string, unknown> | null | undefined} teeth
  * @returns {Record<string, unknown>}
  */
@@ -586,28 +582,21 @@ export function augmentTeethForPalatalBarConnectorNeighbors(teeth) {
 }
 
 /**
- * Anterior AP strap — always drawn for a palatal-hole connector. Position in the
- * upper jaw SVG viewBox space (`0 0 600 420`). Native ratio ~294×92.
- * Kept exported (barrel re-export in components.js); the posterior straps are now
- * selected dynamically per side by {@link getPalatalHoleArchOverlayLayers}.
+ * Anterior AP strap — always drawn for a palatal-hole connector. Frame in the upper
+ * jaw viewBox (0 0 600 420). Posterior straps are selected per side by
+ * getPalatalHoleArchOverlayLayers.
  */
 export const PALATAL_HOLE_ARCH_OVERLAY_LAYERS = Object.freeze([
   { file: "AP_Strap01.svg", x: 248, y: 138, width: 140, height: 74 },
 ]);
 
 /**
- * Posterior AP strap, selected per side by the terminal MOLAR the palatal-hole
- * connector reaches on that side: unit 6/7/8 → AP-Strap_6/7/8. A side whose
- * connector ends before the molars (premolar or earlier) gets no posterior
- * strap; a symmetric design shows both. `left` = Q1 (image-left, teeth 1x,
- * as-authored asset); `right` = Q2 (image-right, teeth 2x, mirrored asset).
- * Frames in the 600×420 upper viewBox — 7 is verified against case 2511; 6/8
- * frames are best-effort starting points pending a case that exercises them.
+ * Posterior AP strap, selected per side by the terminal molar the palatal-hole
+ * connector reaches: unit 6/7/8 → AP-Strap_6/7/8. A side ending before the molars
+ * gets none. Frames in the 600×420 viewBox (7 verified vs case 2511; 6/8 best-effort).
+ * One as-authored half per molar; Q2 reuses the SAME asset shifted one half-width
+ * right and mirrored by the renderer. `width` is one half-width.
  */
-// One asset per terminal molar (a single as-authored half). Each frame places
-// the Q1 (image-left) half; the Q2 (image-right) side reuses the SAME asset,
-// shifted one half-width right and mirrored in place by the renderer — so no
-// separate left/right asset files are needed. `width` is one half-width.
 const PALATAL_HOLE_POSTERIOR_STRAP_BY_UNIT = Object.freeze({
   6: { file: "AP-Strap_6.svg", x: 209, y: 220, width: 108, height: 150 },
   7: { file: "AP-Strap_7.svg", x: 212, y: 254, width: 105, height: 127 },
@@ -632,11 +621,9 @@ function palatalHoleTerminalMolarUnit(teeth, molars) {
 }
 
 /**
- * Overlay layers for the current palatal-hole design: the anterior strap plus,
- * for each side whose connector reaches a molar, that side's posterior strap
- * sized to its terminal molar (AP-Strap_6/7/8). The Q2 (image-right) half is the
- * same asset placed one half-width to the right with `mirror: true`, which the
- * renderer flips horizontally in place.
+ * Overlay layers for the current palatal-hole design: anterior strap + each side's
+ * posterior strap sized to its terminal molar (AP-Strap_6/7/8). The Q2 half is the
+ * same asset shifted one half-width right with `mirror: true`.
  */
 export function getPalatalHoleArchOverlayLayers(teeth) {
   const layers = [...PALATAL_HOLE_ARCH_OVERLAY_LAYERS];
@@ -672,9 +659,9 @@ export function hasPalatalHolePlacementOnUpperArch(teeth) {
 // --- Placement tuning (offset / scale for major-connector SVG per tooth) ---
 
 /**
- * When true, major-connector translation uses only {@link CONNECTOR_EXTRA_OFFSET_SEED_BY_TOOTH}
- * (plus mirroring rules)—mesh/plate anchors are ignored so the same connector frame is used
- * whether the site is mesh or plate. When false, translation = mesh OR plate anchor + extra.
+ * When true, major-connector translation uses only CONNECTOR_EXTRA_OFFSET_SEED_BY_TOOTH
+ * (plus mirroring) — mesh/plate anchors ignored, so the frame is the same for mesh or
+ * plate sites. When false, translation = mesh/plate anchor + extra.
  */
 export const CONNECTOR_POSITION_IGNORE_MESH_PLATE_ANCHOR = true;
 
@@ -687,10 +674,9 @@ export const CONNECTOR_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
 });
 
 /**
- * Extra x/y in tooth-local units, added on top of the mesh/plate anchor (unless
- * {@link CONNECTOR_POSITION_IGNORE_MESH_PLATE_ANCHOR} is true).
- * Keys: upper template `11`–`18` (Q2 mirrors); lower template `41`–`48` (Q3 mirrors); optional exact
- * FDI rows to override mirroring. Quadrants 2 / 3 flip X when resolving from the template row only.
+ * Extra x/y (tooth-local), added on top of the mesh/plate anchor (unless
+ * CONNECTOR_POSITION_IGNORE_MESH_PLATE_ANCHOR). Keys: upper template 11-18 (Q2 mirrors),
+ * lower 41-48 (Q3 mirrors), or exact FDI to override. Quadrants 2/3 flip X for template rows.
  */
 export const CONNECTOR_EXTRA_OFFSET_SEED_BY_TOOTH = Object.freeze({
   "11": { x: 13, y: 76 },
@@ -842,14 +828,11 @@ export function getDefaultMajorConnectorIdForDesignMode(componentById) {
 }
 
 /**
- * Major-connector ids whose coverage runs *continuously to the midline*. The desktop
- * draws these as one span from the most-distal anchor across every tooth (present or
- * missing, plate or bare) up to the central incisors, via an `isStartFound` state machine
- * that reaches the midline: `ConnectorsLogic.CheckAndSetTop` for the upper, `SetLingualMajor`
- * (i=0..8) for **all** lower connectors — lingual bar included (its `isSetPlate` flag only
- * gates per-tooth plate forcing, not the span). The only posterior-only majors are the
- * *upper* palatal bar/strap, whose `CheckAndSetTop` runs with `EndCheck=5`; those keep the
- * per-tooth placement instead.
+ * Major-connector ids whose coverage runs continuously to the midline. The desktop draws
+ * these as one span from the most-distal anchor across every tooth to the central incisors
+ * (CheckAndSetTop for upper, SetLingualMajor for ALL lower connectors, lingual bar included).
+ * The only posterior-only majors are the upper palatal bar/strap (EndCheck=5), which keep
+ * per-tooth placement.
  */
 const MIDLINE_REACHING_MAJOR_CONNECTOR_IDS = Object.freeze(
   new Set([
@@ -868,11 +851,9 @@ export function majorConnectorRunsToMidline(componentId) {
 }
 
 /**
- * Whether a tooth can *anchor* a major-connector run: a present tooth via a plate /
- * reciprocating clasp, a missing tooth via mesh. Mirrors the desktop start test
- * (isComponentPresent / isMesh), narrowed to the components the web models. Shared by
- * placement (where a run may start) and {@link pruneInvalidMajorConnectorPlacementsInJaw}
- * (which runs survive).
+ * Whether a tooth can anchor a major-connector run: present via plate/clasp, missing via
+ * mesh. Mirrors the desktop start test, narrowed to web-modeled components. Shared by
+ * placement and pruneInvalidMajorConnectorPlacementsInJaw.
  */
 function toothAnchorsMajorConnector(tooth, componentById) {
   if (!tooth || !Array.isArray(tooth.componentPlacements)) {
@@ -884,9 +865,8 @@ function toothAnchorsMajorConnector(tooth, componentById) {
       return false;
     }
     if (tooth.isPresent) {
-      // Plate or any clasp (retainer / reciprocating / ring) anchors the
-      // connector — a plate/clasp abutment, matching the desktop anchor test.
-      // So a clasped terminal molar (e.g. 38/48) starts the span and is covered.
+      // Plate or any clasp anchors the connector (matches the desktop anchor test), so
+      // a clasped terminal molar (38/48) starts the span and is covered.
       return (
         String(componentId).startsWith("plate-") ||
         String(componentId).endsWith("-clasp")
@@ -910,10 +890,8 @@ function placeMajorConnectorOnce(tooth, majorComponentId) {
   }
 }
 
-/**
- * Per-tooth placement for posterior-only majors (bar / strap): place the major on every
- * eligible tooth that already anchors it (mesh when missing, plate when present).
- */
+/** Per-tooth placement for posterior-only majors (bar/strap): place on every eligible
+ *  tooth that already anchors it (mesh if missing, plate if present). */
 function placeMajorConnectorPerTooth(teeth, majorComponentId, componentById, jawKey) {
   const ids = TOOTH_ORDER && Array.isArray(TOOTH_ORDER[jawKey]) ? TOOTH_ORDER[jawKey] : [];
   for (const toothId of ids) {
@@ -927,12 +905,10 @@ function placeMajorConnectorPerTooth(teeth, majorComponentId, componentById, jaw
 }
 
 /**
- * Desktop-style span fill for midline-reaching majors. For each side of the arch, scan
- * distal -> midline, start the run at the first anchor tooth (mesh saddle or plate/clasp
- * abutment), then place the major on *every* subsequent tooth that has connector art up
- * to the midline — bare anterior teeth included. Mirrors the `isStartFound` continuation
- * in `ConnectorsLogic.CheckAndSetTop` (a present tooth without its own plate is still
- * covered once the run has started).
+ * Desktop-style span fill for midline-reaching majors. Per side, scan distal → midline,
+ * start the run at the first anchor tooth (mesh saddle or plate/clasp abutment), then place
+ * the major on EVERY subsequent tooth with connector art to the midline (bare anteriors
+ * included). Mirrors the isStartFound continuation in CheckAndSetTop.
  */
 function fillMajorConnectorSpanInArch(teeth, majorComponentId, componentById, jawKey) {
   const order = TOOTH_ORDER && Array.isArray(TOOTH_ORDER[jawKey]) ? TOOTH_ORDER[jawKey] : [];
@@ -963,11 +939,10 @@ function fillMajorConnectorSpanInArch(teeth, majorComponentId, componentById, ja
 }
 
 /**
- * Place `majorComponentId` on EXACTLY the given teeth — used by the load path to
- * honor a saved design's major-connector span (`Major Connector Start/End`)
- * instead of re-deriving it with {@link fillMajorConnectorSpanInArch}. Teeth with
- * no connector art (can't render) or that the connector excludes are skipped; no
- * gap-filling between teeth, so the coverage matches the data, not the rule.
+ * Place `majorComponentId` on EXACTLY the given teeth — the load path honoring a saved
+ * design's major-connector span instead of re-deriving it (fillMajorConnectorSpanInArch).
+ * Teeth with no art or that the connector excludes are skipped; no gap-filling, so
+ * coverage matches the data, not the rule.
  */
 export function placeMajorConnectorOnExactTeeth(
   teeth,
@@ -995,9 +970,9 @@ export function placeMajorConnectorOnExactTeeth(
 }
 
 /**
- * When both arches lock, drop a default major connector on every tooth that already has
- * mesh (missing) or plate (present) **where** {@link getMajorConnectorAssetReference} returns art
- * for that jaw (upper 11–28; lower 31–48 using `41`–`48` basenames; Q3 mirrored like upper Q2).
+ * On lock, drop a default major connector on every tooth that already has mesh (missing) or
+ * plate (present) and has connector art for that jaw (upper 11-28; lower 31-48 via 41-48
+ * basenames, Q3 mirrored).
  */
 export function ensureMajorConnectorPlacementsOnSupportedTeeth(teeth, majorComponentId, componentById) {
   ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
@@ -1044,9 +1019,8 @@ export function ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
 }
 
 /**
- * When the user picks Palatal Bar in the catalog, place per-tooth bar segments on
- * {@link PALATAL_BAR_CONNECTOR_TOOTH_IDS} wherever mesh/plate exists, replacing any other major on those
- * teeth so straps/horseshoe do not block. Sync `tooth.components` after calling (see 2DAnnotation).
+ * Picking Palatal Bar places per-tooth bar segments on PALATAL_BAR_CONNECTOR_TOOTH_IDS
+ * wherever mesh/plate exists, replacing any other major there. Sync `tooth.components` after.
  */
 export function ensurePalatalBarPlacementsOnConnectorTeeth(teeth, componentById) {
   const majorId = PALATAL_BAR_MAJOR_COMPONENT_ID;
@@ -1073,8 +1047,7 @@ export function ensurePalatalBarPlacementsOnConnectorTeeth(teeth, componentById)
         return false;
       }
       if (tooth.isPresent) {
-        // Plate or any clasp (retainer / reciprocating / ring) anchors the
-        // connector — a plate/clasp abutment, matching the desktop anchor test.
+        // Plate or any clasp anchors the connector (matches the desktop anchor test).
         return (
           String(componentId).startsWith("plate-") ||
           String(componentId).endsWith("-clasp")
@@ -1092,10 +1065,8 @@ export function ensurePalatalBarPlacementsOnConnectorTeeth(teeth, componentById)
   }
 }
 
-/**
- * Strip all major-connector placements from {@link PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS} so those
- * regions start “empty” when Palatal Bar is selected.
- */
+/** Strip all major placements from PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS so those
+ *  regions start empty when Palatal Bar is selected. */
 export function removeMajorPlacementsFromPalatalBarExcludedUpperTeeth(teeth) {
   if (!teeth || typeof teeth !== "object") {
     return;
@@ -1112,9 +1083,8 @@ export function removeMajorPlacementsFromPalatalBarExcludedUpperTeeth(teeth) {
 }
 
 /**
- * When switching the catalog from **Palatal Bar** to **Palatal Hole**, swap per-tooth bar segment tags
- * to hole so posterior straps stay consistent, then callers can run
- * {@link ensureMajorConnectorPlacementsOnSupportedTeeth} to re-fill anteriors (11–13, 21–23).
+ * Switching Palatal Bar → Palatal Hole: swap per-tooth bar tags to hole so posterior straps
+ * stay consistent; callers then re-fill anteriors via ensureMajorConnectorPlacementsOnSupportedTeeth.
  */
 export function replaceUpperPalatalBarPlacementsWithPalatalHole(teeth) {
   if (!teeth || typeof teeth !== "object") {
@@ -1155,8 +1125,7 @@ export function pruneInvalidMajorConnectorPlacementsInJaw(teeth, componentById, 
         return false;
       }
       if (tooth.isPresent) {
-        // Plate or any clasp (retainer / reciprocating / ring) anchors the
-        // connector — a plate/clasp abutment, matching the desktop anchor test.
+        // Plate or any clasp anchors the connector (matches the desktop anchor test).
         return (
           String(componentId).startsWith("plate-") ||
           String(componentId).endsWith("-clasp")
@@ -1184,12 +1153,10 @@ export function pruneInvalidMajorConnectorPlacementsInJaw(teeth, componentById, 
     }
   }
 
-  // Drop major-connector *runs* that aren't anchored anywhere. The desktop draws a major
-  // connector as one continuous span anchored by at least one mesh saddle or abutment
-  // (ConnectorsLogic.CheckAndSetTop); a contiguous run of major-bearing teeth with no
-  // anchored tooth is a stray placement -> remove the whole run. Run-scoped (not per-tooth)
-  // so span-filled bare anterior teeth, which sit mid-run, survive instead of being
-  // unravelled inward from the open end.
+  // Drop major-connector runs that aren't anchored anywhere. A major is one continuous span
+  // anchored by ≥1 mesh saddle or abutment; a run of major-bearing teeth with no anchor is
+  // stray → remove the whole run. Run-scoped (not per-tooth) so span-filled bare anteriors
+  // mid-run survive instead of unravelling from the open end.
   const majorOnTooth = (tooth) =>
     tooth &&
     Array.isArray(tooth.componentPlacements) &&
