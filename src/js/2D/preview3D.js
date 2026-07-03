@@ -81,6 +81,16 @@ const EXTRA_STL_SLOT_NAMES = {
   4: "Lower metal RPD",
 };
 
+// Custom image icon per slot, shown ONLY on a populated (uploaded) slot row in
+// the "Other 3D files" list. Paths are relative to src/js/2D/. `black: true`
+// renders the image fully black (via CSS filter) — used for the occlusal PNGs.
+const EXTRA_STL_SLOT_ICONS = {
+  1: { src: "../../assets/Icon_UpperJaw_Occlusal.png", black: true },
+  2: { src: "../../assets/upper.svg" },
+  3: { src: "../../assets/Icon_LowerJaw_Occlusal.png", black: true },
+  4: { src: "../../assets/lower.svg" },
+};
+
 // Display label for a slot, e.g. "Slot 1: Upper jaw".
 function slotLabel(slot) {
   return `Slot ${slot}: ${EXTRA_STL_SLOT_NAMES[slot] || "3D file"}`;
@@ -1419,10 +1429,10 @@ function buildUpload3dFileRow(slot, filename) {
   icon.setAttribute("tabindex", "0");
   icon.title = "Show / hide in 3D view";
   icon.setAttribute("aria-label", `Show or hide ${filename} in the 3D view`);
-  icon.innerHTML =
-    '<i class="fa fa-file" aria-hidden="true"></i><span class="upload3d-file-badge">' +
-    slot +
-    "</span>";
+  const customIcon = EXTRA_STL_SLOT_ICONS[slot];
+  icon.innerHTML = customIcon
+    ? `<img class="upload3d-slot-img${customIcon.black ? " upload3d-slot-img--black" : ""}" src="${customIcon.src}" alt="" />`
+    : '<i class="fa fa-file" aria-hidden="true"></i>';
   // Reflect this slot's current visibility, then wire per-file toggling.
   if (preview3DState.extraGroups?.[slot]?.group?.visible === false) {
     icon.classList.add("is-hidden-extra");

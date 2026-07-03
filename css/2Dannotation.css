@@ -558,6 +558,19 @@ button.upload3d-row {
   color: #8b95a3;
 }
 
+/* Custom per-slot image icon shown on populated rows in "Other 3D files". */
+.upload3d-slot-img {
+  width: 1.9rem;
+  height: 1.9rem;
+  object-fit: contain;
+  display: block;
+}
+
+/* Render the (opaque-on-transparent) occlusal PNGs fully black. */
+.upload3d-slot-img--black {
+  filter: brightness(0);
+}
+
 /* The populated file icon is a per-file show/hide toggle for the 3D view. */
 .upload3d-file-icon[role="button"] {
   cursor: pointer;
