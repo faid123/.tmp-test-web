@@ -275,6 +275,9 @@ export function renderJaw(jaw) {
         onToothClick(jaw, toothId);
         return;
       }
+      // Mobile keeps the eraser toggle: tapping a tooth while remove mode is on
+      // opens its remove list. Desktop uses right-click instead (contextmenu
+      // below) and hides the eraser button via CSS.
       if (state.removeComponentMode) {
         event.stopPropagation();
         openRemoveComponentPicker(toothId, jaw, event);
@@ -391,6 +394,19 @@ export function renderJaw(jaw) {
       }
       placeSelectedComponentOnTooth(toothId, null);
       renderJaw(jaw);
+    });
+    // Desktop: right-click a tooth in design mode to open its remove list.
+    // Left-click always adds; the eraser button is hidden on desktop (CSS).
+    // Mobile keeps the eraser toggle instead, so skip the contextmenu path on
+    // touch/coarse-pointer devices.
+    group.addEventListener("contextmenu", (event) => {
+      const coarsePointer =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(pointer: coarse)").matches;
+      if (coarsePointer || !state.designMode) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openRemoveComponentPicker(toothId, jaw, event);
     });
     group.addEventListener("dblclick", (event) => {
       if (!state.designMode && state.rangeMissingMode) {

@@ -1594,6 +1594,14 @@ button.upload3d-row {
   color: var(--rose-800);
 }
 
+/* Desktop (mouse) removes the eraser button entirely — right-clicking a tooth
+   opens its remove list instead. Mobile/touch keeps the eraser toggle. */
+@media (pointer: fine) {
+  .jaw-lock-eraser-btn {
+    display: none !important;
+  }
+}
+
 .jaw-lock-eraser-icon {
   width: 22px;
   height: 22px;
