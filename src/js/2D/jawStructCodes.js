@@ -1,18 +1,12 @@
 /**
- * Integer code <-> web componentId mapping for the jaw-struct text format.
+ * Integer code <-> web componentId maps for the jaw-struct text format.
+ * Values from the Unity enums in StructData.cs, validated against samples
+ * 03_jawstruct_upper/lower_jaw.txt. Enums are 0-based; "inferred" rows follow
+ * enum order with no confirming sample.
  *
- * Values come straight from the Unity enums in StructData.cs (repo root) and are
- * validated against the real samples 03_jawstruct_upper/lower_jaw.txt (case 03).
- * C# enums are implicit 0-based unless noted. Rows marked "inferred" follow the
- * enum order but had no confirming instance in the samples.
- *
- * IMPORTANT — these are NOT all flat one-field->one-component mappings:
- *   - Retainer is composite: Retainer Type picks clasp/ring, but a bar needs
- *     Retainer Bar Category for its shape (i/s/u/y/t).
- *   - Mesh is stored as spans (Tooth Mesh N), not per tooth.
- *   - Major connector is a jaw-level field.
- * All of these are resolved in jawStructCodec.js (resolveJawStructDesign), which
- * imports the maps below directly.
+ * NOT all flat one-field→one-component: Retainer is composite (Retainer Type +
+ * Retainer Bar Category for bar shape), Mesh is stored as spans, Major connector
+ * is jaw-level. All resolved in jawStructCodec.js (resolveJawStructDesign).
  */
 
 // Posterior_Rest_Type { no_pr=0, pr_full=1, pr_non_full=2 }

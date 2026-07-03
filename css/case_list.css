@@ -2,7 +2,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
 }
 
 :root {
@@ -39,7 +39,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
 }
 
 :root {
@@ -95,7 +95,7 @@ button {
 /* ============ page layout ============ */
 .cm-page {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-columns: minmax(0, 1fr) 320px;
   grid-template-rows: 1fr auto;
   height: 100vh;
   background: var(--bg);
@@ -380,7 +380,7 @@ button {
 
 .cm-main {
   min-width: 0;
-  padding: 28px 28px 20px;
+  padding: 28px 16px 20px 28px;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -774,18 +774,66 @@ button {
 }
 .cm-row.is-active:hover { background: #e6f5ef; }
 
-.cm-td-name { min-width: 200px; }
+.cm-td-name { min-width: 160px; max-width: 240px; position: relative; }
 .cm-row-name {
   font-weight: 600;
   color: var(--ink);
+  /* Wrap a long name onto multiple lines instead of stretching the column. */
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: middle;
 }
+
+/* Due-date urgency bar: vertical indicator at the far-left edge of the row
+   (in the same gutter as the active-row accent), spanning the row height.
+   Color set in JS (dueDateIndicator): overdue=black, due today=red,
+   within 3 days=blue, within 10 days=green; >10 days shows no bar. */
+.cm-due-bar {
+  position: absolute;
+  left: 0px;
+  top: 0px;
+  bottom: 0px;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--muted);
+}
+.cm-due-bar.is-overdue { background: #000000; }
+.cm-due-bar.is-due { background: var(--danger, #ef4444); }
+.cm-due-bar.is-soon { background: #2563eb; }
+.cm-due-bar.is-ok { background: #16a34a; }
 .cm-row-pin {
   margin-left: 8px;
   color: var(--primary);
   font-size: 11px;
 }
 
+/* Give the status pill room to stay on one line (e.g. "3D design pending"). */
+.cm-td-status { min-width: 150px; }
+.cm-td-status .cm-pill { white-space: nowrap; }
+
 .cm-td-date { white-space: nowrap; }
+
+/* Inline "Edit due date" affordance in the Due column. The pencil sits next to
+   the date and stays subtle until the row is hovered. */
+.cm-due-date { position: relative; }
+.cm-due-edit {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 2px 4px;
+  margin-left: 4px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.cm-row:hover .cm-due-edit,
+.cm-due-edit:focus-visible { opacity: 1; }
+.cm-due-edit:hover { background: var(--line); color: var(--ink); }
+
+/* Themed date calendar styles live in the shared css/toast.css. */
 
 .cm-td-owner { white-space: nowrap; }
 .cm-td-owner > i { color: var(--muted); margin-right: 6px; }
@@ -800,18 +848,19 @@ button {
   white-space: nowrap;
   vertical-align: middle;
 }
-.cm-row-coowners {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: 8px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: var(--primary-soft);
-  color: var(--primary-dark);
-  font-size: 11px;
-  font-weight: 600;
+/* Shared With column: truncate a long co-owner list to a single line with an
+   ellipsis (full list is in the title tooltip). */
+.cm-td-shared { white-space: nowrap; }
+.cm-shared-names {
+  color: var(--ink-soft);
+  display: inline-block;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
+.cm-td-shared .cm-shared-empty { color: var(--muted); }
 
 .cm-td-actions { text-align: right; white-space: nowrap; }
 .cm-row-icon {
@@ -892,7 +941,7 @@ button {
 .cm-detail {
   border-left: 1px solid var(--line);
   background: var(--bg);
-  padding: 28px 24px;
+  padding: 28px 24px 28px 16px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -902,8 +951,8 @@ button {
 .cm-image-area {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 11;
-  /* Keep the 16:11 shape on every screen. As a flex child of the scrolling
+  aspect-ratio: 10 / 6;
+  /* Keep the 12:6 shape on every screen. As a flex child of the scrolling
      .cm-detail column it defaults to flex-shrink:1, so on shorter viewports
      (Windows display scaling, mobile portrait) flexbox squished it below the
      aspect-ratio height — making the box the wrong shape. flex:0 0 auto pins
@@ -1242,7 +1291,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel);
-  color: var(--ink-soft);
+  color: var(--primary);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
@@ -1251,6 +1300,101 @@ button {
   color: var(--primary-dark);
   border-color: var(--primary);
 }
+/* Tint the share PNG to the UI teal by using it as a mask over a solid color
+   (the PNG's alpha becomes the icon shape). */
+.cm-3d-share-icon {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  background-color: var(--primary);
+  -webkit-mask: url("../assets/Icon_objects2.png") center / contain no-repeat;
+  mask: url("../assets/Icon_objects2.png") center / contain no-repeat;
+  transition: background-color 0.15s ease;
+}
+.cm-3d-link-anchor:hover .cm-3d-share-icon {
+  background-color: var(--primary-dark);
+}
+
+/* QR button: borderless, transparent background (icon-only look). */
+#generateQrBtn.cm-3d-copy-btn,
+#generateQrBtn.cm-3d-copy-btn:hover {
+  border: none;
+  background: transparent;
+}
+
+/* ===== 3D viewer QR modal ===== */
+.cm-qr-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 5200;
+  display: grid;
+  place-items: center;
+}
+.cm-qr-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.cm-qr-panel {
+  position: relative;
+  z-index: 1;
+  width: min(320px, calc(100vw - 32px));
+  background: var(--panel, #fff);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.cm-qr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.cm-qr-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--ink, #1f2937);
+}
+.cm-qr-close {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 1.05rem;
+  color: var(--muted, #6b7280);
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+}
+.cm-qr-close:hover { background: var(--line-soft, #f1f5f9); color: var(--ink, #1f2937); }
+.cm-qr-code {
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 12px;
+}
+.cm-qr-code img,
+.cm-qr-code canvas { display: block; }
+.cm-qr-url {
+  margin: 0;
+  width: 100%;
+  font-size: 0.72rem;
+  color: var(--muted, #6b7280);
+  word-break: break-all;
+  text-align: center;
+  line-height: 1.4;
+}
+.cm-qr-download { width: 100%; }
 
 /* ============ back-to-list (mobile only) ============ */
 .back-to-list {
@@ -1276,6 +1420,12 @@ button {
   .cm-detail { padding: 22px 18px; }
   .cm-table thead th,
   .cm-table tbody td { padding: 12px 12px; }
+
+  /* iPad mini landscape (~1024) still reserves the 340px detail column, so the
+     toolbar can't keep all chips on one line. Let it wrap to a second row
+     instead of squishing each chip's label onto two lines. */
+  .cm-toolbar { flex-wrap: wrap; }
+  .cm-chip { white-space: nowrap; }
 }
 
 /* Tablet portrait / iPad mini portrait (~744). Single column with the detail
@@ -1387,9 +1537,12 @@ button {
   /* Field rows: small label prefix from the data-label attribute, then value.
      `white-space: normal` lets long dates wrap instead of push the card wide. */
   .cm-td-date,
-  .cm-td-owner { white-space: normal; }
+  .cm-td-owner,
+  .cm-td-shared { white-space: normal; }
+  .cm-td-shared .cm-shared-names { max-width: none; white-space: normal; }
   .cm-td-date::before,
-  .cm-td-owner::before {
+  .cm-td-owner::before,
+  .cm-td-shared::before {
     content: attr(data-label) ": ";
     color: var(--muted);
     font-size: 11px;
@@ -1398,6 +1551,21 @@ button {
     text-transform: uppercase;
     margin-right: 6px;
   }
+
+  /* Mobile: the left urgency bar is hidden; the DUE value text carries the
+     color instead — <0 grey, 0 red, 1-5 blue, 6-14 green, >14 unchanged.
+     The "DUE:" prefix keeps its own muted color via the ::before rule above. */
+  .cm-due-bar { display: none; }
+  .cm-due-date.is-overdue,
+  .cm-due-date.is-due,
+  .cm-due-date.is-soon,
+  .cm-due-date.is-ok { font-weight: 700; }
+  .cm-due-date.is-overdue { color: #9ca3af; }
+  .cm-due-date.is-due { color: var(--danger, #ef4444); }
+  .cm-due-date.is-soon { color: #2563eb; }
+  .cm-due-date.is-ok { color: #16a34a; }
+  /* No hover on touch — keep the edit pencil visible. */
+  .cm-due-edit { opacity: 1; }
 
   /* Actions in their own row, divider above, right-aligned. */
   .cm-td-actions {

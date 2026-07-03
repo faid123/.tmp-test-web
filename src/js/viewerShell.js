@@ -1,6 +1,6 @@
 import { lol } from "../crypt.js";
 import { setupAppSidebar } from "./appSidebar.js";
-import { setupConnectivityIndicator } from "./connectivityIndicator.js";
+import { setupConnectivityIndicator } from "./accessibility.js";
 
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";

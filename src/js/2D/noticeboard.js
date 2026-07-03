@@ -11,6 +11,8 @@ import {
   tiltArrowFor,
 } from "./clinicalInfo.js";
 import { WORK_CATEGORY_LABELS, loadCaseNote, fetchAdditionalCaseDetails } from "./caseNote.js";
+import { statusLabel } from "../apiLog.js";
+import { encodeEditedViewColumns } from "./dotnetBinaryFormatter.js";
 
 //Add constants
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
@@ -24,6 +26,23 @@ function getLoggedInUser(){
   catch{
     return null;
   }
+}
+
+// A "guest" is anyone who reached this page via a shared link without signing
+// in (no logged-in uuid). Guests can't write to the server endpoints, so their
+// noticeboard is mirrored to localStorage instead. See openNoticeboard().
+function isGuest(){
+  return !getLoggedInUser()?.uuid;
+}
+
+// sessionStorage flag: the guest already chose "Continue as guest" this tab
+// session, so don't re-prompt on every noticeboard open.
+const GUEST_ACK_KEY = "noticeboardGuestAck";
+
+// Per-case localStorage key holding a guest's in-memory noticeboard cache so
+// their instructions survive a reload (logged-in users use the server blob).
+function guestStorageKey(){
+  return state.caseIntID ? `noticeboardGuest_${state.caseIntID}` : null;
 }
 
 //Add a common payload builder
@@ -73,20 +92,23 @@ async function fetchNoticeboardEdited(caseIntID, uuid) {
 async function saveNoticeboardEdited(caseIntID, uuid, filenames, data) {
   const names = Array.isArray(filenames) ? filenames : [];
   const datas = Array.isArray(data) ? data : [];
-  // Store the columns as plain JSON arrays (the web app's own format). The
-  // read-back path (buildServerEntries/readEditedViewArrays) prefers JSON and
-  // only falls back to the desktop's BinaryFormatter blob when JSON parsing
-  // fails, so web-saved rows still round-trip here.
+  // Encode in the desktop's .NET BinaryFormatter byte[][] layout so SmartRPD can
+  // deserialize web-saved editedview rows. Plain JSON here made desktop login wipe
+  // web uploads (desktop fails to parse → empty noticeboard → overwrites the row).
+  // Verified byte-for-byte (dotnetBinaryFormatter.js); the web read-back recovers
+  // PNGs + filenames from this blob, so rows round-trip.
+  const { filenames: filenamesBlob, data: dataBlob, count } =
+    await encodeEditedViewColumns(names, datas);
   const payload = [
     { machine_id: MACHINE_ID, uuid, caseIntID },
     {
       case_id: caseIntID,
-      filenames: JSON.stringify(names),
-      data: JSON.stringify(datas),
+      filenames: filenamesBlob,
+      data: dataBlob,
     },
   ];
   console.log(
-    `[noticeboard] → POST /noticeboard/editedview  caseIntID=${caseIntID}  items=${datas.length}`,
+    `[noticeboard] → POST /noticeboard/editedview  caseIntID=${caseIntID}  items=${count}`,
     { filenames: names }
   );
   const t0 = performance.now();
@@ -129,14 +151,17 @@ function mergeCaptureArrays(localFilenames, localData, serverRow) {
   return { filenames, data };
 }
 
-// Generic create POST for any noticeboard capture table (view / drawnview).
-// Columns are stored as plain JSON arrays (the web's own format); the read-back
-// path falls back to the desktop BinaryFormatter blob when JSON parsing fails,
-// so rows still round-trip. Throws on non-2xx so the caller can log + continue.
+// Generic create POST for any noticeboard capture table (view / drawnview). Columns
+// use the desktop's .NET BinaryFormatter byte[][] layout (desktop-readable; web read-back
+// recovers them). Throws on non-2xx so the caller can log + continue.
 async function postNoticeboardCapture(createPath, caseIntID, uuid, filenames, data) {
+  // Same desktop .NET BinaryFormatter byte[][] layout as editedview, so the
+  // per-bucket 3D (/view) and 2D (/drawnview) tables are desktop-readable too.
+  const { filenames: filenamesBlob, data: dataBlob } =
+    await encodeEditedViewColumns(filenames, data);
   const payload = [
     { machine_id: MACHINE_ID, uuid, caseIntID },
-    { case_id: caseIntID, filenames: JSON.stringify(filenames), data: JSON.stringify(data) },
+    { case_id: caseIntID, filenames: filenamesBlob, data: dataBlob },
   ];
   const res = await fetch(`${API_BASE}${createPath}`, {
     method: "POST",
@@ -150,11 +175,10 @@ async function postNoticeboardCapture(createPath, caseIntID, uuid, filenames, da
   return res.json().catch(() => null);
 }
 
-// Mirror one bucket into its dedicated capture table (3D → /view, 2D →
-// /drawnview) alongside the combined editedview blob. Fetch-merge-save so we
-// don't clobber rows the desktop client wrote there. Best-effort: editedview
-// stays the source of truth for read-back, so a mirror failure doesn't fail
-// the overall save.
+// Mirror one bucket into its dedicated capture table (3D → /view, 2D → /drawnview)
+// alongside the editedview blob. Fetch-merge-save so we don't clobber desktop rows.
+// Best-effort: editedview stays the read-back source of truth, so a mirror failure
+// doesn't fail the save.
 async function mirrorCaptureTable(createPath, getPath, caseIntID, uuid, filenames, data) {
   try {
     const existing = await postNoticeboardEndpoint(getPath, noticeboardPayload(caseIntID, uuid));
@@ -202,11 +226,9 @@ function safeAtob(b64) {
   }
 }
 
-// The desktop client stores noticeboard captures by serializing a list of
-// images with .NET BinaryFormatter, then base64-encoding the whole blob. The
-// result isn't JSON, so JSON.parse silently fails. This scans the decoded
-// bytes for embedded PNG signatures (or base64-encoded PNG strings as a
-// fallback) and rebuilds usable data URLs.
+// The desktop stores captures as a .NET BinaryFormatter list of images, base64'd —
+// not JSON, so JSON.parse fails. This scans the decoded bytes for embedded PNG
+// signatures (or base64 PNG strings as fallback) and rebuilds data URLs.
 function extractPngsFromBinaryFormatter(outerBase64) {
   const decoded = safeAtob(outerBase64);
   if (!decoded) return [];
@@ -454,12 +476,46 @@ function emptyData() {
   return { instructions: [], viewcaptures: [] };
 }
 
-// `saveData` is kept as a no-op so existing call sites don't have to be
-// rewritten. The cache is a live object — mutations to it already persist
-// for the rest of the session, and the server is updated via
-// syncInstructionsToEditedView when items are added or edited.
-function saveData(_data) {
-  /* intentionally empty — see emptyData() comment above */
+// Logged-in: `saveData` is a no-op — the cache is live and the server is updated via
+// syncInstructionsToEditedView on add/edit. Guests have no uuid, so mirror the cache
+// to localStorage (keyed by case) so their instructions survive a reload (device-only).
+function saveData(data) {
+  if (!isGuest()) return;
+  const key = guestStorageKey();
+  if (!key) return;
+  try {
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        instructions: data?.instructions || [],
+        viewcaptures: data?.viewcaptures || [],
+      })
+    );
+  } catch (err) {
+    // Most likely the ~5 MB quota (data URLs are large). Keep the in-memory
+    // cache working and let the caller's "saved locally" message stand.
+    console.warn("[noticeboard] guest localStorage save failed", err);
+  }
+}
+
+// Guest counterpart to hydrateNoticeboardFromServer: rebuild the cache from the
+// per-case localStorage mirror written by saveData.
+function hydrateNoticeboardFromLocal() {
+  const key = guestStorageKey();
+  if (!key) return false;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    const data = ensureCache();
+    data.instructions = Array.isArray(parsed?.instructions) ? parsed.instructions : [];
+    data.viewcaptures = Array.isArray(parsed?.viewcaptures) ? parsed.viewcaptures : [];
+    renderGrids();
+    return true;
+  } catch (err) {
+    console.warn("[noticeboard] guest localStorage hydrate failed", err);
+    return false;
+  }
 }
 
 let cache = null;
@@ -512,11 +568,12 @@ function renderGrid(elId, items, kind) {
     const editBtn = document.createElement("button");
     editBtn.type = "button";
     editBtn.className = "noticeboard-thumb-edit";
-    editBtn.setAttribute("aria-label", "Edit or delete");
+    editBtn.setAttribute("aria-label", "Edit");
+    editBtn.title = "Edit";
     editBtn.textContent = "✎";
     editBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      openThumbActionMenu(editBtn, items, idx, kind);
+      editInstructionItem(items, idx, kind);
     });
     card.appendChild(editBtn);
     grid.appendChild(card);
@@ -608,100 +665,35 @@ function onPreviewKeydown(e) {
   else if (e.key === "ArrowRight") { e.preventDefault(); navigatePreview(1); }
 }
 
-let openMenu = null;
-
-function closeThumbActionMenu() {
-  if (!openMenu) return;
-  openMenu.remove();
-  openMenu = null;
-  document.removeEventListener("mousedown", onDocClickForMenu, true);
-  document.removeEventListener("keydown", onKeydownForMenu, true);
-}
-
-function onDocClickForMenu(e) {
-  if (openMenu && !openMenu.contains(e.target)) {
-    closeThumbActionMenu();
+// The thumbnail pencil opens the instruction editor directly (no Edit/Delete
+// menu). Deletion isn't offered because the server editedview blob retains
+// items and the next hydrate resurrects them, so a delete never sticks.
+async function editInstructionItem(items, idx, kind) {
+  const item = items[idx];
+  if (!item) return;
+  const result = await openInstructionEditor({
+    initialImage: item.baseImage || item.preview,
+    initialStrokes: Array.isArray(item.strokes) ? item.strokes : [],
+  });
+  if (!result) return;
+  item.preview = result.dataUrl;
+  item.strokes = result.strokes;
+  // Legacy/server items had no separate baseImage; treat the (then-flat)
+  // preview as the base so re-edits keep the original behind any new strokes.
+  if (!item.baseImage) item.baseImage = item.preview;
+  item.updatedAt = new Date().toISOString();
+  // Once a server item is edited locally, it's no longer a pure server
+  // mirror — clear the marker so the next hydrate doesn't wipe it out.
+  if (item.source === "server") delete item.source;
+  saveData(cache);
+  const synced = await syncInstructionsToEditedView();
+  renderGrids();
+  if (!synced) {
+    setMessage(
+      kind === "instruction" ? "Instruction updated locally." : "Viewcapture updated locally.",
+      false
+    );
   }
-}
-
-function onKeydownForMenu(e) {
-  if (e.key === "Escape") closeThumbActionMenu();
-}
-
-function openThumbActionMenu(anchor, items, idx, kind) {
-  closeThumbActionMenu();
-  const menu = document.createElement("div");
-  menu.className = "noticeboard-thumb-menu";
-  menu.setAttribute("role", "menu");
-
-  const editBtn = document.createElement("button");
-  editBtn.type = "button";
-  editBtn.className = "noticeboard-thumb-menu-item";
-  editBtn.textContent = "Edit";
-  editBtn.addEventListener("click", async (e) => {
-    e.stopPropagation();
-    closeThumbActionMenu();
-    const item = items[idx];
-    if (!item) return;
-    const result = await openInstructionEditor({
-      initialImage: item.baseImage || item.preview,
-      initialStrokes: Array.isArray(item.strokes) ? item.strokes : [],
-    });
-    if (!result) return;
-    item.preview = result.dataUrl;
-    item.strokes = result.strokes;
-    // Legacy/server items had no separate baseImage; treat the (then-flat)
-    // preview as the base so re-edits keep the original behind any new strokes.
-    if (!item.baseImage) item.baseImage = item.preview;
-    item.updatedAt = new Date().toISOString();
-    // Once a server item is edited locally, it's no longer a pure server
-    // mirror — clear the marker so the next hydrate doesn't wipe it out.
-    if (item.source === "server") delete item.source;
-    saveData(cache);
-    const synced = await syncInstructionsToEditedView();
-    renderGrids();
-    if (!synced) {
-      setMessage(
-        kind === "instruction" ? "Instruction updated locally." : "Viewcapture updated locally.",
-        false
-      );
-    }
-  });
-  menu.appendChild(editBtn);
-
-  const deleteBtn = document.createElement("button");
-  deleteBtn.type = "button";
-  deleteBtn.className = "noticeboard-thumb-menu-item noticeboard-thumb-menu-item-danger";
-  deleteBtn.textContent = "Delete";
-  deleteBtn.addEventListener("click", async (e) => {
-    e.stopPropagation();
-    closeThumbActionMenu();
-    items.splice(idx, 1);
-    saveData(cache);
-    renderGrids();
-    setMessage(`${kind === "instruction" ? "Instruction" : "Viewcapture"} deleted.`, false);
-    // Without syncing, the server's editedview blob still contains the item
-    // and the next hydrate will resurrect it.
-    await syncInstructionsToEditedView();
-  });
-  menu.appendChild(deleteBtn);
-
-  document.body.appendChild(menu);
-  openMenu = menu;
-
-  const rect = anchor.getBoundingClientRect();
-  const menuRect = menu.getBoundingClientRect();
-  let left = rect.right - menuRect.width;
-  let top = rect.top - menuRect.height - 6;
-  if (top < 8) top = rect.bottom + 6;
-  left = Math.max(8, Math.min(left, window.innerWidth - menuRect.width - 8));
-  menu.style.left = `${Math.round(left)}px`;
-  menu.style.top = `${Math.round(top)}px`;
-
-  setTimeout(() => {
-    document.addEventListener("mousedown", onDocClickForMenu, true);
-    document.addEventListener("keydown", onKeydownForMenu, true);
-  }, 0);
 }
 
 function renderGrids() {
@@ -1031,20 +1023,10 @@ function trimImageMargins(dataUrl) {
 // and the --status-* palette in case_list.css. Drives the top-right status badge.
 function reportStatusBadge(apiStatus) {
   const v = apiStatus ? String(apiStatus).toLowerCase().replace(/ /g, "_") : "na";
-  const jaw = v.startsWith("2d_") ? " (2D)" : v.startsWith("3d_") ? " (3D)" : "";
 
-  // Labels are kept lowercase to match the dashboard's caseStatusLabel and the
-  // case list's statusDisplayText verbatim, so the report's status reads the same.
-  let label;
-  if (!v || v === "na") label = "N/A";
-  else if (v === "draft") label = "draft";
-  else if (v.endsWith("_pending") || v === "pending") label = `pending${jaw}`;
-  else if (v.endsWith("_drafted") || v.endsWith("_approved")) label = `in-progress${jaw}`;
-  else if (v === "in_production") label = "in-progress";
-  else if (v === "out_for_delivery") label = "out for delivery";
-  else if (v === "delivered") label = "delivered";
-  else if (v === "completed") label = "completed";
-  else label = v.replace(/_/g, " ");
+  // Full status title verbatim from the shared apiLog.js, matching the
+  // case list and dashboard.
+  const label = statusLabel(apiStatus);
 
   // Follow statusPillClass's precedence so the color matches the case list.
   let bg = "#e2e8f0";
@@ -1057,11 +1039,9 @@ function reportStatusBadge(apiStatus) {
   return { label, bg, fg };
 }
 
-// Fetch the case's upper (slot 1) and lower (slot 2) 3D jaw renders for the
-// report's bottom-right panel. POST /thumbnails/get returns one row per slot
-// (slot 0 = composite 2D, 1 = upper STL render, 2 = lower STL render). Prefer
-// the explicit slot field; if the API omits it, fall back to classifying the
-// landscape (3D) images by aspect ratio the way the case-list carousel does.
+// Fetch the case's upper (slot 1) / lower (slot 2) 3D jaw renders for the report.
+// POST /thumbnails/get returns one row per slot (0 = composite 2D, 1/2 = upper/lower
+// STL). Prefer the slot field; if absent, classify by aspect ratio like the carousel.
 async function fetchCaseThumbnailSlots(caseIntID, caseIdStr) {
   const user = getLoggedInUser();
   if (!caseIntID || !user?.uuid) return { upper: "", lower: "" };
@@ -1149,11 +1129,10 @@ async function fetchTwoDPreviewSrc(caseIntID) {
   }
 }
 
-// Build the full standalone report HTML for a case, gathering every input by
-// caseIntID so it also works off the live annotation page (e.g. the case-list
-// bulk download). Pass `twoDPreviewSrc` to reuse an already-loaded 2D design;
-// omit it and the last 2D instruction is fetched from the server editedview.
-// `autoPrint` appends the print-on-load script used by the noticeboard button.
+// Build the standalone report HTML for a case, gathering every input by caseIntID so
+// it works off the live page too (e.g. case-list bulk download). `twoDPreviewSrc`
+// reuses a loaded 2D design (else fetched from editedview); `autoPrint` appends the
+// print-on-load script.
 export async function buildReportHtml(
   caseIntID,
   { caseLabel, caseOwner, twoDPreviewSrc, apiStatus, autoPrint = false } = {}
@@ -1165,20 +1144,16 @@ export async function buildReportHtml(
   const workCategoryLabel =
     WORK_CATEGORY_LABELS[caseNote.workCategory] || caseNote.workCategory || "";
 
-  // Bottom-left "2D Design" panel shows the noticeboard's "2D Setup & Design"
-  // column only — the most recent 2D instruction (2D_*) and its edited .preview.
-  // The viewcaptures bucket is the separate "3D Design" column (3D screenshots),
-  // so it is deliberately NOT used here: only genuine 2D designs belong in this
-  // panel. Cases with no 2D design show the "No 2D design available" placeholder.
+  // Bottom-left "2D Design" panel shows only the "2D Setup & Design" column — the most
+  // recent 2D instruction (2D_*) and its edited .preview. The viewcaptures bucket (3D
+  // screenshots) is deliberately NOT used here. No 2D design → placeholder.
   let twoDSrc = twoDPreviewSrc;
   if (twoDSrc == null) twoDSrc = await fetchTwoDPreviewSrc(caseIntID);
 
-  // Case detail gives the string case id needed to look up the upper/lower 3D
-  // jaw renders (thumbnail slots 1/2). For the top-right status badge, /case/get/:id
-  // does NOT reliably carry new_status — the case list and dashboard both read it
-  // from additionalcasedetails instead. Use that same authoritative source so the
-  // report's status matches the dashboard. Callers that already hold the status
-  // (the case-list row) pass `apiStatus` to skip the extra request.
+  // Case detail gives the string case id for the upper/lower 3D renders (slots 1/2).
+  // For the status badge, /case/get/:id doesn't reliably carry new_status — read it
+  // from additionalcasedetails (same authoritative source as the dashboard). Callers
+  // holding the status (case-list row) pass `apiStatus` to skip the request.
   const [detail, addlRes] = await Promise.all([
     fetchCaseDetailById(caseIntID),
     apiStatus === undefined ? fetchAdditionalCaseDetails(caseIntID) : Promise.resolve(null),
@@ -1423,13 +1398,86 @@ async function generateReport() {
 export function openNoticeboard() {
   const modal = getModal();
   if (!modal) return;
+
+  // Guests reach this page via a shared link without signing in. They can't
+  // save to the server, so the first time they open the noticeboard per tab
+  // session, gate it behind a Login / Continue-as-guest prompt.
+  if (isGuest() && sessionStorage.getItem(GUEST_ACK_KEY) !== "1") {
+    openGuestGate();
+    return;
+  }
+
   ensureCache();
   renderGrids();
   modal.classList.remove("is-hidden");
   modal.setAttribute("aria-hidden", "false");
-  // Re-fetch from server every time the panel opens so newly saved
-  // instructions from other sessions/devices show up without a reload.
-  hydrateNoticeboardFromServer();
+  // Logged-in: re-fetch from the server every open so saves from other
+  // sessions/devices show up. Guest: rehydrate from their local mirror.
+  if (isGuest()) hydrateNoticeboardFromLocal();
+  else hydrateNoticeboardFromServer();
+}
+
+// ============ guest gate (Login / Continue as guest) ============
+function ensureGuestGateModal() {
+  let modal = document.getElementById("noticeboardGuestGate");
+  if (modal) return modal;
+  modal = document.createElement("div");
+  modal.id = "noticeboardGuestGate";
+  modal.className = "noticeboard-guestgate-modal is-hidden";
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  modal.innerHTML = `
+    <div class="noticeboard-guestgate-backdrop" data-gate-close></div>
+    <div class="noticeboard-guestgate-card" role="document">
+      <h2 class="noticeboard-guestgate-title">Sign in to continue</h2>
+      <p class="noticeboard-guestgate-text">
+        Log in to save your noticeboard instructions to this case. You can also
+        continue as a guest &mdash; your edits will be kept on this device only.
+      </p>
+      <div class="noticeboard-guestgate-actions">
+        <button type="button" class="noticeboard-guestgate-btn is-primary" data-gate-login>Login</button>
+        <!-- TEMP: "Continue as guest" hidden for now — remove style="display:none" to restore. -->
+        <button type="button" class="noticeboard-guestgate-btn is-ghost" data-gate-guest style="display:none">Continue as guest</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal
+    .querySelectorAll("[data-gate-close]")
+    .forEach((el) => el.addEventListener("click", closeGuestGate));
+  modal.querySelector("[data-gate-login]").addEventListener("click", goToLoginFromGate);
+  modal.querySelector("[data-gate-guest]").addEventListener("click", continueAsGuest);
+  return modal;
+}
+
+function openGuestGate() {
+  const modal = ensureGuestGateModal();
+  modal.classList.remove("is-hidden");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeGuestGate() {
+  const modal = document.getElementById("noticeboardGuestGate");
+  if (!modal) return;
+  modal.classList.add("is-hidden");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function continueAsGuest() {
+  // Remember the choice for the rest of this tab session, then open for real.
+  try { sessionStorage.setItem(GUEST_ACK_KEY, "1"); } catch {}
+  closeGuestGate();
+  openNoticeboard();
+}
+
+function goToLoginFromGate() {
+  // Remember this case's URL so login.js can bring the user straight back here
+  // after a successful sign-in (instead of the default case list).
+  try { localStorage.setItem("postLoginRedirect", window.location.href); } catch {}
+  closeGuestGate();
+  // Login lives at the repo root (index.html); the annotation page sits two
+  // levels deep under src/pages/, so resolve back up to it.
+  window.location.href = new URL("../../index.html", window.location.href).href;
 }
 
 export function closeNoticeboard() {

@@ -132,6 +132,57 @@ body {
   transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
+/* Leave room on the right for the show/hide password button. */
+.input-wrap.has-toggle input {
+  padding-right: 2.75rem;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--gray-400);
+  cursor: pointer;
+  border-radius: 0.375rem;
+  transition: color 0.15s ease;
+}
+
+.password-toggle:hover {
+  color: var(--gray-600);
+}
+
+.password-toggle:focus-visible {
+  outline: 2px solid var(--teal-500);
+  outline-offset: 1px;
+}
+
+.password-toggle svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* Show the "eye" when hidden, the "eye-off" when the password is revealed. */
+.password-toggle .icon-eye-off {
+  display: none;
+}
+
+.password-toggle[aria-pressed="true"] .icon-eye {
+  display: none;
+}
+
+.password-toggle[aria-pressed="true"] .icon-eye-off {
+  display: block;
+}
+
 .input-wrap input::placeholder {
   color: var(--gray-400);
 }

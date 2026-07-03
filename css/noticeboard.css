@@ -593,6 +593,17 @@
   display: inline-block;
 }
 
+/* While the box is being dragged: move cursor, no text selection, and disable
+   touch panning so the drag tracks the finger. */
+.instruction-editor-text-input.is-dragging {
+  cursor: move;
+  user-select: none;
+  caret-color: transparent;
+}
+.instruction-editor-text-input {
+  touch-action: none;
+}
+
 /* No-mode selection overlay: a dashed outline around the picked element with a
    trash button at its top-right. A DOM overlay (not drawn on canvas) so it
    never bakes into the exported image. The box is click-through so the element
@@ -1450,6 +1461,77 @@
   color: #25735f;
 }
 .noticeboard-thumb-preview i { font-size: inherit; line-height: 1; }
+
+/* ---- Guest gate (Login / Continue as guest) ---- */
+.noticeboard-guestgate-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.noticeboard-guestgate-modal.is-hidden { display: none !important; }
+
+.noticeboard-guestgate-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.78);
+  backdrop-filter: blur(2px);
+}
+
+.noticeboard-guestgate-card {
+  position: relative;
+  z-index: 1;
+  width: min(92vw, 420px);
+  background: #fff;
+  border-radius: 14px;
+  padding: 28px 26px 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  text-align: center;
+}
+
+.noticeboard-guestgate-title {
+  margin: 0 0 10px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.noticeboard-guestgate-text {
+  margin: 0 0 22px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.noticeboard-guestgate-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.noticeboard-guestgate-btn {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.noticeboard-guestgate-btn.is-primary {
+  background: var(--primary, #3BAE95);
+  color: #fff;
+}
+.noticeboard-guestgate-btn.is-primary:hover { background: #2f9c84; }
+.noticeboard-guestgate-btn.is-ghost {
+  background: #fff;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+.noticeboard-guestgate-btn.is-ghost:hover { background: #f1f5f9; }
 
 .noticeboard-preview-modal {
   position: fixed;

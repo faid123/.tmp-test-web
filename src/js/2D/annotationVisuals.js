@@ -66,7 +66,7 @@ import {
   PALATAL_BAR_CONNECTOR_TOOTH_IDS,
   PALATAL_BAR_MAJOR_COMPONENT_ID,
   PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS,
-  PALATAL_HOLE_ARCH_OVERLAY_LAYERS,
+  getPalatalHoleArchOverlayLayers,
   getPalatalPlateArchOverlayFrame,
   shouldMajorConnectorIgnoreMeshPlateAnchor,
   shouldUsePalatalBarSecondMolarDistalTemplate,
@@ -217,30 +217,19 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
   }
 
   for (const majorId of majorIds) {
-    // Lingual plate = the same bar band as the lingual bar, PLUS a plate filling
-    // the lingual surface between each tooth and the bar. The fill climbs the
-    // lingual surface of an actual tooth, so it only belongs on PRESENT teeth
-    // (anterior + posterior). A missing tooth — a saddle, even one carrying mesh —
-    // gets the bar band crossing it but NO plate fill. Draw the plate fill first so
-    // the bar band sits on top of it. The lingual bar (and other majors) render the
-    // band only.
-    // The plate fill IS that tooth's reciprocal/plating element. If the tooth
-    // already carries a reciprocating clasp, that is its reciprocal — drawing the
-    // plate fill on top would overlap it (clasp XOR plate per tooth), so skip the
-    // fill there and let the clasp show. Other present teeth still get filled.
+    // Lingual plate = the lingual bar band PLUS a plate filling each tooth's lingual
+    // surface up to the bar. The fill climbs a real tooth, so it's PRESENT teeth only;
+    // a missing saddle gets the band crossing it but NO fill. Draw the fill first, band
+    // on top. The fill IS the tooth's reciprocal — if the tooth has a reciprocating
+    // clasp, skip the fill (clasp XOR plate) and let the clasp show.
     //
-    // Every major connector attaches to the teeth via this per-tooth plate fill BY
-    // DEFAULT — the only exceptions are the *bars* (lower lingual bar / upper
-    // palatal bar), which are band-only: a bar rides clear of the tissue/palate and
-    // touches teeth only at its minor connectors. For the upper arch this fill is
-    // complementary to the palate arch overlay: the overlay covers the palate body,
-    // the per-tooth fill covers where the plate climbs each tooth's palatal surface.
-    // The plate fill is gated on the tooth's own plate-prox component (the per-tooth plating
-    // element loaded from / saved to the data), so it is data-driven and per-tooth removable:
-    // erasing a tooth's plate-prox drops its fill (and encodes reciprocating=0). On load every
-    // present tooth under a plating connector carries a plate-prox, so the default visual is
-    // unchanged. This is also the single source for the plate visual (the dedicated plate pass
-    // skips plate-prox under a non-bar major), so there is no double-draw / anterior overlap.
+    // Every major attaches via this per-tooth fill BY DEFAULT; the only exceptions are
+    // the bars (lower lingual / upper palatal), which are band-only. On the upper this
+    // complements the palate arch overlay (overlay = palate body, fill = each tooth's
+    // palatal climb). The fill is gated on the tooth's plate-prox component, so it's
+    // data-driven and removable (erasing plate-prox drops the fill, encodes reciprocating=0).
+    // Also the single source for the plate visual (the plate pass skips plate-prox under a
+    // non-bar major), so no double-draw / anterior overlap.
     if (
       majorId !== "major-lower-lingual-bar" &&
       tooth.isPresent &&
@@ -300,14 +289,22 @@ function appendToothPlateComponentVisuals(group, tooth, toothId, jaw) {
         .filter((x) => x.def)
     : [];
 
-  // The connector pass (appendToothComponentVisuals) already draws the plate-prox fill for any
-  // major connector except the lower lingual bar, so re-drawing it here would stack two plates
-  // per tooth (the anterior overlap). Only draw plate-prox here when there is no such connector
-  // (a standalone plate, e.g. RPI under a lingual bar). Mesh plates (plate-crossmesh) are always
-  // drawn here — the connector pass never draws those.
-  const drawnByConnectorFill = tooth.components.some(
-    (id) => isMajorConnectorComponent(id) && id !== "major-lower-lingual-bar"
-  );
+  // The connector pass already draws the plate-prox fill for any major except the lower
+  // lingual bar, so re-drawing here would stack two plates (anterior overlap). Draw plate-prox
+  // here only when no such connector (standalone plate, e.g. RPI under a lingual bar). Mesh
+  // plates (plate-crossmesh) always draw here — the connector pass never does.
+  //
+  // EXCEPTION: under a palatal bar the connector pass SUPPRESSES the anterior teeth from its
+  // loop, so treat those as NOT drawn-by-connector so the anterior plate renders here instead.
+  const suppressedFromConnectorFill =
+    jaw === "upper" &&
+    shouldShowPalatalBarArchOverlay() &&
+    PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS.has(String(toothId));
+  const drawnByConnectorFill =
+    !suppressedFromConnectorFill &&
+    tooth.components.some(
+      (id) => isMajorConnectorComponent(id) && id !== "major-lower-lingual-bar"
+    );
 
   for (const { id } of catalogEntries) {
     if (!isPlateComponentId(id)) {
@@ -362,17 +359,24 @@ function restMarkerAnchorSurface(placementSurface, toothId) {
 }
 
 /**
- * Which embrasure side(s) a tooth's minor connector should attach on, from its placed
- * components — mirrors the desktop `GenericTooth.GetConnectorData` + `isMesio`: a rest/bar
- * sits on its own surface; a retentive clasp anchors at its ORIGIN, opposite the tip
- * (a mesial-tip clasp connects distally). A reciprocating clasp is not a retainer, so it does
- * not join a minor connector and is ignored here. Returns `{ mesial, distal }` booleans.
+ * Which embrasure side(s) a tooth's minor connector attaches on, from placed components
+ * (mirrors desktop GetConnectorData + isMesio): a rest/bar sits on its own surface; a
+ * retentive clasp anchors at its ORIGIN, opposite the tip (mesial-tip → connects distally).
+ * A reciprocating clasp isn't a retainer, so it's ignored. Returns `{ mesial, distal }`.
  */
 function getMinorConnectorSupportSides(tooth) {
   const sides = { mesial: false, distal: false };
   if (!tooth || !Array.isArray(tooth.componentPlacements)) return sides;
   for (const placement of tooth.componentPlacements) {
     const id = placement?.componentId;
+    // A mesh plate (cross-mesh) spans the tooth proximally and joins the major on both
+    // embrasures, so it carries a minor connector despite no anchor surface. (plate-prox
+    // under a major is already joined by the connector fill, so not added here.)
+    if (id === "plate-crossmesh") {
+      sides.mesial = true;
+      sides.distal = true;
+      continue;
+    }
     const surface = normalizeSurface(placement?.surface);
     if (!surface) continue;
     if (isRestComponent(id) || isBarComponent(id)) {
@@ -389,10 +393,9 @@ function getMinorConnectorSupportSides(tooth) {
 }
 
 /**
- * If the embrasure on `side` of `toothId` is shared — the neighbouring tooth across it also
- * carries a minor-connector support facing back — return that neighbour's tooth id, else null.
- * A shared embrasure gets a single `mid` (full) connector spanning the gap; a solo side draws
- * the `mesial`/`distal` half. (Caller renders the shared `mid` once, from the lower-id tooth.)
+ * If the embrasure on `side` of `toothId` is shared (the neighbour across it also supports
+ * back), return that neighbour's id, else null. A shared embrasure gets one `mid` (full)
+ * connector; a solo side draws the `mesial`/`distal` half. (Caller renders `mid` once.)
  */
 function getMinorConnectorSharedNeighborId(toothId, jaw, side) {
   const order = TOOTH_ORDER[jaw];
@@ -463,11 +466,9 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
     return Boolean(componentId && state.selectedComponentId === componentId);
   };
 
-  // A minor connector per supported embrasure side. When the neighbour across the embrasure
-  // also has support facing back, the gap is bridged by a single `mid` (full) connector drawn
-  // ONCE so it isn't doubled. The owner is the higher-id tooth — the more-distal one, whose rest
-  // faces the gap on its MESIAL side (e.g. distal rest on 44 + mesial rest on 45 -> 45 owns it).
-  // The shared mid uses that tooth's mid offset; a solo side draws its own directional half.
+  // One minor connector per supported embrasure side. A shared embrasure is bridged by a single
+  // `mid` (full) connector drawn ONCE (owner = higher-id/more-distal tooth, e.g. 44 distal + 45
+  // mesial → 45 owns it), using that tooth's mid offset; a solo side draws its directional half.
   const minorConnectorSupportSides = getMinorConnectorSupportSides(tooth);
   for (const side of ["mesial", "distal"]) {
     if (!minorConnectorSupportSides[side]) continue;
@@ -697,16 +698,10 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
       })
     );
 
-    // Hit target sized to roughly half the bar image so users can click
-    // anywhere on the visible bar to toggle it without catching too much
-    // of the surrounding transparent bounding rect (which would block
-    // clicks on neighboring teeth). Tuned to be comfortable while still
-    // letting genuinely off-bar clicks fall through.
-    //
-    // Only intercept clicks when this exact bar is the active tool —
-    // otherwise the hit target would cover adjacent teeth and prevent
-    // their tooth-level interactions (radial quick-pick, rest suggestion
-    // points, etc.) when the user isn't in bar mode.
+    // Hit target ~half the bar image so a click anywhere on the visible bar toggles it,
+    // without the transparent bounding rect blocking clicks on neighboring teeth.
+    // Only intercept when this exact bar is the active tool — otherwise it would cover
+    // adjacent teeth and block their interactions (quick-pick, rest points) outside bar mode.
     const barIsActiveTool =
       !state.removeComponentMode &&
       state.selectedComponentId === placement.componentId;
@@ -982,12 +977,10 @@ function handleRestSuggestionPick(jaw, toothId, pointSurface, anchor) {
     return;
   }
 
-  // Toggle-off path: the surface dialog only offers a subset of the cingulum
-  // sub-surfaces, so a surface-exact toggle in placeSelectedComponentOnTooth can't
-  // remove a rest whose stored sub-surface isn't on offer (notably a loaded
-  // "lingual_both"/ac_both). Treat a click on the lingual point of a tooth that
-  // already carries a cingulum rest as "remove it" — regardless of sub-surface —
-  // and only open the dialog to choose a surface when none exists yet.
+  // Toggle-off path: the surface dialog offers only a subset of cingulum sub-surfaces, so a
+  // surface-exact toggle can't remove a rest whose stored sub-surface isn't offered (e.g. a
+  // loaded "lingual_both"/ac_both). So a lingual-point click on a tooth that already has a
+  // cingulum rest = remove it (any sub-surface); open the dialog only when none exists yet.
   const selectedTooth = state.teeth[String(toothId)];
   if (selectedComponent?.id === "rest-seat" && selectedTooth) {
     ensureToothPlacementState(selectedTooth);
@@ -1218,11 +1211,9 @@ function appendRetainerClaspSuggestionPoints(group, tooth, toothId, jaw) {
 
   let points = getRetainerClaspSuggestionPointsForTooth(toothId, jaw);
   if (isReciprocating) {
-    // The reciprocating arm sits on the arch-side OPPOSITE the retentive
-    // component: a buccal clasp → lingual reci, a lingual clasp → buccal reci,
-    // a bar (buccal-approaching) → lingual reci. Offer only the two points
-    // (mesial + distal) on that side. With no retentive clasp/bar yet, fall back
-    // to all four anchors so a standalone reci clasp can still be placed.
+    // The reciprocating arm sits on the arch-side OPPOSITE the retentive component
+    // (buccal clasp → lingual reci, bar → lingual reci). Offer only the two points on
+    // that side; with no retentive clasp/bar yet, fall back to all four anchors.
     const reciSide = getReciprocatingArchSide(tooth);
     if (reciSide) {
       points = points.filter((p) => normalizeSurface(p.surface).includes(reciSide));
@@ -1374,20 +1365,26 @@ function appendPalatalHoleArchOverlay(svg) {
     return;
   }
   const g = svgEl("g", { class: "palatal-hole-arch-overlay" });
-  for (const layer of PALATAL_HOLE_ARCH_OVERLAY_LAYERS) {
+  // Anterior strap + the posterior strap on each side, sized to that side's
+  // terminal molar (AP-Strap_6/7/8); a side ending before the molars gets none.
+  for (const layer of getPalatalHoleArchOverlayLayers(state.teeth)) {
     const href = `../../assets/RPD_Component/MajorConnector/${layer.file}`;
-    g.appendChild(
-      svgEl("image", {
-        href,
-        x: String(layer.x),
-        y: String(layer.y),
-        width: String(layer.width),
-        height: String(layer.height),
-        preserveAspectRatio: "xMidYMid meet",
-        class: "palatal-hole-arch-image",
-        "pointer-events": "none",
-      })
-    );
+    const attrs = {
+      href,
+      x: String(layer.x),
+      y: String(layer.y),
+      width: String(layer.width),
+      height: String(layer.height),
+      preserveAspectRatio: "xMidYMid meet",
+      class: "palatal-hole-arch-image",
+      "pointer-events": "none",
+    };
+    // The Q2 (image-right) strap reuses the Q1 asset, flipped horizontally in
+    // place (mirror about the image's own centre x = layer.x + width/2).
+    if (layer.mirror) {
+      attrs.transform = `translate(${2 * layer.x + layer.width} 0) scale(-1 1)`;
+    }
+    g.appendChild(svgEl("image", attrs));
   }
   svg.appendChild(g);
 }
@@ -1541,12 +1538,10 @@ function createMajorConnectorVisual(majorComponentId, tooth, toothId, jaw) {
     transform: `translate(${ox.toFixed(2)} ${oy.toFixed(2)}) scale(${scaleXConn.toFixed(3)} ${scaleYConn.toFixed(3)})`,
   });
   const isSeparated = isMajorConnectorPlacementSeparated(toothId, state.teeth, jaw);
-  // A separated segment is a stray, floating major-connector cap on a tooth whose
-  // order-neighbors carry no connector — e.g. a lone clasped *8 abutment (18/28/
-  // 38/48) under a posterior-only palatal bar/strap, which the per-tooth placer
-  // tags on its own. A major connector is a continuous span, so a single-tooth
-  // segment is meaningless. Don't render it in the locked preview; design mode
-  // still draws it tinted (below) as an editing cue.
+  // A separated segment is a stray floating major-connector cap whose order-neighbors carry
+  // no connector — e.g. a lone clasped *8 abutment under a posterior-only palatal bar/strap.
+  // A major is a continuous span, so a single-tooth segment is meaningless: don't render it in
+  // the locked preview (design mode still draws it tinted below as an editing cue).
   if (isSeparated && !state.designMode) {
     return null;
   }

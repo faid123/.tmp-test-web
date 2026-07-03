@@ -1,7 +1,6 @@
 import { state, setMessage, fetchCaseDetail } from "./2DAnnotation.js";
 import { saveAsJpeg } from "./annotationLocks.js";
-import { confirmModal } from "../confirmModal.js";
-import { toast } from "../toast.js";
+import { toast, confirmModal } from "../toast.js";
 
 let THREE = null;
 let TrackballControls = null;
@@ -10,15 +9,10 @@ let STLLoader = null;
 const PREVIEW_MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 const PREVIEW_FALLBACK_UUID = "AC4gRQXZJoNz9EhhW36Q8jMJXBsf";
 const SMARTRPD_API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
-// Case thumbnail slots on POST /thumbnails. The case-list detail carousel
-// pulls all slots via /thumbnails/get, so a fresh capture from here lands in
-// the case detail preview on the next case open. Slot 0 is the composite 2D
-// annotation; slots 1/2 are the upper/lower jaw renders that create-case
-// seeds at case-creation time. Camera captures here overwrite the upper or
-// lower slot based on which jaw is currently visible — so isolating one jaw
-// and capturing it refreshes only that jaw's thumbnail, leaving the other
-// untouched. If both jaws are visible we write to both slots so neither one
-// goes stale.
+// Case thumbnail slots on POST /thumbnails (carousel pulls all via /thumbnails/get).
+// Slot 0 = composite 2D; slots 1/2 = upper/lower jaw renders (create-case seeds them).
+// A capture overwrites the slot of whichever jaw is visible — isolating one jaw
+// refreshes only its thumbnail; both visible → write both so neither goes stale.
 const JAW_UPPER_THUMBNAIL_SLOT = 1;
 const JAW_LOWER_THUMBNAIL_SLOT = 2;
 // Default RPD jaw color used as the "no undercut" base in vertex-color renders.
@@ -38,15 +32,19 @@ const preview3DState = {
   mount: null,
   modelRoot: null,
   groups: { upper: null, lower: null },
-  // Uploaded "other 3D files" live in the jaw_stls_extra_slot_1..4 tables.
-  //   occupiedSlots  - Set of slots the backend holds (drives the modal list)
-  //   extraFileNames - slot -> filename for every backend-occupied slot
-  //   extraGroups    - slot -> { group, row } for meshes currently in the panel
-  // A slot can be backend-occupied but removed from the panel (the row trash is
-  // a session-only "remove from preview"; the modal X is the permanent delete).
+  // Uploaded "other 3D files" live in jaw_stls_extra_slot_1..4:
+  //   occupiedSlots  - slots the backend holds (drives the modal list)
+  //   extraFileNames - slot -> filename for each occupied slot
+  //   extraGroups    - slot -> { group, row } for meshes in the panel
+  // A slot can be backend-occupied but removed from the panel (row trash = session-only
+  // "remove from preview"; modal X = permanent delete).
   extraGroups: {},
   extraFileNames: {},
   occupiedSlots: null,
+  // Slot currently uploading (drives that row's inline progress bar), plus the
+  // live progress-bar element refs for that row so setUpload3dBusy can update it.
+  uploadingSlot: null,
+  slotProgressRefs: null,
   upload3dModal: null,
   upload3dKeyHandler: null,
   uploadCleanup: null,
@@ -71,10 +69,38 @@ const preview3DState = {
   previewNav: null,
 };
 
-// Up to four arbitrary extra STLs per case (one per jaw_stls_extra_slot_N).
+// Four fixed, named extra-STL slots per case (one per jaw_stls_extra_slot_N).
+// The slot number is the backend key; the name is a display label only — the
+// backend slots are not semantically typed, so a file previously uploaded to a
+// slot simply shows under that slot's label.
 const EXTRA_STL_SLOTS = [1, 2, 3, 4];
+const EXTRA_STL_SLOT_NAMES = {
+  1: "Upper jaw",
+  2: "Upper metal RPD",
+  3: "Lower jaw",
+  4: "Lower metal RPD",
+};
+
+// Custom image icon per slot, shown ONLY on a populated (uploaded) slot row in
+// the "Other 3D files" list. Paths are relative to src/js/2D/. `black: true`
+// renders the image fully black (via CSS filter) — used for the occlusal PNGs.
+const EXTRA_STL_SLOT_ICONS = {
+  1: { src: "../../assets/Icon_UpperJaw_Occlusal.png", black: true },
+  2: { src: "../../assets/upper.svg" },
+  3: { src: "../../assets/Icon_LowerJaw_Occlusal.png", black: true },
+  4: { src: "../../assets/lower.svg" },
+};
+
+// Display label for a slot, e.g. "Slot 1: Upper jaw".
+function slotLabel(slot) {
+  return `Slot ${slot}: ${EXTRA_STL_SLOT_NAMES[slot] || "3D file"}`;
+}
 // Same flat tan as the upper-jaw material so extras match the original jaws.
 const EXTRA_STL_COLOR = 0xb0875a;
+// Metal-RPD slots (Upper/Lower metal RPD) render with a metallic finish instead
+// of the tan jaw colour.
+const METAL_RPD_SLOTS = new Set([2, 4]);
+const METAL_RPD_COLOR = 0xd6dadf; // brushed cobalt-chrome / stainless
 
 export async function loadInteractiveJawPreview(area) {
   showPreviewLoading(area, "Loading 3D jaws...");
@@ -413,11 +439,9 @@ function getLoggedInUser() {
   }
 }
 
-// Save the latest 3D preview snapshot to the case's upper/lower thumbnail
-// slot based on which jaw is currently visible. POST /thumbnails upserts by
-// (case_int_id, slot), so the upper slot keeps only the latest upper capture
-// and the lower slot keeps only the latest lower capture — they don't stomp
-// each other. Best-effort: failure here is surfaced but non-blocking.
+// Save the latest 3D preview snapshot to the upper/lower thumbnail slot of whichever
+// jaw is visible. POST /thumbnails upserts by (case_int_id, slot), so each slot keeps
+// only its latest capture. Best-effort: failure is surfaced but non-blocking.
 async function uploadLatest3DCapture(dataUrl) {
   const caseIntID = state.caseIntID;
   const user = getLoggedInUser();
@@ -725,10 +749,10 @@ async function loadExtraStlsIntoPreview() {
   renderUpload3dList();
 }
 
-// Parse a base64 STL into a flat-shaded mesh (same tan as the jaws — extras
-// have no undercut/surveying data so they never use the heatmap) and add it to
-// the model root. The file list/controls live in the upload modal, not the
-// view bar.
+// Parse a base64 STL into a mesh and add it to the model root. Jaw slots use the
+// same tan as the original jaws; the metal-RPD slots (2 & 4) use a metallic
+// finish. Extras have no undercut/surveying data so they never use the heatmap.
+// The file list/controls live in the upload modal, not the view bar.
 async function renderExtraStl({ slotNumber, filename, data }) {
   if (!(await ensureThreeDeps())) return;
   const root = preview3DState.modelRoot;
@@ -740,10 +764,11 @@ async function renderExtraStl({ slotNumber, filename, data }) {
   geometry = getDisplayGeometryForQuality(geometry, filename || `slot ${slotNumber}`);
   geometry.computeVertexNormals();
 
+  const isMetal = METAL_RPD_SLOTS.has(slotNumber);
   const material = new THREE.MeshStandardMaterial({
-    color: EXTRA_STL_COLOR,
-    metalness: 0.05,
-    roughness: 0.6,
+    color: isMetal ? METAL_RPD_COLOR : EXTRA_STL_COLOR,
+    metalness: isMetal ? 0.85 : 0.05,
+    roughness: isMetal ? 0.32 : 0.6,
     side: THREE.DoubleSide,
   });
   const mesh = new THREE.Mesh(geometry, material);
@@ -820,14 +845,40 @@ function uploadSlotXHR(payload, onProgress) {
   });
 }
 
-// Upload a user-picked STL into the next free slot, then render it.
-async function uploadExtraStl(file) {
+// Open a transient file picker for a specific extra slot and hand the file to
+// uploadExtraStl targeting that slot. One-shot input, removed after the pick.
+function pickAndUploadExtraStl(slot) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".stl";
+  input.hidden = true;
+  document.body.appendChild(input);
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    input.remove();
+    if (file) uploadExtraStl(file, slot);
+  });
+  input.click();
+}
+
+// Upload a user-picked STL into a specific slot (or the next free slot when no
+// target is given), then render it.
+async function uploadExtraStl(file, targetSlot = null) {
   if (!state.caseIntID) {
     setMessage?.("Open a case before uploading a 3D file.");
     return;
   }
   if (!preview3DState.occupiedSlots) preview3DState.occupiedSlots = new Set();
-  const freeSlot = EXTRA_STL_SLOTS.find((n) => !preview3DState.occupiedSlots.has(n));
+  let freeSlot;
+  if (targetSlot != null) {
+    if (preview3DState.occupiedSlots.has(targetSlot)) {
+      setMessage?.(`${slotLabel(targetSlot)} already has a file. Delete it first.`);
+      return;
+    }
+    freeSlot = targetSlot;
+  } else {
+    freeSlot = EXTRA_STL_SLOTS.find((n) => !preview3DState.occupiedSlots.has(n));
+  }
   if (!freeSlot) {
     setMessage?.("All 4 extra 3D file slots are in use. Delete one first.");
     return;
@@ -837,6 +888,9 @@ async function uploadExtraStl(file) {
     return;
   }
 
+  // Draw this slot's row as an inline progress bar, then start the upload.
+  preview3DState.uploadingSlot = freeSlot;
+  renderUpload3dList();
   setUpload3dBusy(true, 0);
   setMessage?.(`Uploading ${file.name}...`);
   try {
@@ -858,6 +912,8 @@ async function uploadExtraStl(file) {
     setMessage?.("Upload failed. Please try again.");
   } finally {
     setUpload3dBusy(false);
+    preview3DState.uploadingSlot = null;
+    preview3DState.slotProgressRefs = null;
     renderUpload3dList();
   }
 }
@@ -1053,46 +1109,14 @@ function ensureUpload3dModal() {
   const list = document.createElement("div");
   list.className = "upload3d-list";
 
-  const uploadBtn = document.createElement("button");
-  uploadBtn.type = "button";
-  uploadBtn.className = "upload3d-upload-btn";
-  uploadBtn.innerHTML =
-    '<i class="fa fa-cloud-arrow-up" aria-hidden="true"></i><span>UPLOAD OTHER 3D FILES</span>';
-
-  const fileInput = document.createElement("input");
-  fileInput.type = "file";
-  fileInput.accept = ".stl";
-  fileInput.hidden = true;
-  fileInput.addEventListener("change", () => {
-    const file = fileInput.files?.[0];
-    fileInput.value = ""; // reset so re-picking the same file fires change
-    if (file) uploadExtraStl(file);
-  });
-  uploadBtn.addEventListener("click", () => {
-    if (!uploadBtn.disabled) fileInput.click();
-  });
-
-  // Upload progress bar (hidden unless an upload is in flight).
-  const progress = document.createElement("div");
-  progress.className = "upload3d-progress is-hidden";
-  const progressFill = document.createElement("div");
-  progressFill.className = "upload3d-progress-fill";
-  const progressLabel = document.createElement("span");
-  progressLabel.className = "upload3d-progress-label";
-  progress.appendChild(progressFill);
-  progress.appendChild(progressLabel);
-
   card.appendChild(list);
-  card.appendChild(uploadBtn);
-  card.appendChild(progress);
   panel.appendChild(header);
   panel.appendChild(card);
-  panel.appendChild(fileInput);
   overlay.appendChild(backdrop);
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
 
-  preview3DState.upload3dModal = { overlay, panel, list, uploadBtn, fileInput, progress, progressFill, progressLabel };
+  preview3DState.upload3dModal = { overlay, panel, list };
   return preview3DState.upload3dModal;
 }
 
@@ -1115,25 +1139,23 @@ function openUpload3dModal() {
   }
 }
 
-// Anchor the popover so it emerges upward from the footer "Upload other 3D
-// files" icon (drop-up), left-aligned to the icon and clamped to the viewport.
+// Pin the popover to the lower-left corner of the viewer, sitting just above
+// the footer (so it no longer covers the jaw view). Falls back to a fixed
+// bottom margin if the footer icon isn't present.
 function positionUpload3dPanel() {
   const modal = preview3DState.upload3dModal;
   if (!modal) return;
-  const anchor = document.getElementById("footerUpload3dBtn");
-  if (!anchor) return;
-  const r = anchor.getBoundingClientRect();
-  const gap = 10;
-  const margin = 8;
   const panel = modal.panel;
-  // bottom is measured from the viewport bottom, so this sits `gap` px above
-  // the icon's top edge.
-  panel.style.bottom = `${Math.round(window.innerHeight - r.top + gap)}px`;
-  const w = panel.offsetWidth || 340;
-  let left = r.left;
-  if (left + w > window.innerWidth - margin) left = window.innerWidth - margin - w;
-  if (left < margin) left = margin;
-  panel.style.left = `${Math.round(left)}px`;
+  const margin = 12;
+  const gap = 10;
+  panel.style.left = `${margin}px`;
+  const anchor = document.getElementById("footerUpload3dBtn");
+  if (anchor) {
+    const r = anchor.getBoundingClientRect();
+    panel.style.bottom = `${Math.round(window.innerHeight - r.top + gap)}px`;
+  } else {
+    panel.style.bottom = `${margin}px`;
+  }
 }
 
 function closeUpload3dModal() {
@@ -1153,10 +1175,9 @@ function closeUpload3dModal() {
 }
 
 // ---- Download Jaw Profile (STL zip / JPEG) -------------------------------
-// The footer "Download jaw profile" button (and the noticeboard one) dispatch
-// `request-download-jaw-profile`, which opens this two-option menu:
-//   • Download STL file → bundle the upper + lower jaw STLs into one .zip
-//   • Download as JPEG  → reuse the existing "Save as JPEG" arch export
+// `request-download-jaw-profile` (footer + noticeboard buttons) opens this menu:
+//   • Download STL file → bundle upper + lower jaw STLs into one .zip
+//   • Download as JPEG  → reuse the "Save as JPEG" arch export
 function ensureDownloadJawProfileModal() {
   if (preview3DState.downloadJawModal) return preview3DState.downloadJawModal;
 
@@ -1288,7 +1309,7 @@ async function downloadJawStlsAsZip() {
     }
     const zip = new window.JSZip();
     jaws.forEach(({ jaw, data }) => {
-      zip.file(`${jaw}.stl`, base64ToArrayBuffer(data));
+      zip.file(`${jaw}.stl`, jawDataToStlBytes(data));
     });
     const blob = await zip.generateAsync({ type: "blob" });
     const url = URL.createObjectURL(blob);
@@ -1306,51 +1327,135 @@ async function downloadJawStlsAsZip() {
   }
 }
 
+// A jaw payload from /stl/get may be a real STL *or* an OFF mesh (both render
+// in the preview). A `.stl`-named file that actually holds OFF text opens blank
+// in STL viewers, so convert OFF → binary STL here; pass STL bytes through.
+function jawDataToStlBytes(data) {
+  const buffer = base64ToArrayBuffer(data);
+  const info = inspectMeshPayload(buffer);
+  if (info.format === "off") {
+    const geometry = parseOFFToGeometry(new TextDecoder().decode(buffer));
+    if (geometry) return geometryToBinaryStl(geometry);
+    console.warn("[preview3D] OFF jaw could not be parsed for STL export; shipping raw bytes.");
+  }
+  return buffer;
+}
+
+// Serialize a THREE.BufferGeometry (indexed or not) to a binary STL ArrayBuffer.
+function geometryToBinaryStl(geometry) {
+  const pos = geometry.attributes.position;
+  const index = geometry.index;
+  const triCount = (index ? index.count : pos.count) / 3;
+  const buffer = new ArrayBuffer(84 + triCount * 50);
+  const view = new DataView(buffer);
+  view.setUint32(80, triCount, true); // 80-byte header left zeroed
+  const vert = (i) => {
+    const vi = index ? index.getX(i) : i;
+    return [pos.getX(vi), pos.getY(vi), pos.getZ(vi)];
+  };
+  let offset = 84;
+  for (let t = 0; t < triCount; t += 1) {
+    const a = vert(t * 3);
+    const b = vert(t * 3 + 1);
+    const c = vert(t * 3 + 2);
+    let nx = (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]);
+    let ny = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]);
+    let nz = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    const len = Math.hypot(nx, ny, nz) || 1;
+    nx /= len; ny /= len; nz /= len;
+    view.setFloat32(offset, nx, true); offset += 4;
+    view.setFloat32(offset, ny, true); offset += 4;
+    view.setFloat32(offset, nz, true); offset += 4;
+    for (const v of [a, b, c]) {
+      view.setFloat32(offset, v[0], true); offset += 4;
+      view.setFloat32(offset, v[1], true); offset += 4;
+      view.setFloat32(offset, v[2], true); offset += 4;
+    }
+    view.setUint16(offset, 0, true); offset += 2; // attribute byte count
+  }
+  return buffer;
+}
+
 // Toggle the modal's busy (uploading) state and drive the progress bar.
 // `frac` is the 0..1 upload fraction; at 1 the server is still processing.
 function setUpload3dBusy(busy, frac) {
   const modal = preview3DState.upload3dModal;
   if (!modal) return;
+  // The `is-busy` class disables pointer events on the whole list, so every
+  // other slot's upload button / drop zone is blocked while an upload runs.
   modal.overlay.classList.toggle("is-busy", !!busy);
-  modal.uploadBtn.disabled = !!busy;
-  modal.progress.classList.toggle("is-hidden", !busy);
-  const span = modal.uploadBtn.querySelector("span");
-  if (span) span.textContent = busy ? "UPLOADING…" : "UPLOAD OTHER 3D FILES";
-  if (busy) {
+  const refs = preview3DState.slotProgressRefs;
+  if (busy && refs) {
     const pct = Math.round((frac ?? 0) * 100);
-    modal.progressFill.style.width = `${pct}%`;
-    modal.progressLabel.textContent = pct >= 100 ? "Processing…" : `Uploading… ${pct}%`;
-  } else {
-    modal.progressFill.style.width = "0%";
+    refs.fill.style.width = `${pct}%`;
+    refs.label.textContent = pct >= 100 ? "Processing…" : `Uploading… ${pct}%`;
   }
 }
 
-// Rebuild the modal's file list from the backend-occupied slots, plus a single
-// "No file uploaded" placeholder when a free slot remains.
+// Always render all four fixed, named slots in order. An occupied slot shows
+// its filename with show/hide + delete controls; an empty slot shows its name
+// with its own upload button.
 function renderUpload3dList() {
   const modal = preview3DState.upload3dModal;
   if (!modal) return;
   const list = modal.list;
   list.innerHTML = "";
 
-  const slots = [...(preview3DState.occupiedSlots || [])].sort((a, b) => a - b);
-  slots.forEach((slot) => {
-    const filename = preview3DState.extraFileNames[slot] || `slot${slot}.stl`;
-    list.appendChild(buildUpload3dFileRow(slot, filename));
+  const occupied = preview3DState.occupiedSlots || new Set();
+  EXTRA_STL_SLOTS.forEach((slot) => {
+    if (slot === preview3DState.uploadingSlot) {
+      list.appendChild(buildUpload3dUploadingRow(slot));
+    } else if (occupied.has(slot)) {
+      const filename = preview3DState.extraFileNames[slot] || `slot${slot}.stl`;
+      list.appendChild(buildUpload3dFileRow(slot, filename));
+    } else {
+      list.appendChild(buildUpload3dSlotRow(slot));
+    }
   });
-
-  const hasFree = (preview3DState.occupiedSlots?.size || 0) < EXTRA_STL_SLOTS.length;
-  if (hasFree) list.appendChild(buildUpload3dPlaceholderRow());
-
-  modal.uploadBtn.disabled = !hasFree;
-  modal.uploadBtn.classList.toggle("is-disabled", !hasFree);
 }
 
-// Toggle a SINGLE uploaded extra STL's visibility in the 3D view (clicking its
-// own file icon). Each slot has its own THREE.Group in extraGroups[slot], so
-// this only ever shows/hides that one file — never all of them. Mirrors the
-// jaw-row icon toggle: flip the group's `visible` flag (the render loop
-// repaints) and dim just this icon when hidden.
+// True when a drag event carries files (mirrors createCase.js).
+function dragEventHasFiles(e) {
+  const types = e?.dataTransfer?.types;
+  if (!types) return false;
+  return Array.from(types).some((t) => t === "Files");
+}
+
+// Wire an empty slot row as a .stl drop zone that uploads into `slot`
+// (same affordance as the create-case jaw tiles).
+function enableSlotDropZone(el, slot) {
+  el.addEventListener("dragenter", (e) => {
+    if (!dragEventHasFiles(e)) return;
+    e.preventDefault();
+    el.classList.add("is-dragover");
+  });
+  el.addEventListener("dragover", (e) => {
+    if (!dragEventHasFiles(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    el.classList.add("is-dragover");
+  });
+  el.addEventListener("dragleave", (e) => {
+    if (el.contains(e.relatedTarget)) return;
+    el.classList.remove("is-dragover");
+  });
+  el.addEventListener("drop", (e) => {
+    el.classList.remove("is-dragover");
+    if (!dragEventHasFiles(e)) return;
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (!/\.stl$/i.test(file.name)) {
+      setMessage?.("Only .stl files are supported.");
+      return;
+    }
+    uploadExtraStl(file, slot);
+  });
+}
+
+// Toggle a SINGLE uploaded extra STL's visibility (clicking its file icon). Each slot
+// has its own THREE.Group in extraGroups[slot], so this shows/hides only that file.
+// Flip the group's `visible` flag (render loop repaints) and dim just this icon.
 function toggleExtraStlVisibility(slot, iconEl) {
   const entry = preview3DState.extraGroups?.[slot];
   if (!entry?.group) {
@@ -1373,10 +1478,10 @@ function buildUpload3dFileRow(slot, filename) {
   icon.setAttribute("tabindex", "0");
   icon.title = "Show / hide in 3D view";
   icon.setAttribute("aria-label", `Show or hide ${filename} in the 3D view`);
-  icon.innerHTML =
-    '<i class="fa fa-file" aria-hidden="true"></i><span class="upload3d-file-badge">' +
-    slot +
-    "</span>";
+  const customIcon = EXTRA_STL_SLOT_ICONS[slot];
+  icon.innerHTML = customIcon
+    ? `<img class="upload3d-slot-img${customIcon.black ? " upload3d-slot-img--black" : ""}" src="${customIcon.src}" alt="" />`
+    : '<i class="fa fa-file" aria-hidden="true"></i>';
   // Reflect this slot's current visibility, then wire per-file toggling.
   if (preview3DState.extraGroups?.[slot]?.group?.visible === false) {
     icon.classList.add("is-hidden-extra");
@@ -1397,39 +1502,104 @@ function buildUpload3dFileRow(slot, filename) {
   xBtn.innerHTML = '<i class="fa fa-xmark" aria-hidden="true"></i>';
   xBtn.addEventListener("click", () => deleteExtraStl(slot));
 
+  const text = document.createElement("div");
+  text.className = "upload3d-row-text";
+  const slotName = document.createElement("span");
+  slotName.className = "upload3d-slot-name";
+  slotName.textContent = slotLabel(slot);
   const name = document.createElement("span");
   name.className = "upload3d-row-name";
   name.textContent = filename;
   name.title = filename;
+  text.appendChild(slotName);
+  text.appendChild(name);
 
   row.appendChild(icon);
   row.appendChild(xBtn);
-  row.appendChild(name);
+  row.appendChild(text);
   return row;
 }
 
-// The "No file uploaded" placeholder row — clicking it opens the file picker.
-function buildUpload3dPlaceholderRow() {
-  const row = document.createElement("button");
-  row.type = "button";
-  row.className = "upload3d-row upload3d-placeholder";
-  row.innerHTML =
-    '<span class="upload3d-file-icon is-empty"><i class="fa fa-image" aria-hidden="true"></i><i class="fa fa-slash upload3d-slash" aria-hidden="true"></i></span>' +
-    '<span class="upload3d-folder"><i class="fa fa-folder-open" aria-hidden="true"></i></span>' +
-    '<span class="upload3d-row-name is-muted">No file uploaded</span>';
-  row.addEventListener("click", () => {
-    const modal = preview3DState.upload3dModal;
-    if (modal && !modal.uploadBtn.disabled) modal.fileInput.click();
+// An empty, named slot row: slot label + "No file uploaded" and a per-slot
+// upload button that targets exactly this slot.
+function buildUpload3dSlotRow(slot) {
+  const row = document.createElement("div");
+  row.className = "upload3d-row upload3d-slot-row";
+
+  const icon = document.createElement("span");
+  icon.className = "upload3d-file-icon is-empty";
+  icon.innerHTML =
+    '<i class="fa fa-image" aria-hidden="true"></i>' +
+    '<i class="fa fa-slash upload3d-slash" aria-hidden="true"></i>';
+
+  const text = document.createElement("div");
+  text.className = "upload3d-row-text";
+  const slotName = document.createElement("span");
+  slotName.className = "upload3d-slot-name";
+  slotName.textContent = slotLabel(slot);
+  const status = document.createElement("span");
+  status.className = "upload3d-row-name is-muted";
+  status.append("Drag & drop .stl or ");
+  const uploadLink = document.createElement("a");
+  uploadLink.href = "#";
+  uploadLink.className = "upload3d-upload-link";
+  uploadLink.textContent = "Upload";
+  uploadLink.setAttribute("role", "button");
+  uploadLink.setAttribute("aria-label", `Upload ${slotLabel(slot)}`);
+  uploadLink.title = `Upload ${slotLabel(slot)}`;
+  uploadLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    pickAndUploadExtraStl(slot);
   });
+  status.appendChild(uploadLink);
+  text.appendChild(slotName);
+  text.appendChild(status);
+
+  row.appendChild(icon);
+  row.appendChild(text);
+  enableSlotDropZone(row, slot);
+  return row;
+}
+
+// A slot mid-upload: slot label + an inline progress bar. The bar's fill/label
+// refs are stashed on preview3DState so setUpload3dBusy can drive them live.
+function buildUpload3dUploadingRow(slot) {
+  const row = document.createElement("div");
+  row.className = "upload3d-row upload3d-slot-row upload3d-uploading-row";
+
+  const icon = document.createElement("span");
+  icon.className = "upload3d-file-icon";
+  icon.innerHTML = '<i class="fa fa-cloud-arrow-up" aria-hidden="true"></i>';
+
+  const text = document.createElement("div");
+  text.className = "upload3d-row-text";
+  const slotName = document.createElement("span");
+  slotName.className = "upload3d-slot-name";
+  slotName.textContent = slotLabel(slot);
+
+  const progress = document.createElement("div");
+  progress.className = "upload3d-progress";
+  const fill = document.createElement("div");
+  fill.className = "upload3d-progress-fill";
+  const label = document.createElement("span");
+  label.className = "upload3d-progress-label";
+  label.textContent = "Uploading… 0%";
+  progress.appendChild(fill);
+  progress.appendChild(label);
+
+  text.appendChild(slotName);
+  text.appendChild(progress);
+  row.appendChild(icon);
+  row.appendChild(text);
+
+  preview3DState.slotProgressRefs = { fill, label };
   return row;
 }
 
 async function fetchParameterisedMeshForCase() {
-  // The /parameterisation/mesh/getall, /parameterization/mesh/getall,
-  // /surface/getall, and /surface/mesh/getall variants all 404 on the live
-  // backend, so we skip them and let the caller fall through to
-  // fetchJawFilesForCase. Restore the endpoint loop here if any of those
-  // come online.
+  // The /parameterisation, /parameterization, /surface, /surface/mesh mesh/getall
+  // variants all 404 on the live backend, so skip them and let the caller fall
+  // through to fetchJawFilesForCase. Restore the loop if any come online.
   return [];
 }
 
@@ -2307,22 +2477,19 @@ function buildDualDedupGeometry(rawGeometry, surface, targetBackendCount) {
   }
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 
-  // Laplacian smoothing: average each vert's color with its mesh neighbors
-  // several times. Without backend positions we can't get exact per-vert
-  // alignment with the heatmap, so the raw colors are noisy. Heavy smoothing
-  // collapses the misaligned-vert streaks into soft red→yellow zones that
-  // look closer to the desktop app's render. Strong undercut regions stay
-  // visible; the speckle from dedup divergence is washed out.
+  // Laplacian smoothing: average each vert's color with its neighbors several times.
+  // Without backend positions the raw colors are noisy; heavy smoothing collapses the
+  // misaligned streaks into soft red→yellow zones (closer to the desktop render).
+  // Strong undercut regions stay visible; the dedup speckle washes out.
   smoothVertexColors(geometry, 5);
 
   return { geometry, backendVertCount: nextBackend };
 }
 
 /**
- * Laplacian smoothing of an indexed BufferGeometry's color attribute. Each
- * iteration replaces every vertex color with the average of itself and its
- * direct mesh neighbors. 2 iterations is enough to kill speckle while keeping
- * the heatmap's gross structure (red bands stay red, just less spiky).
+ * Laplacian smoothing of an indexed BufferGeometry's color attribute: each iteration
+ * replaces every vertex color with the average of itself and its direct neighbors.
+ * 2 iterations kills speckle while keeping gross structure (red bands stay red).
  */
 function smoothVertexColors(geometry, iterations = 2) {
   const colorAttr = geometry.getAttribute("color");
@@ -2655,13 +2822,10 @@ function fitPreviewCamera() {
   controls.saveState?.();
 }
 
-// Camera offset direction + up-vector for each orthographic snap, expressed in
-// the MODEL's local frame (Z-up dental convention: +Z = occlusal/top). The model
-// sits inside modelRoot, which is tilted -PI/2 on X, so these are rotated by
-// modelRoot's world quaternion at snap time — that's what makes "top" show the
-// occlusal surface instead of a world-axis side. Keys match the BoxGeometry face
-// order used by the ViewCube, and the cube carries the same quaternion so a
-// clicked face always shows that face of the model.
+// Camera offset dir + up-vector per orthographic snap, in the MODEL's local frame
+// (Z-up: +Z = occlusal). modelRoot is tilted -PI/2 on X, so these are rotated by its
+// world quaternion at snap time — that's why "top" shows the occlusal surface, not a
+// world-axis side. Keys match the ViewCube's BoxGeometry face order (same quaternion).
 const PREVIEW_VIEW_PRESETS = {
   top: { dir: [0, -1, 0], up: [0, 0, 1] },
   bottom: { dir: [0, 1, 0], up: [0, 0, 1] },
@@ -2706,11 +2870,9 @@ function snapPreviewView(view) {
   controls.saveState?.();
 }
 
-// Flat view-navigation gizmo (bottom-right of the preview). An isometric 3D cube
-// in the center, ringed by beveled SVG arrows that all point inward toward it.
-// Each arrow snaps the preview camera to a standard view via snapPreviewView;
-// the arrows share one "points down" shape, rotated per position so they face
-// the cube. No background panel, no text labels.
+// Flat view-navigation gizmo (bottom-right): an isometric 3D cube ringed by beveled
+// SVG arrows pointing inward. Each arrow snaps the camera to a standard view via
+// snapPreviewView; all share one "points down" shape, rotated per position.
 function buildPreviewNavGizmo() {
   const SVGNS = "http://www.w3.org/2000/svg";
   const svgNode = (tag, attrs = {}) => {
@@ -2769,11 +2931,9 @@ function buildPreviewNavGizmo() {
   const grid = document.createElement("div");
   grid.className = "jpnav-grid";
 
-  // rot is clockwise from the base "down" arrow, so every arrow points at the
-  // center cube: top→down, right→left, bottom→up, left→right, and the two
-  // corners point diagonally inward. The top/bottom and front/back positions
-  // are swapped: the top control snaps to the bottom view and vice versa, and
-  // the front-corner control snaps to the back view and vice versa.
+  // rot is clockwise from the base "down" arrow so every arrow points at the cube
+  // (top→down, right→left, etc.). Top/bottom and front/back are swapped: the top
+  // control snaps to the bottom view and vice versa, likewise front-corner ↔ back.
   const items = [
     { cls: "jpnav-top", snap: "bottom", label: "Bottom view", rot: 0 },
     { cls: "jpnav-front", snap: "back", label: "Back view", rot: 45 },

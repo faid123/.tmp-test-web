@@ -16,8 +16,10 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
     />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <!-- Rasterizes the case report for the bulk-download .docx (reportDocx.js). -->
+    <!-- Rasterizes the case report for the bulk-download .docx (accessibility.js). -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Client-side QR generation for the "Generate QR" button (caseManagement.js). -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   </head>
   <body>
     <div class="cm-page container">
@@ -159,6 +161,7 @@
                 <th class="cm-th-sort" data-sort="owner" scope="col">
                   <span>Owner</span><i class="fa cm-sort-caret" aria-hidden="true"></i>
                 </th>
+                <th scope="col">Shared With</th>
                 <th class="cm-th-actions" scope="col">Actions</th>
               </tr>
             </thead>
@@ -322,15 +325,15 @@
             View Dashboard
           </button>
           <div class="cm-3d-link" id="view3dLinkRow">
-            <a id="view3dLink" class="cm-3d-link-anchor cm-3d-link-icon-btn" href="#" target="_blank" rel="noopener noreferrer" title="Open 3D Viewer" aria-label="Open 3D Viewer">
-              <img
-                src="../../assets/Icon_objects2.png"
-                class="cm-3d-link-icon"
-                alt=""
-                aria-hidden="true"
-              />
-              <span class="cm-3d-link-text" hidden>Open 3D Viewer</span>
-            </a>
+            <button
+              type="button"
+              id="export3dLinkBtn"
+              class="cm-3d-link-anchor cm-3d-link-icon-btn"
+              aria-label="Export 3D viewer"
+              data-tooltip="Export (open as faid)"
+            >
+              <span class="cm-3d-share-icon" role="img" aria-hidden="true"></span>
+            </button>
             <button
               type="button"
               id="copy3dLinkBtn"
@@ -340,14 +343,14 @@
             >
               <i class="fa-regular fa-copy" aria-hidden="true"></i>
             </button>
-            <button
-              type="button"
-              id="export3dLinkBtn"
-              class="cm-3d-copy-btn"
-              aria-label="Export 3D viewer"
-              data-tooltip="Export (open as faid)"
-            >
-              <i class="fa-regular fa-share-from-square" aria-hidden="true"></i>
+            <button type="button" id="generateQrBtn" class="cm-3d-copy-btn" title="Generate QR code" aria-label="Generate QR code">
+              <img
+                src="../../assets/qr-code.png"
+                class="cm-3d-link-icon"
+                alt=""
+                aria-hidden="true"
+              />
+              <span class="cm-3d-link-text" hidden>Generate QR code</span>
             </button>
           </div>
         </div>

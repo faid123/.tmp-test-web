@@ -43,7 +43,7 @@ import {
   fetchAdditionalCaseDetails,
   updateCaseDueDate,
 } from "./caseNote.js";
-import { toast } from "../toast.js";
+import { toast, attachThemedCalendar } from "../toast.js";
 
 // Build component tabs and initialize the first visible catalog view.
 export function initComponentCatalog() {
@@ -341,9 +341,8 @@ export function handleDesignComponentSelect(componentId) {
       );
     }
 
-    // Keep the per-tooth plate-prox in step with the new connector: a plate/strap/horseshoe
-    // plates the teeth it covers (real, erasable plate-prox); a bar plates none. This is what
-    // flips the plating on a plate<->bar switch and keeps the plate data-driven.
+    // Keep per-tooth plate-prox in step with the new connector: plate/strap/horseshoe
+    // plates the teeth it covers, a bar plates none. Flips plating on a plate↔bar switch.
     syncReciprocatingPlatesToMajorConnector(state.teeth, componentId, jawKeys);
 
     forEachTooth((toothId) => {
@@ -493,7 +492,7 @@ export function ensureMajorCatalogPickForTooth(toothId) {
 }
 
 // Build the Case Note form (renders inside the catalog area when the case-note tab is active).
-function createCaseNoteForm() {
+export function createCaseNoteForm() {
   const saved = loadCaseNote(state.caseIntID);
 
   const form = document.createElement("form");
@@ -506,11 +505,9 @@ function createCaseNoteForm() {
   form.appendChild(buildReadonlyRow("Case Owner", ownerName));
   form.appendChild(buildReadonlyRow("Case Number", String(caseNumber)));
 
-  // "Date Required" IS the case's request/due date (the case-list "Due" column).
-  // Its source of truth is the backend (additionalcasedetails.due_date). Seed the
-  // field instantly from the localStorage stash written when the case was opened,
-  // then replace it with the live server value once it loads — unless the user has
-  // started editing — so we don't prefer a possibly-stale local copy.
+  // "Date Required" IS the case's due date (case-list "Due" column); source of truth is
+  // additionalcasedetails.due_date. Seed instantly from the localStorage stash, then
+  // replace with the live server value once loaded — unless the user is already editing.
   const dueDateDefault = loadCaseDueDate(state.caseIntID);
   const dateInput = buildInputRow(
     "Date Required",
@@ -519,6 +516,8 @@ function createCaseNoteForm() {
     saved.dateRequired || dueDateDefault || ""
   );
   form.appendChild(dateInput.row);
+  // Themed calendar for the "Date Required" field.
+  attachThemedCalendar(dateInput.input, { allowClear: true });
 
   let userTouchedDate = false;
   dateInput.input.addEventListener("input", () => {
@@ -570,15 +569,20 @@ function createCaseNoteForm() {
       comment: commentField.input.value,
       updatedAt: new Date().toISOString(),
     };
-    // The other fields have no API yet, so they stay in localStorage. The request
-    // date is written through to the backend (additionalcasedetails.due_date) so
-    // it shows up in the case-list "Due" column and is shared across devices —
-    // not just kept locally.
+    // Other fields have no API yet, so they stay in localStorage. The due date is
+    // written through to additionalcasedetails.due_date (shows in the case-list "Due"
+    // column, shared across devices).
     const localOk = saveCaseNote(state.caseIntID, note);
     saveBtn.disabled = true;
     status.textContent = "Saving…";
     status.classList.remove("is-error");
-    const remoteOk = await updateCaseDueDate(state.caseIntID, dateRequired);
+    // Write the date through to additionalcasedetails.due_date and the comment
+    // through to additionalcasedetails.comments (shared case-level comment).
+    const remoteOk = await updateCaseDueDate(
+      state.caseIntID,
+      dateRequired,
+      commentField.input.value
+    );
     if (remoteOk) saveCaseDueDate(state.caseIntID, dateRequired);
     saveBtn.disabled = false;
 

@@ -1,17 +1,14 @@
-// Shared helpers for the per-case "Case Note" data (owner, date required, tooth shade,
-// work category, comment). Most fields are persisted in localStorage under
-// `caseNote:<caseIntID>` (no API for them yet). The "Date Required" field is the
-// exception: it is the case's request/due date, whose source of truth is the
-// backend (additionalcasedetails.due_date — the same value the case list "Due"
-// column reads), so it is written through to the API by updateCaseDueDate below.
+// Shared helpers for per-case "Case Note" data (owner, date required, shade, work
+// category, comment). Most fields live in localStorage under `caseNote:<caseIntID>`
+// (no API yet). Exception: "Date Required" is the case's due date, whose source of
+// truth is the backend (additionalcasedetails.due_date, same as the case-list "Due"
+// column), written through via updateCaseDueDate below.
 
 import { MACHINE_ID } from "../../config.js";
 
-// API_BASE and getLoggedInUser are kept local to match the sibling 2D modules
-// (noticeboard.js, clinicalInfo.js, jawStructApi.js): there's no shared export
-// for either, and ApiClient.js can't be reused — it authenticates as the shared
-// VIEWER_UUID for 3D downloads, whereas these case endpoints need the logged-in
-// user's uuid. MACHINE_ID, however, is centralized in config.js, so import it.
+// API_BASE + getLoggedInUser kept local to match sibling 2D modules — ApiClient.js
+// authenticates as the shared VIEWER_UUID, but these case endpoints need the
+// logged-in user's uuid. MACHINE_ID is centralized in config.js, so import it.
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 
 function getLoggedInUser() {
@@ -71,10 +68,9 @@ function lsSet(key, value) {
   }
 }
 
-// Convert a case "Due Date" (Unix seconds/ms, or a date string) into the
-// `YYYY-MM-DD` value an <input type="date"> expects. Mirrors the timestamp
-// handling in caseManagement.js / dashboard.js `formatDateTime`. Returns "" for
-// missing / invalid / pre-2000 values (the API sometimes returns "0").
+// Convert a case Due Date (Unix sec/ms or date string) to the `YYYY-MM-DD` an
+// <input type="date"> expects. Returns "" for missing/invalid/pre-2000 (the API
+// sometimes returns "0").
 export function toDateInputValue(ts) {
   if (ts == null || ts === "" || ts === 0 || ts === "0") return "";
   const n = Number(ts);
@@ -93,10 +89,9 @@ export function toDateInputValue(ts) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-// Persist the case's Due Date (the case-list "Due" column) so the 2D design's
-// Case Note can default its "Date Required" to it. The 2D page opens in a
-// separate tab that can't read window.selectedCaseStub, but localStorage is
-// shared same-origin. Stored already-normalized to `YYYY-MM-DD`.
+// Persist the case Due Date so the 2D Case Note can default "Date Required" to it.
+// The 2D tab can't read window.selectedCaseStub, but localStorage is shared
+// same-origin. Stored already-normalized to `YYYY-MM-DD`.
 export function saveCaseDueDate(caseIntID, isoDate) {
   return lsSet(storageKey(DUE_DATE_PREFIX, caseIntID), isoDate);
 }
@@ -114,11 +109,10 @@ function dateInputToEpochSeconds(isoDate) {
   return Number.isNaN(ms) ? null : Math.floor(ms / 1000);
 }
 
-// Read the case's "additional details" row (status / assignee / comments / due
-// date). POST /additionalcasedetails is a full upsert, so an update has to read
-// these first to avoid clobbering the fields it isn't changing. Returns
-// { ok, detail }: ok=false means the request itself failed (caller should NOT
-// proceed with a write); detail=null with ok=true means no row exists yet.
+// Read the case's "additional details" row (status/assignee/comments/due date).
+// POST /additionalcasedetails is a full upsert, so an update must read first to
+// avoid clobbering unchanged fields. Returns { ok, detail }: ok=false = request
+// failed (don't write); detail=null with ok=true = no row yet.
 export async function fetchAdditionalCaseDetails(caseIntID) {
   const user = getLoggedInUser();
   if (!user?.uuid || caseIntID == null) return { ok: false, detail: null };
@@ -135,21 +129,24 @@ export async function fetchAdditionalCaseDetails(caseIntID) {
   }
 }
 
-// Update the case's request/due date on the backend (the case-list "Due" column).
-// Reads the current additionalcasedetails first and re-posts them with only
-// due_date changed, so status/assignee/comments are preserved. Bails out if that
-// read fails, rather than risk nulling the other fields. Returns true on success.
-export async function updateCaseDueDate(caseIntID, isoDate) {
+// Update the case's due date (and optionally its comment) on the backend.
+// additional_case_details is append-only and the latest row is current, so read
+// that row and re-post with changed fields, carrying assigned_to/new_status
+// forward. Bails if the read fails (rather than null the other fields). `comment`:
+// string writes it through; undefined preserves the existing one. Returns true on success.
+export async function updateCaseDueDate(caseIntID, isoDate, comment) {
   const user = getLoggedInUser();
   if (!user?.uuid || caseIntID == null) return false;
   const { ok, detail } = await fetchAdditionalCaseDetails(caseIntID);
   if (!ok) return false;
+  const comments =
+    comment !== undefined ? (comment?.trim() ? comment : null) : detail?.comments ?? null;
   const res = await postJson("additionalcasedetails", [
     { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID },
     {
       assigned_to: detail?.assigned_to ?? null,
       due_date: dateInputToEpochSeconds(isoDate),
-      comments: detail?.comments ?? null,
+      comments,
       new_status: detail?.new_status ?? null,
     },
   ]);

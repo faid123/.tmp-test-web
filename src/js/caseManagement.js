@@ -1,13 +1,11 @@
 import { lol } from "../crypt.js";
-import { toast } from "./toast.js";
-import { confirmModal } from "./confirmModal.js";
-import { logApi } from "./apiLog.js";
-import { setupConnectivityIndicator } from "./connectivityIndicator.js";
+import { toast, confirmModal, openThemedCalendar, attachThemedCalendar } from "./toast.js";
+import { logApi, statusLabel } from "./apiLog.js";
+import { setupConnectivityIndicator, reportHtmlToDocxBytes } from "./accessibility.js";
 import { setupAppSidebar } from "./appSidebar.js";
 import { VIEWER_UUID, LOGIN_CREDENTIALS } from "../config.js";
 import { buildReportHtml } from "./2D/noticeboard.js";
-import { reportHtmlToDocxBytes } from "./reportDocx.js";
-import { saveCaseDueDate, toDateInputValue } from "./2D/caseNote.js";
+import { saveCaseDueDate, toDateInputValue, updateCaseDueDate } from "./2D/caseNote.js";
 
 function getLoggedInUser() {
   const user = localStorage.getItem("loggedInUser");
@@ -387,6 +385,63 @@ function base64ToBytes(base64) {
   return bytes;
 }
 
+// The backend often stores jaw meshes as OFF; many CAD/slicer tools only open
+// STL, so the download bundle ships an STL copy too. `bytes` starts with "OFF".
+function isOffBytes(bytes) {
+  return bytes && bytes[0] === 0x4f && bytes[1] === 0x46 && bytes[2] === 0x46;
+}
+
+// Convert an OFF mesh (text) to a binary STL byte array. Standalone (no THREE)
+// so the case list stays light. Polygons are fan-triangulated; degenerate faces
+// referencing missing vertices are dropped so the header count stays accurate.
+function offTextToBinaryStl(text) {
+  const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length);
+  if (!lines.length || lines[0].toUpperCase() !== "OFF") return null;
+  const header = lines[1].split(/\s+/).map(Number);
+  const numVertices = header[0];
+  const numFaces = header[1];
+  if (!Number.isFinite(numVertices) || !Number.isFinite(numFaces)) return null;
+
+  const verts = new Array(numVertices);
+  for (let i = 0; i < numVertices; i++) {
+    const p = lines[2 + i].split(/\s+/).map(Number);
+    verts[i] = [p[0], p[1], p[2]];
+  }
+
+  const tris = [];
+  const faceStart = 2 + numVertices;
+  for (let i = 0; i < numFaces; i++) {
+    const p = lines[faceStart + i].split(/\s+/).map(Number);
+    const n = p[0];
+    for (let k = 2; k < n; k++) tris.push([p[1], p[k], p[k + 1]]); // fan
+  }
+  const valid = tris.filter(([a, b, c]) => verts[a] && verts[b] && verts[c]);
+
+  const buffer = new ArrayBuffer(84 + valid.length * 50);
+  const view = new DataView(buffer);
+  view.setUint32(80, valid.length, true); // 80-byte header left zeroed
+  let off = 84;
+  for (const [ia, ib, ic] of valid) {
+    const a = verts[ia];
+    const b = verts[ib];
+    const c = verts[ic];
+    let nx = (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]);
+    let ny = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]);
+    let nz = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    const len = Math.hypot(nx, ny, nz) || 1;
+    view.setFloat32(off, nx / len, true); off += 4;
+    view.setFloat32(off, ny / len, true); off += 4;
+    view.setFloat32(off, nz / len, true); off += 4;
+    for (const v of [a, b, c]) {
+      view.setFloat32(off, v[0], true); off += 4;
+      view.setFloat32(off, v[1], true); off += 4;
+      view.setFloat32(off, v[2], true); off += 4;
+    }
+    view.setUint16(off, 0, true); off += 2; // attribute byte count
+  }
+  return new Uint8Array(buffer);
+}
+
 function triggerBlobDownload(bytes, filename) {
   const blob = new Blob([bytes], { type: "application/octet-stream" });
   const url = URL.createObjectURL(blob);
@@ -509,8 +564,24 @@ async function downloadCaseFiles(caseIntId, caseLabel, apiStatus) {
       }
       usedNames.add(name);
       try {
-        zip.file(name, base64ToBytes(file.data));
+        const bytes = base64ToBytes(file.data);
+        zip.file(name, bytes);
         added += 1;
+        // The mesh is often OFF; also emit an STL copy so STL-only tools work.
+        if (isOffBytes(bytes)) {
+          const stl = offTextToBinaryStl(new TextDecoder().decode(bytes));
+          if (stl) {
+            let stlName = /\.off$/i.test(name)
+              ? name.replace(/\.off$/i, ".stl")
+              : `${name.replace(/\.[^.]+$/, "")}.stl`;
+            if (usedNames.has(stlName)) {
+              stlName = `${stlName.replace(/\.stl$/i, "")}_${idx + 1}.stl`;
+            }
+            usedNames.add(stlName);
+            zip.file(stlName, stl);
+            added += 1;
+          }
+        }
       } catch (err) {
         console.error("❌ Failed to add STL to zip:", name, err);
       }
@@ -573,25 +644,10 @@ function statusPillClass(apiStatus) {
   return "cm-pill-progress";
 }
 
+// Exact status titles live in apiLog.js (shared with the dashboard and the
+// generated report) so the pill reads identically everywhere.
 function statusDisplayText(apiStatus) {
-  const v = apiStatusToValue(apiStatus);
-  if (!v || v === "na") return "N/A";
-  if (v === "draft") return "draft";
-  if (v.endsWith("_pending")) {
-    if (v.startsWith("2d_")) return "pending (2D)";
-    if (v.startsWith("3d_")) return "pending (3D)";
-    return "pending";
-  }
-  if (v.endsWith("_drafted") || v.endsWith("_approved")) {
-    if (v.startsWith("2d_")) return "in-progress (2D)";
-    if (v.startsWith("3d_")) return "in-progress (3D)";
-    return "in-progress";
-  }
-  if (v === "in_production") return "in-progress";
-  if (v === "out_for_delivery") return "out for delivery";
-  if (v === "delivered") return "delivered";
-  if (v === "completed") return "completed";
-  return v.replace(/_/g, " ");
+  return statusLabel(apiStatus);
 }
 
 function applyStatusPillToSelect(apiStatus) {
@@ -676,7 +732,7 @@ function populateTable(cases) {
 
   if (!cases || cases.length === 0) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td class="cm-list-empty" colspan="6">No cases found.</td>`;
+    tr.innerHTML = `<td class="cm-list-empty" colspan="7">No cases found.</td>`;
     body.appendChild(tr);
     return;
   }
@@ -689,10 +745,11 @@ function populateTable(cases) {
       caseItem.due_date ||
       computeDefaultDueDate(caseItem.creation_date);
     const caseIntId = caseItem.id ?? caseItem.case_int_id;
-    const caseDisplayName = caseItem.case_id
+    const caseName = caseItem.case_id ? truncateWords(caseItem.case_id, 10) : null;
+    const caseDisplayName = caseName
       ? caseIntId != null
-        ? `UID_${caseIntId} : ${caseItem.case_id}`
-        : caseItem.case_id
+        ? `UID_${caseIntId} : ${caseName}`
+        : caseName
       : "N/A";
 
     const pinned = pinnedSet.has(String(resolvedCaseId));
@@ -712,19 +769,30 @@ function populateTable(cases) {
     row.setAttribute("role", "button");
     row.tabIndex = 0;
 
-    const coOwnersHtml = caseItem.co_owners?.length
-      ? `<span class="cm-row-coowners" title="Shared with ${escapeAttr(caseItem.co_owners.join(", "))}"><i class="fa-solid fa-user-group"></i>+${caseItem.co_owners.length}</span>`
+    // Urgency bar shown at the left of the row, colored by days remaining
+    // until the due date (compared with today).
+    const dueInd = dueDateIndicator(dueDate);
+    const dueBarHtml = dueInd
+      ? `<span class="cm-due-bar ${dueInd.cls}" title="${escapeAttr(dueInd.label)}" aria-hidden="true"></span>`
       : "";
 
     row.innerHTML = `
       <td class="cm-td-name">
-        <span class="cm-row-name">${escapeAttr(caseDisplayName)}</span>${pinned ? '<i class="fa-solid fa-flag cm-row-pin" title="Pinned"></i>' : ""}
+        <span class="cm-row-name" title="${escapeAttr(caseItem.case_id || "")}">${escapeAttr(caseDisplayName)}</span>${pinned ? '<i class="fa-solid fa-flag cm-row-pin" title="Pinned"></i>' : ""}${dueBarHtml}
       </td>
       <td class="cm-td-status"><span class="cm-pill ${statusPillClass(caseItem.new_status)}">${escapeAttr(statusDisplayText(caseItem.new_status))}</span></td>
       <td class="cm-td-date" data-label="Created">${formatDateTime(caseItem.creation_date)}</td>
-      <td class="cm-td-date" data-label="Due">${dueDate ? formatDateTime(dueDate) : "N/A"}</td>
+      <td class="cm-td-date cm-due-date ${dueInd ? dueInd.cls : ""}" data-label="Due">
+        <span class="cm-due-text">${dueDate ? formatDateOnly(dueDate) : "N/A"}</span>
+        <button class="cm-due-edit" type="button" title="Edit due date" aria-label="Edit due date" data-action="edit-due"><i class="fa-regular fa-pen-to-square"></i></button>
+      </td>
       <td class="cm-td-owner" data-label="Owner">
-        <i class="fa-regular fa-circle-user"></i><span class="cm-owner-name" title="${escapeAttr(assignedTo)}">${escapeAttr(assignedTo)}</span>${coOwnersHtml}
+        <i class="fa-regular fa-circle-user"></i><span class="cm-owner-name" title="${escapeAttr(assignedTo)}">${escapeAttr(assignedTo)}</span>
+      </td>
+      <td class="cm-td-shared" data-label="Shared With">
+        ${caseItem.co_owners?.length
+          ? `<span class="cm-shared-names" title="${escapeAttr(caseItem.co_owners.join(", "))}">${escapeAttr(caseItem.co_owners.join(", "))}</span>`
+          : '<span class="cm-shared-empty">—</span>'}
       </td>
       <td class="cm-td-actions">
         <button class="cm-row-icon" type="button" title="Rename" aria-label="Rename" data-action="rename"><i class="fa-regular fa-pen-to-square"></i></button>
@@ -772,6 +840,14 @@ function populateTable(cases) {
       e.stopPropagation();
       const ok = await deleteCaseById(resolvedCaseId);
       if (ok) toast.success("Case deleted successfully.");
+    });
+
+    // Inline "Edit due date" straight from the list (user feedback: allow
+    // editing the Due Date on the main case-management page).
+    const dueTd = row.querySelector(".cm-due-date");
+    row.querySelector('[data-action="edit-due"]')?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openDueDateEditor(dueTd, caseItem, resolvedCaseId, dueDate);
     });
 
     body.appendChild(row);
@@ -923,30 +999,69 @@ function buildThreeDViewerUrl(caseId) {
   return `${window.location.origin}${basePath}/src/pages/ThreeDViewer.html?id=${encryptedId}`;
 }
 
+// Show a QR code of the 3D viewer URL in a modal. Generated fully client-side
+// (qrcodejs, loaded from CDN in case_list.html), so the URL is never sent to a
+// third party. Offers a PNG download of the code.
+function showThreeDViewerQr(url) {
+  if (typeof window.QRCode === "undefined") {
+    toast.error("QR code library failed to load. Please try again.");
+    return;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "cm-qr-modal";
+  overlay.innerHTML =
+    '<div class="cm-qr-backdrop"></div>' +
+    '<div class="cm-qr-panel" role="dialog" aria-modal="true" aria-label="3D viewer QR code">' +
+    '<div class="cm-qr-header">' +
+    '<h2 class="cm-qr-title">Scan to open 3D viewer</h2>' +
+    '<button type="button" class="cm-qr-close" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>' +
+    "</div>" +
+    '<div class="cm-qr-code" id="cmQrCode"></div>' +
+    '<p class="cm-qr-url"></p>' +
+    '<button type="button" class="cm-btn cm-btn-primary cm-qr-download">Save</button>' +
+    "</div>";
+  document.body.appendChild(overlay);
+
+  const codeEl = overlay.querySelector("#cmQrCode");
+  // eslint-disable-next-line no-new
+  new window.QRCode(codeEl, {
+    text: url,
+    width: 220,
+    height: 220,
+    correctLevel: window.QRCode.CorrectLevel.M,
+  });
+  overlay.querySelector(".cm-qr-url").textContent = url;
+
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey, true);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") close();
+  };
+  overlay.querySelector(".cm-qr-backdrop").addEventListener("click", close);
+  overlay.querySelector(".cm-qr-close").addEventListener("click", close);
+  document.addEventListener("keydown", onKey, true);
+
+  overlay.querySelector(".cm-qr-download").addEventListener("click", () => {
+    const node = codeEl.querySelector("img") || codeEl.querySelector("canvas");
+    let dataUrl = "";
+    if (node?.tagName === "IMG") dataUrl = node.src;
+    else if (node?.tagName === "CANVAS") dataUrl = node.toDataURL("image/png");
+    if (!dataUrl) return;
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `case_${window.selectedCaseId ?? "3d"}_qr.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
+}
+
 // 显示基本信息
 function displayCaseDetails(data) {
   const caseIntId = data.id ?? data.case_int_id;
-
-  const view3dLink = document.getElementById("view3dLink");
-  if (view3dLink) {
-    const url = buildThreeDViewerUrl(caseIntId) || "#";
-    view3dLink.href = url;
-    const textEl = view3dLink.querySelector(".cm-3d-link-text");
-    if (textEl) textEl.textContent = url;
-    // Open the viewer via window.open (not the anchor's default target=_blank,
-    // which carries rel="noopener" → a null opener and a non-closeable tab).
-    // window.open keeps the opener back-reference and makes the tab
-    // script-closeable, so the viewer's Return button can window.close() it.
-    if (!view3dLink.dataset.scriptOpenBound) {
-      view3dLink.dataset.scriptOpenBound = "1";
-      view3dLink.addEventListener("click", (e) => {
-        const href = view3dLink.getAttribute("href");
-        if (!href || href === "#") return;
-        e.preventDefault();
-        window.open(href, "_blank");
-      });
-    }
-  }
 
   const displayName = data.case_id
     ? caseIntId != null
@@ -1024,6 +1139,37 @@ function applyClientFilters() {
   populateTable(base);
 }
 
+// Edit a case's due date from the list via the shared themed calendar. Commits
+// through updateCaseDueDate (writes the backend additionalcasedetails row the
+// list, dashboard and 2D "Date Required" field all read), mirrors it to
+// localStorage for the 2D page, then re-renders.
+function openDueDateEditor(anchorTd, caseItem, caseId, currentDue) {
+  if (!anchorTd) return;
+  openThemedCalendar(anchorTd, {
+    value: toDateInputValue(currentDue) || "",
+    allowClear: true,
+    onPick: async (iso) => {
+      const ok = await updateCaseDueDate(caseId, iso || "");
+      if (ok) {
+        // additionalcasedetails.due_date is Unix *seconds*; mirror it so the
+        // in-memory row (and redraw) show the new date immediately.
+        let epochSec = null;
+        if (iso) {
+          const ms = Date.parse(`${iso}T00:00:00`);
+          epochSec = Number.isNaN(ms) ? null : Math.floor(ms / 1000);
+        }
+        caseItem.expected_date = epochSec;
+        caseItem.due_date = epochSec;
+        saveCaseDueDate(caseId, iso || "");
+        toast.success(iso ? "Due date updated." : "Due date cleared.");
+      } else {
+        toast.error("Failed to update due date. Please try again.");
+      }
+      applyClientFilters();
+    },
+  });
+}
+
 // Compute a default due-date timestamp (ms) that's 14 days after the
 // creation timestamp. Returns null when creation is missing/invalid.
 function computeDefaultDueDate(creationTs) {
@@ -1032,6 +1178,32 @@ function computeDefaultDueDate(creationTs) {
   if (!Number.isFinite(n) || n <= 0) return null;
   const ms = String(n).length >= 13 ? n : n * 1000;
   return ms + 14 * 24 * 60 * 60 * 1000;
+}
+
+// Date-only formatter (no hh:mm:ss). Same parsing/guards as formatDateTime,
+// used by the Due Date column where the time of day is noise.
+function formatDateOnly(ts) {
+  if (ts == null || ts === "" || ts === 0 || ts === "0") return "N/A";
+  const n = Number(ts);
+  let ms;
+  if (Number.isFinite(n)) {
+    if (n <= 0) return "N/A";
+    ms = String(n).length >= 13 ? n : n * 1000;
+  } else {
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return "N/A";
+    ms = d.getTime();
+  }
+  if (ms < 946684800000) return "N/A";
+  return new Date(ms).toLocaleDateString();
+}
+
+// Truncate a string to at most `max` whole words, appending an ellipsis when
+// it's clipped. Used to keep the Case Name column compact.
+function truncateWords(str, max) {
+  const words = String(str).trim().split(/\s+/);
+  if (words.length <= max) return String(str);
+  return words.slice(0, max).join(" ") + "…";
 }
 
 // 日期格式化
@@ -1051,6 +1223,50 @@ function formatDateTime(ts) {
   // (e.g. API returning "0" for missing due_date).
   if (ms < 946684800000) return "N/A";
   return new Date(ms).toLocaleString();
+}
+
+// Normalize a timestamp (Unix seconds/ms, or a date string) to the local
+// calendar-day midnight in ms, mirroring formatDateTime. Returns null for
+// missing / invalid / pre-2000 (unset) values.
+function toDayMidnight(ts) {
+  if (ts == null || ts === "" || ts === 0 || ts === "0") return null;
+  const n = Number(ts);
+  let ms;
+  if (Number.isFinite(n)) {
+    if (n <= 0) return null;
+    ms = String(n).length >= 13 ? n : n * 1000;
+  } else {
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return null;
+    ms = d.getTime();
+  }
+  if (ms < 946684800000) return null;
+  const d = new Date(ms);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+// Urgency classifier shared by the desktop left bar and the mobile DUE-date
+// text: buckets a case by how many whole calendar days remain until its due
+// date (gap = due - today, so "due today" is 0 regardless of time). Buckets:
+// gap < 0 = is-overdue, 0 = is-due, 1-5 = is-soon, 6-14 = is-ok, > 14 = none.
+// Returns { cls, label } or null (no due date / due > 14 days out). The actual
+// colors per cls are defined in CSS — the bar and the mobile text differ only
+// there (e.g. is-overdue: black vs grey).
+function dueDateIndicator(dueTs) {
+  const dueMid = toDayMidnight(dueTs);
+  if (dueMid == null) return null;
+
+  const now = new Date();
+  const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const DAY = 86400000;
+  const gap = Math.round((dueMid - todayMid) / DAY); // days remaining until due
+
+  const days = (d) => `${d} day${Math.abs(d) === 1 ? "" : "s"}`;
+  if (gap < 0) return { cls: "is-overdue", label: `Overdue by ${days(-gap)}` };
+  if (gap === 0) return { cls: "is-due", label: "Due today" };
+  if (gap <= 5) return { cls: "is-soon", label: `Due in ${days(gap)}` };
+  if (gap <= 14) return { cls: "is-ok", label: `Due in ${days(gap)}` };
+  return null; // due more than 14 days out — no indicator
 }
 
 // Map a case + sort column to a comparable value. Numeric columns (dates,
@@ -1374,7 +1590,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         cases.forEach((c) => {
           const key = String(c.id ?? c.case_int_id);
           Object.assign(c, extraMap?.[key] || {});
-          c.co_owners = coOwnerMap?.[key] || [];
+          const roleInfo = coOwnerMap?.[key];
+          c.co_owners = roleInfo?.names || [];
+          // SwiftRPD-created cases store the owner as a uuid in `assigned_to`;
+          // map it back to the username via the case's role rows. SmartRPD cases
+          // already store the username (no uuid match) so they're left as-is.
+          if (c.assigned_to && roleInfo?.byUuid?.[c.assigned_to]) {
+            c.assigned_to = roleInfo.byUuid[c.assigned_to];
+          }
         });
         currentCases = cases;
         populateTable(currentCases);
@@ -1396,6 +1619,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const searchBtn = document.getElementById("searchBtn");
 
     searchInput?.addEventListener("input", applyClientFilters);
+    // Themed calendar for the "Search by Date" filter (allow clearing the filter).
+    if (dateInput) attachThemedCalendar(dateInput, { allowClear: true });
     dateInput?.addEventListener("change", applyClientFilters);
     todayOnly?.addEventListener("change", applyClientFilters);
     searchBtn?.addEventListener("click", applyClientFilters);
@@ -1564,14 +1789,16 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
     });
   }
 
-  // Open 3D viewer link — guard against clicking when no case is selected.
-  const view3dLink = document.getElementById("view3dLink");
-  if (view3dLink) {
-    view3dLink.addEventListener("click", (e) => {
-      if (!window.selectedCaseId) {
-        e.preventDefault();
+  // Generate a QR code of the selected case's 3D viewer link.
+  const generateQrBtn = document.getElementById("generateQrBtn");
+  if (generateQrBtn) {
+    generateQrBtn.addEventListener("click", () => {
+      const url3d = buildThreeDViewerUrl(window.selectedCaseId);
+      if (!url3d) {
         toast.warning("Please select a case first.");
+        return;
       }
+      showThreeDViewerQr(url3d);
     });
   }
 
@@ -2143,7 +2370,14 @@ async function fetchCoOwners(caseList) {
     const names = rows
       .filter((r) => r && r.role === "coowner" && r.username)
       .map((r) => r.username);
-    if (names.length) map[String(id)] = names;
+    // uuid -> username for every role on the case (owner + co-owners). Used to
+    // resolve an `assigned_to` that the backend stored as a uuid (SwiftRPD-created
+    // cases) back to the username (SmartRPD-created cases already store the name).
+    const byUuid = {};
+    for (const r of rows) {
+      if (r && r.uuid && r.username) byUuid[r.uuid] = r.username;
+    }
+    map[String(id)] = { names, byUuid };
   });
   return map;
 }

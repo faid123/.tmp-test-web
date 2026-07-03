@@ -1,7 +1,6 @@
 // 顶部引入模块
 import { lol } from "../crypt.js";
-import { toast, flashToast } from "./toast.js";
-import { confirmModal } from "./confirmModal.js";
+import { toast, flashToast, confirmModal, attachThemedCalendar } from "./toast.js";
 import { logApi } from "./apiLog.js";
 
 let THREE;
@@ -40,6 +39,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const caseNameInput = document.getElementById("caseName");
   const requestDateInput = document.getElementById("requestDate");
+  // Themed calendar for the case request date (no Clear — a request date is required).
+  if (requestDateInput) attachThemedCalendar(requestDateInput, { allowClear: false });
   const caseOwnerDisplay = document.getElementById("ccCaseOwner");
   const caseCreateDateDisplay = document.getElementById("ccCreateDate");
   const inviteInput = document.getElementById("ccInviteInput");

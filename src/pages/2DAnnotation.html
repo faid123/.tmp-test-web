@@ -81,6 +81,13 @@
              the top-right of the jaw cell. On mobile/tablet the topbar
              stays as the centered case label + clinical info row. -->
         <div class="arch-topbar">
+          <!-- Case Note button (tablet/mobile only) — pinned to the topbar's
+               upper-left, beside the case ID, mirroring the clinical-info
+               button on the right. Keeps the ann-footer-note-btn class so its
+               desktop-hidden / mobile-shown visibility rules still apply. -->
+          <button type="button" class="ann-footer-btn ann-footer-note-btn arch-note-btn" id="footerCaseNoteBtn" aria-label="Case note" data-tooltip="Case Note">
+            <img class="arch-note-logo" src="../../assets/case_note.png" alt="Case Note" width="30" height="30" />
+          </button>
           <div id="caseLabel" class="case-label">Case: Unknown</div>
           <button
             type="button"
@@ -256,6 +263,19 @@
       </button>
     </div>
   </footer>
+
+  <div id="caseNoteSheet" class="cn-sheet is-hidden" role="dialog" aria-modal="true" aria-labelledby="cnSheetTitle">
+  <div class="cn-sheet-backdrop" data-cn-close></div>
+  <div class="cn-sheet-panel">
+    <header class="cn-sheet-header">
+      <h3 id="cnSheetTitle" class="cn-sheet-title">Case Note</h3>
+      <button type="button" class="cn-sheet-close" data-cn-close aria-label="Close">
+        <i class="fa fa-xmark" aria-hidden="true"></i>
+      </button>
+    </header>
+    <div id="caseNoteSheetBody" class="cn-sheet-body"></div>
+  </div>
+</div>
 
   <div id="removeComponentDialog" class="remove-component-dialog is-hidden" aria-hidden="true">
     <div class="remove-component-dialog-backdrop" aria-hidden="true"></div>

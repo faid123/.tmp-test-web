@@ -6,10 +6,8 @@ export const TOOTH_ORDER = {
   lower: ["38", "37", "36", "35", "34", "33", "32", "31", "41", "42", "43", "44", "45", "46", "47", "48"]
 };
 
-/**
- * Distal-most uppers/lowers — skip automatic **plate** on these present teeth when entering design mode
- * (lock) and when re-applying defaults on "clear arch". Matches automatic **mesh** skips on missing teeth.
- */
+/** Distal-most teeth — skip auto plate (present) on design-mode lock / clear-arch,
+ *  mirroring auto mesh skips on missing teeth. */
 export const AUTO_MESH_PLATE_EXCLUDED_TOOTH_IDS = Object.freeze(
   new Set(["18", "28", "38", "48"])
 );

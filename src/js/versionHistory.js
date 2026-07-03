@@ -1,3 +1,12 @@
+// Case version history — one module for both use cases:
+//   • the in-app modal widget on case_list / 2DAnnotation / ThreeDViewer
+//     (pages that carry the #versionHistoryModal markup), and
+//   • the standalone VersionHistory.html page (a bare #versionList, no modal).
+// The mode is auto-detected on DOMContentLoaded. openVersionHistory() is exported
+// for the viewer shells that open the modal programmatically (viewerShell.js,
+// 2DAnnotation.js). Distinguishing marker: #versionHistoryModal present = widget;
+// otherwise a lone #versionList = standalone page.
+
 import { lol } from "../crypt.js";
 import { toast } from "./toast.js";
 import { logApi } from "./apiLog.js";
@@ -114,6 +123,24 @@ function resolveActor(userIndex, rawUserId) {
   return { name: String(rawUserId), initials: initialsFrom(String(rawUserId)) };
 }
 
+// Render a single-line status row (loading / empty / error) into #versionList.
+function renderHistoryMessage(label, sub = "—", glyph = "…") {
+  const listEl = document.getElementById("versionList");
+  if (!listEl) return;
+  listEl.innerHTML = `<li class="vh-item">
+    <div class="vh-row">
+      <div class="vh-op">${glyph}</div>
+      <div class="vh-col">
+        <div class="vh-line1"><span class="vh-op-label">${label}</span></div>
+        <div class="vh-line2">
+          <span class="vh-user"><span class="vh-user-name">${sub}</span></span>
+          <time class="vh-timestamp">—</time>
+        </div>
+      </div>
+    </div>
+  </li>`;
+}
+
 function renderVersionList(items, userIndex) {
   const listEl = document.getElementById("versionList");
   if (!listEl) return;
@@ -121,18 +148,7 @@ function renderVersionList(items, userIndex) {
   items.sort((a, b) => (b.datetime || 0) - (a.datetime || 0));
 
   if (!items.length) {
-    listEl.innerHTML = `<li class="vh-item">
-      <div class="vh-row">
-        <div class="vh-op">•</div>
-        <div class="vh-col">
-          <div class="vh-line1"><span class="vh-op-label">No history</span></div>
-          <div class="vh-line2">
-            <span class="vh-user"><span class="vh-user-name">—</span></span>
-            <time class="vh-timestamp">—</time>
-          </div>
-        </div>
-      </div>
-    </li>`;
+    renderHistoryMessage("No history", "—", "•");
     return;
   }
 
@@ -164,7 +180,23 @@ function renderVersionList(items, userIndex) {
   }).join("");
 }
 
-// ---------- Modal ----------
+// Fetch history + the actor index for a case, then render the list. Renders an
+// error message into #versionList on failure. Callers set their own "Loading…"
+// state first (the widget shows it before opening the modal).
+async function loadAndRenderHistory(caseId, uuid) {
+  try {
+    const [hist, userIndex] = await Promise.all([
+      fetchCaseHistory(caseId, uuid),
+      fetchUserIndexForCase(caseId, uuid)
+    ]);
+    renderVersionList(hist, userIndex);
+  } catch (e) {
+    console.error("Version history error:", e);
+    renderHistoryMessage("Failed to load history", "Try again later", "!");
+  }
+}
+
+// ---------- Modal widget ----------
 function openModal() {
   const m = document.getElementById("versionHistoryModal");
   m?.classList.remove("hidden"); m?.classList.add("show");
@@ -175,79 +207,71 @@ function closeModal() {
   m?.classList.remove("show"); m?.classList.add("hidden");
 }
 
-// ---------- Public: open + fetch ----------
+// Open the modal and load the active case's history. Exported for the viewer
+// shells (viewerShell.js, 2DAnnotation.js) that trigger it programmatically.
 export async function openVersionHistory() {
   const caseId = getActiveCaseId();
   const user   = getLoggedInUser();
-  const listEl = document.getElementById("versionList");
 
   if (!caseId || !user?.uuid) {
     toast.warning("Please select a case first.");
     return;
   }
 
-  if (listEl) {
-    listEl.innerHTML = `<li class="vh-item">
-      <div class="vh-row">
-        <div class="vh-op">…</div>
-        <div class="vh-col">
-          <div class="vh-line1"><span class="vh-op-label">Loading…</span></div>
-          <div class="vh-line2">
-            <span class="vh-user"><span class="vh-user-name">Please wait</span></span>
-            <time class="vh-timestamp">—</time>
-          </div>
-        </div>
-      </div>
-    </li>`;
-  }
+  renderHistoryMessage("Loading…", "Please wait");
   openModal();
+  await loadAndRenderHistory(caseId, user.uuid);
+}
 
-  try {
-    const [hist, userIndex] = await Promise.all([
-      fetchCaseHistory(caseId, user.uuid),
-      fetchUserIndexForCase(caseId, user.uuid)
-    ]);
-    renderVersionList(hist, userIndex);
-  } catch (e) {
-    console.error("❌ Version history error:", e);
-    if (listEl) {
-      listEl.innerHTML = `<li class="vh-item">
-        <div class="vh-row">
-          <div class="vh-op">!</div>
-          <div class="vh-col">
-            <div class="vh-line1"><span class="vh-op-label">Failed to load history</span></div>
-            <div class="vh-line2">
-              <span class="vh-user"><span class="vh-user-name">Try again later</span></span>
-              <time class="vh-timestamp">—</time>
-            </div>
-          </div>
-        </div>
-      </li>`;
-    }
+function initWidget(modal) {
+  const closeBtn = document.getElementById("closeVersionModal");
+  closeBtn?.addEventListener("click", closeModal);
+  modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && modal.classList.contains("show")) closeModal();
+  });
+
+  // Trigger button — case management only
+  const btn = document.getElementById("viewVersionBtn");
+  if (btn && document.getElementById("versionList")) {
+    btn.addEventListener("click", async () => {
+      document.getElementById("caseDropdown")?.classList.add("hidden");
+      await openVersionHistory();
+    });
   }
 }
 
-// ---------- Bind ----------
-document.addEventListener("DOMContentLoaded", () => {
-  const modal    = document.getElementById("versionHistoryModal");
-  const closeBtn = document.getElementById("closeVersionModal");
+// ---------- Standalone page (VersionHistory.html) ----------
+async function initStandalonePage() {
+  const params = new URLSearchParams(window.location.search);
+  const encryptedId = params.get("id");
+  const caseId = encryptedId ? lol(encryptedId) : null;
+  const user   = getLoggedInUser();
 
-  // Modal close gestures — work on all pages that carry the modal HTML
-  if (modal) {
-    closeBtn?.addEventListener("click", closeModal);
-    modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
-    document.addEventListener("keydown", e => {
-      if (e.key === "Escape" && modal.classList.contains("show")) closeModal();
-    });
+  document.getElementById("backBtn")?.addEventListener("click", () => history.back());
+
+  if (!caseId || !user?.uuid) {
+    toast.warning("No case selected. Please go back and select a case.");
+    renderHistoryMessage("No case selected", "Return to case list and try again");
+    return;
   }
 
-  // Trigger button — case management only
-  const btn    = document.getElementById("viewVersionBtn");
-  const listEl = document.getElementById("versionList");
-  if (!btn || !listEl) return;
+  const caseLabel = document.getElementById("caseLabel");
+  if (caseLabel) caseLabel.textContent = `Case #${caseId}`;
 
-  btn.addEventListener("click", async () => {
-    document.getElementById("caseDropdown")?.classList.add("hidden");
-    await openVersionHistory();
-  });
+  renderHistoryMessage("Loading…", "Please wait");
+  await loadAndRenderHistory(caseId, user.uuid);
+}
+
+// ---------- Bind (auto-detect mode) ----------
+document.addEventListener("DOMContentLoaded", () => {
+  const modal = document.getElementById("versionHistoryModal");
+  if (modal) {
+    initWidget(modal); // widget pages carry the modal
+    return;
+  }
+  // No modal but a list present → the standalone VersionHistory.html page.
+  if (document.getElementById("versionList")) {
+    initStandalonePage();
+  }
 });

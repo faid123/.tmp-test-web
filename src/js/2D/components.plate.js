@@ -1,6 +1,7 @@
 import { isAutoMeshPlacementExcludedToothId, TOOTH_ORDER } from "./constants.js";
 import { COMPONENT_ASSET_BASE, getComponentTemplateToothId } from "./components.mesh.js";
 import { isReciprocatingClaspComponent } from "./components.clasp.js";
+import { PALATAL_BAR_MAJOR_COMPONENT_ID } from "./components.major.js";
 
 /** Major connectors that are BARS (band-only) — they plate no teeth. */
 const BAR_MAJOR_CONNECTOR_IDS = Object.freeze(
@@ -51,10 +52,7 @@ const PLATE_RENDER_SCALE_BY_JAW = Object.freeze({
   lower: 1,
 });
 
-/**
- * Mesh Plate (`plate-crossmesh`) scale overrides for tuning.
- * Supports exact tooth ids first, then template tooth fallback.
- */
+/** Mesh Plate (`plate-crossmesh`) scale overrides. Exact tooth id first, else template. */
 const PLATE_CROSSMESH_SCALE_OVERRIDE_BY_TOOTH = Object.freeze({
   "11": 1.05,
   "12": 1.05,
@@ -76,9 +74,8 @@ const PLATE_CROSSMESH_SCALE_OVERRIDE_BY_TOOTH = Object.freeze({
 });
 
 /**
- * Tooth-local translation before scale (same units as mesh offsets).
- * Keys: template teeth `11`–`18`, `41`–`48`; optional exact FDI keys override template.
- * Quadrants 2 / 3 mirror X when only the template row exists.
+ * Tooth-local translation before scale (mesh-offset units). Keys: template teeth
+ * 11-18 / 41-48, or exact FDI to override. Quadrants 2/3 mirror X for template-only rows.
  */
 const PLATE_POSITION_OFFSET_SEED_BY_TOOTH = Object.freeze({
   "11": { x: -5, y: 10 },
@@ -107,11 +104,8 @@ const PLATE_POSITION_OFFSET_SEED_BY_TOOTH = Object.freeze({
   "48": { x: 34.5, y: 2.2 },
 });
 
-/**
- * Mesh Plate (`plate-crossmesh`) x/y offset overrides for tuning.
- * Values are additive offsets on top of the base plate seed map.
- * Supports exact tooth ids first, then template tooth fallback.
- */
+/** Mesh Plate (`plate-crossmesh`) additive x/y offset overrides on top of the base
+ *  seed. Exact tooth id first, else template. */
 const PLATE_CROSSMESH_OFFSET_OVERRIDE_BY_TOOTH = Object.freeze({
 "11": { x: 0, y: 0 },
 "12": { x: -6, y: -7 },"22": { x: 6, y: -7 },
@@ -215,8 +209,7 @@ function syncToothComponentsFromCatalog(tooth, componentById) {
   ];
 }
 
-/** Fallback plate id for auto-placement when locking both arches (design mode). */
-// Get default plate id for auto-placement in design mode.
+/** Default plate id for auto-placement when locking both arches (design mode). */
 export function getDefaultPlateIdForDesignMode(componentById) {
   if (componentById.has(DEFAULT_PLATE_ID_FOR_LOCK_DESIGN_MODE)) {
     return DEFAULT_PLATE_ID_FOR_LOCK_DESIGN_MODE;
@@ -229,11 +222,8 @@ export function getDefaultPlateIdForDesignMode(componentById) {
   return null;
 }
 
-/**
- * Add default plate on every **present** tooth in `jawKeys` that has no plate yet (`upper` / `lower`).
- * Pass both arches via `Object.keys(TOOTH_ORDER)` for full-arch behavior.
- */
-// Ensure present teeth have default plate in selected jaws.
+/** Add the default plate to every present tooth in `jawKeys` that has no plate yet.
+ *  Pass `Object.keys(TOOTH_ORDER)` for full-arch. */
 export function ensurePlatePlacementsOnPresentTeethInJaws(
   teeth,
   plateComponentId,
@@ -276,39 +266,37 @@ export function ensurePlatePlacementsOnPresentTeethInJaws(
   }
 }
 
-/**
- * When both arches are locked, add `plateComponentId` to every **present** tooth that has no plate yet.
- * Mirrors {@link ensureMeshPlacementsOnMissingTeeth} for the plate tab.
- */
-// Ensure present teeth have default plate on both jaws.
+/** Both arches locked: add `plateComponentId` to every present tooth without a plate.
+ *  Mirrors ensureMeshPlacementsOnMissingTeeth for the plate tab. */
 export function ensurePlatePlacementsOnPresentTeeth(teeth, plateComponentId, componentById) {
   ensurePlatePlacementsOnPresentTeethInJaws(teeth, plateComponentId, componentById, Object.keys(TOOTH_ORDER));
 }
 
 /**
- * Keep each tooth's `plate-prox` (the per-tooth plating element — the desktop's
- * `Reciprocating.Tooth Type = 2`) in step with the jaw's major connector after a switch:
- *  - a PLATE / strap / horseshoe plates every present tooth it actually covers, giving each a
- *    real, erasable `plate-prox` component (matches the desktop's blanket plating, and the
- *    renderer draws that as the tooth's plate fill);
- *  - a BAR leaves the existing per-tooth plating untouched: it neither blanket-adds nor
- *    blanket-removes `plate-prox`, so selecting a bar does not wipe reciprocating plates the
- *    user already placed (plates stay individually erasable per tooth).
- * A tooth carrying a reciprocating clasp keeps that as its reciprocal (clasp XOR plate), and a
- * tooth the connector excludes loses its plate. This is what makes the plate data-driven and
- * removable.
+ * Keep each tooth's `plate-prox` (per-tooth plating — desktop's Reciprocating.Tooth
+ * Type = 2) in step with the jaw's major connector after a switch:
+ *  - PLATE / strap / horseshoe plates every present tooth it covers, giving each a
+ *    real, erasable `plate-prox` (renderer draws it as the tooth's fill).
+ *  - the LOWER lingual BAR plates nothing, so it CLEARS every `plate-prox`. Critical
+ *    after loading a PLATE: else the bar encodes Type = 2 per tooth and a reopen
+ *    re-materializes it (the bar "comes back as a plate").
+ *  - the UPPER PALATAL BAR is the exception: its plates are user-managed, so it neither
+ *    adds nor removes `plate-prox` (lets an anterior plate coexist with a palatal bar).
+ * A reciprocating clasp keeps its slot (clasp XOR plate); excluded teeth lose their
+ * plate. This is what makes the plate data-driven and removable.
  */
-// Sync per-tooth plate-prox to the jaw's major connector type.
 export function syncReciprocatingPlatesToMajorConnector(teeth, majorComponentId, jawKeys) {
   if (!teeth || typeof teeth !== "object" || !Array.isArray(jawKeys)) {
     return;
   }
-  const isBar = BAR_MAJOR_CONNECTOR_IDS.has(String(majorComponentId));
-  // A bar leaves the per-tooth plating exactly as it is — don't strip reciprocating
-  // plates the user placed when switching to a bar.
-  if (isBar) {
+  // The upper palatal bar leaves plate components untouched (user-managed), so a switch to it
+  // never strips an anterior — or any — plate. Other majors fall through to the sync below.
+  if (String(majorComponentId) === PALATAL_BAR_MAJOR_COMPONENT_ID) {
     return;
   }
+  // For a bar, `covered` below is forced false (the `!isBar` term), so every tooth
+  // with a plate falls into the removal branch — clearing the plating a bar can't carry.
+  const isBar = BAR_MAJOR_CONNECTOR_IDS.has(String(majorComponentId));
   for (const jaw of jawKeys) {
     const ids = TOOTH_ORDER[jaw];
     if (!Array.isArray(ids)) {

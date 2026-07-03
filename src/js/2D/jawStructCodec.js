@@ -1,21 +1,17 @@
 /**
  * Jaw-struct text <-> JS codec (pure / DOM-free / Node-testable).
  *
- * The smartrpdai backend stores per-case 2D design data as base64-encoded text
- * (see 03_jawstruct_upper/lower_jaw.txt for the shape). One record per jaw:
- *   { case_id, type: "upper_jaw"|"lower_jaw", filename, data: <base64> }.
- *
- * The text is a flat list of lines:
+ * The backend stores per-case 2D data as base64 text (see 03_jawstruct_*.txt), one
+ * record per jaw: { case_id, type: "upper_jaw"|"lower_jaw", filename, data: <base64> }.
+ * The text is a flat list of lines, e.g.:
  *   "Tooth 5: Tooth Main.Tooth Rest.Posterior Rest Type: 2"
- *   "Tooth Mesh 0: Mesh Type: 1"
- *   "Major Connector Type: 7"
+ *   "Tooth Mesh 0: Mesh Type: 1" / "Major Connector Type: 7"
  *
- * Pipeline: decodeJawStructResponse() -> parsed jaw -> resolveJawStructDesign()
- * -> a normalized, render-agnostic "design" that jawStructApply.js applies to the
- * 2D annotation state. Integer enums are decoded via ./jawStructCodes.js.
+ * Pipeline: decodeJawStructResponse() → resolveJawStructDesign() → a normalized,
+ * render-agnostic "design" that jawStructApply.js applies. Enums via jawStructCodes.js.
  *
- * Enum semantics worth remembering (from StructData.cs, validated vs samples):
- *   - Tooth_Presence: present=0, missing=1   (NOT the other way round)
+ * Enum semantics to remember (StructData.cs, validated vs samples):
+ *   - Tooth_Presence: present=0, missing=1 (NOT the reverse)
  *   - Retainer is composite (Retainer Type + Retainer Bar Category)
  *   - Mesh is stored as spans, applied across array indices start..end
  */
@@ -49,21 +45,18 @@ const PR_CONFIG_FIELDS = [
   "Tooth Main.Tooth Rest.Pr Config 2",
 ];
 
-// Rests and clasps only render when their placement carries a surface the
-// renderer can anchor to (annotationVisuals skips null-surface markers). These
-// map the desktop's position/orientation fields to that surface vocabulary.
-// Pr Config index (value "0" = that position is present) -> rest anchor surface.
+// Rests/clasps only render with a surface the renderer can anchor to (null-surface
+// markers are skipped). These map the desktop's position/orientation fields to that
+// surface vocabulary. Pr Config index (value "0" = present) → rest anchor surface.
 const REST_POSITION_SURFACE = ["mesial", "distal", "lingual"];
 // Retainer_Clasp_type / Retainer_Ring_type (0..3) -> clasp anchor surface.
 const CLASP_ORIENT_SURFACE = ["mesial_buccal", "mesial_lingual", "distal_buccal", "distal_lingual"];
 
-// NOTE on "implied plating": a plate / strap / horseshoe major connector stamps
-// reciprocating=2 on EVERY present tooth (confirmed vs sample data — upper horseshoe(2) and
-// lower lingual plate(7) plate all present teeth; lower lingual bar(6) plates none). Those are
-// now decoded into real per-tooth plate-prox components (data-driven, removable) rather than
-// being dropped; the renderer draws exactly one plate per tooth and the major-connector switch
-// adds/removes the plate-prox so a plate<->bar switch still flips the plating. See
-// annotationVisuals.js (plate-fill gating) and annotationCatalog.js (switch).
+// "Implied plating": a plate/strap/horseshoe major stamps reciprocating=2 on EVERY
+// present tooth (confirmed: upper horseshoe(2), lower lingual plate(7) plate all; lower
+// lingual bar(6) plates none). Decoded into real per-tooth plate-prox (data-driven,
+// removable); the renderer draws one plate per tooth, and the connector switch adds/removes
+// plate-prox so plate↔bar still flips plating. See annotationVisuals.js + annotationCatalog.js.
 
 const JAW_TYPE_KEY = "Jaw Type";
 const MAJOR_CONNECTOR_KEY = "Major Connector Type";
@@ -163,11 +156,9 @@ function restSurfaceFromConfig(f) {
 }
 
 /**
- * Pr Config triple (value 0 = that position is present) for a posterior rest surface.
- * Inverse of {@link restSurfaceFromConfig}; an unknown surface falls back to mesial to
- * match its default. The posterior rest surface is web-owned (the user picks
- * mesial/distal/lingual), so Save derives Pr Config from the live placement rather than
- * the loaded raw value — otherwise a surface edit (e.g. mesial -> lingual) is dropped.
+ * Pr Config triple (0 = present) for a posterior rest surface — inverse of
+ * restSurfaceFromConfig (unknown → mesial). The surface is web-owned, so Save derives
+ * Pr Config from the live placement, else a surface edit (mesial → lingual) is dropped.
  */
 function prConfigFromSurface(surface) {
   const idx = REST_POSITION_SURFACE.indexOf(String(surface ?? "").toLowerCase());
@@ -181,14 +172,11 @@ function claspSurfaceFromField(f, field) {
 }
 
 // The reciprocating clasp sits on the arch-surface OPPOSITE the retentive clasp
-// (buccal <-> lingual) at the SAME mesial/distal corner. The desktop stores no
-// reciprocating orientation field, so it's derived from the retainer this way.
-// Do NOT add a quadrant / mesial-distal flip here: the 2D renderer already mirrors
-// quadrants 2 & 3 (getToothAssetSpec) exactly as it does for the retentive clasp,
-// so the decoder only needs the anatomical surface. A decode-side flip would cancel
-// the render mirror on the left side, leaving both sides identical (the "nothing
-// changed" symptom). Example: retentive mesial_buccal -> reci mesial_lingual, which
-// renders mesio-lingual on 48 (Q4) and, via the mirror, disto-lingual on 38 (Q3).
+// (buccal ↔ lingual) at the SAME mesial/distal corner; the desktop stores no reci
+// orientation, so it's derived from the retainer. Do NOT add a quadrant/mesial-distal
+// flip here: the renderer already mirrors quadrants 2 & 3 (getToothAssetSpec), so the
+// decoder only needs the anatomical surface. A decode-side flip would cancel the render
+// mirror on the left side, leaving both sides identical (the "nothing changed" symptom).
 function reciprocalClaspSurface(retainerSurface) {
   let s = String(retainerSurface);
   if (s.includes("buccal")) s = s.replace("buccal", "lingual");
@@ -227,6 +215,36 @@ function jawSideFromParsed(parsed) {
   if (jt === "0") return "upper";
   if (jt === "1") return "lower";
   return null;
+}
+
+// Map the saved major-connector span (array-slot ranges) to the FDIs it covers.
+// Unions both connectors (1 & 2); `idxToFdi` is the data-derived slot->FDI map.
+// Returns undefined when neither range is present/valid (from-scratch designs).
+function majorSpanFdisFromParsed(other, idxToFdi) {
+  if (!other || !idxToFdi) return undefined;
+  const ranges = [
+    [other["Major Connector 1 Start"], other["Major Connector 1 End"]],
+    [other["Major Connector 2 Start"], other["Major Connector 2 End"]],
+  ];
+  const slots = new Set();
+  let sawRange = false;
+  for (const [s, e] of ranges) {
+    const start = Number(s);
+    const end = Number(e);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+    // [0,0] is the desktop's "no connector" sentinel (unused 2nd connector), NOT a
+    // real span over slot 0 (the 3rd molar 18/38). Treating it as real drew a
+    // spurious connector arm onto the 3rd molar.
+    if (start === 0 && end === 0) continue;
+    sawRange = true;
+    for (let i = Math.min(start, end); i <= Math.max(start, end); i += 1) {
+      slots.add(String(i));
+    }
+  }
+  if (!sawRange) return undefined;
+  const fdis = [];
+  for (const slot of slots) if (idxToFdi[slot]) fdis.push(idxToFdi[slot]);
+  return fdis.length ? fdis : undefined;
 }
 
 /** Track unmapped codes so we can catalog what's missing from jawStructCodes.js. */
@@ -312,21 +330,16 @@ export function resolveJawStructDesign(parsed) {
       }
     }
 
-    // Reciprocating element (Reciprocating.Tooth Type): 1=reciprocating-clasp, 2=plate-prox,
-    // 3=plate-crossmesh. Plate uses a null surface; a reciprocating clasp gets a lingual anchor.
-    // DATA-DRIVEN: every reciprocating value becomes a real component so it round-trips AND can
-    // be removed via the erase list. Under a PLATING major connector the desktop stamps
-    // reciprocating=2 ("implied plating") on every present tooth — those now decode into a real
-    // plate-prox each, which is the per-tooth plate the connector draws (the renderer gates that
-    // connector plate-fill on the plate-prox component, so there is exactly one plate per tooth —
-    // no double-draw / anterior overlap — and removing the plate-prox removes that tooth's plate).
+    // Reciprocating element (Reciprocating.Tooth Type): 1=reciprocating-clasp,
+    // 2=plate-prox, 3=plate-crossmesh. DATA-DRIVEN: every value becomes a real
+    // component so it round-trips and is erasable. A plating major stamps =2 on every
+    // present tooth ("implied plating") → a real plate-prox each; the renderer gates
+    // plate-fill on plate-prox (one plate per tooth), and removing it drops the plate.
     const recipId = RECIPROCATING_TYPE.get(Number(f[RECIPROCATING_FIELD]));
     if (recipId) {
-      // Derive the reciprocating clasp's surface from the tooth's retentive clasp
-      // (opposite arch-side + quadrant mirror correction — see reciprocalClaspSurface)
-      // rather than hardcoding mesial_lingual, which made every loaded reci clasp
-      // read as linguo-mesial even when the desktop placed it disto-lingual. A plate
-      // keeps a null surface.
+      // Derive the reci clasp surface from the retentive clasp (see reciprocalClaspSurface)
+      // rather than hardcoding mesial_lingual, which made every loaded reci clasp read
+      // linguo-mesial. A plate keeps a null surface.
       let surface = null;
       if (recipId === "reciprocating-clasp") {
         const orientField =
@@ -369,22 +382,26 @@ export function resolveJawStructDesign(parsed) {
     else reportUnmapped(MAJOR_CONNECTOR_KEY, mcCode);
   }
 
+  // Exact major coverage from the saved span: the desktop writes the extent as
+  // array-slot ranges (Major Connector 1/2 Start/End); map both to FDIs and union.
+  // Apply then places the major on exactly these teeth. Absent → undefined, so
+  // from-scratch designs fall back to the arch-fill rule.
+  if (design.major) {
+    design.majorSpanFdis = majorSpanFdisFromParsed(parsed?.other, idxToFdi);
+  }
+
   return design;
 }
 
 // ---- Encode: web state -> complete jaw-struct text -----------------------
-// HYBRID encoder. Emits the full desktop field set (26 fields/tooth + the Mesh /
-// Major / Minor / Ball tail). Fields the web 2D model owns are derived live from
-// the placed components (presence, condition, mesh presence, tooth type, rests,
-// retainer type + bar shape, mesh spans, major connector) so edits flow through.
-// Fields the web can't model are PRESERVED from the loaded data via `rawOr`
-// (tooth positions, Pr Config, bar mesial/distal side, clasp/ring orientation,
-// the reciprocating framework flag, and the jaw-level Minor Connector grid + Ball
-// connectors on state.jawStructTail). When a tooth has loaded raw, a load->Save
-// round-trips byte-identical except the re-stamped "Start of Jaw Struct" time
-// line (validated end-to-end in __tests__/jawStructRoundTrip.test.mjs); a from-scratch
-// web design has no raw and falls back to the desktop defaults the samples use
-// (positions 0, tissue stop / retention pin 0, orientation 0, paths 1, balls 0).
+// HYBRID encoder. Emits the full desktop field set (26 fields/tooth + Mesh/Major/
+// Minor/Ball tail). Web-owned fields are derived live from placed components
+// (presence, condition, mesh, rests, retainer + bar shape, mesh spans, major) so
+// edits flow through; fields the web can't model are PRESERVED from loaded data via
+// `rawOr` (positions, Pr Config, bar side, clasp/ring orientation, reciprocating
+// flag, the Minor Connector grid + Ball connectors). With loaded raw, a load→Save
+// round-trips byte-identical except the re-stamped time line (validated in
+// __tests__/jawStructRoundTrip.test.mjs); from-scratch has no raw → desktop defaults.
 
 // Array slot -> FDI, per StructData.cs get_array_index (major 1/3 reversed).
 const UPPER_FDI_ORDER = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
@@ -421,16 +438,36 @@ function majorConnectorCode(state, fdiOrder) {
   return 0;
 }
 
-// The lower lingual connector's plate-vs-bar SHAPE lives in the 16x16 Minor
-// Connector grid, not just the "Major Connector Type" label: the desktop routes
-// a PLATE through Path D (StructData.cs Path index 6=distal / 7=mesial) and a BAR
-// through Path G (12=distal / 13=mesial). The web doesn't model the grid (it only
-// preserves what was loaded), so switching the type used to leave the desktop
-// drawing the old shape. Here we re-route the active path segments to match the
-// chosen type. Verified byte-exact against desktop case 1923 in both directions;
-// idempotent, so a loaded design that already matches its type round-trips
-// unchanged. Only applies to lower lingual bar(6) / plate(7); other connectors
-// (and from-scratch designs with no active grid) pass through untouched.
+// Connector-1/2 array-slot spans from the teeth carrying a major-* component.
+// Contiguous slot runs become the two connectors so the loader reads back exactly
+// the placed teeth. No major → 0/0.
+function majorConnectorSpans(state, fdiOrder) {
+  const slots = [];
+  fdiOrder.forEach((fdi, idx) => {
+    if (componentList(state.teeth?.[fdi]).some((id) => String(id).startsWith("major-"))) {
+      slots.push(idx);
+    }
+  });
+  if (!slots.length) return { c1: [0, 0], c2: [0, 0] };
+  const runs = [];
+  for (const s of slots) {
+    const last = runs[runs.length - 1];
+    if (last && s === last[1] + 1) last[1] = s;
+    else runs.push([s, s]);
+  }
+  if (runs.length === 1) return { c1: runs[0], c2: runs[0] };
+  if (runs.length === 2) return { c1: runs[0], c2: runs[1] };
+  // >2 runs: can't represent exactly in two connectors — use the overall span.
+  const bound = [slots[0], slots[slots.length - 1]];
+  return { c1: bound, c2: bound };
+}
+
+// The lower lingual connector's plate-vs-bar SHAPE lives in the 16x16 Minor Connector
+// grid, not just "Major Connector Type": the desktop routes a PLATE through Path D
+// (index 6=distal/7=mesial) and a BAR through Path G (12/13). The web only preserves
+// the loaded grid, so switching type used to keep the old shape — here we re-route the
+// active path to match. Verified byte-exact vs case 1923 both ways; idempotent. Only
+// lower lingual bar(6)/plate(7); other connectors pass through untouched.
 function normalizeLingualGridForType(tail, mcCode) {
   if (mcCode !== 6 && mcCode !== 7) return tail;
   const out = { ...tail };
@@ -448,11 +485,9 @@ function normalizeLingualGridForType(tail, mcCode) {
 }
 
 function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
-  // Loaded per-tooth fields (set on load by applyJawStructDesign). The web 2D
-  // model doesn't carry tooth positions, Pr Config, bar mesial/distal side,
-  // clasp/ring orientation or the reciprocating framework flag, so for those we
-  // fall back to the loaded value; web-owned fields below are derived live so
-  // edits flow through. A from-scratch web design has no raw -> uses defaults.
+  // Loaded per-tooth fields (set on load). The web doesn't carry positions, Pr Config,
+  // bar side, clasp/ring orientation or the reciprocating flag, so fall back to loaded
+  // values; web-owned fields below are derived live. From-scratch has no raw → defaults.
   const raw = rec?.rawJawStructFields || {};
   const rawOr = (field, fallback) => (field in raw ? raw[field] : fallback);
 
@@ -522,12 +557,10 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
   }
 
   // Reciprocating element (single slot): derived PURELY from the placed component so the
-  // per-tooth plate is data-driven and removals persist. 1=reciprocating-clasp, 3=plate-crossmesh,
-  // 2=plate-prox, 0=none. Decode creates one of these for every non-zero reciprocating value
-  // (including the "implied plating" =2 a plating connector stamps on every present tooth), so a
-  // loaded design round-trips byte-for-byte; removing a tooth's plate-prox makes it encode 0.
-  // The major-connector switch keeps the components in step: switching to a PLATING connector
-  // adds plate-prox to present teeth, switching to a BAR removes them (see annotationCatalog.js).
+  // per-tooth plate is data-driven and removals persist. 1=reciprocating-clasp,
+  // 2=plate-prox, 3=plate-crossmesh, 0=none. So a loaded design round-trips byte-for-byte;
+  // removing a plate-prox encodes 0. The major-connector switch keeps components in step
+  // (plating adds plate-prox, bar removes them — see annotationCatalog.js).
   let reciprocatingType;
   if (comps.includes("reciprocating-clasp")) reciprocatingType = 1;
   else if (comps.includes("plate-crossmesh")) reciprocatingType = 3;
@@ -561,6 +594,10 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
     ["Tooth Main.Tooth Retainer.Retainer Bar Type", barType],
     ["Tooth Main.Tooth Retainer.Retainer Bar Category", barCategory],
     ["Tooth Main.Tooth Reciprocating.Tooth Type", reciprocatingType],
+    // Native emits a Pattern Type after the reciprocating Tooth Type. The web
+    // doesn't model it, so preserve the loaded value (round-trips for free) and
+    // default 0 for from-scratch. Omitting it desynced the per-tooth parse.
+    ["Tooth Main.Tooth Reciprocating.Tooth Pattern Type", rawOr("Tooth Main.Tooth Reciprocating.Tooth Pattern Type", 0)],
   ];
   return fields.map(([k, v]) => `Tooth ${arrayIdx}: ${k}: ${v}`);
 }
@@ -586,6 +623,13 @@ export function encodeJawStructText(state, jawSide) {
   lines.push(`Jaw Type: ${isUpper ? 0 : 1}`);
   lines.push("Jaw Material: 0");
 
+  // Header pattern types (after Jaw Material). The native parser is positional, so
+  // omitting these desynced the parse (desktop loaded blank). Preserve loaded values;
+  // default 0 from scratch.
+  const header = state?.jawStructTail?.[jawSide] || {};
+  lines.push(`Palatal Pattern Type: ${header["Palatal Pattern Type"] ?? 0}`);
+  lines.push(`Arch Ridge Pattern Type: ${header["Arch Ridge Pattern Type"] ?? 0}`);
+
   fdiOrder.forEach((fdi, arrayIdx) => {
     lines.push(...encodeToothLines(arrayIdx, fdi, state.teeth?.[fdi], meshFdi.has(fdi)));
   });
@@ -599,11 +643,17 @@ export function encodeJawStructText(state, jawSide) {
   }
 
   lines.push(`Major Connector Type: ${mcCode}`);
-  // Minor-connector path grid + ball connectors aren't modeled by the web, so
-  // emit the loaded values when available (preserved on state.jawStructTail),
-  // falling back to the desktop init defaults (paths 1, balls 0). For a lower
-  // lingual bar/plate we re-route the grid's active path to match the chosen
-  // type so the desktop renders the right shape (see normalizeLingualGridForType).
+  // Major connector span indices (after the type), COMPUTED from the teeth carrying
+  // the major component so a web edit round-trips. Contiguous slot runs → connector 1
+  // and 2 (a single run duplicates into both); >2 runs fall back to [min,max] bounds.
+  const span = majorConnectorSpans(state, fdiOrder);
+  lines.push(`Major Connector 1 Start: ${span.c1[0]}`);
+  lines.push(`Major Connector 1 End: ${span.c1[1]}`);
+  lines.push(`Major Connector 2 Start: ${span.c2[0]}`);
+  lines.push(`Major Connector 2 End: ${span.c2[1]}`);
+  // Minor-connector grid + ball connectors aren't modeled: emit loaded values
+  // (state.jawStructTail) or desktop defaults (paths 1, balls 0). For a lower lingual
+  // bar/plate, re-route the active path to match the type (normalizeLingualGridForType).
   const tail = normalizeLingualGridForType(state?.jawStructTail?.[jawSide] || {}, mcCode);
   for (let c = 0; c < 16; c += 1) {
     for (let p = 0; p < 16; p += 1) {

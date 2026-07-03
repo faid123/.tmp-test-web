@@ -26,11 +26,8 @@ const MINOR_CONNECTOR_RENDER_SCALE = Object.freeze({
   lower: 0.56,
 });
 
-/**
- * Mirror a per-template `{x, y}` offset row for a given tooth: quadrants 2 & 3 flip X,
- * quadrants 1 & 4 pass through. Shared by every per-tooth offset lookup below so the
- * mirroring rule lives in one place. A missing/invalid row resolves to no offset.
- */
+/** Mirror a per-template `{x, y}` row for a tooth: quadrants 2 & 3 flip X, 1 & 4
+ *  pass through. Single home for the mirror rule. Missing row → no offset. */
 function mirrorTemplateRowForTooth(toothId, row) {
   if (!row) return { x: 0, y: 0 };
   const quadrant = Math.floor(Number(toothId) / 10);
@@ -42,11 +39,9 @@ function mirrorTemplateRowForTooth(toothId, row) {
 }
 
 /**
- * Base per-tooth offset for a SOLO mesial/distal minor-connector half. Keyed per template
- * tooth (`11`-`18` / `41`-`48`; quadrants 2 & 3 mirror X automatically). The hand-tuned
- * directional nudge is added on top (see getMinorConnectorOffset); the shared `mid`
- * connector uses MINOR_CONNECTOR_MID_OFFSET_BY_TEMPLATE_TOOTH instead. +x = toward the
- * lingual/arch centre.
+ * Base offset for a SOLO mesial/distal minor-connector half, per template tooth
+ * (11-18 / 41-48; quadrants 2 & 3 mirror X). The directional nudge is added on top
+ * (getMinorConnectorOffset); the `mid` connector uses its own table. +x = toward lingual.
  */
 const MINOR_CONNECTOR_OFFSET_SEED_BY_TEMPLATE_TOOTH = Object.freeze({
   "11": { x: 29, y: 33 },
@@ -84,10 +79,9 @@ export function getMinorConnectorAssetReference(toothId, variant = "mid") {
 }
 
 /**
- * Per-variant size multiplier for fine-tuning a minor-connector variant that renders too
- * big/small (the `mesial`/`distal` halves can differ in scale from the `mid` art). Keyed by
- * template tooth (`11`–`18` / `41`–`48`; quadrants 2 & 3 share the same row); default 1.
- * e.g. shrink tooth 12's distal half -> `distal: { "12": 0.8 }`.
+ * Per-variant size multiplier to fine-tune a mesial/distal half that renders too
+ * big/small. Keyed by template tooth (11-18 / 41-48); default 1.
+ * e.g. shrink tooth 12's distal half → `distal: { "12": 0.8 }`.
  */
 const MINOR_CONNECTOR_VARIANT_SCALE_BY_TEMPLATE_TOOTH = Object.freeze({
   mid: {},
@@ -113,11 +107,9 @@ export function getMinorConnectorRenderScale(jaw) {
 }
 
 /**
- * Hand-tuned per-tooth nudge of the minor connector toward its rest/clasp side. For each
- * template tooth (`11`–`18` / `41`–`48`; quadrants 2 & 3 mirror X automatically) a `{x, y}`
- * delta is **added to the base offset** when the tooth's rest/clasp sits on the MESIAL vs the
- * DISTAL side. Edit these by hand to position each tooth; an absent tooth/direction = no nudge
- * (keeps the base offset). +x = toward the lingual/arch centre, sign of y as in the base seed.
+ * Hand-tuned nudge toward the tooth's rest/clasp side: a `{x, y}` delta added to
+ * the base offset per template tooth (11-18 / 41-48; quadrants 2 & 3 mirror X),
+ * for MESIAL vs DISTAL support. Absent = no nudge. +x = toward lingual.
  */
 const MINOR_CONNECTOR_DIRECTIONAL_OFFSET_SEED_BY_TEMPLATE_TOOTH = Object.freeze({
   // template: { mesial: { x, y }, distal: { x, y } }
@@ -148,9 +140,8 @@ function getMinorConnectorDirectionalDelta(toothId, direction) {
   return mirrorTemplateRowForTooth(toothId, row);
 }
 
-// Resolve per-tooth XY offset for a SOLO mesial/distal minor-connector half: the base seed
-// (mirrored) plus the hand-tuned directional nudge. The shared `mid` half (drawn when both
-// adjacent teeth carry support) uses getMinorConnectorMidOffset instead.
+// SOLO mesial/distal half offset: mirrored base seed + directional nudge. The shared
+// `mid` half (both adjacent teeth support) uses getMinorConnectorMidOffset instead.
 export function getMinorConnectorOffset(toothId, direction) {
   const template = getComponentTemplateToothId(toothId);
   const base = mirrorTemplateRowForTooth(
@@ -162,19 +153,16 @@ export function getMinorConnectorOffset(toothId, direction) {
 }
 
 /**
- * Per-template OVERRIDE for the shared `mid` connector — the connector drawn in an embrasure
- * when both adjacent teeth carry support. By default the mid connector reuses the solo-half
- * base offset (MINOR_CONNECTOR_OFFSET_SEED_BY_TEMPLATE_TOOTH); add a row here only for a
- * template tooth whose mid connector needs to sit somewhere different. Keyed per template tooth
- * (`11`-`18` / `41`-`48`; quadrants 2 & 3 mirror X automatically). +x = toward the arch/lingual
- * centre. Empty = the mid connector follows the base offset on every tooth.
+ * Per-template OVERRIDE for the shared `mid` connector (embrasure, both teeth support).
+ * Defaults to the solo-half base seed; add a row only where the mid connector must sit
+ * elsewhere. Keyed per template tooth (11-18 / 41-48; quadrants 2 & 3 mirror X). +x = lingual.
  */
 const MINOR_CONNECTOR_MID_OFFSET_OVERRIDE_BY_TEMPLATE_TOOTH = Object.freeze({
   // e.g. "12": { x: 30, y: 20 },  // move only tooth 12's mid connector, leaving its solo halves
 });
 
-// Resolve the (x, y) offset for the shared mid connector: a per-template override if one exists,
-// otherwise the solo-half base seed (template lookup; X mirrored for quadrants 2 & 3).
+// Mid-connector offset: per-template override if present, else the solo-half base
+// seed (X mirrored for quadrants 2 & 3).
 export function getMinorConnectorMidOffset(toothId) {
   const template = getComponentTemplateToothId(toothId);
   const row =

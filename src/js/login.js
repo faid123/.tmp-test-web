@@ -18,12 +18,30 @@ function logApi(res, label) {
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
-// TEMP: OTP is temporarily disabled. When true, a successful username/password
-// login skips OTP generation/verification and redirects straight to the app.
-// Set back to false to re-enable the OTP flow.
-const DISABLE_OTP = true;
+// "Remember me" persists just the username so the field is pre-filled next
+// visit (the password is never stored). Cleared when the box is unchecked.
+const REMEMBER_KEY = "rememberedUsername";
 
 let currentUUID = null;
+
+// Where to send the user after a successful login. A guest who hit the
+// noticeboard's "Login" button stashes the case page URL in localStorage
+// (postLoginRedirect) so we can return them there; otherwise default to the
+// case list. Only same-origin targets are honored to avoid an open redirect,
+// and the stash is consumed (one-shot) so it can't leak into later logins.
+function postLoginTarget() {
+  try {
+    const stored = localStorage.getItem("postLoginRedirect");
+    if (stored) {
+      localStorage.removeItem("postLoginRedirect");
+      const url = new URL(stored, window.location.href);
+      if (url.origin === window.location.origin) return url.href;
+    }
+  } catch (e) {
+    /* ignore malformed/absent value */
+  }
+  return "./src/pages/case_list.html";
+}
 
 // --- view switching -------------------------------------------------------
 
@@ -95,11 +113,21 @@ async function sendOTP() {
       };
       localStorage.setItem("loggedInUser", JSON.stringify(userInfo));
 
-      // TEMP: OTP disabled — skip generation and let the caller redirect.
-      if (DISABLE_OTP) {
-        return true;
+      // Honor "Remember me": keep the username for next time, or clear it.
+      try {
+        if (document.getElementById("remember")?.checked) {
+          localStorage.setItem(REMEMBER_KEY, username);
+        } else {
+          localStorage.removeItem(REMEMBER_KEY);
+        }
+      } catch (e) {
+        /* storage may be unavailable (private mode); ignore */
       }
 
+      // --- TEMP: OTP disabled. Skip OTP generation/email; the caller redirects
+      // straight to the case list. Remove this return + uncomment below to restore. ---
+      return true;
+      /* TEMP-OTP-DISABLED
       // Trigger OTP generation / email.
       const otpRes = await fetch(`${API_BASE}/otp`, {
         method: "POST",
@@ -107,16 +135,17 @@ async function sendOTP() {
         body: JSON.stringify([{ machine_id: MACHINE_ID, uuid: currentUUID }])
       });
       logApi(otpRes, "POST /otp");
-      
+
       if (!otpRes.ok) {
         setError("error-message", "Login succeeded but OTP generation failed.");
         return false;
       }
-      
+
       // Move to OTP view and show where the code was sent.
       const target = document.getElementById("otp-target");
       if (target) target.textContent = data.email || username || "your account";
       return true;
+      */
     }
 
     setError("error-message", "Login failed. Please check your username and password.");
@@ -171,7 +200,7 @@ async function verifyAndLogin() {
     const data = await response.json();
 
     if (response.ok && data.successful) {
-      window.location.href = "./src/pages/case_list.html";
+      window.location.href = postLoginTarget();
     } else {
       setError("otp-error-message", "Invalid or expired OTP.");
     }
@@ -221,6 +250,35 @@ function wireOtpBoxes() {
 document.addEventListener("DOMContentLoaded", () => {
   wireOtpBoxes();
 
+  // Restore a remembered username and pre-check the box so the state round-trips.
+  try {
+    const remembered = localStorage.getItem(REMEMBER_KEY);
+    if (remembered) {
+      const usernameInput = document.getElementById("username");
+      const rememberBox = document.getElementById("remember");
+      if (usernameInput) usernameInput.value = remembered;
+      if (rememberBox) rememberBox.checked = true;
+      // Move focus to the password since the username is already filled.
+      document.getElementById("password")?.focus();
+    }
+  } catch (e) {
+    /* storage may be unavailable; ignore */
+  }
+
+  // Show/hide password toggle.
+  const toggleBtn = document.getElementById("toggle-password");
+  const passwordInput = document.getElementById("password");
+  if (toggleBtn && passwordInput) {
+    toggleBtn.addEventListener("click", () => {
+      const show = passwordInput.type === "password";
+      passwordInput.type = show ? "text" : "password";
+      toggleBtn.setAttribute("aria-pressed", String(show));
+      toggleBtn.setAttribute("aria-label", show ? "Hide password" : "Show password");
+      // Keep the caret in the field so typing can continue uninterrupted.
+      passwordInput.focus();
+    });
+  }
+
   const loginForm = document.getElementById("login-form");
   if (loginForm) {
     loginForm.addEventListener("submit", async (e) => {
@@ -229,14 +287,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (btn) btn.disabled = true;
       const ok = await sendOTP();
       if (btn) btn.disabled = false;
-      if (ok) {
-        // TEMP: OTP disabled — skip the OTP view and go straight to the app.
-        if (DISABLE_OTP) {
-          window.location.href = "./src/pages/case_list.html";
-        } else {
-          showView("otp");
-        }
-      }
+      // TEMP: OTP disabled — go straight to the post-login target on success.
+      if (ok) window.location.href = postLoginTarget();
+      // if (ok) showView("otp");
     });
   }
 

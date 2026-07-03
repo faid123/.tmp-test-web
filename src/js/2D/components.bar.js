@@ -61,16 +61,12 @@ export function getBarPlacementAnchorPointForTooth(toothId) {
 export const BAR_IMAGE_SIZE = Object.freeze({ width: 92, height: 92 });
 
 /**
- * **Main control for how big bars look everywhere** (d1 / d2 use the same baseline).
- * `1` = current design baseline. Use `1.2` for ~20% larger, `0.85` for smaller, etc.
- * Final size = tier unit × this × per-tooth override.
+ * Main control for overall bar size (d1/d2 share the baseline). 1 = baseline;
+ * 1.2 ≈ 20% larger. Final size = tier unit × this × per-tooth override.
  */
 export const BAR_DEFAULT_RENDER_SCALE = 1.2;
 
-/**
- * d1: adjacent to reference tooth, d2: two teeth away.
- * These units preserve previous visible size with the new common source box.
- */
+/** d1: adjacent to reference tooth, d2: two away. Units preserve prior visible size. */
 const BAR_TIER_DISPLAY_UNIT = Object.freeze({
   d1: (80 * 1) / BAR_IMAGE_SIZE.width,
   d2: (88 * 1) / BAR_IMAGE_SIZE.width,
@@ -81,9 +77,8 @@ function toothHasAnyMeshPlacement(tooth) {
   return placements.some((entry) => isMeshComponent(entry?.componentId));
 }
 /**
- * Optional per-tooth size fine tuning.
- * Keys per tooth: `mesial` / `distal` (side of the bar), and/or the full bar surface
- * string (`bar_d1_mesial`, `bar_d2_distal`, …) if you want different scales for d1 vs d2.
+ * Optional per-tooth size fine-tuning. Keys: `mesial`/`distal`, and/or a full surface
+ * string (`bar_d1_mesial`, …) for different d1 vs d2 scales.
  */
 export const BAR_RENDER_SCALE_BY_TOOTH_SURFACE = Object.freeze({
   "11": {
@@ -200,9 +195,9 @@ export const BAR_RENDER_SCALE_BY_TOOTH_SURFACE = Object.freeze({
 });
 
 /**
- * Optional per-tooth placement fine tuning (tooth-local coordinates).
- * Format: { "11": { mesial: { x: -6, y: 8, rotation: -8 } } }
- * Also supports full surface keys: { "11": { bar_d2_mesial: { x: 0, y: 0, rotation: -12 } } }
+ * Optional per-tooth placement fine-tuning (tooth-local coords).
+ * Format: { "11": { mesial: { x, y, rotation } } }; full surface keys also work
+ * (e.g. { "11": { bar_d2_mesial: {...} } }).
  */
 export const BAR_PLACEMENT_OFFSET_BY_TOOTH_SURFACE = Object.freeze({
   "11": {
@@ -426,8 +421,7 @@ const BAR_SHAPE_LETTER = Object.freeze({
   "bar-y": "Y",
 });
 
-/** Surfaces: `bar_d1_mesial` | `bar_d1_distal` | `bar_d2_mesial` | `bar_d2_distal` */
-// Validate a bar placement surface token.
+/** Validate a bar surface token: bar_d1_mesial | bar_d1_distal | bar_d2_mesial | bar_d2_distal. */
 export function isBarPlacementSurface(surface) {
   const s = typeof surface === "string" ? surface.toLowerCase() : "";
   return BAR_SURFACE_SIDE_RE.test(s);
@@ -441,8 +435,7 @@ export function isBarComponent(componentOrId) {
   return String(componentOrId || "").startsWith("bar-");
 }
 
-/** Present teeth within arch index ±1/±2 from any mesh-bearing tooth in the same jaw. */
-// Compute teeth eligible for bar suggestions on a jaw.
+/** Teeth eligible for bar suggestions: present teeth within ±1/±2 of any mesh-bearing tooth. */
 export function getBarSuggestibleToothIdSet(teethById, jaw) {
   const order = TOOTH_ORDER[jaw];
   const out = new Set();
@@ -465,15 +458,11 @@ export function getBarSuggestibleToothIdSet(teethById, jaw) {
 }
 
 /**
- * Resolve bar surface from nearest mesh-bearing tooth:
- * - distance 1 => d1
- * - distance 2 => d2
- * - side => mesial/distal (relative to each side of the arch). NB this label is a
- *   name matched to the per-tooth bar offset/asset tuning in
- *   `BAR_PLACEMENT_OFFSET_BY_TOOTH_SURFACE` — terminal molars (18/28/38/48) are only
- *   tuned for the `distal` side, so don't invert this mapping without re-tuning them.
+ * Resolve bar surface from the nearest mesh-bearing tooth: distance 1 → d1, 2 → d2;
+ * side → mesial/distal per arch half. NB the side label is matched to the per-tooth
+ * tuning in BAR_PLACEMENT_OFFSET_BY_TOOTH_SURFACE — terminal molars (18/28/38/48) are
+ * only tuned for `distal`, so don't invert this mapping without re-tuning them.
  */
-// Resolve bar surface for a selected suggestible tooth.
 export function getBarPlacementSurfaceForTooth(toothId, jaw, teethById) {
   const order = TOOTH_ORDER[jaw];
   const toothIndex = order.indexOf(String(toothId));
@@ -526,11 +515,9 @@ export function hasMissingTeethOnBothSidesForBar(toothId, jaw, teethById) {
   return false;
 }
 
-// Check whether a specific bar placement is still backed by a mesh-bearing
-// tooth at the surface's implied distance and direction. Mirrors the
-// convention used by `getBarPlacementSurfaceForTooth`:
-//   side === "distal"  ⇒ mesh sits in the same direction as the mesial
-//   side === "mesial"  ⇒ mesh sits in the opposite direction.
+// Is a bar placement still backed by a mesh-bearing tooth at the surface's implied
+// distance + direction? Mirrors getBarPlacementSurfaceForTooth: side "distal" ⇒ mesh
+// in the mesial direction, "mesial" ⇒ opposite.
 function isBarPlacementBackedByMesh(toothId, jaw, surface, teethById) {
   const match = BAR_SURFACE_RE.exec(String(surface || "").toLowerCase());
   if (!match) return false;
@@ -551,10 +538,8 @@ function isBarPlacementBackedByMesh(toothId, jaw, surface, teethById) {
   return Boolean(meshTooth) && toothHasAnyMeshPlacement(meshTooth);
 }
 
-// Drop any bar placements whose anchor tooth no longer has a mesh-bearing
-// neighbor at the exact distance + direction the bar points. Catches both
-// "all nearby mesh removed" and "mesh removed but other mesh still in
-// range, just in the wrong direction" cases. Mutates `teethById` in place.
+// Drop bar placements whose anchor tooth no longer has a mesh-bearing neighbor at
+// the bar's exact distance + direction (catches wrong-direction mesh too). Mutates in place.
 export function pruneInvalidBarPlacementsInJaw(teethById, jaw) {
   if (!teethById || typeof teethById !== "object") return;
   if (!Array.isArray(TOOTH_ORDER?.[jaw])) return;
