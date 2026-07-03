@@ -18,6 +18,11 @@ function logApi(res, label) {
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
+// TEMP: OTP is temporarily disabled. When true, a successful username/password
+// login skips OTP generation/verification and redirects straight to the app.
+// Set back to false to re-enable the OTP flow.
+const DISABLE_OTP = true;
+
 let currentUUID = null;
 
 // --- view switching -------------------------------------------------------
@@ -89,6 +94,11 @@ async function sendOTP() {
         isAdmin: data.isAdmin
       };
       localStorage.setItem("loggedInUser", JSON.stringify(userInfo));
+
+      // TEMP: OTP disabled — skip generation and let the caller redirect.
+      if (DISABLE_OTP) {
+        return true;
+      }
 
       // Trigger OTP generation / email.
       const otpRes = await fetch(`${API_BASE}/otp`, {
@@ -219,7 +229,14 @@ document.addEventListener("DOMContentLoaded", () => {
       if (btn) btn.disabled = true;
       const ok = await sendOTP();
       if (btn) btn.disabled = false;
-      if (ok) showView("otp");
+      if (ok) {
+        // TEMP: OTP disabled — skip the OTP view and go straight to the app.
+        if (DISABLE_OTP) {
+          window.location.href = "./src/pages/case_list.html";
+        } else {
+          showView("otp");
+        }
+      }
     });
   }
 
