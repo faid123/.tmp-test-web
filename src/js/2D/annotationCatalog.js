@@ -43,7 +43,7 @@ import {
   fetchAdditionalCaseDetails,
   updateCaseDueDate,
 } from "./caseNote.js";
-import { toast } from "../toast.js";
+import { toast, attachThemedCalendar } from "../toast.js";
 
 // Build component tabs and initialize the first visible catalog view.
 export function initComponentCatalog() {
@@ -516,6 +516,8 @@ export function createCaseNoteForm() {
     saved.dateRequired || dueDateDefault || ""
   );
   form.appendChild(dateInput.row);
+  // Themed calendar for the "Date Required" field.
+  attachThemedCalendar(dateInput.input, { allowClear: true });
 
   let userTouchedDate = false;
   dateInput.input.addEventListener("input", () => {

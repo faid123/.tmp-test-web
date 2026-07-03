@@ -1,5 +1,5 @@
 import { lol } from "../crypt.js";
-import { toast, confirmModal } from "./toast.js";
+import { toast, confirmModal, openThemedCalendar, attachThemedCalendar } from "./toast.js";
 import { logApi, statusLabel } from "./apiLog.js";
 import { setupConnectivityIndicator, reportHtmlToDocxBytes } from "./accessibility.js";
 import { setupAppSidebar } from "./appSidebar.js";
@@ -385,6 +385,63 @@ function base64ToBytes(base64) {
   return bytes;
 }
 
+// The backend often stores jaw meshes as OFF; many CAD/slicer tools only open
+// STL, so the download bundle ships an STL copy too. `bytes` starts with "OFF".
+function isOffBytes(bytes) {
+  return bytes && bytes[0] === 0x4f && bytes[1] === 0x46 && bytes[2] === 0x46;
+}
+
+// Convert an OFF mesh (text) to a binary STL byte array. Standalone (no THREE)
+// so the case list stays light. Polygons are fan-triangulated; degenerate faces
+// referencing missing vertices are dropped so the header count stays accurate.
+function offTextToBinaryStl(text) {
+  const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length);
+  if (!lines.length || lines[0].toUpperCase() !== "OFF") return null;
+  const header = lines[1].split(/\s+/).map(Number);
+  const numVertices = header[0];
+  const numFaces = header[1];
+  if (!Number.isFinite(numVertices) || !Number.isFinite(numFaces)) return null;
+
+  const verts = new Array(numVertices);
+  for (let i = 0; i < numVertices; i++) {
+    const p = lines[2 + i].split(/\s+/).map(Number);
+    verts[i] = [p[0], p[1], p[2]];
+  }
+
+  const tris = [];
+  const faceStart = 2 + numVertices;
+  for (let i = 0; i < numFaces; i++) {
+    const p = lines[faceStart + i].split(/\s+/).map(Number);
+    const n = p[0];
+    for (let k = 2; k < n; k++) tris.push([p[1], p[k], p[k + 1]]); // fan
+  }
+  const valid = tris.filter(([a, b, c]) => verts[a] && verts[b] && verts[c]);
+
+  const buffer = new ArrayBuffer(84 + valid.length * 50);
+  const view = new DataView(buffer);
+  view.setUint32(80, valid.length, true); // 80-byte header left zeroed
+  let off = 84;
+  for (const [ia, ib, ic] of valid) {
+    const a = verts[ia];
+    const b = verts[ib];
+    const c = verts[ic];
+    let nx = (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]);
+    let ny = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]);
+    let nz = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    const len = Math.hypot(nx, ny, nz) || 1;
+    view.setFloat32(off, nx / len, true); off += 4;
+    view.setFloat32(off, ny / len, true); off += 4;
+    view.setFloat32(off, nz / len, true); off += 4;
+    for (const v of [a, b, c]) {
+      view.setFloat32(off, v[0], true); off += 4;
+      view.setFloat32(off, v[1], true); off += 4;
+      view.setFloat32(off, v[2], true); off += 4;
+    }
+    view.setUint16(off, 0, true); off += 2; // attribute byte count
+  }
+  return new Uint8Array(buffer);
+}
+
 function triggerBlobDownload(bytes, filename) {
   const blob = new Blob([bytes], { type: "application/octet-stream" });
   const url = URL.createObjectURL(blob);
@@ -507,8 +564,24 @@ async function downloadCaseFiles(caseIntId, caseLabel, apiStatus) {
       }
       usedNames.add(name);
       try {
-        zip.file(name, base64ToBytes(file.data));
+        const bytes = base64ToBytes(file.data);
+        zip.file(name, bytes);
         added += 1;
+        // The mesh is often OFF; also emit an STL copy so STL-only tools work.
+        if (isOffBytes(bytes)) {
+          const stl = offTextToBinaryStl(new TextDecoder().decode(bytes));
+          if (stl) {
+            let stlName = /\.off$/i.test(name)
+              ? name.replace(/\.off$/i, ".stl")
+              : `${name.replace(/\.[^.]+$/, "")}.stl`;
+            if (usedNames.has(stlName)) {
+              stlName = `${stlName.replace(/\.stl$/i, "")}_${idx + 1}.stl`;
+            }
+            usedNames.add(stlName);
+            zip.file(stlName, stl);
+            added += 1;
+          }
+        }
       } catch (err) {
         console.error("❌ Failed to add STL to zip:", name, err);
       }
@@ -926,30 +999,69 @@ function buildThreeDViewerUrl(caseId) {
   return `${window.location.origin}${basePath}/src/pages/ThreeDViewer.html?id=${encryptedId}`;
 }
 
+// Show a QR code of the 3D viewer URL in a modal. Generated fully client-side
+// (qrcodejs, loaded from CDN in case_list.html), so the URL is never sent to a
+// third party. Offers a PNG download of the code.
+function showThreeDViewerQr(url) {
+  if (typeof window.QRCode === "undefined") {
+    toast.error("QR code library failed to load. Please try again.");
+    return;
+  }
+
+  const overlay = document.createElement("div");
+  overlay.className = "cm-qr-modal";
+  overlay.innerHTML =
+    '<div class="cm-qr-backdrop"></div>' +
+    '<div class="cm-qr-panel" role="dialog" aria-modal="true" aria-label="3D viewer QR code">' +
+    '<div class="cm-qr-header">' +
+    '<h2 class="cm-qr-title">Scan to open 3D viewer</h2>' +
+    '<button type="button" class="cm-qr-close" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>' +
+    "</div>" +
+    '<div class="cm-qr-code" id="cmQrCode"></div>' +
+    '<p class="cm-qr-url"></p>' +
+    '<button type="button" class="cm-btn cm-btn-primary cm-qr-download">Save</button>' +
+    "</div>";
+  document.body.appendChild(overlay);
+
+  const codeEl = overlay.querySelector("#cmQrCode");
+  // eslint-disable-next-line no-new
+  new window.QRCode(codeEl, {
+    text: url,
+    width: 220,
+    height: 220,
+    correctLevel: window.QRCode.CorrectLevel.M,
+  });
+  overlay.querySelector(".cm-qr-url").textContent = url;
+
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener("keydown", onKey, true);
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") close();
+  };
+  overlay.querySelector(".cm-qr-backdrop").addEventListener("click", close);
+  overlay.querySelector(".cm-qr-close").addEventListener("click", close);
+  document.addEventListener("keydown", onKey, true);
+
+  overlay.querySelector(".cm-qr-download").addEventListener("click", () => {
+    const node = codeEl.querySelector("img") || codeEl.querySelector("canvas");
+    let dataUrl = "";
+    if (node?.tagName === "IMG") dataUrl = node.src;
+    else if (node?.tagName === "CANVAS") dataUrl = node.toDataURL("image/png");
+    if (!dataUrl) return;
+    const a = document.createElement("a");
+    a.href = dataUrl;
+    a.download = `case_${window.selectedCaseId ?? "3d"}_qr.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
+}
+
 // 显示基本信息
 function displayCaseDetails(data) {
   const caseIntId = data.id ?? data.case_int_id;
-
-  const view3dLink = document.getElementById("view3dLink");
-  if (view3dLink) {
-    const url = buildThreeDViewerUrl(caseIntId) || "#";
-    view3dLink.href = url;
-    const textEl = view3dLink.querySelector(".cm-3d-link-text");
-    if (textEl) textEl.textContent = url;
-    // Open the viewer via window.open (not the anchor's default target=_blank,
-    // which carries rel="noopener" → a null opener and a non-closeable tab).
-    // window.open keeps the opener back-reference and makes the tab
-    // script-closeable, so the viewer's Return button can window.close() it.
-    if (!view3dLink.dataset.scriptOpenBound) {
-      view3dLink.dataset.scriptOpenBound = "1";
-      view3dLink.addEventListener("click", (e) => {
-        const href = view3dLink.getAttribute("href");
-        if (!href || href === "#") return;
-        e.preventDefault();
-        window.open(href, "_blank");
-      });
-    }
-  }
 
   const displayName = data.case_id
     ? caseIntId != null
@@ -1027,75 +1139,34 @@ function applyClientFilters() {
   populateTable(base);
 }
 
-// Replace the Due cell's text with a date input so the due date can be edited
-// straight from the list. Commits through updateCaseDueDate (writes the backend
-// additionalcasedetails row that the list, dashboard and 2D "Date Required"
-// field all read), mirrors it to localStorage for the 2D page, then re-renders.
-function openDueDateEditor(td, caseItem, caseId, currentDue) {
-  if (!td || td.querySelector(".cm-due-input")) return;
-
-  const input = document.createElement("input");
-  input.type = "date";
-  input.className = "cm-due-input";
-  input.value = toDateInputValue(currentDue) || "";
-
-  td.innerHTML = "";
-  td.appendChild(input);
-  input.focus();
-  try {
-    input.showPicker?.();
-  } catch {
-    /* showPicker may throw if not user-activated; ignore */
-  }
-
-  let settled = false;
-
-  // Restore the list without changing anything (Escape / empty / failure).
-  const restore = () => {
-    if (settled) return;
-    settled = true;
-    applyClientFilters();
-  };
-
-  const commit = async () => {
-    if (settled) return;
-    const iso = input.value;
-    if (!iso) {
-      restore();
-      return;
-    }
-    settled = true;
-    input.disabled = true;
-    const ok = await updateCaseDueDate(caseId, iso);
-    if (ok) {
-      // additionalcasedetails.due_date is stored in Unix *seconds*; mirror that
-      // so the in-memory row (and the redraw) show the new date immediately.
-      const ms = Date.parse(`${iso}T00:00:00`);
-      const epochSec = Number.isNaN(ms) ? null : Math.floor(ms / 1000);
-      if (epochSec != null) {
+// Edit a case's due date from the list via the shared themed calendar. Commits
+// through updateCaseDueDate (writes the backend additionalcasedetails row the
+// list, dashboard and 2D "Date Required" field all read), mirrors it to
+// localStorage for the 2D page, then re-renders.
+function openDueDateEditor(anchorTd, caseItem, caseId, currentDue) {
+  if (!anchorTd) return;
+  openThemedCalendar(anchorTd, {
+    value: toDateInputValue(currentDue) || "",
+    allowClear: true,
+    onPick: async (iso) => {
+      const ok = await updateCaseDueDate(caseId, iso || "");
+      if (ok) {
+        // additionalcasedetails.due_date is Unix *seconds*; mirror it so the
+        // in-memory row (and redraw) show the new date immediately.
+        let epochSec = null;
+        if (iso) {
+          const ms = Date.parse(`${iso}T00:00:00`);
+          epochSec = Number.isNaN(ms) ? null : Math.floor(ms / 1000);
+        }
         caseItem.expected_date = epochSec;
         caseItem.due_date = epochSec;
+        saveCaseDueDate(caseId, iso || "");
+        toast.success(iso ? "Due date updated." : "Due date cleared.");
+      } else {
+        toast.error("Failed to update due date. Please try again.");
       }
-      saveCaseDueDate(caseId, iso);
-      toast.success("Due date updated.");
-    } else {
-      toast.error("Failed to update due date. Please try again.");
-    }
-    applyClientFilters();
-  };
-
-  input.addEventListener("change", commit);
-  input.addEventListener("blur", () => commit());
-  input.addEventListener("click", (e) => e.stopPropagation());
-  input.addEventListener("keydown", (e) => {
-    e.stopPropagation();
-    if (e.key === "Enter") {
-      e.preventDefault();
-      commit();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      restore();
-    }
+      applyClientFilters();
+    },
   });
 }
 
@@ -1548,6 +1619,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const searchBtn = document.getElementById("searchBtn");
 
     searchInput?.addEventListener("input", applyClientFilters);
+    // Themed calendar for the "Search by Date" filter (allow clearing the filter).
+    if (dateInput) attachThemedCalendar(dateInput, { allowClear: true });
     dateInput?.addEventListener("change", applyClientFilters);
     todayOnly?.addEventListener("change", applyClientFilters);
     searchBtn?.addEventListener("click", applyClientFilters);
@@ -1716,14 +1789,16 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
     });
   }
 
-  // Open 3D viewer link — guard against clicking when no case is selected.
-  const view3dLink = document.getElementById("view3dLink");
-  if (view3dLink) {
-    view3dLink.addEventListener("click", (e) => {
-      if (!window.selectedCaseId) {
-        e.preventDefault();
+  // Generate a QR code of the selected case's 3D viewer link.
+  const generateQrBtn = document.getElementById("generateQrBtn");
+  if (generateQrBtn) {
+    generateQrBtn.addEventListener("click", () => {
+      const url3d = buildThreeDViewerUrl(window.selectedCaseId);
+      if (!url3d) {
         toast.warning("Please select a case first.");
+        return;
       }
+      showThreeDViewerQr(url3d);
     });
   }
 

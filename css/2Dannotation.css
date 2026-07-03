@@ -1439,6 +1439,33 @@ button.upload3d-row {
   background: transparent;
 }
 
+/* Design-mode hint anchored beneath the lock/unlock icon (positioned in JS). */
+.lock-design-tip {
+  position: fixed;
+  z-index: 10000;
+  max-width: min(320px, calc(100vw - 32px));
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #3BAE95;
+  border-radius: 10px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
+  padding: 10px 14px;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #0f172a;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  pointer-events: none;
+}
+
+.lock-design-tip.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .jaw-combined-canvas {
   border: 0;
   background: transparent;

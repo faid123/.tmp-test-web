@@ -548,7 +548,10 @@ export function handleMeshCatalogDoubleClickApplyAll(env, componentId) {
   if (!def || !isMeshComponent(componentId)) {
     return;
   }
+  // Re-type any existing mesh sites to this mesh, then fill every missing tooth
+  // that has no mesh yet (18/28/38/48 are excluded by ensureMesh…MissingTeeth).
   migrateAllMeshPlacementsToMeshId(env.state.teeth, componentId, env.componentById);
+  ensureMeshPlacementsOnMissingTeeth(env.state.teeth, componentId, env.componentById);
   env.state.selectedComponentId = componentId;
   env.state.components = env.state.components.filter((id) => !isMeshComponent(id));
   if (!env.state.components.includes(componentId)) {
@@ -556,7 +559,7 @@ export function handleMeshCatalogDoubleClickApplyAll(env, componentId) {
   }
   env.redrawCatalog();
   env.redrawJaws();
-  env.notify(`All mesh sites now use ${def.label}.`, false);
+  env.notify(`Placed ${def.label} on all missing teeth.`, false);
 }
 
 /** Double-click tooth in design mode with mesh tool: swap mesh, or place if none. */

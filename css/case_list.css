@@ -833,14 +833,7 @@ button {
 .cm-due-edit:focus-visible { opacity: 1; }
 .cm-due-edit:hover { background: var(--line); color: var(--ink); }
 
-.cm-due-input {
-  font: inherit;
-  padding: 3px 6px;
-  border: 1px solid var(--primary, #3BAE95);
-  border-radius: 6px;
-  color: var(--ink);
-  background: #fff;
-}
+/* Themed date calendar styles live in the shared css/toast.css. */
 
 .cm-td-owner { white-space: nowrap; }
 .cm-td-owner > i { color: var(--muted); margin-right: 6px; }
@@ -1298,7 +1291,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel);
-  color: var(--ink-soft);
+  color: var(--primary);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
@@ -1307,6 +1300,101 @@ button {
   color: var(--primary-dark);
   border-color: var(--primary);
 }
+/* Tint the share PNG to the UI teal by using it as a mask over a solid color
+   (the PNG's alpha becomes the icon shape). */
+.cm-3d-share-icon {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  background-color: var(--primary);
+  -webkit-mask: url("../assets/Icon_objects2.png") center / contain no-repeat;
+  mask: url("../assets/Icon_objects2.png") center / contain no-repeat;
+  transition: background-color 0.15s ease;
+}
+.cm-3d-link-anchor:hover .cm-3d-share-icon {
+  background-color: var(--primary-dark);
+}
+
+/* QR button: borderless, transparent background (icon-only look). */
+#generateQrBtn.cm-3d-copy-btn,
+#generateQrBtn.cm-3d-copy-btn:hover {
+  border: none;
+  background: transparent;
+}
+
+/* ===== 3D viewer QR modal ===== */
+.cm-qr-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 5200;
+  display: grid;
+  place-items: center;
+}
+.cm-qr-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.cm-qr-panel {
+  position: relative;
+  z-index: 1;
+  width: min(320px, calc(100vw - 32px));
+  background: var(--panel, #fff);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.cm-qr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.cm-qr-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--ink, #1f2937);
+}
+.cm-qr-close {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 1.05rem;
+  color: var(--muted, #6b7280);
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+}
+.cm-qr-close:hover { background: var(--line-soft, #f1f5f9); color: var(--ink, #1f2937); }
+.cm-qr-code {
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 12px;
+}
+.cm-qr-code img,
+.cm-qr-code canvas { display: block; }
+.cm-qr-url {
+  margin: 0;
+  width: 100%;
+  font-size: 0.72rem;
+  color: var(--muted, #6b7280);
+  word-break: break-all;
+  text-align: center;
+  line-height: 1.4;
+}
+.cm-qr-download { width: 100%; }
 
 /* ============ back-to-list (mobile only) ============ */
 .back-to-list {

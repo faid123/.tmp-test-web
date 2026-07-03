@@ -1309,7 +1309,7 @@ async function downloadJawStlsAsZip() {
     }
     const zip = new window.JSZip();
     jaws.forEach(({ jaw, data }) => {
-      zip.file(`${jaw}.stl`, base64ToArrayBuffer(data));
+      zip.file(`${jaw}.stl`, jawDataToStlBytes(data));
     });
     const blob = await zip.generateAsync({ type: "blob" });
     const url = URL.createObjectURL(blob);
@@ -1325,6 +1325,55 @@ async function downloadJawStlsAsZip() {
     console.error("[preview3D] STL zip download failed", err);
     setMessage("Failed to download STL files.", true);
   }
+}
+
+// A jaw payload from /stl/get may be a real STL *or* an OFF mesh (both render
+// in the preview). A `.stl`-named file that actually holds OFF text opens blank
+// in STL viewers, so convert OFF → binary STL here; pass STL bytes through.
+function jawDataToStlBytes(data) {
+  const buffer = base64ToArrayBuffer(data);
+  const info = inspectMeshPayload(buffer);
+  if (info.format === "off") {
+    const geometry = parseOFFToGeometry(new TextDecoder().decode(buffer));
+    if (geometry) return geometryToBinaryStl(geometry);
+    console.warn("[preview3D] OFF jaw could not be parsed for STL export; shipping raw bytes.");
+  }
+  return buffer;
+}
+
+// Serialize a THREE.BufferGeometry (indexed or not) to a binary STL ArrayBuffer.
+function geometryToBinaryStl(geometry) {
+  const pos = geometry.attributes.position;
+  const index = geometry.index;
+  const triCount = (index ? index.count : pos.count) / 3;
+  const buffer = new ArrayBuffer(84 + triCount * 50);
+  const view = new DataView(buffer);
+  view.setUint32(80, triCount, true); // 80-byte header left zeroed
+  const vert = (i) => {
+    const vi = index ? index.getX(i) : i;
+    return [pos.getX(vi), pos.getY(vi), pos.getZ(vi)];
+  };
+  let offset = 84;
+  for (let t = 0; t < triCount; t += 1) {
+    const a = vert(t * 3);
+    const b = vert(t * 3 + 1);
+    const c = vert(t * 3 + 2);
+    let nx = (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]);
+    let ny = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]);
+    let nz = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+    const len = Math.hypot(nx, ny, nz) || 1;
+    nx /= len; ny /= len; nz /= len;
+    view.setFloat32(offset, nx, true); offset += 4;
+    view.setFloat32(offset, ny, true); offset += 4;
+    view.setFloat32(offset, nz, true); offset += 4;
+    for (const v of [a, b, c]) {
+      view.setFloat32(offset, v[0], true); offset += 4;
+      view.setFloat32(offset, v[1], true); offset += 4;
+      view.setFloat32(offset, v[2], true); offset += 4;
+    }
+    view.setUint16(offset, 0, true); offset += 2; // attribute byte count
+  }
+  return buffer;
 }
 
 // Toggle the modal's busy (uploading) state and drive the progress bar.

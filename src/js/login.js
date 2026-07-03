@@ -18,6 +18,10 @@ function logApi(res, label) {
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
+// "Remember me" persists just the username so the field is pre-filled next
+// visit (the password is never stored). Cleared when the box is unchecked.
+const REMEMBER_KEY = "rememberedUsername";
+
 let currentUUID = null;
 
 // Where to send the user after a successful login. A guest who hit the
@@ -108,6 +112,17 @@ async function sendOTP() {
         isAdmin: data.isAdmin
       };
       localStorage.setItem("loggedInUser", JSON.stringify(userInfo));
+
+      // Honor "Remember me": keep the username for next time, or clear it.
+      try {
+        if (document.getElementById("remember")?.checked) {
+          localStorage.setItem(REMEMBER_KEY, username);
+        } else {
+          localStorage.removeItem(REMEMBER_KEY);
+        }
+      } catch (e) {
+        /* storage may be unavailable (private mode); ignore */
+      }
 
       // --- TEMP: OTP disabled. Skip OTP generation/email; the caller redirects
       // straight to the case list. Remove this return + uncomment below to restore. ---
@@ -234,6 +249,35 @@ function wireOtpBoxes() {
 
 document.addEventListener("DOMContentLoaded", () => {
   wireOtpBoxes();
+
+  // Restore a remembered username and pre-check the box so the state round-trips.
+  try {
+    const remembered = localStorage.getItem(REMEMBER_KEY);
+    if (remembered) {
+      const usernameInput = document.getElementById("username");
+      const rememberBox = document.getElementById("remember");
+      if (usernameInput) usernameInput.value = remembered;
+      if (rememberBox) rememberBox.checked = true;
+      // Move focus to the password since the username is already filled.
+      document.getElementById("password")?.focus();
+    }
+  } catch (e) {
+    /* storage may be unavailable; ignore */
+  }
+
+  // Show/hide password toggle.
+  const toggleBtn = document.getElementById("toggle-password");
+  const passwordInput = document.getElementById("password");
+  if (toggleBtn && passwordInput) {
+    toggleBtn.addEventListener("click", () => {
+      const show = passwordInput.type === "password";
+      passwordInput.type = show ? "text" : "password";
+      toggleBtn.setAttribute("aria-pressed", String(show));
+      toggleBtn.setAttribute("aria-label", show ? "Hide password" : "Show password");
+      // Keep the caret in the field so typing can continue uninterrupted.
+      passwordInput.focus();
+    });
+  }
 
   const loginForm = document.getElementById("login-form");
   if (loginForm) {

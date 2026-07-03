@@ -1,16 +1,7 @@
 import {
   COMPONENT_BY_ID,
-  ensureMajorConnectorPlacementsOnSupportedTeethInJaws,
-  ensureMeshPlacementsOnMissingTeeth,
-  ensurePlatePlacementsOnPresentTeeth,
-  getDefaultMajorConnectorIdForDesignMode,
-  getDefaultMeshIdForDesignMode,
-  getDefaultPlateIdForDesignMode,
   isBarComponent,
   isBarPlacementSurface,
-  isMajorConnectorComponent,
-  isPlateComponentId,
-  meshSelectionContextFromState,
 } from "./components.js";
 import { forEachTooth, TOOTH_ORDER } from "./constants.js";
 import {
@@ -414,50 +405,9 @@ export function syncDesignModeWithLocks(notify) {
   state.designMode = next;
 
   if (next && !prev) {
-    // Auto-fill the default design on lock: mesh on missing teeth, plate on present
-    // teeth, then the major connector seeded onto those anchors. Each ensure* call is
-    // gap-filling (skips teeth already carrying that element), so a loaded design's
-    // own components are preserved.
-    const meshId = getDefaultMeshIdForDesignMode(
-      meshSelectionContextFromState(state),
-      COMPONENT_BY_ID
-    );
-    ensureMeshPlacementsOnMissingTeeth(state.teeth, meshId, COMPONENT_BY_ID);
-
-    const plateId =
-      state.selectedComponentId &&
-      isPlateComponentId(state.selectedComponentId) &&
-      COMPONENT_BY_ID.has(state.selectedComponentId)
-        ? state.selectedComponentId
-        : getDefaultPlateIdForDesignMode(COMPONENT_BY_ID);
-    ensurePlatePlacementsOnPresentTeeth(state.teeth, plateId, COMPONENT_BY_ID);
-
-    // Default major connector per arch: horseshoe (upper) / lingual plate (lower).
-    // A catalog-picked major overrides the default for its own arch only.
-    const selected = COMPONENT_BY_ID.get(state.selectedComponentId || "");
-    const selectedMajorId =
-      selected && isMajorConnectorComponent(selected) ? selected.id : null;
-    const upperMajorId =
-      selectedMajorId && selectedMajorId.startsWith("major-upper-")
-        ? selectedMajorId
-        : getDefaultMajorConnectorIdForDesignMode(COMPONENT_BY_ID);
-    const lowerMajorId =
-      selectedMajorId && selectedMajorId.startsWith("major-lower-")
-        ? selectedMajorId
-        : "major-lower-lingual-plate";
-    ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
-      state.teeth,
-      upperMajorId,
-      COMPONENT_BY_ID,
-      ["upper"]
-    );
-    ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
-      state.teeth,
-      lowerMajorId,
-      COMPONENT_BY_ID,
-      ["lower"]
-    );
-
+    // No components are auto-placed on lock — the user adds mesh, plate and the
+    // major connector manually. We only mark missing teeth so the arch renders
+    // correctly in design mode.
     forEachTooth((toothId) => {
       const t = state.teeth[toothId];
       if (t && !t.isPresent) {
@@ -480,10 +430,55 @@ export function syncDesignModeWithLocks(notify) {
   if (notify && prev !== next) {
     if (next) {
       setMessage("Both arches are locked. Entered design mode; tooth selection is disabled.", false);
+      // Design-mode interaction hint — anchored to the lock/unlock icon, ~5s.
+      // Touch (mobile/tablet) has no right-click; removal is via the eraser button.
+      const coarsePointer =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(pointer: coarse)").matches;
+      showLockDesignTip(
+        coarsePointer
+          ? "Remove the component using the eraser icon."
+          : "Left-click on the tooth to add a component, and right-click to remove it."
+      );
     } else {
       setMessage("Exited design mode. Unlock state allows tooth editing again.", false);
     }
   }
+}
+
+// Design-mode hint anchored beneath the lock/unlock icon (between the arches)
+// rather than the shared top-right toast. Auto-dismisses after ~5s; a repeat
+// lock replaces any tip still on screen.
+let lockDesignTipTimer = null;
+function showLockDesignTip(message) {
+  const anchor = document.getElementById("jawLockToggleBtn");
+  if (!anchor) return;
+
+  document.getElementById("lockDesignTip")?.remove();
+  clearTimeout(lockDesignTipTimer);
+
+  const tip = document.createElement("div");
+  tip.id = "lockDesignTip";
+  tip.className = "lock-design-tip";
+  tip.setAttribute("role", "status");
+  tip.textContent = message;
+  document.body.appendChild(tip);
+
+  // Center under the lock icon, clamped to stay within the viewport.
+  const rect = anchor.getBoundingClientRect();
+  const margin = 8;
+  tip.style.top = `${rect.bottom + margin}px`;
+  let left = rect.left + rect.width / 2 - tip.offsetWidth / 2;
+  left = Math.max(margin, Math.min(left, window.innerWidth - tip.offsetWidth - margin));
+  tip.style.left = `${left}px`;
+
+  requestAnimationFrame(() => tip.classList.add("is-visible"));
+
+  const dismiss = () => {
+    tip.classList.remove("is-visible");
+    setTimeout(() => tip.remove(), 200);
+  };
+  lockDesignTipTimer = setTimeout(dismiss, 5000);
 }
 
 export function bindArchWhitespaceDismiss() {
