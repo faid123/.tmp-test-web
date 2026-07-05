@@ -1,0 +1,136 @@
+================================================================================
+DATA DICTIONARY & ENTITY RELATIONSHIP SPECIFICATION
+================================================================================
+
+This document outlines the database entities, key fields, and structural 
+relationships for the clinical/case management application.
+
+--------------------------------------------------------------------------------
+1. ENTITY SUMMARY TABLE
+--------------------------------------------------------------------------------
+
+Entity          | Key Fields                                    | Relationships
+----------------|-----------------------------------------------|---------------------------------------------------------
+User            | uuid (PK), username, email, is_admin          | 1..* → Role
+                |                                               | 1..* → Alert (sender/recipient)
+                |                                               | 1..* → Note (sender)
+----------------|-----------------------------------------------|---------------------------------------------------------
+Case            | id/caseIntID (PK), case_id, name,             | 1..* → Role, AdditionalCaseDetails, JawStruct, ClinicalInfo,
+                | created_at, new_status                        |        STL, Thumbnail, CaseHistory, Note, Polyline, 
+                |                                               |        UndercutHeatmap
+----------------|-----------------------------------------------|---------------------------------------------------------
+Role            | id (PK), uuid (FK→User),                      | Connects users to cases with access permissions.
+                | case_int_id (FK→Case), role/permission        |
+----------------|-----------------------------------------------|---------------------------------------------------------
+JawStruct       | id (PK), case_id (FK),                        | Stores encoded RPD design data per jaw per case.
+                | type (upper_jaw/lower_jaw), filename,         |
+                | data (base64)                                 |
+----------------|-----------------------------------------------|---------------------------------------------------------
+ClinicalInfo    | id (PK), case_id (FK),                        | Per-tooth clinical flags: mobility, rct, restoration,
+                | data (base64 BinaryFormatter)                 | crown, implant, rootStump, cracked, tilted,
+                |                                               | extraction, abutment.
+----------------|-----------------------------------------------|---------------------------------------------------------
+STL             | id (PK), case_id (FK), type, filename,        | Jaw geometry uploads in STL/OFF format.
+                | data (base64/file)                            |
+----------------|-----------------------------------------------|---------------------------------------------------------
+Polyline        | id (PK), case_id (FK),                        | 3D coordinate arrays rendered as tube geometry overlays.
+                | jaw/type/component, points/data               |
+----------------|-----------------------------------------------|---------------------------------------------------------
+Note            | id (PK), case_id (FK), sender_uuid (FK),      | Case chat messages with optional image attachments.
+                | message, image_data, created_at               |
+----------------|-----------------------------------------------|---------------------------------------------------------
+Alert           | id (PK), to_user_uuid, from_user_uuid,        | In-app notifications between users on a case.
+                | caseIntID, read_status, message               |
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+2. DETAILED ENTITY SPECIFICATIONS
+--------------------------------------------------------------------------------
+
+[User]
+- Description: Represents application users, including clinical operators and admins.
+- Fields:
+    * uuid (PK)           : Unique identifier for the user.
+    * username            : Unique login handle.
+    * email               : Contact email address.
+    * is_admin            : Boolean flag dictating administrative privileges.
+- Relationships:
+    * One-to-Many (1..*) with Role.
+    * One-to-Many (1..*) with Alert (as sender or recipient).
+    * One-to-Many (1..*) with Note (as sender/author).
+
+[Case]
+- Description: The core entity representing a patient case or clinical order.
+- Fields:
+    * id/caseIntID (PK)   : Internal unique integer primary key.
+    * case_id             : Public or external case identifier reference.
+    * name                : Name designation for the case.
+    * created_at          : Timestamp of case creation.
+    * new_status          : Tracking status of the case lifecycle.
+- Relationships:
+    * One-to-Many (1..*) with Role, AdditionalCaseDetails, JawStruct, ClinicalInfo, STL, Thumbnail, CaseHistory, Note, Polyline, and UndercutHeatmap.
+
+[Role]
+- Description: Junction entity that maps users to specific cases with explicit access control permissions.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * uuid (FK)           : Reference to User.uuid.
+    * case_int_id (FK)    : Reference to Case.id.
+    * role/permission     : Defined string or token specifying access level.
+
+[JawStruct]
+- Description: Holds structured Removable Partial Denture (RPD) CAD/CAM design data.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * case_id (FK)        : Reference to Case.id.
+    * type                : Categorization of upper_jaw or lower_jaw.
+    * filename            : Source name of the saved configuration.
+    * data                : Base64-encoded string containing structure data.
+
+[ClinicalInfo]
+- Description: Encapsulates specific clinical dental diagnostics and per-tooth metadata.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * case_id (FK)        : Reference to Case.id.
+    * data                : BinaryFormatter-serialized Base64 payload containing flags for teeth (e.g., mobility, rct, restoration, crown, implant, rootStump, cracked, tilted, extraction, abutment).
+
+[STL]
+- Description: Storage records for 3D jaw geometry model files.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * case_id (FK)        : Reference to Case.id.
+    * type                : Model taxonomy identifier.
+    * filename            : Target mesh filename.
+    * data                : Mesh file contents stored either as Base64 text or file reference paths.
+
+[Polyline]
+- Description: Set of 3D coordinates representing path overlays drawn on the model geometry.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * case_id (FK)        : Reference to Case.id.
+    * jaw/type/component  : Contextual mapping indicating which jaw/part the line belongs to.
+    * points/data         : Array or serialized representation of 3D spatial points.
+
+[Note]
+- Description: Direct communicative chat logs associated with individual cases.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * case_id (FK)        : Reference to Case.id.
+    * sender_uuid (FK)    : Reference to User.uuid.
+    * message             : Text body content of the note.
+    * image_data          : Optional Base64 attachment for diagnostic images.
+    * created_at          : Creation timestamp.
+
+[Alert]
+- Description: Internal application notifications notifying actors of status updates or messages.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * to_user_uuid (FK)   : Reference to target User.uuid.
+    * from_user_uuid (FK) : Reference to originating User.uuid.
+    * caseIntID (FK)      : Reference to Case.id.
+    * read_status         : Tracking flag for notification status (read/unread).
+    * message             : Informational notification text snippet.
+
+================================================================================
+END OF SPECIFICATION FILE
+================================================================================
