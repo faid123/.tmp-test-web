@@ -13,6 +13,7 @@ import {
   isClaspComponent,
   isPalatalHoleMajorComponent,
   isPalatalBarMajorComponent,
+  isPalatalStrapMajorComponent,
   isPlateComponentId,
   ensureMajorConnectorPlacementsOnSupportedTeethInJaws,
   ensurePalatalBarPlacementsOnConnectorTeeth,
@@ -45,6 +46,50 @@ import {
 } from "./caseNote.js";
 import { toast, attachThemedCalendar } from "../toast.js";
 
+// ── Material restrictions ────────────────────────────────────────────────────
+// A full-acrylic case (state.jawMaterial === 2) is an all-acrylic denture, so it
+// can't carry metal-framework elements: the MESH and BARS tabs are disabled
+// wholesale, and the three open/metal upper palatal major connectors — Palatal
+// Strap, A-P strap (aka "palatal hole", major-upper-palatal-hole) and Palatal Bar
+// — are disabled (Palatal Plate + Horseshoe stay, being acrylic-capable). Metal
+// (0) / unset has no restriction.
+const ACRYLIC_BLOCKED_TABS = new Set(["mesh", "bars"]);
+
+function isFullAcrylic() {
+  return state.jawMaterial === 2;
+}
+
+export function isTabBlockedByMaterial(tabId) {
+  return isFullAcrylic() && ACRYLIC_BLOCKED_TABS.has(tabId);
+}
+
+export function isComponentBlockedByMaterial(componentId) {
+  if (!isFullAcrylic()) return false;
+  return (
+    isMeshComponent(componentId) ||
+    isBarComponent(componentId) ||
+    isPalatalStrapMajorComponent(componentId) ||
+    isPalatalHoleMajorComponent(componentId) ||
+    isPalatalBarMajorComponent(componentId)
+  );
+}
+
+// Never leave the user parked on a tab/component the current material forbids
+// (e.g. a loaded full-acrylic case defaulting to the mesh tab, or entering design
+// mode with mesh-hole selected). Called at the top of every catalog render.
+function healSelectionForMaterial() {
+  if (!isFullAcrylic()) return;
+  if (isTabBlockedByMaterial(state.selectedTab)) {
+    const nextTab = COMPONENT_TABS.find(
+      (t) => t.kind !== "form" && !isTabBlockedByMaterial(t.id)
+    );
+    if (nextTab) state.selectedTab = nextTab.id;
+  }
+  if (state.selectedComponentId && isComponentBlockedByMaterial(state.selectedComponentId)) {
+    state.selectedComponentId = null;
+  }
+}
+
 // Build component tabs and initialize the first visible catalog view.
 export function initComponentCatalog() {
   state.components = Array.isArray(state.components)
@@ -66,6 +111,10 @@ export function initComponentCatalog() {
       button.className = `component-tab${kindClass} ${state.selectedTab === tab.id ? "is-active" : ""}`;
       button.textContent = tab.label;
       button.addEventListener("click", () => {
+        if (isTabBlockedByMaterial(tab.id)) {
+          setMessage(`${tab.label} isn't available for a full acrylic case.`, true);
+          return;
+        }
         state.selectedTab = tab.id;
         state.suppressArchPlacementSuggestions = false;
         if (tab.id === "major") {
@@ -82,9 +131,15 @@ export function initComponentCatalog() {
 
 // Render component options for the selected tab and grouped sections.
 export function renderComponentCatalog() {
+  healSelectionForMaterial();
   const tabs = document.querySelectorAll(".component-tab");
   tabs.forEach((tabBtn, index) => {
-    tabBtn.classList.toggle("is-active", COMPONENT_TABS[index]?.id === state.selectedTab);
+    const tabId = COMPONENT_TABS[index]?.id;
+    tabBtn.classList.toggle("is-active", tabId === state.selectedTab);
+    const blocked = isTabBlockedByMaterial(tabId);
+    tabBtn.classList.toggle("is-disabled", blocked);
+    tabBtn.disabled = blocked;
+    tabBtn.setAttribute("aria-disabled", blocked ? "true" : "false");
   });
 
   const itemsEl = document.getElementById("componentItems");
@@ -173,8 +228,15 @@ export function createMajorColumn(title, items) {
 export function createComponentItemButton(item) {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = `component-item ${state.selectedComponentId === item.id ? "is-active" : ""}`;
-  button.title = item.label;
+  const blockedByMaterial = isComponentBlockedByMaterial(item.id);
+  button.className = `component-item ${state.selectedComponentId === item.id ? "is-active" : ""}${blockedByMaterial ? " is-disabled" : ""}`;
+  button.title = blockedByMaterial
+    ? `${item.label} — not available for a full acrylic case`
+    : item.label;
+  if (blockedByMaterial) {
+    button.disabled = true;
+    button.setAttribute("aria-disabled", "true");
+  }
 
   const icon = document.createElement("span");
   icon.className = "component-icon";
@@ -232,6 +294,10 @@ export function handleDesignComponentSelect(componentId) {
   try {
   if (!state.designMode) {
     setMessage("Lock both arches to use the component catalog.", true);
+    return;
+  }
+  if (isComponentBlockedByMaterial(componentId)) {
+    setMessage("This component isn't available for a full acrylic case.", true);
     return;
   }
   state.suppressArchPlacementSuggestions = false;
@@ -337,13 +403,18 @@ export function handleDesignComponentSelect(componentId) {
         state.teeth,
         componentId,
         COMPONENT_BY_ID,
-        jawKeys
+        jawKeys,
+        { fullAcrylic: isFullAcrylic() }
       );
     }
 
     // Keep per-tooth plate-prox in step with the new connector: plate/strap/horseshoe
     // plates the teeth it covers, a bar plates none. Flips plating on a plate↔bar switch.
-    syncReciprocatingPlatesToMajorConnector(state.teeth, componentId, jawKeys);
+    // Full-acrylic cases carry no metal plating — the 7-to-7 major span IS the base — so
+    // skip the plate stamping (otherwise the arch shows per-tooth mesh/plate instead).
+    if (!isFullAcrylic()) {
+      syncReciprocatingPlatesToMajorConnector(state.teeth, componentId, jawKeys);
+    }
 
     forEachTooth((toothId) => {
       const tooth = state.teeth[toothId];

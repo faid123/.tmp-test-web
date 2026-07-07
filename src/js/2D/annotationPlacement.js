@@ -30,7 +30,7 @@ import {
   removePlacementsByComponentIds,
   syncToothComponentsFromPlacements,
 } from "./annotationTeethModel.js";
-import { ensureMajorCatalogPickForTooth } from "./annotationCatalog.js";
+import { ensureMajorCatalogPickForTooth, isComponentBlockedByMaterial } from "./annotationCatalog.js";
 import { assessPlacementCriteria } from "./criteria.js";
 
 // Check whether a tooth ID is anterior (unit 1-3).
@@ -85,6 +85,13 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
 
   if (!selectedComponent) {
     setMessage("Select a component from the catalog first.", true);
+    return;
+  }
+
+  // Full acrylic can't carry mesh, bars, or the palatal A-P strap / palatal bar —
+  // refuse the placement even if a stale selection slips through the catalog gate.
+  if (isComponentBlockedByMaterial(selectedComponent.id)) {
+    setMessage("This component isn't available for a full acrylic case.", true);
     return;
   }
 

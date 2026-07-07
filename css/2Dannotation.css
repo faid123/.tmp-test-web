@@ -1467,6 +1467,7 @@ button.upload3d-row {
 }
 
 .jaw-combined-canvas {
+  position: relative;
   border: 0;
   background: transparent;
   display: flex;
@@ -1477,6 +1478,24 @@ button.upload3d-row {
   margin: 0;
   flex: 1;
   min-height: 0;
+}
+
+/* Material label pinned to the top-left corner of the jaws. Plain text — no
+   background, border or dot; brand-green text. */
+.jaw-material-badge {
+  position: absolute;
+  top: 10px;
+  left: 8px;
+  z-index: 4;
+  pointer-events: none;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  line-height: 1.4;
+  color: #3BAE95;
+}
+.jaw-material-badge.is-hidden {
+  display: none;
 }
 
 .jaw-lock-strip {
@@ -1870,6 +1889,15 @@ button.upload3d-row {
   color: #fff;
 }
 
+/* Disabled by material rule (e.g. mesh/bars tabs on a full acrylic case). */
+.component-tab.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: #f1f3f5;
+  color: var(--muted);
+  border-color: var(--line);
+}
+
 .case-note-form {
   display: grid;
   gap: 10px;
@@ -2044,6 +2072,14 @@ button.upload3d-row {
 .component-item.is-active {
   border-color: transparent;
   box-shadow: none;
+}
+
+/* Blocked by material rule (palatal A-P strap & bar on a full acrylic case). */
+.component-item.is-disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  pointer-events: none;
+  filter: grayscale(1);
 }
 
 .component-icon {

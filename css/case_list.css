@@ -97,7 +97,13 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   grid-template-rows: 1fr auto;
+  /* 100vh is the LARGEST viewport on mobile (URL bar hidden), so on real devices
+     the page grows taller than the visible area and the footer drops below the
+     fold — even though DevTools device-emulation (which uses the exact viewport)
+     shows it. 100dvh tracks the currently visible height so the footer stays put;
+     100vh is the fallback for browsers without dvh. */
   height: 100vh;
+  height: 100dvh;
   background: var(--bg);
 }
 

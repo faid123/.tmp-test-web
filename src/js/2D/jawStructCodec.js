@@ -646,7 +646,10 @@ export function encodeJawStructText(state, jawSide) {
   lines.push("");
   lines.push(`Start of Jaw Struct yr.mth.day.hr.min.sec: ${stampNow()}`);
   lines.push(`Jaw Type: ${isUpper ? 0 : 1}`);
-  lines.push("Jaw Material: 0");
+  // Denture base material: 0 = metal, 2 = full acrylic. Chosen once per case
+  // (state.jawMaterial); defaults to 0/metal when unset. Applies to both jaws.
+  const jawMaterial = Number.isFinite(state?.jawMaterial) ? state.jawMaterial : 0;
+  lines.push(`Jaw Material: ${jawMaterial}`);
 
   // Header pattern types (after Jaw Material). The native parser is positional, so
   // omitting these desynced the parse (desktop loaded blank). Preserve loaded values;

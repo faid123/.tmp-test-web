@@ -241,7 +241,7 @@ function promptMeshQualityChoice() {
           </button>
         </div>
       </div>
-    `;
+    `
 
     const choose = (quality, { showProgress = true } = {}) => {
       if (settled) return;

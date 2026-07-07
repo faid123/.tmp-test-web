@@ -59,9 +59,7 @@
           <i class="fa fa-camera" aria-hidden="true"></i>
         </button>
         <img id="previewImage" alt="Composed dental preview" />
-        <p id="previewFallback" class="preview-fallback">
-          No preview image found. Open from the 3D page after generating the composed image.
-        </p>
+        <p id="previewFallback" class="preview-fallback"></p>
       </div>
     </aside>
 
@@ -101,6 +99,9 @@
         </div>
 
         <div class="jaw-combined-canvas">
+          <!-- Denture-base material for the case (Metal / Full Acrylic), pinned to
+               the top-left corner of the jaws. Populated by updateJawMaterialBadge. -->
+          <span id="jawMaterialBadge" class="jaw-material-badge is-hidden" aria-live="polite"></span>
           <svg id="upperArchSvg" class="arch-svg"></svg>
           <div class="jaw-lock-strip">
             <div class="jaw-lock-strip-cluster">
@@ -189,6 +190,10 @@
         <div class="action-list center-actions">
           <button id="clearTopBtn" type="button" class="action-btn">Clear upper teeth</button>
           <button id="clearBottomBtn" type="button" class="action-btn">Clear lower teeth</button>
+          <!-- Design-mode counterparts: strip all placed components from one jaw
+               (tooth presence is left untouched). Shown only while locked. -->
+          <button id="clearUpperComponentsBtn" type="button" class="action-btn is-hidden" aria-label="Remove all components from the upper jaw">Clear Top</button>
+          <button id="clearLowerComponentsBtn" type="button" class="action-btn is-hidden" aria-label="Remove all components from the lower jaw">Clear Bottom</button>
           <button id="drawFromScratchBtn" class="action-btn">Draw from Scratch</button>
           <button id="loadProposalBtn" type="button" class="action-btn">Load Template Jaw</button>
         </div>

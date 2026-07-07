@@ -983,15 +983,39 @@ export function ensureMajorConnectorPlacementsOnSupportedTeeth(teeth, majorCompo
   );
 }
 
+// Terminal third molars — excluded so a full-acrylic span runs "7 to 7".
+const TERMINAL_THIRD_MOLAR_IDS = Object.freeze(new Set(["18", "28", "38", "48"]));
+
+/**
+ * Full-acrylic span: the acrylic denture base runs the whole arch from #7 to #7
+ * (second molar to second molar), independent of per-tooth anchors and without the
+ * metal-framework plate/mesh stamping. The terminal third molars (#8: 18/28/38/48)
+ * are excluded. Used when the case material is full acrylic (state.jawMaterial === 2).
+ */
+function fillMajorConnectorFullArchSpan(teeth, majorComponentId, jawKey) {
+  const order = TOOTH_ORDER && Array.isArray(TOOTH_ORDER[jawKey]) ? TOOTH_ORDER[jawKey] : [];
+  for (const toothId of order) {
+    if (TERMINAL_THIRD_MOLAR_IDS.has(toothId)) continue; // keep the span 7-to-7
+    if (!getMajorConnectorAssetReference(toothId, jawKey)) continue;
+    if (isMajorConnectorToothExcluded(majorComponentId, toothId)) continue;
+    const tooth = teeth[toothId];
+    if (!tooth) continue;
+    placeMajorConnectorOnce(tooth, majorComponentId);
+  }
+}
+
 /**
  * Jaw-scoped variant of major auto-placement.
  * `jawKeys` accepts `"upper"` and/or `"lower"`.
+ * `options.fullAcrylic` — when true, midline-reaching majors span the full arch
+ * (7-to-7), anchor-independent, for an all-acrylic denture base.
  */
 export function ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
   teeth,
   majorComponentId,
   componentById,
-  jawKeys
+  jawKeys,
+  options = {}
 ) {
   if (
     !majorComponentId ||
@@ -1002,15 +1026,20 @@ export function ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
     return;
   }
 
+  const fullAcrylic = options.fullAcrylic === true;
+
   // Midline-reaching majors (plate / horseshoe / hole / kennedy) fill one continuous run
   // across the arch — including bare anterior teeth between anchors — matching the desktop.
-  // Posterior-only majors (bar / strap) keep the per-tooth placement.
+  // Posterior-only majors (bar / strap) keep the per-tooth placement. Full-acrylic cases
+  // span 7-to-7 regardless of anchors (the acrylic base covers the arch).
   const runsToMidline = majorConnectorRunsToMidline(majorComponentId);
   for (const jawKey of jawKeys) {
     if (jawKey !== "upper" && jawKey !== "lower") {
       continue;
     }
-    if (runsToMidline) {
+    if (fullAcrylic && runsToMidline) {
+      fillMajorConnectorFullArchSpan(teeth, majorComponentId, jawKey);
+    } else if (runsToMidline) {
       fillMajorConnectorSpanInArch(teeth, majorComponentId, componentById, jawKey);
     } else {
       placeMajorConnectorPerTooth(teeth, majorComponentId, componentById, jawKey);

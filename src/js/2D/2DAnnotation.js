@@ -54,6 +54,13 @@ export const state = {
   suppressArchPlacementSuggestions: false,
   rangeMissingMode: false,
   rangeMissingStartToothId: null,
+  /**
+   * Denture base material for the whole case, written to each jaw's
+   * "Jaw Material" field on encode. 0 = metal, 2 = full acrylic. null = not yet
+   * chosen (encodes as 0). Prompted when locking an empty design — see
+   * annotationLocks.maybePromptJawMaterial.
+   */
+  jawMaterial: null,
 };
 
 /** Transient UI refs — mutated by other modules (avoids import-reassignment issues). */
@@ -90,6 +97,7 @@ function cloneStateForHistory() {
     suppressArchPlacementSuggestions: Boolean(state.suppressArchPlacementSuggestions),
     rangeMissingMode: Boolean(state.rangeMissingMode),
     rangeMissingStartToothId: state.rangeMissingStartToothId,
+    jawMaterial: state.jawMaterial ?? null,
   };
 }
 
@@ -111,6 +119,7 @@ function applyHistorySnapshot(snapshot) {
   state.suppressArchPlacementSuggestions = Boolean(snapshot.suppressArchPlacementSuggestions);
   state.rangeMissingMode = Boolean(snapshot.rangeMissingMode);
   state.rangeMissingStartToothId = snapshot.rangeMissingStartToothId ?? null;
+  state.jawMaterial = snapshot.jawMaterial ?? null;
 }
 
 export function getHistoryStateSignature() {
@@ -336,7 +345,20 @@ export function renderJaw(jaw) {
 }
 
 export function renderJaws() {
+  updateJawMaterialBadge();
   return renderJawsImpl();
+}
+
+// Reflect the case's denture-base material in the corner badge over the jaws.
+// Hidden until a material is chosen/loaded (null). Called from renderJaws, so it
+// stays fresh across placement, load, undo/redo and the material prompt.
+const JAW_MATERIAL_LABELS = { 0: "Metal", 2: "Full Acrylic" };
+export function updateJawMaterialBadge() {
+  const badge = document.getElementById("jawMaterialBadge");
+  if (!badge) return;
+  const label = JAW_MATERIAL_LABELS[state.jawMaterial];
+  badge.classList.toggle("is-hidden", !label);
+  if (label) badge.textContent = `Material : ${label}`;
 }
 
 let meshAnnotationEnvImpl = () => ({});
@@ -932,6 +954,13 @@ async function fetchJawStruct(recordsPromise = null) {
   if (Array.isArray(records) && records.length) {
     const decoded = decodeJawStructResponse(records);
     window.__jawStruct = decoded.raw;
+    // A design exists on the server — preserve its saved denture-base material
+    // (default metal/0 if the field is absent) so a re-save doesn't lose it.
+    const savedMaterial = Number(
+      decoded.upper?.other?.["Jaw Material"] ??
+        decoded.lower?.other?.["Jaw Material"]
+    );
+    state.jawMaterial = Number.isFinite(savedMaterial) ? savedMaterial : 0;
     // Apply each jaw independently so one failing doesn't skip the other.
     try {
       if (decoded.upper) applyJawStructDesign(resolveJawStructDesign(decoded.upper), state);
@@ -950,6 +979,9 @@ async function fetchJawStruct(recordsPromise = null) {
     // the 16x16 minor grid), so a Save would emit defaults for them. Reset to a
     // clean arch, which encodes correctly from scratch.
     await resetJawStructDesignToBaseline();
+    // Fresh case with no prior design — leave the material unset so locking the
+    // empty arch prompts for it (annotationLocks.maybePromptJawMaterial).
+    state.jawMaterial = null;
     setMessage("No server 2D design for this case — starting from a clean arch.", false);
   }
 
@@ -1391,6 +1423,11 @@ function init() {
     .then(([, teethModel, locks, catalog, noticeboard, clinicalInfo]) => {
       teethModel.initializeTeethState();
       locks.restoreAnnotationFromStorage();
+      // Always enter the 2D editor in select (unlocked) mode, even if a locked
+      // design-mode state was persisted from a previous session.
+      state.locks.upper = false;
+      state.locks.lower = false;
+      state.designMode = false;
       bindHistoryControls();
       locks.bindStatusPicker();
       locks.bindJawControls();

@@ -16,12 +16,12 @@ import {
   closePresentToothRadialQuickPick,
   renderJaw,
   renderJaws,
+  updateJawMaterialBadge,
 } from "./2DAnnotation.js";
 import { renderComponentCatalog } from "./annotationCatalog.js";
 import {
   ensureToothPlacementState,
   normalizeSurface,
-  resetToothRecord,
   statusJsonForToothRecord,
   syncToothComponentsFromPlacements,
 } from "./annotationTeethModel.js";
@@ -233,6 +233,10 @@ export function bindActionButtons() {
   const saveJpeg = document.getElementById("saveJpegBtn");
   if (clearTop) clearTop.addEventListener("click", () => clearJawTeethBaseline("upper"));
   if (clearBottom) clearBottom.addEventListener("click", () => clearJawTeethBaseline("lower"));
+  const clearUpperComponents = document.getElementById("clearUpperComponentsBtn");
+  const clearLowerComponents = document.getElementById("clearLowerComponentsBtn");
+  if (clearUpperComponents) clearUpperComponents.addEventListener("click", () => clearJawComponents("upper"));
+  if (clearLowerComponents) clearLowerComponents.addEventListener("click", () => clearJawComponents("lower"));
   if (reset) reset.addEventListener("click", drawFromScratch);
   if (save) save.addEventListener("click", saveAnnotation);
   if (saveJpeg) saveJpeg.addEventListener("click", saveAsJpeg);
@@ -250,11 +254,89 @@ export function bindActionButtons() {
 function toggleBothJawsLock() {
   const historyBefore = getHistoryStateSignature();
   const bothLocked = state.locks.upper && state.locks.lower;
+  const enteringDesignMode = !bothLocked;
   state.locks.upper = !bothLocked;
   state.locks.lower = !bothLocked;
   refreshLockButtons();
   syncDesignModeWithLocks(true);
   recordHistoryIfChanged(historyBefore);
+  // On the first lock of a brand-new, empty case, ask which denture-base material
+  // to use before the user starts placing components.
+  if (enteringDesignMode) maybePromptJawMaterial();
+}
+
+// True if any tooth on either arch already carries a placed component.
+function hasAnyComponentPlacement() {
+  return Object.values(state.teeth || {}).some(
+    (tooth) => Array.isArray(tooth?.componentPlacements) && tooth.componentPlacements.length > 0
+  );
+}
+
+// Once-per-page-load guard so re-locking an empty case doesn't re-ask. Module
+// scope resets on navigation (each case opens ThreeDViewer/2DAnnotation.html
+// fresh), so it's effectively per-case.
+let jawMaterialPromptResolved = false;
+
+// Denture-base material prompt. Shown when locking a design that has NO
+// components placed on either jaw and the material hasn't been chosen yet this
+// session (i.e. a fresh/empty design — a new case, or an emptied one). A case
+// that already carries components keeps its loaded material and isn't asked.
+// Choice writes state.jawMaterial (0 = metal, 2 = full acrylic), which the
+// encoder emits as each jaw's "Jaw Material" field.
+export function maybePromptJawMaterial() {
+  if (jawMaterialPromptResolved) return;
+  if (hasAnyComponentPlacement()) return;
+  openJawMaterialDialog();
+}
+
+function openJawMaterialDialog() {
+  if (document.getElementById("jawMaterialGate")) return;
+
+  const gate = document.createElement("div");
+  gate.id = "jawMaterialGate";
+  gate.style.cssText =
+    "position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:transparent;";
+  gate.innerHTML = `
+    <div role="dialog" aria-modal="true" aria-label="Choose denture base material" style="width:min(90vw,360px);background:#fff;border-radius:12px;padding:16px 16px 14px;box-shadow:0 16px 44px rgba(0,0,0,.3);text-align:center;font-family:system-ui,-apple-system,sans-serif;">
+      <h2 style="margin:0 0 6px;font-size:15px;font-weight:700;color:#0f172a;">Choose material</h2>
+      <p style="margin:0 0 14px;font-size:12px;line-height:1.45;color:#475569;">Select the denture base material for this case.</p>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button type="button" data-material="0" style="width:100%;padding:9px 14px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid transparent;background:#3BAE95;color:#fff;">Metal</button>
+        <button type="button" data-material="2" style="width:100%;padding:9px 14px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid #cbd5e1;background:#fff;color:#334155;">Full Acrylic</button>
+      </div>
+    </div>`;
+  document.body.appendChild(gate);
+
+  const historyBefore = getHistoryStateSignature();
+  const choose = (value, label) => {
+    state.jawMaterial = value;
+    jawMaterialPromptResolved = true;
+    document.removeEventListener("keydown", onKey);
+    gate.remove();
+    // Reflect the pick in the corner badge over the jaws.
+    updateJawMaterialBadge();
+    // Full acrylic disables mesh/bars + the palatal A-P strap & bar connectors;
+    // re-render so the catalog moves off any now-blocked tab/component.
+    renderComponentCatalog();
+    recordHistoryIfChanged(historyBefore);
+    setMessage(`Material set to ${label}.`, false);
+  };
+  const onKey = (e) => {
+    // Escape keeps the default (metal) so the prompt can't trap the user.
+    if (e.key === "Escape") choose(0, "Metal");
+  };
+
+  gate.querySelectorAll("[data-material]").forEach((btn) => {
+    btn.addEventListener("click", () =>
+      choose(Number(btn.dataset.material), btn.textContent.trim())
+    );
+  });
+  // Backdrop click defaults to metal (0), matching the historical default.
+  gate.addEventListener("click", (e) => {
+    if (e.target === gate) choose(0, "Metal");
+  });
+  document.addEventListener("keydown", onKey);
+  gate.querySelector("[data-material='0']")?.focus();
 }
 
 function refreshLockButtons() {
@@ -306,29 +388,55 @@ function clearJawTeethBaseline(jaw) {
   recordHistoryIfChanged(historyBefore);
 }
 
+// Design-mode action: remove every placed component from one jaw while leaving
+// tooth presence/status alone (unlike clearJawTeethBaseline, which marks teeth
+// missing). Clears both the placements and the derived component list; the
+// palatal-plate overlay is an upper component, so drop it too.
+function clearJawComponents(jaw) {
+  const historyBefore = getHistoryStateSignature();
+  for (const toothId of TOOTH_ORDER[jaw]) {
+    const tooth = state.teeth[toothId];
+    if (!tooth) continue;
+    tooth.components = [];
+    tooth.componentPlacements = [];
+  }
+  if (jaw === "upper") {
+    state.archOverlayPalatalHoleActive = false;
+  }
+  renderJaw(jaw);
+  setMessage(`${titleCase(jaw)} arch: all components removed.`, false);
+  recordHistoryIfChanged(historyBefore);
+}
+
 function drawFromScratch() {
   const historyBefore = getHistoryStateSignature();
+  // Remove only the components from BOTH jaws (like Clear Top + Clear Bottom) —
+  // keep tooth presence/status, the locks and design mode. Then re-open the
+  // material prompt so the user re-picks the denture base for the fresh design.
   for (const jaw of Object.keys(TOOTH_ORDER)) {
-    state.locks[jaw] = false;
+    for (const toothId of TOOTH_ORDER[jaw]) {
+      const tooth = state.teeth[toothId];
+      if (!tooth) continue;
+      tooth.components = [];
+      tooth.componentPlacements = [];
+    }
   }
-  forEachTooth((toothId) => resetToothRecord(toothId, null));
+  state.archOverlayPalatalHoleActive = false;
   state.components = [];
   state.selectedComponentId = DEFAULT_COMPONENT_ID;
-  state.archOverlayPalatalHoleActive = false;
-  state.restSeatCalibrationAcOnly = false;
   state.removeComponentMode = false;
-  state.rangeMissingMode = false;
-  state.rangeMissingStartToothId = null;
   const rmBtn = document.getElementById("removeComponentModeBtn");
   if (rmBtn) rmBtn.classList.remove("is-active");
-  refreshRangeMissingButton();
-  refreshLockButtons();
-  syncDesignModeWithLocks(false);
+  // Reset the material so the prompt reappears (and clear its once-per-session guard).
+  state.jawMaterial = null;
+  jawMaterialPromptResolved = false;
+  updateJawMaterialBadge();
   renderComponentCatalog();
   updateEditModeUI();
   renderJaws();
-  setMessage("All teeth reset. Both arches unlocked.", false);
+  setMessage("Components cleared from both arches.", false);
   recordHistoryIfChanged(historyBefore);
+  openJawMaterialDialog();
 }
 
 export function updateEditModeUI() {
@@ -349,6 +457,12 @@ export function updateEditModeUI() {
   const clearBottom = document.getElementById("clearBottomBtn");
   if (clearTop) clearTop.classList.toggle("is-hidden", active);
   if (clearBottom) clearBottom.classList.toggle("is-hidden", active);
+
+  // The component-clear counterparts are the inverse: design-mode only.
+  const clearUpperComponents = document.getElementById("clearUpperComponentsBtn");
+  const clearLowerComponents = document.getElementById("clearLowerComponentsBtn");
+  if (clearUpperComponents) clearUpperComponents.classList.toggle("is-hidden", !active);
+  if (clearLowerComponents) clearLowerComponents.classList.toggle("is-hidden", !active);
 
   // Draw from Scratch / Load Template Jaw are design-mode actions — hide them
   // in tooth-selection mode.
