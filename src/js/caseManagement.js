@@ -3,7 +3,6 @@ import { toast, confirmModal, openThemedCalendar, attachThemedCalendar } from ".
 import { logApi, statusLabel } from "./apiLog.js";
 import { setupConnectivityIndicator, reportHtmlToDocxBytes } from "./accessibility.js";
 import { setupAppSidebar } from "./appSidebar.js";
-import { VIEWER_UUID, LOGIN_CREDENTIALS } from "../config.js";
 import { buildReportHtml } from "./2D/noticeboard.js";
 import { saveCaseDueDate, toDateInputValue, updateCaseDueDate } from "./2D/caseNote.js";
 
@@ -986,13 +985,29 @@ async function fireLastOpenedBump(caseId, detail, user) {
   }
 }
 
+// Base of the live (deployed) site, including the GitHub-Pages repo sub-path.
+// The 3D viewer link is meant to be shared / scanned from a phone, so a
+// localhost URL would be unreachable off-machine. Only used as a substitute
+// when developing locally (see below).
+const LIVE_VIEWER_BASE = "https://faid123.github.io/.tmp-test-web";
+
 // Build the 3D viewer URL for a case (ThreeDViewer.html reads ?id=<encryptedId>).
 // Mirrors the Start Case navigation: encrypts the id and respects the
-// GitHub-Pages base path so the link works locally and when deployed.
-function buildThreeDViewerUrl(caseId) {
+// GitHub-Pages base path so the link works when deployed.
+//
+// Pass `forShare: true` for links that leave this machine (copy-to-clipboard,
+// QR): when developing on localhost those are rewritten to the live server so a
+// phone can reach them. In-app navigation leaves it false so it stays local
+// during dev. Deployed builds always use their own origin either way.
+function buildThreeDViewerUrl(caseId, { forShare = false } = {}) {
   if (!caseId) return "";
   const encryptedId = lol(caseId);
-  const isGitHubPages = window.location.hostname.includes("github.io");
+  const host = window.location.hostname;
+  const isLocalhost = host === "localhost" || host === "127.0.0.1" || host === "";
+  if (forShare && isLocalhost) {
+    return `${LIVE_VIEWER_BASE}/src/pages/ThreeDViewer.html?id=${encryptedId}`;
+  }
+  const isGitHubPages = host.includes("github.io");
   const basePath = isGitHubPages
     ? `/${window.location.pathname.split("/").filter(Boolean)[0] || ""}`
     : "";
@@ -1793,7 +1808,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
   const generateQrBtn = document.getElementById("generateQrBtn");
   if (generateQrBtn) {
     generateQrBtn.addEventListener("click", () => {
-      const url3d = buildThreeDViewerUrl(window.selectedCaseId);
+      const url3d = buildThreeDViewerUrl(window.selectedCaseId, { forShare: true });
       if (!url3d) {
         toast.warning("Please select a case first.");
         return;
@@ -1806,7 +1821,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
   const copy3dLinkBtn = document.getElementById("copy3dLinkBtn");
   if (copy3dLinkBtn) {
     copy3dLinkBtn.addEventListener("click", async () => {
-      const url3d = buildThreeDViewerUrl(window.selectedCaseId);
+      const url3d = buildThreeDViewerUrl(window.selectedCaseId, { forShare: true });
       if (!url3d) {
         toast.warning("Please select a case first.");
         return;
@@ -1821,7 +1836,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
     });
   }
 
-  // Open 3D viewer pre-logged-in as the faid account.
+  // Open the 3D viewer as the currently logged-in user (no identity swap).
   const export3dLinkBtn = document.getElementById("export3dLinkBtn");
   if (export3dLinkBtn) {
     export3dLinkBtn.addEventListener("click", () => {
@@ -1830,14 +1845,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         toast.warning("Please select a case first.");
         return;
       }
-      const exportUser = {
-        uuid: VIEWER_UUID,
-        username: LOGIN_CREDENTIALS.username,
-        email: LOGIN_CREDENTIALS.email || "",
-        isAdmin: Boolean(LOGIN_CREDENTIALS.is_admin),
-      };
-      const token = encodeURIComponent(btoa(JSON.stringify(exportUser)));
-      window.open(`${url3d}&auto_user=${token}`, "_blank");
+      window.open(url3d, "_blank");
     });
   }
 

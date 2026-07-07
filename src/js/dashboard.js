@@ -293,7 +293,7 @@ function buildOverlay() {
           <tbody id="dashAccessBody"></tbody>
         </table>
         <div class="dash-col-head dash-col-head-vc">
-          <span class="dash-col-title"><i class="fa-regular fa-images"></i> View Captures</span>
+          <span class="dash-col-title"><i class="fa-regular fa-images"></i> 2D &amp; 3D Captures</span>
           <span class="dash-col-sub" id="dashViewcaptureSub">—</span>
           <button type="button" class="dash-vc-toggle" id="dashViewcaptureToggle" aria-expanded="false" aria-label="Toggle view captures"><i class="fa fa-chevron-down" aria-hidden="true"></i></button>
         </div>
@@ -508,20 +508,127 @@ function renderCaptures(rows) {
   });
 }
 
-// Pure: pull image src strings out of a /noticeboard/view/get row. The web
-// writes `data` as a JSON array of preview strings (data: URLs, or raw base64);
-// desktop BinaryFormatter blobs aren't decoded here and yield an empty list.
+// atob that tolerates whitespace/URL-safe alphabets and missing padding.
+function safeAtob(b64) {
+  if (typeof b64 !== "string") return null;
+  try {
+    const cleaned = b64.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+    const padded = cleaned + "=".repeat((4 - (cleaned.length % 4)) % 4);
+    return atob(padded);
+  } catch {
+    return null;
+  }
+}
+
+// Dig PNG data URLs out of a .NET BinaryFormatter blob (what the desktop client
+// AND — since the 2026-07-06 mirror change — the web app now write to the
+// view_capture table). Scans for raw PNG byte runs, falling back to embedded
+// base64-PNG strings. Mirrors extractPngsFromBinaryFormatter in noticeboard.js.
+function pngsFromBinaryFormatter(outerBase64) {
+  const decoded = safeAtob(outerBase64);
+  if (!decoded) return [];
+  const out = [];
+  const PNG_SIG = "\x89PNG\r\n\x1a\n";
+  const PNG_END = "IEND\xae\x42\x60\x82";
+  let i = 0;
+  while (true) {
+    const start = decoded.indexOf(PNG_SIG, i);
+    if (start === -1) break;
+    const endMarker = decoded.indexOf(PNG_END, start);
+    if (endMarker === -1) break;
+    const end = endMarker + PNG_END.length;
+    out.push("data:image/png;base64," + btoa(decoded.slice(start, end)));
+    i = end;
+  }
+  if (out.length) return out;
+  const B64_PNG_HEAD = "iVBORw0KGgo";
+  let j = 0;
+  while (true) {
+    const idx = decoded.indexOf(B64_PNG_HEAD, j);
+    if (idx === -1) break;
+    let k = idx;
+    while (k < decoded.length && /[A-Za-z0-9+/=]/.test(decoded[k])) k += 1;
+    const b64 = decoded.slice(idx, k).replace(/=+$/, "");
+    const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+    out.push("data:image/png;base64," + b64 + pad);
+    j = k;
+  }
+  return out;
+}
+
+// Extract image filenames from a BinaryFormatter blob, in order.
+function filenamesFromBinaryFormatter(outerBase64) {
+  const decoded = safeAtob(outerBase64);
+  if (!decoded) return [];
+  const out = [];
+  const RE = /[A-Za-z0-9_\-\. ]{1,80}\.(?:png|jpe?g|gif|bmp)/gi;
+  let m;
+  while ((m = RE.exec(decoded)) !== null) out.push(m[0]);
+  return out;
+}
+
+// Desktop/web prefix instruction slides `2D_*`; viewcaptures are `3D_*` (or
+// unprefixed). Both buckets now share the one view_capture table, so the
+// dashboard classifies each slide by this prefix rather than dropping either.
+function isInstructionFilename(name) {
+  return /^\s*2d[_\-\.\s]/i.test(String(name || ""));
+}
+
+// Turn a stored filename into a short human label + kind tag. Strips the
+// `2D_`/`3D_` prefix and image extension; falls back to a generic label.
+function labelForCapture(name, kind, index) {
+  const clean = String(name || "")
+    .replace(/^\s*[23]d[_\-\.\s]+/i, "")
+    .replace(/\.(png|jpe?g|gif|bmp)$/i, "")
+    .trim();
+  if (clean) return clean;
+  return `${kind === "2D" ? "Instruction" : "Viewcapture"} ${index + 1}`;
+}
+
+// Pure: pull capture images out of a /noticeboard/view/get row, keeping BOTH the
+// 2D instruction slides and the 3D viewcaptures that share the table. Handles
+// both encodings of the `data`/`filenames` columns: the web's legacy JSON array
+// of preview strings, and the .NET BinaryFormatter byte[][] blob now written by
+// both desktop and web. Returns `{ src, kind, label }[]` (kind: "2D" | "3D").
 // Exported (DOM-free) for unit testing.
 export function parseViewcaptureImages(row) {
   if (!row) return [];
-  let arr = row.data;
-  if (typeof arr === "string") {
-    try { arr = JSON.parse(arr); } catch { return []; }
+
+  // Preferred: web's JSON-array encoding of data (and filenames) columns.
+  let images = null;
+  let names = null;
+  if (typeof row.data === "string") {
+    try {
+      const parsed = JSON.parse(row.data);
+      if (Array.isArray(parsed)) images = parsed;
+    } catch { /* not JSON — fall through to BinaryFormatter */ }
+  } else if (Array.isArray(row.data)) {
+    images = row.data;
   }
-  if (!Array.isArray(arr)) return [];
-  return arr
-    .filter((v) => typeof v === "string" && v.trim())
-    .map((v) => (v.startsWith("data:") ? v : "data:image/png;base64," + v));
+  if (typeof row.filenames === "string") {
+    try {
+      const parsed = JSON.parse(row.filenames);
+      if (Array.isArray(parsed)) names = parsed;
+    } catch { /* fall through */ }
+  } else if (Array.isArray(row.filenames)) {
+    names = row.filenames;
+  }
+
+  // Fallback: BinaryFormatter blob (desktop, and web since 2026-07-06).
+  if (!images) images = pngsFromBinaryFormatter(row.data);
+  if (!names) names = filenamesFromBinaryFormatter(row.filenames);
+
+  return images
+    .map((v, i) => ({ src: v, name: names[i], index: i }))
+    .filter((it) => typeof it.src === "string" && it.src.trim())
+    .map((it) => {
+      const kind = isInstructionFilename(it.name) ? "2D" : "3D";
+      return {
+        src: it.src.startsWith("data:") ? it.src : "data:image/png;base64," + it.src,
+        kind,
+        label: labelForCapture(it.name, kind, it.index),
+      };
+    });
 }
 
 // getViewCapture returns a single row (or an array wrapping one). Normalize.
@@ -536,24 +643,31 @@ function firstRow(apiResult) {
 function renderViewcaptures(apiResult) {
   const host = document.getElementById("dashViewcaptures");
   if (!host) return;
-  const images = parseViewcaptureImages(firstRow(apiResult));
+  const items = parseViewcaptureImages(firstRow(apiResult));
   const sub = document.getElementById("dashViewcaptureSub");
-  if (sub) sub.textContent = images.length ? `${images.length} photo${images.length === 1 ? "" : "s"}` : "—";
+  if (sub) {
+    const n2d = items.filter((it) => it.kind === "2D").length;
+    const n3d = items.length - n2d;
+    sub.textContent = items.length ? `${n2d} 2D · ${n3d} 3D` : "—";
+  }
 
-  if (!images.length) {
-    host.innerHTML = `<div class="dash-viewcaptures-empty">No viewcaptures yet.</div>`;
+  if (!items.length) {
+    host.innerHTML = `<div class="dash-viewcaptures-empty">No captures yet.</div>`;
     return;
   }
-  host.innerHTML = images
-    .map((src, i) => `
+  host.innerHTML = items
+    .map((it, i) => `
       <button type="button" class="dash-capture" data-vc="${i}">
-        <div class="dash-capture-frame"><img src="${src}" alt="Viewcapture ${i + 1}" /></div>
-        <div class="dash-capture-label">Viewcapture ${i + 1}</div>
+        <div class="dash-capture-frame">
+          <span class="dash-capture-badge dash-capture-badge-${it.kind === "2D" ? "2d" : "3d"}">${it.kind}</span>
+          <img src="${it.src}" alt="${escapeHtml(it.kind + " " + it.label)}" />
+        </div>
+        <div class="dash-capture-label">${escapeHtml(it.label)}</div>
       </button>`)
     .join("");
   host.querySelectorAll(".dash-capture").forEach((btn) => {
-    const src = images[Number(btn.dataset.vc)];
-    btn.addEventListener("click", () => showPreview(src, btn));
+    const it = items[Number(btn.dataset.vc)];
+    btn.addEventListener("click", () => showPreview(it.src, btn));
   });
 }
 

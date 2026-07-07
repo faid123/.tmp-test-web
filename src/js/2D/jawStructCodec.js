@@ -171,6 +171,17 @@ function claspSurfaceFromField(f, field) {
   return CLASP_ORIENT_SURFACE[Number(f[field])] || "mesial_buccal";
 }
 
+/**
+ * Retainer Clasp/Ring Type code (0..3) for a clasp placement surface — inverse of
+ * claspSurfaceFromField (unknown → 0 = mesial_buccal). The clasp orientation is
+ * web-owned, so Save derives it live from the placement; otherwise a surface edit
+ * (e.g. mesial_buccal → distal_buccal) is dropped and reopens as the loaded value.
+ */
+function claspFieldFromSurface(surface) {
+  const idx = CLASP_ORIENT_SURFACE.indexOf(String(surface ?? "").toLowerCase());
+  return idx < 0 ? 0 : idx;
+}
+
 // The reciprocating clasp sits on the arch-surface OPPOSITE the retentive clasp
 // (buccal ↔ lingual) at the SAME mesial/distal corner; the desktop stores no reci
 // orientation, so it's derived from the retainer. Do NOT add a quadrant/mesial-distal
@@ -549,6 +560,20 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
     retainerType = 3;
     barCategory = inverseOf(RETAINER_BAR_CATEGORY).get(barId) ?? barCategory;
   }
+  // Clasp/ring orientation is web-owned: derive the Retainer Clasp/Ring Type code
+  // live from the retentive clasp's placement surface so a mesial↔distal (or
+  // buccal↔lingual) edit persists; fall back to the loaded raw (or default 0 =
+  // mesial_buccal) only when there's no clasp/ring placed. Uses the RETAINER clasp,
+  // not the reciprocating one (whose surface is derived from this on decode).
+  const retainerClaspPl = placements.find((p) => p.componentId === "retainer-clasp");
+  const ringClaspPl = placements.find((p) => p.componentId === "ring-clasp");
+  const claspType = retainerClaspPl
+    ? claspFieldFromSurface(retainerClaspPl.surface)
+    : rawOr(RETAINER_CLASP_TYPE_FIELD, 0);
+  const ringType = ringClaspPl
+    ? claspFieldFromSurface(ringClaspPl.surface)
+    : rawOr(RETAINER_RING_TYPE_FIELD, 0);
+
   // Bar side: loaded value wins; else derive from the placement surface.
   let barType = Number(rawOr(RETAINER_BAR_TYPE_FIELD, 0));
   if (!(RETAINER_BAR_TYPE_FIELD in raw) && barId) {
@@ -589,8 +614,8 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
     ["Tooth Main.Tooth Rest.Pr Config 1", prConfig[1]],
     ["Tooth Main.Tooth Rest.Pr Config 2", prConfig[2]],
     ["Tooth Main.Tooth Retainer.Retainer Type", retainerType],
-    ["Tooth Main.Tooth Retainer.Retainer Clasp Type", rawOr(RETAINER_CLASP_TYPE_FIELD, 0)],
-    ["Tooth Main.Tooth Retainer.Retainer Ring Type", rawOr(RETAINER_RING_TYPE_FIELD, 0)],
+    ["Tooth Main.Tooth Retainer.Retainer Clasp Type", claspType],
+    ["Tooth Main.Tooth Retainer.Retainer Ring Type", ringType],
     ["Tooth Main.Tooth Retainer.Retainer Bar Type", barType],
     ["Tooth Main.Tooth Retainer.Retainer Bar Category", barCategory],
     ["Tooth Main.Tooth Reciprocating.Tooth Type", reciprocatingType],

@@ -135,7 +135,7 @@ async function saveNoticeboardEdited(caseIntID, uuid, filenames, data) {
 // Merge local filename/data arrays over a capture table's current server arrays:
 // local entries win by filename; server-only entries are preserved so a save
 // can't delete something another session or the desktop client wrote. Shared by
-// the editedview save and the per-bucket view/drawnview mirrors.
+// the editedview save and the view_capture mirror.
 function mergeCaptureArrays(localFilenames, localData, serverRow) {
   const server = readEditedViewArrays(serverRow);
   const filenames = [...localFilenames];
@@ -151,12 +151,13 @@ function mergeCaptureArrays(localFilenames, localData, serverRow) {
   return { filenames, data };
 }
 
-// Generic create POST for any noticeboard capture table (view / drawnview). Columns
-// use the desktop's .NET BinaryFormatter byte[][] layout (desktop-readable; web read-back
-// recovers them). Throws on non-2xx so the caller can log + continue.
+// Generic create POST for a noticeboard capture table (used for view_capture,
+// /noticeboard/view). Columns use the desktop's .NET BinaryFormatter byte[][] layout
+// (desktop-readable; web read-back recovers them). Throws on non-2xx so the caller
+// can log + continue.
 async function postNoticeboardCapture(createPath, caseIntID, uuid, filenames, data) {
   // Same desktop .NET BinaryFormatter byte[][] layout as editedview, so the
-  // per-bucket 3D (/view) and 2D (/drawnview) tables are desktop-readable too.
+  // view_capture table is desktop-readable too.
   const { filenames: filenamesBlob, data: dataBlob } =
     await encodeEditedViewColumns(filenames, data);
   const payload = [
@@ -175,7 +176,7 @@ async function postNoticeboardCapture(createPath, caseIntID, uuid, filenames, da
   return res.json().catch(() => null);
 }
 
-// Mirror one bucket into its dedicated capture table (3D → /view, 2D → /drawnview)
+// Mirror capture PNGs into a dedicated capture table (view_capture, /noticeboard/view)
 // alongside the editedview blob. Fetch-merge-save so we don't clobber desktop rows.
 // Best-effort: editedview stays the read-back source of truth, so a mirror failure
 // doesn't fail the save.
@@ -407,15 +408,25 @@ async function syncInstructionsToEditedView() {
     const merged = mergeCaptureArrays(local.filenames, local.data, row);
     await saveNoticeboardEdited(state.caseIntID, user.uuid, merged.filenames, merged.data);
 
-    // 5) Additionally mirror each bucket into its dedicated capture table:
-    // 3D viewcaptures → /noticeboard/view, 2D instructions → /noticeboard/drawnview.
-    // Best-effort, run in parallel; failures are logged but don't fail the save.
-    const vc = serializeForEditedView([], viewcaptures);
-    const inst = serializeForEditedView(instructions, []);
-    await Promise.all([
-      mirrorCaptureTable("/noticeboard/view", "/noticeboard/view/get", state.caseIntID, user.uuid, vc.filenames, vc.data),
-      mirrorCaptureTable("/noticeboard/drawnview", "/noticeboard/drawnview/get", state.caseIntID, user.uuid, inst.filenames, inst.data),
-    ]);
+    // 5) Additionally mirror BOTH buckets into the desktop's view_capture table
+    // (/noticeboard/view). SmartRPD reads the actual slide PNGs for BOTH its 2D and
+    // 3D tabs from this ONE table and classifies each slide as 2D vs 3D purely by the
+    // 2D_/3D_ filename prefix — not by which table it lives in. (drawnview is only a
+    // paint-overlay layer inside the desktop slide editor, and editedview is just the
+    // thumbnail/composite source — neither surfaces a slide in the 2D tab, which is why
+    // 2D instructions previously written only to drawnview never appeared on desktop.)
+    // One merged, idempotent write (stable filenames dedupe) so the two buckets don't
+    // overwrite each other in the shared row. Best-effort: failures are logged but
+    // don't fail the save (editedview stays the web read-back source of truth).
+    const all = serializeForEditedView(instructions, viewcaptures);
+    await mirrorCaptureTable(
+      "/noticeboard/view",
+      "/noticeboard/view/get",
+      state.caseIntID,
+      user.uuid,
+      all.filenames,
+      all.data
+    );
 
     setMessage("Noticeboard saved to server.", false);
     return true;

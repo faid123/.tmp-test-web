@@ -3885,10 +3885,30 @@ btnContainer.appendChild(edit2DStatic); */
     // Call the post method and wait for the response
 
     const [undercut_value, undercut_value1] = await Promise.all([
-      apiClient.post(heatmapEndpoint, data, false, "Heatmap upper"),
-      apiClient.post(heatmapEndpoint, data2, false, "Heatmap lower"),
+      apiClient.post(heatmapEndpoint, data, false, "Heatmap lower"),
+      apiClient.post(heatmapEndpoint, data2, false, "Heatmap upper"),
     ]);
-    undercut_values = [undercut_value1, undercut_value];
+
+    // Pair each heatmap with its jaw by the RESPONSE's own jaw_type, never by
+    // request order (preview3D.fetchUndercutForCase does the same). Verified
+    // against case 2437: requesting jaw_type=1 returns jaw_type:"upper_jaw"
+    // (point_size exactly matches the upper jaw mesh's vertex count) and
+    // jaw_type=2 returns "lower_jaw" — the opposite of what data/data2's
+    // comments assumed, which swapped the undercut colours between the jaws.
+    // Downstream convention: undercut_values[0]=lower jaw, [1]=upper jaw.
+    let upperHeat = null;
+    let lowerHeat = null;
+    [undercut_value, undercut_value1].forEach((heatmap) => {
+      const label = String(heatmap?.jaw_type ?? "").toLowerCase();
+      if (label.includes("upper")) upperHeat = heatmap;
+      else if (label.includes("lower")) lowerHeat = heatmap;
+    });
+    // Fallback if a response ever omits jaw_type: the jaw_type=2 request
+    // (data) serves the lower heatmap, jaw_type=1 (data2) the upper one.
+    undercut_values = [
+      lowerHeat ?? undercut_value,
+      upperHeat ?? undercut_value1,
+    ];
 
     [undercut_value, undercut_value1].forEach((heatmap) => {
       undercut_type[heatmap.jaw_type] = [
@@ -5872,12 +5892,19 @@ btnContainer.appendChild(edit2DStatic); */
           `Slot ${slot}`
         );
 
-        if (!result || !result.data) {
+        // Match the 3D preview panel (preview3D.fetchExtraStlsForCase): the
+        // /stl/slot/get endpoint may return a single object OR a one-element
+        // array ([{ filename, data, ... }]). Newly created slot STLs come back
+        // array-wrapped, so read result[0] when it's an array — otherwise the
+        // viewer silently skipped them.
+        const slotItem = Array.isArray(result) ? result[0] : result;
+
+        if (!slotItem || !slotItem.data) {
           console.log(`❌ Slot ${slot}: No STL data found.`);
           continue;
         }
 
-        const binarySTL = atob(result.data);
+        const binarySTL = atob(slotItem.data);
         // Assign a unique color per slot
         const slotColors = {
           1: {
@@ -5927,7 +5954,7 @@ btnContainer.appendChild(edit2DStatic); */
 				roughness: 0.7
 			}); */
 
-        const slotFilename = result.filename || `Slot ${slot}`;
+        const slotFilename = slotItem.filename || `Slot ${slot}`;
         const isLower = slotFilename.toLowerCase().includes("lower");
         const undercutForSlot =
           (isLower ? undercut_values[0] : undercut_values[1]) ?? "stl";
@@ -5999,6 +6026,23 @@ btnContainer.appendChild(edit2DStatic); */
   let jawMeshCpuMs = 0;
   let frameworkMeshCpuMs = 0;
   startViewerLoadTimer("viewer: mesh decode/parse/render");
+
+  // Normalize each mesh entry so the `.includes()` checks below never throw and
+  // jaw-side detection matches the 3D preview panel (getJawKeyFromFile). The
+  // /stl/get fallback can return a NUMERIC `type` (1=upper, 2=lower) or omit
+  // `filename`; calling `.includes()` on a number threw here, halting the parse
+  // loop and leaving the loader stuck at 100%.
+  for (const f of responseDatas) {
+    if (typeof f.filename !== "string") f.filename = String(f.filename ?? "");
+    const t = String(f.type ?? "").toLowerCase();
+    if (!t.includes("upper") && !t.includes("lower")) {
+      const name = f.filename.toLowerCase();
+      if (f.type === 1 || f.type === "1" || name.includes("upper")) f.type = "upper_jaw";
+      else if (f.type === 2 || f.type === "2" || name.includes("lower")) f.type = "lower_jaw";
+      else f.type = t;
+    }
+  }
+
   const jawFirstResponseDatas = [...responseDatas].sort((left, right) => {
     const leftIsSurface = left.filename.includes("surface");
     const rightIsSurface = right.filename.includes("surface");
@@ -6038,19 +6082,47 @@ btnContainer.appendChild(edit2DStatic); */
     // Load the OFF file
     //console.log('check stl:' + stl)
     const meshParseStartedAt = performance.now();
-    if (stl) {
-      const stlMeshLoader = new STLMeshLoader(material);
-      if (offFile.type.includes("upper")) {
-        mesh_geo = stlMeshLoader.load(offdata, undercut_values[1]);
-      } else if (offFile.type.includes("lower")) {
-        mesh_geo = stlMeshLoader.load(offdata, undercut_values[0]);
+
+    // `stl` only records that /parameterisation/mesh/getall was unavailable and
+    // we fell back to /stl/get — it does NOT guarantee the bytes are STL. That
+    // fallback route serves OFF meshes for some cases (e.g. upperjawclosed.off),
+    // and feeding OFF text into the STL loader throws
+    // "RangeError: Offset is outside the bounds of the DataView", which escapes
+    // this loop and leaves the loader stuck at 100% (the 3D preview panel avoids
+    // this by sniffing each payload — see preview3D.inspectMeshPayload). Detect
+    // the real format from the decoded head and route OFF data to the OFF loader
+    // regardless of the flag; keep `stl` for orientation (closed OFF jaws, like
+    // real STLs, are already world-oriented and must NOT get the +180 flip).
+    const isOffData = offdata.trimStart().slice(0, 3).toUpperCase() === "OFF";
+    // "stl" is the loaders' no-heatmap sentinel — an undefined surface would
+    // throw inside OFFLoader ('surveying_values' in undefined) and re-create
+    // the stuck-at-100% hang.
+    const undercutForJaw =
+      (offFile.type.includes("upper")
+        ? undercut_values[1]
+        : undercut_values[0]) ?? "stl";
+    const jawSideKnown =
+      offFile.type.includes("upper") || offFile.type.includes("lower");
+    if (jawSideKnown) {
+      if (stl && !isOffData) {
+        const stlMeshLoader = new STLMeshLoader(material);
+        mesh_geo = stlMeshLoader.load(offdata, undercutForJaw);
+      } else {
+        mesh_geo = loader.parse(offdata, undercutForJaw, x);
       }
-    } else if (offFile.type.includes("upper")) {
-      mesh_geo = loader.parse(offdata, undercut_values[1], x);
-    } else if (offFile.type.includes("lower")) {
-      mesh_geo = loader.parse(offdata, undercut_values[0], x);
     }
     meshParseMs = performance.now() - meshParseStartedAt;
+
+    // If the jaw side couldn't be resolved (unexpected `type`) or the loader
+    // rejected the payload (OFFLoader.parse returns the string "stl" on a bad
+    // header), mesh_geo isn't a [mesh, materials] pair — skip rather than throw
+    // (a throw here halts the loop and leaves the loading screen stuck at 100%).
+    if (!mesh_geo || typeof mesh_geo === "string" || !mesh_geo[0]) {
+      console.warn(
+        `[viewer3D] Skipping mesh with unresolved geometry: ${offFile.filename} (type=${offFile.type})`
+      );
+      continue;
+    }
 
     const meshAddStartedAt = performance.now();
     const mesh = mesh_geo[0];

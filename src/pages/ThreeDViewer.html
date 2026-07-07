@@ -180,32 +180,6 @@
   </div>
 
     <script>
-      // Apply export auto-login before bundle.js loads (authGuard runs at bundle
-      // eval time, so localStorage must be set synchronously here first).
-      // Restores the previous user on tab close so other tabs stay unaffected.
-      (function () {
-        var params = new URLSearchParams(location.search);
-        var raw = params.get("auto_user");
-        if (!raw) return;
-        try {
-          var user = JSON.parse(atob(raw));
-          if (!user || !user.uuid) return;
-          var prev = localStorage.getItem("loggedInUser");
-          localStorage.setItem("loggedInUser", JSON.stringify(user));
-          params.delete("auto_user");
-          var qs = params.toString();
-          history.replaceState({}, "", location.pathname + (qs ? "?" + qs : ""));
-          // Only restore the previous session on close if there was one.
-          // Recipients with no prior session keep faid in localStorage so the
-          // viewer stays accessible if the page redirects internally.
-          if (prev) {
-            window.addEventListener("beforeunload", function () {
-              localStorage.setItem("loggedInUser", prev);
-            });
-          }
-        } catch (_) {}
-      })();
-
       const hostname = window.location.hostname;
       const isGitHubPages = hostname.includes("github.io");
       const isAWS = /^[0-9.]+$/.test(hostname);

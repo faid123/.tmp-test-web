@@ -171,13 +171,44 @@ function wireSidebarVersionHistory() {
   });
 }
 
+// Gate shown when a guest (not logged in) tries to return to the case list,
+// which is auth-gated (authGuard bounces guests straight to login). Rather than
+// that abrupt redirect, prompt them: Login -> case list after signing in;
+// Cancel -> stay in the viewer. Styled inline since the viewer doesn't load the
+// noticeboard/case-list CSS. Mirrors openAnnotateGate in index.js.
+function openReturnGate({ onLogin }) {
+  const gate = document.createElement("div");
+  gate.style.cssText =
+    "position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,0.78);";
+  gate.innerHTML = `
+    <div style="width:min(92vw,420px);background:#fff;border-radius:14px;padding:28px 26px 24px;box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center;font-family:system-ui,-apple-system,sans-serif;">
+      <h2 style="margin:0 0 10px;font-size:20px;font-weight:700;color:#0f172a;">Sign in to continue</h2>
+      <p style="margin:0 0 22px;font-size:14px;line-height:1.5;color:#475569;">Log in to access the case list.</p>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button type="button" data-gate-login style="width:100%;padding:12px 16px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;border:1px solid transparent;background:#3BAE95;color:#fff;">Login</button>
+        <button type="button" data-gate-cancel style="width:100%;padding:12px 16px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;border:1px solid #cbd5e1;background:#fff;color:#334155;">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(gate);
+  const close = () => gate.remove();
+  gate.addEventListener("click", (ev) => {
+    if (ev.target === gate) close();
+  });
+  gate.querySelector("[data-gate-login]").addEventListener("click", () => {
+    close();
+    onLogin?.();
+  });
+  gate.querySelector("[data-gate-cancel]").addEventListener("click", close);
+}
+
 function wireSidebarReturn() {
   const btn = document.getElementById("sidebarReturnBtn");
   if (!btn) return;
   const isGitHubPages = window.location.hostname.includes("github.io");
   const basePath = isGitHubPages ? "/.tmp-test-web" : "";
   const caseListUrl = `${basePath}/src/pages/case_list.html`;
-  btn.addEventListener("click", () => {
+
+  const returnToCaseList = () => {
     // Return should always land on the MAIN case list. If this viewer was opened
     // directly from the case-list tab, hop back to it and close this one (so
     // viewer tabs don't pile up). Otherwise — a deeper chain of opened tabs, or a
@@ -197,6 +228,27 @@ function wireSidebarReturn() {
       // Cross-context access to opener.location can throw; fall through to nav.
     }
     window.location.href = caseListUrl;
+  };
+
+  btn.addEventListener("click", () => {
+    // Guests can't open the auth-gated case list — gate them to login instead of
+    // letting authGuard bounce them there abruptly.
+    if (!getLoggedInUser()?.uuid) {
+      openReturnGate({
+        onLogin: () => {
+          try {
+            // Return to the case list after a successful sign-in.
+            localStorage.setItem(
+              "postLoginRedirect",
+              `${window.location.origin}${caseListUrl}`
+            );
+          } catch (_) {}
+          window.location.href = `${window.location.origin}${basePath}/index.html`;
+        },
+      });
+      return;
+    }
+    returnToCaseList();
   });
 }
 

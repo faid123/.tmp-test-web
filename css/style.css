@@ -678,7 +678,11 @@ html, body {
   }
 
   .cm-footer-user {
-    display: none;
+    font-size: 12px;
+    max-width: 24vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

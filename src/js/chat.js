@@ -55,13 +55,15 @@ function resolveCaseId(explicitEncryptedId) {
     return decoded || null;
 }
 
-// The signed-in user's name, used as the note author (was hard-coded "faid").
+// The note author. Signed-in users post under their own username; guests (no
+// session — e.g. someone opening a shared viewer link) are allowed to chat but
+// are labelled "Guest" so their messages are clearly unauthenticated.
 function currentUsername() {
     try {
         const u = JSON.parse(localStorage.getItem('loggedInUser') || 'null');
-        return u?.username || 'unknown';
+        return u?.username || 'Guest';
     } catch {
-        return 'unknown';
+        return 'Guest';
     }
 }
 
