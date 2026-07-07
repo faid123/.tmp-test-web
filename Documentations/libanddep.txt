@@ -1,0 +1,446 @@
+Web RPD Libraries and Dependencies
+Overview
+The Web RPD (Removable Partial Denture) application is a comprehensive web-based tool designed to visualize and manage dental models, specifically focusing on the creation and modification of removable partial dentures. The application leverages various libraries and APIs to provide a rich 3D visualization experience, allowing users to interact with dental models, view different data layers, and control various visualization parameters.
+Libraries and Dependencies
+The application primarily uses the following libraries:
+•	THREE.js: A JavaScript library used to create and display animated 3D graphics in the browser.
+•	OrbitControls and TrackballControls: Extensions of THREE.js to allow for interactive control of the camera.
+•	STLMeshLoader: A custom loader for processing STL files.
+•	OFFLoader: A custom loader for processing OFF files.
+•	ApiClient: A custom class to handle API requests.
+This section covers the original core viewer. The application has since grown substantially (case management, 2D annotation, chat/notifications, a separate React sub-app, etc.) - see "Additional Libraries and Dependencies (update, based on branch nyunt/dev-W7.1)" at the end of this document for the current full inventory.
+Index.js
+Initialization
+The script begins by importing necessary libraries and initializing essential variables and objects, such as the scene, camera, and renderer. It sets up the environment for rendering 3D models and handling user interactions.
+URL Parameters
+•	id: The case ID for the dental model to be loaded.
+•	close: A flag indicating whether to load a closed mesh representation.
+The paramValue is decrypted if necessary for security purposes.
+Scene and Camera Setup
+•	Scene: A new THREE.js scene is created.
+•	Camera: An orthographic camera is initialized with specific bounds and added to the scene.
+Material Setup
+Different materials are defined for the meshes to handle various rendering properties:
+•	material: Used for general meshes.
+•	materialsurface and materialsurface_non_metal: Used for surface meshes with different properties (metallic and non-metallic).
+API Client Initialization
+An instance of the ApiClient is created to handle communication with the backend API.
+Data Fetching
+Data is fetched asynchronously using the ApiClient. This includes:
+•	Case information (creation date, case ID, last updated).
+•	Thumbnail images for different slots.
+•	Undercut heatmap values.
+•	Mesh data (both parameterized and surface meshes).
+Mesh Processing
+The application supports two main types of meshes:
+•	OFF files: Loaded using the OFFLoader class.
+•	STL files: Loaded using the STLMeshLoader class if the OFF files cannot be processed.
+The meshes are parsed, transformed, and added to the scene. The application also checks for closed meshes and provides a button to switch between original and closed mesh views.
+UI Elements
+•	Textboxes: Display creation date, case ID, and last updated information.
+•	Thumbnail Buttons: Display thumbnail images and allow for fullscreen view on click.
+•	Visibility and Transparency Controls: Added to manage mesh visibility and transparency dynamically.
+•	Reset Button: Resets the camera view to the original state.
+Event Listeners
+•	Window Resize: Adjusts the camera and renderer size when the window is resized.
+•	Mouse Move: Tracks mouse position for interactive elements.
+•	Button Clicks: Handles various button clicks for changing mesh views and displaying images.
+Rendering
+The application uses an animation loop to render the scene continuously. The camera and controls are updated within this loop to ensure smooth interaction.
+Utility Functions
+•	createTextbox: Creates and styles textboxes for displaying information.
+•	unixToHumanReadable: Converts Unix timestamps to human-readable dates.
+•	displayFullScreenImage: Displays images in fullscreen mode with proper aspect ratio handling.
+Logout
+The application logs out the user after loading the necessary data by calling the /user/logout endpoint.
+ApiClient Class Documentation
+Overview
+The ApiClient class is a core component of the WebRPD system, responsible for managing HTTP requests and handling responses. It includes functionality for posting data to endpoints, managing progress updates, and processing login operations. The login function is to be called before every fetch request to ensure that external user’s logout would not affect the operations.
+ApiClient Class
+Constructor
+constructor(baseUrl)
+•	Parameters:
+o	baseUrl: The base URL for API requests.
+•	Description: Initializes the ApiClient instance with the given baseUrl.
+post
+async post(endpoint, data, test, what)
+•	Parameters:
+o	endpoint: The API endpoint to which the request is sent.
+o	data: The data to be sent in the body of the request.
+o	test: A boolean flag to determine the return value on success.
+o	what: Optional string to describe the download process.
+•	Returns:
+o	On success, returns the parsed JSON response if test is false or true if test is true.
+o	On failure, returns 'stl' for specific HTTP statuses or throws an error for other statuses.
+•	Description:
+o	Sends a POST request to the specified endpoint.
+o	Handles and displays download progress via a progress bar and percentage indicator.
+o	Calculates and displays download speed in megabytes per second (MB/s).
+Error Handling
+•	If the response status is 500 or 404, the method returns 'stl'.
+•	For other errors, an Error is thrown with the status of the response.
+Progress Display
+•	Progress Bar: A visual progress bar is created to show the download progress.
+•	Percentage: A span element displays the current download percentage.
+•	Download Speed: Displays the download speed in MB/s, updated in real-time.
+login Function
+async function login()
+•	Returns: The JSON response from the login API.
+•	Description:
+o	Sends a POST request to the login endpoint with predefined credentials and machine information.
+o	Handles login authentication and retrieves session data.
+Error Handling
+•	If the login request fails, an error is logged and rethrown for further handling.
+HTML Elements Created
+During the file download process, the following HTML elements are dynamically created and styled:
+•	Container: A div element that acts as a wrapper for the progress display elements.
+•	Progress Bar: A progress element indicating the download progress.
+•	Percentage: A span element showing the download percentage.
+•	Display Box: A div element used to display download speed and other status messages.
+Styling Details
+•	Container: Centers all elements vertically and horizontally in the viewport.
+•	Progress Bar: Styled to take up 80% of the container's width.
+•	Percentage: Positioned below the progress bar with a margin for separation.
+•	Display Box: Contains status messages and is styled with padding, border radius, and a transparent background.
+
+ OFFLoader Class Documentation
+Overview
+The OFFLoader class is a part of the Web RPD and is used to load and process 3D models from OFF (Object File Format) files. This class leverages the three.js library to handle 3D geometry and materials, providing a means to visualize and interact with 3D models within a web-based environment.
+Class Definition
+Import Statement:
+import * as THREE from "../node_modules/three/build/three.module.js";
+Class Definition:
+export class OFFLoader {
+constructor(material, submaterial) { this.material = material; if (typeof submaterial != 'undefined') { this.submaterial = submaterial; } }
+Constructor
+•	Parameters:
+o	material (THREE.Material): The default material to be used for rendering the geometry.
+o	submaterial (THREE.Material, optional): An additional material for specialized rendering needs.
+•	Description: Initializes the OFFLoader instance with the specified materials. If a submaterial is provided, it will be stored for later use.
+Methods
+parse(data, surface, check)
+•	Parameters:
+o	data (string): The OFF file data as a string.
+o	surface (object): An object containing additional properties like occlusion_values and surveying_values for advanced visualization.
+o	check (boolean): A flag indicating whether to apply default color settings.
+•	Returns:
+o	An array where:
+	The first element is a THREE.Mesh instance representing the loaded 3D model.
+	The second element is an array of geometries and materials used.
+•	Description: Parses the OFF file data and processes it into a THREE.Mesh object with associated materials. The method handles various types of OFF file data and additional surface properties to enhance the 3D model visualization.
+•	Key Features:
+1.	File Validation:
+	Checks if the file starts with "OFF" to ensure it is a valid OFF file.
+2.	Geometry Creation:
+	Extracts vertex and face data to create a THREE.BufferGeometry object.
+	Supports only triangular faces. Non-triangular faces are warned but ignored.
+3.	Default Color Setting:
+	If check is true, assigns a default color (light brown) to the geometry.
+4.	Occlusion Color Handling:
+	If surface contains occlusion_values, it processes these values to adjust the vertex colors of the geometry.
+5.	Undercut Value Handling:
+	If surface contains surveying_values, it processes these values to further adjust the vertex colors of the geometry.
+6.	Mesh Creation:
+	Creates a THREE.Mesh using either the default or provided submaterial.
+	Includes the geometry and material(s) in the returned array.
+Example Usage
+const loader = new OFFLoader(defaultMaterial, subMaterial);
+fetch('path/to/model.off') .then(response => response.text()) .then(data => { const [mesh, materials] = loader.parse(data, surfaceData, true); scene.add(mesh); // Add the mesh to the scene });
+Notes
+•	Ensure that the OFF file data is correctly formatted and contains valid face and vertex data.
+•	The parse method is designed to handle additional data for advanced visualization. Ensure that the surface object is correctly populated with occlusion_values and/or surveying_values if needed.
+________________________________________
+ STLMeshLoader Class Documentation
+Overview
+The STLMeshLoader class is designed to facilitate the loading and processing of STL (stereolithography) files for 3D rendering. It uses the Three.js library for handling 3D geometries and materials. The class includes functionality for processing STL files, merging vertices to optimize geometry, and applying different color attributes based on input data.
+Dependencies
+•	Three.js: A JavaScript library for 3D graphics.
+•	STLLoader: A Three.js loader specifically for STL files.
+Class Definition
+Import Statement:
+import { STLLoader } from '../node_modules/three/examples/jsm/loaders/STLLoader.js'; import * as THREE from 'three';
+Class Definition:
+class STLMeshLoader { constructor(material) { this.material = material; }
+load(data, surface) { // Method Implementation } }
+export { STLMeshLoader };
+Constructor
+STLMeshLoader(material)
+•	Parameters:
+o	material: A Three.js material object that will be used to render the mesh.
+•	Description: Initializes the STLMeshLoader instance with a material for rendering.
+Methods
+load(data, surface)
+•	Parameters:
+o	data: The STL file data in a format that the STLLoader can parse.
+o	surface: An object containing additional surface data which may include occlusion_values and/or surveying_values.
+•	Returns:
+o	An array containing:
+	A THREE.Mesh object with the processed geometry and the provided material.
+	An array of THREE.BufferGeometry objects with different color attributes.
+•	Description: Loads and processes the STL file data, applies color attributes based on the provided surface data, and creates a THREE.Mesh object. The method performs the following steps:
+1.	Loading Geometry:
+	Utilizes STLLoader to parse the STL data and create an initial geometry.
+2.	Merging Vertices:
+	Calls the mergeVertices function to remove duplicate vertices and optimize the geometry.
+3.	Color Application:
+	Sets default colors (light brown) for the geometry.
+	If occlusion_values are provided in the surface, processes these values to update vertex colors.
+	If surveying_values are provided, processes these as well to further update vertex colors.
+4.	Mesh Creation:
+	Creates a THREE.Mesh using the processed geometry and the provided material.
+Utility Functions
+mergeVertices(geometry)
+•	Parameters:
+o	geometry: The THREE.BufferGeometry object to optimize.
+•	Returns:
+o	A new THREE.BufferGeometry object with merged vertices.
+•	Description: Optimizes the geometry by merging vertices that are close to each other. This function helps to reduce the number of vertices and indices in the geometry, improving performance and rendering efficiency. The function does the following:
+1.	Vertex Mapping:
+	Maps vertices using a threshold to determine when vertices should be considered the same.
+2.	Geometry Creation:
+	Constructs a new THREE.BufferGeometry object with the merged vertices and indices.
+Notes
+•	The color values are set to a default light brown unless overridden by the occlusion_values or surveying_valuesfrom the surface object.
+•	The mergeVertices function uses a simple rounding method to determine vertex uniqueness, which may need adjustment based on the specific requirements of the application.
+WebRPD Crypt.js Functions and Features
+Overview
+The crypt.js module provides functionality for encoding and decoding data using Base64 encoding and XOR encryption/decryption techniques. The primary function, lol, demonstrates how these methods can be used in practice.
+Functions and Features
+For reference
+Current key = PgrJrkwpeG9pd
+Decrypted id = 797
+Encrypted id = OAJBLhkNOQoOdFADDmMBGQ
+1. decodeStringToNumber(encodedString)
+•	Purpose: Converts a Base64 encoded string into a number.
+•	Parameters:
+o	encodedString (String): The Base64 encoded string to be decoded.
+•	Returns:
+o	(Number): The decoded number.
+•	Implementation:
+o	Uses atob() to decode the Base64 string to its original format and parseInt() to convert the decoded string into a number.
+2. xorDecrypt(encryptedBase64, key)
+•	Purpose: Decrypts a Base64 encoded, XOR encrypted string using a specified key.
+•	Parameters:
+o	encryptedBase64 (String): The Base64 encoded string that has been XOR encrypted.
+o	key (String): The key used for XOR decryption.
+•	Returns:
+o	(String): The decrypted text.
+•	Implementation:
+o	Replaces characters in the Base64 string to reverse URL-safe encoding.
+o	Uses atob() to decode the Base64 string to its original encrypted text.
+o	Applies XOR decryption on each character of the encrypted text using the provided key.
+3. lol(things)
+•	Purpose: Demonstrates how to decode a number using XOR decryption and Base64 encoding.
+•	Parameters:
+o	things (String): The input string to be decoded.
+•	Returns:
+o	(Number): The decoded number obtained from the XOR decryption and Base64 decoding process.
+•	Implementation:
+o	Calls xorDecrypt() with the input string and a hardcoded key.
+o	Uses decodeStringToNumber() to convert the decrypted string into a number.
+o	Returns the decoded number.
+Additional Functions (Commented Out)
+•	encodeNumberToString(number) (Commented Out)
+o	Purpose: Encodes a number into a Base64 string.
+o	Parameters:
+	number (Number): The number to be encoded.
+o	Returns:
+	(String): The Base64 encoded string representing the number.
+o	Implementation:
+	Converts the number to a string and then encodes it using btoa().
+•	xorEncrypt(text, key) (Commented Out)
+o	Purpose: Encrypts a string using XOR encryption and encodes it in Base64.
+o	Parameters:
+	text (String): The text to be encrypted.
+	key (String): The key used for XOR encryption.
+o	Returns:
+	(String): The Base64 encoded, XOR encrypted text.
+o	Implementation:
+	Applies XOR encryption on each character of the text using the key.
+	Encodes the encrypted text in Base64.
+Example Usage
+The lol function can be tested by passing an encoded string and verifying the decoded number:
+const number = 12345;
+const encodedString = encodeNumberToString(number);  // Uncomment if encoding function is active
+const decodedNumber = lol(encodedString);
+console.log("Decoded Number:", decodedNumber);
+Control.js
+ WebRPD Control Panel Documentation
+Overview
+The addVisibilityAndTransparencyControls function is a part of the WebRPD (Web-based Robotic Prosthetic Design) system, which provides a graphical user interface (GUI) for controlling various properties of 3D mesh objects in a scene. This function allows users to adjust visibility and transparency, manage materials, and interact with different jaw types and surface features through an interactive control panel.
+Features and Functions
+1. Custom CSS Styling
+•	Scrollbar Customization:
+o	Adjusted scrollbar width and color for a consistent look and feel.
+o	Scrollbars are hidden by default and only shown when hovered over.
+•	Folder Styling:
+o	Folders in the GUI are styled with a black background and white text.
+o	Close controls in folders are hidden for a cleaner appearance.
+•	Icon Styling:
+o	Icons in the folder titles are enlarged and centered for better visibility.
+2. GUI Container Setup
+•	Positioning and Styling:
+o	The GUI container is positioned absolutely with a specified distance from the top and left.
+o	The container has a fixed width and maximum height, with a custom scrollbar.
+•	Black Bar Background:
+o	A black bar is created behind the GUI container to enhance visual integration and prevent layout issues.
+o	The black bar adjusts its width and height based on the viewport size and whether the device is mobile.
+3. GUI Creation and Controls
+•	GUI Initialization:
+o	An instance of dat.GUI is created, and its DOM element is appended to the custom GUI container.
+•	Visibility Controls:
+o	For each mesh child in the parentObject, a folder is created with a title icon based on the mesh name.
+o	Each folder contains checkboxes to toggle the visibility of the corresponding mesh.
+•	Transparency Controls:
+o	Sliders are added to adjust the transparency of the materials of each mesh.
+•	Material Management:
+o	For non-surface meshes, additional controls are provided to switch between different material types (e.g., undercut and occlusion).
+o	Surface meshes have controls to toggle between different surface properties (e.g., metallic).
+•	Global Visibility Toggle:
+o	A button is added to the GUI to toggle the visibility of all meshes at once.
+4. Device-Specific Adjustments
+•	Mobile Device Adjustments:
+o	The scale and position of the GUI container are adjusted for better usability on mobile devices.
+5. External Control Button
+•	Toggle Button:
+o	An external button is created to open and close the GUI controls.
+o	The button's appearance is customized for a professional look, with hover effects for better user interaction.
+6. Event Handling
+•	Visibility and Transparency Changes:
+o	Event listeners are added to checkboxes and sliders to dynamically update mesh properties based on user input.
+•	Toggle Button Click Event:
+o	The button toggles the display of the GUI container and the black bar.
+7. Utility Functions
+•	isMobileDevice Function:
+o	Determines if the current device is mobile based on the user agent string.
+Code Usage
+To integrate this function into your project:
+1.	Import the Function:
+import { addVisibilityAndTransparencyControls } from './control.js';
+2.	Call the Function:
+addVisibilityAndTransparencyControls(parentObject, name, materialArray, jawType);
+o	parentObject: The 3D object containing mesh children to be controlled.
+o	name: Name identifier for the control panel.
+o	materialArray: Array of materials used for different mesh configurations.
+o	jawType: Configuration for different jaw types.
+ResetButton.js
+WebRPD: ResetButton.js
+Overview
+The resetbutton.js file is responsible for adding interactive UI elements to the WebRPD application, including a reset button, a rotation lock button, and a legend container. These elements enhance user experience by allowing users to reset the camera view, lock or unlock rotation, and view a legend with color-coded information.
+Key Features
+1. Reset Button
+•	Functionality: Allows users to reset the camera view and its properties.
+•	UI Elements:
+o	Icon: An image (reset.png) representing the reset action.
+o	Text: A label reading "Reset".
+•	Behavior:
+o	When clicked, the button:
+	Adds a 'clicked' class to trigger a rotation animation on the icon.
+	Resets the camera's view to a pre-defined state by copying properties from a clone object.
+	Resets camera zoom and projection matrix.
+	Resets control target to the origin (0, 0, 0) and updates controls.
+	Removes the 'clicked' class after a short delay to reset the animation.
+2. Lock Rotation Button
+•	Functionality: Toggles the rotation lock state, controlling whether rotation is allowed.
+•	UI Elements:
+o	Icon: An image that changes based on the lock state (lock.png or unlock.png).
+o	Text: A label reading "Rotation".
+•	Behavior:
+o	When clicked, toggles the rotation lock state between locked and unlocked.
+o	Updates the button’s image to reflect the current state.
+o	Disables or enables rotation on the controls based on the lock state.
+•	Auto-Click Feature: Automatically clicks the button twice upon initialization for an undisclosed reason (possibly a feature to initialize the rotation state).
+3. Legend Container
+•	Functionality: Displays a legend with color-coded information relevant to the application.
+•	UI Elements:
+o	Sections: Each section displays a title and color-coded labels.
+	Example Sections:
+	Undercut (mm): Displays ranges of values with corresponding colors.
+	Occlusion (mm): Shows occlusion ranges with specific colors.
+•	Behavior:
+o	Each section contains colored boxes and corresponding text to represent various values.
+o	Responsive design adjustments based on screen width:
+	1200px: Increases container width to 35%.
+	768px: Adjusts width to 50% and modifies bottom position.
+	480px: Further adjusts width to 70%, reduces font sizes, and changes layout to fit smaller screens.
+Styles and Animations
+•	Reset Button Animation: Utilizes CSS keyframe animations to rotate the reset icon when the button is clicked.
+•	Responsive Design: Custom CSS ensures that the layout and font sizes of the legend container adapt to different screen sizes for better usability.
+Implementation Details
+1.	CSS Styles:
+•	Added styles directly in the document’s head for both the reset button and lock rotation button, including hover effects and animations.
+•	Custom CSS for responsive design ensures that the UI adjusts gracefully to various screen sizes.
+2.	HTML Elements:
+•	Created and appended buttons and legend containers dynamically to the document body.
+3.	Event Listeners:
+•	Attached click event listeners to handle interactions with the reset and lock rotation buttons.
+4.	Dynamic Updates:
+•	Functions like updateLockRotationButtonImage dynamically update button visuals based on the current state.
+
+________________________________________
+Additional Libraries and Dependencies (update, based on branch nyunt/dev-W7.1)
+Overview
+The sections above describe the original 3D viewer core. Since then the app has grown into a full case management system (2D annotation, chat, notifications, dashboards, version history) plus a separate React prototype sub-app. This section inventories everything added since the original write-up. Note: control.js (dat.GUI panel, documented above) has been superseded by newControls.js, a custom HTML control panel - dat.GUI is no longer the active UI for visibility/transparency/material controls, though the dat.gui dependency remains in package.json.
+
+Root package.json - npm dependencies
+•	three (^0.165.0): Core 3D library. Still used directly in some files, but several pages (createCase.js, src/js/2D/preview3D.js) instead lazy-load THREE/STLLoader/TrackballControls from a CDN at runtime, so the app keeps working on a plain static deploy (e.g. GitHub Pages) without a bundler.
+•	three-stdlib (^2.30.3): Declared but no import of it was found anywhere in src/ - appears to be an unused/orphan dependency.
+•	dat.gui (^0.7.9) / dat.gui.image (^1.0.4): dat.gui backs the legacy control.js panel; dat.gui.image is declared but not imported anywhere - orphan.
+•	require (^2.4.20): Declared but not referenced anywhere - orphan.
+•	vite (devDependency, ^8.0.16): Dev server only (npm run dev -> vite --port 8089). Configured via vite.config.mjs (new file), which forces Cache-Control: no-store on everything Vite serves - needed because the app loads CSS via <link> tags rather than JS imports, so Vite's normal hot-reload/caching would otherwise show stale styles.
+•	webpack / webpack-cli (devDependencies): Production bundler (npm run build -> dist/bundle.js, UMD, entry src/index.js).
+•	webpack-dev-server, html-webpack-plugin (devDependencies): Declared but not wired into webpack.config.js - currently orphaned/unused.
+•	dotenv (devDependency): Loads .env in webpack.config.js and injects values via webpack.DefinePlugin.
+•	babel-loader, @babel/core, @babel/preset-env, babel-jest (devDependencies): Babel transpilation for the webpack build and for Jest.
+•	jest, jest-environment-jsdom (devDependencies): Unit tests under __tests__/*.test.mjs, covering crypt, chat, dashboard, login, authGuard, the jawStruct codec round-trip, case sorting, and STL loading.
+•	playwright (^1.61.0, devDependency): Declared but no config or usage found yet - unused/aspirational, likely reserved for future end-to-end tests.
+•	@types/dat.gui, @types/three (devDependencies): Type declarations only; the project isn't written in TypeScript, so these have no build-time effect.
+•	serve: Not declared in package.json at all - npm start runs npx serve on demand instead.
+
+QR code generation
+•	qrcodejs (davidshimjs, v1.0.0) - loaded via a <script> CDN tag in case_list.html (exposes a global window.QRCode), not an npm package and not hand-rolled. Used by showThreeDViewerQr() in caseManagement.js to render a scannable QR code for the 3D viewer link without sending the URL anywhere else.
+
+"Sort case list" sub-app (Sort case list/ - separate package.json)
+A self-contained React 18 + Vite 6 + Tailwind 4 (via @tailwindcss/vite) prototype, originally exported from Figma, that is not referenced anywhere in the rest of the codebase. It pulls in MUI, a large set of Radix UI primitives (accordion, dialog, dropdown, popover, select, tabs, tooltip, etc.), plus react-hook-form, react-dnd, recharts, sonner (toasts), embla-carousel-react, cmdk, vaul, react-day-picker, and lucide-react icons, with class-variance-authority/clsx/tailwind-merge as styling utilities. Currently its App.tsx only implements a login/OTP screen (branded "smART RPD") built from shadcn/Radix UI components under src/app/components/ui - no case-sort UI has actually been built in it yet.
+
+Other dependency manifests
+•	tools/MetaInspect/: only contains MetaInspect.csproj.lscache, an orphaned IDE cache file - the actual .csproj project is not committed.
+•	No requirements.txt (no Python in this repo).
+•	Dockerfile: based on nginx:alpine; copies static files (index.html, css/, assets/, dist/, src/) into nginx - no package installation, it's a pure static file server.
+
+New custom modules under src/js/ (root)
+•	caseManagement.js: Case list page - fetch/filter/sort cases, case status, bulk .docx report download, QR viewer-link generation.
+•	chat.js: In-app per-case chat widget (messages plus image upload).
+•	notifications.js: Notification bell popup with unread-count badge.
+•	dashboard.js: Per-case "View Dashboard" overlay (process steps, captures, roles, view-captures gallery).
+•	versionHistory.js: Case version history, as both a modal and a standalone page.
+•	toast.js: Lightweight toast/confirm-modal helper, replacing alert().
+•	viewerShell.js: Shared shell wiring for the 3D viewer pages (sidebar, connectivity indicator, clinical notes).
+•	apiLog.js: Deduplicating console logger for API calls, plus a shared case-status label map.
+•	accessibility.js: Connectivity (Wi-Fi) indicator and a client-side .docx report builder.
+•	login.js: Login and OTP flow (the OTP step currently has a temporary disable path in the code).
+•	authGuard.js: Small route guard - redirects to login.html if no loggedInUser is present in localStorage.
+•	config.js: Centralizes MACHINE_ID, VIEWER_UUID and LOGIN_CREDENTIALS; the file itself notes these aren't actually secret since they ship to the browser.
+•	appSidebar.js: Shared slide-in sidebar (logout, help, feedback, language) reused across pages.
+•	AnnotationHistory.js: Standalone annotation-history page wiring (sidebar, footer, history list).
+•	createCase.js: New-case creation flow; lazy-loads THREE/STLLoader from a CDN.
+•	ThreeDMobile.js: Mobile-only chat-widget show/hide toggle.
+•	newControls.js: Redesigned visibility/transparency/material control panel that replaces the dat.GUI-based control.js, adding a wireframe-overlay toggle and a mobile-friendly component panel.
+
+New subsystem: src/js/2D/ (2D annotation)
+•	2DAnnotation.js: Entry point / shared state hub for the 2D arch annotation editor.
+•	clinicalInfo.js: Clinical info panel; includes logic to decode a .NET BinaryFormatter envelope coming from the backend.
+•	caseNote.js: Per-case note fields (owner, due date, tooth shade, work category).
+•	constants.js: FDI tooth-order tables and shared SVG constants.
+•	criteria.js: Component placement validity/failure-action rules.
+•	toothUtils.js: Small surface-name normalizer helper.
+•	components.js, components.mesh.js, components.plate.js, components.minor.js, components.major.js, components.bar.js, components.clasp.js, components.rest.js: Component catalog plus per-RPD-part (mesh, plate, minor/major connector, bar, clasp, rest) placement and asset logic, split by component family.
+•	annotationCatalog.js, annotationPlacement.js, annotationRender.js, annotationLocks.js, annotationVisuals.js, annotationTeethModel.js: The annotation engine internals - catalog lookup, placement rules, SVG rendering, drag/lock interactions, visual styling, and per-tooth model state.
+•	instructionEditor.js: Canvas-based freehand drawing/instruction annotation editor.
+•	noticeboard.js: Case "noticeboard" / report builder (3D view-captures, drawn views).
+•	preview3D.js: 2D-editor-embedded 3D preview pane; lazy-loads THREE/TrackballControls/STLLoader.
+•	jawStructApi.js, jawStructApply.js, jawStructCodec.js, jawStructCodes.js: The jaw-struct interchange format - API fetch/save wrappers, applying a decoded design to the annotation UI, a pure text-to-JS codec, and integer-to-componentId code tables mirroring the Unity C# StructData.cs enums.
+
+crypt.js update
+•	The lol() function has evolved beyond what's documented above: it's now bidirectional (auto-encrypts numbers / decrypts strings) with added noise padding. Still hand-rolled XOR + Base64 - no crypto library involved.
+
