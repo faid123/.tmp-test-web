@@ -573,9 +573,22 @@ button {
   flex-wrap: nowrap;
 }
 
+/* Spread the toolbar items across the full row at every viewport width —
+   leftover space is shared instead of pooling after the Create button.
+   Applies on desktop's single row and on tablet's wrapped rows alike
+   (each wrapped row fills its own width). The phone grid (≤640) overrides
+   display, so this flex rule is inert there. */
+.cm-toolbar > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* …except the refresh button, which stays icon-sized. */
+.cm-toolbar > .cm-icon-btn { flex: 0 0 auto; }
+
 .cm-chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center; /* keep content centered when the chip stretches */
   gap: 8px;
   padding: 9px 14px;
   border-radius: 10px;

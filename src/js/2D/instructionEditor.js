@@ -1013,11 +1013,12 @@ function onPointerDown(event) {
     // Place a new (empty) text box at the clicked point. spawnTextInput commits
     // any current box first — an empty centered default is simply discarded, so
     // this effectively moves the caret to where the user clicked.
-    const available = canvas.clientWidth || 320;
-    const boxW = textBoxMaxWidth(INITIAL_TEXT_FONT_PX);
-    const x = Math.min(Math.max(0, point.x), Math.max(0, available - boxW));
+    const available = (canvas.clientWidth || 320) - 24;
+    // Clamp x so at least the minimum box width fits; the box starts small
+    // there and auto-grows with the text up to the canvas's right edge.
+    const x = Math.min(Math.max(0, point.x), Math.max(0, available - TEXT_BOX_MIN_WIDTH));
     const y = Math.max(0, point.y);
-    spawnTextInput({ x, y }, { width: boxW });
+    spawnTextInput({ x, y });
     event.preventDefault();
     return;
   }
@@ -1296,25 +1297,15 @@ function commitTextInput() {
 
 const INITIAL_TEXT_FONT_PX = 22;
 
-// Fresh text box width — kept short so comments wrap onto new lines instead of
-// stretching across the image. Sized to ~5 words then reduced 4× per feedback
-// that the box was too long. Measured from the real font, clamped to the canvas.
-const TEXT_BOX_MAX_WORDS = 5;
-const TEXT_BOX_WIDTH_DIVISOR = 4;
+// Fresh text box width — previously sized to ~5 words (then reduced 4×),
+// which wrapped typing after a word or two. Per feedback that cap is gone:
+// the box now stretches from its spawn point to the canvas's right edge, so
+// text wraps only at the canvas boundary — no artificial word limit.
+const TEXT_BOX_MIN_WIDTH = 70;
 
-function textBoxMaxWidth(fontPx) {
+function textBoxMaxWidth(startX = 0) {
   const available = (canvas?.clientWidth || 320) - 24;
-  let width = fontPx * 8; // fallback if the canvas context isn't ready
-  if (ctx) {
-    ctx.save();
-    ctx.font = `600 ${fontPx}px "Montserrat","Segoe UI",sans-serif`;
-    // Representative 5-char words separated by spaces.
-    const sample = Array(TEXT_BOX_MAX_WORDS).fill("widths").join(" ");
-    width = Math.ceil(ctx.measureText(sample).width) + TEXT_PAD_X * 2;
-    ctx.restore();
-  }
-  const reduced = Math.round(width / TEXT_BOX_WIDTH_DIVISOR);
-  return Math.max(70, Math.min(reduced, available));
+  return Math.max(TEXT_BOX_MIN_WIDTH, available - startX);
 }
 
 // Sync a text box's live background to the chosen mode. Transparent keeps the
@@ -1352,10 +1343,9 @@ function spawnTextInput(point, prefill = null, options = {}) {
   // an already-saved text — fresh entry stays a clean, borderless caret.
   const resizable = !!options.resizable;
   const initialFontPx = prefill?.fontSize || INITIAL_TEXT_FONT_PX;
-  // Fresh boxes can't be widened while typing, so start wide enough that normal
-  // text doesn't wrap into a narrow column (capped to the framed canvas width).
-  const defaultWidth = textBoxMaxWidth(initialFontPx);
-  const initialWidth = prefill?.width || defaultWidth;
+  // Fresh boxes start small and auto-grow with the text (width: auto below);
+  // this width only applies to re-edit boxes, which keep their stored width.
+  const initialWidth = prefill?.width || textBoxMaxWidth(point.x);
   const color = prefill?.color || state.color;
   const align = prefill?.align || state.textAlign;
   const bg = prefill?.bg || state.textBg;
@@ -1380,7 +1370,16 @@ function spawnTextInput(point, prefill = null, options = {}) {
   div.dataset.placeholder = "Type…";
   div.style.color = color;
   div.style.fontSize = `${initialFontPx}px`;
-  div.style.width = `${initialWidth}px`;
+  if (resizable) {
+    // Re-edit boxes keep their stored width (drag-corner resizes it).
+    div.style.width = `${initialWidth}px`;
+  } else {
+    // Fresh boxes start small and expand with the text, capped at the canvas's
+    // right edge — wrapping only kicks in once the cap is reached.
+    div.style.width = "auto";
+    div.style.minWidth = `${TEXT_BOX_MIN_WIDTH}px`;
+    div.style.maxWidth = `${textBoxMaxWidth(point.x)}px`;
+  }
   div.style.minHeight = `${initialFontPx + 8}px`;
   // No resize handle / border while typing fresh text; both appear only when
   // re-editing a saved text so it can be made bigger/smaller after save.
@@ -2025,11 +2024,11 @@ function highlightActiveTextStyle() {
 // start typing immediately on entering text mode.
 function spawnCenteredTextInput() {
   if (!canvas) return;
+  // Small box centered on the canvas; it auto-grows rightward as text is typed.
   const available = canvas.clientWidth || 320;
-  const boxW = textBoxMaxWidth(INITIAL_TEXT_FONT_PX);
-  const x = Math.max(12, (available - boxW) / 2);
+  const x = Math.max(12, (available - TEXT_BOX_MIN_WIDTH) / 2);
   const y = Math.max(0, canvas.clientHeight / 2 - 20);
-  spawnTextInput({ x, y }, { width: boxW });
+  spawnTextInput({ x, y });
 }
 
 function enterTextMode() {

@@ -59,6 +59,14 @@ const preview3DState = {
   heatmapToggleBtn: null,
   heatmapBoard: null,
   meshQuality: null,
+  // HD/SD toggle (top-right of the preview): re-renders the jaws from the
+  // kept source files at the chosen quality without a full page reload.
+  //   qualitySource - { kind: "off"|"stl", files, undercut } from the last load
+  //   qualityToggleEl - the segmented HD/SD control in the mount
+  //   qualityToggleBusy - a switch re-render is in flight
+  qualitySource: null,
+  qualityToggleEl: null,
+  qualityToggleBusy: false,
   meshQualityPromptCleanup: null,
   meshQualityPromptResolve: null,
   meshQualityOverlay: null,
@@ -135,6 +143,8 @@ export async function loadInteractiveJawPreview(area) {
       try {
         await populateJawPreviewFromOFF(meshFiles, undercut, meshQuality);
         await finishMeshQualityProgress();
+        preview3DState.qualitySource = { kind: "off", files: meshFiles, undercut };
+        updateQualityToggle();
       } catch (err) {
         clearMeshQualityProgress();
         throw err;
@@ -154,6 +164,8 @@ export async function loadInteractiveJawPreview(area) {
       try {
         await populateJawPreview(jawFiles, undercut, meshQuality);
         await finishMeshQualityProgress();
+        preview3DState.qualitySource = { kind: "stl", files: jawFiles, undercut };
+        updateQualityToggle();
       } catch (err) {
         clearMeshQualityProgress();
         throw err;
@@ -332,6 +344,68 @@ function clearMeshQualityProgress() {
   preview3DState.meshQualityProgressJaw = null;
 }
 
+// Sync the HD/SD badge with the current state: show the CURRENT quality as
+// the label, disable while a switch re-render is in flight, hide when there
+// is nothing to re-render (no kept source files, e.g. an empty case).
+function updateQualityToggle() {
+  const el = preview3DState.qualityToggleEl;
+  if (!el) return;
+  el.classList.toggle("is-hidden", !preview3DState.qualitySource?.files?.length);
+  const high = preview3DState.meshQuality === "high";
+  el.textContent = high ? "HD" : "SD";
+  el.title = high
+    ? "High quality — click to switch to low (faster)"
+    : "Low quality — click to switch to high (original mesh)";
+  el.disabled = preview3DState.qualityToggleBusy;
+}
+
+// HD/SD toggle click: re-render the jaws from the kept source files at the
+// requested quality, reusing the same progress overlay as the initial load.
+async function switchMeshQuality(quality) {
+  const normalized = quality === "high" ? "high" : "low";
+  if (preview3DState.qualityToggleBusy) return;
+  if (preview3DState.meshQuality === normalized) return;
+  const source = preview3DState.qualitySource;
+  const mount = preview3DState.mount;
+  if (!source?.files?.length || !mount) return;
+
+  preview3DState.qualityToggleBusy = true;
+  preview3DState.meshQuality = normalized;
+  updateQualityToggle();
+
+  clearMeshQualityProgress();
+  const overlay = document.createElement("div");
+  overlay.className = "jaw-preview-quality-prompt";
+  mount.appendChild(overlay);
+  showMeshQualityProgress(overlay, normalized);
+  await waitForPreviewPaint();
+
+  try {
+    if (source.kind === "off") {
+      await populateJawPreviewFromOFF(source.files, source.undercut, normalized);
+    } else {
+      await populateJawPreview(source.files, source.undercut, normalized);
+    }
+    // populate* clears the model root, which also drops the extra-slot meshes —
+    // re-attach the still-alive groups (root.clear() detaches, never disposes).
+    const root = preview3DState.modelRoot;
+    const extras = Object.values(preview3DState.extraGroups || {});
+    if (root && extras.length) {
+      extras.forEach((entry) => entry?.group && root.add(entry.group));
+      centerRootOnCombinedBounds(root);
+      fitPreviewCamera();
+    }
+    await finishMeshQualityProgress();
+  } catch (err) {
+    console.error("[preview3D] mesh quality switch failed", err);
+    clearMeshQualityProgress();
+    toast?.error?.("Failed to switch mesh quality.");
+  } finally {
+    preview3DState.qualityToggleBusy = false;
+    updateQualityToggle();
+  }
+}
+
 function waitForPreviewPaint() {
   return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 }
@@ -415,6 +489,9 @@ export function teardown3DPreview() {
   preview3DState.heatmapToggleBtn = null;
   preview3DState.heatmapBoard = null;
   preview3DState.meshQuality = null;
+  preview3DState.qualitySource = null;
+  preview3DState.qualityToggleEl = null;
+  preview3DState.qualityToggleBusy = false;
   if (preview3DState.captureCleanup) {
     preview3DState.captureCleanup();
     preview3DState.captureCleanup = null;
@@ -641,6 +718,13 @@ function removeJawMesh(jaw) {
     preview3DState.groups[jaw] = null;
   }
   delete preview3DState.jawFiles[jaw];
+  // Keep the HD/SD rebuild source in step, so toggling quality later doesn't
+  // resurrect a jaw the user removed this session.
+  const src = preview3DState.qualitySource;
+  if (src?.files?.length) {
+    src.files = src.files.filter((f) => getJawKeyFromFile(f) !== jaw);
+    updateQualityToggle();
+  }
   setJawRowMode(jaw, false);
   if (preview3DState.modelRoot) centerRootOnCombinedBounds(preview3DState.modelRoot);
 }
@@ -1061,6 +1145,17 @@ async function renderJawStl(jaw, file) {
 
   preview3DState.groups[jaw] = group;
   preview3DState.jawFiles[jaw] = { data: file.data, type: file.type, filename: file.filename };
+  // Keep the HD/SD rebuild source in step with the freshly uploaded STL.
+  // Only for STL-kind sources: an OFF (parameterized-mesh) source can't host
+  // an STL entry — toggling would then revert this jaw to the server mesh.
+  const entry = { data: file.data, type: file.type, filename: file.filename };
+  const src = preview3DState.qualitySource;
+  if (src?.kind === "stl") {
+    src.files = src.files.filter((f) => getJawKeyFromFile(f) !== jaw).concat(entry);
+  } else if (!src) {
+    preview3DState.qualitySource = { kind: "stl", files: [entry], undercut: null };
+  }
+  updateQualityToggle();
   setJawRowMode(jaw, true);
   applyJawVisibility();
   centerRootOnCombinedBounds(root);
@@ -1862,6 +1957,19 @@ function init3DPreview(area) {
     setHeatmapEnabled(!preview3DState.heatmapEnabled);
   });
 
+  // HD/SD mesh-quality toggle (top-right): a single badge-button showing the
+  // CURRENT quality; clicking flips to the other one. Hidden until the jaws
+  // have loaded and we have source files to re-render from —
+  // updateQualityToggle() reveals it and keeps the label in sync.
+  const qualityToggle = document.createElement("button");
+  qualityToggle.type = "button";
+  qualityToggle.className = "jaw-preview-quality-toggle is-hidden";
+  qualityToggle.setAttribute("aria-label", "Toggle mesh quality");
+  qualityToggle.addEventListener("click", () => {
+    switchMeshQuality(preview3DState.meshQuality === "high" ? "low" : "high");
+  });
+  preview3DState.qualityToggleEl = qualityToggle;
+
   // Download Jaw Profile was moved to the app footer, which dispatches
   // `request-download-jaw-profile`; we open a small two-option menu here
   // (Download STL file / Download as JPEG). (The "Upload other 3D files"
@@ -1886,6 +1994,7 @@ function init3DPreview(area) {
   shell.appendChild(toolbar);
   shell.appendChild(mount);
   mount.appendChild(undercut);
+  mount.appendChild(qualityToggle);
   area.appendChild(shell);
 
   const renderer = new THREE.WebGLRenderer({

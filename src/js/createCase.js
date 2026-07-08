@@ -141,6 +141,45 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderInviteList();
   };
 
+  // === Image preview lightbox (click an uploaded thumbnail to enlarge) ===
+  let previewOverlay = null;
+  const ensurePreviewOverlay = () => {
+    if (previewOverlay) return previewOverlay;
+    previewOverlay = document.createElement("div");
+    previewOverlay.className = "cc-preview-overlay hidden";
+
+    const previewImg = document.createElement("img");
+    previewImg.alt = "Preview";
+    previewImg.addEventListener("click", (e) => e.stopPropagation());
+
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "cc-preview-close";
+    closeBtn.textContent = "×";
+    closeBtn.setAttribute("aria-label", "Close preview");
+
+    const close = () => previewOverlay.classList.add("hidden");
+    closeBtn.addEventListener("click", close);
+    previewOverlay.addEventListener("click", close);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") close();
+    });
+
+    previewOverlay.appendChild(previewImg);
+    previewOverlay.appendChild(closeBtn);
+    document.body.appendChild(previewOverlay);
+    previewOverlay._img = previewImg;
+    return previewOverlay;
+  };
+
+  // Open the lightbox for a thumbnail <img>. Skips empty (not-yet-rendered) sources.
+  const openImagePreview = (src) => {
+    if (!src) return;
+    const overlay = ensurePreviewOverlay();
+    overlay._img.src = src;
+    overlay.classList.remove("hidden");
+  };
+
   // === Drag & drop helpers (jaw STL placeholders + reference image container) ===
   const eventHasFiles = (e) => {
     const types = e?.dataTransfer?.types;
@@ -205,6 +244,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (refContainer) {
       refContainer.innerHTML = "";
     }
+    if (refUploadBtn) refUploadBtn.classList.remove("has-images");
     if (jawUploadInput) jawUploadInput.value = "";
     if (refUploadInput) refUploadInput.value = "";
   };
@@ -223,8 +263,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     wrapper.file = file;
 
     const img = document.createElement("img");
-    img.style.width = "100px";
     img.alt = jaw === "upper" ? "Upper jaw STL" : "Lower jaw STL";
+    img.addEventListener("click", () => openImagePreview(img.src));
 
     const remove = document.createElement("div");
     remove.className = "remove-model";
@@ -279,9 +319,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(width, height);
-        // Matches the .cm-image-area backdrop so the thumbnail blends into
-        // the detail-pane image box instead of standing out as a white tile.
-        renderer.setClearColor(0xeef2f7);
+        // White backdrop so the rendered thumbnail sits flush on the white
+        // upload tile (and the case-list image box) with no visible seam.
+        renderer.setClearColor(0xffffff);
         renderer.render(scene, camera);
         const dataUrl = renderer.domElement.toDataURL("image/png");
         img.src = dataUrl;
@@ -291,6 +331,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     };
     reader.readAsArrayBuffer(file);
+  };
+
+  // The ref grid lives inside the dashed tile: with images present the tile
+  // hides its placeholder content (CSS .has-images) and shows the thumbnails.
+  const syncRefTileState = () => {
+    if (!refUploadBtn || !refContainer) return;
+    refUploadBtn.classList.toggle("has-images", refContainer.children.length > 0);
   };
 
   // Insert ref image wrapper synchronously (with File attached) so Start-click
@@ -303,19 +350,28 @@ document.addEventListener("DOMContentLoaded", async () => {
     wrapper.file = file;
 
     const img = document.createElement("img");
+    // stopPropagation: thumbnails sit inside the tile, whose click opens the
+    // file picker — a thumbnail click should only open the preview.
+    img.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openImagePreview(img.src);
+    });
 
     const remove = document.createElement("div");
     remove.className = "remove-model";
     remove.textContent = "×";
-    remove.onclick = () => {
+    remove.onclick = (e) => {
+      e.stopPropagation();
       delete wrapper.file;
       wrapper.remove();
       refUploadInput.value = "";
+      syncRefTileState();
     };
 
     wrapper.appendChild(img);
     wrapper.appendChild(remove);
     refContainer.appendChild(wrapper);
+    syncRefTileState();
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -420,12 +476,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     refUploadBtn.addEventListener("click", () => {
       refUploadInput.click();
     });
-    enableRefDropZone(refContainer);
+    // Only the tile is a drop zone; the grid now lives inside it, so a second
+    // binding there would double-add every dropped file (drop events bubble).
     enableRefDropZone(refUploadBtn);
 
     refUploadInput.addEventListener("change", (event) => {
-      const file = event.target.files[0];
-      addRefImageFromFile(file);
+      for (const file of event.target.files) {
+        addRefImageFromFile(file);
+      }
+      // Clear the input so picking the same file again re-fires `change`.
+      refUploadInput.value = "";
     });
   }
 

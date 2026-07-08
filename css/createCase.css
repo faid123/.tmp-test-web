@@ -284,9 +284,9 @@
   overflow: hidden;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
-/* Jaw cards are taller than the reference card. */
+/* Jaw cards are taller than the reference card; match the filled tile height. */
 .cc-jaw-tile {
-  min-height: 180px;
+  min-height: 200px;
 }
 .cc-jaw-tile:hover,
 .cc-ref-tile:hover {
@@ -359,6 +359,27 @@
   flex-wrap: wrap;
   gap: 10px;
 }
+
+/* Uploaded reference thumbnails live INSIDE the dashed tile; once any image
+   is present the tile swaps its placeholder content for the grid (clicking
+   leftover empty space still opens the file picker to add more). */
+.cc-ref-tile .cc-ref-grid {
+  width: 100%;
+  justify-content: center;
+}
+.cc-ref-tile.has-images .jaw-bg,
+.cc-ref-tile.has-images .cc-jaw-text,
+.cc-ref-tile.has-images .cc-jaw-or,
+.cc-ref-tile.has-images .cc-jaw-browse {
+  display: none;
+}
+.cc-ref-tile.has-images {
+  padding: 12px;
+}
+@media (max-width: 860px) {
+  /* has-images also suppresses the mobile short-label (::after) */
+  .cc-ref-tile.has-images::after { display: none; }
+}
 .cc-ref-grid .uploaded-model {
   position: relative;
   width: 84px;
@@ -370,6 +391,7 @@
   object-fit: cover;
   border-radius: 8px;
   border: 1px solid var(--line, #e2e8f0);
+  cursor: zoom-in;
 }
 .cc-ref-grid .remove-model {
   position: absolute;
@@ -411,8 +433,8 @@
 .cc-jaw-models .uploaded-model {
   position: relative;
   width: 100%;
-  height: 180px;
-  background: #fdf3f3;
+  height: 200px;
+  background: #fff;
   border: 1px solid var(--line, #e2e8f0);
   border-radius: 10px;
   overflow: hidden;
@@ -421,12 +443,12 @@
   justify-content: center;
 }
 .cc-jaw-models .uploaded-model img {
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
   border: none;
   border-radius: 0;
+  cursor: zoom-in;
 }
 .cc-jaw-models .remove-model {
   position: absolute;
@@ -447,6 +469,54 @@
   line-height: 1;
 }
 
+
+/* ==================== Upload image preview (lightbox) ==================== */
+.cc-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  cursor: zoom-out;
+}
+.cc-preview-overlay.hidden { display: none !important; }
+
+.cc-preview-overlay img {
+  max-width: 90vw;
+  max-height: 85vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  cursor: default;
+}
+
+.cc-preview-close {
+  position: absolute;
+  top: 20px;
+  right: 26px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+.cc-preview-close:hover { background: #fff; }
 
 /* ==================== Legacy modal styles (kept for userAccessModal) ==================== */
 .modal {

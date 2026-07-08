@@ -1111,6 +1111,42 @@ button.upload3d-row {
   align-items: center;
 }
 
+/* HD/SD mesh-quality toggle — top-right of the 3D mount (undercut legend is
+   top-left, nav gizmo bottom-right). Single badge-button labeled with the
+   CURRENT quality; clicking flips to the other. */
+.jaw-preview-quality-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 8;
+  border: 1px solid var(--rose-700, #25735f);
+  border-radius: 999px;
+  background: var(--rose-700, #25735f);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  min-width: 44px;
+  padding: 6px 14px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(26, 77, 63, 0.08);
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.jaw-preview-quality-toggle.is-hidden { display: none; }
+
+.jaw-preview-quality-toggle:hover {
+  background: var(--rose-500, #2e8a72);
+  transform: translateY(-1px);
+}
+
+.jaw-preview-quality-toggle:disabled {
+  cursor: wait;
+  opacity: 0.7;
+  transform: none;
+}
+
 .jaw-preview-quality-prompt {
   position: absolute;
   inset: 0;
