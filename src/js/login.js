@@ -40,22 +40,41 @@ function postLoginTarget() {
   } catch (e) {
     /* ignore malformed/absent value */
   }
-  return "./src/pages/case_list.html";
+  // Route by role so admins land straight on the admin case list (avoids a
+  // redirect flash from case_list.html). caseManagement.js re-checks and
+  // redirects anyway if someone reaches the wrong page.
+  let isAdmin = false;
+  try {
+    isAdmin = Number(JSON.parse(localStorage.getItem("loggedInUser") || "null")?.isAdmin) === 1;
+  } catch (e) {
+    /* ignore */
+  }
+  return isAdmin
+    ? "./src/pages/admin/admin_case_list.html"
+    : "./src/pages/case_list.html";
 }
 
 // --- view switching -------------------------------------------------------
 
 function showView(view) {
-  const loginView = document.getElementById("login-view");
-  const otpView = document.getElementById("otp-view");
+  const views = {
+    login: document.getElementById("login-view"),
+    signup: document.getElementById("signup-view"),
+    forgot: document.getElementById("forgot-view"),
+    otp: document.getElementById("otp-view")
+  };
+  Object.entries(views).forEach(([name, el]) => {
+    if (!el) return;
+    el.classList.toggle("hidden", name !== view);
+  });
+
   if (view === "otp") {
-    loginView.classList.add("hidden");
-    otpView.classList.remove("hidden");
     const first = document.querySelector("#otp-inputs .otp-box");
     if (first) first.focus();
-  } else {
-    otpView.classList.add("hidden");
-    loginView.classList.remove("hidden");
+  } else if (view === "signup") {
+    document.getElementById("signup-username")?.focus();
+  } else if (view === "forgot") {
+    document.getElementById("forgot-email")?.focus();
   }
 }
 
@@ -210,6 +229,69 @@ async function verifyAndLogin() {
   }
 }
 
+// --- sign up --------------------------------------------------------------
+
+async function handleSignup() {
+  const username = document.getElementById("signup-username").value.trim();
+  const email = document.getElementById("signup-email").value.trim();
+  const password = document.getElementById("signup-password").value.trim();
+  const confirm = document.getElementById("signup-confirm").value.trim();
+
+  setError("signup-error-message", "");
+
+  if (!username || !email || !password || !confirm) {
+    setError("signup-error-message", "Please fill in all fields.");
+    return false;
+  }
+  if (password !== confirm) {
+    setError("signup-error-message", "Passwords do not match.");
+    return false;
+  }
+
+  // TODO: no user-registration endpoint exists on the backend yet.
+  // Once one is available, POST the account here following the
+  // [{ machine_id }, { username, email, password }] convention used by
+  // /user/login, then move the user to the OTP view (or straight to login).
+  // Example:
+  //   const res = await fetch(`${API_BASE}/user/register`, {
+  //     method: "POST",
+  //     headers: { "Content-Type": "application/json" },
+  //     body: JSON.stringify([{ machine_id: MACHINE_ID }, { username, email, password }])
+  //   });
+  //   logApi(res, "POST /user/register");
+  //   ...handle response...
+  setError("signup-error-message", "Sign up is not available yet. Please contact your administrator.");
+  return false;
+}
+
+// --- forgot password ------------------------------------------------------
+
+async function handleForgotPassword() {
+  const email = document.getElementById("forgot-email").value.trim();
+
+  setError("forgot-error-message", "");
+
+  if (!email) {
+    setError("forgot-error-message", "Please enter your registered email.");
+    return false;
+  }
+
+  // TODO: no password-reset endpoint exists on the backend yet.
+  // Once one is available, POST the email here following the
+  // [{ machine_id }, { email }] convention used by the other user routes,
+  // then confirm to the user that a reset link/code has been sent.
+  // Example:
+  //   const res = await fetch(`${API_BASE}/user/password/reset`, {
+  //     method: "POST",
+  //     headers: { "Content-Type": "application/json" },
+  //     body: JSON.stringify([{ machine_id: MACHINE_ID }, { email }])
+  //   });
+  //   logApi(res, "POST /user/password/reset");
+  //   ...handle response...
+  setError("forgot-error-message", "Password reset is not available yet. Please contact your administrator.");
+  return false;
+}
+
 // --- OTP box behavior (auto-advance / backspace / paste) ------------------
 
 function wireOtpBoxes() {
@@ -290,6 +372,74 @@ document.addEventListener("DOMContentLoaded", () => {
       // TEMP: OTP disabled — go straight to the post-login target on success.
       if (ok) window.location.href = postLoginTarget();
       // if (ok) showView("otp");
+    });
+  }
+
+  // Toggle between the login and sign-up views.
+  const goToSignup = document.getElementById("go-to-signup");
+  if (goToSignup) {
+    goToSignup.addEventListener("click", () => {
+      setError("signup-error-message", "");
+      showView("signup");
+    });
+  }
+
+  const goToLogin = document.getElementById("go-to-login");
+  if (goToLogin) {
+    goToLogin.addEventListener("click", () => showView("login"));
+  }
+
+  const signupBack = document.getElementById("signup-back-to-login");
+  if (signupBack) {
+    signupBack.addEventListener("click", () => showView("login"));
+  }
+
+  // Forgot-password view: open from the login form, cancel/submit back to login.
+  const goToForgot = document.getElementById("go-to-forgot");
+  if (goToForgot) {
+    goToForgot.addEventListener("click", () => {
+      setError("forgot-error-message", "");
+      showView("forgot");
+    });
+  }
+
+  const forgotCancel = document.getElementById("forgot-cancel");
+  if (forgotCancel) {
+    forgotCancel.addEventListener("click", () => showView("login"));
+  }
+
+  const forgotForm = document.getElementById("forgot-form");
+  if (forgotForm) {
+    forgotForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("forgot-reset-btn");
+      if (btn) btn.disabled = true;
+      await handleForgotPassword();
+      if (btn) btn.disabled = false;
+    });
+  }
+
+  // Show/hide password toggle on the sign-up form.
+  const signupToggle = document.getElementById("signup-toggle-password");
+  const signupPassword = document.getElementById("signup-password");
+  if (signupToggle && signupPassword) {
+    signupToggle.addEventListener("click", () => {
+      const show = signupPassword.type === "password";
+      signupPassword.type = show ? "text" : "password";
+      signupToggle.setAttribute("aria-pressed", String(show));
+      signupToggle.setAttribute("aria-label", show ? "Hide password" : "Show password");
+      signupPassword.focus();
+    });
+  }
+
+  const signupForm = document.getElementById("signup-form");
+  if (signupForm) {
+    signupForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById("signup-btn");
+      if (btn) btn.disabled = true;
+      await handleSignup();
+      if (btn) btn.disabled = false;
     });
   }
 

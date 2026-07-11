@@ -48,12 +48,32 @@ body {
 
 /* bg-white rounded-2xl shadow-xl p-8 */
 .auth-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 34rem;
   background: #ffffff;
   border-radius: 1rem;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
     0 8px 10px -6px rgba(0, 0, 0, 0.1);
   padding: 2rem;
   animation: fade-in 0.35s ease-out;
+}
+
+/* Forgot-password view: smaller card with custom spacing */
+#forgot-view {
+  justify-content: center;
+  min-height: 10rem;
+}
+
+/* Small gap between the title/subtitle and the email box */
+#forgot-view .auth-header {
+  margin-bottom: 1.5rem;
+}
+
+/* Wider gap between the email box and the Cancel/Reset buttons */
+#forgot-view .auth-form {
+  gap: 2.5rem;
 }
 
 /* ===== Header / logo ===== */
@@ -228,9 +248,24 @@ body {
   color: var(--teal-700);
 }
 
+.auth-switch {
+  margin: 0.25rem 0 0;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--gray-600);
+}
+
+.auth-switch .link-btn {
+  font-weight: 600;
+}
+
 /* w-full bg-teal-500 text-white py-3 rounded-lg hover:bg-teal-600 */
 .primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
+  min-height: 2.75rem;
   padding: 0.75rem;
   border: 0;
   border-radius: 0.5rem;
@@ -238,6 +273,7 @@ body {
   color: #ffffff;
   font: inherit;
   font-size: 0.95rem;
+  line-height: 1;
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
@@ -251,8 +287,42 @@ body {
   cursor: not-allowed;
 }
 
+/* Cancel / Reset row on the forgot-password view */
+.btn-row {
+  display: flex;
+  justify-content: space-evenly;
+  gap: 0.75rem;
+}
+
+.btn-row .primary-btn,
+.btn-row .secondary-btn {
+  flex: 1;
+}
+
+.secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--gray-300);
+  border-radius: 0.5rem;
+  background: #ffffff;
+  color: var(--gray-700);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.secondary-btn:hover {
+  background: #f3f4f6;
+}
+
 .error-message {
-  margin: 1rem 0 0;
+  margin: 0.5rem 0 0;
   min-height: 1.25rem;
   text-align: center;
   color: #dc2626;

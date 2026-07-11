@@ -1,0 +1,251 @@
+/* Admin user-management page. Piggybacks on case_list.css (page frame, chips,
+   buttons, table) and createCase.css (modal); only admin-specific bits here. */
+
+/* Reference layout: full-width title bar + stat cards row across the top, then
+   the user list (left) beside a full-height detail pane (right). */
+.au-page {
+  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+/* Footer spans both columns at the bottom (styling inherited from .cm-footer). */
+.au-page > .cm-footer { grid-column: 1 / -1; grid-row: 4; }
+/* Full-width rows span both columns. */
+.au-page > .au-topbar,
+.au-page > .au-stats {
+  grid-column: 1 / -1;
+}
+.au-page > .au-topbar { grid-row: 1; }
+.au-page > .au-stats { grid-row: 2; }
+/* Branded top bar visuals live in case_list.css (shared by both admin pages),
+   scoped to .au-topbar. Here we handle this page's grid positioning + a
+   full-bleed teal header (square corners, taller). */
+.au-page > .au-topbar {
+  padding: 18px 24px;
+  border-radius: 0;
+  min-height: 68px;
+}
+.au-page > .au-stats { padding: 14px 24px 0; margin: 0; }
+.au-page > .cm-main { grid-column: 1; grid-row: 3; min-height: 0; }
+.au-page > .cm-detail { grid-column: 2; grid-row: 3; min-height: 0; }
+
+/* Collapse to a single column on tablet/phone; the .cm-detail pane then slides
+   in on selection via .cm-page.show-details (rules inherited from case_list.css). */
+@media (max-width: 860px) {
+  .au-page { grid-template-columns: 1fr; }
+  .au-page > .cm-main,
+  .au-page > .cm-detail { grid-column: 1 / -1; }
+}
+
+/* ---- user detail pane ---- */
+.au-detail-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #9ca3af;
+  text-align: center;
+}
+.au-detail-empty i { font-size: 38px; }
+
+.au-detail-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary, #3bae95);
+  color: #fff;
+  font-weight: 700;
+  font-size: 18px;
+  text-transform: uppercase;
+}
+.au-detail-uuid {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  word-break: break-all;
+  color: #6b7280;
+}
+
+/* ---- overview cards (mirror the admin case list) ---- */
+/* The .cm-stat-* card styles come from case_list.css; this just lays them out.
+   Not gated behind body.is-admin (unlike .cm-admin-stats) because this page's
+   own admin gate already controls visibility. */
+.au-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0 0 18px;
+}
+/* Extend the cards a little on this page so the freed width reads as fuller. */
+.au-stats .cm-stat-card {
+  min-height: 118px;
+  padding: 18px 20px;
+}
+/* Tablet landscape: 3 compact cards per row. */
+@media (max-width: 1100px) {
+  .au-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .au-stats .cm-stat-card { min-height: 96px; padding: 14px 16px; }
+  .au-stats .cm-stat-value { font-size: 1.4rem; }
+}
+/* Tablet portrait: 2 per row. */
+@media (max-width: 780px) {
+  .au-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .au-stats .cm-stat-card { min-height: 84px; padding: 12px 14px; }
+}
+/* Phone: hide the overview cards entirely. */
+@media (max-width: 640px) {
+  .au-stats { display: none; }
+}
+
+/* Toolbar: spread the controls evenly across the row. Items size to content
+   and the gaps distribute between them; the search chip absorbs extra slack. */
+.au-toolbar { justify-content: space-between; }
+.au-toolbar > * { flex: 0 0 auto; }
+.au-toolbar > .au-search-chip { flex: 1 1 auto; }
+
+/* ---- toolbar ---- */
+.au-search-chip {
+  flex: 1;
+  max-width: 340px;
+}
+
+.au-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: inherit;
+  outline: none;
+}
+
+/* ---- table ---- */
+.au-table-wrap {
+  /* single-column page: let the table breathe full width */
+  min-height: 0;
+}
+
+.au-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.au-badge-admin {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.au-badge-user {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.au-badge-active {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.au-badge-deleted {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.au-row-deleted td {
+  opacity: 0.6;
+}
+
+/* Rows are clickable (open the detail pane). */
+.au-row { cursor: pointer; transition: background 0.12s ease; }
+.au-row:hover { background: var(--line-soft, #f1f5f9); }
+.au-row.is-active { background: var(--primary-soft, #d4f0e8); }
+
+/* Align the Actions column header directly above its buttons (both left),
+   overriding case_list.css's right-aligned defaults for this page. */
+.au-table-wrap .cm-th-actions,
+.au-table-wrap .cm-td-actions {
+  text-align: left;
+}
+.au-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.au-empty {
+  padding: 28px 12px;
+  text-align: center;
+  color: #6b7280;
+}
+
+/* ---- admins-only gate ---- */
+.au-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 20px;
+  text-align: center;
+  color: #374151;
+}
+
+.au-gate i {
+  font-size: 42px;
+  color: #9ca3af;
+}
+
+.au-gate h2 {
+  margin: 6px 0 0;
+}
+
+.au-gate p {
+  margin: 0 0 12px;
+  color: #6b7280;
+}
+
+/* ---- modal extras ---- */
+.au-req {
+  color: #dc2626;
+}
+
+.au-hint {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: #6b7280;
+}
+
+.au-admin-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.au-form-error {
+  margin: 14px 0 0;
+  min-height: 18px;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.au-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+

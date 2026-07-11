@@ -14,7 +14,17 @@ import { logApi, statusLabel } from "./apiLog.js";
 
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 const API = "https://live.api.smartrpdai.com/api/smartrpd";
-const ICON_BASE = "../../assets/Dashboard_Icon";
+// Resolve an asset path relative to the app root (everything before "/src/"),
+// so icons load whether this shared module runs from a src/pages/ page
+// (case_list) or the deeper src/pages/admin/ one (admin_case_list). A fixed
+// "../../assets" only resolves correctly for the shallower page. Falls back to
+// the original relative path off-browser (jest/jsdom), preserving test output.
+function appAsset(relFromRoot) {
+  const href = typeof window !== "undefined" && window.location ? window.location.href : "";
+  const i = href.indexOf("/src/");
+  return i !== -1 ? href.slice(0, i + 1) + relFromRoot : "../../" + relFromRoot;
+}
+const ICON_BASE = appAsset("assets/Dashboard_Icon");
 
 function getLoggedInUser() {
   const user = localStorage.getItem("loggedInUser");
@@ -732,7 +742,6 @@ export async function openCaseDashboard(caseId, caseStub = null) {
   renderAccess([]);
 
   const auth = { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: caseId };
-  const caseIdStr = caseStub?.case_id ?? caseId;
 
   const [detail, thumbs, viewcaptures, roles] = await Promise.all([
     postJson(`${API}/case/get/${caseId}`, [auth], "POST /case/get/:id").catch(
@@ -741,7 +750,10 @@ export async function openCaseDashboard(caseId, caseStub = null) {
         return caseStub || {};
       }
     ),
-    postJson(`${API}/thumbnails/get`, [auth, { case_id: caseIdStr }], "POST /thumbnails/get").catch(
+    // Numeric case_int_id, not the case-name string — the backend's admin-path
+    // thumbnail lookup parses the payload id as caseIntID, so string names 404
+    // for admin accounts (non-admin path works either way).
+    postJson(`${API}/thumbnails/get`, [auth, { case_int_id: caseId }], "POST /thumbnails/get").catch(
       (err) => {
         console.warn("[dashboard] thumbnails failed", err);
         return [];

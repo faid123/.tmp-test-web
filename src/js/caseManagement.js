@@ -25,7 +25,10 @@ function saveCachedCases(list) {
   const key = caseListCacheKey();
   if (!key || !Array.isArray(list)) return;
   try {
-    localStorage.setItem(key, JSON.stringify(list));
+    // Strip "__"-prefixed bookkeeping (e.g. the lazy-enrichment __enrich state)
+    // so a cached "done" marker can't suppress re-fetching in a later session.
+    const json = JSON.stringify(list, (k, v) => (k.startsWith("__") ? undefined : v));
+    localStorage.setItem(key, json);
   } catch {
     try { localStorage.removeItem(key); } catch { /* ignore */ }
   }
@@ -512,7 +515,9 @@ async function fetchCase2dJpegBytes(caseIntId, uuid) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify([
         { machine_id: DL_MACHINE_ID, uuid, caseIntID: caseIntId },
-        { case_id: caseIntId },
+        // Numeric id, not the case-name string — the admin-path lookup parses
+        // this as caseIntID (string names 404 for admin accounts).
+        { case_int_id: caseIntId },
       ]),
     });
     logApi(res, "POST /thumbnails/get");
@@ -727,6 +732,9 @@ function populateTable(cases) {
   const countBadge = document.getElementById("caseCountBadge");
   if (countBadge) countBadge.textContent = String(cases?.length || 0);
   if (!body) return;
+  // Rows are about to be torn down — drop their pending visibility watches;
+  // the loop below re-registers whichever new rows still need enrichment.
+  if (rowObserver) rowObserver.disconnect();
   body.innerHTML = "";
 
   if (!cases || cases.length === 0) {
@@ -756,6 +764,10 @@ function populateTable(cases) {
     const row = document.createElement("tr");
     row.className = "cm-row";
     if (pinned) row.classList.add("is-pinned");
+    // Admins receive soft-deleted cases in the list (server sets
+    // hideDeleted = !is_admin); flag them so they read as struck-through and
+    // the "Retrieve the Case" action has an obvious target.
+    if (isCaseDeleted(caseItem)) row.classList.add("cm-row-deleted");
     // Re-apply the selected highlight after a re-render (filter/refresh/sort/
     // pin), since the table body is rebuilt but window.selectedCaseId persists.
     if (
@@ -846,11 +858,22 @@ function populateTable(cases) {
     const dueTd = row.querySelector(".cm-due-date");
     row.querySelector('[data-action="edit-due"]')?.addEventListener("click", (e) => {
       e.stopPropagation();
-      openDueDateEditor(dueTd, caseItem, resolvedCaseId, dueDate);
+      // Recompute at click time: lazy enrichment may have patched the case's
+      // due date after this row was rendered.
+      const freshDue =
+        caseItem.expected_date || caseItem.due_date || computeDefaultDueDate(caseItem.creation_date);
+      openDueDateEditor(dueTd, caseItem, resolvedCaseId, freshDue);
     });
 
     body.appendChild(row);
+
+    // Lazy enrichment: un-enriched rows fetch their details/co-owners when
+    // they scroll into view (see the enrichment section below).
+    observeRowForEnrichment(row, caseItem);
   });
+
+  // Refresh the admin overview cards whenever the table is (re)painted.
+  scheduleAdminStats();
 }
 
 // 点击某一行时获取病例详情
@@ -858,6 +881,14 @@ async function handleRowClick(caseId) {
   window.selectedCaseId = caseId;
   const loggedInUser = getLoggedInUser();
   if (!loggedInUser || !caseId) return;
+
+  // The detail pane reads enriched fields (status/due/co-owners) from the list
+  // row — jump this case to the front of the lazy queue so they land ASAP;
+  // syncDetailPaneIfSelected repaints the pane when they do.
+  enqueueEnrichment(
+    currentCases.find((c) => c.id === caseId || c.case_int_id === caseId),
+    { front: true }
+  );
 
   const requestBody = JSON.stringify([
     {
@@ -1129,6 +1160,14 @@ function applyClientFilters() {
 
   const today = new Date();
   const base = currentCases.filter((item) => {
+    // Deleted cases are hidden by default; the "View" link under Total Deleted
+    // Cases flips to showing ONLY deleted cases.
+    if (deletedOnlyView) {
+      if (!isCaseDeleted(item)) return false; // deleted-only view
+    } else if (isCaseDeleted(item)) {
+      return false; // default: hide removed cases
+    }
+
     const caseName = (item.case_id || "").toLowerCase();
     const matchName = !q || caseName.includes(q);
 
@@ -1502,13 +1541,12 @@ async function fetchThumbnails(caseId) {
   const loggedInUser = getLoggedInUser();
   if (!loggedInUser) return;
 
-  // Server expects the STRING case name (e.g. "case_04") under `case_id`,
-  // not the numeric row id. Look it up from currentCases.
-  const caseObj = currentCases.find(
-    (c) => c.id === caseId || c.case_int_id === caseId
-  );
-  const caseIdStr = caseObj?.case_id ?? caseId;
-
+  // Identify the case NUMERICALLY (case_int_id), never by the case-name
+  // string: the backend's non-admin lookup resolves from element-0's
+  // caseIntID anyway, but its ADMIN lookup parses the payload identifier as
+  // a numeric caseIntID — a string name 404s every case for admin accounts
+  // ("No thumbnails found for case with caseIntID <name>"). case_int_id is
+  // live-verified to return rows for both roles (2026-07-10).
   const requestBody = JSON.stringify([
     {
       machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
@@ -1516,27 +1554,33 @@ async function fetchThumbnails(caseId) {
       caseIntID: caseId,
     },
     {
-      case_id: caseIdStr,
+      case_int_id: caseId,
     },
   ]);
 
   try {
-    const res = await fetch(
+    // Go through resilientFetch so a momentary 403/5xx — e.g. this user-initiated
+    // request racing the lazy row-enrichment traffic against the backend's burst
+    // throttle — is retried with backoff instead of failing to a blank pane. A
+    // fresh per-call breaker means pure retry: it can't be tripped/held open by
+    // the shared enrichment breaker, and one click is at most a few requests.
+    const res = await resilientFetch(
       "https://live.api.smartrpdai.com/api/smartrpd/thumbnails/get",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: requestBody,
-      }
+      },
+      makeBreaker(BREAKER_FAILURE_THRESHOLD)
     );
-    logApi(res, 'POST /thumbnails/get');
-    if (!res.ok) {
-      console.warn("⚠️ No images found or request failed:", res.status);
+    if (!res || !res.ok) {
+      console.warn("⚠️ No images found or request failed:", res ? res.status : "no response");
       currentThumbnails = [];
       currentImageIndex = 0;
       updateThumbnail();
       return;
     }
+    logApi(res, 'POST /thumbnails/get');
 
     const data = await res.json();
     currentThumbnails = await orderThumbnailsBySlot(Array.isArray(data) ? data : []);
@@ -1550,16 +1594,347 @@ async function fetchThumbnails(caseId) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Admin case-list extras (stat cards + Transfer Ownership / Retrieve actions).
+// The admin case_list follows the admin prototype: a row of overview stat cards
+// above the list, and admin-only detail actions replacing Start Case / 3D link
+// (those are hidden via body.is-admin — see case_list.css). The server stays
+// authoritative: every admin endpoint re-checks is_admin from the caller uuid.
+// ---------------------------------------------------------------------------
+
+function isCurrentUserAdmin() {
+  return Number(getLoggedInUser()?.isAdmin) === 1;
+}
+
+// Cases the admin receives include soft-deleted ones; the flag name isn't
+// guaranteed, so accept the common spellings and treat 1/true as deleted.
+function isCaseDeleted(caseItem) {
+  const v = caseItem?.deleted ?? caseItem?.is_deleted ?? caseItem?.isDeleted;
+  return v === 1 || v === true || v === "1";
+}
+
+// Which month each "…(month)" card shows: 0 = current month, -1 = last month, …
+// The Deleted and New cards step independently. Never positive (no future).
+let deletedMonthOffset = 0;
+let newMonthOffset = 0;
+
+// When true, the list is filtered to deleted cases only (the "View" link under
+// the Total Deleted Cases card).
+let deletedOnlyView = false;
+
+// [start, end) ms bounds for the month at `offset` relative to the current one.
+function monthRangeMs(offset) {
+  const n = new Date();
+  return {
+    start: new Date(n.getFullYear(), n.getMonth() + offset, 1).getTime(),
+    end: new Date(n.getFullYear(), n.getMonth() + offset + 1, 1).getTime(),
+  };
+}
+
+// Recompute the overview cards from the full loaded list (not the filtered
+// view). Completed/Ongoing depend on new_status, which fills in as rows enrich,
+// so this is called again on each enrichment via scheduleAdminStats().
+function renderAdminStats(cases) {
+  const bar = document.getElementById("adminStatsBar");
+  if (!bar || bar.hidden) return; // non-admin / bar not shown
+  const list = Array.isArray(cases) ? cases : [];
+  const delRange = monthRangeMs(deletedMonthOffset); // Deleted card's month
+  const newRange = monthRangeMs(newMonthOffset);     // New card's month
+
+  let total = 0, completed = 0, deletedTotal = 0, deletedMonth = 0, newMonth = 0;
+  for (const c of list) {
+    const createdMs = toDayMidnight(c.creation_date);
+    const inDelMonth = createdMs != null && createdMs >= delRange.start && createdMs < delRange.end;
+    const inNewMonth = createdMs != null && createdMs >= newRange.start && createdMs < newRange.end;
+
+    if (isCaseDeleted(c)) {
+      deletedTotal++; // all-time deleted count
+      // No deletion timestamp is exposed, so approximate "deleted in month"
+      // by cases created in that month that are now deleted.
+      if (inDelMonth) deletedMonth++;
+      continue; // deleted cases are excluded from the active totals
+    }
+
+    total++;
+    const status = apiStatusToValue(c.new_status);
+    // Completed → Completed; anything else except N/A counts as active.
+    if (status === "completed") completed++;
+    if (inNewMonth) newMonth++;
+  }
+
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(val);
+  };
+  set("statTotal", total);
+  set("statCompleted", completed);
+  set("statDeletedTotal", deletedTotal);
+  set("statDeleted", deletedMonth);
+  set("statNew", newMonth);
+
+  // Name each card's shown month, e.g. "July" (add the year when not this year).
+  const now = new Date();
+  const monthLabelFor = (offset) => {
+    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    const name = d.toLocaleString(undefined, { month: "long" });
+    return d.getFullYear() === now.getFullYear() ? name : `${name} ${d.getFullYear()}`;
+  };
+  set("statDeletedLabel", `Deleted Cases (${monthLabelFor(deletedMonthOffset)})`);
+  set("statNewLabel", `New Cases (${monthLabelFor(newMonthOffset)})`);
+
+  // Can't step into the future: disable each card's "next" arrow at offset 0.
+  document
+    .querySelectorAll('[data-month-target="deleted"][data-month-delta="1"]')
+    .forEach((b) => (b.disabled = deletedMonthOffset >= 0));
+  document
+    .querySelectorAll('[data-month-target="new"][data-month-delta="1"]')
+    .forEach((b) => (b.disabled = newMonthOffset >= 0));
+}
+
+// Enrichment updates rows one at a time; debounce so we recompute once per
+// burst instead of O(N) times.
+let _adminStatsTimer = null;
+function scheduleAdminStats() {
+  if (!isCurrentUserAdmin()) return;
+  clearTimeout(_adminStatsTimer);
+  _adminStatsTimer = setTimeout(() => renderAdminStats(currentCases), 150);
+}
+
+// Resolve a username → uuid via user/uuid/get. Returns the uuid string or null.
+async function resolveUuidByUsername(username) {
+  const me = getLoggedInUser();
+  const res = await fetch(`${DL_API}/user/uuid/get`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([
+      { machine_id: DL_MACHINE_ID, uuid: me?.uuid },
+      { username },
+    ]),
+  });
+  logApi(res, "POST /user/uuid/get");
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => null);
+  // Model selects `uuid`; response may be a row array or a bare object.
+  if (Array.isArray(data)) return data[0]?.uuid ?? null;
+  return data?.uuid ?? null;
+}
+
+// Transfer ownership: resolve the entered username, then PUT /role/owner
+// (changeOwner is admin-only server-side).
+async function submitOwnershipTransfer() {
+  const errEl = document.getElementById("transferOwnerError");
+  const input = document.getElementById("transferOwnerInput");
+  const btn = document.getElementById("confirmTransferBtn");
+  if (errEl) errEl.textContent = "";
+
+  const caseId = window.selectedCaseId;
+  if (!caseId) {
+    if (errEl) errEl.textContent = "Select a case first.";
+    return;
+  }
+  const username = (input?.value || "").trim();
+  if (!username) {
+    if (errEl) errEl.textContent = "Enter the new owner's username.";
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  try {
+    const newUuid = await resolveUuidByUsername(username);
+    if (!newUuid) {
+      if (errEl) errEl.textContent = `No user found with username "${username}".`;
+      return;
+    }
+    const me = getLoggedInUser();
+    const res = await fetch(`${DL_API}/role/owner`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        { machine_id: DL_MACHINE_ID, uuid: me?.uuid },
+        { uuid: newUuid, case_int_id: Number(caseId) },
+      ]),
+    });
+    logApi(res, "PUT /role/owner");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    // Reflect the new owner locally so the row/detail update without a reload.
+    const caseObj = currentCases.find(
+      (c) => String(c.id ?? c.case_int_id) === String(caseId)
+    );
+    if (caseObj) {
+      caseObj.assigned_to = username;
+      patchRowInPlace(caseObj);
+    }
+    closeTransferModal();
+    toast.success(`Ownership transferred to "${username}".`);
+  } catch (err) {
+    console.error("Transfer ownership failed:", err);
+    if (errEl) errEl.textContent = "Transfer failed. Please try again.";
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function openTransferModal() {
+  if (!window.selectedCaseId) {
+    toast.warning("Select a case first.");
+    return;
+  }
+  const modal = document.getElementById("transferOwnerModal");
+  const input = document.getElementById("transferOwnerInput");
+  const errEl = document.getElementById("transferOwnerError");
+  if (errEl) errEl.textContent = "";
+  if (input) input.value = "";
+  modal?.classList.remove("hidden");
+  input?.focus();
+}
+
+function closeTransferModal() {
+  document.getElementById("transferOwnerModal")?.classList.add("hidden");
+}
+
+// Retrieve (restore) the selected soft-deleted case via POST /case/undelete/:id.
+async function retrieveSelectedCase() {
+  const caseId = window.selectedCaseId;
+  if (!caseId) {
+    toast.warning("Select a case first.");
+    return;
+  }
+  const caseObj = currentCases.find(
+    (c) => String(c.id ?? c.case_int_id) === String(caseId)
+  );
+  if (caseObj && !isCaseDeleted(caseObj)) {
+    toast.info("This case is not deleted.");
+    return;
+  }
+
+  const confirmed = await confirmModal({
+    title: "Retrieve this case?",
+    message: "The case will be restored and visible to its members again.",
+    confirmText: "Retrieve",
+    cancelText: "Cancel",
+    variant: "info",
+  });
+  if (!confirmed) return;
+
+  try {
+    const me = getLoggedInUser();
+    const res = await fetch(`${DL_API}/case/undelete/${Number(caseId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([{ machine_id: DL_MACHINE_ID, uuid: me?.uuid }]),
+    });
+    logApi(res, "POST /case/undelete/:id");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    if (caseObj) {
+      caseObj.deleted = 0;
+      const row = document.querySelector(
+        `#caseTableBody tr[data-case-id="${CSS.escape(String(caseId))}"]`
+      );
+      row?.classList.remove("cm-row-deleted");
+    }
+    scheduleAdminStats();
+    toast.success("Case retrieved.");
+  } catch (err) {
+    console.error("Retrieve case failed:", err);
+    toast.error("Failed to retrieve case.");
+  }
+}
+
+// Wire the admin-only UI once, from the init handler.
+function setupAdminCaseList() {
+  if (!isCurrentUserAdmin()) return;
+
+  document.body.classList.add("is-admin");
+
+  // Populate the branded header's user chip from the logged-in account.
+  const _me = getLoggedInUser();
+  const _uname = _me?.username || "User";
+  const nameEl = document.getElementById("adminUserName");
+  const avatarEl = document.getElementById("adminUserAvatar");
+  if (nameEl) nameEl.textContent = _uname;
+  if (avatarEl) avatarEl.textContent = _uname.charAt(0);
+
+  // Reveal the overview cards and the admin detail actions.
+  const statsBar = document.getElementById("adminStatsBar");
+  if (statsBar) statsBar.hidden = false;
+  document.querySelectorAll(".cm-admin-cta").forEach((el) => (el.hidden = false));
+
+  document.getElementById("transferOwnershipBtn")?.addEventListener("click", openTransferModal);
+  document.getElementById("retrieveCaseBtn")?.addEventListener("click", retrieveSelectedCase);
+
+  // Month steppers: each card (Deleted / New) has its own offset so they move
+  // independently. Never step into the future.
+  document.querySelectorAll("[data-month-delta]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const delta = Number(btn.dataset.monthDelta);
+      const target = btn.dataset.monthTarget;
+      if (target === "deleted") {
+        const next = deletedMonthOffset + delta;
+        if (next > 0) return;
+        deletedMonthOffset = next;
+      } else if (target === "new") {
+        const next = newMonthOffset + delta;
+        if (next > 0) return;
+        newMonthOffset = next;
+      }
+      renderAdminStats(currentCases);
+    });
+  });
+
+  // "View" link under Total Deleted Cases: toggle a deleted-only list filter.
+  const viewDeletedLink = document.getElementById("viewDeletedLink");
+  viewDeletedLink?.addEventListener("click", (e) => {
+    e.preventDefault();
+    deletedOnlyView = !deletedOnlyView;
+    viewDeletedLink.textContent = deletedOnlyView ? "Back to active cases" : "View";
+    viewDeletedLink.classList.toggle("is-active", deletedOnlyView);
+    applyClientFilters();
+  });
+
+  document.getElementById("closeTransferModal")?.addEventListener("click", closeTransferModal);
+  document.getElementById("cancelTransferBtn")?.addEventListener("click", closeTransferModal);
+  document.getElementById("confirmTransferBtn")?.addEventListener("click", submitOwnershipTransfer);
+  document.getElementById("transferOwnerModal")?.addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) closeTransferModal();
+  });
+  document.getElementById("transferOwnerInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); submitOwnershipTransfer(); }
+  });
+
+  renderAdminStats(currentCases);
+}
+
 // 初始化页面
 document.addEventListener("DOMContentLoaded", async () => {
+  // Role-based routing: admins get the purpose-built admin_case_list.html
+  // (overview stats + Transfer Ownership / Retrieve Case); everyone else gets
+  // the normal case_list.html (Start Case + 3D viewer + Actions). Redirect when
+  // the page doesn't match the role so neither audience sees the other's UI.
+  {
+    const me = getLoggedInUser();
+    if (me) {
+      const onAdminPage = document.body.dataset.adminPage === "1";
+      const admin = Number(me.isAdmin) === 1;
+      // Paths are relative to the CURRENT page. case_list.html lives in
+      // src/pages/, admin_case_list.html in src/pages/admin/ — so each branch
+      // (which only fires from its own page) targets the other across that
+      // one-directory gap.
+      if (admin && !onAdminPage) { window.location.replace("admin/admin_case_list.html"); return; }
+      if (!admin && onAdminPage) { window.location.replace("../case_list.html"); return; }
+    }
+  }
+
   // Instant paint FIRST — before any other setup (connectivity / sidebar /
   // thumbnail, any of which could be slow or throw) and before the network call —
   // so the table shows the last-known list immediately instead of staying blank
   // while /case/user/findall/get is in flight. That request can lag when the API
   // host is busy (e.g. right after the chat's heavy notes query); the fetch below
   // replaces this paint as soon as it lands.
+  let cachedForPaint = null;
   try {
-    const cachedForPaint = loadCachedCases();
+    cachedForPaint = loadCachedCases();
     if (cachedForPaint && cachedForPaint.length) {
       currentCases = cachedForPaint;
       populateTable(currentCases);
@@ -1574,57 +1949,48 @@ document.addEventListener("DOMContentLoaded", async () => {
     const u = getLoggedInUser();
     footerUserName.textContent = u?.username || "—";
   }
+
+  // Admins get the prototype layout: overview stat cards + Transfer Ownership /
+  // Retrieve actions, with Start Case / 3D link / Actions column hidden via the
+  // `is-admin` body class (see case_list.css). setupAdminCaseList() is a no-op
+  // for non-admins.
+  setupAdminCaseList();
   setupConnectivityIndicator(document.getElementById("footerConnection"));
-  setupAppSidebar({ indexHref: "../../index.html" });
+  // index.html is at the web root; admin_case_list.html lives one level deeper
+  // (src/pages/admin/) than the normal case_list.html (src/pages/).
+  const _inAdminDir = /\/admin\//.test(window.location.pathname);
+  setupAppSidebar({ indexHref: _inAdminDir ? "../../../index.html" : "../../index.html" });
 
   updateThumbnail();
   const cases = await fetchCases();
 
   if (cases) {
+    // Stale-while-revalidate: the fresh base list has no details/co-owners
+    // yet (those now load lazily as rows scroll into view), so carry over the
+    // enrichment cached from the previous session. Rows show the last-known
+    // values immediately and still re-fetch when they become visible.
+    if (cachedForPaint?.length) {
+      const cachedByKey = new Map(
+        cachedForPaint.map((c) => [String(c.id ?? c.case_int_id), c])
+      );
+      for (const c of cases) {
+        const prev = cachedByKey.get(String(c.id ?? c.case_int_id));
+        if (!prev) continue;
+        for (const k of ["expected_date", "new_status", "assigned_to", "comments", "co_owners"]) {
+          if (c[k] === undefined && prev[k] !== undefined) c[k] = prev[k];
+        }
+      }
+    }
     // Persist for the next load's instant paint.
     saveCachedCases(cases);
-    // Paint the base list immediately. The per-case enrichment below fires
-    // 2×N requests (additional details + co-owners, capped at 5 in flight);
-    // gating the first paint on all of them left the table blank until every
-    // one returned. That was worst right after leaving the 2D annotation page,
-    // whose own request burst leaves the API briefly rate-limited — so the list
-    // "took forever" to show on return. Render now; merge + re-render in place
-    // when the extra data lands.
+    // Paint immediately — enrichment never gates the first render. Each row
+    // registers with the IntersectionObserver inside populateTable and pulls
+    // its own details + co-owners when scrolled into view (≤ ENRICH_CONCURRENCY
+    // requests in flight), instead of the old eager 2×N burst that tripped the
+    // backend's rate limiter into a wall of 403s on large lists.
     currentCases = cases;
     populateTable(currentCases);
     applyClientFilters();
-
-    // Pull additional per-case data and the co-owner list in parallel, then
-    // fold them into the already-rendered rows. Fire-and-forget so it never
-    // blocks the list from showing.
-    Promise.all([
-      fetchAdditionalCaseDetails(cases),
-      fetchCoOwners(cases),
-    ])
-      .then(([extraMap, coOwnerMap]) => {
-        cases.forEach((c) => {
-          const key = String(c.id ?? c.case_int_id);
-          Object.assign(c, extraMap?.[key] || {});
-          const roleInfo = coOwnerMap?.[key];
-          c.co_owners = roleInfo?.names || [];
-          // SwiftRPD-created cases store the owner as a uuid in `assigned_to`;
-          // map it back to the username via the case's role rows. SmartRPD cases
-          // already store the username (no uuid match) so they're left as-is.
-          if (c.assigned_to && roleInfo?.byUuid?.[c.assigned_to]) {
-            c.assigned_to = roleInfo.byUuid[c.assigned_to];
-          }
-        });
-        currentCases = cases;
-        populateTable(currentCases);
-        applyClientFilters();
-        // Cache the enriched list (co-owners + details) so the next instant
-        // paint is complete, not just the bare base rows.
-        saveCachedCases(currentCases);
-      })
-      .catch((err) => {
-        // Enrichment is best-effort; the base list is already on screen.
-        console.warn("[caseList] per-case enrichment failed", err);
-      });
 
     const searchInput = document.getElementById("searchCaseInput");
     const dateInput = document.getElementById("dateFilterInput");
@@ -2276,118 +2642,376 @@ function renderSharedUserList() {
   });
 }
 
-// Max in-flight requests for the per-case detail/co-owner fetches below. These
-// endpoints have no by-user batch variant (only alerts does), so the case list
-// must fetch one row per case — but firing `Promise.all(cases.map(fetch))` sent
-// every request at once, so a large case list produced a burst of dozens-to-
-// hundreds of simultaneous connections that overwhelmed the backend. This cap
-// keeps the request COUNT the same but spreads them out (≤ this many at a time).
-const CASE_DETAIL_FETCH_CONCURRENCY = 5;
+// --- resilience for the per-case enrichment --------------------------------
+// The detail/co-owner endpoints have no by-user batch variant, so enriching a
+// case means one request per case. When the backend throttles or fails, firing
+// requests anyway produces a wall of CORS/403/5xx console errors (each failed
+// fetch is logged natively by the browser — JS can't mute that). Two guards:
+//   • retry+backoff rides out an ISOLATED transient failure so the row recovers;
+//   • a shared circuit breaker STOPS firing further requests once the backend
+//     is clearly refusing, then half-opens after a cooldown so scrolling later
+//     (when the rate-limit window has passed) resumes enrichment by itself.
+const BREAKER_FAILURE_THRESHOLD = 6; // consecutive failures before we stop
+const BREAKER_COOLDOWN_MS = 30000; // how long an open breaker stays closed to traffic
+const PER_CASE_FETCH_RETRIES = 2; // extra attempts for a transient failure
+const PER_CASE_FETCH_TIMEOUT_MS = 10000; // abort a hung request so the breaker can trip
 
-// Run `mapper` over `items` with at most `limit` promises in flight at once.
-// Drop-in for `Promise.all(items.map(mapper))`; results keep input order.
-async function mapWithConcurrency(items, limit, mapper) {
-  const results = new Array(items.length);
-  let cursor = 0;
-  const runWorker = async () => {
-    while (cursor < items.length) {
-      const i = cursor++;
-      results[i] = await mapper(items[i], i);
-    }
+// Statuses that mean "the server is refusing this burst" rather than giving a
+// real per-case answer: 429 (rate limit) and 403 (this backend returns it when
+// a large fan-out trips its throttle — the first handful return 200, then it
+// starts 403ing). Treated like 5xx: retried with backoff, and counted toward
+// the breaker so a sustained refusal stops the flood. 401/404 are NOT here —
+// those are genuine answers that wouldn't recover on retry.
+const THROTTLE_STATUSES = new Set([403, 429]);
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Trips (opens) after `threshold` consecutive failures; any success resets it.
+// With `cooldownMs`, an open breaker "half-opens" once the cooldown elapses:
+// isOpen() flips back to false so the next attempt goes through — success
+// closes it for real, failure re-trips it after another `threshold` strikes.
+function makeBreaker(threshold, cooldownMs = 0) {
+  let consecutiveFailures = 0;
+  let openedAt = 0;
+  return {
+    isOpen() {
+      if (!openedAt) return false;
+      if (cooldownMs && Date.now() - openedAt >= cooldownMs) {
+        openedAt = 0;
+        consecutiveFailures = 0;
+        return false;
+      }
+      return true;
+    },
+    recordSuccess() {
+      consecutiveFailures = 0;
+      openedAt = 0;
+    },
+    recordFailure() {
+      consecutiveFailures += 1;
+      if (consecutiveFailures >= threshold && !openedAt) openedAt = Date.now();
+    },
   };
-  const workers = [];
-  for (let i = 0; i < Math.min(limit, items.length); i += 1) {
-    workers.push(runWorker());
-  }
-  await Promise.all(workers);
-  return results;
 }
 
-async function fetchAdditionalCaseDetails(caseList) {
-  const logged = getLoggedInUser();
-  if (!logged || !caseList?.length) return {};
-
-  const url =
-    "https://live.api.smartrpdai.com/api/smartrpd/additionalcasedetails/getall";
-
-  // One request per case, but capped so they don't all fire at once.
-  const results = await mapWithConcurrency(caseList, CASE_DETAIL_FETCH_CONCURRENCY, (c) => {
-    const body = [
-      {
-        machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
-        uuid: logged.uuid,
-        caseIntID: c.case_int_id ?? c.id, // 兼容两种字段名
-      },
-    ];
-
-    return fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-      .then((r) => { logApi(r, 'POST /additionalcasedetails/getall'); return r.ok ? r.json() : []; })
-      .then((arr) => arr.at(-1)) // 接口返回 [ {...} ]
-      .catch(() => undefined);
-  });
-
-  // 把有数据的条目塞进 map
-  const map = {};
-  results.forEach((item) => {
-    if (!item || !item.case_int_id) return;
-
-    const clean = {
-      expected_date: item.due_date,
-      new_status: item.new_status,
-      assigned_to: item.assigned_to,
-      comments: item.comments,
-    };
-    map[String(item.case_int_id)] = clean;
-  });
-
-  return map; // 只包含真的有附加数据的那些病例
-}
-
-// Fetch co-owner usernames per case in parallel. Mirrors the shape of
-// fetchAdditionalCaseDetails — returns { [case_int_id]: string[] }.
-// A case absent from the map (or with an empty array) has no co-owners.
-async function fetchCoOwners(caseList) {
-  const logged = getLoggedInUser();
-  if (!logged || !caseList?.length) return {};
-
-  const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
-  const url = "https://live.api.smartrpdai.com/api/smartrpd/role/all/get";
-
-  // One request per case, but capped so they don't all fire at once.
-  const results = await mapWithConcurrency(caseList, CASE_DETAIL_FETCH_CONCURRENCY, (c) => {
-    const caseIntID = c.case_int_id ?? c.id;
-    return fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([
-        { machine_id: MACHINE_ID, uuid: logged.uuid, caseIntID },
-        { case_int_id: caseIntID },
-      ]),
-    })
-      .then((r) => { logApi(r, 'POST /role/all/get'); return r.ok ? r.json() : []; })
-      .then((arr) => ({ id: caseIntID, rows: Array.isArray(arr) ? arr : [] }))
-      .catch(() => ({ id: caseIntID, rows: [] }));
-  });
-  const map = {};
-  results.forEach(({ id, rows }) => {
-    if (!id) return;
-    const names = rows
-      .filter((r) => r && r.role === "coowner" && r.username)
-      .map((r) => r.username);
-    // uuid -> username for every role on the case (owner + co-owners). Used to
-    // resolve an `assigned_to` that the backend stored as a uuid (SwiftRPD-created
-    // cases) back to the username (SmartRPD-created cases already store the name).
-    const byUuid = {};
-    for (const r of rows) {
-      if (r && r.uuid && r.username) byUuid[r.uuid] = r.username;
+// Returns a Response (whatever status came back — callers handle 4xx), or null
+// if the request ultimately failed or was skipped because the breaker is open.
+// 5xx and throttle statuses (see THROTTLE_STATUSES) are retryable and count
+// toward the breaker; any other status is a real answer and is returned as-is.
+async function resilientFetch(url, options, breaker) {
+  for (let attempt = 0; attempt <= PER_CASE_FETCH_RETRIES; attempt += 1) {
+    if (breaker.isOpen()) return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PER_CASE_FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timer);
+      if (res.status >= 500 || THROTTLE_STATUSES.has(res.status)) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      breaker.recordSuccess();
+      return res;
+    } catch {
+      clearTimeout(timer);
+      breaker.recordFailure();
+      if (breaker.isOpen() || attempt === PER_CASE_FETCH_RETRIES) return null;
+      // Exponential backoff with jitter so retries don't resynchronize.
+      await sleep(250 * 2 ** attempt + Math.random() * 150);
     }
-    map[String(id)] = { names, byUuid };
+  }
+  return null;
+}
+
+// --- lazy per-case enrichment (visible rows only) ---------------------------
+// The old flow eagerly fetched details + co-owners for EVERY case on load —
+// ~2×N requests for one page view — which the backend answers with a 403 wall
+// once its burst throttle trips (see the reload-guard note near the refresh
+// button). Instead, rows now enrich themselves when they scroll into view:
+// populateTable registers each un-enriched row with an IntersectionObserver,
+// visible rows enter a small queue (≤ ENRICH_CONCURRENCY in flight), and the
+// fetched fields are patched into the row IN PLACE — no full re-render, so the
+// table never re-sorts and jumps under the user mid-scroll.
+//
+// Per-case enrichment state lives on the case object as `__enrich`:
+//   undefined → not fetched (observer will queue it when its row is seen)
+//   "queued" / "inflight" → in the pipeline, don't double-queue
+//   "wait"   → last attempt was refused (throttle/outage); a timer re-observes
+//              the row after the breaker cooldown so it self-heals
+//   "done"   → enriched; skipped by the observer on later re-renders
+// Keys starting with "__" are stripped from the localStorage cache.
+const ENRICH_CONCURRENCY = 3;
+const enrichBreaker = makeBreaker(BREAKER_FAILURE_THRESHOLD, BREAKER_COOLDOWN_MS);
+const enrichQueue = [];
+let enrichWorkersActive = 0;
+let enrichWarnedAt = 0;
+let enrichCacheSaveTimer = null;
+
+// One shared observer; root = the table's own scroll container. rootMargin
+// prefetches rows slightly before they become visible so data usually lands
+// by the time the user's eyes do.
+let rowObserver = null;
+function getRowObserver() {
+  if (rowObserver !== null) return rowObserver;
+  if (typeof IntersectionObserver === "undefined") {
+    rowObserver = false; // no observer support: enqueue immediately instead
+    return rowObserver;
+  }
+  rowObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        rowObserver.unobserve(entry.target);
+        enqueueEnrichment(entry.target.__caseObj);
+      }
+    },
+    { root: document.getElementById("caseList"), rootMargin: "200px 0px" }
+  );
+  return rowObserver;
+}
+
+// Called by populateTable for every rendered row that still needs data.
+function observeRowForEnrichment(row, caseObj) {
+  if (!caseObj || caseObj.__enrich) return; // done/queued/inflight/wait
+  row.__caseObj = caseObj;
+  const obs = getRowObserver();
+  if (obs) obs.observe(row);
+  else enqueueEnrichment(caseObj); // ancient browser: degrade to queue-all
+}
+
+function enqueueEnrichment(caseObj, { front = false } = {}) {
+  if (!caseObj || caseObj.__enrich === "done" || caseObj.__enrich === "queued" || caseObj.__enrich === "inflight") {
+    return;
+  }
+  caseObj.__enrich = "queued";
+  if (front) enrichQueue.unshift(caseObj);
+  else enrichQueue.push(caseObj);
+  pumpEnrichQueue();
+}
+
+function pumpEnrichQueue() {
+  while (enrichWorkersActive < ENRICH_CONCURRENCY && enrichQueue.length) {
+    const caseObj = enrichQueue.shift();
+    enrichWorkersActive += 1;
+    enrichOneCase(caseObj).finally(() => {
+      enrichWorkersActive -= 1;
+      pumpEnrichQueue();
+    });
+  }
+}
+
+// Fetch details + co-owner roles for ONE case and fold them into the case
+// object + its rendered row. Refusals (throttle/outage → resilientFetch null)
+// park the case in "wait" and re-observe its row after the breaker cooldown.
+async function enrichOneCase(caseObj) {
+  const logged = getLoggedInUser();
+  const caseIntID = caseObj.case_int_id ?? caseObj.id;
+  if (!logged || caseIntID == null) {
+    caseObj.__enrich = "done"; // nothing we can ever fetch for this row
+    return;
+  }
+  caseObj.__enrich = "inflight";
+  const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
+
+  const [detailRes, rolesRes] = await Promise.all([
+    resilientFetch(
+      "https://live.api.smartrpdai.com/api/smartrpd/additionalcasedetails/getall",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([{ machine_id: MACHINE_ID, uuid: logged.uuid, caseIntID }]),
+      },
+      enrichBreaker
+    ),
+    resilientFetch(
+      "https://live.api.smartrpdai.com/api/smartrpd/role/all/get",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([
+          { machine_id: MACHINE_ID, uuid: logged.uuid, caseIntID },
+          { case_int_id: caseIntID },
+        ]),
+      },
+      enrichBreaker
+    ),
+  ]);
+
+  // Both null means the backend refused (or the breaker was already open):
+  // park and retry after the cooldown. A response that is merely !ok (a real
+  // 4xx answer) is terminal — retrying wouldn't change it.
+  if (!detailRes && !rolesRes) {
+    scheduleEnrichRetry(caseObj);
+    return;
+  }
+
+  if (detailRes) {
+    logApi(detailRes, "POST /additionalcasedetails/getall");
+    if (detailRes.ok) {
+      try {
+        const item = (await detailRes.json()).at(-1); // 接口返回 [ {...} ]
+        if (item && item.case_int_id) {
+          Object.assign(caseObj, {
+            expected_date: item.due_date,
+            new_status: item.new_status,
+            assigned_to: item.assigned_to,
+            comments: item.comments,
+          });
+        }
+      } catch {
+        /* malformed body — keep base fields */
+      }
+    }
+  }
+
+  if (rolesRes) {
+    logApi(rolesRes, "POST /role/all/get");
+    if (rolesRes.ok) {
+      try {
+        const rows = await rolesRes.json();
+        if (Array.isArray(rows)) {
+          caseObj.co_owners = rows
+            .filter((r) => r && r.role === "coowner" && r.username)
+            .map((r) => r.username);
+          // The role table is authoritative for ownership. Some cases (e.g.
+          // SwiftRPD/3D-upload created) store a placeholder like "nobody" or a
+          // raw uuid in `assigned_to`, so the desktop app shows the owner from
+          // the `owner` role row instead. Match that: prefer the owner role's
+          // username, then fall back to the uuid→username remap.
+          const ownerRow = rows.find(
+            (r) => r && String(r.role).toLowerCase() === "owner" && r.username
+          );
+          if (ownerRow?.username) {
+            caseObj.assigned_to = ownerRow.username;
+          } else {
+            const match = rows.find((r) => r && r.uuid && r.uuid === caseObj.assigned_to);
+            if (match?.username) caseObj.assigned_to = match.username;
+          }
+        }
+      } catch {
+        /* malformed body — keep base fields */
+      }
+    }
+  }
+
+  caseObj.__enrich = "done";
+  patchRowInPlace(caseObj);
+  syncDetailPaneIfSelected(caseObj);
+  scheduleEnrichCacheSave();
+}
+
+// Refused by throttle/outage: warn once per breaker window, then re-observe
+// the row after the cooldown so a still-visible row retries automatically.
+function scheduleEnrichRetry(caseObj) {
+  caseObj.__enrich = "wait";
+  if (Date.now() - enrichWarnedAt > BREAKER_COOLDOWN_MS) {
+    enrichWarnedAt = Date.now();
+    console.warn(
+      "[cases] Case enrichment paused — backend refusing requests (rate-limited or unreachable). Retrying automatically in " +
+        Math.round(BREAKER_COOLDOWN_MS / 1000) +
+        "s."
+    );
+  }
+  setTimeout(() => {
+    caseObj.__enrich = undefined;
+    const id = String(caseObj.id ?? caseObj.case_int_id);
+    const row = document.querySelector(`#caseTableBody tr[data-case-id="${CSS.escape(id)}"]`);
+    // Re-observing an on-screen row fires the observer immediately, which
+    // re-queues it; an off-screen or re-rendered row is picked up by the next
+    // populateTable pass instead.
+    if (row) observeRowForEnrichment(row, caseObj);
+  }, BREAKER_COOLDOWN_MS + Math.random() * 2000);
+}
+
+// Update just this case's rendered cells (status pill, due date + urgency bar,
+// owner, shared-with). Deliberately NOT a populateTable() re-render: that would
+// re-sort the table and yank rows around under the user mid-scroll. The one
+// case where in-place patching would be wrong is an active status filter (the
+// fresh new_status may add/remove the row from the filtered set), so that path
+// re-filters properly instead.
+function patchRowInPlace(caseObj) {
+  const sel = document.getElementById("filter-status");
+  if (sel && sel.value !== "all") {
+    applyClientFilters();
+    return;
+  }
+
+  const id = String(caseObj.id ?? caseObj.case_int_id);
+  const row = document.querySelector(`#caseTableBody tr[data-case-id="${CSS.escape(id)}"]`);
+  if (!row) return; // filtered out / re-rendered away — caseObj already holds the data
+
+  const pill = row.querySelector(".cm-td-status .cm-pill");
+  if (pill) {
+    pill.className = `cm-pill ${statusPillClass(caseObj.new_status)}`;
+    pill.textContent = statusDisplayText(caseObj.new_status);
+  }
+
+  const dueDate =
+    caseObj.expected_date || caseObj.due_date || computeDefaultDueDate(caseObj.creation_date);
+  const dueInd = dueDateIndicator(dueDate);
+  const dueCell = row.querySelector(".cm-due-date");
+  if (dueCell) {
+    dueCell.className = `cm-td-date cm-due-date ${dueInd ? dueInd.cls : ""}`;
+    const text = dueCell.querySelector(".cm-due-text");
+    if (text) text.textContent = dueDate ? formatDateOnly(dueDate) : "N/A";
+  }
+  const nameCell = row.querySelector(".cm-td-name");
+  if (nameCell) {
+    nameCell.querySelector(".cm-due-bar")?.remove();
+    if (dueInd) {
+      const bar = document.createElement("span");
+      bar.className = `cm-due-bar ${dueInd.cls}`;
+      bar.title = dueInd.label;
+      bar.setAttribute("aria-hidden", "true");
+      nameCell.appendChild(bar);
+    }
+  }
+
+  const owner = caseObj.assigned_to || caseObj.username || "N/A";
+  const ownerEl = row.querySelector(".cm-owner-name");
+  if (ownerEl) {
+    ownerEl.textContent = owner;
+    ownerEl.title = owner;
+  }
+
+  const sharedCell = row.querySelector(".cm-td-shared");
+  if (sharedCell) {
+    sharedCell.textContent = "";
+    const span = document.createElement("span");
+    if (caseObj.co_owners?.length) {
+      span.className = "cm-shared-names";
+      span.textContent = caseObj.co_owners.join(", ");
+      span.title = span.textContent;
+    } else {
+      span.className = "cm-shared-empty";
+      span.textContent = "—";
+    }
+    sharedCell.appendChild(span);
+  }
+
+  // Status may have just resolved from enrichment — refresh the admin counters.
+  scheduleAdminStats();
+}
+
+// If the enriched case is the one open in the detail pane, fold the fresh
+// fields into the stub (dashboard reads it) and repaint the pane.
+function syncDetailPaneIfSelected(caseObj) {
+  const id = String(caseObj.id ?? caseObj.case_int_id);
+  if (String(window.selectedCaseId) !== id || !window.selectedCaseStub) return;
+  Object.assign(window.selectedCaseStub, {
+    new_status: caseObj.new_status,
+    expected_date: caseObj.expected_date,
+    assigned_to: caseObj.assigned_to,
+    comments: caseObj.comments,
+    co_owners: caseObj.co_owners,
   });
-  return map;
+  displayCaseDetails(window.selectedCaseStub);
+}
+
+// Enrichment lands incrementally now, so persist the cache on a debounce
+// instead of once-per-case (2400 cases scrolling by = 2400 JSON.stringify).
+function scheduleEnrichCacheSave() {
+  clearTimeout(enrichCacheSaveTimer);
+  enrichCacheSaveTimer = setTimeout(() => saveCachedCases(currentCases), 1500);
 }
 
 async function postNewStatus(caseObj, newStatus) {

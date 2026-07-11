@@ -34,6 +34,40 @@ export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../.
   });
 
   // ----- common items -----
+
+  // Admin-only entry (markup ships hidden; only case_list embeds it today).
+  // Visibility is cosmetic — every admin endpoint re-checks is_admin server-side.
+  try {
+    const me = JSON.parse(localStorage.getItem("loggedInUser") || "null");
+    if (Number(me?.isAdmin) === 1) {
+      // admin_users.html lives in src/pages/admin/. Pages that embed #appSidebar
+      // sit at two depths: src/pages/ (case_list, 2DAnnotation) and, now,
+      // src/pages/admin/ (admin_case_list). Resolve relative to whichever the
+      // current page is so the link works from both.
+      const inAdminDir = /\/admin\//.test(window.location.pathname);
+      const adminUsersHref = inAdminDir ? "./admin_users.html" : "./admin/admin_users.html";
+      const goToAdmin = () => (window.location.href = adminUsersHref);
+
+      // Sidebar entry (present on every page with #appSidebar) — but skip it
+      // when we're already on the User Management page.
+      const onAdminUsersPage = /admin_users\.html/.test(window.location.pathname);
+      const adminItem = document.getElementById("sidebarAdminUsersItem");
+      if (adminItem && !onAdminUsersPage) {
+        adminItem.hidden = false;
+        document.getElementById("sidebarAdminUsersBtn")?.addEventListener("click", goToAdmin);
+      }
+
+      // Prominent header shortcut (case_list only) — same gate, more visible.
+      const headerBtn = document.getElementById("adminUsersHeaderBtn");
+      if (headerBtn) {
+        headerBtn.hidden = false;
+        headerBtn.addEventListener("click", goToAdmin);
+      }
+    }
+  } catch {
+    /* malformed loggedInUser — leave the item hidden */
+  }
+
   document.getElementById("sidebarLogoutBtn")?.addEventListener("click", async () => {
     close();
     const ok = await confirmModal({

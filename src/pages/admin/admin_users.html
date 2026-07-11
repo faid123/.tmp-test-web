@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin — User Management</title>
+    <link rel="stylesheet" href="../../../css/case_list.css" />
+    <link rel="stylesheet" href="../../../css/createCase.css" />
+    <link rel="stylesheet" href="../../../css/toast.css" />
+    <link rel="stylesheet" href="../../../css/admin/admin_users.css" />
+    <link rel="icon" href="../../../assets/profile.png" type="image/png" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+  </head>
+  <body>
+    <div class="cm-page container au-page">
+      <header class="cm-header au-topbar">
+        <div class="au-brand">
+          <span class="au-brand-logo">
+            <img src="../../../assets/profile.png" alt="" />
+          </span>
+          <h1>User Management</h1>
+        </div>
+        <div class="cm-header-right au-header-right">
+          <button
+            id="backToCasesBtn"
+            class="cm-btn cm-btn-secondary"
+            type="button"
+          >
+            <i class="fa fa-arrow-left" aria-hidden="true"></i>
+            <span>Back to Cases</span>
+          </button>
+          <button id="adminNotifBtn" class="au-bell" type="button" aria-label="Notifications" title="Notifications">
+            <i class="fa-regular fa-bell" aria-hidden="true"></i>
+            <span class="au-bell-dot" aria-hidden="true"></span>
+          </button>
+          <div class="au-user-chip" id="adminUserChip">
+            <span class="au-user-avatar" id="adminUserAvatar">U</span>
+            <span class="au-user-name" id="adminUserName">Username</span>
+            <i class="fa fa-chevron-down au-user-caret" aria-hidden="true"></i>
+          </div>
+        </div>
+      </header>
+
+      <!-- Full-width overview cards (spans both columns). -->
+      <div class="au-stats" id="userStatsBar">
+        <div class="cm-stat-card">
+          <span class="cm-stat-label">Total Users</span>
+          <span class="cm-stat-value" id="userStatTotal">0</span>
+        </div>
+        <div class="cm-stat-card">
+          <span class="cm-stat-label">Admins</span>
+          <span class="cm-stat-value" id="userStatAdmins">0</span>
+        </div>
+        <div class="cm-stat-card">
+          <span class="cm-stat-label">Active Users</span>
+          <span class="cm-stat-value" id="userStatActive">0</span>
+        </div>
+        <div class="cm-stat-card">
+          <span class="cm-stat-label">Deactivated Users</span>
+          <a href="#" class="cm-stat-link" id="viewDeactivatedLink">View</a>
+          <span class="cm-stat-value" id="userStatDeactivated">0</span>
+        </div>
+        <div class="cm-stat-card cm-stat-card-month">
+          <div class="cm-stat-month-head">
+            <button type="button" class="cm-stat-month-btn" data-user-month-delta="-1" aria-label="Previous month" title="Previous month">
+              <i class="fa fa-chevron-left" aria-hidden="true"></i>
+            </button>
+            <span class="cm-stat-label" id="userStatNewLabel">New Users (this month)</span>
+            <button type="button" class="cm-stat-month-btn" data-user-month-delta="1" aria-label="Next month" title="Next month">
+              <i class="fa fa-chevron-right" aria-hidden="true"></i>
+            </button>
+          </div>
+          <span class="cm-stat-value" id="userStatNew">0</span>
+        </div>
+      </div>
+
+      <main class="cm-main">
+        <!-- Admin-only gate. Shown instead of the toolbar/table when the
+             account is not an admin (or the server rejects with 401). -->
+        <div class="au-gate hidden" id="adminGate">
+          <i class="fa fa-user-shield" aria-hidden="true"></i>
+          <h2>Admins only</h2>
+          <p id="adminGateMessage">
+            This page requires an administrator account.
+          </p>
+          <button
+            id="gateBackBtn"
+            class="cm-btn cm-btn-primary"
+            type="button"
+          >
+            Back to Case List
+          </button>
+        </div>
+
+        <div class="cm-toolbar au-toolbar" id="adminToolbar">
+          <div class="cm-chip cm-chip-filter">
+            <i class="fa-regular fa-calendar" aria-hidden="true"></i>
+            <label for="userDateFilter">Filter by Date</label>
+            <input type="date" id="userDateFilter" class="cm-date-input" />
+            <button
+              id="clearUserDateBtn"
+              type="button"
+              class="cm-date-clear"
+              title="Clear date"
+              aria-label="Clear date filter"
+            >
+              <i class="fa fa-xmark" aria-hidden="true"></i>
+            </button>
+          </div>
+
+          <div class="cm-chip cm-chip-filter au-search-chip">
+            <i class="fa fa-magnifying-glass" aria-hidden="true"></i>
+            <input
+              type="text"
+              id="userSearchInput"
+              class="au-search-input"
+              placeholder="Search username or email"
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="cm-chip cm-chip-filter">
+            <i class="fa fa-filter" aria-hidden="true"></i>
+            <label for="userStatusFilter">Show</label>
+            <select id="userStatusFilter" class="cm-filter-select">
+              <option value="active" selected>Active</option>
+              <option value="deactivated">Deactivated</option>
+              <option value="all">All</option>
+            </select>
+          </div>
+
+          <button
+            id="refreshUsersBtn"
+            class="cm-icon-btn"
+            type="button"
+            aria-label="Refresh users"
+            title="Refresh users"
+          >
+            <i class="fa fa-arrows-rotate" aria-hidden="true"></i>
+          </button>
+
+          <button id="registerUserBtn" class="cm-btn cm-btn-primary" type="button">
+            <i class="fa fa-user-plus" aria-hidden="true"></i>
+            <span>Register User</span>
+          </button>
+        </div>
+
+        <div class="cm-table-wrap au-table-wrap" id="userListWrap">
+          <table class="cm-table">
+            <thead>
+              <tr>
+                <th scope="col">Username</th>
+                <th scope="col">Email</th>
+                <th scope="col">Role</th>
+                <th scope="col">Status</th>
+                <th scope="col">Date Registered</th>
+                <th class="cm-th-actions" scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="userTableBody">
+              <!-- JS-rendered rows land here -->
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      <!-- Right column: full-height user detail pane. -->
+      <aside class="cm-detail" id="userDetail">
+        <button
+          id="userBackToListBtn"
+          class="back-to-list"
+          type="button"
+          aria-label="Back to list"
+        >
+          <i class="fa fa-arrow-left"></i> Back to list
+        </button>
+
+        <div class="au-detail-empty" id="userDetailEmpty">
+          <i class="fa-regular fa-address-card" aria-hidden="true"></i>
+          <span>Select a user to see their details</span>
+        </div>
+
+        <div class="cm-detail-body hidden" id="userDetailContent">
+          <div class="cm-detail-head">
+            <span class="au-detail-avatar" id="userDetailAvatar">–</span>
+            <h2 id="userDetailName">—</h2>
+          </div>
+
+          <div class="cm-field">
+            <div class="cm-field-label">EMAIL</div>
+            <div class="cm-field-value" id="userDetailEmail">—</div>
+          </div>
+
+          <div class="cm-field">
+            <div class="cm-field-label">ROLE</div>
+            <div class="cm-field-value" id="userDetailRole">—</div>
+          </div>
+
+          <div class="cm-field">
+            <div class="cm-field-label">STATUS</div>
+            <div class="cm-field-value" id="userDetailStatus">—</div>
+          </div>
+
+          <div class="cm-field">
+            <div class="cm-field-label">DATE REGISTERED</div>
+            <div class="cm-field-value" id="userDetailDate">—</div>
+          </div>
+
+          <div class="cm-field">
+            <div class="cm-field-label">USER ID</div>
+            <div class="cm-field-value au-detail-uuid" id="userDetailUuid">—</div>
+          </div>
+
+          <div class="cm-detail-cta">
+            <button id="userDetailEditBtn" class="cm-btn cm-btn-primary cm-btn-large" type="button">
+              Edit User
+            </button>
+            <button id="userDetailToggleBtn" class="cm-btn cm-btn-secondary" type="button">
+              Deactivate
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <footer class="cm-footer" aria-label="Status bar">
+        <div class="cm-footer-left">
+          <button type="button" class="cm-footer-btn" id="footerMenuBtn" aria-label="Menu" title="Menu" aria-haspopup="true" aria-expanded="false">
+            <i class="fa fa-bars" aria-hidden="true"></i>
+          </button>
+          <span class="cm-footer-case-label">SmartRPD — User Management</span>
+        </div>
+        <div class="cm-footer-right">
+          <span class="cm-footer-user" id="footerUserName">—</span>
+          <span class="cm-footer-conn" id="footerConnection"></span>
+        </div>
+      </footer>
+    </div>
+
+    <!-- Register / edit user modal (register when data-uuid is empty). -->
+    <div id="userModal" class="modal">
+      <div class="modal-content au-modal">
+        <span class="close-btn" id="closeUserModal">&times;</span>
+        <h3 class="modal-title" id="userModalTitle">Register User</h3>
+
+        <form id="userForm">
+          <label class="input-label" for="umUsername">Username <span class="au-req">*</span></label>
+          <input type="text" id="umUsername" class="modal-input" placeholder="Username" autocomplete="off" required />
+
+          <label class="input-label" for="umEmail">Email <span class="au-req">*</span></label>
+          <input type="email" id="umEmail" class="modal-input" placeholder="user@example.com" autocomplete="off" required />
+
+          <label class="input-label" for="umPassword">
+            Password <span class="au-req" id="umPasswordReq">*</span>
+          </label>
+          <input
+            type="password"
+            id="umPassword"
+            class="modal-input"
+            placeholder="Password"
+            autocomplete="new-password"
+          />
+          <p class="au-hint hidden" id="umPasswordHint">
+            Leave blank to keep the current password.
+          </p>
+
+          <label class="au-admin-check">
+            <input type="checkbox" id="umIsAdmin" />
+            <span>Administrator</span>
+          </label>
+
+          <p class="au-form-error" id="userFormError" role="alert"></p>
+
+          <div class="modal-actions au-modal-actions">
+            <button type="button" id="cancelUserModal" class="cm-btn cm-btn-secondary">Cancel</button>
+            <button type="submit" id="saveUserBtn" class="cm-btn cm-btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <aside id="appSidebar" class="app-sidebar is-hidden" aria-hidden="true" aria-label="Navigation">
+      <div class="app-sidebar-backdrop" data-sidebar-close></div>
+      <nav class="app-sidebar-panel" role="navigation">
+        <header class="app-sidebar-header">
+          <img class="app-sidebar-brand-logo" src="../../../assets/profile.png" alt="" />
+          <span class="app-sidebar-title">SMARTRPD</span>
+          <span class="app-sidebar-version">v2.0</span>
+          <button type="button" class="app-sidebar-close" data-sidebar-close aria-label="Close menu">
+            <i class="fa fa-xmark" aria-hidden="true"></i>
+          </button>
+        </header>
+        <ul id="appSidebarList" class="app-sidebar-list">
+          <li id="sidebarAdminUsersItem" hidden>
+            <button type="button" id="sidebarAdminUsersBtn" class="app-sidebar-item">
+              <i class="fa fa-users-gear app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>User Management</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarChangePasswordBtn" class="app-sidebar-item">
+              <i class="fa fa-key app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Change Account Password</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarLogoutBtn" class="app-sidebar-item">
+              <i class="fa fa-right-from-bracket app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Logout</span>
+            </button>
+          </li>
+          <li><hr class="app-sidebar-separator" /></li>
+          <li>
+            <button type="button" id="sidebarHelpBtn" class="app-sidebar-item">
+              <i class="fa fa-circle-info app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Help</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarReportIssueBtn" class="app-sidebar-item">
+              <i class="fa fa-bug app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Report Issue</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarFeedbackBtn" class="app-sidebar-item">
+              <i class="fa fa-comment-dots app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Feedback</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarAboutBtn" class="app-sidebar-item">
+              <i class="fa-regular fa-square-caret-right app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>About</span>
+            </button>
+          </li>
+          <li class="app-sidebar-language">
+            <i class="fa fa-globe app-sidebar-language-icon" aria-hidden="true"></i>
+            <select id="sidebarLanguageSelect" aria-label="Language">
+              <option value="en">English</option>
+            </select>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <script type="module" src="../../js/admin/adminUsers.js"></script>
+  </body>
+</html>

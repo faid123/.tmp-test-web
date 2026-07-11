@@ -1053,7 +1053,7 @@ function reportStatusBadge(apiStatus) {
 // Fetch the case's upper (slot 1) / lower (slot 2) 3D jaw renders for the report.
 // POST /thumbnails/get returns one row per slot (0 = composite 2D, 1/2 = upper/lower
 // STL). Prefer the slot field; if absent, classify by aspect ratio like the carousel.
-async function fetchCaseThumbnailSlots(caseIntID, caseIdStr) {
+async function fetchCaseThumbnailSlots(caseIntID) {
   const user = getLoggedInUser();
   if (!caseIntID || !user?.uuid) return { upper: "", lower: "" };
 
@@ -1068,7 +1068,9 @@ async function fetchCaseThumbnailSlots(caseIntID, caseIdStr) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify([
         { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID },
-        { case_id: caseIdStr ?? caseIntID },
+        // Numeric id, not the case-name string — the backend's admin-path
+        // lookup parses this as caseIntID (string names 404 for admins).
+        { case_int_id: caseIntID },
       ]),
     });
     if (!res.ok) return { upper: "", lower: "" };
@@ -1185,7 +1187,7 @@ export async function buildReportHtml(
   // the case thumbnail slots (1 = upper, 2 = lower).
   const [jaw2dSrc, jaws] = await Promise.all([
     trimImageMargins(twoDSrc),
-    fetchCaseThumbnailSlots(caseIntID, caseIdStr),
+    fetchCaseThumbnailSlots(caseIntID),
   ]);
   const jaw3dUpper = jaws.upper;
   const jaw3dLower = jaws.lower;

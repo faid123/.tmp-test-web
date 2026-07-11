@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Case Management</title>
-    <link rel="stylesheet" href="../../css/case_list.css" />
-    <link rel="stylesheet" href="../../css/createCase.css" />
-    <link rel="stylesheet" href="../../css/notification.css" />
-    <link rel="stylesheet" href="../../css/versionHistory.css" />
-    <link rel="stylesheet" href="../../css/toast.css" />
-    <link rel="stylesheet" href="../../css/dashboard.css" />
-    <link rel="icon" href="../../assets/profile.png" type="image/png" />
+    <title>Case Management — Admin</title>
+    <link rel="stylesheet" href="../../../css/case_list.css" />
+    <link rel="stylesheet" href="../../../css/createCase.css" />
+    <link rel="stylesheet" href="../../../css/notification.css" />
+    <link rel="stylesheet" href="../../../css/versionHistory.css" />
+    <link rel="stylesheet" href="../../../css/toast.css" />
+    <link rel="stylesheet" href="../../../css/dashboard.css" />
+    <link rel="icon" href="../../../assets/profile.png" type="image/png" />
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
@@ -21,15 +21,17 @@
     <!-- Client-side QR generation for the "Generate QR" button (caseManagement.js). -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   </head>
-  <body>
+  <body data-admin-page="1">
     <div class="cm-page container">
       <main class="cm-main">
-        <header class="cm-header">
-          <div class="cm-titles">
+        <header class="cm-header au-topbar">
+          <div class="au-brand">
+            <span class="au-brand-logo">
+              <img src="../../../assets/profile.png" alt="" />
+            </span>
             <h1>Case Management</h1>
-            <!-- <p>Manage and track all your cases in one place</p> -->
           </div>
-          <div class="cm-header-right">
+          <div class="cm-header-right au-header-right">
             <!-- Admin-only. Unhidden by appSidebar.js when loggedInUser.isAdmin === 1
                  (server re-checks is_admin on every admin endpoint). -->
             <button
@@ -51,6 +53,11 @@
               <i class="fa fa-bell" aria-hidden="true"></i>
               <span id="notificationDot" class="cm-bell-badge" hidden>0</span>
             </button>
+            <div class="au-user-chip" id="adminUserChip">
+              <span class="au-user-avatar" id="adminUserAvatar">U</span>
+              <span class="au-user-name" id="adminUserName">Username</span>
+              <i class="fa fa-chevron-down au-user-caret" aria-hidden="true"></i>
+            </div>
             <button class="cm-user-avatar logout" type="button" title="Log out" aria-label="Log out">
               <i class="fa fa-right-from-bracket" aria-hidden="true"></i>
             </button>
@@ -65,12 +72,54 @@
           </div>
         </header>
 
-        <div class="cm-toolbar">
-          <div class="cm-chip cm-chip-dark">
-            <i class="fa fa-table-cells" aria-hidden="true"></i>
-            <span>All Cases</span>
-            <span class="cm-count" id="caseCountBadge">0</span>
+        <!-- Admin-only overview. Unhidden by caseManagement.js when the logged-in
+             user is an admin; values are computed from the loaded case list. -->
+        <div class="cm-admin-stats" id="adminStatsBar" hidden>
+          <div class="cm-stat-card">
+            <span class="cm-stat-label">Total Cases</span>
+            <span class="cm-stat-value" id="statTotal">0</span>
           </div>
+          <div class="cm-stat-card">
+            <span class="cm-stat-label">Completed Cases</span>
+            <span class="cm-stat-value" id="statCompleted">0</span>
+          </div>
+          <div class="cm-stat-card">
+            <span class="cm-stat-label">Total Deleted Cases</span>
+            <a href="#" class="cm-stat-link" id="viewDeletedLink">View</a>
+            <span class="cm-stat-value" id="statDeletedTotal">0</span>
+          </div>
+          <div class="cm-stat-card cm-stat-card-month">
+            <div class="cm-stat-month-head">
+              <button type="button" class="cm-stat-month-btn" data-month-target="deleted" data-month-delta="-1" aria-label="Previous month" title="Previous month">
+                <i class="fa fa-chevron-left" aria-hidden="true"></i>
+              </button>
+              <span class="cm-stat-label" id="statDeletedLabel">Deleted Cases (this month)</span>
+              <button type="button" class="cm-stat-month-btn" data-month-target="deleted" data-month-delta="1" aria-label="Next month" title="Next month">
+                <i class="fa fa-chevron-right" aria-hidden="true"></i>
+              </button>
+            </div>
+            <span class="cm-stat-value" id="statDeleted">0</span>
+          </div>
+          <div class="cm-stat-card cm-stat-card-month">
+            <div class="cm-stat-month-head">
+              <button type="button" class="cm-stat-month-btn" data-month-target="new" data-month-delta="-1" aria-label="Previous month" title="Previous month">
+                <i class="fa fa-chevron-left" aria-hidden="true"></i>
+              </button>
+              <span class="cm-stat-label" id="statNewLabel">New Cases (this month)</span>
+              <button type="button" class="cm-stat-month-btn" data-month-target="new" data-month-delta="1" aria-label="Next month" title="Next month">
+                <i class="fa fa-chevron-right" aria-hidden="true"></i>
+              </button>
+            </div>
+            <span class="cm-stat-value" id="statNew">0</span>
+          </div>
+        </div>
+
+        <div class="cm-toolbar">
+          <label class="cm-chip cm-chip-filter cm-chip-toggle" id="todayFilterChip">
+            <i class="fa-regular fa-calendar-check" aria-hidden="true"></i>
+            <input type="checkbox" id="todayOnly" class="cm-toggle-input" />
+            <span>Filter Created Today</span>
+          </label>
 
           <div class="cm-chip cm-chip-filter">
             <i class="fa-regular fa-calendar" aria-hidden="true"></i>
@@ -143,14 +192,17 @@
             <i class="fa fa-arrows-rotate" aria-hidden="true"></i>
           </button>
 
-          <button
-            id="createCaseBtn"
-            class="cm-btn cm-btn-primary"
-            type="button"
-          >
-            <i class="fa fa-plus" aria-hidden="true"></i>
-            <span>Create New Case</span>
-          </button>
+          <div class="cm-chip cm-chip-filter cm-chip-search">
+            <i class="fa fa-magnifying-glass" aria-hidden="true"></i>
+            <label for="searchCaseInput" class="cm-visually-hidden">Search by Case Name</label>
+            <input
+              type="text"
+              id="searchCaseInput"
+              class="cm-search-input"
+              placeholder="Search by case name"
+              autocomplete="off"
+            />
+          </div>
         </div>
 
 
@@ -336,6 +388,23 @@
           >
             View Dashboard
           </button>
+          <!-- Admin-only actions (unhidden by caseManagement.js for admins). -->
+          <button
+            id="transferOwnershipBtn"
+            class="cm-btn cm-btn-secondary cm-admin-cta"
+            type="button"
+            hidden
+          >
+            Transfer Case Ownership
+          </button>
+          <button
+            id="retrieveCaseBtn"
+            class="cm-btn cm-btn-secondary cm-admin-cta"
+            type="button"
+            hidden
+          >
+            Retrieve the Case
+          </button>
           <div class="cm-3d-link" id="view3dLinkRow">
             <button
               type="button"
@@ -357,7 +426,7 @@
             </button>
             <button type="button" id="generateQrBtn" class="cm-3d-copy-btn" title="Generate QR code" aria-label="Generate QR code">
               <img
-                src="../../assets/qr-code.png"
+                src="../../../assets/qr-code.png"
                 class="cm-3d-link-icon"
                 alt=""
                 aria-hidden="true"
@@ -371,13 +440,13 @@
           <div class="cc-jaw-row">
             <div id="uploadedJawModels" class="uploaded-models cc-jaw-models">
               <div class="upload-placeholder cc-jaw-tile" data-jaw="upper" data-short="Upper">
-                <img src="../../assets/cloud_upload.svg" class="jaw-bg" alt="Upload Upper Jaw" />
+                <img src="../../../assets/cloud_upload.svg" class="jaw-bg" alt="Upload Upper Jaw" />
                 <span class="cc-jaw-text">Drag&amp;Drop UpperJaw Here</span>
                 <span class="cc-jaw-or">or</span>
                 <span class="cc-jaw-browse">Browse Files</span>
               </div>
               <div class="upload-placeholder cc-jaw-tile" data-jaw="lower" data-short="Lower">
-                <img src="../../assets/cloud_upload.svg" class="jaw-bg" alt="Upload Lower Jaw" />
+                <img src="../../../assets/cloud_upload.svg" class="jaw-bg" alt="Upload Lower Jaw" />
                 <span class="cc-jaw-text">Drag&amp;Drop LowerJaw Here</span>
                 <span class="cc-jaw-or">or</span>
                 <span class="cc-jaw-browse">Browse Files</span>
@@ -388,7 +457,7 @@
 
           <div class="cc-ref-section">
             <div class="upload-placeholder cc-ref-tile" id="addRefImageBtn" data-short="Reference Images" role="button" tabindex="0">
-              <img src="../../assets/cloud_upload.svg" class="jaw-bg" alt="Upload Reference Image" />
+              <img src="../../../assets/cloud_upload.svg" class="jaw-bg" alt="Upload Reference Image" />
               <span class="cc-jaw-text">Drag&amp;Drop Reference Image Here</span>
               <span class="cc-jaw-or">or</span>
               <span class="cc-jaw-browse">Browse Files</span>
@@ -497,6 +566,26 @@
       </div>
     </div>
 
+    <div id="transferOwnerModal" class="modal hidden">
+      <div class="modal-content rename-modal-content">
+        <span class="close-btn" id="closeTransferModal">&times;</span>
+        <h3 class="modal-title">Transfer Case Ownership</h3>
+        <label class="input-label" for="transferOwnerInput">New owner username</label>
+        <input
+          type="text"
+          id="transferOwnerInput"
+          class="modal-input"
+          placeholder="Enter the new owner's username"
+          autocomplete="off"
+        />
+        <p id="transferOwnerError" class="cm-transfer-error" role="alert"></p>
+        <div class="modal-actions rename-modal-actions">
+          <button id="cancelTransferBtn" type="button" class="cm-btn cm-btn-secondary">Cancel</button>
+          <button id="confirmTransferBtn" type="button" class="cm-btn cm-btn-primary">Transfer</button>
+        </div>
+      </div>
+    </div>
+
     <div id="versionHistoryModal" class="modal hidden">
       <div class="modal-content version-modal">
         <span class="close-btn" id="closeVersionModal">&times;</span>
@@ -511,7 +600,7 @@
       <div class="app-sidebar-backdrop" data-sidebar-close></div>
       <nav class="app-sidebar-panel" role="navigation">
         <header class="app-sidebar-header">
-          <img class="app-sidebar-brand-logo" src="../../assets/profile.png" alt="" />
+          <img class="app-sidebar-brand-logo" src="../../../assets/profile.png" alt="" />
           <span class="app-sidebar-title">SMARTRPD</span>
           <span class="app-sidebar-version">v2.0</span>
           <button type="button" class="app-sidebar-close" data-sidebar-close aria-label="Close menu">
@@ -582,10 +671,10 @@
         }
       }
     </script>
-    <script type="module" src="../js/caseManagement.js"></script>
-    <script type="module" src="../js/dashboard.js"></script>
-    <script type="module" src="../js/createCase.js"></script>
-    <script type="module" src="../js/notifications.js"></script>
-    <script type="module" src="../js/versionHistory.js"></script>
+    <script type="module" src="../../js/caseManagement.js"></script>
+    <script type="module" src="../../js/dashboard.js"></script>
+    <script type="module" src="../../js/createCase.js"></script>
+    <script type="module" src="../../js/notifications.js"></script>
+    <script type="module" src="../../js/versionHistory.js"></script>
   </body>
 </html>

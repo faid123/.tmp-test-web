@@ -519,6 +519,15 @@ button {
 }
 .cm-bell:hover { transform: translateY(-1px); }
 
+/* Admin-only header shortcut to User Management — accented so it stands out
+   from the neutral notification bell. */
+.cm-admin-btn {
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  cursor: pointer;
+}
+.cm-admin-btn[hidden] { display: none; }
+
 .cm-bell-badge {
   position: absolute;
   top: -4px;
@@ -1685,3 +1694,312 @@ button {
 }
 #renameCaseModal .close-btn:hover { color: var(--ink); }
 #renameCaseModal .close-btn:hover { color: var(--ink); }
+
+/* ============ Admin read-only view ============ */
+/* When logged in as an admin, hide the Start Case button, the 3D viewer link
+   row and the table's Actions column (header + all body cells). Only the
+   View Dashboard button remains in the detail CTA. */
+body.is-admin .start-case-button,
+body.is-admin #view3dLinkRow,
+body.is-admin .cm-th-actions,
+body.is-admin .cm-td-actions {
+  display: none !important;
+}
+
+/* ============ Admin overview stat cards ============ */
+/* Hidden for everyone by default; the admin gate in caseManagement.js drops the
+   `hidden` attribute AND body gets `is-admin`, so the grid only shows for admins. */
+.cm-admin-stats { display: none; }
+body.is-admin .cm-admin-stats:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0 0 18px;
+}
+.cm-stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  text-align: center;
+  gap: 8px;
+  min-height: 96px;
+  padding: 16px 18px;
+  background: #ffffff;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+/* Month-head spans the full card width so its arrows hug the edges and the
+   label stays centered. */
+.cm-stat-card .cm-stat-month-head { align-self: stretch; }
+
+/* "View" link under Total Deleted Cases. */
+.cm-stat-link {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--primary, #3bae95);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.cm-stat-link:hover { color: var(--teal-700, #0f766e); }
+.cm-stat-link.is-active { color: var(--danger, #dc2626); }
+.cm-stat-label {
+  font-size: 0.8rem;
+  color: var(--primary, #3bae95);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* Month-based cards: ‹ centered label › on one row. */
+.cm-stat-month-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cm-stat-month-head .cm-stat-label {
+  flex: 1 1 auto;
+  text-align: center;
+}
+.cm-stat-month-btn {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--ink-soft, #475569);
+  font-size: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.cm-stat-month-btn:hover:not(:disabled) {
+  background: var(--primary, #3bae95);
+  border-color: var(--primary, #3bae95);
+  color: #ffffff;
+}
+.cm-stat-month-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.cm-stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--ink, #101828);
+}
+/* Tablet landscape: 3 compact cards per row. */
+@media (max-width: 1100px) {
+  body.is-admin .cm-admin-stats:not([hidden]) { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  body.is-admin .cm-admin-stats .cm-stat-card { min-height: 96px; padding: 14px 16px; }
+  body.is-admin .cm-admin-stats .cm-stat-value { font-size: 1.4rem; }
+}
+/* Tablet portrait: 2 per row. */
+@media (max-width: 780px) {
+  body.is-admin .cm-admin-stats:not([hidden]) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body.is-admin .cm-admin-stats .cm-stat-card { min-height: 84px; padding: 12px 14px; }
+}
+
+/* Phones: hide the admin overview cards entirely to keep the list front-and-centre. */
+@media (max-width: 640px) {
+  body.is-admin .cm-admin-stats:not([hidden]) { display: none; }
+}
+
+/* Deleted cases (visible to admins) read as struck-through + muted so the
+   "Retrieve the Case" action has an obvious target. */
+.cm-row.cm-row-deleted { opacity: 0.65; }
+.cm-row.cm-row-deleted .cm-row-name { text-decoration: line-through; }
+
+/* Transfer-ownership modal inline error */
+.cm-transfer-error {
+  min-height: 1.1em;
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: #dc2626;
+}
+
+/* ============ Admin toolbar: "Filter Created Today" toggle + case-name search ============ */
+/* "Filter Created Today" is a toggle chip: it reads like the other filter chips
+   but darkens (like the old "All Cases" chip) when active. */
+.cm-chip-toggle {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.cm-chip-toggle:hover { background: #e9eef5; }
+.cm-toggle-input { position: absolute; opacity: 0; width: 0; height: 0; }
+.cm-chip-toggle:has(.cm-toggle-input:checked) {
+  background: #0f172a;
+  color: #fff;
+}
+/* Keyboard focus ring on the (visually hidden) checkbox. */
+.cm-chip-toggle:has(.cm-toggle-input:focus-visible) {
+  box-shadow: 0 0 0 2px var(--primary, #3bae95);
+}
+
+/* Case-name search chip: input styled to match the date/select controls. */
+.cm-chip-search { flex: 1 1 220px; justify-content: flex-start; min-width: 160px; }
+.cm-search-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  font-family: inherit;
+  padding: 2px 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cm-search-input::placeholder { color: var(--muted); font-weight: 500; }
+
+.cm-visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ============ Admin branded top bar (teal) ============ */
+/* Scoped to .au-topbar so only the admin pages (which add that class) get the
+   teal header; the normal user case_list.html header is untouched. */
+.au-topbar {
+  background: var(--primary, #3bae95);
+  color: #fff;
+  padding: 14px 24px;
+  border-radius: 14px;
+  gap: 16px;
+}
+.au-topbar h1 { color: #fff; margin: 0; }
+
+.au-brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.au-brand-logo {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.au-brand-logo img { width: 78%; height: 78%; object-fit: contain; }
+
+.au-header-right { display: flex; align-items: center; gap: 12px; }
+
+/* Round white-on-teal controls (covers .au-bell plus the case list's existing
+   .cm-bell / .cm-user-avatar buttons when inside the teal bar). */
+.au-topbar .au-bell,
+.au-topbar .cm-bell,
+.au-topbar .cm-user-avatar {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: background 0.15s ease;
+}
+.au-topbar .au-bell:hover,
+.au-topbar .cm-bell:hover,
+.au-topbar .cm-user-avatar:hover { background: rgba(255, 255, 255, 0.28); }
+
+/* Back to Cases button on the teal bar → outlined white. */
+.au-topbar .cm-btn-secondary {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: #fff;
+}
+.au-topbar .cm-btn-secondary:hover { background: rgba(255, 255, 255, 0.28); }
+
+.au-bell-dot {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 2px solid var(--primary, #3bae95);
+}
+
+.au-user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.au-user-chip:hover { background: rgba(255, 255, 255, 0.28); }
+.au-user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--primary, #3bae95);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+}
+.au-user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.au-user-caret { font-size: 11px; color: rgba(255, 255, 255, 0.8); }
+
+/* ============ Admin branded bar — mobile revert (both admin pages) ============ */
+/* On phones, drop the teal brand treatment and the added logo/bell/chip so the
+   header reads like the original compact bar. Keeps the essential controls
+   (title, back button, existing notification bell + logout on the case list). */
+@media (max-width: 640px) {
+  .au-topbar {
+    background: #fff;
+    color: var(--ink, #0f172a);
+    border-radius: 0;
+    border-bottom: 1px solid var(--line, #e2e8f0);
+    gap: 10px;
+  }
+  .au-topbar h1 { color: var(--ink, #0f172a); }
+  .au-topbar .au-brand-logo,
+  .au-topbar .au-bell,
+  .au-topbar .au-user-chip { display: none; }
+  /* Controls revert to light styling on the white bar. */
+  .au-topbar .cm-bell,
+  .au-topbar .cm-user-avatar {
+    background: #fff;
+    border: 1px solid var(--line, #e2e8f0);
+    color: var(--ink-soft, #475569);
+  }
+  .au-topbar .cm-bell:hover,
+  .au-topbar .cm-user-avatar:hover { background: var(--line-soft, #f1f5f9); }
+  .au-topbar .au-bell-dot { border-color: #fff; }
+  .au-topbar .cm-btn-secondary {
+    background: #fff;
+    color: var(--ink, #0f172a);
+    border: 1px solid var(--line, #e2e8f0);
+  }
+}

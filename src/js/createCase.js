@@ -3,6 +3,16 @@ import { lol } from "../crypt.js";
 import { toast, flashToast, confirmModal, attachThemedCalendar } from "./toast.js";
 import { logApi } from "./apiLog.js";
 
+// Resolve an asset path relative to the app root (everything before "/src/") so
+// it loads whether this shared module runs from src/pages/ (case_list) or the
+// deeper src/pages/admin/ (admin_case_list); a fixed "../../assets" only works
+// for the shallower page. Falls back to the original relative path off-browser.
+function appAsset(relFromRoot) {
+  const href = typeof window !== "undefined" && window.location ? window.location.href : "";
+  const i = href.indexOf("/src/");
+  return i !== -1 ? href.slice(0, i + 1) + relFromRoot : "../../" + relFromRoot;
+}
+
 let THREE;
 let STLLoader;
 
@@ -197,7 +207,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const bgImg = document.createElement("img");
     bgImg.className = "jaw-bg";
     bgImg.alt = jawType === "upper" ? "Upload Upper Jaw" : "Upload Lower Jaw";
-    bgImg.src = "../../assets/cloud_upload.svg";
+    bgImg.src = appAsset("assets/cloud_upload.svg");
 
     const text = document.createElement("span");
     text.className = "cc-jaw-text";

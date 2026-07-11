@@ -42,7 +42,6 @@
 
           <form id="login-form" class="auth-form">
             <div class="form-group">
-              <label for="username">Username</label>
               <div class="input-wrap">
                 <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -59,7 +58,6 @@
             </div>
 
             <div class="form-group">
-              <label for="password">Password</label>
               <div class="input-wrap has-toggle">
                 <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -90,13 +88,158 @@
                 <input type="checkbox" id="remember" />
                 <span>Remember me</span>
               </label>
-              <button type="button" class="link-btn">Forgot password?</button>
+              <button type="button" class="link-btn" id="go-to-forgot">Forgot password?</button>
             </div>
 
             <button type="submit" class="primary-btn" id="signin-btn">Sign In</button>
           </form>
 
           <p id="error-message" class="error-message" role="alert"></p>
+
+          <p class="auth-switch">
+            Don't have an account?
+            <button type="button" class="link-btn" id="go-to-signup">Sign up</button>
+          </p>
+        </div>
+
+        <!-- ===== Forgot password view ===== -->
+        <div class="auth-card hidden" id="forgot-view">
+          <div class="auth-header">
+            <div class="logo">
+              <img src="./assets/profile.png" alt="SmartRPD" />
+            </div>
+            <h1>Reset Password</h1>
+            <p class="auth-subtitle">Enter in your registered email to begin the process</p>
+          </div>
+
+          <form id="forgot-form" class="auth-form">
+            <div class="form-group">
+              <div class="input-wrap">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="2" y="4" width="20" height="16" rx="2"/>
+                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                </svg>
+                <input
+                  id="forgot-email"
+                  type="email"
+                  placeholder="Enter your registered email"
+                  autocomplete="email"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="btn-row">
+              <button type="button" class="secondary-btn" id="forgot-cancel">Cancel</button>
+              <button type="submit" class="primary-btn" id="forgot-reset-btn">Reset</button>
+            </div>
+          </form>
+
+          <p id="forgot-error-message" class="error-message" role="alert"></p>
+        </div>
+
+        <!-- ===== Sign up view ===== -->
+        <div class="auth-card hidden" id="signup-view">
+          <button type="button" class="back-btn" id="signup-back-to-login">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="19" y1="12" x2="5" y2="12"/>
+              <polyline points="12 19 5 12 12 5"/>
+            </svg>
+            Back to login
+          </button>
+
+          <div class="auth-header">
+            <div class="logo">
+              <img src="./assets/profile.png" alt="SmartRPD" />
+            </div>
+            <h1>Create Account</h1>
+            <p class="auth-subtitle">Sign up to get started with SmartRPD</p>
+          </div>
+
+          <form id="signup-form" class="auth-form">
+            <div class="form-group">
+              <div class="input-wrap">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                <input
+                  id="signup-username"
+                  type="text"
+                  placeholder="Choose a username"
+                  autocomplete="username"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <div class="input-wrap">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="2" y="4" width="20" height="16" rx="2"/>
+                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                </svg>
+                <input
+                  id="signup-email"
+                  type="email"
+                  placeholder="Enter your email"
+                  autocomplete="email"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <div class="input-wrap has-toggle">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                <input
+                  id="signup-password"
+                  type="password"
+                  placeholder="Create a password"
+                  autocomplete="new-password"
+                  required
+                />
+                <button type="button" id="signup-toggle-password" class="password-toggle" aria-label="Show password" aria-pressed="false">
+                  <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <div class="input-wrap">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                <input
+                  id="signup-confirm"
+                  type="password"
+                  placeholder="Re-enter your password"
+                  autocomplete="new-password"
+                  required
+                />
+              </div>
+            </div>
+
+            <button type="submit" class="primary-btn" id="signup-btn">Create Account</button>
+          </form>
+
+          <p id="signup-error-message" class="error-message" role="alert"></p>
+
+          <p class="auth-switch">
+            Already have an account?
+            <button type="button" class="link-btn" id="go-to-login">Sign in</button>
+          </p>
         </div>
 
         <!-- ===== OTP view ===== -->
