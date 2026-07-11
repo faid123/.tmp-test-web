@@ -40,7 +40,9 @@ export const MESH_TYPE = new Map([
   [2, "mesh-tori"],   // inferred
   [3, "mesh-stripe"], // inferred
   [4, "mesh-cross"],  // inferred
-  [5, "mesh-flange"], // inferred (plate_mesh)
+  [5, "mesh-plate"],  // plate_mesh (renders {tooth}-plate_mesh.svg)
+  // NOTE: mesh-flange is a web-only visual variant with no desktop Mesh_Type code,
+  // so it does not persist through the L2 jawstruct (encodes as no_mesh / 0).
 ]);
 
 // Reciprocating_Type { no_reciprocating=0, reciprocating_clasp=1, reciprocating_plate=2, reciprocating_crossmesh=3 }

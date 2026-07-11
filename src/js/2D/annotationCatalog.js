@@ -173,33 +173,6 @@ export function renderComponentCatalog() {
     itemsEl.appendChild(createComponentItemButton(item));
   }
 
-  if (state.selectedTab === "plate") {
-    const clearRow = document.createElement("div");
-    clearRow.className = "plate-tab-actions";
-    const clearBtn = document.createElement("button");
-    clearBtn.type = "button";
-    clearBtn.className = "plate-clear-all-btn";
-    clearBtn.textContent = "Clear all plates";
-    clearBtn.disabled = !state.designMode;
-    clearBtn.addEventListener("click", () => {
-      const historyBefore = getHistoryStateSignature();
-      if (!state.designMode) {
-        setMessage("Lock both arches to clear plates.", true);
-        return;
-      }
-      removeAllPlatePlacementsFromTeeth();
-      state.components = state.components.filter((id) => !isPlateComponentId(id));
-      state.selectedComponentId =
-        state.components.find((id) => COMPONENT_BY_ID.has(id)) || DEFAULT_COMPONENT_ID;
-      renderComponentCatalog();
-      renderJaws();
-      setMessage("All plates removed from the arch.", false);
-      recordHistoryIfChanged(historyBefore);
-    });
-    clearRow.appendChild(clearBtn);
-    itemsEl.appendChild(clearRow);
-  }
-
   renderSelectedComponents();
 }
 
@@ -224,8 +197,37 @@ export function createMajorColumn(title, items) {
 }
 
 
+// Publish a self-contained SVG filter that fills the (white) mesh catalog icons with
+// the placed-mesh purple (#5b21b6). Defined once on <body> so it does not depend on an
+// arch <svg> being rendered. Referenced from CSS via `filter: url(#icon-tint-mesh)`.
+function ensureMeshIconTintFilter() {
+  if (typeof document === "undefined" || document.getElementById("icon-tint-mesh")) {
+    return;
+  }
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("width", "0");
+  svg.setAttribute("height", "0");
+  svg.setAttribute("aria-hidden", "true");
+  svg.style.position = "absolute";
+  const filter = document.createElementNS(NS, "filter");
+  filter.setAttribute("id", "icon-tint-mesh");
+  filter.setAttribute("color-interpolation-filters", "sRGB");
+  const matrix = document.createElementNS(NS, "feColorMatrix");
+  matrix.setAttribute("type", "matrix");
+  // #5b21b6 -> r 91/255=0.3569, g 33/255=0.1294, b 182/255=0.7137; alpha preserved.
+  matrix.setAttribute(
+    "values",
+    "0 0 0 0 0.3569 0 0 0 0 0.1294 0 0 0 0 0.7137 0 0 0 1 0"
+  );
+  filter.appendChild(matrix);
+  svg.appendChild(filter);
+  document.body.appendChild(svg);
+}
+
 // Create one catalog item button and bind its click/double-click actions.
 export function createComponentItemButton(item) {
+  ensureMeshIconTintFilter();
   const button = document.createElement("button");
   button.type = "button";
   const blockedByMaterial = isComponentBlockedByMaterial(item.id);
@@ -258,6 +260,10 @@ export function createComponentItemButton(item) {
   button.appendChild(label);
 
   if (isMeshComponent(item.id)) {
+    button.classList.add("is-mesh");
+    if (item.id === "mesh-flange") {
+      button.classList.add("is-mesh-native");
+    }
     const deferKey = `mesh-catalog:${item.id}`;
     button.addEventListener("click", () => {
       deferMeshInteraction(deferKey, () => handleDesignComponentSelect(item.id));
@@ -344,7 +350,7 @@ export function handleDesignComponentSelect(componentId) {
         state.components.find((id) => COMPONENT_BY_ID.has(id)) || DEFAULT_COMPONENT_ID;
       renderComponentCatalog();
       renderJaws();
-      setMessage(`${selected.label} deselected. Use "Clear all plates" to remove plates from teeth.`, false);
+      setMessage(`${selected.label} deselected. Click a plated tooth to remove its plate.`, false);
       return;
     }
 
@@ -355,7 +361,7 @@ export function handleDesignComponentSelect(componentId) {
     renderComponentCatalog();
     renderJaws();
     setMessage(
-      `${selected.label} selected. Click cyan suggestion markers on present teeth to toggle this plate. Use "Clear all plates" to remove all.`,
+      `${selected.label} selected. Click cyan suggestion markers on present teeth to toggle this plate.`,
       false
     );
     return;

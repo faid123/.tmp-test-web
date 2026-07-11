@@ -22,7 +22,8 @@ export const COMPONENT_IMAGE_SUFFIX_BY_ID = {
   "mesh-stripe": "stripe_mesh.svg",
   "mesh-hole": "hole_mesh.svg",
   "mesh-cross": "cross_mesh.svg",
-  "mesh-flange": "flange.svg",
+  "mesh-plate": "plate_mesh.svg",
+  "mesh-flange": "flange.svg"
 };
 
 // Check whether a component belongs to mesh family.
@@ -70,6 +71,7 @@ const MESH_IMAGE_SIZE_BY_COMPONENT = Object.freeze({
   "mesh-stripe": { width: 154, height: 246 },
   "mesh-cross": { width: 154, height: 246 },
   "mesh-flange": { width: 154, height: 246 },
+  "mesh-plate": { width: 154, height: 246 },
 });
 
 /**
@@ -150,6 +152,7 @@ const MESH_RENDER_SCALE_BY_COMPONENT = Object.freeze({
   "mesh-hole": 1,
   "mesh-cross": 1,
   "mesh-flange": 1,
+  "mesh-plate": 1,
 });
 
 const MESH_RENDER_SCALE_BY_JAW = Object.freeze({
@@ -163,6 +166,7 @@ const MESH_COMPONENT_IDS = Object.freeze([
   "mesh-stripe",
   "mesh-cross",
   "mesh-flange",
+  "mesh-plate",
 ]);
 
 const MESH_TOOTH_IDS = Object.freeze([
@@ -182,6 +186,7 @@ const MESH_POSITION_OFFSET_BY_COMPONENT = Object.freeze({
   "mesh-stripe": { x: 0, y: 0 },
   "mesh-cross": { x: 0, y: 0 },
   "mesh-flange": { x: 0, y: 0 },
+  "mesh-plate": { x: 0, y: 0 },
 });
 
 const MESH_POSITION_OFFSET_OVERRIDE_SEED_BY_TOOTH = Object.freeze({

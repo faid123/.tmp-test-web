@@ -1611,7 +1611,9 @@ function createComponentVisual(componentId, toothId, jaw) {
   });
 
   const imageClass = isMesh
-    ? "component-image mesh-image"
+    ? componentId === "mesh-flange"
+      ? "component-image mesh-image mesh-image-native"
+      : "component-image mesh-image"
     : isPlate
       ? "component-image plate-image"
       : "component-image";

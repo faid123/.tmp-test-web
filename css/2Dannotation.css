@@ -2033,31 +2033,6 @@ button.upload3d-row {
   min-width: 0;
 }
 
-.plate-tab-actions {
-  grid-column: 1 / -1;
-}
-
-.plate-clear-all-btn {
-  width: 100%;
-  padding: 8px 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  background: #f3f3f3;
-  color: var(--rose-700);
-  cursor: pointer;
-}
-
-.plate-clear-all-btn:hover:not(:disabled) {
-  background: #e8e8e8;
-}
-
-.plate-clear-all-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 .major-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2136,6 +2111,24 @@ button.upload3d-row {
   filter: drop-shadow(0 0 1px rgba(47, 144, 121, 0.55)) drop-shadow(0 1px 2px rgba(47, 144, 121, 0.25));
 }
 
+/* Mesh catalog icons glow purple (#5b21b6) to match the placed-mesh tint. */
+.component-item.is-mesh .component-icon {
+  -webkit-filter: drop-shadow(0 0 1px rgba(91, 33, 182, 0.55)) drop-shadow(0 1px 2px rgba(91, 33, 182, 0.25));
+  filter: drop-shadow(0 0 1px rgba(91, 33, 182, 0.55)) drop-shadow(0 1px 2px rgba(91, 33, 182, 0.25));
+}
+
+/* Fill the (white) mesh icon artwork with the placed-mesh purple. */
+.component-item.is-mesh .component-icon-img {
+  -webkit-filter: url(#icon-tint-mesh);
+  filter: url(#icon-tint-mesh);
+}
+
+/* Mesh Flange keeps its original PNG (no purple fill). */
+.component-item.is-mesh.is-mesh-native .component-icon-img {
+  -webkit-filter: none;
+  filter: none;
+}
+
 .component-item:hover .component-icon,
 .component-item:focus-visible .component-icon {
   background: rgba(59, 174, 149, 0.14);
@@ -2189,6 +2182,12 @@ button.upload3d-row {
 .mesh-image {
   -webkit-filter: url(#tint-mesh);
   filter: url(#tint-mesh);
+}
+
+/* Mesh Flange keeps its native SVG texture/colors (no purple tint). */
+.mesh-image.mesh-image-native {
+  -webkit-filter: none;
+  filter: none;
 }
 
 /* RPD overlays and connectors: neutral gray (tune to match arch) */

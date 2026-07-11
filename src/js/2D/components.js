@@ -73,6 +73,17 @@ export const COMPONENT_CATALOG = [
     actionUponFailure: ACTION_UPON_FAILURE.PREVENT_PLACEMENT,
   },
   {
+    id: "mesh-plate",
+    label: "Mesh Plate",
+    shortLabel: "MP",
+    icon: "../../assets/menu-icon/mesh/Mesh_Plate.png",
+    tab: "mesh",
+    requiresPresence: false,
+    requiresMissing: true,
+    conflictsWith: [],
+    actionUponFailure: ACTION_UPON_FAILURE.PREVENT_PLACEMENT,
+  },
+  {
     id: "assembly-tbar",
     label: "T-bar",
     shortLabel: "TBA",
