@@ -1719,6 +1719,29 @@ async function resolveUuidByUsername(username) {
   return data?.uuid ?? null;
 }
 
+// Rebuild the new-owner datalist for the selected case: only the case's
+// shared co-owners are suggested (the usual transfer target). Any other
+// username can still be typed — resolution happens server-side either way.
+// Skips the current owner (a no-op transfer) and dedupes case-insensitively.
+function populateTransferOptions(caseObj) {
+  const dl = document.getElementById("transferOwnerOptions");
+  if (!dl) return;
+  const seen = new Set(
+    [(caseObj?.assigned_to || caseObj?.username || "").toLowerCase()]
+  );
+  dl.textContent = "";
+  for (const co of caseObj?.co_owners || []) {
+    const name = String(co ?? "").trim();
+    const key = name.toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.label = "Shared co-owner"; // shown next to the value in most browsers
+    dl.appendChild(opt);
+  }
+}
+
 // Transfer ownership: resolve the entered username, then PUT /role/owner
 // (changeOwner is admin-only server-side).
 async function submitOwnershipTransfer() {
@@ -1735,6 +1758,16 @@ async function submitOwnershipTransfer() {
   const username = (input?.value || "").trim();
   if (!username) {
     if (errEl) errEl.textContent = "Enter the new owner's username.";
+    return;
+  }
+
+  const caseObj = currentCases.find(
+    (c) => String(c.id ?? c.case_int_id) === String(caseId)
+  );
+  // No-op guard: transferring to the user who already owns the case.
+  const currentOwner = caseObj?.assigned_to || caseObj?.username || "";
+  if (currentOwner && currentOwner.toLowerCase() === username.toLowerCase()) {
+    if (errEl) errEl.textContent = `"${currentOwner}" already owns this case.`;
     return;
   }
 
@@ -1755,21 +1788,29 @@ async function submitOwnershipTransfer() {
       ]),
     });
     logApi(res, "PUT /role/owner");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      // Surface the server's own message (changeOwner answers 404 when the
+      // case/owner pairing isn't found, 500 on SQL errors) instead of a
+      // generic failure — the admin needs to know which it was.
+      const body = await res.json().catch(() => null);
+      const detail =
+        (body?.serverErrorMessage && body.serverErrorMessage !== "..." && body.serverErrorMessage) ||
+        body?.sqlMessage || `HTTP ${res.status}`;
+      throw new Error(detail);
+    }
 
-    // Reflect the new owner locally so the row/detail update without a reload.
-    const caseObj = currentCases.find(
-      (c) => String(c.id ?? c.case_int_id) === String(caseId)
-    );
+    // Reflect the new owner locally so the row *and* the open detail pane
+    // update without a reload.
     if (caseObj) {
       caseObj.assigned_to = username;
       patchRowInPlace(caseObj);
+      syncDetailPaneIfSelected(caseObj);
     }
     closeTransferModal();
     toast.success(`Ownership transferred to "${username}".`);
   } catch (err) {
     console.error("Transfer ownership failed:", err);
-    if (errEl) errEl.textContent = "Transfer failed. Please try again.";
+    if (errEl) errEl.textContent = `Transfer failed — ${err.message || "please try again."}`;
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -1785,12 +1826,40 @@ function openTransferModal() {
   const errEl = document.getElementById("transferOwnerError");
   if (errEl) errEl.textContent = "";
   if (input) input.value = "";
+
+  // Name the case being transferred + fill the "current owner" side of the
+  // owner → owner flow so the admin can confirm they picked the right row.
+  const caseObj = currentCases.find(
+    (c) => String(c.id ?? c.case_int_id) === String(window.selectedCaseId)
+  );
+  const lineEl = document.getElementById("transferOwnerCaseLine");
+  if (lineEl) {
+    lineEl.textContent = caseObj?.case_id || `Case ${window.selectedCaseId}`;
+    lineEl.title = lineEl.textContent;
+  }
+  const owner = caseObj?.assigned_to || caseObj?.username || "";
+  const ownerNameEl = document.getElementById("transferOwnerCurrentName");
+  const ownerAvatarEl = document.getElementById("transferOwnerCurrentAvatar");
+  if (ownerNameEl) {
+    ownerNameEl.textContent = owner || "Unknown";
+    ownerNameEl.title = owner || "";
+  }
+  if (ownerAvatarEl) ownerAvatarEl.textContent = (owner || "?").charAt(0);
+
+  // Suggestions: the case's shared co-owners (already on the enriched row).
+  populateTransferOptions(caseObj);
+
+  // .modal is display:none until .show lands (createCase.css) — removing
+  // .hidden alone leaves it invisible, which read as "nothing happens".
   modal?.classList.remove("hidden");
+  modal?.classList.add("show");
   input?.focus();
 }
 
 function closeTransferModal() {
-  document.getElementById("transferOwnerModal")?.classList.add("hidden");
+  const modal = document.getElementById("transferOwnerModal");
+  modal?.classList.remove("show");
+  modal?.classList.add("hidden");
 }
 
 // Retrieve (restore) the selected soft-deleted case via POST /case/undelete/:id.
@@ -1855,6 +1924,29 @@ function setupAdminCaseList() {
   const avatarEl = document.getElementById("adminUserAvatar");
   if (nameEl) nameEl.textContent = _uname;
   if (avatarEl) avatarEl.textContent = _uname.charAt(0);
+
+  // User chip → dropdown (holds Logout). The logout item keeps class .logout so
+  // the existing logout handler wires it.
+  const chip = document.getElementById("adminUserChip");
+  const chipMenu = document.getElementById("adminUserDropdown");
+  if (chip && chipMenu) {
+    const toggle = (e) => {
+      e.stopPropagation();
+      const open = chipMenu.classList.toggle("hidden") === false;
+      chip.setAttribute("aria-expanded", String(open));
+    };
+    chip.addEventListener("click", toggle);
+    chip.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") toggle(e);
+    });
+    document.addEventListener("click", (e) => {
+      if (chipMenu.classList.contains("hidden")) return;
+      if (!chipMenu.contains(e.target) && !chip.contains(e.target)) {
+        chipMenu.classList.add("hidden");
+        chip.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
 
   // Reveal the overview cards and the admin detail actions.
   const statsBar = document.getElementById("adminStatsBar");
@@ -2026,8 +2118,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       window.location.reload();
     });
 
-    const logoutBtn = document.querySelector(".logout");
-    logoutBtn?.addEventListener("click", async () => {
+    // Wire every logout affordance (the user-chip dropdown item + the
+    // mobile-only header logout button both carry class .logout).
+    const handleLogout = async () => {
       const confirmed = await confirmModal({
         title: "Log out?",
         message: "You'll need to sign in again to access your cases.",
@@ -2041,8 +2134,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       const cacheKey = caseListCacheKey();
       if (cacheKey) { try { localStorage.removeItem(cacheKey); } catch { /* ignore */ } }
       localStorage.removeItem("loggedInUser");
-      window.location.href = "../../index.html";
-    });
+      // admin_case_list.html is one directory deeper (src/pages/admin/) than the
+      // normal case_list.html (src/pages/); index.html sits at the web root.
+      window.location.href = /\/admin\//.test(window.location.pathname)
+        ? "../../../index.html"
+        : "../../index.html";
+    };
+    document.querySelectorAll(".logout").forEach((btn) =>
+      btn.addEventListener("click", handleLogout)
+    );
 
     const headWrap = document.querySelector(".table-head-wrapper");
     const bodyWrap = document.querySelector(".table-body-wrapper");

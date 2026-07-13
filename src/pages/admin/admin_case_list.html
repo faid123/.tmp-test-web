@@ -45,6 +45,16 @@
               <i class="fa fa-users-gear" aria-hidden="true"></i>
             </button>
             <button
+              id="machineIdHeaderBtn"
+              class="cm-bell cm-admin-btn"
+              type="button"
+              aria-label="Machine ID Management"
+              title="Machine ID Management"
+              hidden
+            >
+              <i class="fa fa-desktop" aria-hidden="true"></i>
+            </button>
+            <button
               id="notificationBtn"
               class="cm-bell"
               type="button"
@@ -53,12 +63,22 @@
               <i class="fa fa-bell" aria-hidden="true"></i>
               <span id="notificationDot" class="cm-bell-badge" hidden>0</span>
             </button>
-            <div class="au-user-chip" id="adminUserChip">
-              <span class="au-user-avatar" id="adminUserAvatar">U</span>
-              <span class="au-user-name" id="adminUserName">Username</span>
-              <i class="fa fa-chevron-down au-user-caret" aria-hidden="true"></i>
+            <div class="au-user-menu">
+              <div class="au-user-chip" id="adminUserChip" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false">
+                <span class="au-user-avatar" id="adminUserAvatar">U</span>
+                <span class="au-user-name" id="adminUserName">Username</span>
+                <i class="fa fa-chevron-down au-user-caret" aria-hidden="true"></i>
+              </div>
+              <div class="au-user-dropdown hidden" id="adminUserDropdown" role="menu">
+                <button type="button" class="au-user-dropdown-item logout" role="menuitem">
+                  <i class="fa fa-right-from-bracket" aria-hidden="true"></i> Logout
+                </button>
+              </div>
             </div>
-            <button class="cm-user-avatar logout" type="button" title="Log out" aria-label="Log out">
+
+            <!-- Mobile-only logout (the user chip that holds Logout is hidden on
+                 phones). Carries .logout so the shared handler wires it. -->
+            <button class="cm-bell au-mobile-logout logout" type="button" title="Log out" aria-label="Log out">
               <i class="fa fa-right-from-bracket" aria-hidden="true"></i>
             </button>
 
@@ -570,14 +590,33 @@
       <div class="modal-content rename-modal-content">
         <span class="close-btn" id="closeTransferModal">&times;</span>
         <h3 class="modal-title">Transfer Case Ownership</h3>
-        <label class="input-label" for="transferOwnerInput">New owner username</label>
-        <input
-          type="text"
-          id="transferOwnerInput"
-          class="modal-input"
-          placeholder="Enter the new owner's username"
-          autocomplete="off"
-        />
+        <!-- Which case is being transferred (filled by JS). -->
+        <p class="cm-transfer-case" id="transferOwnerCaseLine"></p>
+        <!-- current owner ──→ new owner -->
+        <div class="cm-transfer-flow">
+          <div class="cm-transfer-side">
+            <span class="input-label">Current owner</span>
+            <div class="cm-transfer-owner">
+              <span class="cm-transfer-avatar" id="transferOwnerCurrentAvatar">?</span>
+              <span class="cm-transfer-name" id="transferOwnerCurrentName">—</span>
+            </div>
+          </div>
+          <i class="fa fa-arrow-right-long cm-transfer-arrow" aria-hidden="true"></i>
+          <div class="cm-transfer-side">
+            <label class="input-label" for="transferOwnerInput">New owner</label>
+            <input
+              type="text"
+              id="transferOwnerInput"
+              class="modal-input"
+              placeholder="Username"
+              autocomplete="off"
+              list="transferOwnerOptions"
+            />
+            <!-- Username suggestions, filled from the admin user/getall listing
+                 (active users only) when the modal opens. -->
+            <datalist id="transferOwnerOptions"></datalist>
+          </div>
+        </div>
         <p id="transferOwnerError" class="cm-transfer-error" role="alert"></p>
         <div class="modal-actions rename-modal-actions">
           <button id="cancelTransferBtn" type="button" class="cm-btn cm-btn-secondary">Cancel</button>
@@ -614,6 +653,12 @@
             <button type="button" id="sidebarAdminUsersBtn" class="app-sidebar-item">
               <i class="fa fa-users-gear app-sidebar-item-icon" aria-hidden="true"></i>
               <span>User Management</span>
+            </button>
+          </li>
+          <li id="sidebarMachineIdItem" hidden>
+            <button type="button" id="sidebarMachineIdBtn" class="app-sidebar-item">
+              <i class="fa fa-desktop app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Machine ID Management</span>
             </button>
           </li>
           <li>

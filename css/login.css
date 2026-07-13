@@ -329,6 +329,10 @@ body {
   font-size: 0.875rem;
   font-weight: 500;
 }
+/* Same slot, but for good news (e.g. "account created" after sign up). */
+.error-message.is-success {
+  color: #047857;
+}
 
 /* ===== OTP view ===== */
 .back-btn {

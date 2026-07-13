@@ -112,6 +112,10 @@ function normalizeUser(raw) {
     email: raw.email ?? "",
     isAdmin: Number(raw.is_admin ?? raw.isAdmin ?? 0) === 1,
     deleted: Number(raw.deleted ?? raw.is_deleted ?? raw.isDeleted ?? 0) === 1,
+    // Signup request awaiting approval (user/register/request stores it as a
+    // soft-deleted, password-less row; getAll exposes `pending`). Absent until
+    // the backend ships that column — everything pending-related then hides.
+    pending: Number(raw.pending ?? 0) === 1,
     createTime: raw.create_time ?? null,
     raw,
   };
@@ -125,6 +129,10 @@ let allUsers = [];
 
 // Which month the "New Users" card shows: 0 = current, -1 = last month, …
 let newUsersMonthOffset = 0;
+
+// When true, the list is filtered to admins only (the "View" link on the
+// Admins stat card).
+let adminsOnlyView = false;
 
 // Normalize a timestamp (unix seconds/ms or a date string) to ms, or null.
 function tsToMs(ts) {
@@ -175,6 +183,18 @@ function renderUserStats() {
   const label = md.getFullYear() === now.getFullYear() ? name : `${name} ${md.getFullYear()}`;
   set("userStatNewLabel", `New Users (${label})`);
 
+  // Signup-request notification: light the header bell when requests are
+  // waiting (clicking it filters the list to them — wired at init).
+  const pendingCount = allUsers.filter((u) => u.pending).length;
+  const bell = document.getElementById("adminNotifBtn");
+  const dot = bell?.querySelector(".au-bell-dot");
+  if (dot) dot.style.display = pendingCount ? "" : "none";
+  if (bell) {
+    bell.title = pendingCount
+      ? `${pendingCount} signup request${pendingCount === 1 ? "" : "s"} awaiting approval`
+      : "Notifications";
+  }
+
   document
     .querySelectorAll('[data-user-month-delta="1"]')
     .forEach((b) => (b.disabled = newUsersMonthOffset >= 0));
@@ -203,9 +223,14 @@ function visibleUsers() {
   const dateVal = document.getElementById("userDateFilter")?.value || "";
 
   return allUsers.filter((u) => {
-    // Default is Active; "deactivated" shows only deactivated; "all" shows both.
+    // "View" link on the Admins card: show only admins.
+    if (adminsOnlyView && !u.isAdmin) return false;
+
+    // Default is Active; "deactivated" shows only deactivated (excluding
+    // pending signups); "pending" shows only signup requests; "all" = everything.
     if (status === "active" && u.deleted) return false;
-    if (status === "deactivated" && !u.deleted) return false;
+    if (status === "deactivated" && (!u.deleted || u.pending)) return false;
+    if (status === "pending" && !u.pending) return false;
 
     if (q && !u.username.toLowerCase().includes(q) && !u.email.toLowerCase().includes(q)) {
       return false;
@@ -234,17 +259,28 @@ function renderUsers() {
     return;
   }
 
-  // Active users first, then alphabetically.
-  users.sort((a, b) => (a.deleted - b.deleted) || a.username.localeCompare(b.username));
+  // Pending signup requests first (they need action), then active users,
+  // then alphabetically.
+  users.sort(
+    (a, b) =>
+      (b.pending - a.pending) ||
+      (a.deleted - b.deleted) ||
+      a.username.localeCompare(b.username)
+  );
+
+  const statusBadge = (u) => {
+    if (u.pending) return `<span class="au-badge au-badge-pending">Pending approval</span>`;
+    return `<span class="au-badge ${u.deleted ? "au-badge-deleted" : "au-badge-active"}">${u.deleted ? "Deactivated" : "Active"}</span>`;
+  };
 
   tbody.innerHTML = users
     .map(
       (u) => `
-      <tr class="au-row ${u.deleted ? "au-row-deleted" : ""}${u.uuid === selectedUserUuid ? " is-active" : ""}" data-uuid="${esc(u.uuid)}" role="button" tabindex="0">
+      <tr class="au-row ${u.deleted && !u.pending ? "au-row-deleted" : ""}${u.uuid === selectedUserUuid ? " is-active" : ""}" data-uuid="${esc(u.uuid)}" role="button" tabindex="0">
         <td>${esc(u.username) || "—"}</td>
         <td>${esc(u.email) || "—"}</td>
         <td><span class="au-badge ${u.isAdmin ? "au-badge-admin" : "au-badge-user"}">${u.isAdmin ? "Admin" : "User"}</span></td>
-        <td><span class="au-badge ${u.deleted ? "au-badge-deleted" : "au-badge-active"}">${u.deleted ? "Deactivated" : "Active"}</span></td>
+        <td>${statusBadge(u)}</td>
         <td>${esc(formatRegDate(u.createTime))}</td>
         <td class="cm-td-actions">
           <div class="au-actions">
@@ -252,7 +288,11 @@ function renderUsers() {
               <i class="fa fa-pen" aria-hidden="true"></i>
             </button>
             ${
-              u.deleted
+              u.pending
+                ? `<button type="button" class="cm-icon-btn au-approve-btn" data-action="approve" title="Approve request" aria-label="Approve ${esc(u.username)}">
+                     <i class="fa fa-check" aria-hidden="true"></i>
+                   </button>`
+                : u.deleted
                 ? `<button type="button" class="cm-icon-btn" data-action="reactivate" title="Reactivate" aria-label="Reactivate ${esc(u.username)}">
                      <i class="fa fa-rotate-left" aria-hidden="true"></i>
                    </button>`
@@ -286,12 +326,14 @@ function openUserDetail(user) {
   set("userDetailName", user.username || "—");
   set("userDetailEmail", user.email || "—");
   set("userDetailRole", user.isAdmin ? "Administrator" : "User");
-  set("userDetailStatus", user.deleted ? "Deactivated" : "Active");
+  set("userDetailStatus", user.pending ? "Pending approval" : user.deleted ? "Deactivated" : "Active");
   set("userDetailDate", formatRegDate(user.createTime));
   set("userDetailUuid", user.uuid || "—");
 
   const toggleBtn = document.getElementById("userDetailToggleBtn");
-  if (toggleBtn) toggleBtn.textContent = user.deleted ? "Reactivate" : "Deactivate";
+  if (toggleBtn) {
+    toggleBtn.textContent = user.pending ? "Approve" : user.deleted ? "Reactivate" : "Deactivate";
+  }
 
   // Highlight the selected row + slide the pane in on mobile.
   document.querySelectorAll("#userTableBody tr").forEach((tr) =>
@@ -434,6 +476,29 @@ async function handleRowAction(action, user) {
     return;
   }
 
+  // Approve a signup request: the pending row is a soft-deleted user, so
+  // user/restore activates the account.
+  if (action === "approve") {
+    const ok = await confirmModal({
+      title: `Approve "${user.username}"?`,
+      message: `The account for ${user.email || "this user"} will be activated and they will be able to sign in.`,
+      confirmText: "Approve",
+      cancelText: "Cancel",
+      variant: "info",
+    });
+    if (!ok) return;
+    try {
+      await api.restoreUser(user.uuid);
+      toast.success(`Signup request for "${user.username}" approved.`);
+      await loadUsers();
+      refreshDetailIfSelected(user.uuid);
+    } catch (err) {
+      console.error("Approve signup request failed:", err);
+      toast.error(`Approve failed — ${err.message}`);
+    }
+    return;
+  }
+
   if (action === "deactivate") {
     const me = getLoggedInUser();
     if (user.uuid && user.uuid === me?.uuid) {
@@ -501,6 +566,40 @@ document.addEventListener("DOMContentLoaded", () => {
   const footerUser = document.getElementById("footerUserName");
   if (footerUser) footerUser.textContent = uname;
 
+  // User chip → dropdown with Logout.
+  const chip = document.getElementById("adminUserChip");
+  const chipMenu = document.getElementById("adminUserDropdown");
+  if (chip && chipMenu) {
+    const toggleChip = (e) => {
+      e.stopPropagation();
+      const open = chipMenu.classList.toggle("hidden") === false;
+      chip.setAttribute("aria-expanded", String(open));
+    };
+    chip.addEventListener("click", toggleChip);
+    chip.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") toggleChip(e);
+    });
+    document.addEventListener("click", (e) => {
+      if (chipMenu.classList.contains("hidden")) return;
+      if (!chipMenu.contains(e.target) && !chip.contains(e.target)) {
+        chipMenu.classList.add("hidden");
+        chip.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+  document.getElementById("userChipLogout")?.addEventListener("click", async () => {
+    const ok = await confirmModal({
+      title: "Log out?",
+      message: "You'll need to sign in again to access the admin tools.",
+      confirmText: "Log out",
+      cancelText: "Cancel",
+      variant: "info",
+    });
+    if (!ok) return;
+    try { localStorage.removeItem("loggedInUser"); } catch { /* ignore */ }
+    window.location.href = "../../../index.html";
+  });
+
   // This page is admin-only, so return to the admin case list — now a sibling
   // in the same src/pages/admin/ folder.
   const goBack = () => (window.location.href = "./admin_case_list.html");
@@ -519,6 +618,20 @@ document.addEventListener("DOMContentLoaded", () => {
     showGate();
     return;
   }
+
+  // Bell dot starts hidden — renderUserStats lights it when pending signup
+  // requests are in the loaded data.
+  const bellDot = document.querySelector("#adminNotifBtn .au-bell-dot");
+  if (bellDot) bellDot.style.display = "none";
+
+  // Bell → jump the list to the pending signup requests.
+  document.getElementById("adminNotifBtn")?.addEventListener("click", () => {
+    const sel = document.getElementById("userStatusFilter");
+    if (sel) {
+      sel.value = "pending";
+      renderUsers();
+    }
+  });
 
   document.getElementById("refreshUsersBtn").addEventListener("click", loadUsers);
   document.getElementById("registerUserBtn").addEventListener("click", () => openUserModal());
@@ -546,6 +659,16 @@ document.addEventListener("DOMContentLoaded", () => {
     renderUsers();
   });
 
+  // "View" link on the Admins card: toggle showing admins only.
+  const viewAdminsLink = document.getElementById("viewAdminsLink");
+  viewAdminsLink?.addEventListener("click", (e) => {
+    e.preventDefault();
+    adminsOnlyView = !adminsOnlyView;
+    viewAdminsLink.textContent = adminsOnlyView ? "Back to all" : "View";
+    viewAdminsLink.classList.toggle("is-active", adminsOnlyView);
+    renderUsers();
+  });
+
   // Detail pane: back button (mobile) + edit / deactivate-reactivate actions.
   document.getElementById("userBackToListBtn")?.addEventListener("click", closeUserDetail);
   document.getElementById("userDetailEditBtn")?.addEventListener("click", () => {
@@ -554,7 +677,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.getElementById("userDetailToggleBtn")?.addEventListener("click", () => {
     const u = allUsers.find((x) => x.uuid === selectedUserUuid);
-    if (u) handleRowAction(u.deleted ? "reactivate" : "deactivate", u);
+    if (u) handleRowAction(u.pending ? "approve" : u.deleted ? "reactivate" : "deactivate", u);
   });
 
   // "New Users" month stepper (never into the future).

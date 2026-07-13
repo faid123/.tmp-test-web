@@ -1,0 +1,54 @@
+/* Admin machine-ID page. Piggybacks on case_list.css (page frame, chips,
+   buttons, table), createCase.css (modal) and admin_users.css (shared admin
+   bits: au-page grid, gate, badges, detail pane, modal extras). Only the
+   machine-ID-specific tweaks live here. */
+
+/* Three overview cards instead of the user page's five. */
+.mid-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 780px) {
+  .mid-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Machine IDs are opaque hex strings — render them monospaced so they read as
+   identifiers, both in the table and the detail pane. */
+.mid-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  word-break: break-all;
+}
+.mid-detail-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  word-break: break-all;
+  color: #6b7280;
+}
+
+/* Comments column: keep long notes from blowing out the row height. */
+.mid-comment {
+  color: #374151;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mid-comment-empty {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* The register/edit modal reuses the create-case textarea look for comments. */
+.mid-textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+/* Machine ID is the primary key, so it's read-only when editing comments. */
+.modal-input:read-only {
+  background: #f3f4f6;
+  color: #6b7280;
+  cursor: not-allowed;
+}

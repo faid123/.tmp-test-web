@@ -1697,12 +1697,14 @@ button {
 
 /* ============ Admin read-only view ============ */
 /* When logged in as an admin, hide the Start Case button, the 3D viewer link
-   row and the table's Actions column (header + all body cells). Only the
-   View Dashboard button remains in the detail CTA. */
+   row, the table's Actions column (header + all body cells) and the inline
+   due-date edit pencil (due-date writes don't work from the admin view). Only
+   the View Dashboard button remains in the detail CTA. */
 body.is-admin .start-case-button,
 body.is-admin #view3dLinkRow,
 body.is-admin .cm-th-actions,
-body.is-admin .cm-td-actions {
+body.is-admin .cm-td-actions,
+body.is-admin .cm-due-edit {
   display: none !important;
 }
 
@@ -1818,6 +1820,99 @@ body.is-admin .cm-admin-stats:not([hidden]) {
   font-size: 0.85rem;
   color: #dc2626;
 }
+/* Case-name context line above the owner flow. */
+.cm-transfer-case {
+  margin: 0 0 14px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink, #0f172a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "current owner ──→ new owner" flow row. Both sides are label-over-control
+   columns; the arrow centers against the 42px control row. */
+.cm-transfer-flow {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 4px;
+}
+.cm-transfer-side {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cm-transfer-side .input-label { margin: 0 0 6px; }
+.cm-transfer-side .modal-input {
+  margin: 0;
+  height: 42px;
+  box-sizing: border-box;
+  width: 100%;
+}
+/* Read-only current owner chip, mirroring the input's footprint. */
+.cm-transfer-owner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 10px;
+  background: var(--line-soft, #f8fafc);
+  font-weight: 600;
+  color: var(--ink, #0f172a);
+}
+.cm-transfer-owner .cm-transfer-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cm-transfer-avatar {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary, #3bae95);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.cm-transfer-arrow {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  color: var(--primary, #3bae95);
+  font-size: 18px;
+  /* Optically center against the chip/input row (labels pull it up). */
+  transform: translateY(6px);
+}
+/* Cancel / Transfer pinned to the bottom-right corner (the flex-end rule above
+   is scoped to #renameCaseModal, so restate it for this modal). */
+#transferOwnerModal .rename-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+/* Phones: stack the two sides with the arrow pointing down between them. */
+@media (max-width: 480px) {
+  .cm-transfer-flow { flex-direction: column; align-items: stretch; }
+  .cm-transfer-arrow {
+    align-self: center;
+    height: auto;
+    transform: rotate(90deg);
+  }
+}
 
 /* ============ Admin toolbar: "Filter Created Today" toggle + case-name search ============ */
 /* "Filter Created Today" is a toggle chip: it reads like the other filter chips
@@ -1873,6 +1968,7 @@ body.is-admin .cm-admin-stats:not([hidden]) {
   padding: 14px 24px;
   border-radius: 14px;
   gap: 16px;
+  align-items: center; /* override .cm-header's flex-end so items sit centered */
 }
 .au-topbar h1 { color: #fff; margin: 0; }
 
@@ -1914,6 +2010,9 @@ body.is-admin .cm-admin-stats:not([hidden]) {
 .au-topbar .au-bell:hover,
 .au-topbar .cm-bell:hover,
 .au-topbar .cm-user-avatar:hover { background: rgba(255, 255, 255, 0.28); }
+/* Keep [hidden] winning over the inline-flex above (admin-only buttons ship
+   hidden and are revealed by appSidebar.js for admins). */
+.au-topbar .cm-bell[hidden] { display: none; }
 
 /* Back to Cases button on the teal bar → outlined white. */
 .au-topbar .cm-btn-secondary {
@@ -1971,6 +2070,47 @@ body.is-admin .cm-admin-stats:not([hidden]) {
 }
 .au-user-caret { font-size: 11px; color: rgba(255, 255, 255, 0.8); }
 
+/* User chip dropdown menu (holds Logout etc.). */
+.au-user-menu { position: relative; }
+.au-user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 180px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(16, 24, 40, 0.18);
+  z-index: 95;
+}
+.au-user-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink, #0f172a);
+  text-align: left;
+  cursor: pointer;
+}
+.au-user-dropdown-item:hover { background: var(--line-soft, #f1f5f9); }
+.au-user-dropdown-item i { width: 16px; color: var(--muted, #94a3b8); }
+.au-user-dropdown-item.logout,
+.au-user-dropdown-item.logout i { color: #dc2626; }
+
+/* Mobile-only header logout button — hidden on tablet/desktop (logout lives in
+   the user-chip dropdown there); the ≤640 media query reveals it. The
+   .au-topbar-scoped selector is needed to outgun the (0,2,0)
+   `.au-topbar .cm-bell { display: inline-flex }` rule above. */
+.au-mobile-logout,
+.au-topbar .au-mobile-logout { display: none; }
+
 /* ============ Admin branded bar — mobile revert (both admin pages) ============ */
 /* On phones, drop the teal brand treatment and the added logo/bell/chip so the
    header reads like the original compact bar. Keeps the essential controls
@@ -1981,15 +2121,31 @@ body.is-admin .cm-admin-stats:not([hidden]) {
     color: var(--ink, #0f172a);
     border-radius: 0;
     border-bottom: 1px solid var(--line, #e2e8f0);
+    padding: 12px 14px;
     gap: 10px;
+    align-items: center;
+    flex-wrap: nowrap;
   }
-  .au-topbar h1 { color: var(--ink, #0f172a); }
+  /* Title fills the row and ellipsizes instead of wrapping/pushing controls. */
+  .au-topbar .au-brand { min-width: 0; flex: 1 1 auto; }
+  .au-topbar h1 {
+    color: var(--ink, #0f172a);
+    font-size: 18px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .au-topbar .au-brand-logo,
   .au-topbar .au-bell,
   .au-topbar .au-user-chip { display: none; }
-  /* Controls revert to light styling on the white bar. */
+
+  .au-header-right { gap: 8px; flex: 0 0 auto; }
+  /* Controls revert to compact light styling on the white bar. */
   .au-topbar .cm-bell,
   .au-topbar .cm-user-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 15px;
     background: #fff;
     border: 1px solid var(--line, #e2e8f0);
     color: var(--ink-soft, #475569);
@@ -1997,9 +2153,16 @@ body.is-admin .cm-admin-stats:not([hidden]) {
   .au-topbar .cm-bell:hover,
   .au-topbar .cm-user-avatar:hover { background: var(--line-soft, #f1f5f9); }
   .au-topbar .au-bell-dot { border-color: #fff; }
+  /* Back to Cases → compact icon-only button to save width. */
   .au-topbar .cm-btn-secondary {
     background: #fff;
     color: var(--ink, #0f172a);
     border: 1px solid var(--line, #e2e8f0);
+    padding: 8px 10px;
   }
+  .au-topbar #backToCasesBtn span { display: none; }
+  /* Mobile-only logout button becomes visible here (matches the hide rule's
+     .au-topbar-scoped specificity). */
+  .au-mobile-logout,
+  .au-topbar .au-mobile-logout { display: inline-flex; }
 }

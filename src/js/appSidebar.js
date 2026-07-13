@@ -63,6 +63,27 @@ export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../.
         headerBtn.hidden = false;
         headerBtn.addEventListener("click", goToAdmin);
       }
+
+      // Machine ID Management — sibling admin page, resolved the same way and
+      // hidden when we're already on it.
+      const machineIdHref = inAdminDir ? "./admin_machineid.html" : "./admin/admin_machineid.html";
+      const goToMachineIds = () => (window.location.href = machineIdHref);
+      const onMachineIdPage = /admin_machineid\.html/.test(window.location.pathname);
+      const machineItem = document.getElementById("sidebarMachineIdItem");
+      if (machineItem && !onMachineIdPage) {
+        machineItem.hidden = false;
+        document
+          .getElementById("sidebarMachineIdBtn")
+          ?.addEventListener("click", goToMachineIds);
+      }
+
+      // Header shortcut for Machine IDs (admin case list only), mirroring
+      // adminUsersHeaderBtn.
+      const machineHeaderBtn = document.getElementById("machineIdHeaderBtn");
+      if (machineHeaderBtn && !onMachineIdPage) {
+        machineHeaderBtn.hidden = false;
+        machineHeaderBtn.addEventListener("click", goToMachineIds);
+      }
     }
   } catch {
     /* malformed loggedInUser — leave the item hidden */

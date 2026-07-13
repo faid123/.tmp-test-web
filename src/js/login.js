@@ -80,7 +80,11 @@ function showView(view) {
 
 function setError(id, message) {
   const el = document.getElementById(id);
-  if (el) el.textContent = message || "";
+  if (!el) return;
+  el.textContent = message || "";
+  // Success styling (green) is opt-in: callers add .is-success after; any
+  // later message through here reverts to the default error red.
+  el.classList.remove("is-success");
 }
 
 function getOtpValue() {
@@ -234,34 +238,65 @@ async function verifyAndLogin() {
 async function handleSignup() {
   const username = document.getElementById("signup-username").value.trim();
   const email = document.getElementById("signup-email").value.trim();
-  const password = document.getElementById("signup-password").value.trim();
-  const confirm = document.getElementById("signup-confirm").value.trim();
 
   setError("signup-error-message", "");
 
-  if (!username || !email || !password || !confirm) {
+  if (!username || !email) {
     setError("signup-error-message", "Please fill in all fields.");
     return false;
   }
-  if (password !== confirm) {
-    setError("signup-error-message", "Passwords do not match.");
+
+  // POST /user/register/request (smart.reqRegisterUser) — the backend's
+  // registration-request workflow, confirmed from source:
+  //   • Auth.none: fully public, so the logged-out login page can call it.
+  //   • User.requestRegister stores NOTHING — it emails every admin account
+  //     ("SmartRPD Registration Request for user X" with username/email/
+  //     machine-id). The admin then approves by registering the user in the
+  //     admin User Management page (user/register), which creates the account
+  //     and emails this user to set a password via password reset.
+  //   • No password is sent: the account's password is set through that
+  //     emailed step after approval, so the form doesn't collect one.
+  try {
+    const res = await fetch(`${API_BASE}/user/register/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        { machine_id: MACHINE_ID },
+        { username, email },
+      ]),
+    });
+    logApi(res, "POST /user/register/request");
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || data?.successful === false) {
+      const raw =
+        (data?.serverErrorMessage && data.serverErrorMessage !== "..." && data.serverErrorMessage) ||
+        data?.sqlMessage || "";
+      // Backend answers 500 kind:"no_admin_emails_in_database" when there is
+      // no admin to notify — surface something actionable instead.
+      const msg = /no_admin_emails/i.test(`${raw} ${data?.kind || ""}`)
+        ? "No administrator is available to receive the request. Please contact support."
+        : raw || `Request failed (HTTP ${res.status}).`;
+      setError("signup-error-message", `Sign up request failed — ${msg}`);
+      return false;
+    }
+
+    // Request sent: every admin got the notification email. Back to the login
+    // view with the username pre-filled for when the account is approved.
+    showView("login");
+    const loginUser = document.getElementById("username");
+    if (loginUser) loginUser.value = username;
+    setError(
+      "error-message",
+      "Request sent! An administrator has been notified. Once approved, you'll receive an email with instructions to set your password."
+    );
+    document.getElementById("error-message")?.classList.add("is-success");
+    return true;
+  } catch (error) {
+    console.error("Sign up request error:", error);
+    setError("signup-error-message", "Sign up request failed. Please try again.");
     return false;
   }
-
-  // TODO: no user-registration endpoint exists on the backend yet.
-  // Once one is available, POST the account here following the
-  // [{ machine_id }, { username, email, password }] convention used by
-  // /user/login, then move the user to the OTP view (or straight to login).
-  // Example:
-  //   const res = await fetch(`${API_BASE}/user/register`, {
-  //     method: "POST",
-  //     headers: { "Content-Type": "application/json" },
-  //     body: JSON.stringify([{ machine_id: MACHINE_ID }, { username, email, password }])
-  //   });
-  //   logApi(res, "POST /user/register");
-  //   ...handle response...
-  setError("signup-error-message", "Sign up is not available yet. Please contact your administrator.");
-  return false;
 }
 
 // --- forgot password ------------------------------------------------------

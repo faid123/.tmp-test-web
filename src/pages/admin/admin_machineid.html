@@ -3,11 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Admin — User Management</title>
+    <title>Admin — Machine ID Management</title>
     <link rel="stylesheet" href="../../../css/case_list.css" />
     <link rel="stylesheet" href="../../../css/createCase.css" />
     <link rel="stylesheet" href="../../../css/toast.css" />
     <link rel="stylesheet" href="../../../css/admin/admin_users.css" />
+    <link rel="stylesheet" href="../../../css/admin/admin_machineid.css" />
     <link rel="icon" href="../../../assets/profile.png" type="image/png" />
     <link
       rel="stylesheet"
@@ -21,7 +22,7 @@
           <span class="au-brand-logo">
             <img src="../../../assets/profile.png" alt="" />
           </span>
-          <h1>User Management</h1>
+          <h1>Machine ID Management</h1>
         </div>
         <div class="cm-header-right au-header-right">
           <button
@@ -52,36 +53,20 @@
       </header>
 
       <!-- Full-width overview cards (spans both columns). -->
-      <div class="au-stats" id="userStatsBar">
+      <div class="au-stats mid-stats" id="machineStatsBar">
         <div class="cm-stat-card">
-          <span class="cm-stat-label">Total Users</span>
-          <span class="cm-stat-value" id="userStatTotal">0</span>
+          <span class="cm-stat-label">Total Machines</span>
+          <span class="cm-stat-value" id="machineStatTotal">0</span>
         </div>
         <div class="cm-stat-card">
-          <span class="cm-stat-label">Admins</span>
-          <a href="#" class="cm-stat-link" id="viewAdminsLink">View</a>
-          <span class="cm-stat-value" id="userStatAdmins">0</span>
+          <span class="cm-stat-label">Documented</span>
+          <a href="#" class="cm-stat-link" id="viewDocumentedLink">View</a>
+          <span class="cm-stat-value" id="machineStatDocumented">0</span>
         </div>
         <div class="cm-stat-card">
-          <span class="cm-stat-label">Active Users</span>
-          <span class="cm-stat-value" id="userStatActive">0</span>
-        </div>
-        <div class="cm-stat-card">
-          <span class="cm-stat-label">Deactivated Users</span>
-          <a href="#" class="cm-stat-link" id="viewDeactivatedLink">View</a>
-          <span class="cm-stat-value" id="userStatDeactivated">0</span>
-        </div>
-        <div class="cm-stat-card cm-stat-card-month">
-          <div class="cm-stat-month-head">
-            <button type="button" class="cm-stat-month-btn" data-user-month-delta="-1" aria-label="Previous month" title="Previous month">
-              <i class="fa fa-chevron-left" aria-hidden="true"></i>
-            </button>
-            <span class="cm-stat-label" id="userStatNewLabel">New Users (this month)</span>
-            <button type="button" class="cm-stat-month-btn" data-user-month-delta="1" aria-label="Next month" title="Next month">
-              <i class="fa fa-chevron-right" aria-hidden="true"></i>
-            </button>
-          </div>
-          <span class="cm-stat-value" id="userStatNew">0</span>
+          <span class="cm-stat-label">Undocumented</span>
+          <a href="#" class="cm-stat-link" id="viewUndocumentedLink">View</a>
+          <span class="cm-stat-value" id="machineStatUndocumented">0</span>
         </div>
       </div>
 
@@ -104,82 +89,63 @@
         </div>
 
         <div class="cm-toolbar au-toolbar" id="adminToolbar">
-          <div class="cm-chip cm-chip-filter">
-            <i class="fa-regular fa-calendar" aria-hidden="true"></i>
-            <label for="userDateFilter">Filter by Date</label>
-            <input type="date" id="userDateFilter" class="cm-date-input" />
-            <button
-              id="clearUserDateBtn"
-              type="button"
-              class="cm-date-clear"
-              title="Clear date"
-              aria-label="Clear date filter"
-            >
-              <i class="fa fa-xmark" aria-hidden="true"></i>
-            </button>
-          </div>
-
           <div class="cm-chip cm-chip-filter au-search-chip">
             <i class="fa fa-magnifying-glass" aria-hidden="true"></i>
             <input
               type="text"
-              id="userSearchInput"
+              id="machineSearchInput"
               class="au-search-input"
-              placeholder="Search username or email"
+              placeholder="Search machine ID or comment"
               autocomplete="off"
             />
           </div>
 
           <div class="cm-chip cm-chip-filter">
             <i class="fa fa-filter" aria-hidden="true"></i>
-            <label for="userStatusFilter">Show</label>
-            <select id="userStatusFilter" class="cm-filter-select">
-              <option value="active" selected>Active</option>
-              <option value="pending">Pending approval</option>
-              <option value="deactivated">Deactivated</option>
-              <option value="all">All</option>
+            <label for="machineDocFilter">Show</label>
+            <select id="machineDocFilter" class="cm-filter-select">
+              <option value="all" selected>All</option>
+              <option value="documented">Documented</option>
+              <option value="undocumented">Undocumented</option>
             </select>
           </div>
 
           <button
-            id="refreshUsersBtn"
+            id="refreshMachinesBtn"
             class="cm-icon-btn"
             type="button"
-            aria-label="Refresh users"
-            title="Refresh users"
+            aria-label="Refresh machines"
+            title="Refresh machines"
           >
             <i class="fa fa-arrows-rotate" aria-hidden="true"></i>
           </button>
 
-          <button id="registerUserBtn" class="cm-btn cm-btn-primary" type="button">
-            <i class="fa fa-user-plus" aria-hidden="true"></i>
-            <span>Register User</span>
+          <button id="registerMachineBtn" class="cm-btn cm-btn-primary" type="button">
+            <i class="fa fa-plus" aria-hidden="true"></i>
+            <span>Register Machine</span>
           </button>
         </div>
 
-        <div class="cm-table-wrap au-table-wrap" id="userListWrap">
+        <div class="cm-table-wrap au-table-wrap" id="machineListWrap">
           <table class="cm-table">
             <thead>
               <tr>
-                <th scope="col">Username</th>
-                <th scope="col">Email</th>
-                <th scope="col">Role</th>
-                <th scope="col">Status</th>
-                <th scope="col">Date Registered</th>
+                <th scope="col">Machine ID</th>
+                <th scope="col">Comment</th>
                 <th class="cm-th-actions" scope="col">Actions</th>
               </tr>
             </thead>
-            <tbody id="userTableBody">
+            <tbody id="machineTableBody">
               <!-- JS-rendered rows land here -->
             </tbody>
           </table>
         </div>
       </main>
 
-      <!-- Right column: full-height user detail pane. -->
-      <aside class="cm-detail" id="userDetail">
+      <!-- Right column: full-height machine detail pane. -->
+      <aside class="cm-detail" id="machineDetail">
         <button
-          id="userBackToListBtn"
+          id="machineBackToListBtn"
           class="back-to-list"
           type="button"
           aria-label="Back to list"
@@ -187,48 +153,35 @@
           <i class="fa fa-arrow-left"></i> Back to list
         </button>
 
-        <div class="au-detail-empty" id="userDetailEmpty">
-          <i class="fa-regular fa-address-card" aria-hidden="true"></i>
-          <span>Select a user to see their details</span>
+        <div class="au-detail-empty" id="machineDetailEmpty">
+          <i class="fa-solid fa-desktop" aria-hidden="true"></i>
+          <span>Select a machine to see its details</span>
         </div>
 
-        <div class="cm-detail-body hidden" id="userDetailContent">
+        <div class="cm-detail-body hidden" id="machineDetailContent">
           <div class="cm-detail-head">
-            <span class="au-detail-avatar" id="userDetailAvatar">–</span>
-            <h2 id="userDetailName">—</h2>
+            <span class="au-detail-avatar" id="machineDetailAvatar">
+              <i class="fa-solid fa-desktop" aria-hidden="true"></i>
+            </span>
+            <h2 id="machineDetailTitle">—</h2>
           </div>
 
           <div class="cm-field">
-            <div class="cm-field-label">EMAIL</div>
-            <div class="cm-field-value" id="userDetailEmail">—</div>
+            <div class="cm-field-label">MACHINE ID</div>
+            <div class="cm-field-value mid-detail-id" id="machineDetailId">—</div>
           </div>
 
           <div class="cm-field">
-            <div class="cm-field-label">ROLE</div>
-            <div class="cm-field-value" id="userDetailRole">—</div>
-          </div>
-
-          <div class="cm-field">
-            <div class="cm-field-label">STATUS</div>
-            <div class="cm-field-value" id="userDetailStatus">—</div>
-          </div>
-
-          <div class="cm-field">
-            <div class="cm-field-label">DATE REGISTERED</div>
-            <div class="cm-field-value" id="userDetailDate">—</div>
-          </div>
-
-          <div class="cm-field">
-            <div class="cm-field-label">USER ID</div>
-            <div class="cm-field-value au-detail-uuid" id="userDetailUuid">—</div>
+            <div class="cm-field-label">COMMENT</div>
+            <div class="cm-field-value" id="machineDetailComment">—</div>
           </div>
 
           <div class="cm-detail-cta">
-            <button id="userDetailEditBtn" class="cm-btn cm-btn-primary cm-btn-large" type="button">
-              Edit User
+            <button id="machineDetailEditBtn" class="cm-btn cm-btn-primary cm-btn-large" type="button">
+              Edit Comment
             </button>
-            <button id="userDetailToggleBtn" class="cm-btn cm-btn-secondary" type="button">
-              Deactivate
+            <button id="machineDetailDeleteBtn" class="cm-btn cm-btn-secondary" type="button">
+              Delete
             </button>
           </div>
         </div>
@@ -239,7 +192,7 @@
           <button type="button" class="cm-footer-btn" id="footerMenuBtn" aria-label="Menu" title="Menu" aria-haspopup="true" aria-expanded="false">
             <i class="fa fa-bars" aria-hidden="true"></i>
           </button>
-          <span class="cm-footer-case-label">SmartRPD — User Management</span>
+          <span class="cm-footer-case-label">SmartRPD — Machine ID Management</span>
         </div>
         <div class="cm-footer-right">
           <span class="cm-footer-user" id="footerUserName">—</span>
@@ -248,43 +201,26 @@
       </footer>
     </div>
 
-    <!-- Register / edit user modal (register when data-uuid is empty). -->
-    <div id="userModal" class="modal">
+    <!-- Register / edit machine modal (register when editing flag is false).
+         When editing, only the comment is mutable (the backend keys deletes and
+         comment updates on machine_id — it is the primary key). -->
+    <div id="machineModal" class="modal">
       <div class="modal-content au-modal">
-        <span class="close-btn" id="closeUserModal">&times;</span>
-        <h3 class="modal-title" id="userModalTitle">Register User</h3>
+        <span class="close-btn" id="closeMachineModal">&times;</span>
+        <h3 class="modal-title" id="machineModalTitle">Register Machine</h3>
 
-        <form id="userForm">
-          <label class="input-label" for="umUsername">Username <span class="au-req">*</span></label>
-          <input type="text" id="umUsername" class="modal-input" placeholder="Username" autocomplete="off" required />
+        <form id="machineForm">
+          <label class="input-label" for="mmMachineId">Machine ID <span class="au-req">*</span></label>
+          <input type="text" id="mmMachineId" class="modal-input" placeholder="e.g. 3a0df9c37b50873c63cebecd7bed73152a5ef616" autocomplete="off" required />
 
-          <label class="input-label" for="umEmail">Email <span class="au-req">*</span></label>
-          <input type="email" id="umEmail" class="modal-input" placeholder="user@example.com" autocomplete="off" required />
+          <label class="input-label" for="mmComments">Comment</label>
+          <textarea id="mmComments" class="modal-input mid-textarea" placeholder="Optional note (e.g. clinic name, owner, location)"></textarea>
 
-          <label class="input-label" for="umPassword">
-            Password <span class="au-req" id="umPasswordReq">*</span>
-          </label>
-          <input
-            type="password"
-            id="umPassword"
-            class="modal-input"
-            placeholder="Password"
-            autocomplete="new-password"
-          />
-          <p class="au-hint hidden" id="umPasswordHint">
-            Leave blank to keep the current password.
-          </p>
-
-          <label class="au-admin-check">
-            <input type="checkbox" id="umIsAdmin" />
-            <span>Administrator</span>
-          </label>
-
-          <p class="au-form-error" id="userFormError" role="alert"></p>
+          <p class="au-form-error" id="machineFormError" role="alert"></p>
 
           <div class="modal-actions au-modal-actions">
-            <button type="button" id="cancelUserModal" class="cm-btn cm-btn-secondary">Cancel</button>
-            <button type="submit" id="saveUserBtn" class="cm-btn cm-btn-primary">Save</button>
+            <button type="button" id="cancelMachineModal" class="cm-btn cm-btn-secondary">Cancel</button>
+            <button type="submit" id="saveMachineBtn" class="cm-btn cm-btn-primary">Save</button>
           </div>
         </form>
       </div>
@@ -361,6 +297,6 @@
       </nav>
     </aside>
 
-    <script type="module" src="../../js/admin/adminUsers.js"></script>
+    <script type="module" src="../../js/admin/adminMachineId.js"></script>
   </body>
 </html>

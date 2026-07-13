@@ -24,9 +24,22 @@
   border-radius: 0;
   min-height: 68px;
 }
+/* Compact header on phones (matches the shared .au-topbar mobile revert). */
+@media (max-width: 640px) {
+  .au-page > .au-topbar { padding: 12px 14px; min-height: 0; }
+}
 .au-page > .au-stats { padding: 14px 24px 0; margin: 0; }
 .au-page > .cm-main { grid-column: 1; grid-row: 3; min-height: 0; }
-.au-page > .cm-detail { grid-column: 2; grid-row: 3; min-height: 0; }
+/* User detail panel: nudge it down a little and give it a full bordered card
+   look (the base .cm-detail only has a left border). */
+.au-page > .cm-detail {
+  grid-column: 2;
+  grid-row: 3;
+  min-height: 0;
+  margin: 16px 16px 16px 0;
+  border: 1px solid var(--line, teal);
+  border-radius: 14px;
+}
 
 /* Collapse to a single column on tablet/phone; the .cm-detail pane then slides
    in on selection via .cm-page.show-details (rules inherited from case_list.css). */
@@ -158,6 +171,20 @@
 .au-badge-deleted {
   background: #fee2e2;
   color: #b91c1c;
+}
+
+/* Signup request awaiting admin approval. */
+.au-badge-pending {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+/* Approve action reads as a positive (green) icon button. */
+.au-approve-btn {
+  color: #047857;
+}
+.au-approve-btn:hover {
+  background: #d1fae5;
 }
 
 .au-row-deleted td {
