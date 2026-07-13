@@ -1,0 +1,260 @@
+================================================================================
+DATA DICTIONARY & ENTITY RELATIONSHIP SPECIFICATION
+================================================================================
+
+This document outlines the database entities, key fields, and structural
+relationships for the clinical/case management application.
+
+Last verified against source code and the ERD (SmartRPD_ERD (1).drawio): 13 July 2026.
+
+--------------------------------------------------------------------------------
+1. ENTITY SUMMARY TABLE
+--------------------------------------------------------------------------------
+
+Entity                 | Key Fields                                    | Relationships
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+User                   | uuid (PK), username, email, is_admin          | 1..* → Role
+                        |                                               | 1..* → Alert (sender/recipient)
+                        |                                               | 1..* → Note (sender)
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+Case                    | id/caseIntID (PK), case_id, name,             | 1..* → Role, AdditionalCaseDetails, JawStruct, ClinicalInfo,
+                        | created_at, new_status                        |        STL, Thumbnail, CaseHistory, Note, Polyline,
+                        |                                               |        UndercutHeatmap, NoticeboardEditedView, MailingList
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+Role                    | id (PK), uuid (FK→User),                      | Connects users to cases with access permissions.
+                        | case_int_id (FK→Case), role/permission        |
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+AdditionalCaseDetails   | id (PK), case_id/caseIntID (FK→Case),         | Drives the case-list due-date colour indicator and
+                        | due_date (Unix seconds), new_status,          | dashboard workflow status.
+                        | assigned_to, comments                        |
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+JawStruct               | id (PK), case_id (FK),                        | Stores encoded RPD design data per jaw per case.
+                        | type (upper_jaw/lower_jaw), filename,         |
+                        | data (base64)                                 |
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+ClinicalInfo            | id (PK), case_id (FK),                        | Per-tooth clinical flags: mobility, rct, restoration,
+                        | data (base64 BinaryFormatter)                 | crown, implant, rootStump, cracked, tilted,
+                        |                                               | extraction, abutment.
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+STL                     | id (PK), case_id (FK), type, filename,        | Jaw geometry uploads in STL/OFF format. Extra reference
+                        | data (base64/file)                            | slots are the same blob shape addressed by an added
+                        |                                               | slotNumber field (1-4), not a separate table; backend
+                        |                                               | slots carry no semantic typing (frontend-only labeling).
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+Thumbnail               | id (PK), case_id (FK→Case), slot/type,        | Screenshot/preview images per case; distinct from the
+                        | data (base64)                                 | raw STL/OFF geometry in the STL entity.
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+CaseHistory             | id (PK), case_id (FK→Case),                   | Backs Version History - both the standalone page and
+                        | action/status, created_at                    | the modal read from this.
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+Polyline                | id (PK), case_id (FK),                        | 3D coordinate arrays rendered as tube geometry overlays.
+                        | jaw/type/component, points/data               |
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+Note                    | id (PK), case_id (FK), sender_uuid (FK),      | Case chat messages with optional image attachments.
+                        | message, image_data, created_at               |
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+Alert                   | id (PK), to_user_uuid, from_user_uuid,        | In-app notifications between users on a case.
+                        | caseIntID, read_status, message               |
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+UndercutHeatmap         | id (PK), case_id (FK→Case), jaw/type, data    | Backs the undercut/occlusion heatmap analysis modes.
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+NoticeboardEditedView   | id (PK), case_id (FK→Case), filenames         | Backs the 2D-to-desktop noticeboard report handoff.
+                        | (byte[][] MS-NRBF), data (PNG)                | "editedview" and "view" write the same payload shape to
+                        |                                               | two destinations (source of truth vs. desktop-visibility
+                        |                                               | mirror); "drawnview" is referenced in a code comment as
+                        |                                               | legacy but has zero call sites in the web client.
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+ArtificialTeeth         | Per-case, per-jaw (upper_/lower_) Unity       | Fetched via /toothPlacementData/get keyed by caseIntID
+(ToothCraftData)        | MessagePack structs, 7 numeric-keyed sub-maps | as a fetch parameter - not a stored FK field within the
+                        | (placement, geometry, landmark, transform,    | blob itself.
+                        | + initial* variants of each)                  |
+-----------------------|-----------------------------------------------|---------------------------------------------------------
+MailingList             | case_int_id (FK→Case), email                  | Ad-hoc invite-by-email capture tied to Case only - no
+                        |                                               | User/Role object attached.
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+2. DETAILED ENTITY SPECIFICATIONS
+--------------------------------------------------------------------------------
+
+[User]
+- Description: Represents application users, including clinical operators and admins.
+- Fields:
+    * uuid (PK)           : Unique identifier for the user.
+    * username            : Unique login handle.
+    * email               : Contact email address.
+    * is_admin            : Boolean flag dictating administrative privileges.
+- Relationships:
+    * One-to-Many (1..*) with Role.
+    * One-to-Many (1..*) with Alert (as sender or recipient).
+    * One-to-Many (1..*) with Note (as sender/author).
+
+[Case]
+- Description: The core entity representing a patient case or clinical order.
+- Fields:
+    * id/caseIntID (PK)   : Internal unique integer primary key.
+    * case_id             : Public or external case identifier reference (legacy String form -
+                             caseIntID is the integer form used in most API envelopes and the
+                             one encoded into shared QR/viewer links; the two are not interchangeable).
+    * name                : Name designation for the case.
+    * created_at          : Timestamp of case creation.
+    * new_status          : Tracking status of the case lifecycle. Confirmed live enum values:
+                             na, draft, 2d_design_pending, 2d_design_drafted, 2d_design_approved,
+                             3d_design_pending, 3d_design_drafted, 3d_design_approved,
+                             in_production, out_for_delivery, delivered, completed.
+- Relationships:
+    * One-to-Many (1..*) with Role, AdditionalCaseDetails, JawStruct, ClinicalInfo, STL, Thumbnail,
+      CaseHistory, Note, Polyline, UndercutHeatmap, NoticeboardEditedView, and MailingList.
+
+[Role]
+- Description: Junction entity that maps users to specific cases with explicit access control permissions.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * uuid (FK)           : Reference to User.uuid.
+    * case_int_id (FK)    : Reference to Case.id.
+    * role/permission     : Defined string or token specifying access level.
+
+[AdditionalCaseDetails]
+- Description: Case-list and dashboard workflow metadata, separate from the core Case record.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * case_id/caseIntID (FK) : Reference to Case.id.
+    * due_date            : Unix seconds timestamp.
+    * new_status          : Workflow status (see Case.new_status enum above - drives the
+                             case-list due-date colour indicator and dashboard progress display).
+    * assigned_to         : Assigned user reference.
+    * comments            : Free-text comments field (confirmed in caseManagement.js).
+- Relationships:
+    * Many-to-One with Case.
+
+[JawStruct]
+- Description: Holds structured Removable Partial Denture (RPD) CAD/CAM design data.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * case_id (FK)        : Reference to Case.id.
+    * type                : Categorization of upper_jaw or lower_jaw.
+    * filename            : Source name of the saved configuration.
+    * data                : Base64-encoded string containing structure data.
+
+[ClinicalInfo]
+- Description: Encapsulates specific clinical dental diagnostics and per-tooth metadata.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * case_id (FK)        : Reference to Case.id.
+    * data                : BinaryFormatter-serialized Base64 payload containing flags for teeth (e.g., mobility, rct, restoration, crown, implant, rootStump, cracked, tilted, extraction, abutment).
+
+[STL]
+- Description: Storage records for 3D jaw geometry model files, including the primary upper/lower
+  jaw meshes and up to 4 extra reference slots.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * case_id (FK)        : Reference to Case.id.
+    * type                : Model taxonomy identifier.
+    * filename            : Target mesh filename.
+    * data                : Mesh file contents stored either as Base64 text or file reference paths.
+    * slotNumber (extra slots only) : Integer 1-4 addressing an additional reference STL upload
+      on the same case; not backed by a separate table. The backend carries no semantic meaning
+      for the slot number itself - the upper jaw / upper metal RPD / lower jaw / lower metal RPD
+      labeling is a frontend-only convention (EXTRA_STL_SLOT_NAMES). A future client assuming a
+      different slot-to-label mapping could misfile a file under the wrong slot without error.
+
+[Thumbnail]
+- Description: Screenshot/preview images captured per case, distinct from raw STL/OFF geometry.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * case_id (FK)        : Reference to Case.id.
+    * slot/type           : Capture slot identifier (e.g. 2D, upper jaw, lower jaw).
+    * data                : Base64-encoded image data.
+
+[CaseHistory]
+- Description: Backs the Version History feature - read by both the standalone
+  VersionHistory.html page and the in-context modal, which are expected to show consistent data.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * case_id (FK)        : Reference to Case.id.
+    * action/status       : Recorded action or status transition.
+    * created_at          : Timestamp of the history entry.
+
+[Polyline]
+- Description: Set of 3D coordinates representing path overlays drawn on the model geometry.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * case_id (FK)        : Reference to Case.id.
+    * jaw/type/component  : Contextual mapping indicating which jaw/part the line belongs to.
+    * points/data         : Array or serialized representation of 3D spatial points.
+
+[Note]
+- Description: Direct communicative chat logs associated with individual cases.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * case_id (FK)        : Reference to Case.id.
+    * sender_uuid (FK)    : Reference to User.uuid.
+    * message             : Text body content of the note.
+    * image_data          : Optional Base64 attachment for diagnostic images.
+    * created_at          : Creation timestamp.
+
+[Alert]
+- Description: Internal application notifications notifying actors of status updates or messages.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * to_user_uuid (FK)   : Reference to target User.uuid.
+    * from_user_uuid (FK) : Reference to originating User.uuid.
+    * caseIntID (FK)      : Reference to Case.id.
+    * read_status         : Tracking flag for notification status (read/unread).
+    * message             : Informational notification text snippet.
+
+[UndercutHeatmap]
+- Description: Backs the undercut/occlusion analysis heatmap modes in the 2D-embedded and
+  standalone 3D previews.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * case_id (FK)        : Reference to Case.id.
+    * jaw/type            : Which jaw/analysis mode the data applies to.
+    * data                : Heatmap payload.
+
+[NoticeboardEditedView]
+- Description: Backs the 2D-to-desktop noticeboard report handoff (noticeboard.js). Three
+  endpoint variants exist server-side, but only two are live in the web client:
+    * "editedview" is the source of truth, written by this client.
+    * "view" is a best-effort mirror of the same {case_id, filenames, data} payload, written
+      so desktop's 2D/3D tabs (which only read "view") can see slides.
+    * "drawnview" is referenced in a code comment as a legacy paint-overlay layer but has zero
+      call sites anywhere in the web client - it should be treated as unimplemented here, not
+      as a fourth live data source.
+- Fields:
+    * id (PK)             : Unique row identifier.
+    * case_id (FK)        : Reference to Case.id.
+    * filenames           : jagged byte[][] under .NET BinaryFormatter (MS-NRBF) framing -
+                             a distinct shape from ClinicalInfo's per-string BinaryFormatter envelope.
+    * data                : Raw PNG bytes.
+
+[ArtificialTeeth (ToothCraftData)]
+- Description: Artificial-teeth placement and geometry data, distinct from the polyline and
+  jaw-mesh endpoints. Not a flat per-tooth table - a per-case, per-jaw pair of Unity
+  MessagePack-encoded structs (toothCraftDataUpperJaw_ / toothCraftDataLowerJaw_), mirroring
+  the Unity-side StageDataManager/ToothCraftData structure.
+- Fields (per jaw, numeric-keyed sub-maps):
+    * toothData_                          : Current tooth placement.
+    * toothSurfaceMeshData_               : Current tooth geometry.
+    * toothLandmarkInterfaceData_         : Current landmark data.
+    * toothTransformInterfaceData_        : Current transform data.
+    * initialToothSurfaceMeshData_        : Initial-state geometry.
+    * initialToothLandmarkInterfaceData_  : Initial-state landmark data.
+    * initialToothTransformInterfaceData_ : Initial-state transform data.
+- Relationships:
+    * Fetched via /toothPlacementData/get keyed by caseIntID as a fetch parameter - the
+      case/jaw association is not a field inside the decoded blob itself.
+    * Core rule: geometry source and placement source must match (each rendered tooth mesh
+      tags its own geometrySource/placementSource for downstream diagnostics); mixing
+      surfaceMesh geometry with toothData-only placement misaligns the tooth.
+
+[MailingList]
+- Description: Ad-hoc invite-by-email capture (POST /mailinglist/add), separate from the
+  Role-based invite/access mechanism - no User or Role object is attached.
+- Fields:
+    * case_int_id (FK)    : Reference to Case.id.
+    * email               : Invited email address (raw string, not a User reference).
+
+================================================================================
+END OF SPECIFICATION FILE
+================================================================================
