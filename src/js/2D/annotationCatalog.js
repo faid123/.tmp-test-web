@@ -48,12 +48,17 @@ import { toast, attachThemedCalendar } from "../toast.js";
 
 // ── Material restrictions ────────────────────────────────────────────────────
 // A full-acrylic case (state.jawMaterial === 2) is an all-acrylic denture, so it
-// can't carry metal-framework elements: the MESH and BARS tabs are disabled
-// wholesale, and the three open/metal upper palatal major connectors — Palatal
-// Strap, A-P strap (aka "palatal hole", major-upper-palatal-hole) and Palatal Bar
-// — are disabled (Palatal Plate + Horseshoe stay, being acrylic-capable). Metal
+// can't carry metal-framework elements: the BARS tab is disabled wholesale, the
+// metal mesh types are disabled, and the three open/metal upper palatal major
+// connectors — Palatal Strap, A-P strap (aka "palatal hole",
+// major-upper-palatal-hole) and Palatal Bar — are disabled (Palatal Plate +
+// Horseshoe stay, being acrylic-capable). The denture flange (mesh-flange) is an
+// acrylic element, so it stays available and keeps the MESH tab reachable. Metal
 // (0) / unset has no restriction.
-const ACRYLIC_BLOCKED_TABS = new Set(["mesh", "bars"]);
+const ACRYLIC_BLOCKED_TABS = new Set(["bars"]);
+
+/** Components that stay available in a full-acrylic case despite their tab/family. */
+const ACRYLIC_ALLOWED_COMPONENT_IDS = new Set(["mesh-flange"]);
 
 function isFullAcrylic() {
   return state.jawMaterial === 2;
@@ -65,6 +70,7 @@ export function isTabBlockedByMaterial(tabId) {
 
 export function isComponentBlockedByMaterial(componentId) {
   if (!isFullAcrylic()) return false;
+  if (ACRYLIC_ALLOWED_COMPONENT_IDS.has(componentId)) return false;
   return (
     isMeshComponent(componentId) ||
     isBarComponent(componentId) ||

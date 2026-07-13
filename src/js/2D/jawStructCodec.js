@@ -60,6 +60,9 @@ const CLASP_ORIENT_SURFACE = ["mesial_buccal", "mesial_lingual", "distal_buccal"
 
 const JAW_TYPE_KEY = "Jaw Type";
 const MAJOR_CONNECTOR_KEY = "Major Connector Type";
+// Denture-base material: 0 = metal, 2 = full acrylic. Decides how shared plate_mesh
+// (code 5) is shown: acrylic => mesh-flange, metal => mesh-plate.
+const JAW_MATERIAL_KEY = "Jaw Material";
 
 // Tooth_Presence enum: present=0, missing=1.
 const PRESENCE_PRESENT = "0";
@@ -370,10 +373,16 @@ export function resolveJawStructDesign(parsed) {
       const end = Number(span["End Index"]);
       if (!Number.isFinite(mt) || mt === 0) continue;
       if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < 0) continue;
-      const meshId = MESH_TYPE.get(mt);
+      let meshId = MESH_TYPE.get(mt);
       if (!meshId) {
         reportUnmapped("Mesh Type", mt);
         continue;
+      }
+      // plate_mesh (code 5) has no id of its own for the flange: it is shared. The
+      // denture flange and mesh-plate both encode to 5; the case material decides which
+      // is shown on load — acrylic (2) => mesh-flange, metal/unset => mesh-plate.
+      if (mt === 5 && Number(parsed?.other?.[JAW_MATERIAL_KEY]) === 2) {
+        meshId = "mesh-flange";
       }
       const lo = Math.min(start, end);
       const hi = Math.max(start, end);
@@ -422,13 +431,20 @@ function componentList(rec) {
   return Array.isArray(rec?.components) ? rec.components : [];
 }
 
+// Mesh id -> desktop Mesh_Type code. The denture flange has no code of its own; it
+// shares plate_mesh (5) with mesh-plate (the case material picks which is shown on decode).
+function meshTypeCodeForId(meshId) {
+  if (meshId === "mesh-flange") return 5;
+  return inverseOf(MESH_TYPE).get(meshId) ?? 0;
+}
+
 // Contiguous same-type runs of mesh-bearing teeth -> mesh spans for the tail.
 function buildMeshSpans(state, fdiOrder) {
   const spans = [];
   let cur = null;
   fdiOrder.forEach((fdi, idx) => {
     const meshId = componentList(state.teeth?.[fdi]).find((id) => String(id).startsWith("mesh-"));
-    const mt = meshId ? inverseOf(MESH_TYPE).get(meshId) ?? 0 : 0;
+    const mt = meshId ? meshTypeCodeForId(meshId) : 0;
     if (mt > 0 && cur && cur.meshType === mt && idx === cur.end + 1) {
       cur.end = idx;
     } else if (mt > 0) {
