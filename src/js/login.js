@@ -300,31 +300,216 @@ async function handleSignup() {
 }
 
 // --- forgot password ------------------------------------------------------
+//
+// Two-stage flow backed by two endpoints (both take the shared
+// [{ machine_id }, { ...payload }] envelope, Auth.authMachineID only):
+//   1. POST /user/reqpwreset  { email }
+//        -> emails a numeric "password key"; 404 if the email is unknown.
+//   2. POST /user/resetpw     { email, passwordKey, newPassword }
+//        -> resets the password; 403 timed_out/invalid_key, 404 key/email
+//           not found.
+// The same forgot-view hosts both stages; forgotStage tracks which one is
+// live and forgotEmail carries the address from stage 1 into stage 2.
+
+let forgotStage = "request"; // "request" | "reset"
+let forgotEmail = "";
+
+// Swap the forgot-view between its request and reset stages (title, subtitle,
+// which field group is visible, and the submit button's label).
+function setForgotStage(stage) {
+  forgotStage = stage;
+  const isReset = stage === "reset";
+
+  document.getElementById("forgot-stage-request")?.toggleAttribute("hidden", isReset);
+  document.getElementById("forgot-stage-reset")?.toggleAttribute("hidden", !isReset);
+
+  const title = document.getElementById("forgot-title");
+  const subtitle = document.getElementById("forgot-subtitle");
+  const submit = document.getElementById("forgot-reset-btn");
+  if (title) title.textContent = isReset ? "Set New Password" : "Reset Password";
+  if (subtitle) {
+    subtitle.textContent = isReset
+      ? `Enter the key sent to ${forgotEmail || "your email"} and choose a new password`
+      : "Enter in your registered email to begin the process";
+  }
+  if (submit) submit.textContent = isReset ? "Reset password" : "Send reset key";
+
+  if (isReset) {
+    document.getElementById("forgot-key")?.focus();
+  } else {
+    document.getElementById("forgot-email")?.focus();
+  }
+}
+
+// Reset the forgot-view back to a clean stage-1 request state. Called whenever
+// the view is opened or dismissed so a later visit never inherits stale input.
+function resetForgotView() {
+  forgotEmail = "";
+  ["forgot-email", "forgot-key", "forgot-new-password", "forgot-confirm-password"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+  updatePasswordStrength(); // hides the meter now that the field is empty
+  setError("forgot-error-message", "");
+  setForgotStage("request");
+}
+
+// --- password strength ----------------------------------------------------
+
+// Minimum length we require before accepting a new password. The backend
+// enforces nothing, so this guard lives entirely on the client.
+const MIN_PASSWORD_LENGTH = 8;
+
+// Score a password 1-4 (Weak/Fair/Good/Strong) from length + character
+// variety. A password under the minimum length is always Weak regardless of
+// variety; length >= 12 with 3+ character classes counts as Strong.
+function computePasswordStrength(pw) {
+  if (!pw) return { score: 0, label: "" };
+
+  let variety = 0;
+  if (/[a-z]/.test(pw)) variety++;
+  if (/[A-Z]/.test(pw)) variety++;
+  if (/\d/.test(pw)) variety++;
+  if (/[^A-Za-z0-9]/.test(pw)) variety++;
+
+  let score;
+  if (pw.length < MIN_PASSWORD_LENGTH || variety <= 1) {
+    score = 1;
+  } else if (variety === 2) {
+    score = 2;
+  } else {
+    score = 3;
+  }
+  if (pw.length >= 12 && variety >= 3) score = 4;
+
+  const labels = { 1: "Weak", 2: "Fair", 3: "Good", 4: "Strong" };
+  return { score, label: labels[score] };
+}
+
+// Reflect the current new-password value onto the strength meter. Hidden while
+// the field is empty; otherwise sets data-score (drives the bar/label color in
+// CSS) and the "<label> password" text.
+function updatePasswordStrength() {
+  const input = document.getElementById("forgot-new-password");
+  const meter = document.getElementById("forgot-strength");
+  const label = document.getElementById("forgot-strength-label");
+  if (!input || !meter) return;
+
+  const pw = input.value;
+  if (!pw) {
+    meter.hidden = true;
+    meter.removeAttribute("data-score");
+    if (label) label.textContent = "";
+    return;
+  }
+
+  const { score, label: text } = computePasswordStrength(pw);
+  meter.hidden = false;
+  meter.setAttribute("data-score", String(score));
+  if (label) label.textContent = `${text} password`;
+}
+
+// Stage 1: request a reset key be emailed to the address.
+async function requestResetKey(email) {
+  const res = await fetch(`${API_BASE}/user/reqpwreset`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([{ machine_id: MACHINE_ID }, { email }])
+  });
+  logApi(res, "POST /user/reqpwreset");
+  const data = await res.json().catch(() => null);
+
+  if (res.ok && data?.successful) {
+    forgotEmail = email;
+    setForgotStage("reset");
+    setError("forgot-error-message", `A password reset key has been sent to your email`);
+    document.getElementById("forgot-error-message")?.classList.add("is-success");
+    return true;
+  }
+
+  if (res.status === 404) {
+    setError("forgot-error-message", "No account was found for that email address.");
+  } else {
+    setError("forgot-error-message", "Couldn't start the reset. Please try again later.");
+  }
+  return false;
+}
+
+// Stage 2: submit the emailed key + new password.
+async function submitNewPassword() {
+  const passwordKey = document.getElementById("forgot-key").value.trim();
+  const newPassword = document.getElementById("forgot-new-password").value;
+  const confirmPassword = document.getElementById("forgot-confirm-password").value;
+
+  if (!passwordKey) {
+    setError("forgot-error-message", "Please enter the key from your email.");
+    return false;
+  }
+  if (!newPassword) {
+    setError("forgot-error-message", "Please enter a new password.");
+    return false;
+  }
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    setError("forgot-error-message", `Please use a password of at least ${MIN_PASSWORD_LENGTH} characters.`);
+    return false;
+  }
+  if (newPassword !== confirmPassword) {
+    setError("forgot-error-message", "The passwords don't match.");
+    return false;
+  }
+
+  const res = await fetch(`${API_BASE}/user/resetpw`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([
+      { machine_id: MACHINE_ID },
+      { email: forgotEmail, passwordKey, newPassword }
+    ])
+  });
+  logApi(res, "POST /user/resetpw");
+  const data = await res.json().catch(() => null);
+
+  if (res.ok && data?.successful) {
+    // Return to the login view with the email pre-filled and a success note.
+    showView("login");
+    const loginUser = document.getElementById("username");
+    if (loginUser && !loginUser.value) loginUser.value = forgotEmail;
+    setError("error-message", "Your password has been reset. You can now sign in with your new password.");
+    document.getElementById("error-message")?.classList.add("is-success");
+    resetForgotView();
+    return true;
+  }
+
+  // The backend distinguishes an expired vs. wrong key by `kind`; both come
+  // back as 403 so surface the specific message when we have it.
+  const kind = data?.kind || "";
+  let msg;
+  if (kind === "timed_out") {
+    msg = "That key has expired. Request a new one and try again.";
+  } else if (kind === "invalid_key" || kind === "key_not_found") {
+    msg = "That key isn't valid. Please check it and try again.";
+  } else if (kind === "email_not_found") {
+    msg = "No account was found for that email address.";
+  } else {
+    msg = "Couldn't reset your password. Please try again later.";
+  }
+  setError("forgot-error-message", msg);
+  return false;
+}
 
 async function handleForgotPassword() {
-  const email = document.getElementById("forgot-email").value.trim();
-
   setError("forgot-error-message", "");
 
+  if (forgotStage === "reset") {
+    return submitNewPassword();
+  }
+
+  const email = document.getElementById("forgot-email").value.trim();
   if (!email) {
     setError("forgot-error-message", "Please enter your registered email.");
     return false;
   }
-
-  // TODO: no password-reset endpoint exists on the backend yet.
-  // Once one is available, POST the email here following the
-  // [{ machine_id }, { email }] convention used by the other user routes,
-  // then confirm to the user that a reset link/code has been sent.
-  // Example:
-  //   const res = await fetch(`${API_BASE}/user/password/reset`, {
-  //     method: "POST",
-  //     headers: { "Content-Type": "application/json" },
-  //     body: JSON.stringify([{ machine_id: MACHINE_ID }, { email }])
-  //   });
-  //   logApi(res, "POST /user/password/reset");
-  //   ...handle response...
-  setError("forgot-error-message", "Password reset is not available yet. Please contact your administrator.");
-  return false;
+  return requestResetKey(email);
 }
 
 // --- OTP box behavior (auto-advance / backspace / paste) ------------------
@@ -430,17 +615,21 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Forgot-password view: open from the login form, cancel/submit back to login.
+  // Always open on stage 1 with clean fields so a prior attempt never lingers.
   const goToForgot = document.getElementById("go-to-forgot");
   if (goToForgot) {
     goToForgot.addEventListener("click", () => {
-      setError("forgot-error-message", "");
+      resetForgotView();
       showView("forgot");
     });
   }
 
   const forgotCancel = document.getElementById("forgot-cancel");
   if (forgotCancel) {
-    forgotCancel.addEventListener("click", () => showView("login"));
+    forgotCancel.addEventListener("click", () => {
+      resetForgotView();
+      showView("login");
+    });
   }
 
   const forgotForm = document.getElementById("forgot-form");
@@ -451,6 +640,38 @@ document.addEventListener("DOMContentLoaded", () => {
       if (btn) btn.disabled = true;
       await handleForgotPassword();
       if (btn) btn.disabled = false;
+    });
+  }
+
+  // "Resend" on stage 2: re-request a key for the same email. forgotEmail is
+  // already known, so this hits /user/reqpwreset again without leaving stage 2.
+  const forgotResend = document.getElementById("forgot-resend");
+  if (forgotResend) {
+    forgotResend.addEventListener("click", async () => {
+      if (!forgotEmail) return;
+      setError("forgot-error-message", "");
+      forgotResend.disabled = true;
+      await requestResetKey(forgotEmail);
+      forgotResend.disabled = false;
+    });
+  }
+
+  // Live strength meter as the user types a new password.
+  const forgotNewPasswordInput = document.getElementById("forgot-new-password");
+  if (forgotNewPasswordInput) {
+    forgotNewPasswordInput.addEventListener("input", updatePasswordStrength);
+  }
+
+  // Show/hide toggle for the new-password field on the reset stage.
+  const forgotToggle = document.getElementById("forgot-toggle-password");
+  const forgotNewPassword = document.getElementById("forgot-new-password");
+  if (forgotToggle && forgotNewPassword) {
+    forgotToggle.addEventListener("click", () => {
+      const show = forgotNewPassword.type === "password";
+      forgotNewPassword.type = show ? "text" : "password";
+      forgotToggle.setAttribute("aria-pressed", String(show));
+      forgotToggle.setAttribute("aria-label", show ? "Hide password" : "Show password");
+      forgotNewPassword.focus();
     });
   }
 

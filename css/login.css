@@ -125,6 +125,17 @@ body {
   color: var(--gray-700);
 }
 
+/* The forgot-view stages wrap their fields in a div, so those fields aren't
+   direct children of .auth-form and miss its row gap. Give the stage wrappers
+   the same flex column + gap. :not([hidden]) so this display rule doesn't
+   defeat the hidden attribute used to switch stages. */
+#forgot-stage-request:not([hidden]),
+#forgot-stage-reset:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .input-wrap {
   position: relative;
 }
@@ -332,6 +343,44 @@ body {
 /* Same slot, but for good news (e.g. "account created" after sign up). */
 .error-message.is-success {
   color: #047857;
+}
+
+/* ===== Password strength meter (reset stage) ===== */
+.pw-strength {
+  margin: 0.5rem 0 0;
+}
+.pw-strength-bar {
+  display: flex;
+  gap: 0.25rem;
+}
+.pw-strength-bar span {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--gray-300);
+  transition: background 0.2s ease;
+}
+.pw-strength-label {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--gray-600);
+}
+/* Score-driven fill: level-N lights up N segments in the matching color.
+   Colors set on both the bar and the label so they read as one signal. */
+.pw-strength[data-score="1"] .pw-strength-bar span:nth-child(-n + 1),
+.pw-strength[data-score="2"] .pw-strength-bar span:nth-child(-n + 2),
+.pw-strength[data-score="3"] .pw-strength-bar span:nth-child(-n + 3),
+.pw-strength[data-score="4"] .pw-strength-bar span:nth-child(-n + 4) {
+  background: currentColor;
+}
+.pw-strength[data-score="1"] { color: #dc2626; } /* weak   — red         */
+.pw-strength[data-score="2"] { color: #eab308; } /* fair   — yellow      */
+.pw-strength[data-score="3"] { color: #4ade80; } /* good   — light green */
+.pw-strength[data-score="4"] { color: #16a34a; } /* strong — green       */
+/* The label inherits the score color; keep its base tone when empty. */
+.pw-strength[data-score] .pw-strength-label {
+  color: inherit;
 }
 
 /* ===== OTP view ===== */
