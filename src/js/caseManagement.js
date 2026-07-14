@@ -459,6 +459,10 @@ function triggerBlobDownload(bytes, filename) {
 const DL_API = "https://live.api.smartrpdai.com/api/smartrpd";
 const DL_MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
+function safeDownloadBase(name, fallback = "case") {
+  return String(name || fallback).replace(/[^a-z0-9_\-]+/gi, "_").replace(/^_+|_+$/g, "") || fallback;
+}
+
 // Fetch the case's STL files, preferring processed STLs and falling back to raw.
 async function fetchCaseStls(caseIntId, uuid) {
   const payload = [
@@ -482,6 +486,87 @@ async function fetchCaseStls(caseIntId, uuid) {
     }
   }
   return [];
+}
+
+async function fetchCaseJawStructL2(caseIntId, uuid) {
+  const res = await fetch(`${DL_API}/jawstruct/l2/getall`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([
+      { machine_id: DL_MACHINE_ID, uuid, caseIntID: caseIntId },
+      { case_id: caseIntId },
+    ]),
+  });
+  logApi(res, "POST /jawstruct/l2/getall");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return (Array.isArray(data) ? data : [data]).filter((row) => row?.data);
+}
+
+function jawStructDownloadName(row, base, index) {
+  const rawName = String(row?.filename || "").trim();
+  if (rawName) return rawName.replace(/[\\/:*?"<>|]+/g, "_");
+  const type = String(row?.type || "").toLowerCase();
+  if (type === "upper_jaw") return "JawUpper_Struct_L2.txt";
+  if (type === "lower_jaw") return "JawLower_Struct_L2.txt";
+  return `${base}_JawStruct_L2_${index + 1}.txt`;
+}
+
+function combinedJawStructText(records) {
+  const decoder = new TextDecoder();
+  return records
+    .map((record, index) => {
+      const label = record.type || record.filename || `record_${index + 1}`;
+      const text = decoder.decode(base64ToBytes(record.data));
+      return `===== ${label} =====\r\n${text}`;
+    })
+    .join("\r\n\r\n");
+}
+
+async function downloadCaseJawStructL2(caseIntId, caseLabel) {
+  const user = getLoggedInUser();
+  if (!user?.uuid || caseIntId == null) {
+    toast.warning("Unable to download: missing case info or login.");
+    return;
+  }
+
+  const base = safeDownloadBase(caseLabel, `case_${caseIntId}`);
+  toast.info("Preparing 2D design L2 download...");
+
+  try {
+    const records = await fetchCaseJawStructL2(caseIntId, user.uuid);
+    if (!records.length) {
+      toast.info("No 2D design L2 jaw struct found for this case.");
+      return;
+    }
+
+    if (records.length === 1) {
+      triggerBlobDownload(
+        base64ToBytes(records[0].data),
+        jawStructDownloadName(records[0], base, 0)
+      );
+      toast.success("2D design L2 download ready.");
+      return;
+    }
+
+    if (typeof window.JSZip === "function") {
+      const zip = new window.JSZip();
+      records.forEach((record, index) => {
+        zip.file(jawStructDownloadName(record, base, index), base64ToBytes(record.data));
+      });
+      const blob = await zip.generateAsync({ type: "uint8array" });
+      triggerBlobDownload(blob, `${base}_JawStruct_L2.zip`);
+    } else {
+      triggerBlobDownload(
+        new TextEncoder().encode(combinedJawStructText(records)),
+        `${base}_JawStruct_L2.txt`
+      );
+    }
+    toast.success("2D design L2 download ready.");
+  } catch (err) {
+    console.error("Failed to download 2D design L2:", err);
+    toast.error(`Failed to download 2D design L2. ${err.message || err}`);
+  }
 }
 
 function loadImage(src) {
@@ -2365,6 +2450,30 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         await duplicateCaseById(caseId);
       } finally {
         duplicateBtn.classList.remove("is-disabled");
+      }
+    });
+  }
+
+  const download2dDesignBtn = document.getElementById("download2dDesignBtn");
+
+  if (download2dDesignBtn) {
+    download2dDesignBtn.addEventListener("click", async () => {
+      const caseId = window.selectedCaseId;
+      if (!caseId) {
+        toast.warning("Please select a case first.");
+        return;
+      }
+      const caseObj = currentCases.find((c) => {
+        const resolvedId = c?.id ?? c?.case_int_id;
+        return String(resolvedId) === String(caseId);
+      }) || window.selectedCaseStub || null;
+
+      download2dDesignBtn.classList.add("is-disabled");
+      try {
+        await downloadCaseJawStructL2(caseId, caseObj?.case_id);
+      } finally {
+        download2dDesignBtn.classList.remove("is-disabled");
+        dropdownMenu?.classList.add("hidden");
       }
     });
   }
