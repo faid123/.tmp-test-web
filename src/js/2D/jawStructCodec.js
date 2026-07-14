@@ -60,8 +60,9 @@ const CLASP_ORIENT_SURFACE = ["mesial_buccal", "mesial_lingual", "distal_buccal"
 
 const JAW_TYPE_KEY = "Jaw Type";
 const MAJOR_CONNECTOR_KEY = "Major Connector Type";
-// Denture-base material: 0 = metal, 2 = full acrylic. Decides how shared plate_mesh
-// (code 5) is shown: acrylic => mesh-flange, metal => mesh-plate.
+// Denture-base material: 0 = metal, 2 = full acrylic. In acrylic, the denture flange
+// has no Mesh_Type code of its own — it encodes as 0 (no_mesh) and is reconstructed on
+// load onto the missing saddle teeth. See resolveJawStructDesign.
 const JAW_MATERIAL_KEY = "Jaw Material";
 
 // Tooth_Presence enum: present=0, missing=1.
@@ -373,16 +374,10 @@ export function resolveJawStructDesign(parsed) {
       const end = Number(span["End Index"]);
       if (!Number.isFinite(mt) || mt === 0) continue;
       if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < 0) continue;
-      let meshId = MESH_TYPE.get(mt);
+      const meshId = MESH_TYPE.get(mt);
       if (!meshId) {
         reportUnmapped("Mesh Type", mt);
         continue;
-      }
-      // plate_mesh (code 5) has no id of its own for the flange: it is shared. The
-      // denture flange and mesh-plate both encode to 5; the case material decides which
-      // is shown on load — acrylic (2) => mesh-flange, metal/unset => mesh-plate.
-      if (mt === 5 && Number(parsed?.other?.[JAW_MATERIAL_KEY]) === 2) {
-        meshId = "mesh-flange";
       }
       const lo = Math.min(start, end);
       const hi = Math.max(start, end);
@@ -392,6 +387,20 @@ export function resolveJawStructDesign(parsed) {
       }
       if (fdis.length) design.mesh.push({ componentId: meshId, fdis });
     }
+  }
+
+  // Full-acrylic denture: the flange has no Mesh_Type code of its own — it encodes as 0
+  // (no_mesh), so on load the acrylic base flanges every missing saddle tooth (7-to-7,
+  // excluding the third molars) that no other mesh span already covers.
+  if (Number(parsed?.other?.[JAW_MATERIAL_KEY]) === 2) {
+    const meshed = new Set(design.mesh.flatMap((m) => m.fdis));
+    const flangeFdis = [];
+    for (const [fdi, entry] of Object.entries(design.teeth)) {
+      if (entry.present || meshed.has(fdi)) continue;
+      if (Number(fdi) % 10 === 8) continue; // third molars sit outside the acrylic 7-to-7 span
+      flangeFdis.push(fdi);
+    }
+    if (flangeFdis.length) design.mesh.push({ componentId: "mesh-flange", fdis: flangeFdis });
   }
 
   // Major connector (jaw-level).
@@ -431,20 +440,13 @@ function componentList(rec) {
   return Array.isArray(rec?.components) ? rec.components : [];
 }
 
-// Mesh id -> desktop Mesh_Type code. The denture flange has no code of its own; it
-// shares plate_mesh (5) with mesh-plate (the case material picks which is shown on decode).
-function meshTypeCodeForId(meshId) {
-  if (meshId === "mesh-flange") return 5;
-  return inverseOf(MESH_TYPE).get(meshId) ?? 0;
-}
-
 // Contiguous same-type runs of mesh-bearing teeth -> mesh spans for the tail.
 function buildMeshSpans(state, fdiOrder) {
   const spans = [];
   let cur = null;
   fdiOrder.forEach((fdi, idx) => {
     const meshId = componentList(state.teeth?.[fdi]).find((id) => String(id).startsWith("mesh-"));
-    const mt = meshId ? meshTypeCodeForId(meshId) : 0;
+    const mt = meshId ? inverseOf(MESH_TYPE).get(meshId) ?? 0 : 0;
     if (mt > 0 && cur && cur.meshType === mt && idx === cur.end + 1) {
       cur.end = idx;
     } else if (mt > 0) {

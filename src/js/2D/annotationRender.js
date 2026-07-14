@@ -64,6 +64,9 @@ const SVG_TINT_FILTERS = {
   "tint-tooth-bar-suggestible": { color: "#7cb342", shadow: true },
   "tint-mesh": { color: "#5b21b6" },
   "tint-rpd-gray": { color: "#8a8a8a" },
+  // Denture flange pink (acrylic gum) — used for the acrylic-case major connector
+  // (the acrylic base reads as a flange).
+  "tint-flange": { color: "E8ADBF" },
   "tint-separated": { color: "#BB0D27" },
   "tint-rose": { color: "#c0285f" },
   "tint-rose-deep": { color: "#a31552" },

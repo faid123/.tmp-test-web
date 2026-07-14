@@ -2201,6 +2201,16 @@ button.upload3d-row {
   filter: url(#tint-rpd-gray);
 }
 
+/* Full-acrylic case: the acrylic base reads as a flange, so the major connector, plate
+   fill, minor connectors and palatal plate all render in flange pink. Metal keeps gray. */
+.major-connector-image.is-acrylic,
+.plate-image.is-acrylic,
+.minor-connector-image.is-acrylic,
+.palatal-plate-arch-image.is-acrylic {
+  -webkit-filter: url(#tint-flange);
+  filter: url(#tint-flange);
+}
+
 .major-connector-image.is-separated {
   -webkit-filter: url(#tint-separated);
   filter: url(#tint-separated);

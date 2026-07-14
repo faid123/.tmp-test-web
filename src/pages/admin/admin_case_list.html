@@ -417,6 +417,30 @@
           >
             Transfer Case Ownership
           </button>
+          <!-- Download the case's files as a zip (same bundle as the user
+               case-list row action; shown for admins on every case). -->
+          <button
+            id="downloadFilesBtn"
+            class="cm-btn cm-btn-secondary cm-admin-cta"
+            type="button"
+            hidden
+          >
+            Download Files
+          </button>
+          <!-- Retrieve / Delete are mutually exclusive per selected case and are
+               toggled in displayCaseDetails(): Delete for active cases, Retrieve
+               for soft-deleted ones. Retrieve is the admin default (cm-admin-cta
+               reveals it); Delete has no cm-admin-cta, so before any selection —
+               and whenever Retrieve is shown — Delete stays hidden. They are
+               never visible at the same time. -->
+          <button
+            id="deleteCaseBtn"
+            class="cm-btn cm-btn-secondary cm-btn-danger"
+            type="button"
+            hidden
+          >
+            Delete the Case
+          </button>
           <button
             id="retrieveCaseBtn"
             class="cm-btn cm-btn-secondary cm-admin-cta"

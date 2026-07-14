@@ -711,6 +711,16 @@ button {
   background: var(--line-soft);
 }
 
+/* Destructive detail action (admin "Delete the Case"). */
+.cm-btn-danger {
+  color: #b42318;
+  border-color: rgba(180, 35, 24, 0.35);
+}
+.cm-btn-danger:hover {
+  background: rgba(180, 35, 24, 0.08);
+  border-color: rgba(180, 35, 24, 0.55);
+}
+
 .cm-btn-large {
   padding: 14px 18px;
   font-size: 14px;
@@ -1261,6 +1271,12 @@ button {
 }
 .cm-detail-cta > .cm-btn {
   width: 100%;
+}
+/* .cm-btn sets display:inline-flex, which otherwise beats the UA [hidden]
+   rule — so a JS-toggled `hidden` button (Retrieve ⇄ Delete) would stay
+   visible. Make [hidden] win for the detail CTAs. */
+.cm-detail-cta > .cm-btn[hidden] {
+  display: none;
 }
 .cm-detail-cta .cm-3d-link {
   width: 100%;

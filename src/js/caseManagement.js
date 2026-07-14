@@ -946,15 +946,10 @@ async function handleRowClick(caseId) {
     displayCaseDetails(detail);
     await fetchThumbnails(caseId);
 
-    // Bump server-side last_updated so this case sits at the top on the next
-    // list load (and across devices). Optimistically update the local timestamp
-    // first so the UI moves the case immediately, then fire the PUT in the
-    // background — if it fails, the next page load will fall back to whatever
-    // the server has.
-    bumpLocalLastUpdated(caseId);
-    fireLastOpenedBump(caseId, detail, loggedInUser).catch((err) => {
-      console.warn("[caseManagement] last-opened bump failed:", err);
-    });
+    // NOTE: selecting a row only previews it — it must NOT reorder the list.
+    // The last-opened bump now fires from the Start Case action (see the
+    // ".start-case-button" handler), so a case only moves to the top once the
+    // user actually enters it.
   } catch (err) {
     console.error("❌ Failed to get case detail:", err);
   }
@@ -1147,6 +1142,22 @@ function displayCaseDetails(data) {
   const webUrl = data.web_url || data.weburl || data.url || "-";
   const webUrlEl = document.getElementById("web-url");
   if (webUrlEl) webUrlEl.textContent = webUrl;
+
+  // Admin detail actions: show "Delete the Case" for active cases and
+  // "Retrieve the Case" for soft-deleted ones (mutually exclusive). The
+  // authoritative deleted flag lives on the cached list row, not on the
+  // /case/get payload merged into `data`, so look it up there.
+  if (isCurrentUserAdmin()) {
+    const caseObj =
+      currentCases.find(
+        (c) => String(c.id ?? c.case_int_id) === String(caseIntId)
+      ) || data;
+    const deleted = isCaseDeleted(caseObj);
+    const retrieveBtn = document.getElementById("retrieveCaseBtn");
+    const deleteBtn = document.getElementById("deleteCaseBtn");
+    if (retrieveBtn) retrieveBtn.hidden = !deleted;
+    if (deleteBtn) deleteBtn.hidden = deleted;
+  }
 }
 
 function applyClientFilters() {
@@ -1903,12 +1914,95 @@ async function retrieveSelectedCase() {
       );
       row?.classList.remove("cm-row-deleted");
     }
+    // Flip the detail CTA from Retrieve → Delete.
+    const retrieveBtn = document.getElementById("retrieveCaseBtn");
+    const deleteBtn = document.getElementById("deleteCaseBtn");
+    if (retrieveBtn) retrieveBtn.hidden = true;
+    if (deleteBtn) deleteBtn.hidden = false;
     scheduleAdminStats();
+    applyClientFilters();
     toast.success("Case retrieved.");
   } catch (err) {
     console.error("Retrieve case failed:", err);
     toast.error("Failed to retrieve case.");
   }
+}
+
+// Soft-delete the selected case from the admin detail panel. Unlike the user
+// row action (deleteCaseById, which drops the case from the list), admins keep
+// the case in view — flagged deleted (struck-through, retrievable) — so the
+// Delete ⇄ Retrieve toggle stays coherent without a refetch.
+async function deleteSelectedCase() {
+  const caseId = window.selectedCaseId;
+  if (!caseId) {
+    toast.warning("Select a case first.");
+    return;
+  }
+  const caseObj = currentCases.find(
+    (c) => String(c.id ?? c.case_int_id) === String(caseId)
+  );
+  if (caseObj && isCaseDeleted(caseObj)) {
+    toast.info("This case is already deleted.");
+    return;
+  }
+
+  const confirmed = await confirmModal({
+    title: "Delete this case?",
+    message: "The case will be removed from its members. You can retrieve it later.",
+    confirmText: "Delete",
+    cancelText: "Cancel",
+    variant: "danger",
+  });
+  if (!confirmed) return;
+
+  try {
+    const me = getLoggedInUser();
+    const res = await fetch(`${DL_API}/case/delete/${Number(caseId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        { machine_id: DL_MACHINE_ID, uuid: me?.uuid, caseIntID: Number(caseId) },
+        { case_int_id: Number(caseId) },
+      ]),
+    });
+    logApi(res, "POST /case/delete/:id");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    if (caseObj) {
+      caseObj.deleted = 1;
+      const row = document.querySelector(
+        `#caseTableBody tr[data-case-id="${CSS.escape(String(caseId))}"]`
+      );
+      row?.classList.add("cm-row-deleted");
+    }
+    // Flip the detail CTA from Delete → Retrieve.
+    const retrieveBtn = document.getElementById("retrieveCaseBtn");
+    const deleteBtn = document.getElementById("deleteCaseBtn");
+    if (retrieveBtn) retrieveBtn.hidden = false;
+    if (deleteBtn) deleteBtn.hidden = true;
+    scheduleAdminStats();
+    applyClientFilters();
+    toast.success("Case deleted.");
+  } catch (err) {
+    console.error("Delete case failed:", err);
+    toast.error("Failed to delete case.");
+  }
+}
+
+// Download the selected case's files (STL/OFF, 2D JPEG, report .docx) as a zip —
+// the same bundle the user case-list row's download action produces.
+function downloadSelectedCaseFiles() {
+  const caseId = window.selectedCaseId;
+  if (!caseId) {
+    toast.warning("Select a case first.");
+    return;
+  }
+  const caseObj = currentCases.find(
+    (c) => String(c.id ?? c.case_int_id) === String(caseId)
+  );
+  const caseLabel = caseObj?.case_id || window.selectedCaseStub?.case_id;
+  const apiStatus = caseObj?.new_status ?? window.selectedCaseStub?.new_status ?? null;
+  return downloadCaseFiles(caseId, caseLabel, apiStatus);
 }
 
 // Wire the admin-only UI once, from the init handler.
@@ -1955,6 +2049,8 @@ function setupAdminCaseList() {
 
   document.getElementById("transferOwnershipBtn")?.addEventListener("click", openTransferModal);
   document.getElementById("retrieveCaseBtn")?.addEventListener("click", retrieveSelectedCase);
+  document.getElementById("deleteCaseBtn")?.addEventListener("click", deleteSelectedCase);
+  document.getElementById("downloadFilesBtn")?.addEventListener("click", downloadSelectedCaseFiles);
 
   // Month steppers: each card (Deleted / New) has its own offset so they move
   // independently. Never step into the future.
@@ -2118,6 +2214,28 @@ document.addEventListener("DOMContentLoaded", async () => {
       window.location.reload();
     });
 
+    // Auto-refresh on return to the case list. Common flow: the user opens a
+    // case in a new tab (Start Case), edits it there, then switches back here —
+    // the list should pick up the new status/ordering (incl. the last-opened
+    // bump) without a manual refresh. Reload when the tab becomes visible again
+    // or is restored from the bfcache, mirroring the manual refresh button.
+    // Throttled so quick tab-switches don't reload repeatedly or hammer the
+    // rate-limited API; seeded at load so it never fires immediately.
+    let lastAutoRefreshAt = Date.now();
+    const AUTO_REFRESH_MIN_INTERVAL_MS = 10000;
+    const maybeAutoRefresh = () => {
+      if (document.visibilityState !== "visible") return;
+      if (refreshInFlight) return;
+      if (Date.now() - lastAutoRefreshAt < AUTO_REFRESH_MIN_INTERVAL_MS) return;
+      lastAutoRefreshAt = Date.now();
+      refreshInFlight = true;
+      window.location.reload();
+    };
+    document.addEventListener("visibilitychange", maybeAutoRefresh);
+    window.addEventListener("pageshow", (e) => {
+      if (e.persisted) maybeAutoRefresh();
+    });
+
     // Wire every logout affordance (the user-chip dropdown item + the
     // mobile-only header logout button both carry class .logout).
     const handleLogout = async () => {
@@ -2267,6 +2385,20 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
 
       const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}`;
       window.open(targetURL, "_blank");
+
+      // Entering the case is what bumps it to the top of the list — not merely
+      // selecting the row. Optimistically update the local timestamp so the UI
+      // moves it immediately, then fire the PUT in the background so the order
+      // persists on the next load (and across devices).
+      const loggedInUser = getLoggedInUser();
+      if (loggedInUser) {
+        bumpLocalLastUpdated(caseId);
+        fireLastOpenedBump(caseId, window.selectedCaseStub, loggedInUser).catch(
+          (err) => {
+            console.warn("[caseManagement] last-opened bump failed:", err);
+          }
+        );
+      }
     });
   }
 
