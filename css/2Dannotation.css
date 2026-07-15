@@ -188,7 +188,7 @@ body.is-panel-resizing {
   background: #fff;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  padding: 14px 14px 12px;
+  padding: 4px 14px 12px;
   gap: 12px;
   position: relative;
   overflow: hidden;
@@ -209,9 +209,12 @@ body.is-panel-resizing {
 
 .jaw-preview-row {
   display: grid;
-  grid-template-columns: 28px 170px 32px 1fr;
+  /* Left group (jaw icon + ALLOW PROCESSING + delete) stays tight; the trailing
+     1fr spacer pushes SET SURVEY ANGLE to the far right so the delete button no
+     longer floats in the middle on wide (iPad) layouts. */
+  grid-template-columns: 26px auto 32px 1fr;
   align-items: center;
-  column-gap: 14px;
+  column-gap: 18px;
   padding: 2px 4px;
 }
 
@@ -755,7 +758,10 @@ button.upload3d-row {
 }
 
 .jaw-preview-survey-btn {
-  justify-self: start;
+  /* Sits in the trailing 1fr track, pinned to the right — but offset left so it
+     clears the fullscreen/expand button pinned at the panel's top-right. */
+  justify-self: end;
+  margin-right: 44px;
   border: 1px solid var(--rose-500);
   background: #fff;
   color: var(--rose-700);
@@ -2857,6 +2863,9 @@ button.upload3d-row {
 
   .jaw-preview-survey-btn {
     justify-self: end;
+    /* Drop the desktop 45px-gap margin on narrow screens so the
+       "ALLOW PROCESSING" label keeps its space instead of collapsing. */
+    margin-left: 0;
     padding: 0 10px;
     font-size: 0.62rem;
     letter-spacing: 0.02em;
@@ -3600,11 +3609,12 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   top: 0;
   bottom: 0;
   left: 0;
-  width: min(320px, 85vw);
-  background: #e5e7eb;
-  box-shadow: 2px 0 16px rgba(15, 23, 42, 0.18);
+  width: min(324px, 86vw);
+  background: #ffffff;
+  border-right: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 14px 0 44px rgba(15, 23, 42, 0.24);
   transform: translateX(-100%);
-  transition: transform 0.22s ease;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
   display: flex;
   flex-direction: column;
   pointer-events: auto;
@@ -3614,104 +3624,315 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
 .app-sidebar-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 18px 18px 16px;
+  background: linear-gradient(135deg, #3bae95 0%, #25735f 100%);
+  color: #ffffff;
 }
 .app-sidebar-brand-logo {
-  width: 28px;
-  height: 28px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 5px;
 }
 .app-sidebar-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 800;
-  color: #1f2937;
-  letter-spacing: 0.06em;
+  color: #ffffff;
+  letter-spacing: 0.08em;
 }
 .app-sidebar-version {
-  font-size: 11px;
-  color: #475569;
-  font-weight: 600;
-  margin-left: 2px;
+  font-size: 10.5px;
+  color: #ffffff;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
 }
 .app-sidebar-close {
   border: 0;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.16);
   width: 32px;
   height: 32px;
-  border-radius: 6px;
-  color: #475569;
+  border-radius: 8px;
+  color: #ffffff;
   cursor: pointer;
   font-size: 16px;
   margin-left: auto;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s ease;
 }
-.app-sidebar-close:hover { background: rgba(15, 23, 42, 0.06); color: #1f2937; }
+.app-sidebar-close:hover { background: rgba(255, 255, 255, 0.32); color: #ffffff; }
 
 .app-sidebar-list {
   list-style: none;
   margin: 0;
-  padding: 14px 0 8px;
+  padding: 12px 12px 8px;
   overflow-y: auto;
   flex: 1;
 }
 .app-sidebar-list li { margin: 0; }
 .app-sidebar-item {
+  position: relative;
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 22px;
+  gap: 14px;
+  padding: 10px 14px;
   border: 0;
+  border-radius: 10px;
   background: transparent;
-  color: #1f2937;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   font-family: inherit;
   cursor: pointer;
   text-align: left;
+  transition: background 0.15s ease, color 0.15s ease;
 }
-.app-sidebar-item:hover { background: rgba(15, 23, 42, 0.05); }
+.app-sidebar-item::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--rose-500);
+  transform: translateY(-50%) scaleY(0);
+  transition: transform 0.15s ease;
+}
+.app-sidebar-item:hover {
+  background: rgba(59, 174, 149, 0.1);
+  color: var(--rose-700);
+}
+.app-sidebar-item:hover::before { transform: translateY(-50%) scaleY(1); }
 .app-sidebar-item:focus-visible {
   outline: 2px solid var(--rose-500);
   outline-offset: -2px;
 }
 .app-sidebar-item-icon {
-  width: 22px;
+  width: 34px;
+  height: 34px;
+  /* Font Awesome loads after this file and forces .fa back to inline-block via
+     --fa-display; set it to inline-flex so the glyph centers in the chip.
+     line-height/text-align are a fallback if FA isn't the display source. */
+  --fa-display: inline-flex;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 34px;
   text-align: center;
-  color: #1f2937;
-  font-size: 16px;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--muted);
+  font-size: 15px;
   flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
 }
-.app-sidebar-item-danger .app-sidebar-item-icon { color: #dc2626; }
+.app-sidebar-item:hover .app-sidebar-item-icon {
+  background: rgba(59, 174, 149, 0.16);
+  color: var(--rose-700);
+}
+.app-sidebar-item-danger .app-sidebar-item-icon {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
 
 .app-sidebar-separator {
   border: 0;
   height: 1px;
-  background: rgba(15, 23, 42, 0.18);
-  margin: 8px 22px;
+  background: rgba(15, 23, 42, 0.1);
+  margin: 8px 14px;
 }
 
 .app-sidebar-language {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 22px;
+  gap: 12px;
+  margin: 6px 12px 14px;
+  padding: 8px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+  background: #f8fafc;
 }
 .app-sidebar-language-icon {
-  width: 22px;
+  width: 20px;
   text-align: center;
-  color: #1f2937;
-  font-size: 16px;
+  color: var(--muted);
+  font-size: 15px;
 }
 .app-sidebar-language select {
   flex: 1;
   border: 0;
   background: transparent;
-  color: #1f2937;
-  font-size: 14px;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
   font-family: inherit;
   cursor: pointer;
   outline: none;
+}
+
+/* ============================================================================
+   Premium polish layer (appended last so it wins via the cascade).
+   Purely visual: depth, radii, typography and interaction states. No layout
+   structure (grid/flex/positioning/sizes) is changed here.
+   ============================================================================ */
+:root {
+  --pp-radius: 12px;
+  --pp-radius-sm: 9px;
+  --pp-shadow-sm: 0 1px 2px rgba(26, 77, 63, 0.06), 0 2px 6px rgba(26, 77, 63, 0.06);
+  --pp-shadow-md: 0 6px 18px rgba(26, 77, 63, 0.1), 0 2px 6px rgba(26, 77, 63, 0.06);
+  --pp-shadow-lg: 0 18px 44px rgba(26, 77, 63, 0.14);
+  --pp-ring: 0 0 0 3px rgba(59, 174, 149, 0.18);
+  --pp-grad: linear-gradient(135deg, #43bda2 0%, #2f9079 100%);
+}
+
+/* ---- Elevated surfaces ---- */
+.preview-frame {
+  border-color: rgba(59, 174, 149, 0.35);
+  border-radius: 16px;
+  box-shadow: var(--pp-shadow-md);
+}
+
+/* ---- Top labels & section headings ---- */
+.edit-mode-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rose-700);
+}
+
+.panel-mini-title {
+  border-radius: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  box-shadow: var(--pp-shadow-sm);
+}
+
+.case-label {
+  font-weight: 600;
+  color: var(--rose-700);
+  border-color: rgba(59, 174, 149, 0.4);
+  box-shadow: var(--pp-shadow-sm);
+}
+
+/* ---- Component tabs: segmented-control feel ---- */
+.component-tabs {
+  border: 1px solid rgba(59, 174, 149, 0.28);
+  box-shadow: inset 0 1px 2px rgba(26, 77, 63, 0.05);
+}
+
+.component-tab {
+  border-radius: 8px;
+  border-color: rgba(59, 174, 149, 0.4);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease,
+    box-shadow 0.16s ease, transform 0.12s ease;
+}
+.component-tab:hover:not(.is-active):not(.is-disabled) {
+  border-color: var(--rose-500);
+  background: rgba(59, 174, 149, 0.08);
+  color: var(--rose-700);
+}
+.component-tab.is-active {
+  box-shadow: 0 3px 10px rgba(47, 144, 121, 0.28);
+}
+
+/* ---- Status (teeth) buttons ---- */
+.status-btn {
+  border-radius: 12px;
+  border-color: rgba(59, 174, 149, 0.4);
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease,
+    box-shadow 0.16s ease, transform 0.12s ease;
+}
+.status-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--pp-shadow-sm);
+}
+.status-btn.is-active {
+  box-shadow: 0 4px 12px rgba(47, 144, 121, 0.3);
+}
+
+/* ---- Component rows ---- */
+.component-item {
+  border-radius: 10px;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.component-item:hover {
+  background: rgba(59, 174, 149, 0.06);
+}
+
+/* ---- Bottom action buttons ---- */
+.action-btn {
+  border-radius: 10px;
+  border-color: rgba(59, 174, 149, 0.45);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 9px 8px;
+  box-shadow: var(--pp-shadow-sm);
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease,
+    box-shadow 0.16s ease, transform 0.12s ease;
+}
+.action-btn:hover {
+  transform: translateY(-1px);
+  border-color: var(--rose-500);
+  background: var(--rose-050);
+  color: var(--rose-800);
+  box-shadow: var(--pp-shadow-md);
+}
+.action-btn.primary {
+  background: linear-gradient(135deg, #43bda2 0%, #2f9079 100%);
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(47, 144, 121, 0.32);
+}
+.action-btn.primary:hover {
+  color: #fff;
+  background: linear-gradient(135deg, #4cc7ac 0%, #33987f 100%);
+  box-shadow: 0 6px 18px rgba(47, 144, 121, 0.4);
+}
+
+/* ---- Preview control buttons ---- */
+.preview-3d-max-btn,
+.preview-3d-capture-btn {
+  box-shadow: var(--pp-shadow-sm);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease,
+    box-shadow 0.15s ease, transform 0.12s ease;
+}
+.preview-3d-max-btn:hover,
+.preview-3d-capture-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--pp-shadow-md);
+}
+
+/* ---- Survey-angle & mesh-quality controls ---- */
+.jaw-preview-survey-btn {
+  box-shadow: var(--pp-shadow-sm);
+  transition: background-color 0.14s ease, border-color 0.14s ease,
+    color 0.14s ease, box-shadow 0.14s ease, transform 0.12s ease;
+}
+.jaw-preview-survey-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--pp-shadow-md);
+}
+.jaw-preview-quality-panel {
+  border-radius: 14px;
+  box-shadow: var(--pp-shadow-lg);
+}
+.jaw-preview-quality-btn {
+  border-radius: 10px;
+}
+
+/* ---- Footer: subtle depth + gradient ---- */
+.ann-footer {
+  background: linear-gradient(180deg, #43bda2 0%, #2f9079 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 -2px 12px rgba(26, 77, 63, 0.18);
 }
