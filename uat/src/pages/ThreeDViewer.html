@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SmartRPD 3D Web Viewer</title>
+    <link rel="preconnect" href="https://live.api.smartrpdai.com">
+    <link rel="icon" href="../../assets/profile.png" type="image/png" />
+    <link rel="stylesheet" href="../../css/chat.css" />
+    <link rel="stylesheet" href="../../css/versionHistory.css" />
+    <link rel="stylesheet" href="../../css/toast.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+  </head>
+  <body>
+    <div class="viewer-shell">
+      <div class="viewer-main">
+        <div id="container3D"></div>
+      </div>
+
+      <footer class="cm-footer viewer-footer" aria-label="Application status bar">
+        <div class="cm-footer-left">
+          <button type="button" class="cm-footer-btn" id="footerMenuBtn" aria-label="Menu" data-tooltip="Menu">
+            <i class="fa fa-bars" aria-hidden="true"></i>
+          </button>
+          <span class="cm-footer-case-label">
+            Case : <span id="footerCaseName">&mdash;</span>
+          </span>
+        </div>
+
+        <!-- TODO: pen/eraser/notes toolbar — not ready yet
+        <div class="cm-footer-center">
+          <button type="button" class="cm-footer-btn cm-footer-tool-btn" id="footerPenBtn" aria-label="Pen" aria-pressed="false" data-tooltip="Pen">
+            <img src="" id="footerPenIcon" alt="Pen" class="cm-footer-tool-icon">
+          </button>
+          <button type="button" class="cm-footer-btn cm-footer-tool-btn" id="footerEraserBtn" aria-label="Eraser" aria-pressed="false" data-tooltip="Eraser">
+            <img src="" id="footerEraserIcon" alt="Eraser" class="cm-footer-tool-icon">
+          </button>
+          <div class="cm-footer-tool-divider" aria-hidden="true"></div>
+          <button type="button" class="cm-footer-btn" id="footerDrawUndoBtn" aria-label="Undo drawing" data-tooltip="Undo" disabled>
+            <img src="" id="footerDrawUndoIcon" alt="Undo" class="cm-footer-tool-icon">
+          </button>
+          <button type="button" class="cm-footer-btn" id="footerDrawRedoBtn" aria-label="Redo drawing" data-tooltip="Redo" disabled>
+            <img src="" id="footerDrawRedoIcon" alt="Redo" class="cm-footer-tool-icon">
+          </button>
+          <div class="cm-footer-tool-divider" aria-hidden="true"></div>
+          <button type="button" class="cm-footer-btn cm-footer-tool-btn" id="footerNotesBtn" aria-label="Clinical notes" aria-pressed="false" data-tooltip="Notes">
+            <img src="" id="footerNotesIcon" alt="Notes" class="cm-footer-tool-icon">
+          </button>
+        </div>
+        -->
+
+        <div class="cm-footer-right">
+          <span class="cm-footer-user" id="footerUserName">&mdash;</span>
+          <span class="cm-footer-conn" id="footerConnection"></span>
+          <button type="button" class="cm-footer-btn cm-footer-chat-btn" id="footerChatBtn" aria-label="Open chat" data-tooltip="Chat">
+            <i class="fa-regular fa-comment" aria-hidden="true"></i>
+          </button>
+          <button type="button" class="cm-footer-btn" id="footerRightNavBtn" aria-label="Close right panel" data-tooltip="Right panel">
+            <img id="footerRightNavIcon" src="" alt="Right panel" style="width:22px;height:22px;object-fit:contain;display:block;">
+          </button>
+        </div>
+      </footer>
+
+      <!-- TODO: clinical notes popup — not ready yet
+      <div id="clinicalNotesPopup" class="clinical-notes-popup" aria-hidden="true" role="dialog" aria-label="Clinical Design Notes">
+        <div class="clinical-notes-panel">
+          <header class="clinical-notes-header">
+            <span class="clinical-notes-title">Clinical Design Notes</span>
+            <button type="button" id="clinicalNotesClose" class="clinical-notes-close" aria-label="Close notes">&times;</button>
+          </header>
+          <textarea id="clinicalNotesText" class="clinical-notes-textarea" placeholder="Enter clinical design notes…" spellcheck="true"></textarea>
+        </div>
+      </div>
+      -->
+    </div>
+
+    <div id="versionHistoryModal" class="modal hidden">
+      <div class="modal-content version-modal">
+        <span class="close-btn" id="closeVersionModal">&times;</span>
+        <div class="vh-header"><h3 class="modal-title">Version History</h3></div>
+        <div class="vh-body">
+          <ul id="versionList" class="vh-list"></ul>
+        </div>
+      </div>
+    </div>
+
+    <aside id="appSidebar" class="app-sidebar is-hidden" aria-hidden="true" aria-label="Navigation">
+      <div class="app-sidebar-backdrop" data-sidebar-close></div>
+      <nav class="app-sidebar-panel" role="navigation">
+        <header class="app-sidebar-header">
+          <img class="app-sidebar-brand-logo" src="../../assets/profile.png" alt="" />
+          <span class="app-sidebar-title">SMARTRPD</span>
+          <span class="app-sidebar-version">v2.0</span>
+        </header>
+        <ul id="appSidebarList" class="app-sidebar-list">
+          <li>
+            <button type="button" id="sidebarReturnBtn" class="app-sidebar-item">
+              <i class="fa fa-arrow-left app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Return to Case Selection</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarVersionHistoryBtn" class="app-sidebar-item">
+              <i class="fa fa-clock-rotate-left app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Version History</span>
+            </button>
+          </li>
+          <li><hr class="app-sidebar-separator" /></li>
+          <li>
+            <button type="button" id="sidebarChangePasswordBtn" class="app-sidebar-item">
+              <i class="fa fa-key app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Change Account Password</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarLogoutBtn" class="app-sidebar-item">
+              <i class="fa fa-right-from-bracket app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Logout</span>
+            </button>
+          </li>
+          <li><hr class="app-sidebar-separator" /></li>
+          <li>
+            <button type="button" id="sidebarHelpBtn" class="app-sidebar-item">
+              <i class="fa fa-circle-info app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Help</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarReportIssueBtn" class="app-sidebar-item">
+              <i class="fa fa-bug app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Report Issue</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarFeedbackBtn" class="app-sidebar-item">
+              <i class="fa fa-comment-dots app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Feedback</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarAboutBtn" class="app-sidebar-item">
+              <i class="fa-regular fa-square-caret-right app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>About</span>
+            </button>
+          </li>
+          <li class="app-sidebar-language">
+            <i class="fa fa-globe app-sidebar-language-icon" aria-hidden="true"></i>
+            <select id="sidebarLanguageSelect" aria-label="Language">
+              <option value="en">English</option>
+            </select>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+  <!-- Case chat (notes) — slide-in side panel toggled by the footer chat button -->
+  <div id="chat-widget" class="chat-sidebar is-hidden" aria-hidden="true">
+    <div class="chat-sidebar-backdrop" data-chat-close></div>
+    <aside class="chat-sidebar-panel" role="dialog" aria-label="Case chat">
+      <header class="chat-sidebar-header">
+        <span class="chat-sidebar-title">Case Chat</span>
+        <button type="button" class="chat-sidebar-close" data-chat-close aria-label="Close chat">&times;</button>
+      </header>
+      <div id="chat-box"></div>
+      <div id="chat-input-area">
+        <input type="file" id="imageInput" accept="image/*" hidden />
+        <button id="uploadBtn" type="button">+</button>
+        <textarea id="textInput" rows="1" placeholder="Type a comment..."></textarea>
+        <button id="sendBtn" type="button">Send</button>
+      </div>
+    </aside>
+  </div>
+  <div class="image-modal" id="imageModal">
+    <img id="modalImage" src="" alt="Zoomed" />
+  </div>
+
+    <script>
+      const hostname = window.location.hostname;
+      const isGitHubPages = hostname.includes("github.io");
+      const isAWS = /^[0-9.]+$/.test(hostname);
+      const basePath = isGitHubPages ? "/.tmp-test-web" : "";
+      const bundlePath = isGitHubPages
+        ? `${basePath}/dist/bundle.js`
+        : isAWS
+          ? "/dist/bundle.js"
+          : "/dist/bundle.js";
+
+      document.write(`
+        <link rel="stylesheet" href="${basePath}/css/style.css" />
+        <script type="module" src="${bundlePath}"></` + `script>
+        <script type="module" src="${basePath}/src/js/viewerShell.js"></` + `script>
+        <script type="module" src="${basePath}/src/js/versionHistory.js"></` + `script>
+      `);
+    </script>
+  </body>
+</html>

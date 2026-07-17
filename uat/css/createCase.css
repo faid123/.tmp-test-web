@@ -1,0 +1,933 @@
+/* ==================== Inline Create-Case View ==================== */
+/* The form pane lives inside .cm-main (sibling of the .cm-table-wrap list);
+   the upload pane lives inside .cm-detail. Both are hidden unless
+   .cm-page.creating. */
+
+.cc-form-pane.hidden,
+.cc-upload-pane.hidden { display: none !important; }
+
+.cm-page.creating .cm-table-wrap,
+.cm-page.creating .table-head-wrapper,
+.cm-page.creating .table-body-wrapper { display: none !important; }
+
+.cm-page.creating .cm-detail > *:not(.cc-upload-pane) {
+  display: none !important;
+}
+
+.cc-form-pane {
+  flex: 1;
+  min-height: 0;
+  background: var(--panel, #fff);
+  border-radius: var(--radius, 14px);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.06));
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  overflow-y: auto;
+}
+
+.cc-form-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 18px 32px;
+}
+
+.cc-field { display: flex; flex-direction: column; gap: 6px; }
+.cc-field-full { grid-column: 1 / -1; }
+
+.cc-field .input-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft, #475569);
+  margin: 0;
+}
+
+.cc-field .modal-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  background: #fff;
+  box-sizing: border-box;
+}
+.cc-field .modal-input:focus {
+  outline: none;
+  border-color: var(--primary, #3BAE95);
+}
+
+.cc-display {
+  padding: 10px 12px;
+  background: var(--line-soft, #f1f5f9);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--ink, #0f172a);
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.cc-invite-row {
+  display: flex;
+  gap: 8px;
+}
+.cc-invite-row .modal-input { flex: 1; min-width: 0; }
+/* Keep the Add button hugging its label; the phone-wide `.cm-btn { width:100% }`
+   rule would otherwise stretch it across the row and crush the input. */
+.cc-invite-row .cm-btn {
+  width: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.cc-invite-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cc-invite-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--line-soft, #f1f5f9);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--ink, #0f172a);
+}
+.cc-invite-list li button {
+  background: transparent;
+  border: none;
+  color: var(--muted, #94a3b8);
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.cc-upload-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.cc-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 50;
+  border-radius: inherit;
+}
+
+.cc-loading-overlay.hidden { display: none !important; }
+
+/* Fixed full-viewport variant. The base overlay is absolute (scoped to the
+   create-case pane); duplication is triggered from the case list, so its
+   progress pop-up must cover the whole screen instead. */
+.cc-loading-overlay--fixed {
+  position: fixed;
+  border-radius: 0;
+  z-index: 1000;
+}
+
+.cc-loading-card {
+  width: min(360px, 80%);
+  padding: 20px 24px;
+  background: var(--panel, #fff);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cc-loading-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cc-loading-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink, #0f172a);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cc-loading-percent {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft, #475569);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.cc-loading-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--line, #e2e8f0);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.cc-loading-bar-fill {
+  position: relative;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #3BAE95, #2563eb);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+  overflow: hidden;
+}
+
+.cc-loading-bar-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: translateX(-100%);
+  animation: cc-loading-shimmer 1.4s linear infinite;
+}
+
+@keyframes cc-loading-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-loading-bar-fill::after { animation: none; }
+  .cc-loading-bar-fill { transition: none; }
+}
+
+/* On small screens (iPad Mini portrait + phones) the case-list layout pushes
+   .cm-detail off-canvas. In create mode we want the upload pane to stack
+   below the form pane, so override the off-canvas positioning and allow
+   the page to scroll vertically (the base layout locks scrolling). */
+@media (max-width: 860px) {
+  html:has(body.creating-case),
+  body.creating-case {
+    overflow: auto !important;
+    height: auto !important;
+  }
+  .cm-page.creating {
+    height: auto;
+    min-height: 100vh;
+  }
+  .cm-page.creating .cm-main { overflow: visible; }
+  .cm-page.creating .cm-detail {
+    position: static;
+    inset: auto;
+    transform: none;
+    transition: none;
+    padding: 0 28px 28px;
+    overflow: visible;
+    z-index: auto;
+  }
+  .cm-page.creating .back-to-list { display: none; }
+  .cm-page.creating .cc-form-pane { overflow: visible; }
+  /* The list toolbar (All Cases / filters / Create) is irrelevant while
+     creating a case on mobile — hide it to give the form room. */
+  .cm-page.creating .cm-toolbar { display: none !important; }
+}
+
+.cc-jaw-row .cc-jaw-models {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 0;
+}
+
+.upload-placeholder.cc-jaw-tile,
+.upload-placeholder.cc-ref-tile {
+  width: 100%;
+}
+
+/* Shared dashed drop-zone styling for the three upload cards
+   (upper jaw, lower jaw, reference image). */
+.cc-jaw-tile,
+.cc-ref-tile {
+  width: 100%;
+  min-height: 132px;
+  background: #fff;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 10px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+/* Jaw cards are taller than the reference card; match the filled tile height. */
+.cc-jaw-tile {
+  min-height: 200px;
+}
+.cc-jaw-tile:hover,
+.cc-ref-tile:hover {
+  border-color: var(--primary, #3BAE95);
+}
+.cc-jaw-tile .jaw-bg,
+.cc-ref-tile .jaw-bg {
+  width: 34px;
+  height: auto;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.cc-jaw-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #94a3b8;
+}
+.cc-jaw-or {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.cc-jaw-browse {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary, #3BAE95);
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  padding: 4px 14px;
+  line-height: 1.2;
+}
+
+.cc-ref-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ---- Mobile upload tiles ---------------------------------------------------
+   Placed after the base tile rules so these overrides win inside the breakpoint.
+   - Jaw cards sit side by side.
+   - Drop everything except the icon + a short one-word label (data-short). */
+@media (max-width: 860px) {
+  .cc-jaw-row .cc-jaw-models {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .cc-jaw-tile,
+  .cc-ref-tile {
+    min-height: 120px;
+  }
+  .cc-jaw-models .uploaded-model {
+    height: 120px;
+  }
+  .cc-jaw-text,
+  .cc-jaw-or,
+  .cc-jaw-browse {
+    display: none;
+  }
+  .cc-jaw-tile::after,
+  .cc-ref-tile::after {
+    content: attr(data-short);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink, #0f172a);
+  }
+}
+
+.cc-ref-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Uploaded reference thumbnails live INSIDE the dashed tile; once any image
+   is present the tile swaps its placeholder content for the grid (clicking
+   leftover empty space still opens the file picker to add more). */
+.cc-ref-tile .cc-ref-grid {
+  width: 100%;
+  justify-content: center;
+}
+.cc-ref-tile.has-images .jaw-bg,
+.cc-ref-tile.has-images .cc-jaw-text,
+.cc-ref-tile.has-images .cc-jaw-or,
+.cc-ref-tile.has-images .cc-jaw-browse {
+  display: none;
+}
+.cc-ref-tile.has-images {
+  padding: 12px;
+}
+@media (max-width: 860px) {
+  /* has-images also suppresses the mobile short-label (::after) */
+  .cc-ref-tile.has-images::after { display: none; }
+}
+.cc-ref-grid .uploaded-model {
+  position: relative;
+  width: 84px;
+  height: 84px;
+}
+.cc-ref-grid .uploaded-model img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line, #e2e8f0);
+  cursor: zoom-in;
+}
+.cc-ref-grid .remove-model {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 14px;
+  color: #888;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cc-actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.cc-actions .cm-btn { width: 100%; }
+
+/* dragover affordance for jaw + ref tiles in inline view */
+.cc-jaw-tile.is-dragover,
+.cc-ref-tile.is-dragover {
+  background: #d4f0e8;
+  outline: 2px dashed var(--primary, #3BAE95);
+  outline-offset: -3px;
+}
+
+/* uploaded jaw preview within tiles */
+.cc-jaw-models .uploaded-model {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  background: #fff;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cc-jaw-models .uploaded-model img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border: none;
+  border-radius: 0;
+  cursor: zoom-in;
+}
+.cc-jaw-models .remove-model {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  color: #555;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+
+/* ==================== Upload image preview (lightbox) ==================== */
+.cc-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  cursor: zoom-out;
+}
+.cc-preview-overlay.hidden { display: none !important; }
+
+.cc-preview-overlay img {
+  max-width: 90vw;
+  max-height: 85vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  cursor: default;
+}
+
+.cc-preview-close {
+  position: absolute;
+  top: 20px;
+  right: 26px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+.cc-preview-close:hover { background: #fff; }
+
+/* ==================== Legacy modal styles (kept for userAccessModal) ==================== */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.3);
+  justify-content: center;
+  align-items: center;
+}
+.modal.show {
+  display: flex;
+}
+
+.modal-content {
+  background: #fff;
+  width: 600px;
+  max-width: 90%;
+  border-radius: 8px;
+  padding: 30px;
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.15);
+  position: relative;
+  font-family: "Segoe UI", sans-serif;
+}
+
+.close-btn {
+  position: absolute;
+  top: 18px;
+  right: 24px;
+  font-size: 24px;
+  color: #888;
+  cursor: pointer;
+}
+
+.modal-title {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.input-label {
+  display: block;
+  font-weight: 600;
+  margin-top: 20px;
+  margin-bottom: 8px;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.uploaded-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.cancel-btn {
+  background: rgb(245, 245, 245);
+  color: black;
+}
+.cancel-btn:hover {
+  background: #cccccc;
+}
+
+.uploaded-model img {
+  width: 100px;
+  height: auto;
+  display: block;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+}
+
+
+.remove-model {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 18px;
+  font-weight: bold;
+  color: #888;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+
+.uploaded-model {
+  position: relative;
+}
+
+/* Right-side reference-image thumbnails (unlimited). */
+#uploadedReferenceImages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  max-width: 100%;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+#uploadedReferenceImages .uploaded-model {
+  position: relative;
+  width: 100px;
+  height: 100px;
+}
+
+#uploadedReferenceImages img {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+#uploadedReferenceImages .remove-model {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 16px;
+  color: #888;
+  cursor: pointer;
+  background: white;
+  border-radius: 50%;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+/* User-access modal: layout overrides on top of the generic .modal rules. */
+/* ==================== User Access Modal ==================== */
+#userAccessModal .modal-content.uam-modal {
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  padding: 0;
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+  font-family: inherit;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 48px);
+}
+
+.uam-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.uam-header-text { min-width: 0; }
+
+.uam-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.uam-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  min-width: 0;
+}
+
+.uam-subtitle-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.uam-subtitle .case-name-display {
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uam-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.uam-close:hover {
+  background: var(--line-soft);
+  color: var(--ink);
+}
+
+.uam-search-row {
+  display: flex;
+  gap: 10px;
+  padding: 18px 24px 14px;
+}
+
+.uam-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.uam-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.uam-search-input {
+  width: 100%;
+  padding: 10px 12px 10px 34px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.uam-search-input::placeholder { color: var(--muted); }
+.uam-search-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 174, 149, 0.18);
+}
+
+.uam-add-btn { flex-shrink: 0; }
+
+.uam-list-section {
+  padding: 4px 24px 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.uam-list-header {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 4px 0 10px;
+}
+
+.uam-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: 320px;
+}
+.uam-list::-webkit-scrollbar { width: 6px; }
+.uam-list::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 3px;
+}
+
+.uam-list .shared-user-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin: 0;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.uam-list .shared-user-item:hover {
+  border-color: #cfd8e3;
+  background: var(--line-soft);
+}
+
+.uam-list .shared-user-item .user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.uam-list .shared-user-item .user-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.uam-list .shared-user-item .user-name {
+  font-size: 14px;
+  font-weight: 600;
+  font-style: normal;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uam-list .shared-user-item .user-role {
+  font-size: 12px;
+  font-style: normal;
+  color: var(--ink-soft);
+  text-transform: capitalize;
+}
+.uam-list .shared-user-item .user-role.is-owner {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary-dark);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  align-self: flex-start;
+}
+
+.uam-list .delete-user-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.uam-list .delete-user-btn:hover {
+  background: var(--status-danger-bg);
+  color: var(--danger);
+}
+
+.uam-list .uam-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  background: var(--line-soft);
+  border-radius: 10px;
+}
+.uam-list .uam-empty i {
+  font-size: 22px;
+  margin-bottom: 4px;
+  opacity: 0.7;
+}
+
+.uam-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px 22px;
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+}
+
+.uam-footer .cm-btn { min-width: 120px; }

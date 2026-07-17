@@ -1,0 +1,8 @@
+{
+  "app": "smartrpd",
+  "revision": "c6f540b5ab229e70b879fa8b4726d3cae02bd9ba",
+  "buildId": "manual-smoke-1",
+  "digest": "sha256:fa8235bcab0e16742b8d6d74d1eb56ca7264dd7454e63aa5565c609f37e8d9d8",
+  "createdAt": "2026-07-17T07:08:58Z",
+  "uatUrl": "https://faid123.github.io/.tmp-test-web/uat/"
+}

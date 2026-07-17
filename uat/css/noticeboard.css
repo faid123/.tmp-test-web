@@ -1,0 +1,1650 @@
+/* ===== Noticeboard modal ===== */
+.noticeboard-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+}
+
+.noticeboard-modal.is-hidden { display: none !important; }
+
+.noticeboard-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 77, 63, 0.4);
+}
+
+.noticeboard-panel {
+  position: absolute;
+  inset: 2vh 2vw;
+  background: linear-gradient(180deg, #ffffff 0%, var(--rose-050) 100%);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(26, 77, 63, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: inherit;
+}
+
+.noticeboard-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 28px 10px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.noticeboard-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.noticeboard-title {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.noticeboard-generate-btn {
+  background: var(--rose-500);
+  color: #fff;
+  border: 1px solid var(--rose-500);
+  border-radius: 6px;
+  padding: 9px 18px;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.noticeboard-generate-btn:hover {
+  background: var(--rose-600);
+  border-color: var(--rose-600);
+}
+
+.noticeboard-close-btn {
+  background: transparent;
+  border: 0;
+  font-size: 1.6rem;
+  color: var(--muted);
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  line-height: 1;
+  border-radius: 6px;
+}
+
+.noticeboard-close-btn:hover {
+  background: var(--rose-100);
+  color: var(--rose-700);
+}
+
+.noticeboard-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding: 20px 28px;
+  overflow: auto;
+  min-height: 0;
+}
+
+.noticeboard-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.noticeboard-column-titlerow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.noticeboard-column-icon {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  -webkit-filter: brightness(0) saturate(0) opacity(0.65);
+  filter: brightness(0) saturate(0) opacity(0.65);
+}
+
+.noticeboard-column-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.noticeboard-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.noticeboard-tab {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 8px 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: inherit;
+  margin-bottom: -1px;
+}
+
+.noticeboard-tab.is-active {
+  color: var(--rose-700);
+  border-bottom-color: var(--rose-500);
+}
+
+.noticeboard-add-row {
+  display: flex;
+}
+
+.noticeboard-add-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: var(--rose-050);
+  border: 1.5px solid var(--rose-500);
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  width: 240px;
+}
+
+.noticeboard-add-card:hover {
+  background: var(--rose-100);
+  border-color: var(--rose-600);
+}
+
+.noticeboard-add-card-preview {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #fff;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.noticeboard-add-card-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.noticeboard-add-card-preview img:not([src]),
+.noticeboard-add-card-preview img[src=""] {
+  display: none;
+}
+
+.noticeboard-add-card-preview img[src]:not([src=""]) + .noticeboard-add-card-placeholder {
+  display: none;
+}
+
+.noticeboard-add-card-placeholder {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.noticeboard-add-card-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--rose-700);
+}
+
+.noticeboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  align-content: start;
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.noticeboard-thumb-card {
+  position: relative;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  /* Match the captured jaw image's portrait aspect ratio so it fills the
+     card without grey letterbox on the sides. Landscape 3D screenshots will
+     get a slim top/bottom letterbox here, which we accept as the trade-off. */
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+}
+
+.noticeboard-thumb-card img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+/* Mobile: single column → cards span the full panel width. Cap the height
+   so a single portrait card doesn't dominate the scroll, and keep the
+   aspect-ratio so taller content stays readable. */
+@media (max-width: 720px) {
+  .noticeboard-grid {
+    grid-template-columns: 1fr;
+  }
+  .noticeboard-thumb-card {
+    aspect-ratio: 2 / 1;
+    max-height: 60vh;
+  }
+}
+
+.noticeboard-thumb-edit {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: inherit;
+}
+
+.noticeboard-thumb-edit:hover {
+  background: var(--rose-100);
+  border-color: var(--rose-500);
+  color: var(--rose-700);
+}
+
+.noticeboard-thumb-menu {
+  position: fixed;
+  z-index: 5400;
+  display: flex;
+  flex-direction: column;
+  min-width: 110px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(26, 77, 63, 0.18);
+  overflow: hidden;
+}
+
+.noticeboard-thumb-menu-item {
+  background: transparent;
+  border: 0;
+  text-align: left;
+  padding: 8px 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.noticeboard-thumb-menu-item:hover {
+  background: var(--rose-050);
+  color: var(--rose-700);
+}
+
+.noticeboard-thumb-menu-item-danger {
+  color: var(--rose-700);
+}
+
+.noticeboard-thumb-menu-item-danger:hover {
+  background: var(--rose-100);
+  color: var(--rose-800);
+}
+
+.noticeboard-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 28px;
+  border-top: 1px solid var(--line);
+  background: #fff;
+}
+
+.noticeboard-footer-btn {
+  background: #fff;
+  color: var(--rose-700);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 22px;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.noticeboard-footer-btn:hover {
+  background: var(--rose-050);
+  border-color: var(--rose-500);
+}
+
+.noticeboard-footer-btn-primary {
+  background: var(--rose-500);
+  color: #fff;
+  border-color: var(--rose-500);
+}
+
+.noticeboard-footer-btn-primary:hover {
+  background: var(--rose-600);
+  border-color: var(--rose-600);
+}
+
+/* ===== Instruction drawing editor ===== */
+.instruction-editor-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 5500;
+}
+
+.instruction-editor-modal.is-hidden { display: none !important; }
+
+.instruction-editor-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 77, 63, 0.55);
+}
+
+.instruction-editor-panel {
+  position: absolute;
+  inset: 2vh 2vw;
+  background: linear-gradient(180deg, #ffffff 0%, var(--rose-050) 100%);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(26, 77, 63, 0.3);
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: inherit;
+}
+
+.instruction-editor-canvas-wrap {
+  position: relative;
+  background: #f1f7f4;
+  border-right: 1px solid var(--line);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.instruction-editor-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.instruction-editor-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  padding: 24px 20px 28px;
+  background: #fff;
+  overflow-y: auto;
+}
+
+.instruction-editor-tools-top {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.instruction-editor-btn {
+  background: #fff;
+  color: var(--rose-700);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 14px;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+}
+
+.instruction-editor-btn:hover {
+  background: var(--rose-050);
+  border-color: var(--rose-500);
+}
+
+.instruction-editor-btn-primary {
+  background: var(--rose-500);
+  color: #fff;
+  border-color: var(--rose-500);
+}
+
+.instruction-editor-btn-primary:hover {
+  background: var(--rose-600);
+  border-color: var(--rose-600);
+}
+
+.instruction-editor-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.instruction-editor-section:last-of-type {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.instruction-editor-section-title {
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+  letter-spacing: 0.03em;
+}
+
+.instruction-editor-tool-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  justify-items: center;
+  align-items: center;
+  gap: 12px;
+}
+
+.instruction-editor-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--ink);
+  font-family: inherit;
+}
+
+.instruction-editor-icon-img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+}
+
+.instruction-editor-icon-btn:hover {
+  background: var(--rose-050);
+  border-color: var(--rose-500);
+  color: var(--rose-700);
+}
+
+.instruction-editor-icon-btn.is-active {
+  background: var(--rose-100);
+  border-color: var(--rose-500);
+  color: var(--rose-700);
+}
+
+.instruction-editor-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.instruction-editor-size-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--muted);
+  padding: 10px 12px;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.instruction-editor-size-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--rose-500);
+}
+
+.instruction-editor-color-picker-btn {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  padding: 0;
+}
+
+.instruction-editor-color-picker-swatch {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #7B3FF2;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+}
+
+.instruction-editor-color-picker-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.instruction-editor-color-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  padding: 4px;
+}
+
+.instruction-editor-color-swatch {
+  height: 46px;
+  border-radius: 8px;
+  border: 2px solid #3BAE95;
+  cursor: pointer;
+  box-shadow: 0 0 0 1px var(--line);
+  font-family: inherit;
+}
+
+.instruction-editor-color-swatch.is-active {
+  box-shadow: 0 0 0 2px var(--rose-700);
+  transform: scale(1.04);
+}
+
+.instruction-editor-text-wrap {
+  display: inline-block;
+}
+
+/* While the box is being dragged: move cursor, no text selection, and disable
+   touch panning so the drag tracks the finger. */
+.instruction-editor-text-input.is-dragging {
+  cursor: move;
+  user-select: none;
+  caret-color: transparent;
+}
+.instruction-editor-text-input {
+  touch-action: none;
+}
+
+/* No-mode selection overlay: a dashed outline around the picked element with a
+   trash button at its top-right. A DOM overlay (not drawn on canvas) so it
+   never bakes into the exported image. The box is click-through so the element
+   under it stays draggable; only the trash button captures clicks. */
+.ie-select-box {
+  position: absolute;
+  border: 1.5px dashed var(--rose-500);
+  border-radius: 4px;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 12;
+}
+.ie-select-box.is-hidden { display: none; }
+.ie-select-trash {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--rose-700);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  pointer-events: auto;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.ie-select-trash:hover {
+  background: var(--rose-100);
+  color: var(--rose-800);
+  border-color: var(--rose-500);
+}
+
+.instruction-editor-text-input {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px dashed var(--rose-500);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: "Montserrat", "Segoe UI", sans-serif;
+  font-weight: 600;
+  outline: none;
+  min-width: 60px;
+  box-shadow: 0 2px 8px rgba(26, 77, 63, 0.15);
+  cursor: text;
+  /* Resize handle is drawn at the bottom-right by `resize: both`; the dashed
+     border + light background acts as the visible "text box" the user drags. */
+  line-height: 1.1;
+}
+
+/* Empty-box placeholder so the user knows to type before resizing */
+.instruction-editor-text-input:empty::before {
+  content: attr(data-placeholder);
+  color: #b48daa;
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .tooth.is-missing .tooth-image {
+    opacity: 0.25;
+  }
+
+  /* ---- Instruction editor: Instagram Stories–style overlay ---- */
+  .instruction-editor-panel {
+    inset: 0;
+    border: 0;
+    border-radius: 0;
+    background: #111;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+  }
+
+  .instruction-editor-canvas-wrap {
+    border-right: 0;
+    background: #fff;
+    grid-row: 1;
+    grid-column: 1;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Tools overlay covers the whole panel; only its actual controls catch input */
+  .instruction-editor-tools {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    gap: 0;
+    background: transparent;
+    overflow: visible;
+    pointer-events: none;
+    display: block;
+  }
+
+  /* Reset section / top-bar wrappers so they no longer drive layout */
+  .instruction-editor-tools-top,
+  .instruction-editor-section {
+    display: contents;
+  }
+
+  .instruction-editor-section-title { display: none; }
+
+  /* CANCEL — top-left circular pill (× glyph generated via ::before) */
+  #instructionEditorCancelBtn {
+    position: absolute;
+    top: max(12px, env(safe-area-inset-top, 12px));
+    left: 12px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    font-size: 0;
+    pointer-events: auto;
+  }
+  #instructionEditorCancelBtn::before {
+    content: "\00D7";
+    font-size: 1.6rem;
+    line-height: 1;
+    font-weight: 400;
+  }
+
+  /* SAVE — top-right rose pill */
+  #instructionEditorSaveBtn {
+    position: absolute;
+    top: max(12px, env(safe-area-inset-top, 12px));
+    right: 12px;
+    padding: 10px 18px;
+    border-radius: 22px;
+    font-size: 0.72rem;
+    background: var(--rose-500);
+    border: 1px solid var(--rose-500);
+    color: #fff;
+    pointer-events: auto;
+  }
+
+  /* Drawing-tool icons stack vertically on the right edge */
+  .instruction-editor-section:nth-of-type(1) > .instruction-editor-tool-row,
+  .instruction-editor-section:nth-of-type(2) > .instruction-editor-tool-row {
+    position: absolute;
+    right: 12px;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: auto;
+  }
+
+  /* Currently Drawing row (line, text) — upper part of right column */
+  .instruction-editor-section:nth-of-type(1) > .instruction-editor-tool-row {
+    top: 78px;
+  }
+
+  /* Undo/Redo — horizontal pair at top-left under Cancel */
+  .instruction-editor-section:nth-of-type(2) > .instruction-editor-tool-row:nth-of-type(1) {
+    top: 78px;
+    left: 12px;
+    right: auto;
+    flex-direction: row;
+  }
+
+  /* Brush/Pen/Eraser — lower part of right column, below the line/text pair */
+  .instruction-editor-section:nth-of-type(2) > .instruction-editor-tool-row:nth-of-type(2) {
+    /* line/text takes 2*(44+10) = 108; gap 16 → start at 78 + 124 ≈ 202 */
+    top: 202px;
+  }
+
+  /* CLEAR — bottom-left pill above the size slider */
+  #clearDrawingsBtn {
+    position: absolute;
+    left: 12px;
+    bottom: 168px;
+    width: auto;
+    padding: 8px 14px;
+    border-radius: 22px;
+    background: rgba(0, 0, 0, 0.55);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    font-size: 0.66rem;
+    pointer-events: auto;
+  }
+
+  /* SIZE slider — full-width translucent pill above the colour row */
+  .instruction-editor-size-row {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 108px;
+    background: rgba(0, 0, 0, 0.55);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border-radius: 22px;
+    padding: 8px 16px;
+    color: #fff;
+    grid-template-columns: auto 1fr auto;
+    pointer-events: auto;
+  }
+
+  /* COLOURS — full-width swatch row pinned to bottom */
+  .instruction-editor-color-grid {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: max(20px, env(safe-area-inset-bottom, 20px));
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    padding: 10px 14px;
+    background: rgba(0, 0, 0, 0.55);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    border-radius: 30px;
+    justify-items: center;
+    pointer-events: auto;
+  }
+
+  /* Icon buttons: translucent dark circles → solid white when active */
+  .instruction-editor-icon-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    pointer-events: auto;
+  }
+
+  .instruction-editor-icon-btn:hover,
+  .instruction-editor-icon-btn.is-active {
+    background: #fff;
+    color: var(--rose-700);
+    border-color: #fff;
+  }
+
+  .instruction-editor-icon-btn .instruction-editor-icon-img {
+    filter: brightness(0) invert(1);
+  }
+
+  .instruction-editor-icon-btn.is-active .instruction-editor-icon-img,
+  .instruction-editor-icon-btn:hover .instruction-editor-icon-img {
+    filter: none;
+  }
+
+  /* Color swatches: white-ringed circles */
+  .instruction-editor-color-swatch {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+  }
+
+  .instruction-editor-color-swatch.is-active {
+    box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--rose-500);
+    transform: scale(1.05);
+  }
+}
+
+/* ---- Instruction editor: floating circular toolbar ----------------------
+   Replaces the old tool sidebar/panel: a full-screen white editing surface
+   with a centered top toolbar of circular icon buttons (their actions are
+   wired up later), a close button top-left, and a green circular send/save
+   button bottom-right. This block is intentionally LAST in the file so it
+   overrides the legacy editor rules above (whose target elements no longer
+   exist) at every width — no media query needed. */
+.instruction-editor-panel {
+  inset: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  /* Black surround so the centred white photo frame stands out on desktop.
+     On mobile the frame fills the screen, so the black isn't visible. */
+  background: #000;
+  display: block;
+}
+
+/* Frame holding the photo + tools + colour bar + save. Mobile-first: fills the
+   screen. Desktop turns it into a centred, bordered phone-shaped card (see the
+   min-width rule at the end of the file). */
+.ie-frame {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  overflow: hidden;
+}
+
+.instruction-editor-canvas-wrap {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: #fff;
+  overflow: hidden;
+}
+
+/* Top-center toolbar: white pill holding circular icon buttons. */
+.ie-toolbar {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top, 14px));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  padding: 1px 12px;
+  background: transparent;
+  border-radius: 999px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.14);
+  z-index: 3;
+}
+
+.ie-tool-btn {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #3BAE95;
+  cursor: pointer;
+}
+.ie-tool-btn:hover { background: var(--rose-050); }
+.ie-tool-btn.is-active { background: var(--rose-500); }
+.ie-tool-btn svg { width: 22px; height: 22px; }
+.ie-tool-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  display: block;
+}
+/* Teal icons flip to white when their tool is the active one. */
+.ie-tool-btn.is-active .ie-tool-icon { filter: brightness(0) invert(1); }
+
+/* Close — top-left circle. Dark disc + white glyph so it reads on both the
+   black desktop surround and the white photo on mobile. */
+#instructionEditorCancelBtn {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top, 14px));
+  left: 16px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 0;
+  cursor: pointer;
+  z-index: 3;
+}
+#instructionEditorCancelBtn::before {
+  content: "\00D7";
+  font-size: 1.7rem;
+  line-height: 1;
+}
+#instructionEditorCancelBtn:hover { background: rgba(0, 0, 0, 0.6); }
+
+/* Save — labelled green pill, OUTSIDE the frame at the screen's lower-right.
+   top/left forced to auto so the legacy mobile rule (which sets top:12px)
+   can't stretch it into a full-height bar. */
+#instructionEditorSaveBtn {
+  position: absolute;
+  top: auto;
+  left: auto;
+  right: 22px;
+  bottom: 22px;
+  width: auto;
+  height: auto;
+  min-width: 92px;
+  padding: 12px 26px;
+  border: 0;
+  border-radius: 10px;
+  background: #25d366;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-family: inherit;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  z-index: 3;
+}
+#instructionEditorSaveBtn:hover { background: #1ebe5b; }
+
+/* ---- Crop & rotate mode -------------------------------------------------- */
+/* While cropping, the editor's own chrome is hidden — the crop bar has its own
+   Cancel / Done. */
+.instruction-editor-modal.is-cropping .ie-toolbar,
+.instruction-editor-modal.is-cropping .ie-shapeui,
+.instruction-editor-modal.is-cropping .ie-textui,
+.instruction-editor-modal.is-cropping .ie-brushui,
+.instruction-editor-modal.is-cropping #instructionEditorCancelBtn,
+.instruction-editor-modal.is-cropping #instructionEditorSaveBtn {
+  display: none;
+}
+
+/* Shape mode takes over the editor the same way crop does: the editor's own
+   toolbar and × / send chrome are hidden, and the shapes UI shows its own
+   Cancel / Done at the bottom. */
+.instruction-editor-modal.is-shaping .ie-toolbar,
+.instruction-editor-modal.is-shaping #instructionEditorCancelBtn,
+.instruction-editor-modal.is-shaping #instructionEditorSaveBtn {
+  display: none;
+}
+
+/* Text mode takes over the editor like shape mode does. */
+.instruction-editor-modal.is-texting .ie-toolbar,
+.instruction-editor-modal.is-texting #instructionEditorCancelBtn,
+.instruction-editor-modal.is-texting #instructionEditorSaveBtn {
+  display: none;
+}
+
+/* Brush mode takes over the editor like shape mode does. */
+.instruction-editor-modal.is-brushing .ie-toolbar,
+.instruction-editor-modal.is-brushing #instructionEditorCancelBtn,
+.instruction-editor-modal.is-brushing #instructionEditorSaveBtn {
+  display: none;
+}
+
+/* ---- Shapes UI (opens from the square toolbar icon) ----------------------
+   Full-overlay container; only its controls catch input so the canvas stays
+   drawable underneath. Holds the shapes row (top-center), an undo button
+   (top-left, next to Close), and a vertical rainbow colour bar (right).
+   .ie-brushui (brush mode) reuses the same overlay + shape sub-classes. */
+.ie-shapeui,
+.ie-brushui {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.ie-shapeui.is-hidden,
+.ie-brushui.is-hidden { display: none; }
+
+/* Shape controls cluster — parked in the top-right corner (undo sits beside
+   the shape row) so it stays clear of the jaw's anterior teeth. The editor's
+   × / send chrome is hidden in shape mode, so the corner is free. */
+.ie-shape-top {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top, 14px));
+  right: max(14px, env(safe-area-inset-right, 14px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+.ie-shape-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
+}
+.ie-shape-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--rose-700);
+  cursor: pointer;
+}
+.ie-shape-btn:hover { background: var(--rose-050); }
+.ie-shape-btn.is-active {
+  background: var(--rose-500);
+  border-color: var(--rose-500);
+  color: #fff;
+}
+.ie-shape-btn svg { width: 22px; height: 22px; }
+
+/* Undo — circular button sitting just left of the shape row in the cluster. */
+.ie-shape-undo {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+}
+.ie-shape-undo:hover { background: rgba(0, 0, 0, 0.7); }
+.ie-shape-undo svg { width: 22px; height: 22px; }
+
+/* Vertical rainbow colour bar (right edge). */
+.ie-colorbar {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: min(360px, 60vh);
+  border-radius: 9px;
+  box-shadow: 0 0 0 2px #fff, 0 2px 10px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
+}
+.ie-colorbar-thumb {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Bottom Cancel / Done bar — mirrors the crop bar's bottom row. */
+.ie-shape-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px max(20px, env(safe-area-inset-bottom, 20px));
+  pointer-events: auto;
+}
+.ie-shape-text {
+  background: transparent;
+  border: 0;
+  color: #1a1a1a;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 4px;
+  font-family: inherit;
+}
+.ie-shape-done { color: #1a9d4e; }
+
+/* ---- Text UI (opens from the text toolbar icon) --------------------------
+   Same overlay pattern as the shapes UI: a top-right pill with an alignment
+   toggle + a background toggle, the rainbow colour bar (right) and the bottom
+   Cancel / Done bar. The live text box is a contenteditable placed over the
+   canvas. */
+.ie-textui {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.ie-textui.is-hidden { display: none; }
+
+.ie-text-top {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top, 14px));
+  right: max(14px, env(safe-area-inset-right, 14px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+.ie-text-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.16);
+}
+.ie-text-ctl {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--rose-700);
+  cursor: pointer;
+  padding: 0;
+}
+.ie-text-ctl:hover { background: var(--rose-050); }
+.ie-text-ctl svg { width: 22px; height: 22px; }
+/* Background-toggle swatch: shows the current text-plate colour. */
+.ie-text-bg-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: transparent;
+}
+.ie-text-bg-swatch.is-transparent {
+  background-image: linear-gradient(45deg, #ccc 25%, transparent 25%),
+    linear-gradient(-45deg, #ccc 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ccc 75%),
+    linear-gradient(-45deg, transparent 75%, #ccc 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
+
+/* ---- Brush mode -----------------------------------------------------------
+   Top brush/eraser toggle uses PNG icons; the bottom-centre row holds the four
+   size/style presets (2px / 5px / 10px / spray), just above Cancel·Done. */
+.ie-brush-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+}
+.ie-shape-btn.is-active .ie-brush-icon {
+  filter: brightness(0) invert(1);
+}
+.ie-brush-presets {
+  position: absolute;
+  left: 50%;
+  bottom: 76px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  padding: 8px 12px;
+  background: transparent;
+  border-radius: 14px;
+  pointer-events: auto;
+}
+.ie-brush-preset {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--rose-700);
+  cursor: pointer;
+  padding: 0;
+}
+.ie-brush-preset:hover { background: rgba(255, 255, 255, 0.5); }
+.ie-brush-preset.is-active {
+  background: var(--rose-500);
+  border-color: var(--rose-500);
+  color: #fff;
+}
+.ie-brush-preset svg { width: 26px; height: 26px; }
+/* Letter labels (text-style presets B / I / U / N). */
+.ie-brush-preset span {
+  font-family: inherit;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.ie-crop {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  touch-action: none;
+}
+.ie-crop.is-hidden { display: none; }
+
+/* The frame's huge spread box-shadow dims everything outside the crop rect. */
+.ie-crop-frame {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+  cursor: move;
+}
+
+/* Rule-of-thirds grid (lines at 33% / 66%). */
+.ie-crop-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.35) 1px, transparent 1px);
+  background-size: 100% 33.333%, 33.333% 100%;
+}
+
+/* Corner handles drawn as small white L-brackets. */
+.ie-crop-handle {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+}
+.ie-crop-handle::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 3px solid #fff;
+}
+.ie-crop-handle-nw { top: -2px; left: -2px; cursor: nwse-resize; }
+.ie-crop-handle-nw::before { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+.ie-crop-handle-ne { top: -2px; right: -2px; cursor: nesw-resize; }
+.ie-crop-handle-ne::before { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+.ie-crop-handle-sw { bottom: -2px; left: -2px; cursor: nesw-resize; }
+.ie-crop-handle-sw::before { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+.ie-crop-handle-se { bottom: -2px; right: -2px; cursor: nwse-resize; }
+.ie-crop-handle-se::before { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+
+/* Bottom bar (rotation dial + Cancel/Done), floating over the dimmed area. */
+.ie-crop-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 24px max(20px, env(safe-area-inset-bottom, 20px));
+}
+.ie-crop-bar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+/* Rotate-90 (left) + aspect-ratio (right) corner icon buttons. */
+.ie-crop-iconbtn {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #1a1a1a;
+  cursor: pointer;
+}
+.ie-crop-iconbtn:hover { background: rgba(0, 0, 0, 0.08); }
+.ie-crop-iconbtn svg { width: 24px; height: 24px; }
+.ie-crop-iconimg { width: 24px; height: 24px; object-fit: contain; display: block; }
+.ie-crop-dial {
+  position: relative;
+  flex: 1 1 auto;
+  max-width: min(360px, 60vw);
+  height: 40px;
+  cursor: ew-resize;
+}
+.ie-crop-dial-track {
+  position: absolute;
+  inset: 12px 0;
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.45) 0 1px,
+    transparent 1px 14px
+  );
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+}
+.ie-crop-dial-pointer {
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: #25d366;
+  transform: translateX(-50%);
+}
+.ie-crop-dial-value {
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #111;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.ie-crop-bar-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ie-crop-text {
+  background: transparent;
+  border: 0;
+  color: #1a1a1a;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 4px;
+  font-family: inherit;
+}
+.ie-crop-done { color: #1a9d4e; }
+
+/* Aspect-ratio action sheet (opened from the right corner button). */
+.ie-crop-aspect-menu {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.25);
+}
+.ie-crop-aspect-menu.is-hidden { display: none; }
+.ie-crop-aspect-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(300px, 80vw);
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(40, 40, 40, 0.72);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.ie-crop-aspect-sheet button {
+  border: 0;
+  border-radius: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.ie-crop-aspect-sheet button:hover { background: rgba(255, 255, 255, 0.22); }
+.ie-crop-aspect-cancel { color: #ff6b6b !important; }
+
+
+/* ============ noticeboard thumbnail preview lightbox ============ */
+.noticeboard-thumb-preview {
+  position: absolute;
+  bottom: 6px;
+  right: 36px;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  color: var(--ink-soft, #475569);
+  padding: 0;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.noticeboard-thumb-preview:hover {
+  background: #eef6f3;
+  border-color: #3BAE95;
+  color: #25735f;
+}
+.noticeboard-thumb-preview i { font-size: inherit; line-height: 1; }
+
+/* ---- Guest gate (Login / Continue as guest) ---- */
+.noticeboard-guestgate-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.noticeboard-guestgate-modal.is-hidden { display: none !important; }
+
+.noticeboard-guestgate-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.78);
+  backdrop-filter: blur(2px);
+}
+
+.noticeboard-guestgate-card {
+  position: relative;
+  z-index: 1;
+  width: min(92vw, 420px);
+  background: #fff;
+  border-radius: 14px;
+  padding: 28px 26px 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  text-align: center;
+}
+
+.noticeboard-guestgate-title {
+  margin: 0 0 10px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.noticeboard-guestgate-text {
+  margin: 0 0 22px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.noticeboard-guestgate-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.noticeboard-guestgate-btn {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.noticeboard-guestgate-btn.is-primary {
+  background: var(--primary, #3BAE95);
+  color: #fff;
+}
+.noticeboard-guestgate-btn.is-primary:hover { background: #2f9c84; }
+.noticeboard-guestgate-btn.is-ghost {
+  background: #fff;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+.noticeboard-guestgate-btn.is-ghost:hover { background: #f1f5f9; }
+
+.noticeboard-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.noticeboard-preview-modal.is-hidden { display: none !important; }
+
+.noticeboard-preview-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.78);
+  backdrop-filter: blur(2px);
+}
+
+.noticeboard-preview-frame {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: min(92vw, 1100px);
+  height: min(88vh, 800px);
+}
+
+.noticeboard-preview-img {
+  max-width: 88%;
+  max-height: 100%;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+}
+
+.noticeboard-preview-nav {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.noticeboard-preview-nav:hover {
+  background: rgba(255, 255, 255, 0.32);
+  transform: scale(1.05);
+}
+
+.noticeboard-preview-close {
+  position: absolute;
+  top: -42px;
+  right: -4px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.noticeboard-preview-close:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.noticeboard-preview-caption {
+  position: absolute;
+  bottom: -36px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .noticeboard-preview-frame {
+    gap: 6px;
+  }
+  .noticeboard-preview-nav {
+    width: 36px;
+    height: 36px;
+    font-size: 22px;
+  }
+}
+
+/* ---- Instruction editor: tablet/desktop frame the photo like the 3D preview
+   On screens ≥600px (tablets incl. iPad Mini portrait at 768, and desktop) the
+   photo sits in a centred, phone-shaped card with a light border (matching
+   .preview-frame) and a black surround. The tools, colour bar and presets live
+   inside this frame so they stay aligned to the photo; only Close (×) and Save
+   sit outside. On phones (<600px) the frame fills the screen (base rule). */
+@media (min-width: 600px) {
+  .ie-frame {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: min(100%, 430px);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+}

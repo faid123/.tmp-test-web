@@ -1,0 +1,823 @@
+.clinical-info-btn {
+  position: absolute;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 8px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.clinical-info-btn:hover {
+  opacity: 0.75;
+}
+
+.clinical-info-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+}
+
+.clinical-info-modal.is-hidden { display: none !important; }
+
+.clinical-info-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 77, 63, 0.4);
+}
+
+.clinical-info-panel {
+  position: absolute;
+  inset: 0.5vh 0.5vw;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(26, 77, 63, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--ink);
+  font-family: inherit;
+}
+
+.clinical-info-srtitle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
+}
+
+.clinical-info-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #dae6dd;
+  background: #fff;
+}
+
+.clinical-info-topbar-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.clinical-info-action-btn {
+  background: #fff;
+  color: var(--rose-700);
+  border: 1px solid var(--rose-500);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.clinical-info-action-btn:hover {
+  background: var(--rose-050);
+}
+
+.clinical-info-action-btn-primary {
+  background: var(--rose-500);
+  color: #fff;
+  border-color: var(--rose-500);
+}
+
+.clinical-info-action-btn-primary:hover {
+  background: var(--rose-500);
+  border-color: var(--rose-500);
+}
+
+.clinical-info-legend {
+  padding: 12px 18px;
+  border: 1px solid #d7dce4;
+  border-radius: 10px;
+  margin: 14px 20px 8px;
+  background: #f1f2f4;
+  position: relative;
+}
+
+.clinical-info-legend-title {
+  color: #2aa67c;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  font-size: 0.85rem;
+  margin-bottom: 10px;
+}
+
+.clinical-info-legend-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: flex-end;
+  row-gap: 14px;
+  column-gap: 18px;
+}
+
+.clinical-info-legend-block {
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.clinical-info-legend-row {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+}
+
+.clinical-info-legend-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 75px;
+}
+
+.clinical-info-legend-label-top,
+.clinical-info-legend-text {
+  color: #2a3340;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 2px 4px;
+  white-space: nowrap;
+}
+
+.clinical-info-legend-text { font-size: 0.68rem; }
+.clinical-info-legend-label-top { font-size: 0.68rem; }
+
+.clinical-info-note {
+  padding: 5px 18px;
+  margin: 0 5px 8px;
+  background: #fff;
+}
+
+.clinical-info-note-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  column-gap: 24px;
+  row-gap: 25px;
+  align-items: start;
+}
+
+.clinical-info-note-field {
+  display: grid;
+  grid-template-rows: auto auto;
+  row-gap: 4px;
+  min-width: 0;
+}
+
+.clinical-info-note-label {
+  font-size: 0.93rem;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--rose-700);
+  line-height: 1.2;
+}
+
+.clinical-info-note-value {
+  font-size: 0.72rem;
+  line-height: 1.3;
+  font-weight: bold;
+  color: #1f2937;
+  background: transparent;
+  border: none;
+  word-break: break-word;
+}
+
+@media (max-width: 900px) {
+  .clinical-info-note-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.clinical-info-legend-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 0.66rem;
+  color: #fff;
+}
+
+/* Mobile: keep all clinical-info-modal action buttons + legend visible without
+   horizontal clipping. The default topbar/legend layouts are tuned for desktop. */
+@media (max-width: 720px) {
+  .clinical-info-panel {
+    inset: 0;
+    border-radius: 0;
+  }
+
+  .clinical-info-topbar {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    gap: 6px;
+  }
+
+  .clinical-info-topbar-actions {
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .clinical-info-action-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 8px 10px;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    text-align: center;
+  }
+
+  .clinical-info-legend {
+    margin: 6px 10px;
+    padding: 6px 8px;
+    max-height: 38vh;
+    overflow-y: auto;
+  }
+
+  .clinical-info-legend-title {
+    font-size: 0.7rem;
+    margin-bottom: 4px;
+  }
+
+  .clinical-info-legend-grid {
+    column-gap: 6px;
+    row-gap: 4px;
+  }
+
+  .clinical-info-legend-row {
+    flex-wrap: wrap;
+    row-gap: 2px;
+    gap: 2px;
+  }
+
+  .clinical-info-legend-item {
+    min-width: 36px;
+    gap: 2px;
+  }
+
+  .clinical-info-legend-swatch {
+    width: 22px;
+    height: 22px;
+    font-size: 0.6rem;
+  }
+
+  .clinical-info-legend-label-top,
+  .clinical-info-legend-text {
+    font-size: 0.56rem;
+    padding: 1px 2px;
+  }
+}
+
+.clinical-info-mobility--1 { background: #4caf50; }
+.clinical-info-mobility--2 { background: #f6c344; color: #3a2c00; }
+.clinical-info-mobility--3 { background: red; }
+
+.clinical-info-legend-img {
+  width: auto;
+  height: 70px;
+  max-width: 70px;
+  object-fit: contain;
+  display: block;
+}
+
+/* Visually align the taller icons (root canal + cracked) with their
+   row by pulling them up a few pixels. */
+.clinical-info-legend-block[data-ci-toggle="rct"] .clinical-info-legend-img,
+.clinical-info-legend-block[data-ci-toggle="cracked"] .clinical-info-legend-img {
+  position: relative;
+  top: 0px;
+  margin-bottom: -6px;
+}
+
+/* Mobile: cap legend icon size. Must come after the global .clinical-info-legend-img
+   rule above (which sets height: 70px) so it actually wins. */
+@media (max-width: 720px) {
+  .clinical-info-legend-img {
+    height: 24px;
+    max-width: 24px;
+    max-height: 24px;
+    width: auto;
+  }
+
+  .clinical-info-legend-block[data-ci-toggle="rct"] .clinical-info-legend-img,
+  .clinical-info-legend-block[data-ci-toggle="cracked"] .clinical-info-legend-img {
+    margin-bottom: 0;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 900px) {
+  .clinical-info-legend {
+    margin: 8px 12px;
+    padding: 8px 12px;
+  }
+
+  .clinical-info-legend-grid {
+    column-gap: 10px;
+    row-gap: 8px;
+  }
+
+  .clinical-info-legend-row {
+    gap: 4px;
+  }
+
+  .clinical-info-legend-item {
+    min-width: 46px;
+    gap: 3px;
+  }
+
+  .clinical-info-legend-img {
+    height: 40px;
+    max-width: 40px;
+  }
+
+  .clinical-info-legend-swatch {
+    width: 30px;
+    height: 30px;
+    font-size: 0.62rem;
+  }
+
+  .clinical-info-legend-label-top,
+  .clinical-info-legend-text {
+    font-size: 0.62rem;
+  }
+}
+
+/* ----- Interactive legend (when a tooth is selected) ----- */
+
+.clinical-info-legend [data-ci-toggle],
+.clinical-info-legend [data-ci-option] {
+  cursor: not-allowed;
+  user-select: none;
+}
+
+.clinical-info-legend.has-selection [data-ci-toggle],
+.clinical-info-legend.has-selection [data-ci-option] {
+  cursor: pointer;
+}
+
+.clinical-info-legend:not(.has-selection) .clinical-info-legend-grid {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.clinical-info-legend.is-locked-missing .clinical-info-legend-grid {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.clinical-info-legend.is-locked-missing .clinical-info-legend-title {
+  color: #3BAE95;
+}
+
+.clinical-info-legend [data-ci-toggle] {
+  border-radius: 8px;
+  padding: 4px 8px;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+  border: 1.5px solid transparent;
+}
+
+.clinical-info-legend [data-ci-toggle].is-active {
+  background: #eef9f3;
+  border-color: #2aa67c;
+}
+
+.clinical-info-legend [data-ci-option] {
+  border-radius: 6px;
+  border: 1.5px solid transparent;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.clinical-info-legend .clinical-info-legend-option {
+  padding: 3px 6px;
+}
+
+.clinical-info-legend [data-ci-option].is-active {
+  background: #eef9f3;
+  border-color: #2aa67c;
+}
+
+.clinical-info-legend .clinical-info-mobility[data-ci-option].is-active {
+  outline: 2px solid #1f8a6b;
+  outline-offset: 1px;
+}
+
+/* ----- Tooth chart markers driven by clinicalNotes ----- */
+
+.clinical-info-tooth-img.is-tint-yellow {
+  filter: brightness(0) saturate(100%) invert(72%) sepia(85%) saturate(2200%) hue-rotate(2deg) brightness(105%) contrast(105%);
+}
+
+.clinical-info-tooth-img.is-tint-red {
+  filter: brightness(0) saturate(100%) invert(22%) sepia(99%) saturate(6000%) hue-rotate(355deg) brightness(95%) contrast(105%);
+}
+
+.clinical-info-tooth-img.is-tint-green {
+  filter: brightness(0) saturate(100%) invert(45%) sepia(85%) saturate(2500%) hue-rotate(105deg) brightness(95%) contrast(105%);
+}
+
+/* Root stump: blacken the crown silhouette. */
+.clinical-info-tooth-img.is-tint-black {
+  filter: brightness(0);
+}
+
+/* Root stump: white "RS" centered over the blacked-out crown. */
+.clinical-info-tooth-rootstump-label {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.8rem;
+  line-height: 1;
+  letter-spacing: 0.5px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.clinical-info-tooth.is-upper .clinical-info-tooth-rootstump-label {
+  bottom: 17%;
+}
+
+.clinical-info-tooth.is-lower .clinical-info-tooth-rootstump-label {
+  top: 20%;
+}
+
+
+.clinical-info-tooth-img.is-hidden {
+  visibility: hidden;
+  height: 0 !important;
+  max-height: 0 !important;
+}
+
+.clinical-info-tooth-tilt {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 2.2rem;
+  font-weight: 900;
+  color: var(--rose-500);
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.9), 0 0 2px rgba(255, 255, 255, 0.9);
+  z-index: 3;
+  line-height: 0;
+  pointer-events: none;
+}
+
+/* Crown sits at the bottom of upper-tooth cells, top of lower-tooth cells. */
+.clinical-info-tooth.is-upper .clinical-info-tooth-tilt {
+  bottom: 18%;
+}
+
+.clinical-info-tooth.is-lower .clinical-info-tooth-tilt {
+  top: 22%;
+}
+
+.clinical-info-tooth-tilt--SE {
+  font-size: 1rem;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.clinical-info-tooth-extraction-arrow {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.4rem;
+  color: #3BAE95;
+  font-weight: 900;
+  letter-spacing: -2px;
+  z-index: 3;
+  line-height: 1;
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+
+.clinical-info-tooth.is-upper .clinical-info-tooth-extraction-arrow {
+  bottom: -2%;
+}
+
+.clinical-info-tooth.is-lower .clinical-info-tooth-extraction-arrow {
+  top: 0%;
+}
+
+/* ----- Restoration subtype markers (overlay on crown) ----- */
+
+.clinical-info-tooth-restoration {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.clinical-info-tooth.is-upper .clinical-info-tooth-restoration {
+  bottom: 17%;
+}
+
+.clinical-info-tooth.is-lower .clinical-info-tooth-restoration {
+  top: 20%;
+}
+
+.clinical-info-tooth-restoration.is-ar {
+  width: 14px;
+  height: 14px;
+  background: #888a8f;
+  border-radius: 50%;
+}
+
+.clinical-info-tooth-restoration.is-tcr {
+  width: 14px;
+  height: 14px;
+  background: cyan;
+  border-radius: 50%;
+}
+
+.clinical-info-tooth-restoration.is-inlay {
+  width: 20px;
+  height: 10px;
+  background: #2563eb;
+  border-radius: 2px;
+}
+
+.clinical-info-tooth-restoration.is-onlay {
+  width: 20px;
+  height: 10px;
+  background: #b8860b;
+  border-radius: 2px;
+}
+
+@media (min-width: 721px) and (max-width: 900px) {
+  .clinical-info-tooth-restoration {
+  position: absolute;
+  left: 35%;
+  transform: translateX(-10%);
+  z-index: 2;
+  pointer-events: none;
+ }
+ .clinical-info-tooth.is-upper .clinical-info-tooth-restoration {
+  bottom: 27%;
+}
+
+.clinical-info-tooth.is-lower .clinical-info-tooth-restoration {
+  top: 30%;
+}
+
+  .clinical-info-tooth-restoration.is-ar,
+  .clinical-info-tooth-restoration.is-tcr {
+    width: 12px;
+    height: 12px;
+  }
+
+  .clinical-info-tooth-restoration.is-inlay,
+  .clinical-info-tooth-restoration.is-onlay {
+    width: 16px;
+    height: 8px;
+  }
+}
+
+@media (max-width: 720px) {
+   .clinical-info-tooth-restoration {
+  position: absolute;
+  left: 38%;
+  transform: translateX(-20%);
+  z-index: 2;
+  pointer-events: none;
+ }
+ .clinical-info-tooth.is-upper .clinical-info-tooth-restoration {
+  bottom: 38%;
+}
+
+.clinical-info-tooth.is-lower .clinical-info-tooth-restoration {
+  top: 38%;
+}
+  .clinical-info-tooth-restoration.is-ar,
+  .clinical-info-tooth-restoration.is-tcr {
+    width: 5px;
+    height: 5px;
+  }
+
+  .clinical-info-tooth-restoration.is-inlay,
+  .clinical-info-tooth-restoration.is-onlay {
+    width: 8px;
+    height: 4px;
+  }
+  .clinical-info-tooth-rootstump-label {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.3rem;
+  line-height: 1;
+  letter-spacing: 0.5px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.clinical-info-tooth.is-upper .clinical-info-tooth-rootstump-label {
+  bottom: 38%;
+}
+
+.clinical-info-tooth.is-lower .clinical-info-tooth-rootstump-label {
+  top: 38%;
+}
+.clinical-info-tooth-tilt {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1rem;
+  font-weight: 900;
+  color: var(--rose-500);
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.9), 0 0 2px rgba(255, 255, 255, 0.9);
+  z-index: 3;
+  line-height: 0;
+  pointer-events: none;
+}
+
+/* Crown sits at the bottom of upper-tooth cells, top of lower-tooth cells. */
+.clinical-info-tooth.is-upper .clinical-info-tooth-tilt {
+  bottom: 30%;
+}
+
+.clinical-info-tooth.is-lower .clinical-info-tooth-tilt {
+  top: 30%;
+}
+
+.clinical-info-tooth-tilt--SE {
+  font-size: 0.5rem;
+  background: transparent;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.clinical-info-tooth-extraction-arrow {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.9rem;
+  color: #3BAE95;
+  font-weight: 900;
+  z-index: 3;
+  line-height: 1;
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+
+.clinical-info-tooth.is-upper .clinical-info-tooth-extraction-arrow {
+  bottom: 27%;
+}
+
+.clinical-info-tooth.is-lower .clinical-info-tooth-extraction-arrow {
+  top: 27%;
+}
+}
+
+
+.clinical-info-chart {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 20px 20px;
+  overflow: auto;
+  min-height: 0;
+}
+
+.clinical-info-chart-label {
+  color: #2aa67c;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.clinical-info-row {
+  display: grid;
+  grid-template-columns: repeat(16, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.clinical-info-tooth {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #f4f4f6;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  padding: 4px 0 6px;
+  min-height: 200px;
+  cursor: pointer;
+}
+
+.clinical-info-tooth.is-selected {
+  border-color: #2aa67c;
+  background: #eef9f3;
+}
+
+.clinical-info-tooth:hover {
+  background: #ececf2;
+}
+
+.clinical-info-tooth.is-selected:hover {
+  background: #e6f5ec;
+}
+
+.clinical-info-tooth-number {
+  font-size: 0.78rem;
+  color: #2a3340;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.clinical-info-row-lower .clinical-info-tooth {
+  flex-direction: column-reverse;
+}
+
+.clinical-info-row-lower .clinical-info-tooth-number {
+  margin-bottom: 0;
+  margin-top: 4px;
+}
+
+.clinical-info-tooth-img-wrap {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.clinical-info-tooth-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0;
+}
+
+.clinical-info-tooth-img {
+  max-width: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  display: block;
+}
+
+.clinical-info-tooth-crown {
+  max-height: 58px;
+}
+
+.clinical-info-tooth-root {
+  max-height: 110px;
+}
+
+.clinical-info-tooth-full {
+  max-height: 170px;
+}
+
+.clinical-info-tooth-img.is-mirrored { transform: scaleX(-1); }
+
+.clinical-info-tooth-cross {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.clinical-info-tooth-cross::before,
+.clinical-info-tooth-cross::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 260%;
+  height: 4px;
+  background: #b0341c;
+  transform-origin: center;
+  border-radius: 2px;
+}
+
+.clinical-info-tooth-cross::before {
+  transform: translate(-50%, -50%) rotate(72deg);
+}
+
+.clinical-info-tooth-cross::after {
+  transform: translate(-50%, -50%) rotate(-72deg);
+}
+

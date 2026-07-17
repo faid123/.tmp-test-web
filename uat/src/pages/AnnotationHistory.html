@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Annotation History</title>
+    <link rel="icon" href="../../assets/profile.png" type="image/png" />
+    <link rel="stylesheet" href="../../css/2Dannotation.css" />
+    <link rel="stylesheet" href="../../css/case_list.css" />
+    <link rel="stylesheet" href="../../css/toast.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: system-ui, -apple-system, sans-serif;
+        background: #f5f5f5;
+        color: #222;
+        min-height: 100vh;
+        padding-bottom: 50px;
+      }
+      .ah-page { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+      .ah-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 20px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid #e0e0e0;
+      }
+      .ah-title {
+        font-size: 18px;
+        font-weight: 600;
+        flex: 1;
+        color: var(--ink, #1a4d3f);
+      }
+      .ah-case-label { font-size: 13px; color: #888; }
+      #annotation-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 16px;
+      }
+      #annotation-grid img {
+        width: 100%;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+        background: #fff;
+        cursor: zoom-in;
+        display: block;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+      }
+      #annotation-grid img:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      }
+      .ah-empty {
+        color: #888;
+        font-size: 14px;
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="ah-page">
+      <header class="ah-header">
+        <h1 class="ah-title">Annotation History</h1>
+        <span class="ah-case-label" id="ahCaseLabel"></span>
+      </header>
+      <div id="annotation-grid">
+        <!-- Filled dynamically via JS -->
+      </div>
+    </div>
+
+    <footer class="ann-footer" aria-label="Application status bar">
+      <div class="ann-footer-left">
+        <button type="button" class="ann-footer-btn" id="footerMenuBtn" aria-label="Menu" data-tooltip="Menu">
+          <i class="fa fa-bars" aria-hidden="true"></i>
+        </button>
+        <span class="ann-footer-case-label">
+          Case : <span id="footerCaseName">—</span>
+        </span>
+      </div>
+      <div class="ann-footer-right">
+        <span class="ann-footer-user" id="footerUserName">—</span>
+      </div>
+    </footer>
+
+    <aside id="appSidebar" class="app-sidebar is-hidden" aria-hidden="true" aria-label="Navigation">
+      <div class="app-sidebar-backdrop" data-sidebar-close></div>
+      <nav class="app-sidebar-panel" role="navigation">
+        <header class="app-sidebar-header">
+          <img class="app-sidebar-brand-logo" src="../../assets/profile.png" alt="" />
+          <span class="app-sidebar-title">SMARTRPD</span>
+          <span class="app-sidebar-version">v2.0</span>
+        </header>
+        <ul id="appSidebarList" class="app-sidebar-list">
+          <li>
+            <button type="button" id="sidebarReturnBtn" class="app-sidebar-item">
+              <i class="fa fa-arrow-left app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Return to Case Selection</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarLogoutBtn" class="app-sidebar-item">
+              <i class="fa fa-right-from-bracket app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Logout</span>
+            </button>
+          </li>
+          <li><hr class="app-sidebar-separator" /></li>
+          <li>
+            <button type="button" id="sidebarHelpBtn" class="app-sidebar-item">
+              <i class="fa fa-circle-info app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Help</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarReportIssueBtn" class="app-sidebar-item">
+              <i class="fa fa-bug app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Report Issue</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarFeedbackBtn" class="app-sidebar-item">
+              <i class="fa fa-comment-dots app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>Feedback</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" id="sidebarAboutBtn" class="app-sidebar-item">
+              <i class="fa-regular fa-square-caret-right app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>About</span>
+            </button>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <script>
+      const hostname = window.location.hostname;
+      const isGitHubPages = hostname.includes("github.io");
+      const basePath = isGitHubPages ? "/.tmp-test-web" : "";
+      document.write(`<script type="module" src="${basePath}/src/js/AnnotationHistory.js"></` + `script>`);
+    </script>
+  </body>
+</html>

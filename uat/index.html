@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login</title>
+    <link rel="preconnect" href="https://live.api.smartrpdai.com">
+    <link
+      rel="preconnect"
+      href="https://fonts.googleapis.com"
+    />
+    <link
+      rel="preconnect"
+      href="https://fonts.gstatic.com"
+      crossorigin
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./css/login.css" />
+    <link rel="icon" href="./assets/profile.png" type="image/png" />
+  </head>
+  <body>
+    <div class="auth-page">
+      <!-- Decorative dot patterns -->
+      <div class="dot-pattern dot-tl" aria-hidden="true"></div>
+      <div class="dot-pattern dot-bl" aria-hidden="true"></div>
+      <div class="dot-pattern dot-tr" aria-hidden="true"></div>
+      <div class="dot-pattern dot-br" aria-hidden="true"></div>
+
+      <div class="auth-container">
+        <!-- ===== Login view ===== -->
+        <div class="auth-card" id="login-view">
+          <div class="auth-header">
+            <div class="logo">
+              <img src="./assets/profile.png" alt="SmartRPD" />
+            </div>
+            <h1>Welcome Back</h1>
+            <p class="auth-subtitle">Sign in to continue to your account</p>
+          </div>
+
+          <form id="login-form" class="auth-form">
+            <div class="form-group">
+              <div class="input-wrap">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                <input
+                  id="username"
+                  type="text"
+                  placeholder="Enter your username"
+                  autocomplete="username"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <div class="input-wrap has-toggle">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                <input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  autocomplete="current-password"
+                  required
+                />
+                <button type="button" id="toggle-password" class="password-toggle" aria-label="Show password" aria-pressed="false">
+                  <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label class="remember">
+                <input type="checkbox" id="remember" />
+                <span>Remember me</span>
+              </label>
+              <button type="button" class="link-btn" id="go-to-forgot">Forgot password?</button>
+            </div>
+
+            <button type="submit" class="primary-btn" id="signin-btn">Sign In</button>
+          </form>
+
+          <p id="error-message" class="error-message" role="alert"></p>
+
+          <p class="auth-switch">
+            Don't have an account?
+            <button type="button" class="link-btn" id="go-to-signup">Sign up</button>
+          </p>
+        </div>
+
+        <!-- ===== Forgot password view ===== -->
+        <!-- Two-stage flow: stage 1 requests a reset key (POST /user/reqpwreset,
+             which emails a key); stage 2 submits that key + a new password
+             (POST /user/resetpw). login.js swaps between the two stages. -->
+        <div class="auth-card hidden" id="forgot-view">
+          <div class="auth-header">
+            <div class="logo">
+              <img src="./assets/profile.png" alt="SmartRPD" />
+            </div>
+            <h1 id="forgot-title">Reset Password</h1>
+            <p class="auth-subtitle" id="forgot-subtitle">Enter in your registered email to begin the process</p>
+          </div>
+
+          <form id="forgot-form" class="auth-form">
+            <!-- Stage 1: request a reset key by email -->
+            <div id="forgot-stage-request">
+              <div class="form-group">
+                <div class="input-wrap">
+                  <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="2" y="4" width="20" height="16" rx="2"/>
+                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                  </svg>
+                  <input
+                    id="forgot-email"
+                    type="email"
+                    placeholder="Enter your registered email"
+                    autocomplete="email"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- Stage 2: enter the emailed key + a new password -->
+            <div id="forgot-stage-reset" hidden>
+              <div class="form-group">
+                <div class="input-wrap">
+                  <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/>
+                    <circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>
+                  </svg>
+                  <input
+                    id="forgot-key"
+                    type="text"
+                    inputmode="numeric"
+                    placeholder="Enter the key from your email"
+                    autocomplete="one-time-code"
+                  />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <div class="input-wrap has-toggle">
+                  <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                  <input
+                    id="forgot-new-password"
+                    type="password"
+                    placeholder="Create a new password"
+                    autocomplete="new-password"
+                  />
+                  <button type="button" id="forgot-toggle-password" class="password-toggle" aria-label="Show password" aria-pressed="false">
+                    <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                      <line x1="1" y1="1" x2="23" y2="23"/>
+                    </svg>
+                  </button>
+                </div>
+                <!-- Password strength meter (hidden until typing begins).
+                     Filled/labelled by updatePasswordStrength() in login.js. -->
+                <div class="pw-strength" id="forgot-strength" hidden>
+                  <div class="pw-strength-bar" aria-hidden="true">
+                    <span></span><span></span><span></span><span></span>
+                  </div>
+                  <p class="pw-strength-label" id="forgot-strength-label" aria-live="polite"></p>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <div class="input-wrap">
+                  <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                  <input
+                    id="forgot-confirm-password"
+                    type="password"
+                    placeholder="Confirm new password"
+                    autocomplete="new-password"
+                  />
+                </div>
+              </div>
+
+              <button type="button" class="link-btn" id="forgot-resend">Didn't get a key? Resend</button>
+            </div>
+
+            <div class="btn-row">
+              <button type="button" class="secondary-btn" id="forgot-cancel">Cancel</button>
+              <button type="submit" class="primary-btn" id="forgot-reset-btn">Send reset key</button>
+            </div>
+          </form>
+
+          <p id="forgot-error-message" class="error-message" role="alert"></p>
+        </div>
+
+        <!-- ===== Sign up view ===== -->
+        <div class="auth-card hidden" id="signup-view">
+          <button type="button" class="back-btn" id="signup-back-to-login">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="19" y1="12" x2="5" y2="12"/>
+              <polyline points="12 19 5 12 12 5"/>
+            </svg>
+            Back to login
+          </button>
+
+          <div class="auth-header">
+            <div class="logo">
+              <img src="./assets/profile.png" alt="SmartRPD" />
+            </div>
+            <h1>Create Account</h1>
+            <p class="auth-subtitle">
+              Request an account — an administrator will review it, then
+              you'll get an email to set your password
+            </p>
+          </div>
+
+          <form id="signup-form" class="auth-form">
+            <div class="form-group">
+              <div class="input-wrap">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                <input
+                  id="signup-username"
+                  type="text"
+                  placeholder="Choose a username"
+                  autocomplete="username"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <div class="input-wrap">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="2" y="4" width="20" height="16" rx="2"/>
+                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                </svg>
+                <input
+                  id="signup-email"
+                  type="email"
+                  placeholder="Enter your email"
+                  autocomplete="email"
+                  required
+                />
+              </div>
+            </div>
+
+            <!-- Password fields hidden: /user/register/request only takes
+                 username + email — the password is set via the email the user
+                 receives after an admin approves (User.create discards any
+                 password anyway). Kept in the DOM in case the flow changes. -->
+            <div class="form-group" hidden>
+              <div class="input-wrap has-toggle">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                <input
+                  id="signup-password"
+                  type="password"
+                  placeholder="Create a password"
+                  autocomplete="new-password"
+                />
+                <button type="button" id="signup-toggle-password" class="password-toggle" aria-label="Show password" aria-pressed="false">
+                  <svg class="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  <svg class="icon-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group" hidden>
+              <div class="input-wrap">
+                <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                <input
+                  id="signup-confirm"
+                  type="password"
+                  placeholder="Re-enter your password"
+                  autocomplete="new-password"
+                />
+              </div>
+            </div>
+
+            <button type="submit" class="primary-btn" id="signup-btn">Request Account</button>
+          </form>
+
+          <p id="signup-error-message" class="error-message" role="alert"></p>
+
+          <p class="auth-switch">
+            Already have an account?
+            <button type="button" class="link-btn" id="go-to-login">Sign in</button>
+          </p>
+        </div>
+
+        <!-- ===== OTP view ===== -->
+        <div class="auth-card hidden" id="otp-view">
+          <button type="button" class="back-btn" id="back-to-login">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="19" y1="12" x2="5" y2="12"/>
+              <polyline points="12 19 5 12 12 5"/>
+            </svg>
+            Back to login
+          </button>
+
+          <div class="auth-header">
+            <div class="logo">
+              <img src="./assets/profile.png" alt="SmartRPD" />
+            </div>
+            <h1>Enter OTP</h1>
+            <p class="auth-subtitle">
+              We've sent a verification code to
+              <br />
+              <span class="otp-target" id="otp-target">your account</span>
+            </p>
+          </div>
+
+          <form id="otp-form" class="auth-form">
+            <div class="form-group">
+              <label class="otp-label">Enter 6-digit code</label>
+              <div class="otp-inputs" id="otp-inputs">
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+                <input type="text" inputmode="numeric" maxlength="1" class="otp-box" />
+              </div>
+            </div>
+
+            <button type="submit" class="primary-btn" id="verify-btn">Verify OTP</button>
+
+            <p class="resend-text">
+              Didn't receive the code?
+              <button type="button" class="link-btn" id="resend-otp">Resend OTP</button>
+            </p>
+          </form>
+
+          <p id="otp-error-message" class="error-message" role="alert"></p>
+        </div>
+      </div>
+    </div>
+
+    <script src="./src/js/login.js"></script>
+  </body>
+</html>

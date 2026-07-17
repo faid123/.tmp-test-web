@@ -1,0 +1,352 @@
+// Shared slide-in sidebar wiring. Both case_list and 2DAnnotation embed the
+// same #appSidebar markup; this module handles open/close + the items that
+// behave identically on both pages (logout, quit, change password, help,
+// report issue, feedback, about, language). Page-specific items (Save,
+// Return, etc.) are wired by the calling page directly.
+
+import { toast, confirmModal } from "./toast.js";
+
+export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../../index.html" } = {}) {
+  const sidebar = document.getElementById("appSidebar");
+  const trigger = document.getElementById(triggerId);
+  if (!sidebar) return { open() {}, close() {} };
+
+  const open = () => {
+    sidebar.classList.remove("is-hidden");
+    requestAnimationFrame(() => sidebar.classList.add("is-open"));
+    sidebar.setAttribute("aria-hidden", "false");
+  };
+  const close = () => {
+    sidebar.classList.remove("is-open");
+    sidebar.setAttribute("aria-hidden", "true");
+    setTimeout(() => sidebar.classList.add("is-hidden"), 220);
+  };
+
+  trigger?.addEventListener("click", () => {
+    if (sidebar.classList.contains("is-open")) close();
+    else open();
+  });
+  sidebar.querySelectorAll("[data-sidebar-close]").forEach((el) => {
+    el.addEventListener("click", close);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && sidebar.classList.contains("is-open")) close();
+  });
+
+  // ----- common items -----
+
+  // Admin-only entry (markup ships hidden; only case_list embeds it today).
+  // Visibility is cosmetic — every admin endpoint re-checks is_admin server-side.
+  try {
+    const me = JSON.parse(localStorage.getItem("loggedInUser") || "null");
+    if (Number(me?.isAdmin) === 1) {
+      // admin_users.html lives in src/pages/admin/. Pages that embed #appSidebar
+      // sit at two depths: src/pages/ (case_list, 2DAnnotation) and, now,
+      // src/pages/admin/ (admin_case_list). Resolve relative to whichever the
+      // current page is so the link works from both.
+      const inAdminDir = /\/admin\//.test(window.location.pathname);
+      const adminUsersHref = inAdminDir ? "./admin_users.html" : "./admin/admin_users.html";
+      const goToAdmin = () => (window.location.href = adminUsersHref);
+
+      // Sidebar entry (present on every page with #appSidebar) — but skip it
+      // when we're already on the User Management page.
+      const onAdminUsersPage = /admin_users\.html/.test(window.location.pathname);
+      const adminItem = document.getElementById("sidebarAdminUsersItem");
+      if (adminItem && !onAdminUsersPage) {
+        adminItem.hidden = false;
+        document.getElementById("sidebarAdminUsersBtn")?.addEventListener("click", goToAdmin);
+      }
+
+      // Prominent header shortcut (case_list only) — same gate, more visible.
+      const headerBtn = document.getElementById("adminUsersHeaderBtn");
+      if (headerBtn) {
+        headerBtn.hidden = false;
+        headerBtn.addEventListener("click", goToAdmin);
+      }
+
+      // Machine ID Management — sibling admin page, resolved the same way and
+      // hidden when we're already on it.
+      const machineIdHref = inAdminDir ? "./admin_machineid.html" : "./admin/admin_machineid.html";
+      const goToMachineIds = () => (window.location.href = machineIdHref);
+      const onMachineIdPage = /admin_machineid\.html/.test(window.location.pathname);
+      const machineItem = document.getElementById("sidebarMachineIdItem");
+      if (machineItem && !onMachineIdPage) {
+        machineItem.hidden = false;
+        document
+          .getElementById("sidebarMachineIdBtn")
+          ?.addEventListener("click", goToMachineIds);
+      }
+
+      // Header shortcut for Machine IDs (admin case list only), mirroring
+      // adminUsersHeaderBtn.
+      const machineHeaderBtn = document.getElementById("machineIdHeaderBtn");
+      if (machineHeaderBtn && !onMachineIdPage) {
+        machineHeaderBtn.hidden = false;
+        machineHeaderBtn.addEventListener("click", goToMachineIds);
+      }
+    }
+  } catch {
+    /* malformed loggedInUser — leave the item hidden */
+  }
+
+  document.getElementById("sidebarLogoutBtn")?.addEventListener("click", async () => {
+    close();
+    const ok = await confirmModal({
+      title: "Log out?",
+      message: "You'll need to sign in again to access your cases.",
+      confirmText: "Log out",
+      cancelText: "Cancel",
+      variant: "info",
+    });
+    if (!ok) return;
+    localStorage.removeItem("loggedInUser");
+    window.location.href = indexHref;
+  });
+
+  document.getElementById("sidebarChangePasswordBtn")?.addEventListener("click", () => {
+    close();
+    toast.info("Change password — coming soon.");
+  });
+  document.getElementById("sidebarHelpBtn")?.addEventListener("click", () => {
+    close();
+    toast.info("Help — coming soon.");
+  });
+  document.getElementById("sidebarReportIssueBtn")?.addEventListener("click", () => {
+    close();
+    toast.info("Report Issue — coming soon.");
+  });
+  document.getElementById("sidebarFeedbackBtn")?.addEventListener("click", () => {
+    close();
+    window.open(
+      "https://forms.office.com/pages/responsepage.aspx?id=P_nIomsSlkWjYIlBqJhLCHRlAf-JbFtOlEA3yGARDhBUN0pHWDA4WlZQUEFMSFJGVUVUSE5OVDYwVC4u&route=shorturl",
+      "_blank",
+      "noopener,noreferrer"
+    );
+  });
+  document.getElementById("sidebarAboutBtn")?.addEventListener("click", () => {
+    close();
+    toast.info("About — coming soon.");
+  });
+
+  return { open, close };
+}
+
+// ---------------------------------------------------------------------------
+// Legacy 2D-drawing sidebar prototype (formerly src/js/sidebar.js). Kept here,
+// commented out, for reference only — it built a floating #sidebarContainer with
+// brush/pen/eraser/undo/redo over a draw canvas and predates the current 2D
+// annotation tooling. Not wired to anything.
+// ---------------------------------------------------------------------------
+// // 创建样式
+// const style = document.createElement('style');
+// style.textContent = `
+//   #sidebarContainer {
+//     position: absolute;
+//     top: 0;
+//     right: -180px; /* ✅ 向右再移出 20px，避免重叠 */
+//     bottom: 0;
+//     width: 160px;
+//     background: rgba(255, 255, 255, 0.9);
+//     color: #000;
+//     display: flex;
+//     flex-direction: column;
+//     align-items: center;
+//     padding: 10px;
+//     border-left: 2px solid #ddd;
+//     z-index: 10;
+//     box-shadow: -2px 0 10px rgba(0, 0, 0, 0.3);
+//     border-top-right-radius: 16px;
+//     border-bottom-right-radius: 16px;
+//     border-top-left-radius: 16px;
+//     border-bottom-left-radius: 16px;
+//   }
+
+//   #sidebarContainer.hidden {
+//     display: none;
+//   }
+
+//   #sidebarContainer button {
+//     margin: 5px 0;
+//     width: 120px;
+//   }
+
+//   #sidebarContainer .color {
+//     width: 32px;
+//     height: 32px;
+//     margin: 3px;
+//     border: 1px solid #000;
+//     cursor: pointer;
+//   }
+// `;
+// document.head.appendChild(style);
+
+
+// // 🧩 Sidebar DOM 元素
+// const sidebar = document.createElement('div');
+// sidebar.id = 'sidebarContainer';
+// sidebar.classList.add('hidden');
+// sidebar.innerHTML = `
+//   <button id="cancelBtn">CANCEL</button>
+//   <button id="saveBtn">SAVE</button>
+//   <div style="margin: 10px 0; font-weight: bold;">Currently Drawing</div>
+//   <button id="arrowBtn">🔗</button>
+//   <button id="textBtn">💬</button>
+//   <button id="clearBtn">Clear</button>
+//   <button id="undoBtn">⤺</button>
+//   <button id="redoBtn">⤻</button>
+//   <button id="brushBtn">🖌</button>
+//   <button id="penBtn">✏</button>
+//   <button id="eraserBtn">🧽</button>
+//   <label for="sizeSlider">Size</label>
+//   <input type="range" id="sizeSlider" min="1" max="50" value="10">
+//   <label for="colorPicker">Pick Colour</label>
+//   <input type="color" id="colorPicker" value="#00ff00">
+// `;
+// document.body.appendChild(sidebar);
+
+// // 插入 sidebar 到 .twod-group
+// function ensureSidebarIn2D() {
+//   const container = document.querySelector('.twod-group');
+//   if (container && !container.contains(sidebar)) {
+//     container.appendChild(sidebar);
+//     console.log('✅ Sidebar 插入成功');
+//   }
+// }
+
+// // 添加绘图 canvas（只有一层）
+// function ensureDrawingCanvas() {
+//   const group = document.querySelector('.twod-group');
+//   const baseImg = group?.querySelector('.twod-fullscreen-image');
+//   if (!group || !baseImg) {
+//     console.warn('⚠️ 无法找到 .twod-group 或 .twod-fullscreen-image');
+//     return;
+//   }
+
+//   let drawCanvas = document.getElementById('draw-canvas');
+//   if (drawCanvas) {
+//     console.log('🎯 Canvas 已存在');
+//     return;
+//   }
+
+//   drawCanvas = document.createElement('canvas');
+//   drawCanvas.id = 'draw-canvas';
+//   drawCanvas.style.position = 'absolute';
+//   drawCanvas.style.top = '0';
+//   drawCanvas.style.left = '0';
+//   drawCanvas.style.zIndex = '5';
+//   drawCanvas.style.pointerEvents = 'auto';
+//   group.appendChild(drawCanvas);
+
+//   // 等待图片加载完设置宽高
+//   if (!baseImg.complete) {
+//     baseImg.onload = () => {
+//       drawCanvas.width = baseImg.clientWidth;
+//       drawCanvas.height = baseImg.clientHeight;
+//       initDrawingLogic(drawCanvas);
+//     };
+//   } else {
+//     drawCanvas.width = baseImg.clientWidth;
+//     drawCanvas.height = baseImg.clientHeight;
+//     initDrawingLogic(drawCanvas);
+//   }
+
+//   console.log('✅ Canvas 已插入并准备绘图');
+// }
+
+// // 绑定绘图逻辑
+// function initDrawingLogic(canvas) {
+//   const ctx = canvas.getContext('2d');
+//   let drawing = false;
+//   let mode = 'brush';
+//   const sizeSlider = document.getElementById('sizeSlider');
+//   const colorPicker = document.getElementById('colorPicker');
+//   let history = [], undone = [];
+
+//   canvas.addEventListener('mousedown', (e) => {
+//     drawing = true;
+//     ctx.beginPath();
+//     ctx.moveTo(e.offsetX, e.offsetY);
+//     history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+//     undone = [];
+//   });
+
+//   canvas.addEventListener('mousemove', (e) => {
+//     if (!drawing) return;
+//     ctx.lineWidth = sizeSlider.value;
+//     ctx.lineCap = 'round';
+
+//     if (mode === 'eraser') {
+//       ctx.globalCompositeOperation = 'destination-out';
+//     } else {
+//       ctx.globalCompositeOperation = 'source-over';
+//       ctx.strokeStyle = colorPicker.value;
+//     }
+
+//     ctx.lineTo(e.offsetX, e.offsetY);
+//     ctx.stroke();
+//   });
+
+//   canvas.addEventListener('mouseup', () => drawing = false);
+//   canvas.addEventListener('mouseleave', () => drawing = false);
+
+//   // 工具绑定
+//   document.getElementById('brushBtn').onclick = () => mode = 'brush';
+//   document.getElementById('penBtn').onclick = () => mode = 'pen';
+//   document.getElementById('eraserBtn').onclick = () => mode = 'eraser';
+
+//   document.getElementById('clearBtn').onclick = () => {
+//     ctx.clearRect(0, 0, canvas.width, canvas.height);
+//     history = []; undone = [];
+//   };
+//   document.getElementById('undoBtn').onclick = () => {
+//     if (history.length > 0) {
+//       undone.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+//       ctx.putImageData(history.pop(), 0, 0);
+//     }
+//   };
+//   document.getElementById('redoBtn').onclick = () => {
+//     if (undone.length > 0) {
+//       history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+//       ctx.putImageData(undone.pop(), 0, 0);
+//     }
+//   };
+//   document.getElementById('saveBtn').onclick = () => {
+//     const link = document.createElement('a');
+//     link.href = canvas.toDataURL();
+//     link.download = 'annotation.png';
+//     link.click();
+//   };
+// }
+
+// // 监听 Annotate 按钮点击
+// document.addEventListener('click', (e) => {
+//   const annotateBtn = document.querySelector('.smart-btn.annotate');
+//   const target = e.target;
+//   const isInAnnotate = annotateBtn && (target === annotateBtn || annotateBtn.contains(target));
+//   const isInSidebar = target.closest && target.closest('#sidebarContainer');
+
+//   if (isInAnnotate) {
+//     console.log('🟢 点击 Annotate');
+//     e.stopPropagation();
+//     ensureSidebarIn2D();
+//     ensureDrawingCanvas();
+//     sidebar.classList.toggle('hidden');
+//     return;
+//   }
+
+//   if (isInSidebar) {
+//     console.log('🟡 点击 Sidebar 内部');
+//     e.stopPropagation();
+//     return;
+//   }
+
+//   if (!sidebar.classList.contains('hidden')) {
+//     console.log('🔴 点击空白关闭 Sidebar');
+//     sidebar.classList.add('hidden');
+//   }
+// }, true);
+
+// // Cancel 按钮逻辑
+// sidebar.querySelector('#cancelBtn').addEventListener('click', () => {
+//   sidebar.classList.add('hidden');
+// });

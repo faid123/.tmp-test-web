@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2D Annotate</title>
+  <link rel="stylesheet" href="../../css/2Dannotation.css" />
+  <link rel="stylesheet" href="../../css/noticeboard.css" />
+  <link rel="stylesheet" href="../../css/clinicalInformation.css" />
+  <link rel="stylesheet" href="../../css/toast.css" />
+  <link rel="stylesheet" href="../../css/chat.css" />
+  <link rel="stylesheet" href="../../css/versionHistory.css" />
+  <link rel="icon" href="../../assets/profile.png" type="image/png" />
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+  />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+      }
+    }
+  </script>
+  <!-- Used by "Download Jaw Profile → Download STL file" to bundle the upper +
+       lower jaw STLs into a single .zip. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <link rel="modulepreload" crossorigin href="https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js" />
+  <link rel="modulepreload" crossorigin href="https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/TrackballControls.js" />
+  <link rel="modulepreload" crossorigin href="https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/STLLoader.js" />
+</head>
+<body>
+  <main class="annotation-shell">
+    <aside class="panel preview-panel">
+      <div class="preview-frame" id="imagePreviewArea">
+        <button
+          type="button"
+          id="preview3dMaximizeBtn"
+          class="preview-3d-max-btn"
+          aria-label="Maximize 3D panel"
+        >
+          <!-- maximize icon -->
+          <svg id="preview3dMaximizeIcon" viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 6V2h4M2 2l4 4M16 6V2h-4M16 2l-4 4M2 12v4h4M2 16l4-4M16 12v4h-4M16 16l-4-4"/>
+          </svg>
+          <!-- restore icon (shown when maximized) -->
+          <svg id="preview3dRestoreIcon" viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+            <path d="M6 2v4H2M2 6l4-4M12 2v4h4M16 6l-4-4M6 16v-4H2M2 12l4 4M12 16v-4h4M16 12l-4 4"/>
+          </svg>
+        </button>
+        <button
+          type="button"
+          id="preview3dCaptureBtn"
+          class="preview-3d-capture-btn"
+          aria-label="Screen capture"
+          title="Screen capture"
+        >
+          <i class="fa fa-camera" aria-hidden="true"></i>
+        </button>
+        <img id="previewImage" alt="Composed dental preview" />
+        <p id="previewFallback" class="preview-fallback"></p>
+      </div>
+    </aside>
+
+    <div
+      class="panel-splitter"
+      id="panelSplitter"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize 3D panel"
+      tabindex="0"
+    ></div>
+
+    <section class="workspace-panel">
+      <section class="panel arch-panel">
+        <!-- On desktop, the topbar's role collapses (caseLabel is shown in
+             the footer instead) and the clinical button is grid-placed at
+             the top-right of the jaw cell. On mobile/tablet the topbar
+             stays as the centered case label + clinical info row. -->
+        <div class="arch-topbar">
+          <!-- Case Note button (tablet/mobile only) — pinned to the topbar's
+               upper-left, beside the case ID, mirroring the clinical-info
+               button on the right. Keeps the ann-footer-note-btn class so its
+               desktop-hidden / mobile-shown visibility rules still apply. -->
+          <button type="button" class="ann-footer-btn ann-footer-note-btn arch-note-btn" id="footerCaseNoteBtn" aria-label="Case note" data-tooltip="Case Note">
+            <img class="arch-note-logo" src="../../assets/case_note.png" alt="Case Note" width="30" height="30" />
+          </button>
+          <div id="caseLabel" class="case-label">Case: Unknown</div>
+          <button
+            type="button"
+            id="openClinicalInfoBtn"
+            class="clinical-info-btn"
+            aria-label="Clinical Information"
+            data-tooltip="Clinical Information"
+          >
+            <img class="clinical-info-logo" src="../../assets/clinicalInfo/clinicalnote.png" alt="Clinical Info" width="35" height="35"/>
+          </button>
+        </div>
+
+        <div class="jaw-combined-canvas">
+          <!-- Denture-base material for the case (Metal / Full Acrylic), pinned to
+               the top-left corner of the jaws. Populated by updateJawMaterialBadge. -->
+          <span id="jawMaterialBadge" class="jaw-material-badge is-hidden" aria-live="polite"></span>
+          <svg id="upperArchSvg" class="arch-svg"></svg>
+          <div class="jaw-lock-strip">
+            <div class="jaw-lock-strip-cluster">
+              <button
+                type="button"
+                id="undoWorkflowBtn"
+                class="jaw-history-btn"
+                aria-label="Undo"
+                data-tooltip="Undo"
+              >
+                <img
+                  class="jaw-history-icon"
+                  src="../../assets/undo.png"
+                  alt="Undo"
+                  width="18"
+                  height="18"
+                />
+              </button>
+              <button
+                type="button"
+                id="jawLockToggleBtn"
+                class="lock-btn jaw-lock-between-btn"
+                aria-label="Switch to design mode"
+                data-tooltip="Lock for design mode"
+              >
+                <img
+                  class="lock-icon"
+                  src="../../assets/unlock.png"
+                  alt=""
+                  width="20"
+                  height="20"
+                />
+              </button>
+              <button
+                type="button"
+                id="teethRangeMissingBtn"
+                class="jaw-range-missing-btn"
+                aria-pressed="false"
+                data-tooltip="Remove multiple teeth"
+              >
+                <img
+                  class="jaw-range-missing-icon"
+                  src="../../assets/PresenceToothIconGreen.png"
+                  alt="Teeth selected"
+                  width="18"
+                  height="18"
+                />
+              </button>
+              <button
+                type="button"
+                id="removeComponentModeBtn"
+                class="jaw-lock-eraser-btn"
+                aria-label="Remove component mode"
+                aria-pressed="false"
+                data-tooltip="Remove components: click a tooth, then pick what to remove"
+                disabled
+              >
+                <img
+                  class="jaw-lock-eraser-icon"
+                  src="../../assets/eraser.svg"
+                  alt=""
+                  width="22"
+                  height="22"
+                />
+              </button>
+              <button
+                type="button"
+                id="redoWorkflowBtn"
+                class="jaw-history-btn jaw-history-btn-redo"
+                aria-label="Redo"
+                data-tooltip="Redo"
+              >
+                <img
+                  class="jaw-history-icon"
+                  src="../../assets/undo.png"
+                  alt="Redo"
+                  width="18"
+                  height="18"
+                />
+              </button>
+            </div>
+          </div>
+          <svg id="lowerArchSvg" class="arch-svg"></svg>
+        </div>
+
+        <div class="action-list center-actions">
+          <button id="clearTopBtn" type="button" class="action-btn">Clear upper teeth</button>
+          <button id="clearBottomBtn" type="button" class="action-btn">Clear lower teeth</button>
+          <!-- Design-mode counterparts: strip all placed components from one jaw
+               (tooth presence is left untouched). Shown only while locked. -->
+          <button id="clearUpperComponentsBtn" type="button" class="action-btn is-hidden" aria-label="Remove all components from the upper jaw">Clear Top</button>
+          <button id="clearLowerComponentsBtn" type="button" class="action-btn is-hidden" aria-label="Remove all components from the lower jaw">Clear Bottom</button>
+          <button id="drawFromScratchBtn" class="action-btn">Draw from Scratch</button>
+          <button id="loadProposalBtn" type="button" class="action-btn">Load Template Jaw</button>
+        </div>
+
+        <p id="saveMessage" class="save-message" role="status"></p>
+      </section>
+
+      <aside class="panel tools-panel">
+        <section id="selectTeethPanel" class="select-teeth-panel">
+          <div class="panel-mini-title">Select Teeth</div>
+          <div class="status-picker">
+            <button class="status-btn is-active" data-status="presence">
+              <img class="status-icon" src="../../assets/PresenceToothIconGreen.png" alt="Presence" />
+            </button>
+            <button class="status-btn" data-status="abutment">
+              <img class="status-icon" src="../../assets/AbutmentToothIconBlue.png" alt="Abutment" />
+            </button>
+            <button class="status-btn" data-status="compromised">
+              <img class="status-icon" src="../../assets/CompromisedToothIconYellow.png" alt="Compromised" />
+            </button>
+          </div>
+        </section>
+
+        <section id="editModePanel" class="edit-mode-panel is-hidden">
+          <h3 class="edit-mode-title">Components</h3>
+          <div class="catalog-wrap">
+            <div id="componentTabs" class="component-tabs"></div>
+            <div class="component-canvas">
+              <div id="componentItems" class="component-items"></div>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </section>
+  </main>
+
+  <footer class="ann-footer" aria-label="Application status bar">
+    <div class="ann-footer-left">
+      <button type="button" class="ann-footer-btn" id="footerMenuBtn" aria-label="Menu" data-tooltip="Menu">
+        <i class="fa fa-bars" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="ann-footer-btn" id="openNoticeboardBtn" aria-label="Noticeboard" data-tooltip="Noticeboard">
+        <i class="fa fa-clipboard" aria-hidden="true"></i>
+      </button>
+      <!-- Screen capture moved to the lower-left of the 3D preview panel
+           (#preview3dCaptureBtn); it still dispatches `request-3d-capture`. -->
+      <!-- Upload other 3D files: stored in jaw_stls_extra_slot_1..4 via
+           POST /stl/slot/ (up to 4 extra STLs per case). The handler in
+           2DAnnotation.js opens the picker and hands the file to preview3D.js. -->
+      <button type="button" class="ann-footer-btn" id="footerUpload3dBtn" aria-label="Upload other 3D files" data-tooltip="Upload other 3D files">
+        <i class="fa fa-cloud-arrow-up" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="ann-footer-btn" id="footerDownloadJawProfileBtn" aria-label="Download jaw profile" data-tooltip="Download jaw profile">
+        <i class="fa fa-file-arrow-down" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="ann-footer-btn ann-footer-undo" id="footerUndoBtn" aria-label="Undo" data-tooltip="Undo">
+        <i class="fa fa-rotate-left" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="ann-footer-btn ann-footer-redo" id="footerRedoBtn" aria-label="Redo" data-tooltip="Redo">
+        <i class="fa fa-rotate-right" aria-hidden="true"></i>
+      </button>
+      <span class="ann-footer-case-label">
+        Case : <span id="footerCaseName">—</span>
+      </span>
+    </div>
+
+    <div class="ann-footer-right">
+      <span class="ann-footer-user" id="footerUserName">—</span>
+      <span class="ann-footer-conn" id="footerConnection"></span>
+      <button type="button" class="ann-footer-btn ann-footer-chat-btn" id="footerChatBtn" aria-label="Open chat" data-tooltip="Chat">
+        <i class="fa-regular fa-comment" aria-hidden="true"></i>
+      </button>
+    </div>
+  </footer>
+
+  <div id="caseNoteSheet" class="cn-sheet is-hidden" role="dialog" aria-modal="true" aria-labelledby="cnSheetTitle">
+  <div class="cn-sheet-backdrop" data-cn-close></div>
+  <div class="cn-sheet-panel">
+    <header class="cn-sheet-header">
+      <h3 id="cnSheetTitle" class="cn-sheet-title">Case Note</h3>
+      <button type="button" class="cn-sheet-close" data-cn-close aria-label="Close">
+        <i class="fa fa-xmark" aria-hidden="true"></i>
+      </button>
+    </header>
+    <div id="caseNoteSheetBody" class="cn-sheet-body"></div>
+  </div>
+</div>
+
+  <div id="removeComponentDialog" class="remove-component-dialog is-hidden" aria-hidden="true">
+    <div class="remove-component-dialog-backdrop" aria-hidden="true"></div>
+    <div
+      class="remove-component-dialog-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="removeComponentDialogTitle"
+    >
+      <h2 id="removeComponentDialogTitle" class="remove-component-dialog-title">Remove component</h2>
+      <p id="removeComponentDialogHint" class="remove-component-dialog-hint is-hidden"></p>
+      <div id="removeComponentList" class="remove-component-list"></div>
+      <div class="remove-component-dialog-footer">
+        <button type="button" id="removeComponentDialogCancel" class="remove-component-cancel-btn">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="anteriorRestSurfaceDialog" class="anterior-rest-dialog is-hidden" aria-hidden="true">
+    <div class="anterior-rest-dialog-backdrop" aria-hidden="true"></div>
+    <div
+      class="anterior-rest-dialog-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="anteriorRestSurfaceTitle"
+    >
+      <h2 id="anteriorRestSurfaceTitle" class="anterior-rest-dialog-title">Set Cingulum Rest</h2>
+      <div class="anterior-rest-dialog-actions">
+        <button type="button" class="anterior-rest-surface-btn" data-rest-surface="lingual_mesial">Mesial</button>
+        <button type="button" class="anterior-rest-surface-btn" data-rest-surface="lingual_distal">Distal</button>
+        <button type="button" class="anterior-rest-surface-btn" data-rest-surface="lingual">Full</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="noticeboardModal" class="noticeboard-modal is-hidden" aria-hidden="true">
+    <div class="noticeboard-backdrop" aria-hidden="true"></div>
+    <div
+      class="noticeboard-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="noticeboardTitle"
+    >
+      <header class="noticeboard-topbar">
+        <div class="noticeboard-topbar-left">
+          <h2 id="noticeboardTitle" class="noticeboard-title">NOTICEBOARD</h2>
+          <button type="button" id="noticeboardGenerateReportBtn" class="noticeboard-generate-btn">
+            GENERATE REPORT
+          </button>
+        </div>
+        <button
+          type="button"
+          id="noticeboardCloseBtn"
+          class="noticeboard-close-btn"
+          aria-label="Close noticeboard"
+        >
+          ×
+        </button>
+      </header>
+
+      <div class="noticeboard-body">
+        <section class="noticeboard-column noticeboard-column-2d">
+          <div class="noticeboard-column-titlerow">
+            <img
+              class="noticeboard-column-icon"
+              src="../../assets/Icon_UpperJaw_Occlusal.png"
+              alt=""
+            />
+            <h3 class="noticeboard-column-title">2D Setup &amp; Design</h3>
+          </div>
+
+          <div class="noticeboard-add-row">
+            <button type="button" id="addInstructionBtn" class="noticeboard-add-card">
+              <div class="noticeboard-add-card-preview">
+                <img id="addInstructionPreview" alt="" />
+                <span class="noticeboard-add-card-placeholder">No preview</span>
+              </div>
+              <span class="noticeboard-add-card-label">+ ADD NEW INSTRUCTION</span>
+            </button>
+          </div>
+
+          <div id="instructionGrid" class="noticeboard-grid" role="list"></div>
+        </section>
+
+        <section class="noticeboard-column noticeboard-column-3d">
+          <div class="noticeboard-tabs" role="tablist">
+            <button
+              type="button"
+              class="noticeboard-tab is-active"
+              data-noticeboard-tab="3d"
+              role="tab"
+            >
+              3D DESIGN
+            </button>
+            <button
+              type="button"
+              class="noticeboard-tab"
+              data-noticeboard-tab="other"
+              role="tab"
+            >
+              [OTHER DEVICES]
+            </button>
+          </div>
+
+          <div class="noticeboard-column-titlerow">
+            <img class="noticeboard-column-icon" src="../../assets/Model.png" alt="" />
+            <h3 class="noticeboard-column-title">3D Design</h3>
+          </div>
+
+          <div class="noticeboard-add-row">
+            <button type="button" id="addViewcaptureBtn" class="noticeboard-add-card">
+              <div class="noticeboard-add-card-preview">
+                <img id="addViewcapturePreview" alt="" />
+                <span class="noticeboard-add-card-placeholder">No preview</span>
+              </div>
+              <span class="noticeboard-add-card-label">+ ADD NEW INSTRUCTION</span>
+            </button>
+          </div>
+
+          <div id="viewcaptureGrid" class="noticeboard-grid" role="list"></div>
+        </section>
+      </div>
+
+      <footer class="noticeboard-footer">
+        <button type="button" id="downloadJawProfileBtn" class="noticeboard-footer-btn">
+          DOWNLOAD JAW PROFILE
+        </button>
+        <button
+          type="button"
+          id="drawFromScratchModalBtn"
+          class="noticeboard-footer-btn noticeboard-footer-btn-primary"
+        >
+          DRAW FROM SCRATCH
+        </button>
+      </footer>
+    </div>
+  </div>
+
+  <div id="instructionEditorModal" class="instruction-editor-modal is-hidden" aria-hidden="true">
+    <div class="instruction-editor-backdrop" aria-hidden="true"></div>
+    <div
+      class="instruction-editor-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Instruction drawing editor"
+    >
+      <!-- Close (×) sits at the screen corner, outside the framed photo. -->
+      <button type="button" id="instructionEditorCancelBtn" class="instruction-editor-btn" aria-label="Close">
+        CANCEL
+      </button>
+
+      <!-- Phone-shaped frame: on desktop it's centred with a light border
+           (like the 3D preview card) and a black surround; on mobile it fills
+           the screen. The photo, tools and colour bar live inside so they stay
+           aligned to the frame; Close (×) and Save sit outside it. -->
+      <div class="ie-frame">
+        <div class="instruction-editor-canvas-wrap">
+          <canvas id="instructionEditorCanvas" class="instruction-editor-canvas"></canvas>
+        </div>
+
+        <!-- Top-center editing toolbar. Each icon's action is wired up later. -->
+        <div class="ie-toolbar" role="toolbar" aria-label="Editing tools">
+          <button type="button" class="ie-tool-btn" data-ie-tool="crop" aria-label="Crop" data-tooltip="Crop" title="Crop">
+            <img src="../../assets/instruction%20editor/crop.png" alt="" class="ie-tool-icon" />
+          </button>
+          <button type="button" class="ie-tool-btn" data-ie-tool="icon" aria-label="Sticker" data-tooltip="Sticker" title="Sticker">
+            <img src="../../assets/instruction%20editor/icon.png" alt="" class="ie-tool-icon" />
+          </button>
+          <button type="button" class="ie-tool-btn" data-ie-tool="text" aria-label="Text" data-tooltip="Text" title="Text">
+            <img src="../../assets/instruction%20editor/text.png" alt="" class="ie-tool-icon" />
+          </button>
+          <button type="button" class="ie-tool-btn" data-ie-tool="pencil" aria-label="Draw" data-tooltip="Draw" title="Draw">
+            <img src="../../assets/instruction%20editor/pencil.png" alt="" class="ie-tool-icon" />
+          </button>
+        </div>
+      </div>
+
+      <!-- Save sits OUTSIDE the frame, at the screen's lower-right corner. -->
+      <button
+        type="button"
+        id="instructionEditorSaveBtn"
+        class="instruction-editor-btn instruction-editor-btn-primary"
+        aria-label="Save and close"
+      >
+        Save
+      </button>
+    </div>
+  </div>
+
+  <div id="backConfirmModal" class="back-confirm-modal is-hidden" aria-hidden="true">
+    <div class="back-confirm-panel" role="dialog" aria-modal="true" aria-labelledby="backConfirmTitle">
+      <h3 id="backConfirmTitle">Leave this page?</h3>
+      <p>Your latest edits may be unsaved.</p>
+      <div class="back-confirm-actions">
+        <button id="backConfirmCancel" type="button">Cancel</button>
+        <button id="backConfirmBack" type="button">Return</button>
+        <button id="backConfirmSaveBack" type="button">Save &amp; Return</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="clinicalInfoModal" class="clinical-info-modal is-hidden" aria-hidden="true">
+    <div class="clinical-info-backdrop" aria-hidden="true"></div>
+    <div
+      class="clinical-info-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="clinicalInfoTitle"
+    >
+      <header class="clinical-info-topbar">
+        <h2 id="clinicalInfoTitle" class="clinical-info-srtitle">Clinical Info</h2>
+        <div class="clinical-info-topbar-actions">
+          <button type="button" id="clinicalInfoCloseBtn" class="clinical-info-action-btn">
+            CLOSE
+          </button>
+          <button type="button" id="clinicalInfoClearBtn" class="clinical-info-action-btn">
+            CLEAR NOTES
+          </button>
+          <button
+            type="button"
+            id="clinicalInfoSaveBtn"
+            class="clinical-info-action-btn clinical-info-action-btn-primary"
+          >
+            SAVE NOTES
+          </button>
+        </div>
+      </header>
+
+      <section class="clinical-info-legend" aria-label="Legend">
+        <div id="clinicalInfoLegendTitle" class="clinical-info-legend-title">LEGEND</div>
+        <div class="clinical-info-legend-grid">
+          <div class="clinical-info-legend-block" data-ci-group="mobility">
+            <div class="clinical-info-legend-row">
+              <div class="clinical-info-legend-item">
+                <span class="clinical-info-legend-label-top">Mobility</span>
+                <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/mobility.png" alt="" />
+              </div>
+              <div class="clinical-info-legend-item">
+                <span class="clinical-info-legend-swatch clinical-info-mobility clinical-info-mobility--1" data-ci-option="1">I</span>
+              </div>
+              <div class="clinical-info-legend-item">
+                <span class="clinical-info-legend-swatch clinical-info-mobility clinical-info-mobility--2" data-ci-option="2">II</span>
+              </div>
+              <div class="clinical-info-legend-item">
+                <span class="clinical-info-legend-swatch clinical-info-mobility clinical-info-mobility--3" data-ci-option="3">III</span>
+              </div>
+              <div class="clinical-info-legend-item">
+                <span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="clear">CLEAR</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block" data-ci-toggle="rct">
+            <div class="clinical-info-legend-item">
+              <span class="clinical-info-legend-label-top">ROOT CANAL THERAPY</span>
+              <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/root_canal.png" alt="" />
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block" data-ci-group="restoration">
+            <div class="clinical-info-legend-row">
+              <div class="clinical-info-legend-item">
+                <span class="clinical-info-legend-label-top">Restoration</span>
+                <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/filling.png" alt="" />
+              </div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="AR">AR</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="TCR">TCR</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="INLAY">INLAY</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="ONLAY">ONLAY</span></div>
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block" data-ci-toggle="crown">
+            <div class="clinical-info-legend-item">
+              <span class="clinical-info-legend-label-top">CROWN</span>
+              <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/crown.png" alt="" />
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block" data-ci-toggle="implant">
+            <div class="clinical-info-legend-item">
+              <span class="clinical-info-legend-label-top">IMPLANT</span>
+              <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/implant.png" alt="" />
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block" data-ci-toggle="rootStump">
+            <div class="clinical-info-legend-item">
+              <span class="clinical-info-legend-label-top">ROOT STUMP</span>
+              <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/root_stump.png" alt="" />
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block" data-ci-toggle="cracked">
+            <div class="clinical-info-legend-item">
+              <span class="clinical-info-legend-label-top">CRACKED</span>
+              <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/cracked.png" alt="" />
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block" data-ci-group="tilted">
+            <div class="clinical-info-legend-row">
+              <div class="clinical-info-legend-item">
+                <span class="clinical-info-legend-label-top">Tilted Tooth</span>
+                <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/tilted.png" alt="" />
+              </div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="M">M</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="D">D</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="B">B</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="L">L</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="A">A</span></div>
+              <div class="clinical-info-legend-item"><span class="clinical-info-legend-text clinical-info-legend-option" data-ci-option="SE">SE</span></div>
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block" data-ci-toggle="extraction">
+            <div class="clinical-info-legend-item">
+              <span class="clinical-info-legend-label-top">EXTRACTION</span>
+              <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/extraction.png" alt="" />
+            </div>
+          </div>
+
+          <div class="clinical-info-legend-block" data-ci-toggle="abutment">
+            <div class="clinical-info-legend-item">
+              <span class="clinical-info-legend-label-top">ABUTMENT</span>
+              <img class="clinical-info-legend-img" src="../../assets/clinicalInfo/abutment.png" alt="" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="clinical-info-chart" aria-label="Teeth chart">
+        <div class="clinical-info-chart-label">BUCCAL</div>
+        <div id="clinicalInfoUpperRow" class="clinical-info-row clinical-info-row-upper"></div>
+        <div class="clinical-info-chart-label">LINGUAL</div>
+        <div id="clinicalInfoLowerRow" class="clinical-info-row clinical-info-row-lower"></div>
+        <div class="clinical-info-chart-label">BUCCAL</div>
+      </section>
+    </div>
+  </div>
+
+  <div id="versionHistoryModal" class="modal hidden">
+    <div class="modal-content version-modal">
+      <span class="close-btn" id="closeVersionModal">&times;</span>
+      <div class="vh-header"><h3 class="modal-title">Version History</h3></div>
+      <div class="vh-body">
+        <ul id="versionList" class="vh-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <aside id="appSidebar" class="app-sidebar is-hidden" aria-hidden="true" aria-label="Navigation">
+    <div class="app-sidebar-backdrop" data-sidebar-close></div>
+    <nav class="app-sidebar-panel" role="navigation">
+      <header class="app-sidebar-header">
+        <img class="app-sidebar-brand-logo" src="../../assets/profile.png" alt="" />
+        <span class="app-sidebar-title">SMARTRPD</span>
+        <span class="app-sidebar-version">v2.0</span>
+      </header>
+      <ul id="appSidebarList" class="app-sidebar-list">
+        <li>
+          <button type="button" id="sidebarChangePasswordBtn" class="app-sidebar-item">
+            <i class="fa fa-key app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Change Account Password</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" id="sidebarSaveBtn" class="app-sidebar-item">
+            <i class="fa fa-floppy-disk app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Save</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" id="sidebarReturnBtn" class="app-sidebar-item">
+            <i class="fa fa-angles-left app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Return to Case Selection</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" id="sidebarVersionHistoryBtn" class="app-sidebar-item">
+            <i class="fa fa-clock-rotate-left app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Version History</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" id="sidebarLogoutBtn" class="app-sidebar-item">
+            <i class="fa fa-right-from-bracket app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Logout</span>
+          </button>
+        </li>
+        <li><hr class="app-sidebar-separator" /></li>
+        <li>
+          <button type="button" id="sidebarHelpBtn" class="app-sidebar-item">
+            <i class="fa fa-circle-info app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Help</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" id="sidebarReportIssueBtn" class="app-sidebar-item">
+            <i class="fa fa-bug app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Report Issue</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" id="sidebarFeedbackBtn" class="app-sidebar-item">
+            <i class="fa fa-comment-dots app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>Feedback</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" id="sidebarAboutBtn" class="app-sidebar-item">
+            <i class="fa-regular fa-square-caret-right app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>About</span>
+          </button>
+        </li>
+        <li class="app-sidebar-language">
+          <i class="fa fa-globe app-sidebar-language-icon" aria-hidden="true"></i>
+          <select id="sidebarLanguageSelect" aria-label="Language">
+            <option value="en">English</option>
+          </select>
+        </li>
+      </ul>
+    </nav>
+  </aside>
+
+  <!-- Case chat (notes) — slide-in side panel toggled by the footer chat button -->
+  <div id="chat-widget" class="chat-sidebar is-hidden" aria-hidden="true">
+    <div class="chat-sidebar-backdrop" data-chat-close></div>
+    <aside class="chat-sidebar-panel" role="dialog" aria-label="Case chat">
+      <header class="chat-sidebar-header">
+        <span class="chat-sidebar-title">Case Chat</span>
+        <button type="button" class="chat-sidebar-close" data-chat-close aria-label="Close chat">&times;</button>
+      </header>
+      <div id="chat-box"></div>
+      <div id="chat-input-area">
+        <input type="file" id="imageInput" accept="image/*" hidden />
+        <button id="uploadBtn" type="button">+</button>
+        <textarea id="textInput" rows="1" placeholder="Type a comment..."></textarea>
+        <button id="sendBtn" type="button">Send</button>
+      </div>
+    </aside>
+  </div>
+  <div class="image-modal" id="imageModal">
+    <img id="modalImage" src="" alt="Zoomed" />
+  </div>
+
+  <script type="module" src="../js/2D/2DAnnotation.js"></script>
+  <script type="module" src="../js/versionHistory.js"></script>
+</body>
+</html>
