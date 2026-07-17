@@ -1,6 +1,9 @@
 # Node.js dependencies
 node_modules/
 
+# Test output
+coverage/
+
 # Webpack build output
 
 .idea/
