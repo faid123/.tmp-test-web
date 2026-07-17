@@ -1,9 +1,10 @@
 {
   "app": "smartrpd",
-  "revision": "f3198567e8c2eb31e6273de4a134c79fd0a0c9d0",
-  "buildId": "6",
-  "releaseId": "f3198567e8c2eb31e6273de4a134c79fd0a0c9d0-6",
-  "digest": "sha256:79527e3ad8c7d505af5c81a5c2bda93d72e452b360115460c8cc67ae67ccd8da",
-  "createdAt": "2026-07-17T08:35:26Z",
-  "siteUrl": "https://faid123.github.io/.tmp-test-web/"
+  "revision": "d910c781b9d1a1ff637325abec6564fb5d3e6bb6",
+  "buildId": "1",
+  "releaseId": "d910c781b9d1a1ff637325abec6564fb5d3e6bb6-1",
+  "digest": "sha256:3a95f6b2291394e7aaa53d25e89a67ab672c64f2c0201e394ba673e40eabcf92",
+  "createdAt": "2026-07-17T12:11:03Z",
+  "siteUrl": "https://faid123.github.io/.tmp-test-web/",
+  "ci": "github-actions"
 }
