@@ -1,0 +1,105 @@
+name: Deploy Test Site
+
+on:
+  push:
+    branches: [nyunt/integration_3]
+  workflow_dispatch:
+
+# Serialize deploys so two runs never push the Pages branch concurrently.
+concurrency:
+  group: deploy-test-site
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+
+env:
+  PAGES_BRANCH: nyunt/dev-W7.1
+  SITE_URL: https://faid123.github.io/.tmp-test-web/
+
+jobs:
+  verify-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Capture revision
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install (deterministic, from lockfile)
+        run: npm ci
+
+      - name: Test (fail-closed gate)
+        run: npm run test:ci
+
+      - name: Archive coverage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: ignore
+
+      - name: Build (production webpack)
+        run: |
+          npm run build
+          test -f dist/bundle.js || { echo "❌ build produced no dist/bundle.js"; exit 1; }
+
+      - name: Manifest (revision + digest)
+        run: |
+          CREATED=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          # -z/-0 keeps filenames with spaces (e.g. assets/instruction editor/) intact.
+          DIGEST=$({ git ls-files -z; printf 'dist/bundle.js\0'; } | LC_ALL=C sort -zu | xargs -0 sha256sum | sha256sum | cut -d" " -f1)
+          cat > manifest.json <<EOF
+          {
+            "app": "smartrpd",
+            "revision": "${GITHUB_SHA}",
+            "buildId": "${GITHUB_RUN_NUMBER}",
+            "releaseId": "${GITHUB_SHA}-${GITHUB_RUN_NUMBER}",
+            "digest": "sha256:${DIGEST}",
+            "createdAt": "${CREATED}",
+            "siteUrl": "${SITE_URL}",
+            "ci": "github-actions"
+          }
+          EOF
+          echo "🔒 Artifact digest: sha256:${DIGEST}"
+          cat manifest.json
+
+      - name: Checkout Pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PAGES_BRANCH }}
+          path: .pages-branch
+
+      - name: Deploy to Pages branch
+        run: |
+          # Replace branch content with exactly this verified revision + built bundle.
+          # History is preserved — every previous deploy is one commit back for rollback.
+          find .pages-branch -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          git archive "${GITHUB_SHA}" | tar -x -C .pages-branch
+          mkdir -p .pages-branch/dist
+          cp dist/bundle.js .pages-branch/dist/
+          cp manifest.json .pages-branch/
+          touch .pages-branch/.nojekyll
+          cd .pages-branch
+          test -f index.html || { echo "❌ deploy missing index.html"; exit 1; }
+          git add -A
+          if git diff --cached --quiet; then
+            echo "ℹ️ Site already at ${GITHUB_SHA} — nothing to push"
+          else
+            git -c user.email='ci@smartrpd.local' -c user.name='SmartRPD CI' \
+              commit -m "Deploy ${GITHUB_SHA} (run ${GITHUB_RUN_NUMBER})"
+            git push origin "${PAGES_BRANCH}"
+            echo "✅ Deployed to ${SITE_URL}"
+          fi
+
+      - name: Request Pages rebuild
+        # Pushes made with GITHUB_TOKEN do not auto-trigger the legacy Pages build.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/builds" || echo "⚠️ Pages build request failed — a build may already be queued"
