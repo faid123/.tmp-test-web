@@ -2,7 +2,7 @@ name: Deploy Test Site
 
 on:
   push:
-    branches: [nyunt/integration_3]
+    branches: [nyunt/dev-deploy]
   workflow_dispatch:
 
 # Serialize deploys so two runs never push the Pages branch concurrently.
