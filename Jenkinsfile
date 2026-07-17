@@ -8,6 +8,8 @@ pipeline {
     }
 
     environment {
+        // launchd-started Jenkins gets a minimal PATH; include the usual macOS install locations for node/npm.
+        PATH         = "/usr/local/bin:/opt/homebrew/bin:${PATH}"
         APP_NAME     = 'smartrpd'
         GH_REPO      = 'faid123/.tmp-test-web'                      // owner/repo
         PAGES_BRANCH = 'nyunt/dev-W7.1'                              // GitHub Pages publishing source (the test site)
