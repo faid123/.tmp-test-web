@@ -5,6 +5,12 @@ import { setupConnectivityIndicator, reportHtmlToDocxBytes } from "./accessibili
 import { setupAppSidebar } from "./appSidebar.js";
 import { buildReportHtml } from "./2D/noticeboard.js";
 import { saveCaseDueDate, toDateInputValue, updateCaseDueDate } from "./2D/caseNote.js";
+import {
+  ENRICH_CONCURRENCY,
+  caseIntIdOf,
+  buildEnrichRequests,
+  applyEnrichmentResponses,
+} from "./caseEnrichment.js";
 
 function getLoggedInUser() {
   const user = localStorage.getItem("loggedInUser");
@@ -2971,7 +2977,7 @@ async function resilientFetch(url, options, breaker) {
 //              the row after the breaker cooldown so it self-heals
 //   "done"   → enriched; skipped by the observer on later re-renders
 // Keys starting with "__" are stripped from the localStorage cache.
-const ENRICH_CONCURRENCY = 3;
+// (ENRICH_CONCURRENCY + the request/fold layer live in caseEnrichment.js.)
 const enrichBreaker = makeBreaker(BREAKER_FAILURE_THRESHOLD, BREAKER_COOLDOWN_MS);
 const enrichQueue = [];
 let enrichWorkersActive = 0;
@@ -3036,93 +3042,24 @@ function pumpEnrichQueue() {
 // park the case in "wait" and re-observe its row after the breaker cooldown.
 async function enrichOneCase(caseObj) {
   const logged = getLoggedInUser();
-  const caseIntID = caseObj.case_int_id ?? caseObj.id;
+  const caseIntID = caseIntIdOf(caseObj);
   if (!logged || caseIntID == null) {
     caseObj.__enrich = "done"; // nothing we can ever fetch for this row
     return;
   }
   caseObj.__enrich = "inflight";
-  const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
-  const [detailRes, rolesRes] = await Promise.all([
-    resilientFetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/additionalcasedetails/getall",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([{ machine_id: MACHINE_ID, uuid: logged.uuid, caseIntID }]),
-      },
-      enrichBreaker
-    ),
-    resilientFetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/role/all/get",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([
-          { machine_id: MACHINE_ID, uuid: logged.uuid, caseIntID },
-          { case_int_id: caseIntID },
-        ]),
-      },
-      enrichBreaker
-    ),
-  ]);
+  const [detailRes, rolesRes] = await Promise.all(
+    buildEnrichRequests(caseIntID, logged.uuid).map(([url, options]) =>
+      resilientFetch(url, options, enrichBreaker)
+    )
+  );
 
-  // Both null means the backend refused (or the breaker was already open):
-  // park and retry after the cooldown. A response that is merely !ok (a real
-  // 4xx answer) is terminal — retrying wouldn't change it.
-  if (!detailRes && !rolesRes) {
+  // false = both refused (throttle/outage or breaker already open): park and
+  // retry after the cooldown. Fold details are in caseEnrichment.js.
+  if (!(await applyEnrichmentResponses(caseObj, detailRes, rolesRes, logApi))) {
     scheduleEnrichRetry(caseObj);
     return;
-  }
-
-  if (detailRes) {
-    logApi(detailRes, "POST /additionalcasedetails/getall");
-    if (detailRes.ok) {
-      try {
-        const item = (await detailRes.json()).at(-1); // 接口返回 [ {...} ]
-        if (item && item.case_int_id) {
-          Object.assign(caseObj, {
-            expected_date: item.due_date,
-            new_status: item.new_status,
-            assigned_to: item.assigned_to,
-            comments: item.comments,
-          });
-        }
-      } catch {
-        /* malformed body — keep base fields */
-      }
-    }
-  }
-
-  if (rolesRes) {
-    logApi(rolesRes, "POST /role/all/get");
-    if (rolesRes.ok) {
-      try {
-        const rows = await rolesRes.json();
-        if (Array.isArray(rows)) {
-          caseObj.co_owners = rows
-            .filter((r) => r && r.role === "coowner" && r.username)
-            .map((r) => r.username);
-          // The role table is authoritative for ownership. Some cases (e.g.
-          // SwiftRPD/3D-upload created) store a placeholder like "nobody" or a
-          // raw uuid in `assigned_to`, so the desktop app shows the owner from
-          // the `owner` role row instead. Match that: prefer the owner role's
-          // username, then fall back to the uuid→username remap.
-          const ownerRow = rows.find(
-            (r) => r && String(r.role).toLowerCase() === "owner" && r.username
-          );
-          if (ownerRow?.username) {
-            caseObj.assigned_to = ownerRow.username;
-          } else {
-            const match = rows.find((r) => r && r.uuid && r.uuid === caseObj.assigned_to);
-            if (match?.username) caseObj.assigned_to = match.username;
-          }
-        }
-      } catch {
-        /* malformed body — keep base fields */
-      }
-    }
   }
 
   caseObj.__enrich = "done";

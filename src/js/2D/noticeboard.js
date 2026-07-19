@@ -13,6 +13,7 @@ import {
 import { WORK_CATEGORY_LABELS, loadCaseNote, fetchAdditionalCaseDetails } from "./caseNote.js";
 import { statusLabel } from "../apiLog.js";
 import { encodeEditedViewColumns } from "./dotnetBinaryFormatter.js";
+import { mergeInstructions } from "./mergeInstructions.js";
 
 //Add constants
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
@@ -318,21 +319,6 @@ function buildServerEntries(editedRow) {
     else viewcaptures.push(item);
   }
   return { instructions, viewcaptures };
-}
-
-function mergeInstructions(localItems, serverItems) {
-  const map = new Map();
-  const keyOf = (item) => {
-    if (item.title) return `title:${item.title}`;
-    if (item.id) return `id:${item.id}`;
-    return `preview:${item.preview || ""}`;
-  };
-  for (const it of localItems || []) map.set(keyOf(it), it);
-  for (const it of serverItems || []) {
-    const key = keyOf(it);
-    map.set(key, { ...(map.get(key) || {}), ...it });
-  }
-  return Array.from(map.values());
 }
 
 // Ensure the persisted title carries a 2D_/3D_ prefix so the next hydrate
