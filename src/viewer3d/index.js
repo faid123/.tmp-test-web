@@ -16,6 +16,7 @@ import { addResetButton } from "./resetButton.js";
 import { lol } from "../js/shared/crypt.js";
 import "../js/pages/createCase.js";
 import { logApi } from "../js/shared/apiLog.js";
+import { toast, confirmModal } from "../js/shared/toast.js";
 import {
   addVisibilityAndTransparencyControls,
   removeVisibilityAndTransparencyControls,
@@ -4041,7 +4042,16 @@ btnContainer.appendChild(edit2DStatic); */
           approveButton3D.setAttribute("aria-label", "Approve 3D");
           approveButton3D.title = "Approve 3D";
           approveButton3D.innerHTML = `<img src="${basePath}/assets/Icon_approve.png" alt="Approve 3D">`;
-          approveButton3D.addEventListener("click", function () {
+          approveButton3D.addEventListener("click", async function () {
+            const ok = await confirmModal({
+              title: "Approve 3D Design?",
+              message:
+                "This notifies the associated users that the 3D design has been approved. Do you want to continue?",
+              confirmText: "Approve",
+              cancelText: "Cancel",
+              variant: "info",
+            });
+            if (!ok) return;
             sendEmail("Your 3D Design has been APPROVED.");
           });
           btnContainer3D.appendChild(approveButton3D);
@@ -5759,11 +5769,11 @@ btnContainer.appendChild(edit2DStatic); */
         }
 
         console.log("Email sent successfully:", data);
-        alert("✅ Email sent successfully to associated users.");
+        toast.success("Email sent successfully to associated users.");
       })
       .catch((error) => {
         console.error("Error sending email:", error);
-        alert("❌ Failed to send email. Please try again.");
+        toast.error("Failed to send email. Please try again.");
       });
   }
 
