@@ -44,7 +44,7 @@ import {
   fetchAdditionalCaseDetails,
   updateCaseDueDate,
 } from "./caseNote.js";
-import { toast, attachThemedCalendar } from "../toast.js";
+import { toast, attachThemedCalendar } from "../shared/toast.js";
 
 // ── Material restrictions ────────────────────────────────────────────────────
 // A full-acrylic case (state.jawMaterial === 2) is an all-acrylic denture, so it

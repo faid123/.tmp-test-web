@@ -15,7 +15,7 @@ import {
   computeSteps,
   countCompletedStages,
   resolveCaptureSlots,
-} from "../src/js/dashboard.js";
+} from "../src/js/pages/dashboard.js";
 
 describe("statusRank()", () => {
   test("returns 0 for absent / empty / default-0 statuses", () => {

@@ -1,6 +1,6 @@
-import { lol } from "../crypt.js";
-import { setupAppSidebar } from "./appSidebar.js";
-import { setupConnectivityIndicator } from "./accessibility.js";
+import { lol } from "../shared/crypt.js";
+import { setupAppSidebar } from "../shared/appSidebar.js";
+import { setupConnectivityIndicator } from "../shared/accessibility.js";
 
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
@@ -104,7 +104,7 @@ function wireChatButton() {
     window.SMARTRPD_CHAT_CASE_ID = encryptedId;
   }
   footerChatBtn.addEventListener("click", async () => {
-    const { toggleChat } = await import("./chat.js");
+    const { toggleChat } = await import("../shared/chat.js");
     toggleChat(encryptedId);
   });
 }

@@ -11,10 +11,10 @@
 // with a real admin account — everything shape-related is centralized in the
 // api object + normalizeUser below so adjustments stay one-line.
 
-import { toast, confirmModal, attachThemedCalendar } from "../toast.js";
-import { logApi } from "../apiLog.js";
-import { setupAppSidebar } from "../appSidebar.js";
-import { setupConnectivityIndicator } from "../accessibility.js";
+import { toast, confirmModal, attachThemedCalendar } from "../shared/toast.js";
+import { logApi } from "../shared/apiLog.js";
+import { setupAppSidebar } from "../shared/appSidebar.js";
+import { setupConnectivityIndicator } from "../shared/accessibility.js";
 
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";

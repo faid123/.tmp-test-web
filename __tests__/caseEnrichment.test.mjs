@@ -16,7 +16,7 @@ import {
   caseIntIdOf,
   buildEnrichRequests,
   applyEnrichmentResponses,
-} from '../src/js/caseEnrichment.js';
+} from '../src/js/shared/caseEnrichment.js';
 
 const API = 'https://live.api.smartrpdai.com/api/smartrpd';
 const MACHINE_ID = '3a0df9c37b50873c63cebecd7bed73152a5ef616';

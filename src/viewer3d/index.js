@@ -13,9 +13,9 @@ import { OFFLoader } from "./OFFLoader.js";
 import { ApiClient } from "./ApiClient.js";
 
 import { addResetButton } from "./resetButton.js";
-import { lol } from "./crypt.js";
-import "./js/createCase";
-import { logApi } from "./js/apiLog.js";
+import { lol } from "../js/shared/crypt.js";
+import "../js/pages/createCase.js";
+import { logApi } from "../js/shared/apiLog.js";
 import {
   addVisibilityAndTransparencyControls,
   removeVisibilityAndTransparencyControls,

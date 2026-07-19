@@ -1,7 +1,7 @@
 // 顶部引入模块
-import { lol } from "../crypt.js";
-import { toast, flashToast, confirmModal, attachThemedCalendar } from "./toast.js";
-import { logApi } from "./apiLog.js";
+import { lol } from "../shared/crypt.js";
+import { toast, flashToast, confirmModal, attachThemedCalendar } from "../shared/toast.js";
+import { logApi } from "../shared/apiLog.js";
 
 // Resolve an asset path relative to the app root (everything before "/src/") so
 // it loads whether this shared module runs from src/pages/ (case_list) or the

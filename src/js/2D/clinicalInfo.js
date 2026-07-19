@@ -1,6 +1,6 @@
 import { state, setMessage } from "./2DAnnotation.js";
 import { loadCaseNote, WORK_CATEGORY_LABELS } from "./caseNote.js";
-import { logApi } from "../apiLog.js";
+import { logApi } from "../shared/apiLog.js";
 
 const ASSET_BASE = "../../assets/clinicalInfo";
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
