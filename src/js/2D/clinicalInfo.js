@@ -84,7 +84,7 @@ async function saveClinicalInfoRow(caseIntID, uuid, encodedData) {
   return postClinical("/clinicalinfo", payload);
 }
 
-function emptyToothNote() {
+export function emptyToothNote() {
   return {
     mobility: null,
     rct: false,
@@ -134,13 +134,13 @@ function extractDotNetString(bin) {
 }
 
 // Fallback for anything that isn't a recognizable .NET envelope.
-function bracketSlice(bin) {
+export function bracketSlice(bin) {
   const start = bin.indexOf("[");
   const end = bin.lastIndexOf("]");
   return start === -1 || end === -1 || end < start ? null : bin.slice(start, end + 1);
 }
 
-function decodeClinicalInfoData(dataB64) {
+export function decodeClinicalInfoData(dataB64) {
   const decoded = safeAtob(dataB64);
   if (!decoded) return [];
   const json = extractDotNetString(decoded) ?? bracketSlice(decoded);
@@ -166,7 +166,7 @@ function encode7BitLength(byteLength) {
   return out;
 }
 
-function encodeClinicalInfoData(rows) {
+export function encodeClinicalInfoData(rows) {
   // 2-space JSON mirrors the desktop's style for human-diffability; any whitespace
   // deserializes fine. Payload is pure ASCII, so char length == UTF-8 byte length,
   // which the .NET length prefix below requires.
@@ -206,7 +206,7 @@ function uiTiltToDesktop(value) {
   return i === -1 ? TILT_ENUM.length : i; // none => 6
 }
 
-function apiRowsToClinicalNotes(rows) {
+export function apiRowsToClinicalNotes(rows) {
   const notes = {};
   (Array.isArray(rows) ? rows : []).forEach((row) => {
     const toothId = Number(row?.ToothIndex);
@@ -230,7 +230,7 @@ function apiRowsToClinicalNotes(rows) {
   return notes;
 }
 
-function clinicalNotesToApiRows(notes) {
+export function clinicalNotesToApiRows(notes) {
   const ordered = [...UPPER_TEETH, ...LOWER_TEETH];
   return ordered.map((toothId) => {
     const note = notes?.[toothId] || emptyToothNote();
