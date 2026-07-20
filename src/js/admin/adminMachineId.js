@@ -17,10 +17,10 @@
 // machine_id is the primary key: comment-edits and deletes are keyed on it, and
 // there is no soft-delete/restore — delete removes the row.
 
-import { toast, confirmModal } from "../toast.js";
-import { logApi } from "../apiLog.js";
-import { setupAppSidebar } from "../appSidebar.js";
-import { setupConnectivityIndicator } from "../accessibility.js";
+import { toast, confirmModal } from "../shared/toast.js";
+import { logApi } from "../shared/apiLog.js";
+import { setupAppSidebar } from "../shared/appSidebar.js";
+import { setupConnectivityIndicator } from "../shared/accessibility.js";
 
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";

@@ -1,6 +1,6 @@
 import { state, setMessage, fetchCaseDetail } from "./2DAnnotation.js";
 import { saveAsJpeg } from "./annotationLocks.js";
-import { toast, confirmModal } from "../toast.js";
+import { toast, confirmModal } from "../shared/toast.js";
 
 let THREE = null;
 let TrackballControls = null;
@@ -3551,7 +3551,7 @@ function buildPreviewTrashButton({ ariaLabel, title }) {
   btn.setAttribute("aria-label", ariaLabel);
   btn.title = title;
   btn.innerHTML =
-    '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M5 7h14M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m1 0v12a2 2 0 01-2 2h-6a2 2 0 01-2-2V7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    '<svg viewBox="0 -960 960 960" width="15" height="15" aria-hidden="true"><path d="M261-120q-24.75 0-42.37-17.63Q201-155.25 201-180v-570h-41v-60h188v-30h264v30h188v60h-41v570q0 24-18 42t-42 18H261Zm438-630H261v570h438v-570ZM367-266h60v-399h-60v399Zm166 0h60v-399h-60v399ZM261-750v570-570Z" fill="currentColor"/></svg>';
   return btn;
 }
 

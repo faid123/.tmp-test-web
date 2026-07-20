@@ -256,9 +256,11 @@ button {
 .app-sidebar-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(11, 18, 28, 0.35);
+  background: rgba(11, 18, 28, 0.45);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
   opacity: 0;
-  transition: opacity 0.18s ease;
+  transition: opacity 0.2s ease;
   pointer-events: auto;
 }
 .app-sidebar.is-open .app-sidebar-backdrop { opacity: 1; }
@@ -268,11 +270,12 @@ button {
   top: 0;
   bottom: 0;
   left: 0;
-  width: min(320px, 85vw);
-  background: #e5e7eb;
-  box-shadow: 2px 0 16px rgba(15, 23, 42, 0.18);
+  width: min(324px, 86vw);
+  background: #ffffff;
+  border-right: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 14px 0 44px rgba(15, 23, 42, 0.24);
   transform: translateX(-100%);
-  transition: transform 0.22s ease;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
   display: flex;
   flex-direction: column;
   pointer-events: auto;
@@ -282,103 +285,155 @@ button {
 .app-sidebar-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 18px 18px 16px;
+  background: linear-gradient(135deg, #3bae95 0%, #25735f 100%);
+  color: #ffffff;
 }
 .app-sidebar-brand-logo {
-  width: 28px;
-  height: 28px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 5px;
 }
 .app-sidebar-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 800;
-  color: var(--ink);
-  letter-spacing: 0.06em;
+  color: #ffffff;
+  letter-spacing: 0.08em;
 }
 .app-sidebar-version {
-  font-size: 11px;
-  color: var(--ink-soft);
-  font-weight: 600;
-  margin-left: 2px;
+  font-size: 10.5px;
+  color: #ffffff;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
 }
 .app-sidebar-close {
   border: 0;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.16);
   width: 32px;
   height: 32px;
-  border-radius: 6px;
-  color: var(--ink-soft);
+  border-radius: 8px;
+  color: #ffffff;
   cursor: pointer;
   font-size: 16px;
   margin-left: auto;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s ease;
 }
-.app-sidebar-close:hover { background: rgba(15, 23, 42, 0.06); color: var(--ink); }
+.app-sidebar-close:hover { background: rgba(255, 255, 255, 0.32); color: #ffffff; }
 
 .app-sidebar-list {
   list-style: none;
   margin: 0;
-  padding: 14px 0 8px;
+  padding: 12px 12px 8px;
   overflow-y: auto;
   flex: 1;
 }
 .app-sidebar-list li { margin: 0; }
 .app-sidebar-item {
+  position: relative;
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 22px;
+  gap: 14px;
+  padding: 10px 14px;
   border: 0;
+  border-radius: 10px;
   background: transparent;
   color: var(--ink);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   font-family: inherit;
   cursor: pointer;
   text-align: left;
+  transition: background 0.15s ease, color 0.15s ease;
 }
-.app-sidebar-item:hover { background: rgba(15, 23, 42, 0.05); }
+.app-sidebar-item::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--primary);
+  transform: translateY(-50%) scaleY(0);
+  transition: transform 0.15s ease;
+}
+.app-sidebar-item:hover {
+  background: rgba(59, 174, 149, 0.1);
+  color: var(--primary-dark);
+}
+.app-sidebar-item:hover::before { transform: translateY(-50%) scaleY(1); }
 .app-sidebar-item:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: -2px;
 }
 .app-sidebar-item-icon {
-  width: 22px;
+  width: 34px;
+  height: 34px;
+  /* Font Awesome loads after this file and forces .fa back to inline-block via
+     --fa-display; set it to inline-flex so the glyph centers in the chip.
+     line-height/text-align are a fallback if FA isn't the display source. */
+  --fa-display: inline-flex;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 34px;
   text-align: center;
-  color: var(--ink);
-  font-size: 16px;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--ink-soft);
+  font-size: 15px;
   flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
 }
-.app-sidebar-item-danger .app-sidebar-item-icon { color: #dc2626; }
+.app-sidebar-item:hover .app-sidebar-item-icon {
+  background: rgba(59, 174, 149, 0.16);
+  color: var(--primary-dark);
+}
+.app-sidebar-item-danger .app-sidebar-item-icon {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
 
 .app-sidebar-separator {
   border: 0;
   height: 1px;
-  background: rgba(15, 23, 42, 0.18);
-  margin: 8px 22px;
+  background: rgba(15, 23, 42, 0.1);
+  margin: 8px 14px;
 }
 
 .app-sidebar-language {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 22px;
+  gap: 12px;
+  margin: 6px 12px 14px;
+  padding: 8px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+  background: #f8fafc;
 }
 .app-sidebar-language-icon {
-  width: 22px;
+  width: 20px;
   text-align: center;
-  color: var(--ink);
-  font-size: 16px;
+  color: var(--ink-soft);
+  font-size: 15px;
 }
 .app-sidebar-language select {
   flex: 1;
   border: 0;
   background: transparent;
   color: var(--ink);
-  font-size: 14px;
+  font-size: 13.5px;
+  font-weight: 600;
   font-family: inherit;
   cursor: pointer;
   outline: none;
@@ -386,10 +441,10 @@ button {
 
 .cm-main {
   min-width: 0;
-  padding: 28px 16px 20px 28px;
+  padding: 14px 16px 12px 28px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 8px;
   overflow: hidden;
 }
 
@@ -711,6 +766,16 @@ button {
   background: var(--line-soft);
 }
 
+/* Destructive detail action (admin "Delete the Case"). */
+.cm-btn-danger {
+  color: #b42318;
+  border-color: rgba(180, 35, 24, 0.35);
+}
+.cm-btn-danger:hover {
+  background: rgba(180, 35, 24, 0.08);
+  border-color: rgba(180, 35, 24, 0.55);
+}
+
 .cm-btn-large {
   padding: 14px 18px;
   font-size: 14px;
@@ -972,7 +1037,7 @@ button {
   padding: 28px 24px 28px 16px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
   overflow-y: auto;
 }
 
@@ -1261,6 +1326,12 @@ button {
 }
 .cm-detail-cta > .cm-btn {
   width: 100%;
+}
+/* .cm-btn sets display:inline-flex, which otherwise beats the UA [hidden]
+   rule — so a JS-toggled `hidden` button (Retrieve ⇄ Delete) would stay
+   visible. Make [hidden] win for the detail CTAs. */
+.cm-detail-cta > .cm-btn[hidden] {
+  display: none;
 }
 .cm-detail-cta .cm-3d-link {
   width: 100%;
@@ -1716,7 +1787,7 @@ body.is-admin .cm-admin-stats:not([hidden]) {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
-  margin: 0 0 18px;
+  margin: 0;
 }
 .cm-stat-card {
   display: flex;
@@ -2165,4 +2236,98 @@ body.is-admin .cm-admin-stats:not([hidden]) {
      .au-topbar-scoped specificity). */
   .au-mobile-logout,
   .au-topbar .au-mobile-logout { display: inline-flex; }
+}
+
+/* ============================================================================
+   Premium polish (case list + admin overview). Appended last so it wins via
+   the cascade. Visual only — no layout structure changed.
+   ============================================================================ */
+
+/* Give the two main surfaces a crisp hairline border to sit cleanly on the bg. */
+.cm-toolbar,
+.cm-table-wrap {
+  border: 1px solid var(--line);
+}
+
+/* Elevated, interactive stat cards. */
+body.is-admin .cm-stat-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #fafdfc 100%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 6px 16px rgba(15, 23, 42, 0.05);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+body.is-admin .cm-stat-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary-soft);
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.06), 0 14px 28px rgba(37, 115, 95, 0.12);
+}
+body.is-admin .cm-stat-label {
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 0.72rem;
+  color: var(--primary-dark);
+}
+body.is-admin .cm-stat-value {
+  font-size: 1.7rem;
+  letter-spacing: -0.01em;
+}
+
+/* Table: solid tinted sticky header + smoother, on-brand row hover. */
+.cm-table thead th {
+  background: #f8fafb;
+  border-bottom: 1px solid var(--line);
+}
+.cm-row:hover { background: #f3faf8; }
+
+/* Toolbar chips: clean white surface with a hairline border and soft hover. */
+.cm-chip {
+  border: 1px solid var(--line);
+  background: #ffffff;
+}
+.cm-chip-button:hover {
+  background: var(--line-soft);
+  border-color: var(--primary-soft);
+}
+/* "All Cases" chip is now a white chip like the others, so its text and count
+   badge need dark ink (they were white for the old dark-filled chip). */
+.cm-chip-dark {
+  color: var(--ink);
+}
+.cm-chip-dark .cm-count {
+  background: var(--line);
+  color: var(--ink);
+}
+
+/* ============================================================================
+   Admin user/machine detail panes: center-align the fields and distribute them
+   evenly down the pane (buttons anchored at the bottom). Scoped by id so the
+   case-list detail pane keeps its default left-aligned layout.
+   ============================================================================ */
+#userDetail .cm-detail-body,
+#machineDetail .cm-detail-body {
+  flex: 1 1 auto;              /* fill the pane height */
+  justify-content: space-between; /* spread head → fields → buttons evenly */
+  align-items: center;        /* center everything horizontally */
+  text-align: center;
+}
+
+#userDetail .cm-detail-head,
+#machineDetail .cm-detail-head {
+  flex-direction: column;     /* avatar stacked over the name, centered */
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+}
+
+#userDetail .cm-field,
+#machineDetail .cm-field {
+  align-items: center;        /* center label + value */
+  width: 100%;
+}
+
+#userDetail .cm-detail-cta,
+#machineDetail .cm-detail-cta {
+  margin-top: 0;              /* let space-between handle the distribution */
+  width: 100%;
 }

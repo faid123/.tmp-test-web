@@ -439,7 +439,7 @@ function appendMinorConnectorVisual(group, toothId, jaw, variant, side, mirrored
       width: String(width),
       height: String(height),
       preserveAspectRatio: "xMidYMid meet",
-      class: "minor-connector-image",
+      class: state.jawMaterial === 2 ? "minor-connector-image is-acrylic" : "minor-connector-image",
       "data-component-id": "minor-connector",
       "pointer-events": "none",
     })
@@ -1433,7 +1433,7 @@ function appendPalatalPlateArchOverlay(svg) {
       width: String(frame.width),
       height: String(frame.height),
       preserveAspectRatio: "xMidYMid meet",
-      class: "palatal-plate-arch-image",
+      class: state.jawMaterial === 2 ? "palatal-plate-arch-image is-acrylic" : "palatal-plate-arch-image",
       "pointer-events": "none",
     })
   );
@@ -1545,9 +1545,12 @@ function createMajorConnectorVisual(majorComponentId, tooth, toothId, jaw) {
   if (isSeparated && !state.designMode) {
     return null;
   }
+  const isAcrylic = state.jawMaterial === 2;
   const imageClass = isSeparated
     ? "component-image major-connector-image is-separated"
-    : "component-image major-connector-image";
+    : isAcrylic
+      ? "component-image major-connector-image is-acrylic"
+      : "component-image major-connector-image";
   visual.appendChild(
     svgEl("image", {
       href: connectorHref,
@@ -1615,7 +1618,9 @@ function createComponentVisual(componentId, toothId, jaw) {
       ? "component-image mesh-image mesh-image-native"
       : "component-image mesh-image"
     : isPlate
-      ? "component-image plate-image"
+      ? state.jawMaterial === 2
+        ? "component-image plate-image is-acrylic"
+        : "component-image plate-image"
       : "component-image";
 
   visual.appendChild(

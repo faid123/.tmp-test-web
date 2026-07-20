@@ -4,8 +4,8 @@
  * TDZ issues.
  */
 
-import { lol } from "../../crypt.js";
-import { toggleChat } from "../chat.js";
+import { lol } from "../shared/crypt.js";
+import { toggleChat } from "../shared/chat.js";
 import { SVG_NS } from "./constants.js";
 import {
   COMPONENT_BY_ID,
@@ -17,9 +17,9 @@ import {
 import { fetchJawStruct as apiFetchJawStruct, saveJawStructFromState } from "./jawStructApi.js";
 import { decodeJawStructResponse, resolveJawStructDesign } from "./jawStructCodec.js";
 import { applyJawStructDesign } from "./jawStructApply.js";
-import { logApi } from "../apiLog.js";
-import { toast, flashToast } from "../toast.js";
-import { VIEWER_UUID } from "../../config.js";
+import { logApi } from "../shared/apiLog.js";
+import { toast, flashToast } from "../shared/toast.js";
+import { VIEWER_UUID } from "../shared/config.js";
 
 /** Autosave on every edit (history hook). Off by default: Save button is the
  *  trigger, avoids a POST per placement. POST /jawstruct/l2 verified. */
@@ -1295,7 +1295,7 @@ function start() {
 }
 
 async function initSidebar() {
-  const { setupAppSidebar } = await import("../appSidebar.js");
+  const { setupAppSidebar } = await import("../shared/appSidebar.js");
   const handle = setupAppSidebar({ indexHref: "../../index.html" });
 
   // Sidebar Save: run the save pipeline (no nav). Prefer window.__ann2dSaveCurrent
@@ -1315,7 +1315,7 @@ async function initSidebar() {
 
   document.getElementById("sidebarVersionHistoryBtn")?.addEventListener("click", async () => {
     handle.close();
-    const { openVersionHistory } = await import("../versionHistory.js");
+    const { openVersionHistory } = await import("../pages/versionHistory.js");
     openVersionHistory();
   });
 }
@@ -1327,7 +1327,7 @@ function initAnnFooter() {
   const userEl = document.getElementById("footerUserName");
   if (userEl) userEl.textContent = footerUser?.username || "—";
 
-  import("../accessibility.js").then(({ setupConnectivityIndicator }) => {
+  import("../shared/accessibility.js").then(({ setupConnectivityIndicator }) => {
     setupConnectivityIndicator(document.getElementById("footerConnection"));
   });
 

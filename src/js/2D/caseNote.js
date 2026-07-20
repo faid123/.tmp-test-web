@@ -4,7 +4,7 @@
 // truth is the backend (additionalcasedetails.due_date, same as the case-list "Due"
 // column), written through via updateCaseDueDate below.
 
-import { MACHINE_ID } from "../../config.js";
+import { MACHINE_ID } from "../shared/config.js";
 
 // API_BASE + getLoggedInUser kept local to match sibling 2D modules — ApiClient.js
 // authenticates as the shared VIEWER_UUID, but these case endpoints need the
