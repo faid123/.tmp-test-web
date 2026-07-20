@@ -199,6 +199,7 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
       const avatar = document.getElementById("assigneeAvatar");
       if (avatar) avatar.textContent = "·";
       renderSharedWith([]);
+      renderCaseInstructions(null, "");
       currentThumbnails = [];
       currentImageIndex = 0;
       updateThumbnail();
@@ -745,17 +746,14 @@ function statusDisplayText(apiStatus) {
   return statusLabel(apiStatus);
 }
 
+// Paint the read-only STATUS pill (text + color) in the detail pane. The native
+// <select> is kept only as the (invisible) editing control, so the visible pill
+// is what reflects the current status.
 function applyStatusPillToSelect(apiStatus) {
-  const sel = document.getElementById("status");
-  if (!sel) return;
-  sel.classList.remove(
-    "cm-pill-pending",
-    "cm-pill-progress",
-    "cm-pill-completed",
-    "cm-pill-na",
-    "cm-pill-draft"
-  );
-  sel.classList.add(statusPillClass(apiStatus));
+  const pill = document.getElementById("statusPillText");
+  if (!pill) return;
+  pill.className = `cm-pill ${statusPillClass(apiStatus)}`;
+  pill.textContent = statusDisplayText(apiStatus);
 }
 
 function initialsFor(name) {
@@ -1203,7 +1201,9 @@ function displayCaseDetails(data) {
   const nameHeader = document.getElementById("caseNameDisplay");
   if (nameHeader) nameHeader.textContent = "Case Details";
 
-  document.getElementById("selected-case").textContent = displayName;
+  // Case Details "CASE NAME" shows only the case name, not the "UID <id>-" prefix.
+  const caseNameOnly = data.case_name || data.case_id || "N/A";
+  document.getElementById("selected-case").textContent = caseNameOnly;
   const footerCaseName = document.getElementById("footerCaseName");
   if (footerCaseName) footerCaseName.textContent = data.case_name || displayName;
   const assignee = data.assigned_to || data.username || "N/A";
@@ -1215,6 +1215,8 @@ function displayCaseDetails(data) {
 
   document.getElementById("date-created").textContent = formatDateTime(data.creation_date);
   document.getElementById("last-edited").textContent = formatDateTime(data.last_updated);
+
+  renderCaseInstructions(caseIntId, data.comments);
 
   const statusSel = document.getElementById("status");
   if (statusSel) {
@@ -1252,11 +1254,15 @@ function displayCaseDetails(data) {
 }
 
 function applyClientFilters() {
+  // Two possible search boxes: the toolbar one (desktop; admin page only) and
+  // the phone header's collapsible bar. Only one is ever visible, so take
+  // whichever actually has a query.
   const searchInput = document.getElementById("searchCaseInput");
+  const mobileSearch = document.getElementById("mobileSearchInput");
   const dateInput = document.getElementById("dateFilterInput");
   const todayOnly = document.getElementById("todayOnly");
 
-  const q = (searchInput?.value || "").trim().toLowerCase();
+  const q = (mobileSearch?.value || searchInput?.value || "").trim().toLowerCase();
   const dateVal = dateInput?.value || "";
   const todayFlag = !!todayOnly?.checked;
 
@@ -2279,6 +2285,39 @@ document.addEventListener("DOMContentLoaded", async () => {
     const searchBtn = document.getElementById("searchBtn");
 
     searchInput?.addEventListener("input", applyClientFilters);
+
+    // Phone header actions. The filter toolbar is hidden at this width, so the
+    // magnifier reveals the search bar and the "+" reuses the toolbar's own
+    // create button (kept in the DOM, just CSS-hidden) rather than duplicating
+    // createCase.js's open logic.
+    const mobileSearchBtn = document.getElementById("mobileSearchBtn");
+    const mobileSearchBar = document.getElementById("mobileSearchBar");
+    const mobileSearchInput = document.getElementById("mobileSearchInput");
+    mobileSearchInput?.addEventListener("input", applyClientFilters);
+    if (mobileSearchBtn && mobileSearchBar && mobileSearchInput) {
+      mobileSearchBtn.addEventListener("click", () => {
+        const opening = mobileSearchBar.classList.contains("hidden");
+        mobileSearchBar.classList.toggle("hidden", !opening);
+        mobileSearchBtn.setAttribute("aria-expanded", String(opening));
+        if (opening) {
+          mobileSearchInput.focus();
+        } else if (mobileSearchInput.value) {
+          // Closing the bar drops the filter — otherwise the list would stay
+          // filtered by a query the user can no longer see.
+          mobileSearchInput.value = "";
+          applyClientFilters();
+        }
+      });
+    }
+    document.getElementById("mobileSearchClear")?.addEventListener("click", () => {
+      if (!mobileSearchInput) return;
+      mobileSearchInput.value = "";
+      applyClientFilters();
+      mobileSearchInput.focus();
+    });
+    document.getElementById("mobileCreateCaseBtn")?.addEventListener("click", () => {
+      document.getElementById("createCaseBtn")?.click();
+    });
     // Themed calendar for the "Search by Date" filter (allow clearing the filter).
     if (dateInput) attachThemedCalendar(dateInput, { allowClear: true });
     dateInput?.addEventListener("change", applyClientFilters);
@@ -2453,6 +2492,32 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
     document.getElementById("caseImage")?.addEventListener("click", () => {
       openThumbnailPreview();
     });
+
+    document
+      .getElementById("upload3dFileBtn")
+      ?.addEventListener("click", () => pickAndUploadStl());
+
+    // Case instructions autosave: no Save button, so the note commits when focus
+    // leaves the box or on Enter. The box expands to fit while it's being edited
+    // and collapses back once committed.
+    const instructionsBox = document.getElementById("caseInstructions");
+    if (instructionsBox) {
+      instructionsBox.addEventListener("focus", () => autoGrowInstructions(instructionsBox));
+      instructionsBox.addEventListener("input", () => {
+        autoGrowInstructions(instructionsBox);
+        setInstructionsStatus("");
+      });
+      instructionsBox.addEventListener("blur", () => saveCaseInstructions());
+      // Enter commits; Shift+Enter still inserts a newline for multi-line notes.
+      // Blurring (rather than saving directly) keeps a single commit path and
+      // stops the blur that follows from firing a second save.
+      instructionsBox.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          instructionsBox.blur();
+        }
+      });
+    }
   }
 
   // ✅ START CASE 按钮绑定逻辑（使用 class 绑定方案 B）
@@ -2543,20 +2608,28 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
   const dropdownMenu = document.getElementById("caseDropdown");
 
   if (dropdownToggle && dropdownMenu) {
-    // 点击 ⋯ 展开或关闭菜单
+    const setDropdownOpen = (open) => {
+      dropdownMenu.classList.toggle("hidden", !open);
+      dropdownToggle.setAttribute("aria-expanded", String(open));
+    };
+
     dropdownToggle.addEventListener("click", (e) => {
-      e.stopPropagation(); // 阻止冒泡
-      dropdownMenu.classList.toggle("hidden");
+      e.stopPropagation();
+      setDropdownOpen(dropdownMenu.classList.contains("hidden"));
     });
 
-    // 点击空白处时收起菜单
-    document.addEventListener("click", () => {
-      dropdownMenu.classList.add("hidden");
-    });
+    // Clicking anywhere outside closes it.
+    document.addEventListener("click", () => setDropdownOpen(false));
 
-    // 点击菜单内部不关闭（防止误触）
+    // Every entry is an action, so picking one closes the menu. Delegated to the
+    // menu rather than bound per item so entries added later behave the same.
     dropdownMenu.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (e.target.closest(".dropdown-item")) setDropdownOpen(false);
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") setDropdownOpen(false);
     });
   }
 
@@ -3290,6 +3363,292 @@ function syncDetailPaneIfSelected(caseObj) {
 function scheduleEnrichCacheSave() {
   clearTimeout(enrichCacheSaveTimer);
   enrichCacheSaveTimer = setTimeout(() => saveCachedCases(currentCases), 1500);
+}
+
+// --- Upload 3D file --------------------------------------------------------
+// Same "extra STL slot" mechanism the 2D annotation page's 3D preview uses
+// (POST /stl/slot/), surfaced here so a clinic can attach an STL without opening
+// the case first. Slots 1–4 sit alongside the case's real upper/lower jaws.
+const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
+const EXTRA_STL_SLOTS = [1, 2, 3, 4];
+
+function extraSlotAuth(caseIntId) {
+  const user = getLoggedInUser();
+  return {
+    machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+    uuid: user?.uuid || "",
+    caseIntID: caseIntId,
+  };
+}
+
+// Find the lowest unoccupied extra slot, or null when all four are taken.
+//
+// Probed one at a time and stopped at the first miss on purpose: /stl/slot/get
+// has no "is it empty" mode — an occupied slot returns the whole base64 STL — so
+// checking all four in parallel would pull tens of MB just to pick a slot. In the
+// common case (slot 1 free) this downloads nothing at all.
+async function findFreeStlSlot(caseIntId) {
+  const auth = extraSlotAuth(caseIntId);
+  for (const slotNumber of EXTRA_STL_SLOTS) {
+    try {
+      const res = await fetch(`${API_BASE}/stl/slot/get`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([auth, { slotNumber }]),
+      });
+      if (!res.ok) return slotNumber; // 404 = empty slot
+      const data = await res.json();
+      const item = Array.isArray(data) ? data[0] : data;
+      if (!item?.data) return slotNumber;
+    } catch (err) {
+      console.warn(`⚠️ /stl/slot/get probe failed for slot ${slotNumber}`, err);
+      return slotNumber; // treat an unreachable probe as free and let the POST decide
+    }
+  }
+  return null;
+}
+
+// Read a File as base64, chunked so a large STL doesn't blow the call stack.
+async function stlFileToBase64(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+// POST via XHR rather than fetch so upload progress is reportable — STLs are
+// large enough that a silent multi-second wait reads as a hang.
+function uploadStlSlotXHR(payload, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE}/stl/slot/`);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
+    };
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300
+        ? resolve(xhr.responseText)
+        : reject(new Error(`HTTP ${xhr.status}`));
+    xhr.onerror = () => reject(new Error("network error"));
+    xhr.send(payload);
+  });
+}
+
+async function uploadCaseStlFile(file) {
+  const caseIntId = window.selectedCaseId;
+  if (caseIntId == null) {
+    toast.warning("Please select a case first.");
+    return;
+  }
+  if (!/\.stl$/i.test(file.name)) {
+    toast.warning("Only .stl files are supported.");
+    return;
+  }
+  const btn = document.getElementById("upload3dFileBtn");
+  if (btn) btn.disabled = true;
+  try {
+    const slotNumber = await findFreeStlSlot(caseIntId);
+    if (slotNumber == null) {
+      toast.warning("All 4 extra 3D file slots are in use. Delete one first.");
+      return;
+    }
+    toast.info(`Uploading ${file.name}…`);
+    const data = await stlFileToBase64(file);
+    await uploadStlSlotXHR(
+      JSON.stringify([extraSlotAuth(caseIntId), { slotNumber, filename: file.name, data }])
+    );
+    toast.success(`${file.name} uploaded.`);
+  } catch (err) {
+    console.error("❌ 3D file upload failed", err);
+    toast.error("Upload failed. Please try again.");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// One-shot file picker, removed after the pick.
+function pickAndUploadStl() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".stl";
+  input.hidden = true;
+  document.body.appendChild(input);
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    input.remove();
+    if (file) uploadCaseStlFile(file);
+  });
+  input.click();
+}
+
+// --- Case instructions -----------------------------------------------------
+// Free-text case note the clinic uses for anything the structured fields don't
+// cover. Stored in additionalcasedetails.comments — the same field the 2D Case
+// Note's comment box writes, so the two stay in sync by design.
+
+// Size the textarea to its content so it grows as the note gets longer (there is
+// no drag handle). Height is cleared first so the box can shrink again, and the
+// border is added back on top of scrollHeight, which measures content + padding
+// only — without it a border-box textarea clips its last line.
+function autoGrowInstructions(box) {
+  if (!box) return;
+  box.style.height = "auto";
+  box.style.height = `${box.scrollHeight + box.offsetHeight - box.clientHeight}px`;
+}
+
+// Drop the inline height so the box falls back to its CSS resting size. Called
+// once a note is committed: it grows while being typed, then goes back to
+// compact so a long note doesn't permanently eat the detail panel.
+function collapseInstructions(box) {
+  if (box) box.style.height = "";
+}
+
+// The case the textarea currently holds, and the value last known to be on the
+// server. Tracked so a slow save can't land on a case the user has since
+// switched away from, and so Save only enables on a real edit.
+let instructionsLoadedFor = null;
+let instructionsSavedValue = "";
+
+function renderCaseInstructions(caseIntId, comments) {
+  const box = document.getElementById("caseInstructions");
+  if (!box) return;
+  instructionsLoadedFor = caseIntId ?? null;
+  instructionsSavedValue = comments ?? "";
+  box.value = instructionsSavedValue;
+  box.disabled = caseIntId == null;
+  // Opening a case shows the note at its resting size; it only expands once the
+  // user focuses in to edit.
+  collapseInstructions(box);
+  setInstructionsStatus("");
+}
+
+function setInstructionsStatus(text, isError = false) {
+  const status = document.getElementById("caseInstructionsStatus");
+  if (!status) return;
+  status.textContent = text;
+  status.classList.toggle("is-error", !!isError);
+}
+
+// Read the case's current additionalcasedetails row. The table is append-only —
+// every POST inserts a new row and the newest is authoritative — so the latest
+// row is the one to merge onto. Returns { ok, detail }: ok=false means the read
+// failed and the caller must NOT write; detail=null with ok=true = no row yet.
+async function fetchAdditionalCaseDetails(caseIntId) {
+  const user = getLoggedInUser();
+  if (!user?.uuid || caseIntId == null) return { ok: false, detail: null };
+  try {
+    const res = await fetch(
+      "https://live.api.smartrpdai.com/api/smartrpd/additionalcasedetails/getall",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([
+          {
+            machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+            uuid: user.uuid,
+            caseIntID: caseIntId,
+          },
+        ]),
+      }
+    );
+    logApi(res, "POST /additionalcasedetails/getall");
+    // 404 = this case has no row yet, which is a valid starting point.
+    if (res.status === 404) return { ok: true, detail: null };
+    if (!res.ok) return { ok: false, detail: null };
+    const arr = await res.json();
+    return { ok: true, detail: Array.isArray(arr) ? arr.at(-1) ?? null : null };
+  } catch (err) {
+    console.error("❌ Failed to read additional case details:", err);
+    return { ok: false, detail: null };
+  }
+}
+
+// Save the instructions box. POST /additionalcasedetails is a FULL upsert, so
+// read the current row first and carry assigned_to/due_date/new_status forward —
+// posting only `comments` would null the rest (that's how the case loses its due
+// date and status).
+// There is no Save button — this is called on Enter and on focus leaving the
+// box, so it fires often and must be cheap and idempotent when nothing changed.
+async function saveCaseInstructions() {
+  const box = document.getElementById("caseInstructions");
+  const caseIntId = instructionsLoadedFor;
+  if (!box || caseIntId == null) return;
+
+  const text = box.value.trim();
+  // Blur fires every time focus leaves, including when the user just clicked in
+  // and out. Nothing to write, so collapse and stay quiet.
+  if (text === instructionsSavedValue.trim()) {
+    collapseInstructions(box);
+    return;
+  }
+
+  const user = getLoggedInUser();
+  if (!user?.uuid) {
+    setInstructionsStatus("Not signed in.", true);
+    return;
+  }
+
+  setInstructionsStatus("Saving…");
+
+  const { ok, detail } = await fetchAdditionalCaseDetails(caseIntId);
+  if (!ok) {
+    setInstructionsStatus("Couldn't save — try again.", true);
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      "https://live.api.smartrpdai.com/api/smartrpd/additionalcasedetails",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([
+          {
+            machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+            uuid: user.uuid,
+            caseIntID: caseIntId,
+          },
+          {
+            assigned_to: detail?.assigned_to ?? null,
+            due_date: detail?.due_date ?? null,
+            new_status: detail?.new_status ?? null,
+            comments: text || null,
+          },
+        ]),
+      }
+    );
+    logApi(res, "POST /additionalcasedetails");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    // Mirror into the cached list row and the dashboard stub so reopening the
+    // case shows the saved text without waiting for a re-fetch.
+    const cached = currentCases.find(
+      (c) => String(c.id ?? c.case_int_id) === String(caseIntId)
+    );
+    if (cached) cached.comments = text || null;
+    if (window.selectedCaseStub) window.selectedCaseStub.comments = text || null;
+
+    // The user may have switched cases mid-request; only touch the box if it is
+    // still showing the case we saved.
+    if (instructionsLoadedFor === caseIntId) {
+      instructionsSavedValue = text;
+      box.value = text;
+      // Committed — shrink back to the resting size.
+      collapseInstructions(box);
+      setInstructionsStatus("Saved.");
+      setTimeout(() => {
+        const status = document.getElementById("caseInstructionsStatus");
+        if (status?.textContent === "Saved.") setInstructionsStatus("");
+      }, 2000);
+    }
+  } catch (err) {
+    console.error("❌ Failed to save case instructions:", err);
+    setInstructionsStatus("Couldn't save — try again.", true);
+  }
 }
 
 async function postNewStatus(caseObj, newStatus) {

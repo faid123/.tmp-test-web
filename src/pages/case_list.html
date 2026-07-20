@@ -42,6 +42,28 @@
             >
               <i class="fa fa-users-gear" aria-hidden="true"></i>
             </button>
+            <!-- Phone-only. The filter toolbar is hidden at this width, so search
+                 and "create case" move up here as icons. -->
+            <button
+              id="mobileSearchBtn"
+              class="cm-bell cm-mobile-only"
+              type="button"
+              aria-label="Search cases"
+              title="Search cases"
+              aria-expanded="false"
+              aria-controls="mobileSearchBar"
+            >
+              <i class="fa fa-magnifying-glass" aria-hidden="true"></i>
+            </button>
+            <button
+              id="mobileCreateCaseBtn"
+              class="cm-bell cm-mobile-only cm-mobile-create"
+              type="button"
+              aria-label="Create new case"
+              title="Create new case"
+            >
+              <i class="fa fa-plus" aria-hidden="true"></i>
+            </button>
             <button
               id="notificationBtn"
               class="cm-bell"
@@ -64,6 +86,21 @@
             </div>
           </div>
         </header>
+
+        <!-- Phone-only search, revealed by the header's magnifier. Hidden at
+             desktop widths, where the input stays empty and so filters nothing. -->
+        <div class="cm-mobile-search hidden" id="mobileSearchBar">
+          <i class="fa fa-magnifying-glass" aria-hidden="true"></i>
+          <input
+            type="search"
+            id="mobileSearchInput"
+            placeholder="Search cases by name"
+            aria-label="Search cases by name"
+          />
+          <button type="button" id="mobileSearchClear" aria-label="Clear search">
+            <i class="fa fa-xmark" aria-hidden="true"></i>
+          </button>
+        </div>
 
         <div class="cm-toolbar">
           <div class="cm-chip cm-chip-dark">
@@ -209,6 +246,15 @@
               </div>
               <ul id="ccInviteList" class="cc-invite-list"></ul>
             </div>
+            <div class="cc-field cc-field-full">
+              <label class="input-label" for="ccCaseInstructions">Case Instructions</label>
+              <textarea
+                id="ccCaseInstructions"
+                class="modal-input cc-textarea"
+                rows="3"
+                placeholder="Add case instructions here if any"
+              ></textarea>
+            </div>
           </div>
         </div>
 
@@ -253,17 +299,44 @@
           <div class="cm-detail-head">
             <h2 id="caseNameDisplay">Case Details</h2>
             <div class="dropdown-menu-wrapper">
-              <button class="dropdown-toggle" type="button" aria-label="More actions">
-                <i class="fa fa-ellipsis"></i>
+              <button
+                class="dropdown-toggle"
+                type="button"
+                aria-label="Case actions"
+                aria-haspopup="true"
+                aria-expanded="false"
+                aria-controls="caseDropdown"
+              >
+                <i class="fa fa-bars" aria-hidden="true"></i>
               </button>
-              <div class="dropdown-menu hidden" id="caseDropdown">
-                <div class="dropdown-item" id="renameBtn">Rename</div>
-                <div class="dropdown-item" id="upload3dBtn">Upload 3D File</div>
-                <div class="dropdown-item" id="editUserAccessBtn">Edit User Access</div>
-                <div class="dropdown-item" id="viewVersionBtn">View Version History</div>
-                <div class="dropdown-item" id="download2dDesignBtn">Download 2D Design L2</div>
-                <div class="dropdown-item" id="duplicateBtn">Duplicate</div>
-                <div class="dropdown-item" id="deleteBtn">Delete</div>
+              <div class="dropdown-menu hidden" id="caseDropdown" role="menu">
+                <button class="dropdown-item" id="viewDashboardBtn" type="button" role="menuitem">
+                  <i class="fa fa-chart-line" aria-hidden="true"></i><span>View Dashboard</span>
+                </button>
+                <button class="dropdown-item" id="renameBtn" type="button" role="menuitem">
+                  <i class="fa fa-pen" aria-hidden="true"></i><span>Rename</span>
+                </button>
+                <button class="dropdown-item" id="editUserAccessBtn" type="button" role="menuitem">
+                  <i class="fa fa-user-group" aria-hidden="true"></i><span>Edit User Access</span>
+                </button>
+                <button class="dropdown-item" id="viewVersionBtn" type="button" role="menuitem">
+                  <i class="fa fa-clock-rotate-left" aria-hidden="true"></i><span>View Version History</span>
+                </button>
+                <button class="dropdown-item" id="download2dDesignBtn" type="button" role="menuitem">
+                  <i class="fa fa-download" aria-hidden="true"></i><span>Download 2D Design L2</span>
+                </button>
+                <button class="dropdown-item" id="duplicateBtn" type="button" role="menuitem">
+                  <i class="fa fa-clone" aria-hidden="true"></i><span>Duplicate</span>
+                </button>
+                <div class="dropdown-sep" role="separator"></div>
+                <button
+                  class="dropdown-item dropdown-item-danger"
+                  id="deleteBtn"
+                  type="button"
+                  role="menuitem"
+                >
+                  <i class="fa fa-trash-can" aria-hidden="true"></i><span>Delete</span>
+                </button>
               </div>
             </div>
           </div>
@@ -271,7 +344,16 @@
           <div class="cm-field">
             <div class="cm-field-label">STATUS</div>
             <div class="cm-status-control">
-              <select id="status" class="cm-status-select cm-pill cm-pill-na" aria-label="Change status">
+              <button
+                type="button"
+                class="cm-status-edit"
+                aria-label="Edit status"
+                title="Edit status"
+              >
+                <i class="fa-regular fa-pen-to-square" aria-hidden="true"></i>
+              </button>
+              <span class="cm-pill cm-pill-na" id="statusPillText">N/A</span>
+              <select id="status" class="cm-status-select" aria-label="Change status">
                 <option value="na">N/A</option>
                 <option value="draft">Draft</option>
                 <option value="2d_design_pending">2D design pending</option>
@@ -285,7 +367,6 @@
                 <option value="delivered">Delivered</option>
                 <option value="completed">Completed</option>
               </select>
-              <i class="fa fa-chevron-down cm-status-chevron" aria-hidden="true"></i>
             </div>
             <span id="status-text" hidden></span>
           </div>
@@ -315,6 +396,21 @@
             <div class="cm-field-value" id="date-created">—</div>
           </div>
 
+          <div class="cm-field">
+            <div class="cm-field-label">
+              <label for="caseInstructions">CASE INSTRUCTIONS</label>
+            </div>
+            <div class="cm-instructions-wrap">
+              <textarea
+                id="caseInstructions"
+                class="cm-instructions"
+                rows="4"
+                placeholder="Add case instructions here if any"
+              ></textarea>
+              <span class="cm-instructions-status" id="caseInstructionsStatus" role="status"></span>
+            </div>
+          </div>
+
           <div class="cm-field cm-field-hidden">
             <span id="last-edited"></span>
             <span id="web-url"></span>
@@ -330,13 +426,6 @@
           >
             Start Case
           </button>
-          <button
-            id="viewDashboardBtn"
-            class="cm-btn cm-btn-secondary"
-            type="button"
-          >
-            View Dashboard
-          </button>
           <div class="cm-3d-link" id="view3dLinkRow">
             <button
               type="button"
@@ -346,6 +435,15 @@
               data-tooltip="Export (open as faid)"
             >
               <span class="cm-3d-share-icon" role="img" aria-hidden="true"></span>
+            </button>
+            <button
+              type="button"
+              id="upload3dFileBtn"
+              class="cm-3d-copy-btn"
+              aria-label="Upload 3D file"
+              data-tooltip="Upload 3D file"
+            >
+              <i class="fa fa-file-arrow-up" aria-hidden="true"></i>
             </button>
             <button
               type="button"
