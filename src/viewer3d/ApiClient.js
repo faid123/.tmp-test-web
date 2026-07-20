@@ -1,5 +1,5 @@
-import { logApi } from "./js/apiLog.js";
-import { LOGIN_CREDENTIALS, MACHINE_ID, VIEWER_UUID } from "./config.js";
+import { logApi } from "../js/shared/apiLog.js";
+import { LOGIN_CREDENTIALS, MACHINE_ID, VIEWER_UUID } from "../js/shared/config.js";
 export class ApiClient {
   constructor(baseUrl) {
     this.baseUrl = baseUrl;

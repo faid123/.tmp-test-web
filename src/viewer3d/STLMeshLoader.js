@@ -1,4 +1,4 @@
-import { STLLoader } from '../node_modules/three/examples/jsm/loaders/STLLoader.js';
+import { STLLoader } from '../../node_modules/three/examples/jsm/loaders/STLLoader.js';
 import * as THREE from 'three';
 
 

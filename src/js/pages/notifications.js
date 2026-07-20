@@ -1,4 +1,4 @@
-import { logApi } from "./apiLog.js";
+import { logApi } from "../shared/apiLog.js";
 (function () {
   const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 

@@ -94,9 +94,6 @@
           <img class="app-sidebar-brand-logo" src="../../assets/profile.png" alt="" />
           <span class="app-sidebar-title">SMARTRPD</span>
           <span class="app-sidebar-version">v2.0</span>
-          <button type="button" class="app-sidebar-close" data-sidebar-close aria-label="Close menu">
-            <i class="fa fa-xmark" aria-hidden="true"></i>
-          </button>
         </header>
         <ul id="appSidebarList" class="app-sidebar-list">
           <li>
@@ -144,7 +141,7 @@
       const hostname = window.location.hostname;
       const isGitHubPages = hostname.includes("github.io");
       const basePath = isGitHubPages ? "/.tmp-test-web" : "";
-      document.write(`<script type="module" src="${basePath}/src/js/AnnotationHistory.js"></` + `script>`);
+      document.write(`<script type="module" src="${basePath}/src/js/pages/AnnotationHistory.js"></` + `script>`);
     </script>
   </body>
 </html>

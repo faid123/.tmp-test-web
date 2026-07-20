@@ -1,7 +1,7 @@
-import { lol } from "../crypt.js";
-import { logApi } from "./apiLog.js";
-import { setupAppSidebar } from "./appSidebar.js";
-import { VIEWER_UUID } from "../config.js";
+import { lol } from "../shared/crypt.js";
+import { logApi } from "../shared/apiLog.js";
+import { setupAppSidebar } from "../shared/appSidebar.js";
+import { VIEWER_UUID } from "../shared/config.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   initFooter();
