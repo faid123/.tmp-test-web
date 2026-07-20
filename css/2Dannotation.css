@@ -891,6 +891,16 @@ button.upload3d-row {
   z-index: 1;
 }
 
+.jaw-preview-3d-mount canvas.jaw-preview-survey-widget {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  width: 96px;
+  height: 96px;
+  z-index: 5;
+  pointer-events: none;
+}
+
 .jp-confirm-overlay {
   position: fixed;
   inset: 0;

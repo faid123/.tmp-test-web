@@ -55,9 +55,14 @@ const preview3DState = {
   // Base64 STL of each shown jaw ({ data, type, filename }), kept so the jaw
   // trash buttons can POST the current STL to /stlclosed/.
   jawFiles: {},
+  undercut: { upper: null, lower: null },
   heatmapEnabled: false,
   heatmapToggleBtn: null,
   heatmapBoard: null,
+  surveyDirectionArrow: null,
+  surveyDirectionRenderer: null,
+  surveyDirectionScene: null,
+  surveyDirectionCamera: null,
   meshQuality: null,
   // HD/SD toggle (top-right of the preview): re-renders the jaws from the
   // kept source files at the chosen quality without a full page reload.
@@ -117,8 +122,11 @@ export async function loadInteractiveJawPreview(area) {
     // module download overlaps the STL/undercut requests instead of running
     // strictly before them (the fetches don't need THREE to be ready).
     const depsPromise = ensureThreeDeps();
-    // Fetch the heatmap up front so both render paths can use it.
-    const undercutPromise = fetchUndercutForCase();
+    // DB undercut heatmap retrieval is intentionally disabled here. Saved
+    // insertion angles are the source of truth; autoApplySavedSurveyAngles()
+    // calls the DLL on load when upper/lower survey angles exist.
+    // const undercutPromise = fetchUndercutForCase();
+    const undercutPromise = Promise.resolve({ upper: null, lower: null });
     const jawFilesPromise = fetchJawFilesForCase();
     // Prefetch case data so SET SURVEY ANGLE can preserve the unmodified jaw's
     // angles without an extra round-trip when the button is clicked.
@@ -139,12 +147,18 @@ export async function loadInteractiveJawPreview(area) {
     const meshFiles = await fetchParameterisedMeshForCase();
     if (meshFiles.length) {
       const [undercut, meshQuality] = await Promise.all([undercutPromise, meshQualityPromise]);
+      const normalizedUndercut = undercut || { upper: null, lower: null };
+      preview3DState.undercut = normalizedUndercut;
+      setHeatmapEnabled(hasAnyUndercutSurface(normalizedUndercut));
       await waitForPreviewPaint();
       try {
-        await populateJawPreviewFromOFF(meshFiles, undercut, meshQuality);
+        await populateJawPreviewFromOFF(meshFiles, normalizedUndercut, meshQuality);
         await finishMeshQualityProgress();
-        preview3DState.qualitySource = { kind: "off", files: meshFiles, undercut };
+        preview3DState.qualitySource = { kind: "off", files: meshFiles, undercut: normalizedUndercut };
         updateQualityToggle();
+        autoApplySavedSurveyAngles().catch((err) =>
+          console.warn("[preview3D] saved survey auto-apply failed", err)
+        );
       } catch (err) {
         clearMeshQualityProgress();
         throw err;
@@ -160,12 +174,18 @@ export async function loadInteractiveJawPreview(area) {
     const jawFiles = await jawFilesPromise;
     if (jawFiles.length) {
       const [undercut, meshQuality] = await Promise.all([undercutPromise, meshQualityPromise]);
+      const normalizedUndercut = undercut || { upper: null, lower: null };
+      preview3DState.undercut = normalizedUndercut;
+      setHeatmapEnabled(hasAnyUndercutSurface(normalizedUndercut));
       await waitForPreviewPaint();
       try {
-        await populateJawPreview(jawFiles, undercut, meshQuality);
+        await populateJawPreview(jawFiles, normalizedUndercut, meshQuality);
         await finishMeshQualityProgress();
-        preview3DState.qualitySource = { kind: "stl", files: jawFiles, undercut };
+        preview3DState.qualitySource = { kind: "stl", files: jawFiles, undercut: normalizedUndercut };
         updateQualityToggle();
+        autoApplySavedSurveyAngles().catch((err) =>
+          console.warn("[preview3D] saved survey auto-apply failed", err)
+        );
       } catch (err) {
         clearMeshQualityProgress();
         throw err;
@@ -472,6 +492,7 @@ export function teardown3DPreview() {
   preview3DState.modelRoot = null;
   preview3DState.groups = { upper: null, lower: null };
   preview3DState.jawFiles = {};
+  preview3DState.undercut = { upper: null, lower: null };
   preview3DState.extraGroups = {};
   preview3DState.extraFileNames = {};
   preview3DState.occupiedSlots = null;
@@ -488,6 +509,12 @@ export function teardown3DPreview() {
   preview3DState.heatmapEnabled = false;
   preview3DState.heatmapToggleBtn = null;
   preview3DState.heatmapBoard = null;
+  preview3DState.surveyDirectionRenderer?.dispose?.();
+  preview3DState.surveyDirectionRenderer?.domElement?.remove?.();
+  preview3DState.surveyDirectionArrow = null;
+  preview3DState.surveyDirectionRenderer = null;
+  preview3DState.surveyDirectionScene = null;
+  preview3DState.surveyDirectionCamera = null;
   preview3DState.meshQuality = null;
   preview3DState.qualitySource = null;
   preview3DState.qualityToggleEl = null;
@@ -1765,6 +1792,23 @@ function fetchCaseData() {
   return fetchCaseDetail();
 }
 
+function bufferDataToFloatArray(data) {
+  if (!data?.length) return null;
+  return new Float32Array(new Uint8Array(data).buffer);
+}
+
+function surfaceFloatArray(surface, field) {
+  return bufferDataToFloatArray(surface?.[field]?.data);
+}
+
+function hasUndercutSurface(surface) {
+  return !!surfaceFloatArray(surface, "surveying_values")?.length;
+}
+
+function hasAnyUndercutSurface(undercut) {
+  return hasUndercutSurface(undercut?.upper) || hasUndercutSurface(undercut?.lower);
+}
+
 // Capture the camera position as an XYZ Euler. X = pitch from the horizontal
 // plane (asin of the y component), Y = azimuth around the world up axis,
 // Z = 0 since we only store position-derived angles (no camera roll). Stored
@@ -1779,6 +1823,135 @@ function eulerFromCameraOrbit(camera, controls) {
     y: Math.atan2(dir.x, dir.z),
     z: 0,
   };
+}
+
+function savedSurveyAnglesForJaw(caseData, jaw) {
+  if (!caseData) return null;
+  const prefix = jaw === "upper" ? "upper" : "lower";
+  const rawValues = ["x", "y", "z"].map((axis) =>
+    caseData[`${prefix}_insertion_angle_${axis}`]
+  );
+  if (rawValues.some((value) => value === undefined || value === null || value === "")) return null;
+  const values = rawValues.map(Number);
+  if (values.some((value) => !Number.isFinite(value))) return null;
+  return { x: values[0], y: values[1], z: values[2] };
+}
+
+function savedSurveyDirectionForJaw(caseData, jaw) {
+  const angles = savedSurveyAnglesForJaw(caseData, jaw);
+  if (!angles || !THREE) return null;
+
+  const cosX = Math.cos(angles.x);
+  const dir = new THREE.Vector3(
+    Math.sin(angles.y) * cosX,
+    Math.sin(angles.x),
+    Math.cos(angles.y) * cosX
+  );
+
+  const root = preview3DState.modelRoot;
+  if (root) {
+    const rootQuat = new THREE.Quaternion();
+    root.getWorldQuaternion(rootQuat);
+    dir.applyQuaternion(rootQuat.invert());
+  }
+
+  if (dir.lengthSq() < 1e-9) return null;
+  dir.normalize();
+  return [dir.x, dir.y, dir.z].map((value) =>
+    Number(Number(value).toFixed(8))
+  );
+}
+
+function getCameraSurveyDirection() {
+  const camera = preview3DState.camera;
+  if (!camera || !THREE) return [1, 0, 0];
+
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  dir.multiplyScalar(-1);
+
+  const root = preview3DState.modelRoot;
+  if (root) {
+    const rootQuat = new THREE.Quaternion();
+    root.getWorldQuaternion(rootQuat);
+    dir.applyQuaternion(rootQuat.invert());
+  }
+
+  if (dir.lengthSq() < 1e-9) return [1, 0, 0];
+  dir.normalize();
+  return [dir.x, dir.y, dir.z].map((value) =>
+    Number(Number(value).toFixed(8))
+  );
+}
+
+function getWorldSurveyDirection() {
+  if (!THREE) return null;
+  const direction = new THREE.Vector3(...getCameraSurveyDirection());
+  const root = preview3DState.modelRoot;
+  if (root) {
+    const rootQuat = new THREE.Quaternion();
+    root.getWorldQuaternion(rootQuat);
+    direction.applyQuaternion(rootQuat);
+  }
+  if (direction.lengthSq() < 1e-9) return null;
+  return direction.normalize();
+}
+
+function createSurveyDirectionWidget(mount) {
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: true,
+    preserveDrawingBuffer: false,
+    powerPreference: "low-power",
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.setSize(96, 96, false);
+  renderer.setClearColor(0x000000, 0);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.domElement.className = "jaw-preview-survey-widget";
+  renderer.domElement.setAttribute("aria-hidden", "true");
+  mount.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const widgetCamera = new THREE.OrthographicCamera(-48, 48, 48, -48, 0.1, 200);
+  widgetCamera.position.set(0, 0, 120);
+  widgetCamera.lookAt(0, 0, 0);
+  scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+
+  const arrow = new THREE.ArrowHelper(
+    new THREE.Vector3(0, 0, 1),
+    new THREE.Vector3(0, 0, 0),
+    58,
+    0x0f766e,
+    18,
+    9
+  );
+  arrow.traverse((obj) => {
+    if (obj.material) {
+      obj.material.depthTest = false;
+      obj.material.depthWrite = false;
+    }
+  });
+  scene.add(arrow);
+
+  return { renderer, scene, camera: widgetCamera, arrow };
+}
+
+function updateSurveyDirectionIndicator() {
+  const arrow = preview3DState.surveyDirectionArrow;
+  const camera = preview3DState.camera;
+  const renderer = preview3DState.surveyDirectionRenderer;
+  const scene = preview3DState.surveyDirectionScene;
+  const widgetCamera = preview3DState.surveyDirectionCamera;
+  if (!arrow || !camera || !renderer || !scene || !widgetCamera || !THREE) return;
+
+  const direction = new THREE.Vector3();
+  camera.getWorldDirection(direction);
+  direction.multiplyScalar(-1);
+  if (direction.lengthSq() < 1e-9) return;
+
+  arrow.setDirection(direction.normalize());
+  renderer.render(scene, widgetCamera);
 }
 
 function setHeatmapEnabled(enabled) {
@@ -1818,6 +1991,183 @@ function reapplyHeatmap(undercut) {
   repaint(preview3DState.groups.lower, undercut?.lower);
 }
 
+async function applySurveyUndercutToPreview(nextUndercut) {
+  preview3DState.undercut = nextUndercut;
+  if (preview3DState.qualitySource) {
+    preview3DState.qualitySource.undercut = nextUndercut;
+  }
+  setHeatmapEnabled(true);
+
+  const source = preview3DState.qualitySource;
+  const quality = preview3DState.meshQuality || "low";
+  if (quality === "low" && source?.files?.length) {
+    console.log("[preview3D] rebuilding low quality mesh with updated survey heatmap", {
+      kind: source.kind,
+      quality,
+    });
+    if (source.kind === "off") {
+      await populateJawPreviewFromOFF(source.files, nextUndercut, quality);
+    } else {
+      await populateJawPreview(source.files, nextUndercut, quality);
+    }
+    applyJawVisibility();
+    updateQualityToggle();
+    setHeatmapEnabled(true);
+    return;
+  }
+
+  reapplyHeatmap(nextUndercut);
+}
+
+function getJawDbType(jaw) {
+  return jaw === "upper" ? 1 : 2;
+}
+
+function colorForSurveyingValue(value) {
+  const v = Math.max(0, Number(value) || 0);
+  if (v <= 0) return DEFAULT_TOOTH_COLOR;
+
+  if (v < 0.25) return [1, 245 / 255, 157 / 255];
+  if (v < 0.5) return [1, 214 / 255, 10 / 255];
+  if (v < 0.75) return [245 / 255, 124 / 255, 0];
+  return [211 / 255, 47 / 255, 47 / 255];
+}
+
+function buildDllUndercutSurface(jaw, response) {
+  let values = null;
+  if (response?.surveying_values_base64) {
+    values = new Float32Array(base64ToArrayBuffer(response.surveying_values_base64));
+  } else if (Array.isArray(response?.surveying_values)) {
+    values = response.surveying_values;
+  } else {
+    values = response?.surveying_values_preview;
+  }
+  if (!values?.length) return null;
+
+  const heatmap = new Float32Array(values.length * 4);
+  for (let i = 0; i < values.length; i += 1) {
+    const [r, g, b] = colorForSurveyingValue(values[i]);
+    heatmap[i * 4] = r;
+    heatmap[i * 4 + 1] = g;
+    heatmap[i * 4 + 2] = b;
+    heatmap[i * 4 + 3] = 1;
+  }
+
+  return {
+    jaw_type: jaw === "upper" ? "upper_jaw" : "lower_jaw",
+    point_size: response?.surveying_count || values.length,
+    source: "dll_compute_surveying_no_pd",
+    surveying_direction: response?.surveying_direction,
+    surveying_values: {
+      data: Array.from(new Uint8Array(heatmap.buffer)),
+    },
+  };
+}
+
+async function computeSurveyingNoPdForJaw(jaw, direction) {
+  if (!state.caseIntID) throw new Error("Case ID unavailable");
+  const user = getLoggedInUser();
+  const uuid = user?.uuid || PREVIEW_FALLBACK_UUID;
+  console.log("[preview3D] surveying direction request", {
+    jaw,
+    case_id: state.caseIntID,
+    type: getJawDbType(jaw),
+    direction,
+  });
+  const body = [
+    {
+      machine_id: PREVIEW_MACHINE_ID,
+      uuid,
+      caseIntID: state.caseIntID,
+    },
+    {
+      case_id: state.caseIntID,
+      type: getJawDbType(jaw),
+      dir: direction,
+      printFullSurveying: true,
+      returnSurveyingBase64: true,
+    },
+  ];
+
+  const path = "/dll/compute-surveying-no-pd";
+  const t0 = performance.now();
+  const res = await fetch(`${SMARTRPD_API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const dt = Math.round(performance.now() - t0);
+  const tag = res.ok ? "✓" : "✕";
+  console.log(`[preview3D] ${tag} POST ${path} (${jaw}) status=${res.status} ${dt}ms`);
+
+  let json = null;
+  try {
+    json = await res.json();
+  } catch {
+    json = null;
+  }
+
+  if (!res.ok) {
+    throw new Error(json?.details || json?.error || `DLL surveying request failed with status ${res.status}`);
+  }
+  return json;
+}
+
+async function autoApplySavedSurveyAngles() {
+  if (!state.caseIntID) return;
+  if (!preview3DState.caseData) {
+    preview3DState.caseData = await fetchCaseData();
+  }
+
+  const caseData = preview3DState.caseData;
+  if (!caseData) return;
+
+  for (const jaw of ["upper", "lower"]) {
+    if (!preview3DState.groups[jaw]) {
+      console.log("[preview3D] saved survey auto-apply skipped: jaw mesh not loaded", {
+        jaw,
+        case_id: state.caseIntID,
+      });
+      continue;
+    }
+
+    const direction = savedSurveyDirectionForJaw(caseData, jaw);
+    if (!direction) {
+      console.log("[preview3D] saved survey auto-apply skipped: insertion angles missing", {
+        jaw,
+        case_id: state.caseIntID,
+        upper: {
+          x: caseData.upper_insertion_angle_x,
+          y: caseData.upper_insertion_angle_y,
+          z: caseData.upper_insertion_angle_z,
+        },
+        lower: {
+          x: caseData.lower_insertion_angle_x,
+          y: caseData.lower_insertion_angle_y,
+          z: caseData.lower_insertion_angle_z,
+        },
+      });
+      continue;
+    }
+
+    console.log("[preview3D] auto-applying saved survey direction", {
+      jaw,
+      case_id: state.caseIntID,
+      direction,
+    });
+
+    const dllResult = await computeSurveyingNoPdForJaw(jaw, direction);
+    const dllSurface = buildDllUndercutSurface(jaw, dllResult);
+    if (!dllSurface) continue;
+
+    const nextUndercut = {
+      ...(preview3DState.undercut || {}),
+      [jaw]: dllSurface,
+    };
+    await applySurveyUndercutToPreview(nextUndercut);
+  }
+}
+
 async function saveSurveyAngle(jaw, btn) {
   const camera = preview3DState.camera;
   const controls = preview3DState.controls;
@@ -1832,6 +2182,7 @@ async function saveSurveyAngle(jaw, btn) {
   }
 
   const { x, y, z } = eulerFromCameraOrbit(camera, controls);
+  const surveyDirection = getCameraSurveyDirection();
   const current = preview3DState.caseData;
   const updated = { ...current };
   if (jaw === "upper") {
@@ -1870,6 +2221,7 @@ async function saveSurveyAngle(jaw, btn) {
   }
 
   const path = `/case/${state.caseIntID}`;
+  if (btn) btn.textContent = "SURVEYING...";
   const t0 = performance.now();
   try {
     const res = await fetch(`${SMARTRPD_API_BASE}${path}`, {
@@ -1883,10 +2235,22 @@ async function saveSurveyAngle(jaw, btn) {
     if (!res.ok) return;
     preview3DState.caseData = updated;
 
-    const newUndercut = await fetchUndercutForCase();
-    reapplyHeatmap(newUndercut);
+    if (btn) btn.textContent = "COMPUTING...";
+    const dllResult = await computeSurveyingNoPdForJaw(jaw, surveyDirection);
+    const dllSurface = buildDllUndercutSurface(jaw, dllResult);
+    if (!dllSurface) {
+      throw new Error("DLL response did not include full surveying values");
+    }
+
+    const nextUndercut = {
+      ...(preview3DState.undercut || {}),
+      [jaw]: dllSurface,
+    };
+    await applySurveyUndercutToPreview(nextUndercut);
+    toast?.success?.(`${jaw === "upper" ? "Upper" : "Lower"} survey angle applied.`);
   } catch (err) {
     console.error(`[preview3D] ✕ PUT ${path} failed`, err);
+    toast?.error?.(`Survey angle failed. ${err.message || err}`);
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -1942,13 +2306,13 @@ function init3DPreview(area) {
     </div>
     <div class="jaw-preview-undercut-body">
       <div class="jaw-preview-undercut-scale">
-        <span style="background:#fff3bf"></span>
-        <span style="background:#ffd43b"></span>
-        <span style="background:#ff922b"></span>
-        <span style="background:#fa5252"></span>
+        <span style="background:#d32f2f"></span>
+        <span style="background:#f57c00"></span>
+        <span style="background:#ffd60a"></span>
+        <span style="background:#fff59d"></span>
       </div>
       <div class="jaw-preview-undercut-labels">
-        <span>0.25</span><span>0.5</span><span>0.75</span><span>&gt;0.75</span>
+        <span>&gt;0.75</span><span>0.5-0.75</span><span>0.25-0.5</span><span>&lt;0.25</span>
       </div>
     </div>
   `;
@@ -2040,6 +2404,8 @@ function init3DPreview(area) {
   modelRoot.rotation.x = -Math.PI / 2;
   scene.add(modelRoot);
 
+  const surveyWidget = createSurveyDirectionWidget(mount);
+
   // TrackballControls (arcball-style): true free 360° rotation in any
   // direction, no up-vector lock and no polar limits. Switched from
   // OrbitControls so users can spin the jaw freely to inspect every surface.
@@ -2128,6 +2494,10 @@ function init3DPreview(area) {
   preview3DState.controls = controls;
   preview3DState.mount = mount;
   preview3DState.modelRoot = modelRoot;
+  preview3DState.surveyDirectionArrow = surveyWidget.arrow;
+  preview3DState.surveyDirectionRenderer = surveyWidget.renderer;
+  preview3DState.surveyDirectionScene = surveyWidget.scene;
+  preview3DState.surveyDirectionCamera = surveyWidget.camera;
   preview3DState.groups = { upper: null, lower: null };
   preview3DState.activeView = "both";
   preview3DState.topControls = { rowUpper, rowLower };
@@ -2158,6 +2528,7 @@ function init3DPreview(area) {
   const animate = () => {
     preview3DState.frameId = requestAnimationFrame(animate);
     controls.update();
+    updateSurveyDirectionIndicator();
     renderer.render(scene, camera);
   };
   animate();
