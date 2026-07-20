@@ -5728,7 +5728,7 @@ btnContainer.appendChild(edit2DStatic); */
   const encryptedID = urlParams.get("id");
 
   // Use the full viewer URL in the email
-  const viewerURL = `https://faid123.github.io/webrpdviewer/?id=${encodeURIComponent(
+  const viewerURL = `https://faid123.github.io/.tmp-test-web/src/pages/ThreeDViewer.html?id=${encodeURIComponent(
     encryptedID
   )}`;
 
