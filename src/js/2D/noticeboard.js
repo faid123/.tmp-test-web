@@ -11,7 +11,7 @@ import {
   tiltArrowFor,
 } from "./clinicalInfo.js";
 import { WORK_CATEGORY_LABELS, loadCaseNote, fetchAdditionalCaseDetails } from "./caseNote.js";
-import { statusLabel } from "../apiLog.js";
+import { statusLabel } from "../shared/apiLog.js";
 import { encodeEditedViewColumns } from "./dotnetBinaryFormatter.js";
 import { mergeInstructions } from "./mergeInstructions.js";
 

@@ -1,16 +1,16 @@
-import { lol } from "../crypt.js";
-import { toast, confirmModal, openThemedCalendar, attachThemedCalendar } from "./toast.js";
-import { logApi, statusLabel } from "./apiLog.js";
-import { setupConnectivityIndicator, reportHtmlToDocxBytes } from "./accessibility.js";
-import { setupAppSidebar } from "./appSidebar.js";
-import { buildReportHtml } from "./2D/noticeboard.js";
-import { saveCaseDueDate, toDateInputValue, updateCaseDueDate } from "./2D/caseNote.js";
+import { lol } from "../shared/crypt.js";
+import { toast, confirmModal, openThemedCalendar, attachThemedCalendar } from "../shared/toast.js";
+import { logApi, statusLabel } from "../shared/apiLog.js";
+import { setupConnectivityIndicator, reportHtmlToDocxBytes } from "../shared/accessibility.js";
+import { setupAppSidebar } from "../shared/appSidebar.js";
+import { buildReportHtml } from "../2D/noticeboard.js";
+import { saveCaseDueDate, toDateInputValue, updateCaseDueDate } from "../2D/caseNote.js";
 import {
   ENRICH_CONCURRENCY,
   caseIntIdOf,
   buildEnrichRequests,
   applyEnrichmentResponses,
-} from "./caseEnrichment.js";
+} from "../shared/caseEnrichment.js";
 
 function getLoggedInUser() {
   const user = localStorage.getItem("loggedInUser");

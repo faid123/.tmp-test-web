@@ -7,9 +7,9 @@
 // 2DAnnotation.js). Distinguishing marker: #versionHistoryModal present = widget;
 // otherwise a lone #versionList = standalone page.
 
-import { lol } from "../crypt.js";
-import { toast } from "./toast.js";
-import { logApi } from "./apiLog.js";
+import { lol } from "../shared/crypt.js";
+import { toast } from "../shared/toast.js";
+import { logApi } from "../shared/apiLog.js";
 
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 

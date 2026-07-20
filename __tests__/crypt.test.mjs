@@ -1,4 +1,4 @@
-import { lol } from '../src/crypt.js';
+import { lol } from '../src/js/shared/crypt.js';
 
 describe('lol function (encrypt/decrypt)', () => {
   test('should encrypt and decrypt numeric case ID correctly', () => {
