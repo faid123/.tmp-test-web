@@ -770,8 +770,8 @@ function escapeAttr(value) {
 }
 
 // Render the co-owner list into the detail pane's SHARED WITH field. Each
-// co-owner is a small avatar chip with initials and a name tooltip; empty
-// arrays render an em-dash so the field never sits blank.
+// co-owner shows as a small name pill (no avatar); empty arrays render an
+// em-dash so the field never sits blank.
 function renderSharedWith(coOwners) {
   const container = document.getElementById("shared-with-list");
   if (!container) return;
@@ -780,15 +780,8 @@ function renderSharedWith(coOwners) {
     container.innerHTML = '<span class="cm-shared-empty">—</span>';
     return;
   }
-  container.innerHTML = names
-    .map(
-      (name) => `
-        <span class="cm-shared-chip" title="${escapeAttr(name)}">
-          <span class="cm-avatar-sm cm-avatar-coowner">${escapeAttr(initialsFor(name))}</span>
-          <span class="cm-shared-name">${escapeAttr(name)}</span>
-        </span>`
-    )
-    .join("");
+  const joined = names.map((name) => escapeAttr(name)).join(", ");
+  container.innerHTML = `<span class="cm-shared-name" title="${joined}">${joined}</span>`;
 }
 
 // Render the case list as a sortable table. The owner cell shows a "+N"

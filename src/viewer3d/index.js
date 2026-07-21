@@ -113,9 +113,12 @@ function resizeViewerStage(renderer) {
 let objToRender = "dino";
 let mesh_geo;
 
-// Create a material
-const material = new THREE.MeshPhongMaterial({
+// Jaw material. Standard (not Phong) with the same shading as the 2D-annotation
+// jaw preview, so the same scan looks identical in both viewers.
+const material = new THREE.MeshStandardMaterial({
   vertexColors: true,
+  metalness: 0,
+  roughness: 0.5,
   side: THREE.DoubleSide,
   transparent: false,
   opacity: 1,
@@ -6286,8 +6289,17 @@ btnContainer.appendChild(edit2DStatic); */
 
   finished = true;
   // Instantiate a new renderer and set its size
-  const renderer = new THREE.WebGLRenderer({ alpha: true }); // Alpha: true allows for the transparent background
-  renderer.setClearColor(0xf8f5fb, 1);
+  // antialias on: fissures are sub-pixel at normal zoom and alias into noise
+  // without it. Do NOT add setPixelRatio here — resizeViewerStage() calls
+  // setSize(w, h, false), so the canvas carries no CSS size and `#container3D
+  // canvas { width/height: auto !important }` lays it out at its INTRINSIC
+  // (attribute) size. A pixel ratio of 2 therefore lays the canvas out at twice
+  // the stage and pushes the jaw off-screen.
+  const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+  // White by choice. Note it costs silhouette contrast — tan crowns measure 2.6:1
+  // on white versus 5.6:1 on dark slate, so interproximal embrasures read less
+  // strongly. Keep #container3D's background-color in step with this.
+  renderer.setClearColor(0xffffff, 1);
   resizeViewerStage(renderer);
 
   // Add the renderer to the DOM
@@ -6318,26 +6330,41 @@ btnContainer.appendChild(edit2DStatic); */
 
   camera.position.z = objToRender === "dino" ? 100 : 500;
 
-  // Add lights to the scene, so we can actually see the 3D model
-  const ambientLight = new THREE.AmbientLight(0xffffff, 1); // Soft white light
-  scene.add(ambientLight);
+  // Lighting is tuned for surface relief, NOT for even illumination — the previous
+  // rig (ambient 1.0 plus four opposing directionals "for even lighting") lit every
+  // facing equally, which is exactly what erases cusps and fissures.
+  //
+  // The directional lights are children of the camera, the way dental CAD viewers
+  // rig them, so the surface being looked at is always the lit one. World-fixed
+  // lights leave the far side dark when the camera orbits (measured 43% brightness
+  // swing front-to-back, versus 4% rigged this way). The offsets are deliberately
+  // off-axis: a pure headlight lights everything evenly and flattens relief again.
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xfff1f5, 0.38));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.18));
 
-  // Add directional lights from different directions for even lighting
-  const lights = [
-    new THREE.DirectionalLight(0xffffff, 1), // Front light
-    new THREE.DirectionalLight(0xffffff, 1), // Back light
-    new THREE.DirectionalLight(0xffffff, 1), // Left light
-    new THREE.DirectionalLight(0xffffff, 1), // Right light
-  ];
+  // Aim point parented to the camera too, so the rig is unaffected by where the
+  // jaw sits or by panning — direction stays fixed relative to the view.
+  const lightAim = new THREE.Object3D();
+  lightAim.position.set(0, 0, -100);
+  camera.add(lightAim);
 
-  lights[0].position.set(0, 0, 1);
-  lights[1].position.set(0, 0, -1);
-  lights[2].position.set(-1, 0, 0);
-  lights[3].position.set(1, 0, 0);
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.55);
+  keyLight.position.set(-60, 80, 100);
+  keyLight.target = lightAim;
+  camera.add(keyLight);
 
-  lights.forEach((light) => {
-    scene.add(light);
-  });
+  const fillLight = new THREE.DirectionalLight(0xffffff, 0.32);
+  fillLight.position.set(80, 20, 60);
+  fillLight.target = lightAim;
+  camera.add(fillLight);
+
+  const rimLight = new THREE.DirectionalLight(0xffffff, 0.42);
+  rimLight.position.set(0, -70, -90);
+  rimLight.target = lightAim;
+  camera.add(rimLight);
+
+  // Camera children only get world matrices once the camera is in the scene graph.
+  scene.add(camera);
 
   // This adds controls to the camera, so we can rotate / zoom it with the mouse
   if (objToRender === "dino") {

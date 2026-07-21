@@ -793,7 +793,7 @@ button {
 }
 
 .cm-btn-large {
-  padding: 9px 18px;
+  padding: 13px 18px;
   font-size: 14px;
   width: 100%;
 }
@@ -1220,7 +1220,7 @@ button {
 .cm-detail-body {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 24px;
 }
 
 .cm-detail-head {
@@ -1338,6 +1338,11 @@ button {
   align-items: center;
   gap: 8px;
 }
+/* Owner (ASSIGNED TO) name in teal. */
+.cm-assignee #created-by {
+  color: var(--primary);
+  font-weight: 600;
+}
 .cm-avatar-sm {
   width: 26px;
   height: 26px;
@@ -1356,35 +1361,19 @@ button {
 .cm-shared-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 8px;
+  gap: 4px;
   align-items: center;
 }
 .cm-shared-empty {
   font-size: 14px;
   color: var(--muted);
 }
-.cm-shared-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px 3px 3px;
-  border-radius: 999px;
-  background: var(--line-soft);
-  color: var(--ink);
+/* Co-owner names shown as plain comma-separated text (matches the case list). */
+.cm-shared-name {
   font-size: 13px;
   font-weight: 500;
-  max-width: 100%;
-}
-.cm-avatar-coowner {
-  width: 22px;
-  height: 22px;
-  font-size: 10px;
-}
-.cm-shared-name {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 140px;
+  color: var(--ink);
+  text-align: right;
 }
 
 /* ============ dropdown (rename / delete / etc.) ============ */
@@ -1533,6 +1522,7 @@ button {
 .cm-3d-link-icon-btn {
   flex: 1;
   min-width: 0;
+  height: 42px;
   padding: 2px;
   justify-content: center;
 }
@@ -1551,8 +1541,8 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 42px;
+  height: 42px;
   flex-shrink: 0;
   border: 1px solid var(--line);
   border-radius: 10px;
