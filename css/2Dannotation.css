@@ -785,6 +785,71 @@ button.upload3d-row {
   color: var(--rose-800);
 }
 
+/* Armed state: the button has become the SET confirm for the jaw whose
+   placement arrow is currently showing in the 3D view. Filled teal so it reads
+   as "commit", matching the arrow's colour. */
+.jaw-preview-survey-btn.is-aiming {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+  padding: 0 26px;
+}
+.jaw-preview-survey-btn.is-aiming:hover {
+  background: #115e56;
+  border-color: #115e56;
+  color: #fff;
+}
+.jaw-preview-survey-btn[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* While aiming, dragging swings the arrow rather than orbiting the arch, so the
+   canvas advertises grab instead of the default rotate cursor. */
+.jaw-preview-3d-mount.is-aiming-survey canvas {
+  cursor: grab;
+}
+.jaw-preview-3d-mount.is-aiming-survey canvas.is-aiming-drag {
+  cursor: grabbing;
+}
+
+/* Banner shown over the 3D view while a jaw is armed for surveying. */
+.jaw-preview-survey-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 8px;
+  z-index: 6;
+  max-width: calc(100% - 32px);
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.86);
+  color: #f8fafc;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.28);
+}
+.jaw-preview-survey-hint.is-on {
+  display: flex;
+}
+.jaw-preview-survey-hint-jaw {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #0f766e;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.jaw-preview-survey-hint-esc {
+  opacity: 0.65;
+}
+
 /* Inline upload progress shown in the SET SURVEY ANGLE slot while a freshly
    picked jaw STL uploads. The `is-uploading-jaw` row class swaps the survey/
    trash/upload controls for this bar until the upload settles. */
@@ -895,16 +960,6 @@ button.upload3d-row {
   display: block;
   position: relative;
   z-index: 1;
-}
-
-.jaw-preview-3d-mount canvas.jaw-preview-survey-widget {
-  position: absolute;
-  left: 16px;
-  bottom: 16px;
-  width: 96px;
-  height: 96px;
-  z-index: 5;
-  pointer-events: none;
 }
 
 .jp-confirm-overlay {

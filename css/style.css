@@ -27,7 +27,8 @@ main {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: contain;
-  background-color: #f8f5fb;
+  /* Matches the WebGL clear colour so there is no flash before first paint. */
+  background-color: #ffffff;
 }
 
 header {

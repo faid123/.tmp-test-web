@@ -851,35 +851,59 @@ function svgToImage(inlinedSvg, targetWidth, targetHeight) {
   });
 }
 
-async function composeJawCanvas(scale = 1) {
-  const upperSvg = document.getElementById("upperArchSvg");
-  const lowerSvg = document.getElementById("lowerArchSvg");
-  if (!upperSvg || !lowerSvg) return null;
+// Outer aesthetic margin around a composed image.
+const JAW_PAD_X = 10;
+const JAW_PAD_Y = 20;
+// ViewBox expansion: edge teeth extend past the original viewBox and get clipped,
+// so expand the cloned SVG's viewBox to render them in full.
+const JAW_VIEWBOX_PAD = 80;
+// Space between the two arches in the side-by-side thumbnail, measured between
+// the arches themselves rather than their padded image boxes. Keep it below
+// JAW_VIEWBOX_PAD * 2 (160) — past that the padding bands stop overlapping and
+// the layout goes back to leaving a wide dead strip down the middle.
+const JAW_SIDE_BY_SIDE_GAP = 40;
 
-  const parseViewBox = (svg) => {
-    const parts = (svg.getAttribute("viewBox") || "0 0 620 380").trim().split(/\s+/).map(Number);
-    return {
-      x: parts[0] || 0,
-      y: parts[1] || 0,
-      w: parts[2] || 620,
-      h: parts[3] || 380,
-    };
+function parseJawViewBox(svg) {
+  const parts = (svg.getAttribute("viewBox") || "0 0 620 380").trim().split(/\s+/).map(Number);
+  return {
+    x: parts[0] || 0,
+    y: parts[1] || 0,
+    w: parts[2] || 620,
+    h: parts[3] || 380,
   };
+}
 
-  const upperDims = parseViewBox(upperSvg);
-  const lowerDims = parseViewBox(lowerSvg);
-  const gap = 20;
-  // Outer aesthetic margin around the composed image.
-  const padX = 10;
-  const padY = 20;
-  // ViewBox expansion: edge teeth extend past the original viewBox and get clipped,
-  // so expand the cloned SVG's viewBox to render them in full.
-  const vbPad = 80;
-  const baseW = Math.max(upperDims.w, lowerDims.w) + vbPad * 2;
-  const baseH = upperDims.h + lowerDims.h + vbPad * 4 + gap;
-  const canvasW = Math.round((baseW + padX * 2) * scale);
-  const canvasH = Math.round((baseH + padY * 2) * scale);
+// Inline an arch SVG's images, expand its viewBox so edge-clipped content
+// (anterior teeth at the front of the arch) is included, and rasterize it.
+async function renderJawImage(svg, dims, scale) {
+  const inlined = await inlineImagesInSvg(svg);
+  inlined.setAttribute(
+    "viewBox",
+    `${dims.x - JAW_VIEWBOX_PAD} ${dims.y - JAW_VIEWBOX_PAD} ${dims.w + JAW_VIEWBOX_PAD * 2} ${dims.h + JAW_VIEWBOX_PAD * 2}`
+  );
+  const renderW = dims.w + JAW_VIEWBOX_PAD * 2;
+  const renderH = dims.h + JAW_VIEWBOX_PAD * 2;
+  const img = await svgToImage(inlined, renderW * scale, renderH * scale);
+  return { img, renderW, renderH };
+}
 
+function drawCaseWatermark(ctx, centerX, centerY, scale) {
+  const labelText = getCaseLabelTextForExport();
+  if (!labelText) return;
+  const watermarkText = labelText.startsWith("🦷") ? labelText : `🦷 ${labelText}`;
+  const fontPx = Math.round(28 * scale);
+  ctx.save();
+  ctx.font = `700 ${fontPx}px "Montserrat", "Segoe UI", sans-serif`;
+  ctx.fillStyle = "rgba(40, 60, 80, 0.55)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.shadowColor = "rgba(255, 255, 255, 0.85)";
+  ctx.shadowBlur = 4 * scale;
+  ctx.fillText(watermarkText, centerX, centerY);
+  ctx.restore();
+}
+
+function newJawCanvas(canvasW, canvasH) {
   const canvas = document.createElement("canvas");
   canvas.width = canvasW;
   canvas.height = canvasH;
@@ -888,60 +912,98 @@ async function composeJawCanvas(scale = 1) {
   ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvasW, canvasH);
+  return { canvas, ctx };
+}
 
-  const [upperInlined, lowerInlined] = await Promise.all([
-    inlineImagesInSvg(upperSvg),
-    inlineImagesInSvg(lowerSvg),
+// Render both arches onto one canvas SIDE BY SIDE (upper left, lower right).
+// This is the case-detail carousel thumbnail: clinicians asked to see the two
+// jaws next to each other rather than stacked, matching how the 3D upper/lower
+// renders already read as a pair. The stacked composeJawCanvas layout stays as
+// it is — the JPEG export and the noticeboard / instruction-editor base image
+// depend on its proportions (annotations are drawn over that geometry).
+async function composeJawCanvasSideBySide(scale = 1) {
+  const upperSvg = document.getElementById("upperArchSvg");
+  const lowerSvg = document.getElementById("lowerArchSvg");
+  if (!upperSvg || !lowerSvg) return null;
+
+  const upperDims = parseJawViewBox(upperSvg);
+  const lowerDims = parseJawViewBox(lowerSvg);
+
+  // Each rendered jaw carries JAW_VIEWBOX_PAD of transparent padding on every
+  // side (the viewBox expansion that stops edge teeth being clipped), so two
+  // images placed flush already sit 2 * JAW_VIEWBOX_PAD apart on screen. Space
+  // them by the gap we actually want between the ARCHES and let the padding
+  // bands overlap to absorb the difference — they're transparent, and the
+  // arches themselves stay JAW_SIDE_BY_SIDE_GAP apart.
+  const gap = JAW_SIDE_BY_SIDE_GAP - JAW_VIEWBOX_PAD * 2;
+
+  const [upper, lower] = await Promise.all([
+    renderJawImage(upperSvg, upperDims, scale),
+    renderJawImage(lowerSvg, lowerDims, scale),
   ]);
-  // Expand each cloned SVG's viewBox so edge-clipped content (anterior
-  // teeth at the front of each arch) is included in the rendered image.
-  upperInlined.setAttribute(
-    "viewBox",
-    `${upperDims.x - vbPad} ${upperDims.y - vbPad} ${upperDims.w + vbPad * 2} ${upperDims.h + vbPad * 2}`
-  );
-  lowerInlined.setAttribute(
-    "viewBox",
-    `${lowerDims.x - vbPad} ${lowerDims.y - vbPad} ${lowerDims.w + vbPad * 2} ${lowerDims.h + vbPad * 2}`
-  );
 
-  const upperRenderW = upperDims.w + vbPad * 2;
-  const upperRenderH = upperDims.h + vbPad * 2;
-  const lowerRenderW = lowerDims.w + vbPad * 2;
-  const lowerRenderH = lowerDims.h + vbPad * 2;
+  const baseW = upper.renderW + lower.renderW + gap;
+  const baseH = Math.max(upper.renderH, lower.renderH);
+  const canvasW = Math.round((baseW + JAW_PAD_X * 2) * scale);
+  const canvasH = Math.round((baseH + JAW_PAD_Y * 2) * scale);
+  const { canvas, ctx } = newJawCanvas(canvasW, canvasH);
 
-  const [upperImg, lowerImg] = await Promise.all([
-    svgToImage(upperInlined, upperRenderW * scale, upperRenderH * scale),
-    svgToImage(lowerInlined, lowerRenderW * scale, lowerRenderH * scale),
+  // Each arch is vertically centered so a taller jaw doesn't drag the other up.
+  const upperX = JAW_PAD_X * scale;
+  const upperY = (JAW_PAD_Y + (baseH - upper.renderH) / 2) * scale;
+  const lowerX = (JAW_PAD_X + upper.renderW + gap) * scale;
+  const lowerY = (JAW_PAD_Y + (baseH - lower.renderH) / 2) * scale;
+  ctx.drawImage(upper.img, upperX, upperY, upper.renderW * scale, upper.renderH * scale);
+  ctx.drawImage(lower.img, lowerX, lowerY, lower.renderW * scale, lower.renderH * scale);
+
+  // Watermark spans the full width below both arches, centered in the empty band
+  // the viewBox expansion leaves under the lowest visible content.
+  const visibleBottom = Math.max(
+    upperY + (JAW_VIEWBOX_PAD + upperDims.h) * scale,
+    lowerY + (JAW_VIEWBOX_PAD + lowerDims.h) * scale
+  );
+  drawCaseWatermark(ctx, canvasW / 2, (visibleBottom + canvasH) / 2, scale);
+
+  return canvas;
+}
+
+async function composeJawCanvas(scale = 1) {
+  const upperSvg = document.getElementById("upperArchSvg");
+  const lowerSvg = document.getElementById("lowerArchSvg");
+  if (!upperSvg || !lowerSvg) return null;
+
+  const upperDims = parseJawViewBox(upperSvg);
+  const lowerDims = parseJawViewBox(lowerSvg);
+  const gap = 20;
+  const vbPad = JAW_VIEWBOX_PAD;
+  const padX = JAW_PAD_X;
+  const padY = JAW_PAD_Y;
+  const baseW = Math.max(upperDims.w, lowerDims.w) + vbPad * 2;
+  const baseH = upperDims.h + lowerDims.h + vbPad * 4 + gap;
+  const canvasW = Math.round((baseW + padX * 2) * scale);
+  const canvasH = Math.round((baseH + padY * 2) * scale);
+
+  const { canvas, ctx } = newJawCanvas(canvasW, canvasH);
+
+  const [upper, lower] = await Promise.all([
+    renderJawImage(upperSvg, upperDims, scale),
+    renderJawImage(lowerSvg, lowerDims, scale),
   ]);
+
   // Center each jaw horizontally in the padded canvas; upper starts at the top
   // padding, lower sits a `gap` below it (no header band).
-  const upperX = (padX + (baseW - upperRenderW) / 2) * scale;
+  const upperX = (padX + (baseW - upper.renderW) / 2) * scale;
   const upperY = padY * scale;
-  const lowerX = (padX + (baseW - lowerRenderW) / 2) * scale;
-  const lowerY = (padY + upperRenderH + gap) * scale;
-  ctx.drawImage(upperImg, upperX, upperY, upperRenderW * scale, upperRenderH * scale);
-  ctx.drawImage(lowerImg, lowerX, lowerY, lowerRenderW * scale, lowerRenderH * scale);
+  const lowerX = (padX + (baseW - lower.renderW) / 2) * scale;
+  const lowerY = (padY + upper.renderH + gap) * scale;
+  ctx.drawImage(upper.img, upperX, upperY, upper.renderW * scale, upper.renderH * scale);
+  ctx.drawImage(lower.img, lowerX, lowerY, lower.renderW * scale, lower.renderH * scale);
 
   // Case-ID watermark — sit in the visible gap between the jaws' content. Computed
   // from actual jaw positions so it stays centered even when one jaw is taller.
-  const labelText = getCaseLabelTextForExport();
-  if (labelText) {
-    const watermarkText = labelText.startsWith("🦷") ? labelText : `🦷 ${labelText}`;
-    const visibleUpperBottom = upperY + (vbPad + upperDims.h) * scale;
-    const visibleLowerTop = lowerY + vbPad * scale;
-    const watermarkY = (visibleUpperBottom + visibleLowerTop) / 2;
-    const watermarkX = canvasW / 2;
-    const fontPx = Math.round(28 * scale);
-    ctx.save();
-    ctx.font = `700 ${fontPx}px "Montserrat", "Segoe UI", sans-serif`;
-    ctx.fillStyle = "rgba(40, 60, 80, 0.55)";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.shadowColor = "rgba(255, 255, 255, 0.85)";
-    ctx.shadowBlur = 4 * scale;
-    ctx.fillText(watermarkText, watermarkX, watermarkY);
-    ctx.restore();
-  }
+  const visibleUpperBottom = upperY + (vbPad + upperDims.h) * scale;
+  const visibleLowerTop = lowerY + vbPad * scale;
+  drawCaseWatermark(ctx, canvasW / 2, (visibleUpperBottom + visibleLowerTop) / 2, scale);
 
   return canvas;
 }
@@ -974,17 +1036,17 @@ export async function captureJawPngDataUrl(scale = 3) {
   return canvas.toDataURL("image/png");
 }
 
-// Thumbnail slot for the composite 2D arch render. The case-detail panel (and
-// legacy 2D viewer) treats slot 0 as the primary 2D thumbnail.
+// Thumbnail slot for the 2D arch render. The case-detail panel (and legacy 2D
+// viewer) treats slot 0 as the primary 2D thumbnail.
 const THUMBNAIL_SLOT_2D = 0;
 
-// Capture jaws as PNG and upload to the case's 2D thumbnail slot. Returns true on
-// success. Uses scale=2 to keep the payload under server body limits (scale=3
-// two-arch PNGs often exceed 5 MB).
+// Capture both jaws side by side as a PNG and upload to the case's 2D thumbnail
+// slot. Returns true on success. Uses scale=2 to keep the payload under server
+// body limits (scale=3 two-arch PNGs often exceed 5 MB).
 export async function uploadJawPngThumbnail() {
-  const pngUrl = await captureJawPngDataUrl(2);
-  if (!pngUrl) return false;
-  return await uploadCaseThumbnail(pngUrl, THUMBNAIL_SLOT_2D);
+  const canvas = await composeJawCanvasSideBySide(2);
+  if (!canvas) return false;
+  return await uploadCaseThumbnail(canvas.toDataURL("image/png"), THUMBNAIL_SLOT_2D);
 }
 
 export async function saveAsJpeg() {
@@ -1005,10 +1067,10 @@ export async function saveAsJpeg() {
     a.click();
     a.remove();
 
-    // Upload PNG (not JPEG) to the 2D thumbnail slot so the case-detail
-    // panel gets a lossless render of the arches.
-    const pngUrl = canvas.toDataURL("image/png");
-    const uploaded = await uploadCaseThumbnail(pngUrl, THUMBNAIL_SLOT_2D);
+    // Upload PNG (not JPEG) to the 2D thumbnail slot so the case-detail panel
+    // gets a lossless render of the arches. The downloaded JPEG keeps the
+    // stacked layout; only the thumbnail puts the jaws side by side.
+    const uploaded = await uploadJawPngThumbnail();
     if (uploaded) {
       setMessage("Arch annotation saved as JPEG and uploaded to case.", false);
     } else {
