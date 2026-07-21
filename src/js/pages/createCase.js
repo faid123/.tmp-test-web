@@ -49,6 +49,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const caseNameInput = document.getElementById("caseName");
   const requestDateInput = document.getElementById("requestDate");
+  const instructionsInput = document.getElementById("ccCaseInstructions");
+  // Grow the instructions box with its content instead of giving it a drag
+  // handle. Height is cleared first so it can shrink again; the border is added
+  // back on top of scrollHeight (content + padding only) to avoid clipping the
+  // last line on a border-box textarea.
+  const autoGrowTextarea = (el) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+  };
+  if (instructionsInput) {
+    instructionsInput.addEventListener("input", () => autoGrowTextarea(instructionsInput));
+  }
   // Themed calendar for the case request date (no Clear — a request date is required).
   if (requestDateInput) attachThemedCalendar(requestDateInput, { allowClear: false });
   const caseOwnerDisplay = document.getElementById("ccCaseOwner");
@@ -239,6 +252,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   const resetCreateCaseForm = () => {
     if (caseNameInput) caseNameInput.value = "";
     if (requestDateInput) requestDateInput.value = "";
+    if (instructionsInput) {
+      instructionsInput.value = "";
+      // Drop the inline height the auto-grow set, or the box stays expanded to
+      // fit the note from the case that was just created.
+      instructionsInput.style.height = "";
+    }
     if (inviteInput) inviteInput.value = "";
     pendingInvites = [];
     renderInviteList();
@@ -641,6 +660,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       caseIntID = data.id;
       const user_id = loggedInUser.username || "";
       await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
+      await saveCaseInstructions(machine_id, uuid, caseIntID, instructionsInput?.value ?? "");
       advance(hasUpperPre ? "Uploading upper jaw…" : hasLowerPre ? "Uploading lower jaw…" : "Saving…");
     } catch (err) {
       console.error("❌ Failed to create case", err);
@@ -1174,6 +1194,36 @@ async function uploadReferenceImage(
 
     reader.readAsDataURL(file); // ✅ 读取为 Base64
   });
+}
+
+// POST /additionalcasedetails — store the create-form's case instructions as the
+// case's `comments`. The case is brand new here, so there's no existing row to
+// merge with; the other columns are explicitly null and get filled in later by
+// the status/due-date writers. Non-fatal: a failure here must not fail the case
+// creation that already succeeded.
+async function saveCaseInstructions(machine_id, uuid, caseIntID, text) {
+  const comments = (text || "").trim();
+  if (!caseIntID || !comments) return;
+  const payload = [
+    { machine_id, uuid, caseIntID },
+    { assigned_to: null, due_date: null, new_status: null, comments },
+  ];
+  try {
+    const res = await fetch(
+      "https://live.api.smartrpdai.com/api/smartrpd/additionalcasedetails",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
+    logApi(res, "POST /additionalcasedetails");
+    if (!res.ok) {
+      console.error("❌ Failed to save case instructions:", res.status);
+    }
+  } catch (err) {
+    console.error("❌ Error saving case instructions:", err);
+  }
 }
 
 // POST /thumbnails — save a thumbnail PNG into a specific slot for a case.
