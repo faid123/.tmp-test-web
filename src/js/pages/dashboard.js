@@ -9,8 +9,8 @@
 // repopulates it from the selected case's detail, thumbnails, viewcaptures and
 // roles.
 
-import { toast } from "./toast.js";
-import { logApi, statusLabel } from "./apiLog.js";
+import { toast } from "../shared/toast.js";
+import { logApi, statusLabel } from "../shared/apiLog.js";
 
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 const API = "https://live.api.smartrpdai.com/api/smartrpd";

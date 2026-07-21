@@ -26,8 +26,8 @@ import {
   syncToothComponentsFromPlacements,
 } from "./annotationTeethModel.js";
 import { loadInteractiveJawPreview, teardown3DPreview } from "./preview3D.js";
-import { logApi } from "../apiLog.js";
-import { toast } from "../toast.js";
+import { logApi } from "../shared/apiLog.js";
+import { toast } from "../shared/toast.js";
 
 // Bind tooth status picker buttons (presence/abutment/compromised).
 export function bindStatusPicker() {

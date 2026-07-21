@@ -6,7 +6,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 module.exports = {
-  entry: './src/index.js', // Adjust the entry point to your main JS file
+  entry: './src/viewer3d/index.js', // Adjust the entry point to your main JS file
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: 'bundle.js',

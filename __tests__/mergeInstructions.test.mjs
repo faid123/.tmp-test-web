@@ -1,25 +1,12 @@
 // __tests__/mergeInstructions.test.mjs
 //
-// Mirrors mergeInstructions() in src/js/2D/noticeboard.js, which dedupes local
-// and server noticeboard items by a stable key (title → id → preview) and lets
-// server fields win on a key collision while keeping local-only fields. These
-// tests pin that key precedence and the shallow-merge / server-wins behaviour.
+// Exercises the REAL mergeInstructions() (src/js/2D/mergeInstructions.js, which
+// noticeboard.js imports). It dedupes local and server noticeboard items by a
+// stable key (title → id → preview) and lets server fields win on a key
+// collision while keeping local-only fields. These tests pin that key
+// precedence and the shallow-merge / server-wins behaviour.
 
-// Faithful copy of the source implementation.
-function mergeInstructions(localItems, serverItems) {
-  const map = new Map();
-  const keyOf = (item) => {
-    if (item.title) return `title:${item.title}`;
-    if (item.id) return `id:${item.id}`;
-    return `preview:${item.preview || ''}`;
-  };
-  for (const it of localItems || []) map.set(keyOf(it), it);
-  for (const it of serverItems || []) {
-    const key = keyOf(it);
-    map.set(key, { ...(map.get(key) || {}), ...it });
-  }
-  return Array.from(map.values());
-}
+import { mergeInstructions } from '../src/js/2D/mergeInstructions.js';
 
 describe('mergeInstructions()', () => {
   test('merges a server item onto the local item sharing the same title key', () => {

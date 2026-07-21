@@ -27,7 +27,7 @@ function createAuthData(caseIntID) {
 // [Decoder 1] Decode raw MessagePack bytes/base64 from ToothPlacementData.data.
 const messagePackTextDecoder = new TextDecoder("utf-8");
 
-function toUint8Array(value) {
+export function toUint8Array(value) {
   if (!value) return null;
   if (value instanceof Uint8Array) return value;
   if (value instanceof ArrayBuffer) return new Uint8Array(value);
@@ -51,7 +51,7 @@ function toUint8Array(value) {
   return null;
 }
 
-function decodeMessagePack(value) {
+export function decodeMessagePack(value) {
   const bytes = toUint8Array(value);
   if (!bytes?.length) return null;
 
@@ -225,7 +225,7 @@ function maybeDecodeNestedMessagePack(value) {
   return null;
 }
 
-function expandSerializedBuffers(candidate, seen = new Set(), depth = 0) {
+export function expandSerializedBuffers(candidate, seen = new Set(), depth = 0) {
   if (!candidate || typeof candidate !== "object" || depth > 8) return candidate;
   if (seen.has(candidate)) return candidate;
   seen.add(candidate);
@@ -266,7 +266,7 @@ function disposeObject3D(object) {
   });
 }
 
-function normalizeJawKey(value) {
+export function normalizeJawKey(value) {
   const text = String(value || "").toLowerCase();
   if (text.includes("upper_jaw") || text.includes("upper") || text.includes("maxillary") || text === "2") {
     return "upper";
@@ -292,7 +292,7 @@ function toNumericArray(value) {
   return numbers.every(Number.isFinite) ? numbers : null;
 }
 
-function toPointObject(value) {
+export function toPointObject(value) {
   if (typeof value === "string") {
     try {
       return toPointObject(JSON.parse(value));
@@ -318,7 +318,7 @@ function toPointObject(value) {
   return null;
 }
 
-function toQuaternionObject(value) {
+export function toQuaternionObject(value) {
   if (!value) return null;
   if (typeof value === "string") {
     try {
@@ -359,23 +359,23 @@ function looksLikeModelPosition(point) {
   return isValidPoint(point) && pointMagnitude(point) > 2;
 }
 
-function toDataView(candidate) {
+export function toDataView(candidate) {
   const bytes = toUint8Array(candidate);
   if (!bytes?.length) return null;
   return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 }
 
-function readFloat64LE(view, offset) {
+export function readFloat64LE(view, offset) {
   if (!view || offset + 7 >= view.byteLength) return NaN;
   return view.getFloat64(offset, true);
 }
 
-function readFloat32LE(view, offset) {
+export function readFloat32LE(view, offset) {
   if (!view || offset + 3 >= view.byteLength) return NaN;
   return view.getFloat32(offset, true);
 }
 
-function readVector3Float64LE(view, offset) {
+export function readVector3Float64LE(view, offset) {
   const point = {
     x: readFloat64LE(view, offset),
     y: readFloat64LE(view, offset + 8),

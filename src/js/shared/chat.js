@@ -1,5 +1,5 @@
 // 引入加密解密函数
-import { lol } from '../crypt.js';
+import { lol } from './crypt.js';
 import { logApi } from "./apiLog.js";
 
 // DOM elements are resolved lazily (bindDom) so this module can be imported on
