@@ -1971,24 +1971,12 @@ function hasAnyUndercutSurface(undercut) {
 
 // ---- Survey angle --------------------------------------------------------
 
-// The stored insertion angle is a world-space direction in spherical form (x = pitch, y = azimuth,
-// z = 0), in radians for the DECIMAL(9,8) column. savedSurveyDirectionForJaw() is the exact inverse.
-function eulerFromWorldDirection(dir) {
-  if (!dir || dir.lengthSq() < 1e-9) return { x: 0, y: 0, z: 0 };
-  const unit = dir.clone().normalize();
-  const clampedY = Math.max(-1, Math.min(1, unit.y));
-  return {
-    x: Math.asin(clampedY),
-    y: Math.atan2(unit.x, unit.z),
-    z: 0,
-  };
-}
-
-function eulerFromCameraOrbit(camera, controls) {
-  return eulerFromWorldDirection(camera.position.clone().sub(controls.target));
-}
-
-function savedSurveyAnglesForJaw(caseData, jaw) {
+// The six *_insertion_angle_{x,y,z} fields hold a world-space unit insertion vector,
+// matching the desktop app (which writes arrow.transform.up straight into them). Web
+// once stored spherical angles here with z always 0 — a different encoding, so desktop
+// read web's saved angle as a bogus vector and vice versa. |components| <= 1 fits the
+// DECIMAL(9,8) column.
+function savedSurveyVectorForJaw(caseData, jaw) {
   if (!caseData) return null;
   const prefix = jaw === "upper" ? "upper" : "lower";
   const rawValues = ["x", "y", "z"].map((axis) =>
@@ -2000,29 +1988,27 @@ function savedSurveyAnglesForJaw(caseData, jaw) {
   return { x: values[0], y: values[1], z: values[2] };
 }
 
-function savedSurveyDirectionForJaw(caseData, jaw) {
-  const angles = savedSurveyAnglesForJaw(caseData, jaw);
-  if (!angles || !THREE) return null;
-
-  const cosX = Math.cos(angles.x);
-  const dir = new THREE.Vector3(
-    Math.sin(angles.y) * cosX,
-    Math.sin(angles.x),
-    Math.cos(angles.y) * cosX
-  );
-
+// The DLL surveys in the mesh's own (modelRoot-local) frame, so bring the world-space
+// direction into it and round to the array shape the endpoint expects. Returns null for a
+// zero vector — an unset (0,0,0) case must not be surveyed at a phantom angle.
+function worldToLocalSurveyDirection(worldVec) {
+  if (!worldVec || !THREE) return null;
+  const dir = worldVec.clone();
   const root = preview3DState.modelRoot;
   if (root) {
     const rootQuat = new THREE.Quaternion();
     root.getWorldQuaternion(rootQuat);
     dir.applyQuaternion(rootQuat.invert());
   }
-
   if (dir.lengthSq() < 1e-9) return null;
   dir.normalize();
-  return [dir.x, dir.y, dir.z].map((value) =>
-    Number(Number(value).toFixed(8))
-  );
+  return [dir.x, dir.y, dir.z].map((value) => Number(Number(value).toFixed(8)));
+}
+
+function savedSurveyDirectionForJaw(caseData, jaw) {
+  const vec = savedSurveyVectorForJaw(caseData, jaw);
+  if (!vec || !THREE) return null;
+  return worldToLocalSurveyDirection(new THREE.Vector3(vec.x, vec.y, vec.z));
 }
 
 function getCameraSurveyDirection() {
@@ -2612,14 +2598,14 @@ async function saveSurveyAngle(jaw, btn) {
 
   // What the arrow is pointing at is what gets surveyed. Falls back to the camera
   // orbit if we somehow get here without an armed jaw.
-  const aimWorld = surveyAimWorldDirection();
-  const { x, y, z } = aimWorld
-    ? eulerFromWorldDirection(aimWorld)
-    : eulerFromCameraOrbit(camera, controls);
-  const aimLocal = surveyAimLocalDirection();
-  const surveyDirection = aimLocal
-    ? [aimLocal.x, aimLocal.y, aimLocal.z].map((v) => Number(Number(v).toFixed(8)))
-    : getCameraSurveyDirection();
+  const aimWorld = surveyAimWorldDirection() || getWorldSurveyDirection();
+  const worldVec = aimWorld ? aimWorld.clone().normalize() : new THREE.Vector3(0, 1, 0);
+  // Store the raw world-space vector (desktop's arrow.up format), not spherical angles.
+  const [x, y, z] = [worldVec.x, worldVec.y, worldVec.z].map((v) =>
+    Number(Number(v).toFixed(8))
+  );
+  // The same direction in the mesh's local frame is what the DLL endpoint consumes.
+  const surveyDirection = worldToLocalSurveyDirection(worldVec) || getCameraSurveyDirection();
   const current = preview3DState.caseData;
   const updated = { ...current };
   if (jaw === "upper") {
