@@ -56,6 +56,42 @@ let currentSortOrder = "desc";
 let currentCases = [];
 let existingUsers = [];
 
+// Stat-card filters (replace the old "Filter by Status" dropdown). Each card
+// represents a *stage* — a group of raw statuses — so one click filters the
+// whole list to that stage. Keys are the canonical underscore values produced
+// by apiStatusToValue(). "na" (no status yet) is deliberately left out of every
+// stage, so N/A cases are excluded from the stage counts.
+const STATUS_GROUPS = {
+  // Draft → 3D design approved.
+  preparation: new Set([
+    "draft",
+    "2d_design_pending",
+    "2d_design_drafted",
+    "2d_design_approved",
+    "3d_design_pending",
+    "3d_design_drafted",
+    "3d_design_approved",
+  ]),
+  // In production → delivered.
+  delivery: new Set(["in_production", "out_for_delivery", "delivered"]),
+  // Completed.
+  completed: new Set(["completed"]),
+};
+
+// Which stat card is active ("all" = no stage filter). Toggled by clicking a
+// card; a second click on the active card clears back to "all".
+let activeStatusFilter = "all";
+
+// The stage a case belongs to, or null if it matches none (shouldn't happen
+// given the groups above cover every status).
+function caseStatusGroup(caseItem) {
+  const v = apiStatusToValue(caseItem?.new_status);
+  for (const [group, set] of Object.entries(STATUS_GROUPS)) {
+    if (set.has(v)) return group;
+  }
+  return null;
+}
+
 let currentThumbnails = [];
 let currentImageIndex = 0;
 window.selectedCaseId = null;
@@ -730,6 +766,13 @@ function statusPillClass(apiStatus) {
   if (!v || v === "na") return "cm-pill-na";
   if (v === "completed" || v === "delivered") return "cm-pill-completed";
   if (v === "draft") return "cm-pill-draft";
+  // 2D/3D design approved (+ 3D drafted) read as orange to match the
+  // Preparation card.
+  if (
+    v === "2d_design_approved" ||
+    v === "3d_design_drafted" ||
+    v === "3d_design_approved"
+  ) return "cm-pill-prep";
   if (
     v === "in_production" ||
     v === "out_for_delivery" ||
@@ -787,9 +830,16 @@ function renderSharedWith(coOwners) {
 // Render the case list as a sortable table. The owner cell shows a "+N"
 // badge (titled with the full list) when a case has co-owners.
 function populateTable(cases) {
+  // Legacy per-status dropdown (still present on the admin page).
   const sel = document.getElementById("filter-status");
   if (sel && sel.value !== "all") {
     cases = cases.filter((c) => apiStatusToValue(c.new_status) === sel.value);
+  }
+
+  // Stat-card stage filter (user case list). "all" = show everything.
+  if (activeStatusFilter !== "all" && STATUS_GROUPS[activeStatusFilter]) {
+    const group = STATUS_GROUPS[activeStatusFilter];
+    cases = cases.filter((c) => group.has(apiStatusToValue(c.new_status)));
   }
 
   const pinnedSet = getPinnedSet();
@@ -813,6 +863,9 @@ function populateTable(cases) {
   const body = document.getElementById("caseTableBody");
   const countBadge = document.getElementById("caseCountBadge");
   if (countBadge) countBadge.textContent = String(cases?.length || 0);
+  // Reflect the current match count in the search bar (visible only while a
+  // name/date/status search is active).
+  updateSearchResultCount(cases?.length || 0);
   if (!body) return;
   // Rows are about to be torn down — drop their pending visibility watches;
   // the loop below re-registers whichever new rows still need enrichment.
@@ -1255,6 +1308,12 @@ function applyClientFilters() {
   const dateInput = document.getElementById("dateFilterInput");
   const todayOnly = document.getElementById("todayOnly");
 
+  // Keep the stat-card counts in sync with the underlying list (they reflect
+  // the whole non-deleted list, independent of the active stage/search).
+  updateStatFilterCounts();
+  // Grey the date/status controls while they hold no real selection.
+  syncSearchPlaceholderState();
+
   const q = (mobileSearch?.value || searchInput?.value || "").trim().toLowerCase();
   const dateVal = dateInput?.value || "";
   const todayFlag = !!todayOnly?.checked;
@@ -1292,6 +1351,108 @@ function applyClientFilters() {
   });
 
   populateTable(base);
+}
+
+// Tally the non-deleted cases into the three stage buckets and paint the counts
+// on the stat cards. Counts represent the whole list (they don't shrink as you
+// filter), so the cards always read as a stable overview.
+function updateStatFilterCounts() {
+  const counts = { all: 0, preparation: 0, delivery: 0, completed: 0 };
+  for (const item of currentCases) {
+    if (isCaseDeleted(item)) continue;
+    counts.all += 1;
+    const group = caseStatusGroup(item);
+    if (group && group in counts) counts[group] += 1;
+  }
+  const ids = {
+    all: "statAllCount",
+    preparation: "statPreparationCount",
+    delivery: "statDeliveryCount",
+    completed: "statCompletedCount",
+  };
+  for (const [group, id] of Object.entries(ids)) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = String(counts[group]);
+  }
+}
+
+// Reflect the active stage on the cards (pressed state) so it's obvious which
+// filter is on and which click will clear it.
+function syncStatFilterActiveState() {
+  document.querySelectorAll("[data-status-group]").forEach((btn) => {
+    const on = btn.getAttribute("data-status-group") === activeStatusFilter;
+    btn.classList.toggle("is-active", on);
+    btn.setAttribute("aria-pressed", String(on));
+  });
+}
+
+// Click handler for a stat card: select its stage, or toggle back to "all" when
+// the already-active card is clicked again. The "All Cases" card always clears
+// the filter.
+function applyStatFilter(group) {
+  if (group === "all") {
+    activeStatusFilter = "all";
+  } else {
+    activeStatusFilter = activeStatusFilter === group ? "all" : group;
+  }
+  syncStatFilterActiveState();
+  applyClientFilters();
+}
+
+// Fade the date/status controls while they hold no real selection, so they read
+// like the Name field's greyed placeholder. Native date inputs and <select>s
+// have no ::placeholder, so we drive it with an .is-empty class instead: the
+// date field is "empty" with no value, the status <select> while it's on "all".
+function syncSearchPlaceholderState() {
+  const dateInput = document.getElementById("dateFilterInput");
+  if (dateInput) dateInput.classList.toggle("is-empty", !dateInput.value);
+  const statusSel = document.getElementById("filter-status");
+  if (statusSel) statusSel.classList.toggle("is-empty", statusSel.value === "all");
+}
+
+// Show a "N found" badge in the search bar while any search (name / date /
+// status) is active, so the user sees how many cases matched — handy for the
+// date and status searches where the match isn't obvious at a glance. Hidden
+// when no search is active. `count` is the number of rows actually rendered.
+function updateSearchResultCount(count) {
+  const el = document.getElementById("searchResultCount");
+  if (!el) return;
+  const nameQ = (document.getElementById("searchCaseInput")?.value || "").trim();
+  const mobileQ = (document.getElementById("mobileSearchInput")?.value || "").trim();
+  const dateV = document.getElementById("dateFilterInput")?.value || "";
+  const statusV = document.getElementById("filter-status")?.value || "all";
+  const searchActive = !!(nameQ || mobileQ || dateV || statusV !== "all");
+  el.hidden = !searchActive;
+  // Compact corner badge: show just the match count (99+ when it overflows).
+  el.textContent = searchActive ? (count > 99 ? "99+" : String(count)) : "";
+  el.setAttribute(
+    "title",
+    `${count} ${count === 1 ? "case" : "cases"} found`
+  );
+}
+
+// Show only the input that matches the chosen search mode (name / date /
+// status) and clear the other two so a stale value can't keep filtering after
+// the user switches modes.
+function updateSearchModeUI() {
+  const mode = document.getElementById("searchMode")?.value || "name";
+  const nameInput = document.getElementById("searchCaseInput");
+  const dateInput = document.getElementById("dateFilterInput");
+  const statusSel = document.getElementById("filter-status");
+
+  if (nameInput) {
+    nameInput.hidden = mode !== "name";
+    if (mode !== "name") nameInput.value = "";
+  }
+  if (dateInput) {
+    dateInput.hidden = mode !== "date";
+    if (mode !== "date") dateInput.value = "";
+  }
+  if (statusSel) {
+    statusSel.hidden = mode !== "status";
+    if (mode !== "status") statusSel.value = "all";
+  }
+  applyClientFilters();
 }
 
 // Edit a case's due date from the list via the shared themed calendar. Commits
@@ -2166,7 +2327,14 @@ function setupAdminCaseList() {
   viewDeletedLink?.addEventListener("click", (e) => {
     e.preventDefault();
     deletedOnlyView = !deletedOnlyView;
-    viewDeletedLink.textContent = deletedOnlyView ? "Back to active cases" : "View";
+    // The link carries an icon + a text span, so update those in place instead
+    // of overwriting textContent (which would drop the icon).
+    const label = viewDeletedLink.querySelector(".cm-stat-link-text");
+    const text = deletedOnlyView ? "Back to active cases" : "View";
+    if (label) label.textContent = text;
+    else viewDeletedLink.textContent = text;
+    const icon = viewDeletedLink.querySelector("i");
+    if (icon) icon.className = deletedOnlyView ? "fa fa-arrow-left" : "fa fa-eye";
     viewDeletedLink.classList.toggle("is-active", deletedOnlyView);
     applyClientFilters();
   });
@@ -2278,6 +2446,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     const searchBtn = document.getElementById("searchBtn");
 
     searchInput?.addEventListener("input", applyClientFilters);
+    // <input type="search"> clears itself on Escape in WebKit, which would wipe
+    // the active filter out from under the user. Swallow Escape so the query
+    // (and the filtered list) stay put.
+    searchInput?.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" || e.key === "Esc") e.preventDefault();
+    });
+
+    // Header search mode picker (Name / Date / Status). Switching modes swaps
+    // the visible control and re-applies filters.
+    document.getElementById("searchMode")?.addEventListener("change", updateSearchModeUI);
+
+    // Stat-card stage filters (All / Preparation / Delivery / Completed).
+    // Clicking a stage card filters the list to it; clicking it again (or the
+    // "All Cases" card) clears the filter.
+    document.querySelectorAll("[data-status-group]").forEach((btn) => {
+      btn.addEventListener("click", () =>
+        applyStatFilter(btn.getAttribute("data-status-group"))
+      );
+    });
+    syncStatFilterActiveState();
 
     // Phone header actions. The filter toolbar is hidden at this width, so the
     // magnifier reveals the search bar and the "+" reuses the toolbar's own
@@ -2287,6 +2475,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const mobileSearchBar = document.getElementById("mobileSearchBar");
     const mobileSearchInput = document.getElementById("mobileSearchInput");
     mobileSearchInput?.addEventListener("input", applyClientFilters);
+    mobileSearchInput?.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" || e.key === "Esc") e.preventDefault();
+    });
     if (mobileSearchBtn && mobileSearchBar && mobileSearchInput) {
       mobileSearchBtn.addEventListener("click", () => {
         const opening = mobileSearchBar.classList.contains("hidden");

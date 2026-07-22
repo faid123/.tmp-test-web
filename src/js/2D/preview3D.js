@@ -19,6 +19,16 @@ const SMARTRPD_API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 // Default RPD jaw color used as the "no undercut" base in vertex-color renders.
 const DEFAULT_TOOTH_COLOR = [208 / 255, 190 / 255, 141 / 255];
 
+// Vertex-colour attributes are read as LINEAR by three.js (unlike material.color,
+// which is converted for you), so HEATMAP values are converted here or they render
+// washed out — #D32F2F was arriving on screen as salmon #CE7371.
+//
+// DEFAULT_TOOTH_COLOR is deliberately NOT converted: it is written raw into both the
+// vertex colours and the flat material, so the jaw keeps its established appearance.
+// Converting it would darken the jaw — intentional, do not "fix".
+const srgbToLinear = (c) =>
+  c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+
 // Shading for every jaw material (heatmap + plain, both loader paths) — these drifted apart once, so they live here.
 // Roughness 0.5: glossier than the old 0.6 so ridges catch highlights, but not so glossy that dense meshes sparkle.
 const JAW_SURFACE_SHADING = {
@@ -70,9 +80,10 @@ const preview3DState = {
   heatmapToggleBtn: null,
   heatmapBoard: null,
   // Survey aiming: SET SURVEY ANGLE arms a jaw instead of saving, so the arrow can be aimed and only then confirmed with SET.
-  // surveyAiming {jaw,btn,metrics,spherical} · surveyArrow (in-scene) · surveyHint (banner) · surveyKeyHandler (Esc) · surveyDragCleanup.
+  // surveyAiming {jaw,btn,metrics,dir} · surveyArrow (in-scene) · surveyHint (banner) · surveyKeyHandler (Esc) · surveyDragCleanup.
   surveyAiming: null,
   surveyArrow: null,
+  surveyRayLight: null,
   surveyHint: null,
   surveyKeyHandler: null,
   surveyDragCleanup: null,
@@ -1886,7 +1897,7 @@ function normalizeUndercutColor(r, g, b) {
   if (r === 1 && g === 1 && b === 1) {
     return DEFAULT_TOOTH_COLOR;
   }
-  return [r, g, b];
+  return [srgbToLinear(r), srgbToLinear(g), srgbToLinear(b)];
 }
 
 function getUndercutColorSeverity(r, g, b) {
@@ -1896,14 +1907,18 @@ function getUndercutColorSeverity(r, g, b) {
   return dr * dr + dg * dg + db * db;
 }
 
+// Returns sRGB on purpose: these land in the surveying buffer and are converted to
+// linear later by normalizeUndercutColor. Converting here too would double it.
+// "No undercut" emits the backend's white sentinel so it resolves to the raw,
+// unconverted tan — same as the backend path.
 function colorForSurveyingValue(value) {
   const v = Math.max(0, Number(value) || 0);
-  if (v <= 0) return DEFAULT_TOOTH_COLOR;
+  if (v <= 0) return [1, 1, 1];
 
   if (v < 0.25) return [1, 245 / 255, 157 / 255];
   if (v < 0.5) return [1, 214 / 255, 10 / 255];
   if (v < 0.75) return [245 / 255, 124 / 255, 0];
-  return [211 / 255, 47 / 255, 47 / 255];
+  return [240 / 255, 24 / 255, 24 / 255];
 }
 
 function buildDllUndercutSurface(jaw, response) {
@@ -2049,14 +2064,13 @@ function getWorldSurveyDirection() {
 // 400px drag sweeps roughly half a turn).
 const SURVEY_AIM_DRAG_SPEED = 0.009;
 
-const SURVEY_AIM_POLAR_EPS = 0.02;
 
 // The aim direction lives in world space (that's what gets saved); the arrow is
 // a child of modelRoot, so positioning needs it in the model's frame.
 function surveyAimWorldDirection() {
   const aiming = preview3DState.surveyAiming;
   if (!aiming || !THREE) return null;
-  return new THREE.Vector3().setFromSpherical(aiming.spherical).normalize();
+  return aiming.dir.clone().normalize();
 }
 
 function surveyAimLocalDirection() {
@@ -2107,9 +2121,153 @@ function createSurveyPlacementArrow(radius) {
   shaft.position.y = headLength + shaftLength / 2;
   group.add(shaft);
 
+  // Light shaft riding the same axis, dipping slightly past the tip so it reads as
+  // landing ON the jaw rather than stopping above it. Additive and depth-write off
+  // so it glows over the arch instead of occluding it.
+  const beamLength = total * 1.12;
+  const sink = total * 0.1;
+  // Normal blending, not additive: the preview backdrop is white, and additive
+  // blending over white is a no-op — the beam would be invisible.
+  const beamMaterial = new THREE.MeshBasicMaterial({
+    color: 0x2fd4bb,
+    transparent: true,
+    opacity: 0.4,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const beam = new THREE.Mesh(
+    new THREE.CylinderGeometry(shaftRadius * 2.4, shaftRadius * 1.1, beamLength, 24, 1, true),
+    beamMaterial
+  );
+  beam.position.y = beamLength / 2 - sink;
+  group.add(beam);
+
   group.userData.surveyArrowLength = total;
   group.userData.surveyArrowMaterial = material;
+  group.userData.surveyBeamMaterial = beamMaterial;
   return group;
+}
+
+// Parallel light down the insertion axis. A denture is seated by parallel
+// translation, so parallel rays are the physically correct model: whatever falls
+// in shadow from this direction is exactly what the denture cannot reach — the
+// undercut. Shadows are rendered on demand (see updateSurveyPlacementArrow).
+function createSurveyRayLight(metrics, root) {
+  // Near-zero intensity: this light exists only to render a shadow map, which it still
+  // does at any intensity. Brightening from the survey axis would change how the jaw
+  // itself looks while aiming, and the occluded areas are marked by colour, not by dark.
+  const light = new THREE.DirectionalLight(0xffffff, 0.0001);
+  light.castShadow = true;
+
+  const target = new THREE.Object3D();
+  target.position.copy(metrics.center);
+  root.add(target);
+  light.target = target;
+
+  // Ortho shadow frustum sized to the jaw, with depth to spare either side.
+  const r = metrics.radius;
+  const cam = light.shadow.camera;
+  cam.left = -r; cam.right = r; cam.top = r; cam.bottom = -r;
+  cam.near = 0.1; cam.far = r * 6;
+  cam.updateProjectionMatrix();
+  light.shadow.mapSize.set(1024, 1024);
+  // Pulls the shadow off surfaces facing the light so gentle slopes don't
+  // self-shadow into acne — undercuts are what we want dark, not the whole arch.
+  light.shadow.bias = -0.0004;
+  // Undercuts are often only 0.25-1mm deep, so the normal bias has to stay well
+  // under that or it pushes the shallow ones out of shadow and hides them.
+  light.shadow.normalBias = r * 0.004;
+
+  root.add(light);
+  light.userData.surveyRayTarget = target;
+  return light;
+}
+
+// Shadowed pixels are repainted in the heatmap's deepest-undercut red, so an occluded
+// area reads as the same colour it will have once SET runs. Sourced from the palette
+// itself (converted to linear, the space outgoingLight is in) so the two can't drift.
+const SURVEY_TINT_UNIFORMS = {
+  uSurveyTintColor: { value: null },
+  uSurveyTintAmount: { value: 0.85 },
+};
+
+function surveyTintColor() {
+  if (!SURVEY_TINT_UNIFORMS.uSurveyTintColor.value) {
+    const [r, g, b] = colorForSurveyingValue(1);
+    SURVEY_TINT_UNIFORMS.uSurveyTintColor.value = new THREE.Color(
+      srgbToLinear(r), srgbToLinear(g), srgbToLinear(b)
+    );
+  }
+  return SURVEY_TINT_UNIFORMS.uSurveyTintColor.value;
+}
+
+// Reads the survey light's shadow mask and tints occluded pixels red. Index 0 is safe
+// because the survey light is the only shadow caster (the camera rig never casts).
+// The whole block compiles out when no shadow-casting light is in the scene, so this
+// costs nothing outside survey mode — no need to unpatch on exit.
+function applySurveyShadowTint(material) {
+  if (!material || material.userData.surveyTintPatched) return;
+  material.userData.surveyTintPatched = true;
+  surveyTintColor();
+
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uSurveyTintColor = SURVEY_TINT_UNIFORMS.uSurveyTintColor;
+    shader.uniforms.uSurveyTintAmount = SURVEY_TINT_UNIFORMS.uSurveyTintAmount;
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "void main() {",
+        "uniform vec3 uSurveyTintColor;\nuniform float uSurveyTintAmount;\nvoid main() {"
+      )
+      // USE_SHADOWMAP must be in the guard too: the light count can be non-zero while
+      // shadow mapping is off, and getShadow does not exist in that build.
+      .replace(
+        "#include <opaque_fragment>",
+        `#if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
+  DirectionalLightShadow svCfg = directionalLightShadows[ 0 ];
+  // receiveShadow keeps the tint off the opposing arch, which is excluded from shadows.
+  float svLit = receiveShadow ? getShadow( directionalShadowMap[ 0 ], svCfg.shadowMapSize,
+    svCfg.shadowBias, svCfg.shadowRadius, vDirectionalShadowCoord[ 0 ] ) : 1.0;
+  // Carrying the shaded luminance through keeps relief visible inside the red.
+  float svLum = dot( outgoingLight, vec3( 0.2126, 0.7152, 0.0722 ) );
+  outgoingLight = mix( outgoingLight, uSurveyTintColor * ( 0.35 + svLum ),
+    ( 1.0 - svLit ) * uSurveyTintAmount );
+#endif
+#include <opaque_fragment>`
+      );
+  };
+  // Without this three.js would hand the patched material a cached unpatched program.
+  material.customProgramCacheKey = () => "surveyShadowTint";
+  material.needsUpdate = true;
+}
+
+// Shadows cost a second scene render, so they are only switched on while a jaw is
+// armed and switched straight back off afterwards.
+function setSurveyShadowsEnabled(enabled, jaw = null) {
+  const renderer = preview3DState.renderer;
+  if (!renderer) return;
+  renderer.shadowMap.enabled = enabled;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Manual updates only: the scene is static, so re-rendering the map every frame
+  // would waste a full depth pass on an HD mesh for nothing.
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = enabled;
+
+  // Only the surveyed jaw casts and receives. Including the opposing arch would
+  // drape a big shadow over the very surface being read.
+  const flag = (group, on) => {
+    group?.traverse((obj) => {
+      if (!obj.isMesh) return;
+      obj.castShadow = on;
+      obj.receiveShadow = on;
+      // DoubleSide materials self-shadow badly on a hollow scan shell.
+      if (obj.material) obj.material.shadowSide = THREE.BackSide;
+      // Patched on both jaws: the heatmap material is shared, and the shader gates
+      // on receiveShadow anyway, so only the surveyed arch actually tints.
+      if (enabled) applySurveyShadowTint(obj.material);
+    });
+  };
+  flag(preview3DState.groups?.upper, enabled && jaw === "upper");
+  flag(preview3DState.groups?.lower, enabled && jaw === "lower");
 }
 
 // Metrics of the jaw being aimed at, in modelRoot-local space: where to point
@@ -2225,6 +2383,19 @@ function updateSurveyPlacementArrow() {
 
   arrow.position.copy(tip);
   arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+
+  // Park the survey light far enough back that its ortho frustum covers the arch,
+  // then redraw the shadow map — the only time it needs redrawing is right here,
+  // when the aim has actually moved.
+  const light = preview3DState.surveyRayLight;
+  if (light) {
+    light.position
+      .copy(metrics.center)
+      .addScaledVector(direction, metrics.radius * 3);
+    light.target.position.copy(metrics.center);
+    light.target.updateMatrixWorld();
+    if (preview3DState.renderer) preview3DState.renderer.shadowMap.needsUpdate = true;
+  }
 }
 
 // Left-drag swings the arrow around the fixed jaw (camera rotation is off while aiming),
@@ -2254,14 +2425,22 @@ function attachSurveyAimDrag() {
     lastX = e.clientX;
     lastY = e.clientY;
 
-    aiming.spherical.theta -= dx * SURVEY_AIM_DRAG_SPEED;
-    aiming.spherical.phi -= dy * SURVEY_AIM_DRAG_SPEED;
-    // Keep off the poles: phi of exactly 0 or PI makes theta meaningless and
-    // the arrow snaps unpredictably.
-    aiming.spherical.phi = Math.max(
-      SURVEY_AIM_POLAR_EPS,
-      Math.min(Math.PI - SURVEY_AIM_POLAR_EPS, aiming.spherical.phi)
-    );
+    // Trackball-style: rotate the aim vector about the camera's own screen axes.
+    // This was spherical theta/phi, which had to be clamped off the poles — so the
+    // arrow jammed whenever it was dragged past vertical, the clamp eating the drag
+    // until you reversed. Quaternions have no poles, so it swings freely in every
+    // direction, and rotating about CAMERA axes keeps motion 1:1 with the cursor
+    // whichever way the view is turned.
+    const camera = preview3DState.camera;
+    if (!camera) return;
+    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+    const spin = new THREE.Quaternion()
+      .setFromAxisAngle(up, dx * SURVEY_AIM_DRAG_SPEED)
+      .multiply(
+        new THREE.Quaternion().setFromAxisAngle(right, dy * SURVEY_AIM_DRAG_SPEED)
+      );
+    aiming.dir.applyQuaternion(spin).normalize();
     aiming.aimDirty = true;
   };
 
@@ -2323,11 +2502,13 @@ function enterSurveyAiming(jaw, btn) {
   const arrow = createSurveyPlacementArrow(metrics.radius);
   root.add(arrow);
   preview3DState.surveyArrow = arrow;
+  preview3DState.surveyRayLight = createSurveyRayLight(metrics, root);
+  setSurveyShadowsEnabled(true, jaw);
   preview3DState.surveyAiming = {
     jaw,
     btn,
     metrics,
-    spherical: new THREE.Spherical().setFromVector3(seedWorld),
+    dir: seedWorld.clone(),
     aimDirty: true,
   };
 
@@ -2369,8 +2550,19 @@ function exitSurveyAiming() {
     arrow.parent?.remove(arrow);
     arrow.traverse((obj) => obj.geometry?.dispose?.());
     arrow.userData.surveyArrowMaterial?.dispose?.();
+    arrow.userData.surveyBeamMaterial?.dispose?.();
   }
   preview3DState.surveyArrow = null;
+
+  const rayLight = preview3DState.surveyRayLight;
+  if (rayLight) {
+    rayLight.userData.surveyRayTarget?.parent?.remove(rayLight.userData.surveyRayTarget);
+    rayLight.parent?.remove(rayLight);
+    rayLight.shadow?.map?.dispose?.();
+    rayLight.dispose?.();
+  }
+  preview3DState.surveyRayLight = null;
+  setSurveyShadowsEnabled(false);
 
   // Hand the camera back its rotation and drop the drag-to-aim listeners.
   if (preview3DState.controls) preview3DState.controls.noRotate = false;
@@ -2645,13 +2837,23 @@ function fitPreviewCamera() {
   if (box.isEmpty()) return;
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z, 1);
-  // Distance at which the model's largest dimension just fills the vertical FOV,
-  // padded out so the loaded jaws don't start uncomfortably close to the camera.
-  const FIT_PADDING = 1.5;
-  const fitDist = (maxDim / (2 * Math.tan((camera.fov * Math.PI) / 360))) * FIT_PADDING;
+  // Fit BOTH axes. This used to measure only the largest dimension against the
+  // vertical FOV, so on a wide viewport the arch width was padded against the wrong
+  // axis and the jaw opened at ~45% of the frame. Taking the larger of the vertical
+  // and horizontal requirements frames it tightly without overflowing either edge.
+  const FIT_PADDING = 1.3;
+  const vFov = (camera.fov * Math.PI) / 180;
+  const hFov = 2 * Math.atan(Math.tan(vFov / 2) * (camera.aspect || 1));
+  // The camera looks down on the jaw, so its on-screen height comes from both the
+  // world Y and Z extents; width is the arch across world X.
+  const distV = Math.max(size.y, size.z, 1) / 2 / Math.tan(vFov / 2);
+  const distH = Math.max(size.x, 1) / 2 / Math.tan(hFov / 2);
+  const fitDist = Math.max(distV, distH) * FIT_PADDING;
+  // Normalised so fitDist IS the camera distance — the old offset was 1.3 long,
+  // silently scaling the padding up by another 30%.
+  const viewOffset = new THREE.Vector3(0, 0.35, 1.25).normalize();
   camera.up.set(0, 1, 0);
-  camera.position.set(center.x, center.y + fitDist * 0.35, center.z + fitDist * 1.25);
+  camera.position.copy(center).addScaledVector(viewOffset, fitDist);
   controls.target.copy(center);
   controls.update();
   // OrbitControls had saveState(); TrackballControls doesn't. Call it only if
