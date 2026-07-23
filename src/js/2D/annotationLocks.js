@@ -1024,8 +1024,26 @@ function getCaseLabelTextForExport() {
   return "";
 }
 
+// The instruction editor frame is landscape on tablet/desktop and portrait on
+// phones — the same 600px breakpoint drives .ie-frame in noticeboard.css. Match
+// the base image to whichever frame will show it: side-by-side arches for the
+// landscape frame, stacked (upper top / lower bottom) for the portrait one, so
+// the jaws fill the frame either way instead of shrinking to fit the wrong
+// orientation.
+function isInstructionEditorPortrait() {
+  return typeof window !== "undefined" && window.matchMedia
+    ? window.matchMedia("(max-width: 599.98px)").matches
+    : false;
+}
+
+// Base image for the instruction editor flow — the editor background, the
+// noticeboard "add instruction" preview, and the baked base of a new
+// instruction. Layout follows the frame orientation (see above). The stacked
+// composeJawCanvas layout is also what the JPEG download (saveAsJpeg) uses.
 export async function captureJawJpegDataUrl(quality = 0.92, scale = 3) {
-  const canvas = await composeJawCanvas(scale);
+  const canvas = isInstructionEditorPortrait()
+    ? await composeJawCanvas(scale)
+    : await composeJawCanvasSideBySide(scale);
   if (!canvas) return null;
   return canvas.toDataURL("image/jpeg", quality);
 }

@@ -42,6 +42,57 @@
             >
               <i class="fa fa-users-gear" aria-hidden="true"></i>
             </button>
+            <!-- Desktop search. The mode picker chooses what to search by; only
+                 the matching control is shown (the others are cleared so they
+                 don't keep filtering). Wired in caseManagement.js:
+                 #searchCaseInput (name), #dateFilterInput (date),
+                 #filter-status (status). Hidden on phone, where the magnifier
+                 button below reveals #mobileSearchBar instead. -->
+            <div class="cm-header-search cm-desktop-only">
+              <select id="searchMode" class="cm-search-mode" aria-label="Search by">
+                <option value="name">Name</option>
+                <option value="date">Date</option>
+                <option value="status">Status</option>
+              </select>
+              <span class="cm-search-divider" aria-hidden="true"></span>
+              <i class="fa fa-magnifying-glass" aria-hidden="true"></i>
+              <input
+                type="search"
+                id="searchCaseInput"
+                class="cm-header-search-input"
+                placeholder="Search cases by name"
+                aria-label="Search cases by name"
+                autocomplete="off"
+              />
+              <input
+                type="date"
+                id="dateFilterInput"
+                class="cm-header-search-input cm-header-search-date"
+                aria-label="Search cases by date"
+                hidden
+              />
+              <select
+                id="filter-status"
+                class="cm-header-search-input cm-header-search-select"
+                aria-label="Search cases by status"
+                hidden
+              >
+                <option value="all">All statuses</option>
+                <option value="na">N/A</option>
+                <option value="draft">Draft</option>
+                <option value="2d_design_pending">2D design pending</option>
+                <option value="2d_design_drafted">2D design drafted</option>
+                <option value="2d_design_approved">2D design approved</option>
+                <option value="3d_design_pending">3D design pending</option>
+                <option value="3d_design_drafted">3D design drafted</option>
+                <option value="3d_design_approved">3D design approved</option>
+                <option value="in_production">In production</option>
+                <option value="out_for_delivery">Out for delivery</option>
+                <option value="delivered">Delivered</option>
+                <option value="completed">Completed</option>
+              </select>
+              <span id="searchResultCount" class="cm-search-count" hidden></span>
+            </div>
             <!-- Phone-only. The filter toolbar is hidden at this width, so search
                  and "create case" move up here as icons. -->
             <button
@@ -63,6 +114,18 @@
               title="Create new case"
             >
               <i class="fa fa-plus" aria-hidden="true"></i>
+            </button>
+            <!-- Refresh sits between the search box and the notification bell.
+                 Desktop-only (kept out of the crowded phone header, same as
+                 before when it lived in the now-hidden toolbar). -->
+            <button
+              id="refreshListBtn"
+              class="cm-bell cm-desktop-only"
+              type="button"
+              aria-label="Refresh list"
+              title="Refresh list"
+            >
+              <i class="fa fa-arrows-rotate" aria-hidden="true"></i>
             </button>
             <button
               id="notificationBtn"
@@ -103,49 +166,65 @@
         </div>
 
         <div class="cm-toolbar">
-          <div class="cm-chip cm-chip-dark">
-            <i class="fa fa-table-cells" aria-hidden="true"></i>
-            <span>All Cases</span>
-            <span class="cm-count" id="caseCountBadge">0</span>
-          </div>
-
-          <div class="cm-chip cm-chip-filter">
-            <i class="fa-regular fa-calendar" aria-hidden="true"></i>
-            <label for="dateFilterInput">Search by Date</label>
-            <input
-              type="date"
-              id="dateFilterInput"
-              class="cm-date-input"
-            />
+          <!-- Stage filter cards (replace the old date + status dropdowns). Each
+               shows a live count and, when clicked, filters the list to it;
+               clicking the active card (or "All Cases") clears the filter.
+               Stage → status mapping lives in caseManagement.js (STATUS_GROUPS). -->
+          <div class="cm-stat-filters" role="group" aria-label="Filter cases by stage">
             <button
-              id="clearDateBtn"
               type="button"
-              class="cm-date-clear"
-              title="Clear date"
-              aria-label="Clear date filter"
+              class="cm-stat-filter cm-stat-filter-all"
+              data-status-group="all"
+              aria-pressed="true"
+              title="Show all cases"
             >
-              <i class="fa fa-xmark" aria-hidden="true"></i>
+              <span class="cm-stat-filter-text">
+                <span class="cm-stat-filter-label">All Cases</span>
+              </span>
+              <span class="cm-stat-filter-count" id="statAllCount">0</span>
             </button>
-          </div>
 
-          <div class="cm-chip cm-chip-filter">
-            <i class="fa fa-filter" aria-hidden="true"></i>
-            <label for="filter-status">Filter by Status</label>
-            <select id="filter-status" class="cm-filter-select">
-              <option value="all">All</option>
-              <option value="na">N/A</option>
-              <option value="draft">Draft</option>
-              <option value="2d_design_pending">2D design pending</option>
-              <option value="2d_design_drafted">2D design drafted</option>
-              <option value="2d_design_approved">2D design approved</option>
-              <option value="3d_design_pending">3D design pending</option>
-              <option value="3d_design_drafted">3D design drafted</option>
-              <option value="3d_design_approved">3D design approved</option>
-              <option value="in_production">In production</option>
-              <option value="out_for_delivery">Out for delivery</option>
-              <option value="delivered">Delivered</option>
-              <option value="completed">Completed</option>
-            </select>
+            <button
+              type="button"
+              class="cm-stat-filter cm-stat-filter-prep"
+              data-status-group="preparation"
+              aria-pressed="false"
+              title="Draft through 3D design approved"
+            >
+              <span class="cm-stat-filter-text">
+                <span class="cm-stat-filter-label">Preparation</span>
+                <span class="cm-stat-filter-sub">Draft &rarr; 3D approved</span>
+              </span>
+              <span class="cm-stat-filter-count" id="statPreparationCount">0</span>
+            </button>
+
+            <button
+              type="button"
+              class="cm-stat-filter cm-stat-filter-delivery"
+              data-status-group="delivery"
+              aria-pressed="false"
+              title="In production through delivered"
+            >
+              <span class="cm-stat-filter-text">
+                <span class="cm-stat-filter-label">Delivery</span>
+                <span class="cm-stat-filter-sub">In production &rarr; delivered</span>
+              </span>
+              <span class="cm-stat-filter-count" id="statDeliveryCount">0</span>
+            </button>
+
+            <button
+              type="button"
+              class="cm-stat-filter cm-stat-filter-completed"
+              data-status-group="completed"
+              aria-pressed="false"
+              title="Completed"
+            >
+              <span class="cm-stat-filter-text">
+                <span class="cm-stat-filter-label">Completed</span>
+                <span class="cm-stat-filter-sub">Finished cases</span>
+              </span>
+              <span class="cm-stat-filter-count" id="statCompletedCount">0</span>
+            </button>
           </div>
 
           <!-- Phone-only sort picker. Tablet/desktop sort via clickable table
@@ -169,16 +248,6 @@
               <option value="due|desc">Due date (latest)</option>
             </select>
           </div>
-
-          <button
-            id="refreshListBtn"
-            class="cm-icon-btn"
-            type="button"
-            aria-label="Refresh list"
-            title="Refresh list"
-          >
-            <i class="fa fa-arrows-rotate" aria-hidden="true"></i>
-          </button>
 
           <button
             id="createCaseBtn"

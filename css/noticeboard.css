@@ -1634,16 +1634,22 @@
 
 /* ---- Instruction editor: tablet/desktop frame the photo like the 3D preview
    On screens ≥600px (tablets incl. iPad Mini portrait at 768, and desktop) the
-   photo sits in a centred, phone-shaped card with a light border (matching
-   .preview-frame) and a black surround. The tools, colour bar and presets live
-   inside this frame so they stay aligned to the photo; only Close (×) and Save
-   sit outside. On phones (<600px) the frame fills the screen (base rule). */
+   photo sits in a centred, LANDSCAPE card with a light border (matching
+   .preview-frame) and a black surround. Landscape rather than the old
+   phone-shaped column because the base image is now two arches side by side —
+   a portrait frame shrank that wide image to a sliver. The tools, colour bar and
+   presets live inside this frame so they stay aligned to the photo; only Close
+   (×) and Save sit outside. On phones (<600px) the frame fills the screen and
+   stays portrait (base rule). */
 @media (min-width: 600px) {
   .ie-frame {
+    top: 50%;
+    bottom: auto;
     left: 50%;
     right: auto;
-    transform: translateX(-50%);
-    width: min(100%, 430px);
+    transform: translate(-50%, -50%);
+    width: min(94vw, 880px);
+    height: min(86vh, 560px);
     border: 1px solid var(--line);
     border-radius: 14px;
   }

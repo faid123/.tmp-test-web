@@ -2372,8 +2372,8 @@ export async function openInstructionEditor(options = {}) {
   resizeCanvas();
 
   // The case-ID watermark is now baked into the background image by
-  // composeJawCanvas (so it sits between the jaws even when one is taller),
-  // so we don't draw a second watermark on top.
+  // captureJawJpegDataUrl (below the arches — side by side on desktop, stacked
+  // on phones), so we don't draw a second watermark on top.
   if (typeof ResizeObserver !== "undefined") {
     resizeObserver = new ResizeObserver(() => resizeCanvas());
     resizeObserver.observe(canvas.parentElement);
