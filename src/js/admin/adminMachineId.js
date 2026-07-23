@@ -469,6 +469,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Stat-card "View" links: focus the list on documented / undocumented machines
   // and sync the dropdown so the state reads consistently.
+  // Update a stat-card "View" link's label + icon (eye ↔ back arrow) in place.
+  // The links carry an <i> icon and a .cm-stat-link-text span, so we set the
+  // span rather than textContent (which would drop the icon).
+  const setStatLinkState = (link, text, active) => {
+    if (!link) return;
+    const label = link.querySelector(".cm-stat-link-text");
+    if (label) label.textContent = text;
+    else link.textContent = text;
+    const icon = link.querySelector("i");
+    if (icon) icon.className = active ? "fa fa-arrow-left" : "fa fa-eye";
+    link.classList.toggle("is-active", active);
+  };
+
   const wireDocLink = (linkId, group) => {
     const link = document.getElementById(linkId);
     link?.addEventListener("click", (e) => {
@@ -478,13 +491,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const sel = document.getElementById("machineDocFilter");
       if (sel) sel.value = activating ? group : "all";
       // Reset the sibling link's label.
-      document.getElementById(
-        group === "documented" ? "viewUndocumentedLink" : "viewDocumentedLink"
-      ).textContent = "View";
-      document.getElementById("viewUndocumentedLink").classList.remove("is-active");
-      document.getElementById("viewDocumentedLink").classList.remove("is-active");
-      link.textContent = activating ? "Back to all" : "View";
-      link.classList.toggle("is-active", activating);
+      setStatLinkState(
+        document.getElementById(
+          group === "documented" ? "viewUndocumentedLink" : "viewDocumentedLink"
+        ),
+        "View",
+        false
+      );
+      setStatLinkState(link, activating ? "Back to all" : "View", activating);
       renderMachines();
     });
   };
@@ -495,8 +509,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("machineDocFilter").addEventListener("change", () => {
     docOnlyView = null;
     ["viewDocumentedLink", "viewUndocumentedLink"].forEach((id) => {
-      const l = document.getElementById(id);
-      if (l) { l.textContent = "View"; l.classList.remove("is-active"); }
+      setStatLinkState(document.getElementById(id), "View", false);
     });
   });
 

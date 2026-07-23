@@ -650,6 +650,19 @@ document.addEventListener("DOMContentLoaded", () => {
     renderUsers();
   });
 
+  // Update a stat-card "View" link's label + icon (eye ↔ back arrow) in place.
+  // The links carry an <i> icon and a .cm-stat-link-text span, so we set the
+  // span rather than textContent (which would drop the icon).
+  const setStatLinkState = (link, text, active) => {
+    if (!link) return;
+    const label = link.querySelector(".cm-stat-link-text");
+    if (label) label.textContent = text;
+    else link.textContent = text;
+    const icon = link.querySelector("i");
+    if (icon) icon.className = active ? "fa fa-arrow-left" : "fa fa-eye";
+    link.classList.toggle("is-active", active);
+  };
+
   // "View" link under the Deactivated card: jump the status filter to
   // deactivated (and toggle back to active).
   const viewDeactivatedLink = document.getElementById("viewDeactivatedLink");
@@ -658,8 +671,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const sel = document.getElementById("userStatusFilter");
     const showingDeactivated = sel.value === "deactivated";
     sel.value = showingDeactivated ? "active" : "deactivated";
-    viewDeactivatedLink.textContent = showingDeactivated ? "View" : "Back to active";
-    viewDeactivatedLink.classList.toggle("is-active", !showingDeactivated);
+    setStatLinkState(
+      viewDeactivatedLink,
+      showingDeactivated ? "View" : "Back to active",
+      !showingDeactivated
+    );
     renderUsers();
   });
 
@@ -668,8 +684,7 @@ document.addEventListener("DOMContentLoaded", () => {
   viewAdminsLink?.addEventListener("click", (e) => {
     e.preventDefault();
     adminsOnlyView = !adminsOnlyView;
-    viewAdminsLink.textContent = adminsOnlyView ? "Back to all" : "View";
-    viewAdminsLink.classList.toggle("is-active", adminsOnlyView);
+    setStatLinkState(viewAdminsLink, adminsOnlyView ? "Back to all" : "View", adminsOnlyView);
     renderUsers();
   });
 

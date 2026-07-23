@@ -693,13 +693,17 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
       return;
     }
     for (const item of items) {
-      const isMesh = isMeshComponent(item.id);
+      // Mesh icons are white silhouettes recolored with the violet mesh tint via CSS
+      // mask — except Mesh Flange, whose PNG is native full-color artwork (the pink
+      // acrylic flange). Masking it collapses the tile into a solid violet square, so
+      // render it as a plain <img>, matching the desktop catalog's `is-mesh-native`.
+      const tintMesh = isMeshComponent(item.id) && item.id !== "mesh-flange";
       grid.appendChild(
         buildTile(
           item.label,
           item.icon,
           () => commit({ tab: item.tab, componentId: item.id, label: item.label }),
-          isMesh ? { iconAsMask: true, tileClass: "tooth-quickpick-tile--mesh" } : undefined
+          tintMesh ? { iconAsMask: true, tileClass: "tooth-quickpick-tile--mesh" } : undefined
         )
       );
     }
