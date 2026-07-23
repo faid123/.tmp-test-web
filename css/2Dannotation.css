@@ -757,11 +757,49 @@ button.upload3d-row {
   color: #2b3440;
 }
 
-.jaw-preview-survey-btn {
-  /* Sits in the trailing 1fr track, pinned to the right — but offset left so it
-     clears the fullscreen/expand button pinned at the panel's top-right. */
+/* CANCEL + SET share the trailing 1fr track, pinned right — offset left so the
+   pair clears the fullscreen/expand button pinned at the panel's top-right. */
+.jaw-preview-survey-group {
   justify-self: end;
   margin-right: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Secondary action next to SET: quiet outline, red on hover. Hidden until a
+   jaw is armed. */
+.jaw-preview-survey-cancel-btn {
+  display: none;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 8px;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  align-items: center;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.jaw-preview-survey-cancel-btn.is-on {
+  display: inline-flex;
+}
+.jaw-preview-survey-cancel-btn:hover {
+  color: #b3261e;
+  border-color: #b3261e;
+  background: #fdf3f2;
+}
+.jaw-preview-survey-cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.jaw-preview-survey-btn {
   border: 1px solid var(--rose-500);
   background: #fff;
   color: var(--rose-700);
@@ -802,6 +840,14 @@ button.upload3d-row {
 .jaw-preview-survey-btn[disabled] {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* Survey-aiming mode ring: a prominent border in the undercut colour (the
+   deepest heatmap band — keep in step with colorForSurveyingValue). Drawn as an
+   inset outline so the mount's size and radius are untouched. */
+.jaw-preview-3d-mount.is-aiming-survey {
+  outline: 3px solid #aa0003;
+  outline-offset: -3px;
 }
 
 /* While aiming, dragging swings the arrow rather than orbiting the arch, so the
@@ -1033,16 +1079,53 @@ button.upload3d-row {
 
 .jaw-preview-undercut {
   position: absolute;
-  left: 16px;
-  top: 16px;
+  left: 8px;
+  top: 8px;
   z-index: 8;
+}
+
+/* Undercut icon button — the legend dropdown's anchor in the corner. */
+.jaw-preview-undercut-icon {
+  display: block;
+  width: 35px;
+  height: 35px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.jaw-preview-undercut-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.jaw-preview-undercut-icon:hover {
+  transform: scale(1.08);
+}
+.jaw-preview-undercut-icon:active {
+  transform: scale(0.96);
+}
+
+/* The legend dropdown: borderless by design; the shadow alone lifts it off the mesh. */
+.jaw-preview-undercut-panel {
+  margin-top: 4px;
   background: #ffffff;
-  border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 4px 6px;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  box-shadow: 0 2px 8px rgba(26, 77, 63, 0.08);
+  box-shadow: 0 2px 10px rgba(26, 77, 63, 0.14);
+}
+.jaw-preview-undercut.is-off .jaw-preview-undercut-panel {
+  display: none;
+}
+
+/* Off state reads on the icon itself: greyed while the heatmap is hidden. */
+.jaw-preview-undercut.is-off .jaw-preview-undercut-icon img {
+  filter: grayscale(0.85);
+  opacity: 0.55;
 }
 
 /* View-navigation gizmo (square pad, bottom-right): isometric cube ringed by
@@ -1113,50 +1196,22 @@ button.upload3d-row {
 .jpnav-bottom { grid-area: 3 / 2; }
 
 .jaw-preview-undercut-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .jaw-preview-undercut-title {
-  font-size: 0.62rem;
+  font-size: 0.56rem;
   font-weight: 700;
   color: var(--rose-700);
   letter-spacing: 0.02em;
 }
 
-.jaw-preview-undercut-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: #fff;
-  color: var(--ink);
-  font-size: 10px;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-.jaw-preview-undercut-toggle:hover {
-  color: var(--rose-700, #25735f);
-  border-color: var(--rose-700, #25735f);
-}
-.jaw-preview-undercut.is-off .jaw-preview-undercut-toggle {
-  color: var(--muted);
-}
-.jaw-preview-undercut.is-off .jaw-preview-undercut-body {
-  opacity: 0.85;
-}
+
 
 .jaw-preview-undercut-body {
   display: grid;
-  grid-template-columns: 16px auto;
-  gap: 6px;
+  grid-template-columns: 12px auto;
+  gap: 5px;
   align-items: stretch;
 }
 
@@ -1164,15 +1219,17 @@ button.upload3d-row {
   height: 56px;
   display: grid;
   grid-template-rows: repeat(4, 1fr);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  overflow: hidden;
+  row-gap: 4px;
+}
+.jaw-preview-undercut-scale span {
+  border-radius: 2px;
 }
 
 .jaw-preview-undercut-labels {
   display: grid;
   grid-template-rows: repeat(4, 1fr);
-  font-size: 0.54rem;
+  row-gap: 4px;
+  font-size: 0.5rem;
   color: var(--muted);
   font-weight: 600;
 }
@@ -2926,8 +2983,13 @@ button.upload3d-row {
     text-overflow: ellipsis;
   }
 
-  .jaw-preview-survey-btn {
+  .jaw-preview-survey-group {
     justify-self: end;
+    gap: 6px;
+  }
+
+  .jaw-preview-survey-btn,
+  .jaw-preview-survey-cancel-btn {
     /* Drop the desktop 45px-gap margin on narrow screens so the
        "ALLOW PROCESSING" label keeps its space instead of collapsing. */
     margin-left: 0;
@@ -2950,22 +3012,14 @@ button.upload3d-row {
   .jaw-preview-undercut {
     left: 10px;
     top: 10px;
-    padding: 5px 6px;
   }
 
-  .jaw-preview-undercut-header {
-    margin-bottom: 4px;
-    gap: 6px;
+  .jaw-preview-undercut-panel {
+    padding: 5px 6px;
   }
 
   .jaw-preview-undercut-title {
     font-size: 0.56rem;
-  }
-
-  .jaw-preview-undercut-toggle {
-    width: 16px;
-    height: 16px;
-    font-size: 9px;
   }
 
   .jaw-preview-undercut-body {
@@ -2973,9 +3027,6 @@ button.upload3d-row {
     gap: 5px;
   }
 
-  .jaw-preview-undercut-scale {
-    height: 48px;
-  }
 
   .jaw-preview-undercut-labels {
     font-size: 0.5rem;

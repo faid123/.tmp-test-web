@@ -36,6 +36,14 @@ const JAW_SURFACE_SHADING = {
   roughness: 0.5,
 };
 
+// Matte variant for the undercut heatmap. Specular is additive white, so on the
+// dark band red it reads as a glossy sheen that washes the colour out — roughness
+// 1.0 kills the highlight while diffuse shading keeps the relief visible.
+const HEATMAP_SURFACE_SHADING = {
+  ...JAW_SURFACE_SHADING,
+  roughness: 1.0,
+};
+
 const PREVIEW_DESKTOP_PIXEL_RATIO_CAP = 2;
 
 const PREVIEW_EDGE_DESKTOP_PIXEL_RATIO_CAP = 1;
@@ -70,6 +78,8 @@ const preview3DState = {
   uploadCleanup: null,
   area: null,
   activeView: "both",
+  surveyPrevVisibility: null,
+  surveyAutoMaximized: false,
   topControls: null,
   caseData: null,
   // Base64 STL of each shown jaw ({ data, type, filename }), kept so the jaw
@@ -134,6 +144,7 @@ export async function loadInteractiveJawPreview(area) {
       const [undercut, meshQuality] = await Promise.all([undercutPromise, meshQualityPromise]);
       const normalizedUndercut = undercut || { upper: null, lower: null };
       preview3DState.undercut = normalizedUndercut;
+      // Auto-open the heatmap whenever the case already has undercut data.
       setHeatmapEnabled(hasAnyUndercutSurface(normalizedUndercut));
       await waitForPreviewPaint();
       try {
@@ -161,6 +172,7 @@ export async function loadInteractiveJawPreview(area) {
       const [undercut, meshQuality] = await Promise.all([undercutPromise, meshQualityPromise]);
       const normalizedUndercut = undercut || { upper: null, lower: null };
       preview3DState.undercut = normalizedUndercut;
+      // Auto-open the heatmap whenever the case already has undercut data.
       setHeatmapEnabled(hasAnyUndercutSurface(normalizedUndercut));
       await waitForPreviewPaint();
       try {
@@ -228,28 +240,34 @@ function init3DPreview(area) {
   rows.appendChild(rowLower.row);
   toolbar.appendChild(rows);
 
+  // Icon button in the top-left corner IS the heatmap on/off toggle; the legend
+  // dropdown under it appears only while the heatmap is on (driven by .is-off).
+  // Asset path must stay "Undercut.png" — that's git's casing, and GitHub Pages
+  // is case-sensitive even though the local filesystem isn't.
   const undercut = document.createElement("div");
   undercut.className = "jaw-preview-undercut is-off";
   undercut.innerHTML = `
-    <div class="jaw-preview-undercut-header">
-      <span class="jaw-preview-undercut-title">Undercut (mm)</span>
-      <button type="button" class="jaw-preview-undercut-toggle" aria-pressed="false" title="Toggle heatmap" aria-label="Toggle heatmap">
-        <i class="fa-solid fa-eye-slash" aria-hidden="true"></i>
-      </button>
-    </div>
-    <div class="jaw-preview-undercut-body">
-      <div class="jaw-preview-undercut-scale">
-        <span style="background:#d32f2f"></span>
-        <span style="background:#f57c00"></span>
-        <span style="background:#ffd60a"></span>
-        <span style="background:#fff59d"></span>
+    <button type="button" class="jaw-preview-undercut-icon" aria-pressed="false" title="Toggle undercut heatmap" aria-label="Toggle undercut heatmap">
+      <img src="../../assets/Undercut.png" alt="" />
+    </button>
+    <div class="jaw-preview-undercut-panel">
+      <div class="jaw-preview-undercut-header">
+        <span class="jaw-preview-undercut-title">Undercut (mm)</span>
       </div>
-      <div class="jaw-preview-undercut-labels">
-        <span>&gt;0.75</span><span>0.5-0.75</span><span>0.25-0.5</span><span>&lt;0.25</span>
+      <div class="jaw-preview-undercut-body">
+        <div class="jaw-preview-undercut-scale">
+          <span style="background:${undercutBandHex(0.8)}"></span>
+          <span style="background:${undercutBandHex(0.6)}"></span>
+          <span style="background:${undercutBandHex(0.3)}"></span>
+          <span style="background:${undercutBandHex(0.1)}"></span>
+        </div>
+        <div class="jaw-preview-undercut-labels">
+          <span>&gt;0.75</span><span>0.5-0.75</span><span>0.25-0.5</span><span>&lt;0.25</span>
+        </div>
       </div>
     </div>
   `;
-  const heatmapToggleBtn = undercut.querySelector(".jaw-preview-undercut-toggle");
+  const heatmapToggleBtn = undercut.querySelector(".jaw-preview-undercut-icon");
   heatmapToggleBtn.addEventListener("click", () => {
     setHeatmapEnabled(!preview3DState.heatmapEnabled);
   });
@@ -372,6 +390,8 @@ function init3DPreview(area) {
   rowLower.surveyBtn.addEventListener("click", () =>
     handleSurveyButtonClick("lower", rowLower.surveyBtn)
   );
+  rowUpper.cancelBtn.addEventListener("click", () => exitSurveyAiming());
+  rowLower.cancelBtn.addEventListener("click", () => exitSurveyAiming());
 
   // The footer camera button dispatches `request-3d-capture`; the render+upload runs here.
   // preview3DState.capturing is a single-flight guard so rapid clicks don't double-upload.
@@ -1121,11 +1141,11 @@ async function populateJawPreview(jawFiles, undercut, meshQuality = "low") {
   const lowerGroup = new THREE.Group();
   const heatmapMaterial = new THREE.MeshStandardMaterial({
     vertexColors: true,
-    ...JAW_SURFACE_SHADING,
+    ...HEATMAP_SURFACE_SHADING,
     side: THREE.DoubleSide,
   });
   // DoubleSide + opaque so the hollow STL shell's open base renders solid from every angle.
-  // Colour/shading match heatmapMaterial: toggling undercut should tint the jaw, not restyle it.
+  // Same base colour as the heatmap; the flat jaw keeps the glossier sculpted look.
   const flatBaseProps = {
     color: new THREE.Color(...DEFAULT_TOOTH_COLOR),
     ...JAW_SURFACE_SHADING,
@@ -1276,7 +1296,7 @@ async function populateJawPreviewFromOFF(meshFiles, undercut, meshQuality = "low
   // so the inside of the jaw isn't dark when the camera tilts under the occlusal plane.
   const meshMaterial = new THREE.MeshStandardMaterial({
     vertexColors: true,
-    ...JAW_SURFACE_SHADING,
+    ...HEATMAP_SURFACE_SHADING,
     side: THREE.DoubleSide,
   });
   const flatColor = new THREE.Color(
@@ -1600,28 +1620,36 @@ function buildDualDedupGeometry(rawGeometry, surface, targetBackendCount) {
   }
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 
-  // Laplacian smoothing: average each vert's colour with its neighbours several times.
-  // Collapses dedup-misalignment streaks into soft red→yellow zones; strong undercuts survive.
-  smoothVertexColors(geometry, 5);
+  // Majority-vote cleanup: dedup-misalignment speckle gets out-voted by neighbours,
+  // while the bands stay quantized — crisp thresholds, matching the desktop app.
+  snapVertexColorBands(geometry, 2);
 
   return { geometry, backendVertCount: nextBackend };
 }
 
 /**
- * Laplacian smoothing of an indexed BufferGeometry's color attribute: each iteration
- * replaces every vertex color with the average of itself and its direct neighbors.
- * 2 iterations kills speckle while keeping gross structure (red bands stay red).
+ * Band-vote cleanup of an indexed BufferGeometry's color attribute: classify every
+ * vertex to its nearest palette band, then let each vertex adopt the majority band
+ * among itself and its neighbours. Kills the dedup-misalignment speckle the old
+ * Laplacian blur was hiding, but keeps the bands quantized — crisp desktop-style
+ * threshold terraces instead of melted gradients. Ties keep the vertex's own band.
  */
-function smoothVertexColors(geometry, iterations = 2) {
+function snapVertexColorBands(geometry, iterations = 2) {
   const colorAttr = geometry.getAttribute("color");
   const indexAttr = geometry.getIndex();
   if (!colorAttr || !indexAttr) return;
 
+  // Palette as written into the attribute: tan raw, band colours linear-converted.
+  const palette = [
+    DEFAULT_TOOTH_COLOR,
+    ...[0.1, 0.3, 0.6, 0.8].map((v) => colorForSurveyingValue(v).map(srgbToLinear)),
+  ];
+
   const vertexCount = colorAttr.count;
   const indices = indexAttr.array;
 
-  // Build adjacency once — each triangle's three corners are mutual neighbours. Flat parallel
-  // arrays (offsets + neighbours) so the hot loop doesn't walk a Set per vertex.
+  // Adjacency once — each triangle's three corners are mutual neighbours. Flat
+  // parallel arrays (offsets + neighbours) so the hot loop doesn't walk a Set.
   const neighborSets = new Array(vertexCount);
   for (let v = 0; v < vertexCount; v += 1) neighborSets[v] = new Set();
   for (let i = 0; i < indices.length; i += 3) {
@@ -1645,34 +1673,45 @@ function smoothVertexColors(geometry, iterations = 2) {
     for (const n of neighborSets[v]) flatNeighbors[cursor++] = n;
   }
 
-  let current = new Float32Array(colorAttr.array);
-  let next = new Float32Array(current.length);
-
-  for (let iter = 0; iter < iterations; iter += 1) {
-    for (let v = 0; v < vertexCount; v += 1) {
-      const start = offsets[v];
-      const end = offsets[v + 1];
-      let r = current[v * 3];
-      let g = current[v * 3 + 1];
-      let b = current[v * 3 + 2];
-      let count = 1;
-      for (let k = start; k < end; k += 1) {
-        const n = flatNeighbors[k];
-        r += current[n * 3];
-        g += current[n * 3 + 1];
-        b += current[n * 3 + 2];
-        count += 1;
-      }
-      next[v * 3] = r / count;
-      next[v * 3 + 1] = g / count;
-      next[v * 3 + 2] = b / count;
+  // Classify each vertex to its nearest palette band.
+  let bands = new Uint8Array(vertexCount);
+  for (let v = 0; v < vertexCount; v += 1) {
+    const r = colorAttr.getX(v);
+    const g = colorAttr.getY(v);
+    const b = colorAttr.getZ(v);
+    let best = 0;
+    let bestDist = Infinity;
+    for (let pIdx = 0; pIdx < palette.length; pIdx += 1) {
+      const pc = palette[pIdx];
+      const d = (r - pc[0]) ** 2 + (g - pc[1]) ** 2 + (b - pc[2]) ** 2;
+      if (d < bestDist) { bestDist = d; best = pIdx; }
     }
-    const tmp = current;
-    current = next;
-    next = tmp;
+    bands[v] = best;
   }
 
-  colorAttr.array.set(current);
+  const counts = new Uint32Array(palette.length);
+  let next = new Uint8Array(vertexCount);
+  for (let iter = 0; iter < iterations; iter += 1) {
+    for (let v = 0; v < vertexCount; v += 1) {
+      counts.fill(0);
+      counts[bands[v]] += 1; // self votes too
+      for (let n = offsets[v]; n < offsets[v + 1]; n += 1) {
+        counts[bands[flatNeighbors[n]]] += 1;
+      }
+      let winner = bands[v];
+      let winnerVotes = counts[bands[v]];
+      for (let pIdx = 0; pIdx < counts.length; pIdx += 1) {
+        if (counts[pIdx] > winnerVotes) { winner = pIdx; winnerVotes = counts[pIdx]; }
+      }
+      next[v] = winner;
+    }
+    [bands, next] = [next, bands];
+  }
+
+  for (let v = 0; v < vertexCount; v += 1) {
+    const pc = palette[bands[v]];
+    colorAttr.setXYZ(v, pc[0], pc[1], pc[2]);
+  }
   colorAttr.needsUpdate = true;
 }
 
@@ -1805,11 +1844,8 @@ function setHeatmapEnabled(enabled) {
   swap(preview3DState.groups.upper);
   swap(preview3DState.groups.lower);
   const btn = preview3DState.heatmapToggleBtn;
-  if (btn) {
-    btn.setAttribute("aria-pressed", enabled ? "true" : "false");
-    const icon = btn.querySelector("i");
-    if (icon) icon.className = enabled ? "fa-solid fa-eye" : "fa-solid fa-eye-slash";
-  }
+  if (btn) btn.setAttribute("aria-pressed", enabled ? "true" : "false");
+  // .is-off both dims the corner icon and hides the legend dropdown.
   preview3DState.heatmapBoard?.classList.toggle("is-off", !enabled);
 }
 
@@ -1819,7 +1855,7 @@ function reapplyHeatmap(undercut) {
     group.traverse((obj) => {
       if (obj.isMesh && obj.geometry) {
         applyUndercutVertexColors(obj.geometry, surface);
-        smoothVertexColors(obj.geometry, 5);
+        snapVertexColorBands(obj.geometry, 2);
       }
     });
   };
@@ -1827,12 +1863,13 @@ function reapplyHeatmap(undercut) {
   repaint(preview3DState.groups.lower, undercut?.lower);
 }
 
+// Paints the undercut colours into the meshes but does NOT switch the display to
+// them — showing the heatmap is the caller's decision.
 async function applySurveyUndercutToPreview(nextUndercut) {
   preview3DState.undercut = nextUndercut;
   if (preview3DState.qualitySource) {
     preview3DState.qualitySource.undercut = nextUndercut;
   }
-  setHeatmapEnabled(true);
 
   const source = preview3DState.qualitySource;
   const quality = preview3DState.meshQuality || "low";
@@ -1848,7 +1885,6 @@ async function applySurveyUndercutToPreview(nextUndercut) {
     }
     applyJawVisibility();
     updateQualityToggle();
-    setHeatmapEnabled(true);
     return;
   }
 
@@ -1911,14 +1947,27 @@ function getUndercutColorSeverity(r, g, b) {
 // linear later by normalizeUndercutColor. Converting here too would double it.
 // "No undercut" emits the backend's white sentinel so it resolves to the raw,
 // unconverted tan — same as the backend path.
+// Bands + colours are the desktop app's undercutColourMap, byte-exact: derived by
+// joining desktop-stored heatmap RGBA with matching DLL scalars (case 2270).
 function colorForSurveyingValue(value) {
   const v = Math.max(0, Number(value) || 0);
   if (v <= 0) return [1, 1, 1];
 
-  if (v < 0.25) return [1, 245 / 255, 157 / 255];
-  if (v < 0.5) return [1, 214 / 255, 10 / 255];
-  if (v < 0.75) return [245 / 255, 124 / 255, 0];
-  return [240 / 255, 24 / 255, 24 / 255];
+  if (v < 0.25) return [255 / 255, 210 / 255, 0]; // #FFD200
+  if (v < 0.5) return [253 / 255, 140 / 255, 0]; // #FD8C00
+  if (v < 0.75) return [254 / 255, 70 / 255, 0]; // #FE4600
+  return [170 / 255, 0, 3 / 255]; // #AA0003
+}
+
+// Legend swatches are generated from colorForSurveyingValue so the two can't drift
+// (the legend once showed #d32f2f while the mesh painted #F01818).
+function undercutBandHex(value) {
+  return (
+    "#" +
+    colorForSurveyingValue(value)
+      .map((c) => Math.round(c * 255).toString(16).padStart(2, "0"))
+      .join("")
+  );
 }
 
 function buildDllUndercutSurface(jaw, response) {
@@ -1971,9 +2020,9 @@ function hasAnyUndercutSurface(undercut) {
 
 // ---- Survey angle --------------------------------------------------------
 
-// The six *_insertion_angle_{x,y,z} fields hold a world-space unit insertion vector,
-// matching the desktop app (which writes arrow.transform.up straight into them). Web
-// once stored spherical angles here with z always 0 — a different encoding, so desktop
+// The six *_insertion_angle_{x,y,z} fields hold desktop's arrow.up unit vector — the
+// DLL/mesh-frame insertion direction with the per-jaw flip (desktopSurveyFlip) un-applied.
+// Web once stored spherical angles here with z always 0 — a different encoding, so desktop
 // read web's saved angle as a bogus vector and vice versa. |components| <= 1 fits the
 // DECIMAL(9,8) column.
 function savedSurveyVectorForJaw(caseData, jaw) {
@@ -2005,10 +2054,24 @@ function worldToLocalSurveyDirection(worldVec) {
   return [dir.x, dir.y, dir.z].map((value) => Number(Number(value).toFixed(8)));
 }
 
+// Desktop's per-jaw transform between the stored insertion vector and the DLL
+// direction: upper negates X and Y (its Solo2D branch — what the production desktop
+// runs), lower negates Z. Verified bit-exact against desktop-computed heatmaps on
+// cases 2270 and 1923: accuracy 1.0000 on every vertex, both jaws, both cases.
+// The stored vector is already in the DLL/mesh frame — do NOT rotate it through
+// modelRoot (that was the "inverted undercut" bug). Self-inverse: the same call
+// encodes for storage and decodes for the DLL.
+function desktopSurveyFlip(jaw, [x, y, z]) {
+  return jaw === "upper" ? [-x, -y, z] : [x, y, -z];
+}
+
 function savedSurveyDirectionForJaw(caseData, jaw) {
   const vec = savedSurveyVectorForJaw(caseData, jaw);
-  if (!vec || !THREE) return null;
-  return worldToLocalSurveyDirection(new THREE.Vector3(vec.x, vec.y, vec.z));
+  if (!vec) return null;
+  const [x, y, z] = desktopSurveyFlip(jaw, [vec.x, vec.y, vec.z]);
+  const len = Math.hypot(x, y, z);
+  if (len < 1e-4) return null; // unset case stores (0,0,0)
+  return [x / len, y / len, z / len].map((v) => Number(Number(v).toFixed(8)));
 }
 
 function getCameraSurveyDirection() {
@@ -2456,7 +2519,7 @@ function createSurveyHint(mount) {
   hint.className = "jaw-preview-survey-hint";
   hint.innerHTML =
     '<span class="jaw-preview-survey-hint-jaw"></span>' +
-    "<span>Drag to swing the placement arrow around the jaw, then press <b>SET</b>." +
+    "<span>Drag to swing the placement arrow &middot; right-drag to rotate the jaw &middot; press <b>SET</b>." +
     " <span class='jaw-preview-survey-hint-esc'>Esc to cancel</span></span>";
   mount.appendChild(hint);
   return hint;
@@ -2498,9 +2561,15 @@ function enterSurveyAiming(jaw, btn) {
     aimDirty: true,
   };
 
-  // Freeze the arch: while aiming, dragging moves the arrow, not the camera.
+  // While aiming, LEFT drags the arrow, but the jaw stays inspectable: rotation
+  // moves to the RIGHT button. TrackballControls hard-wires its case bodies
+  // (LEFT slot → rotate), so "rotate on right button" is expressed by pointing
+  // the LEFT slot at physical button 2 and unmapping the RIGHT slot.
   const controls = preview3DState.controls;
-  if (controls) controls.noRotate = true;
+  if (controls) {
+    controls.noRotate = false;
+    controls.mouseButtons = { LEFT: 2, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: -1 };
+  }
   preview3DState.surveyDragCleanup = attachSurveyAimDrag();
   mount.classList.add("is-aiming-survey");
 
@@ -2508,6 +2577,25 @@ function enterSurveyAiming(jaw, btn) {
     btn.textContent = "SET";
     btn.classList.add("is-aiming");
     btn.title = "Confirm this placement direction and survey the jaw";
+  }
+  setSurveyCancelState(jaw, { visible: true, disabled: false });
+
+  // Focus the stage: maximize the panel and show only the armed jaw. Both the
+  // mesh and the row's is-hidden-jaw state move together (same contract as the
+  // row icon toggles). Restored on cancel/Esc; kept after a successful SET so
+  // the undercut result stays big and unobstructed.
+  preview3DState.surveyPrevVisibility = {
+    upper: preview3DState.groups?.upper?.visible,
+    lower: preview3DState.groups?.lower?.visible,
+  };
+  setSurveyJawVisible(jaw, true);
+  setSurveyJawVisible(jaw === "upper" ? "lower" : "upper", false);
+  const shell = document.querySelector(".annotation-shell");
+  if (shell && !shell.classList.contains("preview-maximized")) {
+    // Route through the maximize button so 2DAnnotation.js stays the single
+    // owner of panel-mode state (class, icon swap, stored preference, resize).
+    document.getElementById("preview3dMaximizeBtn")?.click();
+    preview3DState.surveyAutoMaximized = true;
   }
   // Lock out the other jaw: only one placement direction is being aimed at a
   // time, and its button is the SET confirm.
@@ -2528,7 +2616,7 @@ function enterSurveyAiming(jaw, btn) {
   updateSurveyPlacementArrow();
 }
 
-function exitSurveyAiming() {
+function exitSurveyAiming({ preserveStage = false } = {}) {
   const aiming = preview3DState.surveyAiming;
   const arrow = preview3DState.surveyArrow;
 
@@ -2550,8 +2638,16 @@ function exitSurveyAiming() {
   preview3DState.surveyRayLight = null;
   setSurveyShadowsEnabled(false);
 
-  // Hand the camera back its rotation and drop the drag-to-aim listeners.
-  if (preview3DState.controls) preview3DState.controls.noRotate = false;
+  // Restore the default button map (left rotate / right pan-slot, which stays
+  // locked by noPan) and drop the drag-to-aim listeners.
+  if (preview3DState.controls) {
+    preview3DState.controls.noRotate = false;
+    preview3DState.controls.mouseButtons = {
+      LEFT: THREE.MOUSE.ROTATE,
+      MIDDLE: THREE.MOUSE.DOLLY,
+      RIGHT: THREE.MOUSE.PAN,
+    };
+  }
   preview3DState.surveyDragCleanup?.();
   preview3DState.surveyDragCleanup = null;
   preview3DState.mount?.classList.remove("is-aiming-survey");
@@ -2563,6 +2659,29 @@ function exitSurveyAiming() {
   }
   preview3DState.topControls?.rowUpper?.surveyBtn?.removeAttribute("disabled");
   preview3DState.topControls?.rowLower?.surveyBtn?.removeAttribute("disabled");
+  for (const key of ["rowUpper", "rowLower"]) {
+    const cancel = preview3DState.topControls?.[key]?.cancelBtn;
+    if (cancel) {
+      cancel.classList.remove("is-on");
+      cancel.disabled = false;
+    }
+  }
+
+  // Cancel/Esc puts the stage back exactly as it was; a successful SET keeps
+  // the maximized, isolated view so the fresh heatmap can be inspected.
+  const prevVis = preview3DState.surveyPrevVisibility;
+  if (!preserveStage && prevVis) {
+    if (prevVis.upper !== undefined) setSurveyJawVisible("upper", !!prevVis.upper);
+    if (prevVis.lower !== undefined) setSurveyJawVisible("lower", !!prevVis.lower);
+  }
+  preview3DState.surveyPrevVisibility = null;
+  if (!preserveStage && preview3DState.surveyAutoMaximized) {
+    const shell = document.querySelector(".annotation-shell");
+    if (shell?.classList.contains("preview-maximized")) {
+      document.getElementById("preview3dMaximizeBtn")?.click();
+    }
+  }
+  preview3DState.surveyAutoMaximized = false;
 
   preview3DState.surveyHint?.classList.remove("is-on");
 
@@ -2577,10 +2696,32 @@ function exitSurveyAiming() {
 // placement arrow, second click (now labelled SET) commits.
 function handleSurveyButtonClick(jaw, btn) {
   if (preview3DState.surveyAiming?.jaw === jaw) {
+    // A cancel click mid-save would null the aim before saveSurveyAngle reads
+    // it (its first await comes earlier), so lock cancel out for the duration.
+    setSurveyCancelState(jaw, { disabled: true });
     saveSurveyAngle(jaw, btn);
     return;
   }
   enterSurveyAiming(jaw, btn);
+}
+
+function setSurveyJawVisible(jaw, visible) {
+  const group = preview3DState.groups?.[jaw];
+  if (!group) return;
+  group.visible = visible;
+  const rowKey = jaw === "upper" ? "rowUpper" : "rowLower";
+  preview3DState.topControls?.[rowKey]?.row?.classList.toggle("is-hidden-jaw", !visible);
+}
+
+// Show/hide + enable/disable the per-jaw CANCEL buttons beside SET.
+function setSurveyCancelState(jaw, { visible, disabled } = {}) {
+  for (const key of ["rowUpper", "rowLower"]) {
+    const btn = preview3DState.topControls?.[key]?.cancelBtn;
+    if (!btn) continue;
+    const isArmedRow = jaw === (key === "rowUpper" ? "upper" : "lower");
+    if (visible !== undefined) btn.classList.toggle("is-on", visible && isArmedRow);
+    if (disabled !== undefined) btn.disabled = disabled && isArmedRow;
+  }
 }
 
 async function saveSurveyAngle(jaw, btn) {
@@ -2600,12 +2741,11 @@ async function saveSurveyAngle(jaw, btn) {
   // orbit if we somehow get here without an armed jaw.
   const aimWorld = surveyAimWorldDirection() || getWorldSurveyDirection();
   const worldVec = aimWorld ? aimWorld.clone().normalize() : new THREE.Vector3(0, 1, 0);
-  // Store the raw world-space vector (desktop's arrow.up format), not spherical angles.
-  const [x, y, z] = [worldVec.x, worldVec.y, worldVec.z].map((v) =>
-    Number(Number(v).toFixed(8))
-  );
-  // The same direction in the mesh's local frame is what the DLL endpoint consumes.
+  // The DLL consumes the aim in the mesh's local frame.
   const surveyDirection = worldToLocalSurveyDirection(worldVec) || getCameraSurveyDirection();
+  // Store desktop's encoding: un-apply the per-jaw flip, so desktop's own flip (and
+  // our reload path) turns the stored vector back into exactly this DLL direction.
+  const [x, y, z] = desktopSurveyFlip(jaw, surveyDirection);
   const current = preview3DState.caseData;
   const updated = { ...current };
   if (jaw === "upper") {
@@ -2680,7 +2820,7 @@ async function saveSurveyAngle(jaw, btn) {
     toast?.error?.(`Survey angle failed. ${err.message || err}`);
   } finally {
     // Drops the placement arrow and resets the button back to SET SURVEY ANGLE.
-    exitSurveyAiming();
+    exitSurveyAiming({ preserveStage: true });
     if (btn) {
       btn.disabled = false;
       btn.textContent = "SET SURVEY ANGLE";
@@ -2789,6 +2929,9 @@ async function autoApplySavedSurveyAngles() {
       [jaw]: dllSurface,
     };
     await applySurveyUndercutToPreview(nextUndercut);
+    // Saved survey applied — auto-open the heatmap so entering the case lands
+    // straight on the undercut view.
+    setHeatmapEnabled(true);
   }
 }
 
@@ -4051,6 +4194,20 @@ function buildJawRow({ jaw, icon, label }) {
   surveyBtn.className = "jaw-preview-survey-btn";
   surveyBtn.textContent = "SET SURVEY ANGLE";
 
+  // Only visible while this jaw is armed; drops the aim without surveying.
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "jaw-preview-survey-cancel-btn";
+  cancelBtn.textContent = "CANCEL";
+  cancelBtn.title = "Cancel survey aiming";
+
+  // The row is a 4-track grid with the survey control pinned in the last track,
+  // so CANCEL + SET share one flex group there instead of taking a new track.
+  const surveyGroup = document.createElement("div");
+  surveyGroup.className = "jaw-preview-survey-group";
+  surveyGroup.appendChild(cancelBtn);
+  surveyGroup.appendChild(surveyBtn);
+
   // Shown only on an empty jaw (no STL): opens the file picker to upload a 3D file for this jaw.
   // Hidden once a jaw STL is loaded — the trash + survey controls take over.
   const uploadBtn = document.createElement("button");
@@ -4071,10 +4228,10 @@ function buildJawRow({ jaw, icon, label }) {
   row.appendChild(iconEl);
   row.appendChild(allowWrap);
   row.appendChild(deleteBtn);
-  row.appendChild(surveyBtn);
+  row.appendChild(surveyGroup);
   row.appendChild(uploadBtn);
   row.appendChild(surveyLoading);
-  return { row, toggle, deleteBtn, surveyBtn, uploadBtn, surveyLoading, iconEl };
+  return { row, toggle, deleteBtn, surveyBtn, cancelBtn, uploadBtn, surveyLoading, iconEl };
 }
 
 // Switch a jaw's row between its "loaded" controls (trash + SET SURVEY ANGLE) and its empty
