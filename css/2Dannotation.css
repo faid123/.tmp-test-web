@@ -850,6 +850,13 @@ button.upload3d-row {
   outline-offset: -3px;
 }
 
+/* Long-press engaged on touch: the mode ring brightens and thickens while the
+   finger is turning the jaw, so the tool switch is visible under the hand. */
+.jaw-preview-3d-mount.is-jaw-rotating {
+  outline-color: #d0342c;
+  outline-width: 5px;
+}
+
 /* While aiming, dragging swings the arrow rather than orbiting the arch, so the
    canvas advertises grab instead of the default rotate cursor. */
 .jaw-preview-3d-mount.is-aiming-survey canvas {

@@ -1,44 +1,45 @@
 import { state, setMessage, fetchCaseDetail } from "./2DAnnotation.js";
 import { saveAsJpeg } from "./annotationLocks.js";
 import { toast, confirmModal } from "../shared/toast.js";
+// Survey-angle logic; shares this module's state and helpers via its exports.
+import {
+  handleSurveyButtonClick,
+  exitSurveyAiming,
+  updateSurveyPlacementArrow,
+  autoApplySavedSurveyAngles,
+} from "./preview3DSurvey.js";
 
 // ---- Module state, constants and shared config ---------------------------
 
-let THREE = null;
+export let THREE = null;
 
 let TrackballControls = null;
 
 let STLLoader = null;
 
-const PREVIEW_MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
+export const PREVIEW_MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
-const PREVIEW_FALLBACK_UUID = "AC4gRQXZJoNz9EhhW36Q8jMJXBsf";
+export const PREVIEW_FALLBACK_UUID = "AC4gRQXZJoNz9EhhW36Q8jMJXBsf";
 
-const SMARTRPD_API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
+export const SMARTRPD_API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 
 // Default RPD jaw color used as the "no undercut" base in vertex-color renders.
 const DEFAULT_TOOTH_COLOR = [208 / 255, 190 / 255, 141 / 255];
 
-// Vertex-colour attributes are read as LINEAR by three.js (unlike material.color,
-// which is converted for you), so HEATMAP values are converted here or they render
-// washed out — #D32F2F was arriving on screen as salmon #CE7371.
-//
-// DEFAULT_TOOTH_COLOR is deliberately NOT converted: it is written raw into both the
-// vertex colours and the flat material, so the jaw keeps its established appearance.
-// Converting it would darken the jaw — intentional, do not "fix".
-const srgbToLinear = (c) =>
+// Vertex-colour attributes are read as LINEAR by three.js, so heatmap values are
+// converted here or they render washed out. DEFAULT_TOOTH_COLOR is deliberately
+// NOT converted — do not "fix".
+export const srgbToLinear = (c) =>
   c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 
-// Shading for every jaw material (heatmap + plain, both loader paths) — these drifted apart once, so they live here.
-// Roughness 0.5: glossier than the old 0.6 so ridges catch highlights, but not so glossy that dense meshes sparkle.
+// Shared shading for every jaw material (heatmap + plain, both loader paths).
 const JAW_SURFACE_SHADING = {
   metalness: 0.0,
   roughness: 0.5,
 };
 
-// Matte variant for the undercut heatmap. Specular is additive white, so on the
-// dark band red it reads as a glossy sheen that washes the colour out — roughness
-// 1.0 kills the highlight while diffuse shading keeps the relief visible.
+// Matte variant for the undercut heatmap: roughness 1.0 kills the specular sheen
+// that washes out the band colours.
 const HEATMAP_SURFACE_SHADING = {
   ...JAW_SURFACE_SHADING,
   roughness: 1.0,
@@ -54,7 +55,7 @@ const PREVIEW_MAX_DISPLAY_TRIANGLES = 120000;
 
 const PREVIEW_MIN_SIMPLIFY_TRIANGLES = 160000;
 
-const preview3DState = {
+export const preview3DState = {
   renderer: null,
   scene: null,
   camera: null,
@@ -329,20 +330,14 @@ function init3DPreview(area) {
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
   camera.position.set(0, 40, 160);
 
-  // Tuned for relief, not even light: only the DIRECTIONAL lights separate a cusp from a fissure, so the flat
-  // terms stay low (20% of total → 3.8:1 contrast; was 42% → 1.8:1). An env map was tried — its diffuse IBL flattens it back.
+  // Tuned for relief: only the directional lights separate a cusp from a fissure,
+  // so the flat terms stay low.
   const hemi = new THREE.HemisphereLight(0xffffff, 0xfff1f5, 0.38);
   scene.add(hemi);
 
-  // The three directional lights are CHILDREN OF THE CAMERA, the way dental CAD
-  // viewers (exocad et al.) rig them: TrackballControls orbits the camera around a
-  // fixed model, so world-fixed lights left the far side dark — measured 43%
-  // brightness swing between front and back views, versus 4% rigged like this.
-  //
-  // Offsets are in camera space and deliberately NOT straight down the view axis:
-  // a pure headlight lights everything evenly and flattens the relief away. Up-and-
-  // left keeps cusp/fissure shading while staying readable at every angle. The
-  // default light target is the world origin, which is where the model is centred.
+  // The directional lights are CHILDREN OF THE CAMERA so the model stays lit from
+  // every orbit angle. Offsets are deliberately off the view axis: a pure headlight
+  // flattens the relief away.
   const keyLight = new THREE.DirectionalLight(0xffffff, 1.55);
   keyLight.position.set(-60, 80, 100);
   camera.add(keyLight);
@@ -952,7 +947,7 @@ function createDisplayGeometry(geometry, label = "mesh") {
 
 // ---- Case data and API fetches -------------------------------------------
 
-function getLoggedInUser() {
+export function getLoggedInUser() {
   try {
     const raw = localStorage.getItem("loggedInUser");
     return raw ? JSON.parse(raw) : null;
@@ -963,7 +958,7 @@ function getLoggedInUser() {
 
 // Reuse the shared /case/get round-trip from 2D init instead of duplicating it.
 // Only used to preserve the other jaw's survey angles, so a null result is harmless.
-function fetchCaseData() {
+export function fetchCaseData() {
   return fetchCaseDetail();
 }
 
@@ -1410,8 +1405,8 @@ async function renderJawStl(jaw, file) {
   geometry = getDisplayGeometryForQuality(geometry, file.filename || `${jaw}.stl`);
   geometry.computeVertexNormals();
 
-  // Same shading as every other jaw material: a jaw uploaded now must not look different
-  // after a reload. (This path had drifted to its own colour and roughness.)
+  // Same shading as every other jaw material: a jaw uploaded now must not look
+  // different after a reload.
   const flatMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(...DEFAULT_TOOTH_COLOR),
     ...JAW_SURFACE_SHADING,
@@ -1628,11 +1623,9 @@ function buildDualDedupGeometry(rawGeometry, surface, targetBackendCount) {
 }
 
 /**
- * Band-vote cleanup of an indexed BufferGeometry's color attribute: classify every
- * vertex to its nearest palette band, then let each vertex adopt the majority band
- * among itself and its neighbours. Kills the dedup-misalignment speckle the old
- * Laplacian blur was hiding, but keeps the bands quantized — crisp desktop-style
- * threshold terraces instead of melted gradients. Ties keep the vertex's own band.
+ * Band-vote cleanup of an indexed geometry's color attribute: classify every vertex
+ * to its nearest palette band, then adopt the majority band among its neighbours.
+ * Kills speckle while keeping the bands quantized; ties keep the vertex's own band.
  */
 function snapVertexColorBands(geometry, iterations = 2) {
   const colorAttr = geometry.getAttribute("color");
@@ -1829,7 +1822,7 @@ function inspectMeshPayload(buffer) {
 
 // ---- Undercut heatmap ----------------------------------------------------
 
-function setHeatmapEnabled(enabled) {
+export function setHeatmapEnabled(enabled) {
   preview3DState.heatmapEnabled = !!enabled;
   const swap = (group) => {
     if (!group) return;
@@ -1865,7 +1858,7 @@ function reapplyHeatmap(undercut) {
 
 // Paints the undercut colours into the meshes but does NOT switch the display to
 // them — showing the heatmap is the caller's decision.
-async function applySurveyUndercutToPreview(nextUndercut) {
+export async function applySurveyUndercutToPreview(nextUndercut) {
   preview3DState.undercut = nextUndercut;
   if (preview3DState.qualitySource) {
     preview3DState.qualitySource.undercut = nextUndercut;
@@ -1943,13 +1936,10 @@ function getUndercutColorSeverity(r, g, b) {
   return dr * dr + dg * dg + db * db;
 }
 
-// Returns sRGB on purpose: these land in the surveying buffer and are converted to
-// linear later by normalizeUndercutColor. Converting here too would double it.
-// "No undercut" emits the backend's white sentinel so it resolves to the raw,
-// unconverted tan — same as the backend path.
-// Bands + colours are the desktop app's undercutColourMap, byte-exact: derived by
-// joining desktop-stored heatmap RGBA with matching DLL scalars (case 2270).
-function colorForSurveyingValue(value) {
+// Desktop's undercutColourMap, byte-exact. Returns sRGB on purpose (converted to
+// linear later by normalizeUndercutColor); "no undercut" emits the backend's white
+// sentinel so it resolves to the raw tan.
+export function colorForSurveyingValue(value) {
   const v = Math.max(0, Number(value) || 0);
   if (v <= 0) return [1, 1, 1];
 
@@ -1959,8 +1949,7 @@ function colorForSurveyingValue(value) {
   return [170 / 255, 0, 3 / 255]; // #AA0003
 }
 
-// Legend swatches are generated from colorForSurveyingValue so the two can't drift
-// (the legend once showed #d32f2f while the mesh painted #F01818).
+// Legend swatches are generated from colorForSurveyingValue so the two can't drift.
 function undercutBandHex(value) {
   return (
     "#" +
@@ -1970,7 +1959,7 @@ function undercutBandHex(value) {
   );
 }
 
-function buildDllUndercutSurface(jaw, response) {
+export function buildDllUndercutSurface(jaw, response) {
   let values = null;
   if (response?.surveying_values_base64) {
     values = new Float32Array(base64ToArrayBuffer(response.surveying_values_base64));
@@ -2018,927 +2007,6 @@ function hasAnyUndercutSurface(undercut) {
   return hasUndercutSurface(undercut?.upper) || hasUndercutSurface(undercut?.lower);
 }
 
-// ---- Survey angle --------------------------------------------------------
-
-// The six *_insertion_angle_{x,y,z} fields hold desktop's arrow.up unit vector — the
-// DLL/mesh-frame insertion direction with the per-jaw flip (desktopSurveyFlip) un-applied.
-// Web once stored spherical angles here with z always 0 — a different encoding, so desktop
-// read web's saved angle as a bogus vector and vice versa. |components| <= 1 fits the
-// DECIMAL(9,8) column.
-function savedSurveyVectorForJaw(caseData, jaw) {
-  if (!caseData) return null;
-  const prefix = jaw === "upper" ? "upper" : "lower";
-  const rawValues = ["x", "y", "z"].map((axis) =>
-    caseData[`${prefix}_insertion_angle_${axis}`]
-  );
-  if (rawValues.some((value) => value === undefined || value === null || value === "")) return null;
-  const values = rawValues.map(Number);
-  if (values.some((value) => !Number.isFinite(value))) return null;
-  return { x: values[0], y: values[1], z: values[2] };
-}
-
-// The DLL surveys in the mesh's own (modelRoot-local) frame, so bring the world-space
-// direction into it and round to the array shape the endpoint expects. Returns null for a
-// zero vector — an unset (0,0,0) case must not be surveyed at a phantom angle.
-function worldToLocalSurveyDirection(worldVec) {
-  if (!worldVec || !THREE) return null;
-  const dir = worldVec.clone();
-  const root = preview3DState.modelRoot;
-  if (root) {
-    const rootQuat = new THREE.Quaternion();
-    root.getWorldQuaternion(rootQuat);
-    dir.applyQuaternion(rootQuat.invert());
-  }
-  if (dir.lengthSq() < 1e-9) return null;
-  dir.normalize();
-  return [dir.x, dir.y, dir.z].map((value) => Number(Number(value).toFixed(8)));
-}
-
-// Desktop's per-jaw transform between the stored insertion vector and the DLL
-// direction: upper negates X and Y (its Solo2D branch — what the production desktop
-// runs), lower negates Z. Verified bit-exact against desktop-computed heatmaps on
-// cases 2270 and 1923: accuracy 1.0000 on every vertex, both jaws, both cases.
-// The stored vector is already in the DLL/mesh frame — do NOT rotate it through
-// modelRoot (that was the "inverted undercut" bug). Self-inverse: the same call
-// encodes for storage and decodes for the DLL.
-function desktopSurveyFlip(jaw, [x, y, z]) {
-  return jaw === "upper" ? [-x, -y, z] : [x, y, -z];
-}
-
-function savedSurveyDirectionForJaw(caseData, jaw) {
-  const vec = savedSurveyVectorForJaw(caseData, jaw);
-  if (!vec) return null;
-  const [x, y, z] = desktopSurveyFlip(jaw, [vec.x, vec.y, vec.z]);
-  const len = Math.hypot(x, y, z);
-  if (len < 1e-4) return null; // unset case stores (0,0,0)
-  return [x / len, y / len, z / len].map((v) => Number(Number(v).toFixed(8)));
-}
-
-function getCameraSurveyDirection() {
-  const camera = preview3DState.camera;
-  if (!camera || !THREE) return [1, 0, 0];
-
-  const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-  dir.multiplyScalar(-1);
-
-  const root = preview3DState.modelRoot;
-  if (root) {
-    const rootQuat = new THREE.Quaternion();
-    root.getWorldQuaternion(rootQuat);
-    dir.applyQuaternion(rootQuat.invert());
-  }
-
-  if (dir.lengthSq() < 1e-9) return [1, 0, 0];
-  dir.normalize();
-  return [dir.x, dir.y, dir.z].map((value) =>
-    Number(Number(value).toFixed(8))
-  );
-}
-
-function getWorldSurveyDirection() {
-  if (!THREE) return null;
-  const direction = new THREE.Vector3(...getCameraSurveyDirection());
-  const root = preview3DState.modelRoot;
-  if (root) {
-    const rootQuat = new THREE.Quaternion();
-    root.getWorldQuaternion(rootQuat);
-    direction.applyQuaternion(rootQuat);
-  }
-  if (direction.lengthSq() < 1e-9) return null;
-  return direction.normalize();
-}
-
-// Drag sensitivity for swinging the arrow, in radians per pixel (~0.5°/px, so a
-// 400px drag sweeps roughly half a turn).
-const SURVEY_AIM_DRAG_SPEED = 0.009;
-
-
-// The aim direction lives in world space (that's what gets saved); the arrow is
-// a child of modelRoot, so positioning needs it in the model's frame.
-function surveyAimWorldDirection() {
-  const aiming = preview3DState.surveyAiming;
-  if (!aiming || !THREE) return null;
-  return aiming.dir.clone().normalize();
-}
-
-function surveyAimLocalDirection() {
-  const world = surveyAimWorldDirection();
-  if (!world) return null;
-  const root = preview3DState.modelRoot;
-  if (root) {
-    const rootQuat = new THREE.Quaternion();
-    root.getWorldQuaternion(rootQuat);
-    world.applyQuaternion(rootQuat.invert());
-  }
-  return world.normalize();
-}
-
-// Arrow points along local +Y with its TIP at the origin, so aiming is "tip here, point there".
-// Sizes are fractions of the bounding-SPHERE radius (half a diagonal, so bigger than the arch).
-function createSurveyPlacementArrow(radius) {
-  const total = radius * 0.35;
-  const headLength = total * 0.28;
-  const shaftLength = total - headLength;
-  // Ratios get fatter as the arrow gets shorter — a fixed slenderness would make
-  // this length read as a hairline against an 80mm arch.
-  const shaftRadius = total * 0.055;
-  const headRadius = shaftRadius * 2.6;
-
-  const group = new THREE.Group();
-  const material = new THREE.MeshStandardMaterial({
-    color: 0x0f766e,
-    emissive: 0x0f766e,
-    emissiveIntensity: 0.35,
-    roughness: 0.45,
-    metalness: 0.1,
-  });
-
-  // ConeGeometry's apex sits at +height/2; flip it so the apex leads at y=0.
-  const head = new THREE.Mesh(
-    new THREE.ConeGeometry(headRadius, headLength, 28),
-    material
-  );
-  head.rotation.x = Math.PI;
-  head.position.y = headLength / 2;
-  group.add(head);
-
-  const shaft = new THREE.Mesh(
-    new THREE.CylinderGeometry(shaftRadius, shaftRadius, shaftLength, 24),
-    material
-  );
-  shaft.position.y = headLength + shaftLength / 2;
-  group.add(shaft);
-
-  // Light shaft riding the same axis, dipping slightly past the tip so it reads as
-  // landing ON the jaw rather than stopping above it. Additive and depth-write off
-  // so it glows over the arch instead of occluding it.
-  const beamLength = total * 1.12;
-  const sink = total * 0.1;
-  // Normal blending, not additive: the preview backdrop is white, and additive
-  // blending over white is a no-op — the beam would be invisible.
-  const beamMaterial = new THREE.MeshBasicMaterial({
-    color: 0x2fd4bb,
-    transparent: true,
-    opacity: 0.4,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-  });
-  const beam = new THREE.Mesh(
-    new THREE.CylinderGeometry(shaftRadius * 2.4, shaftRadius * 1.1, beamLength, 24, 1, true),
-    beamMaterial
-  );
-  beam.position.y = beamLength / 2 - sink;
-  group.add(beam);
-
-  group.userData.surveyArrowLength = total;
-  group.userData.surveyArrowMaterial = material;
-  group.userData.surveyBeamMaterial = beamMaterial;
-  return group;
-}
-
-// Parallel light down the insertion axis. A denture is seated by parallel
-// translation, so parallel rays are the physically correct model: whatever falls
-// in shadow from this direction is exactly what the denture cannot reach — the
-// undercut. Shadows are rendered on demand (see updateSurveyPlacementArrow).
-function createSurveyRayLight(metrics, root) {
-  // Near-zero intensity: this light exists only to render a shadow map, which it still
-  // does at any intensity. Brightening from the survey axis would change how the jaw
-  // itself looks while aiming, and the occluded areas are marked by colour, not by dark.
-  const light = new THREE.DirectionalLight(0xffffff, 0.0001);
-  light.castShadow = true;
-
-  const target = new THREE.Object3D();
-  target.position.copy(metrics.center);
-  root.add(target);
-  light.target = target;
-
-  // Ortho shadow frustum sized to the jaw, with depth to spare either side.
-  const r = metrics.radius;
-  const cam = light.shadow.camera;
-  cam.left = -r; cam.right = r; cam.top = r; cam.bottom = -r;
-  cam.near = 0.1; cam.far = r * 6;
-  cam.updateProjectionMatrix();
-  light.shadow.mapSize.set(1024, 1024);
-  // Pulls the shadow off surfaces facing the light so gentle slopes don't
-  // self-shadow into acne — undercuts are what we want dark, not the whole arch.
-  light.shadow.bias = -0.0004;
-  // Undercuts are often only 0.25-1mm deep, so the normal bias has to stay well
-  // under that or it pushes the shallow ones out of shadow and hides them.
-  light.shadow.normalBias = r * 0.004;
-
-  root.add(light);
-  light.userData.surveyRayTarget = target;
-  return light;
-}
-
-// Shadowed pixels are repainted in the heatmap's deepest-undercut red, so an occluded
-// area reads as the same colour it will have once SET runs. Sourced from the palette
-// itself (converted to linear, the space outgoingLight is in) so the two can't drift.
-const SURVEY_TINT_UNIFORMS = {
-  uSurveyTintColor: { value: null },
-  uSurveyTintAmount: { value: 0.85 },
-};
-
-function surveyTintColor() {
-  if (!SURVEY_TINT_UNIFORMS.uSurveyTintColor.value) {
-    const [r, g, b] = colorForSurveyingValue(1);
-    SURVEY_TINT_UNIFORMS.uSurveyTintColor.value = new THREE.Color(
-      srgbToLinear(r), srgbToLinear(g), srgbToLinear(b)
-    );
-  }
-  return SURVEY_TINT_UNIFORMS.uSurveyTintColor.value;
-}
-
-// Reads the survey light's shadow mask and tints occluded pixels red. Index 0 is safe
-// because the survey light is the only shadow caster (the camera rig never casts).
-// The whole block compiles out when no shadow-casting light is in the scene, so this
-// costs nothing outside survey mode — no need to unpatch on exit.
-function applySurveyShadowTint(material) {
-  if (!material || material.userData.surveyTintPatched) return;
-  material.userData.surveyTintPatched = true;
-  surveyTintColor();
-
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.uSurveyTintColor = SURVEY_TINT_UNIFORMS.uSurveyTintColor;
-    shader.uniforms.uSurveyTintAmount = SURVEY_TINT_UNIFORMS.uSurveyTintAmount;
-    shader.fragmentShader = shader.fragmentShader
-      .replace(
-        "void main() {",
-        "uniform vec3 uSurveyTintColor;\nuniform float uSurveyTintAmount;\nvoid main() {"
-      )
-      // USE_SHADOWMAP must be in the guard too: the light count can be non-zero while
-      // shadow mapping is off, and getShadow does not exist in that build.
-      .replace(
-        "#include <opaque_fragment>",
-        `#if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
-  DirectionalLightShadow svCfg = directionalLightShadows[ 0 ];
-  // receiveShadow keeps the tint off the opposing arch, which is excluded from shadows.
-  float svLit = receiveShadow ? getShadow( directionalShadowMap[ 0 ], svCfg.shadowMapSize,
-    svCfg.shadowBias, svCfg.shadowRadius, vDirectionalShadowCoord[ 0 ] ) : 1.0;
-  // Carrying the shaded luminance through keeps relief visible inside the red.
-  float svLum = dot( outgoingLight, vec3( 0.2126, 0.7152, 0.0722 ) );
-  outgoingLight = mix( outgoingLight, uSurveyTintColor * ( 0.35 + svLum ),
-    ( 1.0 - svLit ) * uSurveyTintAmount );
-#endif
-#include <opaque_fragment>`
-      );
-  };
-  // Without this three.js would hand the patched material a cached unpatched program.
-  material.customProgramCacheKey = () => "surveyShadowTint";
-  material.needsUpdate = true;
-}
-
-// Shadows cost a second scene render, so they are only switched on while a jaw is
-// armed and switched straight back off afterwards.
-function setSurveyShadowsEnabled(enabled, jaw = null) {
-  const renderer = preview3DState.renderer;
-  if (!renderer) return;
-  renderer.shadowMap.enabled = enabled;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  // Manual updates only: the scene is static, so re-rendering the map every frame
-  // would waste a full depth pass on an HD mesh for nothing.
-  renderer.shadowMap.autoUpdate = false;
-  renderer.shadowMap.needsUpdate = enabled;
-
-  // Only the surveyed jaw casts and receives. Including the opposing arch would
-  // drape a big shadow over the very surface being read.
-  const flag = (group, on) => {
-    group?.traverse((obj) => {
-      if (!obj.isMesh) return;
-      obj.castShadow = on;
-      obj.receiveShadow = on;
-      // DoubleSide materials self-shadow badly on a hollow scan shell.
-      if (obj.material) obj.material.shadowSide = THREE.BackSide;
-      // Patched on both jaws: the heatmap material is shared, and the shader gates
-      // on receiveShadow anyway, so only the surveyed arch actually tints.
-      if (enabled) applySurveyShadowTint(obj.material);
-    });
-  };
-  flag(preview3DState.groups?.upper, enabled && jaw === "upper");
-  flag(preview3DState.groups?.lower, enabled && jaw === "lower");
-}
-
-// Metrics of the jaw being aimed at, in modelRoot-local space: where to point
-// the arrow and how big to draw it.
-function surveyTargetMetrics(jaw) {
-  const group = preview3DState.groups?.[jaw];
-  const root = preview3DState.modelRoot;
-  if (!group || !root || !THREE) return null;
-
-  const worldBox = new THREE.Box3().setFromObject(group);
-  if (worldBox.isEmpty()) return null;
-
-  // setFromObject gives a world AABB but the arrow is parented to modelRoot, so re-fit the box
-  // through the inverse transform — centre and half-extents below are in the arrow's own frame.
-  const box = worldBox.applyMatrix4(
-    new THREE.Matrix4().copy(root.matrixWorld).invert()
-  );
-  const center = box.getCenter(new THREE.Vector3());
-  const half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5);
-  const radius = half.length();
-  return {
-    group,
-    center,
-    half,
-    radius: radius || 30,
-    points: cacheSurveySurfacePoints(group, root),
-  };
-}
-
-// Snapshot every jaw vertex in modelRoot-local space, once when a jaw is armed, so the
-// per-drag scan below is a flat pass over one typed array with no matrix work.
-function cacheSurveySurfacePoints(group, root) {
-  if (!group || !root || !THREE) return null;
-
-  const meshes = [];
-  let vertexCount = 0;
-  group.traverse((obj) => {
-    if (obj.isMesh && obj.geometry?.attributes?.position) {
-      meshes.push(obj);
-      vertexCount += obj.geometry.attributes.position.count;
-    }
-  });
-  if (!vertexCount) return null;
-
-  const points = new Float32Array(vertexCount * 3);
-  const toLocal = new THREE.Matrix4();
-  const inverseRoot = new THREE.Matrix4().copy(root.matrixWorld).invert();
-  const vertex = new THREE.Vector3();
-  let offset = 0;
-
-  for (const mesh of meshes) {
-    toLocal.multiplyMatrices(inverseRoot, mesh.matrixWorld);
-    const position = mesh.geometry.attributes.position;
-    for (let i = 0; i < position.count; i += 1) {
-      vertex.fromBufferAttribute(position, i).applyMatrix4(toLocal);
-      points[offset] = vertex.x;
-      points[offset + 1] = vertex.y;
-      points[offset + 2] = vertex.z;
-      offset += 3;
-    }
-  }
-  return points;
-}
-
-// Tip sits just clear of the real mesh: the surface's support function (furthest vertex along the aim).
-// Beats the AABB (floated ~11mm on oblique aims) and a centre raycast (MISSES a horseshoe from occlusal).
-function surveySurfaceTip(metrics, localDirection) {
-  const gap = metrics.radius * 0.015;
-  const { center, half, points } = metrics;
-
-  if (!points || !points.length) {
-    // Fallback: support function of the AABB.
-    const reach =
-      Math.abs(half.x * localDirection.x) +
-      Math.abs(half.y * localDirection.y) +
-      Math.abs(half.z * localDirection.z);
-    return center.clone().addScaledVector(localDirection, reach + gap);
-  }
-
-  const { x: dx, y: dy, z: dz } = localDirection;
-  let furthest = -Infinity;
-  for (let i = 0; i < points.length; i += 3) {
-    const projection = points[i] * dx + points[i + 1] * dy + points[i + 2] * dz;
-    if (projection > furthest) furthest = projection;
-  }
-
-  // Projections are measured from the origin; re-base onto the arrow's axis,
-  // which runs through the jaw centre.
-  const reach = furthest - center.dot(localDirection);
-  return center.clone().addScaledVector(localDirection, reach + gap);
-}
-
-function updateSurveyPlacementArrow() {
-  const aiming = preview3DState.surveyAiming;
-  const arrow = preview3DState.surveyArrow;
-  if (!aiming || !arrow || !THREE) return;
-
-  // Metrics are captured when the jaw is armed: the mesh doesn't move while
-  // aiming (the camera orbits, not the model), so there's nothing to recompute.
-  const metrics = aiming.metrics;
-  if (!metrics) return;
-
-  // The vertex scan is only redone when the aim actually moved — idle frames and camera zoom
-  // cost nothing; a drag costs at most one scan per frame.
-  if (!aiming.aimDirty) return;
-  aiming.aimDirty = false;
-
-  const direction = surveyAimLocalDirection();
-  if (!direction || direction.lengthSq() < 1e-9) return;
-
-  const tip = surveySurfaceTip(metrics, direction);
-  if (!tip) return;
-
-  arrow.position.copy(tip);
-  arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
-
-  // Park the survey light far enough back that its ortho frustum covers the arch,
-  // then redraw the shadow map — the only time it needs redrawing is right here,
-  // when the aim has actually moved.
-  const light = preview3DState.surveyRayLight;
-  if (light) {
-    light.position
-      .copy(metrics.center)
-      .addScaledVector(direction, metrics.radius * 3);
-    light.target.position.copy(metrics.center);
-    light.target.updateMatrixWorld();
-    if (preview3DState.renderer) preview3DState.renderer.shadowMap.needsUpdate = true;
-  }
-}
-
-// Left-drag swings the arrow around the fixed jaw (camera rotation is off while aiming),
-// so you aim at the jaw rather than turning the jaw to meet the arrow.
-function attachSurveyAimDrag() {
-  const canvas = preview3DState.renderer?.domElement;
-  if (!canvas) return null;
-
-  let dragging = false;
-  let lastX = 0;
-  let lastY = 0;
-
-  const onDown = (e) => {
-    if (e.button !== 0 || !preview3DState.surveyAiming) return;
-    dragging = true;
-    lastX = e.clientX;
-    lastY = e.clientY;
-    canvas.setPointerCapture?.(e.pointerId);
-    canvas.classList.add("is-aiming-drag");
-  };
-
-  const onMove = (e) => {
-    const aiming = preview3DState.surveyAiming;
-    if (!dragging || !aiming) return;
-    const dx = e.clientX - lastX;
-    const dy = e.clientY - lastY;
-    lastX = e.clientX;
-    lastY = e.clientY;
-
-    // Trackball-style: rotate the aim vector about the camera's own screen axes.
-    // This was spherical theta/phi, which had to be clamped off the poles — so the
-    // arrow jammed whenever it was dragged past vertical, the clamp eating the drag
-    // until you reversed. Quaternions have no poles, so it swings freely in every
-    // direction, and rotating about CAMERA axes keeps motion 1:1 with the cursor
-    // whichever way the view is turned.
-    const camera = preview3DState.camera;
-    if (!camera) return;
-    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
-    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
-    const spin = new THREE.Quaternion()
-      .setFromAxisAngle(up, dx * SURVEY_AIM_DRAG_SPEED)
-      .multiply(
-        new THREE.Quaternion().setFromAxisAngle(right, dy * SURVEY_AIM_DRAG_SPEED)
-      );
-    aiming.dir.applyQuaternion(spin).normalize();
-    aiming.aimDirty = true;
-  };
-
-  const onUp = (e) => {
-    if (!dragging) return;
-    dragging = false;
-    canvas.releasePointerCapture?.(e.pointerId);
-    canvas.classList.remove("is-aiming-drag");
-  };
-
-  canvas.addEventListener("pointerdown", onDown);
-  canvas.addEventListener("pointermove", onMove);
-  canvas.addEventListener("pointerup", onUp);
-  canvas.addEventListener("pointercancel", onUp);
-
-  return () => {
-    canvas.removeEventListener("pointerdown", onDown);
-    canvas.removeEventListener("pointermove", onMove);
-    canvas.removeEventListener("pointerup", onUp);
-    canvas.removeEventListener("pointercancel", onUp);
-    canvas.classList.remove("is-aiming-drag");
-  };
-}
-
-function createSurveyHint(mount) {
-  const hint = document.createElement("div");
-  hint.className = "jaw-preview-survey-hint";
-  hint.innerHTML =
-    '<span class="jaw-preview-survey-hint-jaw"></span>' +
-    "<span>Drag to swing the placement arrow &middot; right-drag to rotate the jaw &middot; press <b>SET</b>." +
-    " <span class='jaw-preview-survey-hint-esc'>Esc to cancel</span></span>";
-  mount.appendChild(hint);
-  return hint;
-}
-
-function enterSurveyAiming(jaw, btn) {
-  const root = preview3DState.modelRoot;
-  const mount = preview3DState.mount;
-  if (!root || !mount || !THREE) return;
-
-  // Only one jaw can be armed; re-arming switches target.
-  if (preview3DState.surveyAiming) exitSurveyAiming();
-
-  const metrics = surveyTargetMetrics(jaw);
-  if (!metrics) {
-    toast?.error?.(`No ${jaw} jaw loaded to survey.`);
-    return;
-  }
-
-  // Seed from this jaw's saved angle so re-opening nudges the existing direction;
-  // first time round, fall back to where the user is already looking.
-  const saved = savedSurveyDirectionForJaw(preview3DState.caseData, jaw);
-  const seedLocal = new THREE.Vector3(...(saved || getCameraSurveyDirection()));
-  const rootQuat = new THREE.Quaternion();
-  root.getWorldQuaternion(rootQuat);
-  // Both seeds are model-frame; the aim direction is tracked in world space.
-  const seedWorld = seedLocal.applyQuaternion(rootQuat).normalize();
-
-  const arrow = createSurveyPlacementArrow(metrics.radius);
-  root.add(arrow);
-  preview3DState.surveyArrow = arrow;
-  preview3DState.surveyRayLight = createSurveyRayLight(metrics, root);
-  setSurveyShadowsEnabled(true, jaw);
-  preview3DState.surveyAiming = {
-    jaw,
-    btn,
-    metrics,
-    dir: seedWorld.clone(),
-    aimDirty: true,
-  };
-
-  // While aiming, LEFT drags the arrow, but the jaw stays inspectable: rotation
-  // moves to the RIGHT button. TrackballControls hard-wires its case bodies
-  // (LEFT slot → rotate), so "rotate on right button" is expressed by pointing
-  // the LEFT slot at physical button 2 and unmapping the RIGHT slot.
-  const controls = preview3DState.controls;
-  if (controls) {
-    controls.noRotate = false;
-    controls.mouseButtons = { LEFT: 2, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: -1 };
-  }
-  preview3DState.surveyDragCleanup = attachSurveyAimDrag();
-  mount.classList.add("is-aiming-survey");
-
-  if (btn) {
-    btn.textContent = "SET";
-    btn.classList.add("is-aiming");
-    btn.title = "Confirm this placement direction and survey the jaw";
-  }
-  setSurveyCancelState(jaw, { visible: true, disabled: false });
-
-  // Focus the stage: maximize the panel and show only the armed jaw. Both the
-  // mesh and the row's is-hidden-jaw state move together (same contract as the
-  // row icon toggles). Restored on cancel/Esc; kept after a successful SET so
-  // the undercut result stays big and unobstructed.
-  preview3DState.surveyPrevVisibility = {
-    upper: preview3DState.groups?.upper?.visible,
-    lower: preview3DState.groups?.lower?.visible,
-  };
-  setSurveyJawVisible(jaw, true);
-  setSurveyJawVisible(jaw === "upper" ? "lower" : "upper", false);
-  const shell = document.querySelector(".annotation-shell");
-  if (shell && !shell.classList.contains("preview-maximized")) {
-    // Route through the maximize button so 2DAnnotation.js stays the single
-    // owner of panel-mode state (class, icon swap, stored preference, resize).
-    document.getElementById("preview3dMaximizeBtn")?.click();
-    preview3DState.surveyAutoMaximized = true;
-  }
-  // Lock out the other jaw: only one placement direction is being aimed at a
-  // time, and its button is the SET confirm.
-  const otherRow = jaw === "upper" ? "rowLower" : "rowUpper";
-  preview3DState.topControls?.[otherRow]?.surveyBtn?.setAttribute("disabled", "true");
-
-  const hint = preview3DState.surveyHint || createSurveyHint(mount);
-  hint.querySelector(".jaw-preview-survey-hint-jaw").textContent =
-    jaw === "upper" ? "UPPER" : "LOWER";
-  hint.classList.add("is-on");
-  preview3DState.surveyHint = hint;
-
-  preview3DState.surveyKeyHandler = (e) => {
-    if (e.key === "Escape") exitSurveyAiming();
-  };
-  window.addEventListener("keydown", preview3DState.surveyKeyHandler);
-
-  updateSurveyPlacementArrow();
-}
-
-function exitSurveyAiming({ preserveStage = false } = {}) {
-  const aiming = preview3DState.surveyAiming;
-  const arrow = preview3DState.surveyArrow;
-
-  if (arrow) {
-    arrow.parent?.remove(arrow);
-    arrow.traverse((obj) => obj.geometry?.dispose?.());
-    arrow.userData.surveyArrowMaterial?.dispose?.();
-    arrow.userData.surveyBeamMaterial?.dispose?.();
-  }
-  preview3DState.surveyArrow = null;
-
-  const rayLight = preview3DState.surveyRayLight;
-  if (rayLight) {
-    rayLight.userData.surveyRayTarget?.parent?.remove(rayLight.userData.surveyRayTarget);
-    rayLight.parent?.remove(rayLight);
-    rayLight.shadow?.map?.dispose?.();
-    rayLight.dispose?.();
-  }
-  preview3DState.surveyRayLight = null;
-  setSurveyShadowsEnabled(false);
-
-  // Restore the default button map (left rotate / right pan-slot, which stays
-  // locked by noPan) and drop the drag-to-aim listeners.
-  if (preview3DState.controls) {
-    preview3DState.controls.noRotate = false;
-    preview3DState.controls.mouseButtons = {
-      LEFT: THREE.MOUSE.ROTATE,
-      MIDDLE: THREE.MOUSE.DOLLY,
-      RIGHT: THREE.MOUSE.PAN,
-    };
-  }
-  preview3DState.surveyDragCleanup?.();
-  preview3DState.surveyDragCleanup = null;
-  preview3DState.mount?.classList.remove("is-aiming-survey");
-
-  if (aiming?.btn) {
-    aiming.btn.textContent = "SET SURVEY ANGLE";
-    aiming.btn.classList.remove("is-aiming");
-    aiming.btn.removeAttribute("title");
-  }
-  preview3DState.topControls?.rowUpper?.surveyBtn?.removeAttribute("disabled");
-  preview3DState.topControls?.rowLower?.surveyBtn?.removeAttribute("disabled");
-  for (const key of ["rowUpper", "rowLower"]) {
-    const cancel = preview3DState.topControls?.[key]?.cancelBtn;
-    if (cancel) {
-      cancel.classList.remove("is-on");
-      cancel.disabled = false;
-    }
-  }
-
-  // Cancel/Esc puts the stage back exactly as it was; a successful SET keeps
-  // the maximized, isolated view so the fresh heatmap can be inspected.
-  const prevVis = preview3DState.surveyPrevVisibility;
-  if (!preserveStage && prevVis) {
-    if (prevVis.upper !== undefined) setSurveyJawVisible("upper", !!prevVis.upper);
-    if (prevVis.lower !== undefined) setSurveyJawVisible("lower", !!prevVis.lower);
-  }
-  preview3DState.surveyPrevVisibility = null;
-  if (!preserveStage && preview3DState.surveyAutoMaximized) {
-    const shell = document.querySelector(".annotation-shell");
-    if (shell?.classList.contains("preview-maximized")) {
-      document.getElementById("preview3dMaximizeBtn")?.click();
-    }
-  }
-  preview3DState.surveyAutoMaximized = false;
-
-  preview3DState.surveyHint?.classList.remove("is-on");
-
-  if (preview3DState.surveyKeyHandler) {
-    window.removeEventListener("keydown", preview3DState.surveyKeyHandler);
-    preview3DState.surveyKeyHandler = null;
-  }
-  preview3DState.surveyAiming = null;
-}
-
-// SET SURVEY ANGLE is a two-step control: first click arms the jaw and shows the
-// placement arrow, second click (now labelled SET) commits.
-function handleSurveyButtonClick(jaw, btn) {
-  if (preview3DState.surveyAiming?.jaw === jaw) {
-    // A cancel click mid-save would null the aim before saveSurveyAngle reads
-    // it (its first await comes earlier), so lock cancel out for the duration.
-    setSurveyCancelState(jaw, { disabled: true });
-    saveSurveyAngle(jaw, btn);
-    return;
-  }
-  enterSurveyAiming(jaw, btn);
-}
-
-function setSurveyJawVisible(jaw, visible) {
-  const group = preview3DState.groups?.[jaw];
-  if (!group) return;
-  group.visible = visible;
-  const rowKey = jaw === "upper" ? "rowUpper" : "rowLower";
-  preview3DState.topControls?.[rowKey]?.row?.classList.toggle("is-hidden-jaw", !visible);
-}
-
-// Show/hide + enable/disable the per-jaw CANCEL buttons beside SET.
-function setSurveyCancelState(jaw, { visible, disabled } = {}) {
-  for (const key of ["rowUpper", "rowLower"]) {
-    const btn = preview3DState.topControls?.[key]?.cancelBtn;
-    if (!btn) continue;
-    const isArmedRow = jaw === (key === "rowUpper" ? "upper" : "lower");
-    if (visible !== undefined) btn.classList.toggle("is-on", visible && isArmedRow);
-    if (disabled !== undefined) btn.disabled = disabled && isArmedRow;
-  }
-}
-
-async function saveSurveyAngle(jaw, btn) {
-  const camera = preview3DState.camera;
-  const controls = preview3DState.controls;
-  if (!camera || !controls || !state.caseIntID) return;
-
-  if (!preview3DState.caseData) {
-    preview3DState.caseData = await fetchCaseData();
-  }
-  if (!preview3DState.caseData) {
-    console.warn("[preview3D] cannot save survey angle: case data unavailable");
-    return;
-  }
-
-  // What the arrow is pointing at is what gets surveyed. Falls back to the camera
-  // orbit if we somehow get here without an armed jaw.
-  const aimWorld = surveyAimWorldDirection() || getWorldSurveyDirection();
-  const worldVec = aimWorld ? aimWorld.clone().normalize() : new THREE.Vector3(0, 1, 0);
-  // The DLL consumes the aim in the mesh's local frame.
-  const surveyDirection = worldToLocalSurveyDirection(worldVec) || getCameraSurveyDirection();
-  // Store desktop's encoding: un-apply the per-jaw flip, so desktop's own flip (and
-  // our reload path) turns the stored vector back into exactly this DLL direction.
-  const [x, y, z] = desktopSurveyFlip(jaw, surveyDirection);
-  const current = preview3DState.caseData;
-  const updated = { ...current };
-  if (jaw === "upper") {
-    updated.upper_insertion_angle_x = x;
-    updated.upper_insertion_angle_y = y;
-    updated.upper_insertion_angle_z = z;
-  } else {
-    updated.lower_insertion_angle_x = x;
-    updated.lower_insertion_angle_y = y;
-    updated.lower_insertion_angle_z = z;
-  }
-
-  const user = getLoggedInUser();
-  const uuid = user?.uuid || PREVIEW_FALLBACK_UUID;
-  const auth = {
-    machine_id: PREVIEW_MACHINE_ID,
-    uuid,
-    caseIntID: state.caseIntID,
-  };
-  const caseBody = {
-    case_id: updated.case_id || "",
-    upper_insertion_angle_x: Number(updated.upper_insertion_angle_x) || 0,
-    upper_insertion_angle_y: Number(updated.upper_insertion_angle_y) || 0,
-    upper_insertion_angle_z: Number(updated.upper_insertion_angle_z) || 0,
-    lower_insertion_angle_x: Number(updated.lower_insertion_angle_x) || 0,
-    lower_insertion_angle_y: Number(updated.lower_insertion_angle_y) || 0,
-    lower_insertion_angle_z: Number(updated.lower_insertion_angle_z) || 0,
-    process_upper: Number(updated.process_upper) || 0,
-    process_lower: Number(updated.process_lower) || 0,
-  };
-
-  // btn may currently read "SET" (aiming mode), so restore the canonical label
-  // rather than whatever it happened to say when we were called.
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = "SAVING…";
-  }
-
-  const path = `/case/${state.caseIntID}`;
-  if (btn) btn.textContent = "SURVEYING...";
-  const t0 = performance.now();
-  try {
-    const res = await fetch(`${SMARTRPD_API_BASE}${path}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([auth, caseBody]),
-    });
-    const dt = Math.round(performance.now() - t0);
-    const tag = res.ok ? "✓" : "✕";
-    console.log(`[preview3D] ${tag} PUT ${path} status=${res.status} ${dt}ms`);
-    if (!res.ok) return;
-    preview3DState.caseData = updated;
-
-    if (btn) btn.textContent = "COMPUTING...";
-    const dllResult = await computeSurveyingNoPdForJaw(jaw, surveyDirection);
-    const dllSurface = buildDllUndercutSurface(jaw, dllResult);
-    if (!dllSurface) {
-      throw new Error("DLL response did not include full surveying values");
-    }
-
-    const nextUndercut = {
-      ...(preview3DState.undercut || {}),
-      [jaw]: dllSurface,
-    };
-    await applySurveyUndercutToPreview(nextUndercut);
-    // The whole point of setting the angle is seeing the undercuts it produces,
-    // so reveal the heatmap instead of leaving the user to toggle it on.
-    setHeatmapEnabled(true);
-    toast?.success?.(`${jaw === "upper" ? "Upper" : "Lower"} survey angle applied.`);
-  } catch (err) {
-    console.error(`[preview3D] ✕ PUT ${path} failed`, err);
-    toast?.error?.(`Survey angle failed. ${err.message || err}`);
-  } finally {
-    // Drops the placement arrow and resets the button back to SET SURVEY ANGLE.
-    exitSurveyAiming({ preserveStage: true });
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = "SET SURVEY ANGLE";
-    }
-  }
-}
-
-async function computeSurveyingNoPdForJaw(jaw, direction) {
-  if (!state.caseIntID) throw new Error("Case ID unavailable");
-  const user = getLoggedInUser();
-  const uuid = user?.uuid || PREVIEW_FALLBACK_UUID;
-  console.log("[preview3D] surveying direction request", {
-    jaw,
-    case_id: state.caseIntID,
-    type: getJawDbType(jaw),
-    direction,
-  });
-  const body = [
-    {
-      machine_id: PREVIEW_MACHINE_ID,
-      uuid,
-      caseIntID: state.caseIntID,
-    },
-    {
-      case_id: state.caseIntID,
-      type: getJawDbType(jaw),
-      dir: direction,
-      printFullSurveying: true,
-      returnSurveyingBase64: true,
-    },
-  ];
-
-  const path = "/dll/compute-surveying-no-pd";
-  const t0 = performance.now();
-  const res = await fetch(`${SMARTRPD_API_BASE}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const dt = Math.round(performance.now() - t0);
-  const tag = res.ok ? "✓" : "✕";
-  console.log(`[preview3D] ${tag} POST ${path} (${jaw}) status=${res.status} ${dt}ms`);
-
-  let json = null;
-  try {
-    json = await res.json();
-  } catch {
-    json = null;
-  }
-
-  if (!res.ok) {
-    throw new Error(json?.details || json?.error || `DLL surveying request failed with status ${res.status}`);
-  }
-  return json;
-}
-
-async function autoApplySavedSurveyAngles() {
-  if (!state.caseIntID) return;
-  if (!preview3DState.caseData) {
-    preview3DState.caseData = await fetchCaseData();
-  }
-
-  const caseData = preview3DState.caseData;
-  if (!caseData) return;
-
-  for (const jaw of ["upper", "lower"]) {
-    if (!preview3DState.groups[jaw]) {
-      console.log("[preview3D] saved survey auto-apply skipped: jaw mesh not loaded", {
-        jaw,
-        case_id: state.caseIntID,
-      });
-      continue;
-    }
-
-    const direction = savedSurveyDirectionForJaw(caseData, jaw);
-    if (!direction) {
-      console.log("[preview3D] saved survey auto-apply skipped: insertion angles missing", {
-        jaw,
-        case_id: state.caseIntID,
-        upper: {
-          x: caseData.upper_insertion_angle_x,
-          y: caseData.upper_insertion_angle_y,
-          z: caseData.upper_insertion_angle_z,
-        },
-        lower: {
-          x: caseData.lower_insertion_angle_x,
-          y: caseData.lower_insertion_angle_y,
-          z: caseData.lower_insertion_angle_z,
-        },
-      });
-      continue;
-    }
-
-    console.log("[preview3D] auto-applying saved survey direction", {
-      jaw,
-      case_id: state.caseIntID,
-      direction,
-    });
-
-    const dllResult = await computeSurveyingNoPdForJaw(jaw, direction);
-    const dllSurface = buildDllUndercutSurface(jaw, dllResult);
-    if (!dllSurface) continue;
-
-    const nextUndercut = {
-      ...(preview3DState.undercut || {}),
-      [jaw]: dllSurface,
-    };
-    await applySurveyUndercutToPreview(nextUndercut);
-    // Saved survey applied — auto-open the heatmap so entering the case lands
-    // straight on the undercut view.
-    setHeatmapEnabled(true);
-  }
-}
-
-function getJawDbType(jaw) {
-  return jaw === "upper" ? 1 : 2;
-}
-
 // ---- Camera framing and view navigation ----------------------------------
 
 function centerRootOnCombinedBounds(root) {
@@ -2966,10 +2034,7 @@ function fitPreviewCamera() {
   if (box.isEmpty()) return;
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
-  // Fit BOTH axes. This used to measure only the largest dimension against the
-  // vertical FOV, so on a wide viewport the arch width was padded against the wrong
-  // axis and the jaw opened at ~45% of the frame. Taking the larger of the vertical
-  // and horizontal requirements frames it tightly without overflowing either edge.
+  // Fit BOTH axes: take the larger of the vertical and horizontal distance needs.
   const FIT_PADDING = 1.3;
   const vFov = (camera.fov * Math.PI) / 180;
   const hFov = 2 * Math.atan(Math.tan(vFov / 2) * (camera.aspect || 1));
@@ -2978,15 +2043,13 @@ function fitPreviewCamera() {
   const distV = Math.max(size.y, size.z, 1) / 2 / Math.tan(vFov / 2);
   const distH = Math.max(size.x, 1) / 2 / Math.tan(hFov / 2);
   const fitDist = Math.max(distV, distH) * FIT_PADDING;
-  // Normalised so fitDist IS the camera distance — the old offset was 1.3 long,
-  // silently scaling the padding up by another 30%.
+  // Normalised so fitDist IS the camera distance.
   const viewOffset = new THREE.Vector3(0, 0.35, 1.25).normalize();
   camera.up.set(0, 1, 0);
   camera.position.copy(center).addScaledVector(viewOffset, fitDist);
   controls.target.copy(center);
   controls.update();
-  // OrbitControls had saveState(); TrackballControls doesn't. Call it only if
-  // present so we stay compatible if controls ever get swapped again.
+  // Call only if present (TrackballControls has no saveState).
   controls.saveState?.();
 }
 
