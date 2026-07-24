@@ -3044,18 +3044,15 @@ body,
 
 /* ============================================================================
    CASE DETAILS — fill the full-screen pane on mobile (<786px)
-   ----------------------------------------------------------------------------
-   Below 786px the details pane is a full-screen slide-in. The desktop fit rule
-   above (min-width: 786px) doesn't apply here, so without this the fields sit
-   packed at the top and leave empty space on tall phones.
-
-   Here the instructions box stretches to absorb the leftover height so the
-   content fills the screen — but, unlike the desktop rule, the body may grow
-   (flex-grow) and NOT shrink (flex-shrink: 0) and nothing is clipped, so when a
-   case has enough content to exceed the screen the pane simply scrolls and the
-   Start Case CTA stays reachable.
    ============================================================================ */
 @media (max-width: 785px) {
+  .cm-detail {
+  border-left: 1px solid var(--line);
+  background: var(--bg);
+  border-radius: 0%;
+  padding: 10px;
+  margin: 0px ;
+}
   .cm-detail-body {
     flex: 1 0 auto;
     min-height: 0;

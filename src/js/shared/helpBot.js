@@ -384,8 +384,3 @@ export function closePanel({ keepTranscript = false } = {}) {
     if (!keepTranscript) resetConversation({ focus: false });
   }, CLOSE_MS);
 }
-
-export function toggleHelpBot() {
-  if (root && root.classList.contains("is-open")) closePanel();
-  else openHelpBot();
-}

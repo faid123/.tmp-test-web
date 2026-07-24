@@ -1,8 +1,7 @@
 // Dedupe local + server noticeboard items by a stable key (title -> id ->
 // preview). On a key collision the server fields win, but local-only fields on
-// the matching item survive (shallow merge). Extracted from noticeboard.js so
-// the pure logic can be imported by both the app and its unit test (no DOM /
-// 2DAnnotation dependency).
+// the matching item survive (shallow merge). Pure (no DOM) so the app and its
+// unit test share it.
 export function mergeInstructions(localItems, serverItems) {
   const map = new Map();
   const keyOf = (item) => {
