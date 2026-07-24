@@ -764,23 +764,20 @@ async function downloadCaseFiles(caseIntId, caseLabel, apiStatus) {
 function statusPillClass(apiStatus) {
   const v = apiStatusToValue(apiStatus);
   if (!v || v === "na") return "cm-pill-na";
-  if (v === "completed" || v === "delivered") return "cm-pill-completed";
-  if (v === "draft") return "cm-pill-draft";
+  if (v === "completed") return "cm-pill-completed";
   // 2D/3D design approved (+ 3D drafted) read as orange to match the
   // Preparation card.
   if (
-    v === "2d_design_approved" ||
-    v === "3d_design_drafted" ||
-    v === "3d_design_approved"
+    v === "draft" ||
+   (v.endsWith("_pending") || v === "pending") ||
+   (v.endsWith("_drafted") || v === "drafted") ||
+   (v.endsWith("_approved") || v === "approved") 
   ) return "cm-pill-prep";
   if (
     v === "in_production" ||
     v === "out_for_delivery" ||
-    v.endsWith("_drafted") ||
-    v.endsWith("_approved")
+    v === "delivered" 
   ) return "cm-pill-progress";
-  if (v.endsWith("_pending") || v === "pending") return "cm-pill-pending";
-  return "cm-pill-progress";
 }
 
 // Exact status titles live in apiLog.js (shared with the dashboard and the

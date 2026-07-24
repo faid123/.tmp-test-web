@@ -441,7 +441,7 @@ button {
 
 .cm-main {
   min-width: 0;
-  padding: 14px 16px 12px 28px;
+  padding: 14px 8px 12px 28px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -461,6 +461,7 @@ button {
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--ink);
+  
 }
 
 .cm-titles p {
@@ -646,10 +647,9 @@ button {
   /* Stretch so the stat cards and the Create button share one height. */
   align-items: stretch;
   gap: 10px;
-  padding: 10px;
-  background: var(--panel);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
+  /* No surface of its own — the stat cards float on the page bg; vertical
+     padding gives the row breathing room against header and table. */
+  padding: 3px 0;
   /* Desktop: keep every control on one line. Tablet (≤860) re-enables wrap. */
   flex-wrap: nowrap;
 }
@@ -665,6 +665,9 @@ button {
 }
 /* …except the refresh button, which stays icon-sized. */
 .cm-toolbar > .cm-icon-btn { flex: 0 0 auto; }
+/* Create button hugs its label instead of soaking up leftover row space
+   (tablet ≤1100 overrides this with a full-width row of its own). */
+.cm-toolbar > .cm-btn-primary { flex: 0 0 auto; }
 
 .cm-chip {
   display: inline-flex;
@@ -847,10 +850,10 @@ button {
   text-align: left;
   padding: 14px 16px;
   font-size: 11px;
+  color:var(--ink);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--muted);
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
@@ -1075,17 +1078,20 @@ button {
 .cm-detail {
   border-left: 1px solid var(--line);
   background: var(--bg);
-  padding: 12px 10px 10px 10px;
+  padding: 5px 5px 5px 5px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin: 5px ;
 }
 
 .cm-image-area {
   position: relative;
   width: 100%;
-  aspect-ratio: 10 / 7.4;
+  aspect-ratio: 12 / 6;
   /* Keep the 12:6 shape on every screen. As a flex child of the scrolling
      .cm-detail column it defaults to flex-shrink:1, so on shorter viewports
      (Windows display scaling, mobile portrait) flexbox squished it below the
@@ -1224,7 +1230,7 @@ button {
 .cm-detail-body {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 14px;
 }
 
 .cm-detail-head {
@@ -1234,7 +1240,7 @@ button {
   gap: 12px;
 }
 .cm-detail-head h2 {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
 }
 
@@ -1243,12 +1249,12 @@ button {
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px;
 }
 
 .cm-field-label {
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--muted);
   letter-spacing: 0.07em;
@@ -1277,7 +1283,7 @@ button {
 }
 
 .cm-field-value {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--ink);
 }
@@ -1694,8 +1700,8 @@ button {
 @media (max-width: 860px) {
   .cm-page { grid-template-columns: 1fr; }
   .cm-main { padding: 20px 18px 14px; gap: 14px; }
-  .cm-titles h1 { font-size: 22px; }
-  .cm-toolbar { padding: 8px; gap: 8px; flex-wrap: wrap; }
+  .cm-titles h1 { font-size: 22px;}
+  .cm-toolbar { padding: 0; gap: 8px; flex-wrap: wrap; }
   .cm-detail {
     position: fixed;
     inset: 0;
@@ -2390,15 +2396,15 @@ body.is-admin .cm-admin-stats:not([hidden]) {
 .cm-stat-filter {
   flex: 1 1 0;
   min-width: 0;
-  min-height: 52px;
+  min-height: 38px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 12px;
+  gap: 8px;
+  padding: 5px 12px;
   border-radius: 10px;
   background: var(--line-soft);
-  border: 1px solid transparent;
+  border: 1px solid var(--stat-accent, var(--muted));
   border-left: 3px solid var(--stat-accent, var(--muted));
   color: var(--ink-soft);
   cursor: pointer;
@@ -2427,16 +2433,18 @@ body.is-admin .cm-admin-stats:not([hidden]) {
   white-space: nowrap;
 }
 .cm-stat-filter-sub {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--muted);
+  /* The sub is each card's only text (titles were dropped), so it reads as
+     the main label, not a faded caption. */
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .cm-stat-filter-count {
-  min-width: 30px;
-  height: 30px;
+  min-width: 26px;
+  height: 26px;
   padding: 0 8px;
   border-radius: 999px;
   display: inline-flex;
@@ -2467,6 +2475,8 @@ body.is-admin .cm-admin-stats:not([hidden]) {
 /* "All Cases" card — dark, to read as the master/reset control (carries the
    prominence the old dark chip had) while matching the card layout. */
 .cm-stat-filter-all {
+  /* Hug its content instead of stretching equally with the stage cards. */
+  flex: 0 0 auto;
   background: #0f172a;
   border-color: #0f172a;
   border-left-color: #0f172a;
@@ -2489,10 +2499,10 @@ body.is-admin .cm-admin-stats:not([hidden]) {
   color: #fff;
 }
 
-/* Tablet: reclaim space by dropping the descriptive sub-labels; the stage name
-   and count still carry the meaning. */
+/* Tablet: the sub is each card's only text, so it must stay visible. Reclaim
+   space by dropping the Create button to its own full-width row instead. */
 @media (max-width: 1100px) {
-  .cm-stat-filter-sub { display: none; }
+  .cm-toolbar > .cm-btn-primary { flex: 1 1 100%; }
 }
 
 /* Phone: the whole .cm-toolbar is already hidden, so the stat cards go with it.
@@ -2715,8 +2725,8 @@ body.is-admin .cm-admin-stats:not([hidden]) {
    the cascade. Visual only — no layout structure changed.
    ============================================================================ */
 
-/* Give the two main surfaces a crisp hairline border to sit cleanly on the bg. */
-.cm-toolbar,
+/* Crisp hairline border so the table sits cleanly on the bg (the toolbar has
+   no surface of its own — its stat cards float directly on the page). */
 .cm-table-wrap {
   border: 1px solid var(--line);
 }
@@ -2802,4 +2812,272 @@ body.is-admin .cm-stat-value {
 #machineDetail .cm-detail-cta {
   margin-top: 0;              /* let space-between handle the distribution */
   width: 100%;
+}
+
+
+/* ============================================================================
+   PREMIUM POLISH — case management view
+   ----------------------------------------------------------------------------
+   Appended last so these visual refinements win the same-specificity tie over
+   the base rules above. Intentionally limited to appearance (background,
+   border, shadow, radius, colour, transition) — no layout/positioning changes —
+   so the grid, flex and responsive behaviour defined earlier stay intact.
+   ============================================================================ */
+
+/* Crisper text rendering across the app. */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Soft, layered page backdrop instead of a flat grey — gives the surfaces on
+   top something to lift off of. */
+html,
+body,
+.cm-page {
+  background:
+    radial-gradient(1100px 460px at 100% -12%, rgba(59, 174, 149, 0.1), transparent 60%),
+    radial-gradient(860px 420px at -8% 112%, rgba(37, 115, 95, 0.07), transparent 55%),
+    #f3f6f8;
+}
+
+/* ---- header ---- */
+.cm-titles h1 {
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  background: linear-gradient(180deg, #12233b 0%, #24435f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.cm-header-search {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 10px 24px -18px rgba(15, 23, 42, 0.35);
+}
+.cm-header-search:focus-within {
+  box-shadow: 0 0 0 3px rgba(59, 174, 149, 0.2), 0 10px 24px -16px rgba(37, 115, 95, 0.45);
+}
+
+/* ---- header action buttons (bell / avatar) ---- */
+.cm-bell {
+  border: 1px solid rgba(15, 23, 42, 0.05);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 18px -14px rgba(15, 23, 42, 0.4);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.cm-bell:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08), 0 14px 26px -14px rgba(15, 23, 42, 0.45);
+}
+.cm-user-avatar.logout {
+  background: linear-gradient(180deg, #43b89e 0%, #2f9e83 100%);
+  box-shadow: 0 1px 2px rgba(37, 115, 95, 0.4), 0 10px 20px -12px rgba(37, 115, 95, 0.7);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+.cm-user-avatar.logout:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.03);
+}
+
+/* ---- stat filter cards: white surfaces that lift on hover ---- */
+.cm-stat-filter {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+  border-left: 3px solid var(--stat-accent, var(--muted));
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 10px 22px -18px rgba(15, 23, 42, 0.4);
+}
+.cm-stat-filter:hover {
+  background: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06), 0 16px 30px -18px rgba(15, 23, 42, 0.5);
+}
+.cm-stat-filter.is-active {
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06),
+    0 16px 30px -18px rgba(15, 23, 42, 0.45),
+    inset 0 0 0 1px var(--stat-accent);
+}
+.cm-stat-filter-all {
+  background: linear-gradient(160deg, #16273e 0%, #0f172a 100%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.3), 0 12px 24px -14px rgba(15, 23, 42, 0.7);
+}
+.cm-stat-filter-all:hover {
+  background: linear-gradient(160deg, #1e3350 0%, #16273e 100%);
+  transform: translateY(-2px);
+}
+
+/* ---- primary buttons: gradient + depth ---- */
+.cm-btn-primary {
+  background: linear-gradient(180deg, #43b89e 0%, #2f9e83 100%);
+  box-shadow: 0 1px 2px rgba(37, 115, 95, 0.35), 0 10px 20px -10px rgba(37, 115, 95, 0.6);
+}
+.cm-btn-primary:hover {
+  background: linear-gradient(180deg, #3bae95 0%, #25735f 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(37, 115, 95, 0.4), 0 14px 26px -10px rgba(37, 115, 95, 0.65);
+}
+.cm-btn-primary:active { transform: translateY(0); }
+
+/* ---- table: elevated card with a refined header ---- */
+.cm-table-wrap {
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 18px 40px -24px rgba(15, 23, 42, 0.4);
+}
+.cm-table thead th {
+  background: linear-gradient(180deg, #fbfdfc 0%, #f2f7f5 100%);
+  border-bottom: 1px solid var(--line);
+}
+.cm-row { transition: background 0.14s ease, box-shadow 0.14s ease; }
+.cm-row:hover { background: #f4faf8; }
+.cm-row.is-active {
+  background: #ecf8f3;
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+.cm-table-wrap::-webkit-scrollbar-thumb { background: #cbd5e1; }
+.cm-table-wrap::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ---- status pills: subtle hairline ring ---- */
+.cm-pill {
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.05);
+}
+
+/* ---- detail panel: soft panel surface + refined media ---- */
+.cm-detail {
+  background: linear-gradient(180deg, #ffffff 0%, #f6faf9 100%);
+  border-left: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow: -18px 0 40px -34px rgba(15, 23, 42, 0.45);
+}
+.cm-image-area {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+.cm-image-nav {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.cm-detail-head h2 {
+  letter-spacing: -0.01em;
+}
+
+/* ---- create-case form + upload surfaces ---- */
+.cc-form-pane,
+.cc-upload-pane { border-radius: 14px; }
+
+
+/* ============================================================================
+   CASE DETAILS — paneled card with width-responsive item spacing
+   ----------------------------------------------------------------------------
+   The details section reads as a distinct card (surface + border + shadow),
+   and its field rows are separated by hairline dividers instead of a flat gap.
+   Row padding and the label/value gap scale with the viewport width via
+   clamp(), so the items breathe on wide screens and tighten on narrow ones
+   while staying aligned in the two-column (label left / value right) read.
+   ============================================================================ */
+.cm-detail-body {
+  gap: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 0 clamp(8px, 1vw, 12px) clamp(6px, 1vw, 12px);
+}
+.cm-detail-head {
+  padding: clamp(10px, 1.3vw, 14px) 0 clamp(8px, 1.1vw, 12px);
+  margin-bottom: clamp(2px, 0.6vw, 6px);
+  border-bottom: 1px solid var(--line);
+}
+.cm-field {
+  padding: clamp(7px, 1vw, 11px) 0;
+  gap: clamp(10px, 2.4vw, 22px);
+  border-bottom: 1px solid var(--line-soft);
+}
+.cm-field:last-child { border-bottom: none; }
+
+
+/* ============================================================================
+   CASE DETAILS — fit the column to its height (no scroll) on desktop
+   ----------------------------------------------------------------------------
+   The details column has a fixed height (the grid's 1fr row). Rather than
+   scrolling when the content is tall, the case-instructions box is made the
+   elastic element: it grows to absorb the leftover space (and scrolls
+   internally for very long notes), so the image, fields and the Start Case CTA
+   all stay visible without a panel scrollbar.
+
+   Scoped to >860px only. At ≤860px the details pane is a full-screen slide-in
+   (position: fixed; inset: 0) and KEEPS its scroll — otherwise a long note
+   could push the Start Case button off the bottom of the screen.
+   ============================================================================ */
+@media (min-width: 786px) {
+  .cm-detail {
+    overflow: hidden;
+    min-height: 0;
+  }
+  /* The fields panel takes the space left after the image, nav and CTA; its own
+     overflow is clipped so that, on a viewport too short to fit everything, the
+     content can never spill out and paint over the CTA below it. */
+  .cm-detail-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+  /* Keep the image and the Start Case CTA at their natural size — only the
+     fields panel (and the instructions box) flexes, so the CTA stays visible. */
+  .cm-image-area { flex: 0 0 auto; }
+  .cm-detail-cta { flex: 0 0 auto; }
+  /* The instructions row (and its textarea) is the part that stretches. */
+  .cm-field:has(.cm-instructions-wrap) {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .cm-instructions-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .cm-instructions {
+    flex: 1 1 auto;
+    min-height: 56px;   /* floor so it never collapses to nothing on short screens */
+    max-height: none;   /* fill the available height; long notes scroll inside */
+  }
+}
+
+
+/* ============================================================================
+   CASE DETAILS — fill the full-screen pane on mobile (<786px)
+   ----------------------------------------------------------------------------
+   Below 786px the details pane is a full-screen slide-in. The desktop fit rule
+   above (min-width: 786px) doesn't apply here, so without this the fields sit
+   packed at the top and leave empty space on tall phones.
+
+   Here the instructions box stretches to absorb the leftover height so the
+   content fills the screen — but, unlike the desktop rule, the body may grow
+   (flex-grow) and NOT shrink (flex-shrink: 0) and nothing is clipped, so when a
+   case has enough content to exceed the screen the pane simply scrolls and the
+   Start Case CTA stays reachable.
+   ============================================================================ */
+@media (max-width: 785px) {
+  .cm-detail-body {
+    flex: 1 0 auto;
+    min-height: 0;
+  }
+  /* Keep the CTA at full size so it's never squeezed. */
+  .cm-detail-cta {
+    flex: 0 0 auto;
+  }
+  /* The instructions row (and its textarea) takes the slack. */
+  .cm-field:has(.cm-instructions-wrap) {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .cm-instructions-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .cm-instructions {
+    flex: 1 1 auto;
+    min-height: 96px;
+    max-height: none;
+  }
 }

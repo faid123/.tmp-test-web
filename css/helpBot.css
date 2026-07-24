@@ -1,0 +1,306 @@
+/* Help assistant — slide-in panel opened from the sidebar Help item.
+   Mirrors the case-chat sidebar pattern (full-screen overlay + backdrop that
+   closes on outside click + a panel that slides in via transform), but under
+   its own hb- prefix so it can sit on the same pages as #chat-widget without
+   either one styling the other. Injected by helpBot.js on first open.
+
+   Tokens are re-declared locally: the panel is appended to <body> on every
+   page, including ones that don't load case_list.css. */
+
+#help-bot {
+  --hb-panel: #ffffff;
+  --hb-ink: #0f172a;
+  --hb-ink-soft: #475569;
+  --hb-muted: #94a3b8;
+  --hb-line: #e2e8f0;
+  --hb-line-soft: #f1f5f9;
+  --hb-primary: #3bae95;
+  --hb-primary-soft: #d4f0e8;
+  --hb-primary-dark: #25735f;
+
+  position: fixed;
+  inset: 0;
+  z-index: 1300; /* above the app sidebar (1100) and case chat (1200) */
+  pointer-events: none;
+  font-family: Arial, Helvetica, sans-serif;
+}
+#help-bot.is-hidden {
+  display: none;
+}
+
+.hb-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(11, 18, 28, 0.35);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: auto;
+}
+#help-bot.is-open .hb-backdrop {
+  opacity: 1;
+}
+
+.hb-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: min(380px, 90vw);
+  background: var(--hb-panel);
+  box-shadow: -2px 0 16px rgba(15, 23, 42, 0.18);
+  transform: translateX(100%);
+  transition: transform 0.22s ease;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  pointer-events: auto;
+  color: var(--hb-ink);
+  font-family: Arial, sans-serif;
+}
+#help-bot.is-open .hb-panel {
+  transform: translateX(0);
+}
+
+/* ------------------------------------------------------------------ header */
+
+.hb-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 2px 12px;
+  margin: 0;
+}
+.hb-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hb-title {
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.1;
+}
+.hb-context {
+  font-size: 12px;
+  color: var(--hb-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hb-icon-btn {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  color: #6b7280;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+.hb-icon-btn:hover {
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--hb-ink);
+}
+.hb-close {
+  font-size: 22px;
+}
+
+/* --------------------------------------------------------------------- log */
+
+.hb-log {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #f9f9f9;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.hb-msg {
+  border-radius: 16px;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  max-width: 80%;
+  color: #333;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+}
+/* Bot replies: left side, white bubble with a hairline (chat "theirs"). */
+.hb-msg.is-bot {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  align-self: flex-start;
+}
+/* User questions: right side, light-green bubble (chat "mine"). */
+.hb-msg.is-user {
+  background: #dcf8c6;
+  color: #333;
+  align-self: flex-end;
+}
+.hb-msg.hb-typing {
+  color: var(--hb-muted);
+  letter-spacing: 2px;
+}
+
+.hb-answer-title {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.hb-answer-text {
+  margin: 0;
+  color: var(--hb-ink-soft);
+}
+.hb-steps {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: var(--hb-ink-soft);
+}
+.hb-steps li {
+  margin-bottom: 4px;
+}
+.hb-steps li:last-child {
+  margin-bottom: 0;
+}
+
+/* ----------------------------------------------------------------- actions */
+
+.hb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.hb-action {
+  appearance: none;
+  border: none;
+  background: #2aa67c;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 7px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hb-action:hover {
+  background: #23916c;
+}
+
+.hb-chips-label {
+  margin-top: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--hb-muted);
+}
+.hb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.hb-chip {
+  border: 1px solid var(--hb-line);
+  background: var(--hb-line-soft);
+  color: var(--hb-ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  text-align: left;
+}
+.hb-chip:hover {
+  background: var(--hb-primary-soft);
+  border-color: var(--hb-primary);
+  color: var(--hb-primary-dark);
+}
+
+/* ------------------------------------------------------------------- input */
+
+.hb-input {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+.hb-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  box-sizing: border-box;
+}
+.hb-field:focus {
+  outline: none;
+  border-color: var(--hb-primary);
+  box-shadow: 0 0 0 3px var(--hb-primary-soft);
+}
+.hb-send {
+  flex: 0 0 60px;
+  border: none;
+  background: #2aa67c;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.hb-send:hover {
+  background: #23916c;
+}
+
+/* --------------------------------------------------------------- highlight */
+
+/* Applied by "Show me" to the control being described. Ringed with box-shadow
+   rather than outline/border so it never shifts the page's layout. */
+.hb-highlight {
+  animation: hb-pulse 1.1s ease-out 3;
+  border-radius: 8px;
+  position: relative;
+  z-index: 1250;
+}
+@keyframes hb-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 174, 149, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(59, 174, 149, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 174, 149, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hb-highlight {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--hb-primary, #3bae95);
+  }
+  .hb-panel,
+  .hb-backdrop {
+    transition: none;
+  }
+}

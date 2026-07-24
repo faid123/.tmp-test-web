@@ -103,13 +103,29 @@ export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../.
     window.location.href = indexHref;
   });
 
-  document.getElementById("sidebarChangePasswordBtn")?.addEventListener("click", () => {
+  // Change password runs the same emailed-key flow as the login page's forgot
+  // view, with the address taken from the session. Imported on click.
+  document.getElementById("sidebarChangePasswordBtn")?.addEventListener("click", async () => {
     close();
-    toast.info("Change password — coming soon.");
+    try {
+      const { openChangePassword } = await import("./changePassword.js");
+      openChangePassword();
+    } catch (err) {
+      console.error("[appSidebar] change password failed to load:", err);
+      toast.error("Change password is unavailable right now.");
+    }
   });
-  document.getElementById("sidebarHelpBtn")?.addEventListener("click", () => {
+  // Help opens the in-app assistant. Imported on click so the panel, its
+  // knowledge base and its stylesheet only load for users who ask for help.
+  document.getElementById("sidebarHelpBtn")?.addEventListener("click", async () => {
     close();
-    toast.info("Help — coming soon.");
+    try {
+      const { openHelpBot } = await import("./helpBot.js");
+      openHelpBot();
+    } catch (err) {
+      console.error("[appSidebar] help assistant failed to load:", err);
+      toast.error("Help is unavailable right now.");
+    }
   });
   document.getElementById("sidebarReportIssueBtn")?.addEventListener("click", () => {
     close();
