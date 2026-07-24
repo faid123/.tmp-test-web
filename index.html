@@ -370,6 +370,9 @@
       </div>
     </div>
 
-    <script src="./src/js/pages/login.js"></script>
+    <!-- Module (not a plain script) so it can share shared/passwordReset.js
+         with the in-app Change Password flow. Deferred like all modules, which
+         is fine — the wiring below runs on DOMContentLoaded. -->
+    <script type="module" src="./src/js/pages/login.js"></script>
   </body>
 </html>

@@ -10,6 +10,9 @@
     <link rel="stylesheet" href="../../css/versionHistory.css" />
     <link rel="stylesheet" href="../../css/toast.css" />
     <link rel="stylesheet" href="../../css/dashboard.css" />
+    <!-- Shared app shell (sidebar + footer). Loaded last so it unifies the
+         look across case_list, 2DAnnotation and ThreeDViewer. -->
+    <link rel="stylesheet" href="../../css/app-shell.css" />
     <link rel="icon" href="../../assets/profile.png" type="image/png" />
     <link
       rel="stylesheet"
@@ -192,7 +195,6 @@
               title="Draft through 3D design approved"
             >
               <span class="cm-stat-filter-text">
-                <span class="cm-stat-filter-label">Preparation</span>
                 <span class="cm-stat-filter-sub">Draft &rarr; 3D approved</span>
               </span>
               <span class="cm-stat-filter-count" id="statPreparationCount">0</span>
@@ -206,7 +208,6 @@
               title="In production through delivered"
             >
               <span class="cm-stat-filter-text">
-                <span class="cm-stat-filter-label">Delivery</span>
                 <span class="cm-stat-filter-sub">In production &rarr; delivered</span>
               </span>
               <span class="cm-stat-filter-count" id="statDeliveryCount">0</span>
@@ -220,8 +221,7 @@
               title="Completed"
             >
               <span class="cm-stat-filter-text">
-                <span class="cm-stat-filter-label">Completed</span>
-                <span class="cm-stat-filter-sub">Finished cases</span>
+                <span class="cm-stat-filter-sub">Completed</span>
               </span>
               <span class="cm-stat-filter-count" id="statCompletedCount">0</span>
             </button>
