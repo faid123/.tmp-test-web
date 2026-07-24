@@ -1014,7 +1014,7 @@ async function resetJawStructDesignToBaseline() {
 // Returns saveJawStructFromState's { upper, lower } per-jaw result, or
 // { ok: false, reason } when it can't run (no case / not logged in).
 // Endpoint + payload shape verified against the live backend (POST
-// /jawstruct/l2 → {"successful":true}; see put_jawstruct_debug.sh).
+// /jawstruct/l2 → {"successful":true}; see legacy/put_jawstruct_debug.sh).
 // Used by the Save button and by the (off-by-default) autosave hook below.
 export async function postJawStructToServer() {
   if (!state.caseIntID) {

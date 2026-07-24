@@ -1,0 +1,200 @@
+PASS __tests__/mergeInstructions.test.mjs
+  mergeInstructions()
+    √ merges a server item onto the local item sharing the same title key (12 ms)
+    √ keeps items with distinct keys separate
+    √ falls back from title to id to preview when building the key (1 ms)
+    √ title takes precedence over id when both are present (1 ms)
+    √ tolerates null / undefined inputs (1 ms)
+
+PASS __tests__/crypt.test.mjs
+  lol function (encrypt/decrypt)
+    √ should encrypt and decrypt numeric case ID correctly (10 ms)
+    √ should return different encryption for different IDs
+    √ should handle invalid encrypted input gracefully and return NaN
+
+PASS __tests__/clinicalInfoCodec.test.mjs
+  clinical-info .NET envelope codec
+    √ encode emits a valid .NET BinaryFormatter single-String envelope (12 ms)
+    √ the 7-bit length prefix matches the byte length of the embedded JSON (1 ms)
+    √ encode is deterministic (1 ms)
+    √ decode reads a desktop-authored blob (not produced by our encoder) (1 ms)
+    √ decode walks the envelope even when a length byte equals "[" (0x5B) (4 ms)
+    √ decode tolerates junk / non-array payloads
+  desktop <-> UI field mapping
+    √ decodes desktop int-enums and bools into UI values
+    √ "none" sentinels (mobility 0, restoration 4, tilt 6) decode to null; presence 1 = missing (1 ms)
+    √ write emits all 32 teeth in desktop arch order with desktop field names
+    √ UI "none" values write back to the desktop sentinels, not 0
+    √ absent notes default to present (0); explicit present:false writes ToothPresence 1 (1 ms)
+  full round-trip
+    √ notes -> rows -> encode -> decode -> notes is lossless across every marker (1 ms)
+    √ decode∘encode is idempotent on a full default 32-tooth chart (2 ms)
+
+PASS __tests__/reciprocatingExclusivity.test.mjs
+  reciprocating element is mutually exclusive (clasp XOR plate)
+    √ placing plate-prox when tooth already has ... conflicts (10 ms)
+    √ placing plate-crossmesh when tooth already has ... conflicts
+    √ placing reciprocating-clasp when tooth already has ... conflicts (1 ms)
+    √ placing reciprocating-clasp when tooth already has ... conflicts (4 ms)
+    √ placing plate-prox when tooth already has ... conflicts
+    √ placing plate-crossmesh when tooth already has ... conflicts
+    √ a retainer clasp may coexist with a reciprocal plate (valid clasp assembly) (1 ms)
+  addPlacement enforces the single reciprocating slot
+    √ placing a reciprocating clasp drops a pre-existing plate (and vice versa) (1 ms)
+    √ a retainer clasp + reciprocal plate both survive (different slot) (1 ms)
+
+PASS __tests__/importResolution.test.mjs
+  √ every relative import in src/ resolves to an existing file (40 ms)
+  √ every relative import and jest.mock in __tests__/ resolves (5 ms)
+  √ every relative <script src> in the HTML pages resolves (5 ms)
+
+PASS __tests__/dashboard.test.mjs
+  statusRank()
+    √ returns 0 for absent / empty / default-0 statuses (12 ms)
+    √ returns 0 for an unrecognised status with no known keyword
+    √ matches confirmed exact value jaw_prepared -> 1
+    √ ranks the real case-1723 value 'polylines' -> 4 (1 ms)
+    √ infers rank from a keyword regardless of exact wording (1 ms)
+    √ is case- and whitespace-insensitive
+    √ a later-stage keyword takes precedence (checked high -> low)
+  computeSteps()
+    √ always returns the 5 stages, each with an Upper and a Lower line (2 ms)
+    √ nothing done when both jaws have the default status
+    √ case 1723 ('polylines'/'polylines'): steps 1-4 done, step 5 pending
+    √ per-jaw independence: upper prepared, lower still at default
+    √ a fully-surfaced case marks every stage done (1 ms)
+  countCompletedStages()
+    √ counts only stages where BOTH jaws are done
+    √ a stage with only one jaw done does not count as complete
+    √ 0 when nothing is done, 5 when fully surfaced (1 ms)
+    √ tolerates empty / nullish input
+  resolveCaptureSlots()
+    √ maps rows to their slot (0=2D, 1=upper, 2=lower) regardless of order (1 ms)
+    √ tolerates slot_index / slot_id field-name variants
+    √ skips rows without data and keeps the first row for a duplicate slot
+    √ falls back to positional order when no rows carry a slot tag (1 ms)
+    √ returns an empty map for empty / nullish input
+
+  console.log
+    [jawStructApply] upper: resolved {
+      present: 11,
+      placements: 17,
+      bars: 0,
+      meshSpans: 1,
+      major: 'major-upper-horseshoe'
+    } -> placed on teeth { rest: 3, clasp: 3, bar: 0, mesh: 3, plate: 11, major: 16 } | major placedOn=[11,12,13,14,15,16,17,18,21,22,23,24,25,26,27,28]
+
+      at log (src/js/2D/jawStructApply.js:130:11)
+
+  console.log
+    [jawStructApply] upper: resolved {
+      present: 11,
+      placements: 17,
+      bars: 0,
+      meshSpans: 1,
+      major: 'major-upper-horseshoe'
+    } -> placed on teeth { rest: 3, clasp: 3, bar: 0, mesh: 3, plate: 11, major: 16 } | major placedOn=[11,12,13,14,15,16,17,18,21,22,23,24,25,26,27,28]
+
+      at log (src/js/2D/jawStructApply.js:130:11)
+
+  console.log
+    [jawStructApply] lower: resolved {
+      present: 12,
+      placements: 15,
+      bars: 1,
+      meshSpans: 1,
+      major: 'major-lower-lingual-plate'
+    } -> placed on teeth { rest: 2, clasp: 1, bar: 1, mesh: 2, plate: 12, major: 16 } | major placedOn=[31,32,33,34,35,36,37,38,41,42,43,44,45,46,47,48]
+
+      at log (src/js/2D/jawStructApply.js:130:11)
+
+  console.log
+    [jawStructApply] lower: resolved {
+      present: 12,
+      placements: 15,
+      bars: 1,
+      meshSpans: 1,
+      major: 'major-lower-lingual-plate'
+    } -> placed on teeth { rest: 2, clasp: 1, bar: 1, mesh: 2, plate: 12, major: 16 } | major placedOn=[31,32,33,34,35,36,37,38,41,42,43,44,45,46,47,48]
+
+      at log (src/js/2D/jawStructApply.js:130:11)
+
+  console.log
+    [jawStructApply] lower: resolved {
+      present: 12,
+      placements: 10,
+      bars: 0,
+      meshSpans: 2,
+      major: 'major-lower-lingual-bar'
+    } -> placed on teeth { rest: 6, clasp: 4, bar: 0, mesh: 4, plate: 0, major: 16 } | major placedOn=[31,32,33,34,35,36,37,38,41,42,43,44,45,46,47,48]
+
+      at log (src/js/2D/jawStructApply.js:130:11)
+
+  console.log
+    [jawStructApply] lower: resolved {
+      present: 12,
+      placements: 10,
+      bars: 0,
+      meshSpans: 2,
+      major: 'major-lower-lingual-bar'
+    } -> placed on teeth { rest: 6, clasp: 4, bar: 0, mesh: 4, plate: 0, major: 16 } | major placedOn=[31,32,33,34,35,36,37,38,41,42,43,44,45,46,47,48]
+
+      at log (src/js/2D/jawStructApply.js:130:11)
+
+  console.log
+    after->bar: lowerHasBar= true mc= Major Connector Type: 6
+
+      at Object.log (__tests__/jawStructMajorSwitch.test.mjs:81:13)
+
+  console.log
+    [jawStructApply] lower: resolved {
+      present: 12,
+      placements: 22,
+      bars: 0,
+      meshSpans: 2,
+      major: 'major-lower-lingual-plate'
+    } -> placed on teeth { rest: 6, clasp: 4, bar: 0, mesh: 4, plate: 12, major: 16 } | major placedOn=[31,32,33,34,35,36,37,38,41,42,43,44,45,46,47,48]
+
+      at log (src/js/2D/jawStructApply.js:130:11)
+
+  console.log
+    after->plate: placed majors= { 'major-lower-lingual-plate': 14 } mc= Major Connector Type: 7
+
+      at Object.log (__tests__/jawStructMajorSwitch.test.mjs:89:13)
+
+  console.log
+    [jawStructApply] lower: resolved {
+      present: 12,
+      placements: 15,
+      bars: 1,
+      meshSpans: 1,
+      major: 'major-lower-lingual-plate'
+    } -> placed on teeth { rest: 2, clasp: 1, bar: 1, mesh: 2, plate: 12, major: 16 } | major placedOn=[31,32,33,34,35,36,37,38,41,42,43,44,45,46,47,48]
+
+      at log (src/js/2D/jawStructApply.js:130:11)
+
+PASS __tests__/jawStructRoundTrip.test.mjs
+  jaw-struct load -> save round-trip (no edits)
+    √ upper_jaw: saved text equals loaded text (19 ms)
+    √ lower_jaw: saved text equals loaded text (5 ms)
+
+PASS __tests__/jawStructLingualPlate.test.mjs
+  lower lingual plate: web reproduces desktop geometry
+    √ loaded BAR round-trips to the desktop bar file (59 ms)
+    √ BAR -> switch to PLATE encodes the desktop plate file (6 ms)
+    √ loading a lingual PLATE creates one plate-prox per present tooth (6 ms)
+    √ PLATE -> switch to BAR -> reopen stays a clean bar (no leftover plate-prox) (8 ms)
+
+PASS __tests__/jawStructMajorSwitch.test.mjs
+  lower major connector bar <-> plate switch
+    √ loaded design encodes lingual plate (7) (17 ms)
+    √ switch to lingual bar encodes 6 (10 ms)
+    √ switch back to lingual plate encodes 7 (5 ms)
+    √ bar->plate now changes the type label AND the connector geometry grid (16 ms)
+
+Test Suites: 9 passed, 9 total
+Tests:       64 passed, 64 total
+Snapshots:   0 total
+Time:        2.593 s
+Ran all test suites.
+Test results written to: .jest-run-result.tmp.json

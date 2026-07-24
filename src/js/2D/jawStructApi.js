@@ -6,7 +6,7 @@
  * Both endpoints are live: fetch via POST /jawstruct/l2/getall, save via
  * POST /jawstruct/l2 (returns {"successful":true}, upsert per case+type).
  * The save endpoint + payload shape were verified against the backend with
- * put_jawstruct_debug.sh. The Save button (saveAnnotation) drives the write.
+ * legacy/put_jawstruct_debug.sh. The Save button (saveAnnotation) drives the write.
  */
 import { encodeJawStructBase64 } from "./jawStructCodec.js";
 
