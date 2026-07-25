@@ -29,10 +29,6 @@ import { logApi } from "../shared/apiLog.js";
     if (toolbarBadge) toolbarBadge.textContent = String(count > 99 ? "99+" : count);
   }
 
-  function setDotVisible(on) {
-    applyUnreadCount(on ? 1 : 0);
-  }
-
   // Count unread alerts across all of the user's cases. Returns 0 on any failure.
   async function refreshNotifDotFromAPI() {
     try {
@@ -102,11 +98,6 @@ import { logApi } from "../shared/apiLog.js";
     // 先立即跑一次，再进入节拍
     notifDotTick();
     notifDotTimer = setInterval(notifDotTick, intervalMs);
-  }
-  function stopNotificationDotPolling() {
-    if (!notifDotTimer) return;
-    clearInterval(notifDotTimer);
-    notifDotTimer = null;
   }
   /* ====== 🔴 红点自动轮询（独立模块）结束 ====== */
 

@@ -15,7 +15,12 @@ import {
   isPlateComponentId,
 } from "./components.js";
 import { fetchJawStruct as apiFetchJawStruct, saveJawStructFromState } from "./jawStructApi.js";
-import { decodeJawStructResponse, resolveJawStructDesign } from "./jawStructCodec.js";
+import {
+  decodeJawStructResponse,
+  resolveJawStructDesign,
+  parseJawStructText,
+  safeAtob,
+} from "./jawStructCodec.js";
 import { applyJawStructDesign } from "./jawStructApply.js";
 import { logApi } from "../shared/apiLog.js";
 import { toast, flashToast } from "../shared/toast.js";
@@ -1037,6 +1042,176 @@ async function saveJawStructAutosave() {
 }
 registerAutosaveHook(saveJawStructAutosave);
 
+// ---- Load Template Jaw ----------------------------------------------------
+// Upload one or more Jaw Struct .txt files (the same format the backend stores),
+// decode them, and apply the design onto the arch. Each file's "Jaw Type" header
+// picks the side (0=upper, 1=lower), so the upper + lower files can be loaded at
+// once. Reuses the exact fetch/apply pipeline used for the server design.
+
+// A template file is normally plain text ("Start of Jaw Struct…"); tolerate a
+// base64-wrapped body too (matches what /jawstruct/l2/getall returns).
+function templateTextToParsed(rawText) {
+  const looksPlain = /Jaw Struct|Jaw Type:|Tooth \d+:/.test(rawText);
+  const text = looksPlain ? rawText : safeAtob(rawText) ?? rawText;
+  return parseJawStructText(text);
+}
+
+// Read each file, resolve it into a design, and apply it. Undoable (records a
+// history checkpoint). Refreshes the catalog/edit-mode UI and repaints the jaws.
+async function loadTemplateJawFromFiles(files) {
+  const historyBefore = getHistoryStateSignature();
+  const applied = [];
+  let material = null;
+
+  for (const file of files) {
+    let parsed;
+    try {
+      parsed = templateTextToParsed(await file.text());
+    } catch (err) {
+      console.warn(`[loadTemplateJaw] could not read ${file.name}:`, err);
+      continue;
+    }
+    const design = resolveJawStructDesign(parsed);
+    // "Jaw Type" header sets the side; fall back to the filename if it's absent.
+    let side = design.jawSide;
+    if (!side) {
+      if (/upper/i.test(file.name)) side = "upper";
+      else if (/lower/i.test(file.name)) side = "lower";
+    }
+    if (!side) {
+      console.warn(`[loadTemplateJaw] skipped ${file.name}: unknown jaw side.`);
+      continue;
+    }
+    design.jawSide = side;
+    applyJawStructDesign(design, state);
+    applied.push(side);
+
+    const m = Number(design.rawOther?.["Jaw Material"]);
+    if (Number.isFinite(m)) material = m;
+  }
+
+  if (!applied.length) {
+    setMessage("No valid Jaw Struct data found in the selected file(s).", true);
+    return false;
+  }
+  // Adopt the template's denture-base material so the badge + a later Save match.
+  if (material != null) state.jawMaterial = material;
+
+  // Rebuild the catalog + edit-mode UI (a loaded design can change what's placed),
+  // then repaint both arches.
+  try {
+    const [catalog, locks] = await Promise.all([
+      import("./annotationCatalog.js"),
+      import("./annotationLocks.js"),
+    ]);
+    catalog.renderComponentCatalog();
+    locks.updateEditModeUI();
+  } catch (_) {}
+  renderJaws();
+
+  const label = applied.map(titleCase).join(" + ");
+  setMessage(`Loaded template design (${label}).`, false);
+  toast.success("Template jaw loaded");
+  recordHistoryIfChanged(historyBefore);
+  return true;
+}
+
+// Wire the "Load Template Jaw" button to its upload modal (markup in the HTML).
+function bindLoadTemplateJaw() {
+  const btn = document.getElementById("loadProposalBtn");
+  const modal = document.getElementById("loadTemplateJawModal");
+  const backdrop = modal?.querySelector(".load-template-backdrop");
+  const dropzone = document.getElementById("loadTemplateDropzone");
+  const fileInput = document.getElementById("loadTemplateFileInput");
+  const fileList = document.getElementById("loadTemplateFileList");
+  const cancelBtn = document.getElementById("loadTemplateCancelBtn");
+  const loadBtn = document.getElementById("loadTemplateLoadBtn");
+
+  if (!btn) return;
+  // Modal markup missing — keep the button honest rather than silently dead.
+  if (!modal || !fileInput || !fileList || !cancelBtn || !loadBtn) {
+    btn.addEventListener("click", () =>
+      setMessage("Load Template Jaw is unavailable on this page.", true)
+    );
+    return;
+  }
+
+  /** @type {File[]} */
+  let selectedFiles = [];
+
+  const renderFileList = () => {
+    fileList.innerHTML = "";
+    for (const file of selectedFiles) {
+      const li = document.createElement("li");
+      li.className = "load-template-file-item";
+      li.textContent = file.name;
+      fileList.appendChild(li);
+    }
+    loadBtn.disabled = selectedFiles.length === 0;
+  };
+
+  const setFiles = (fileArr) => {
+    selectedFiles = Array.from(fileArr || []).filter(
+      (f) => /\.txt$/i.test(f.name) || f.type === "text/plain"
+    );
+    renderFileList();
+  };
+
+  const openModal = () => {
+    selectedFiles = [];
+    fileInput.value = "";
+    renderFileList();
+    modal.classList.remove("is-hidden");
+    modal.setAttribute("aria-hidden", "false");
+  };
+  const closeModal = () => {
+    modal.classList.add("is-hidden");
+    modal.setAttribute("aria-hidden", "true");
+  };
+
+  btn.addEventListener("click", openModal);
+  cancelBtn.addEventListener("click", closeModal);
+  backdrop?.addEventListener("click", closeModal);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !modal.classList.contains("is-hidden")) closeModal();
+  });
+
+  fileInput.addEventListener("change", () => setFiles(fileInput.files));
+
+  // Drag-and-drop onto the dropzone (the label already opens the picker on click).
+  if (dropzone) {
+    ["dragenter", "dragover"].forEach((evt) =>
+      dropzone.addEventListener(evt, (event) => {
+        event.preventDefault();
+        dropzone.classList.add("is-dragover");
+      })
+    );
+    ["dragleave", "drop"].forEach((evt) =>
+      dropzone.addEventListener(evt, (event) => {
+        event.preventDefault();
+        dropzone.classList.remove("is-dragover");
+      })
+    );
+    dropzone.addEventListener("drop", (event) => {
+      if (event.dataTransfer?.files?.length) setFiles(event.dataTransfer.files);
+    });
+  }
+
+  loadBtn.addEventListener("click", async () => {
+    if (!selectedFiles.length) return;
+    loadBtn.disabled = true;
+    try {
+      const ok = await loadTemplateJawFromFiles(selectedFiles);
+      if (ok) closeModal();
+    } catch (err) {
+      console.error("[loadTemplateJaw] failed", err);
+      setMessage("Could not load the template jaw. Check the file and console.", true);
+    } finally {
+      loadBtn.disabled = selectedFiles.length === 0;
+    }
+  });
+}
+
 function bindPreviewPanelToggle() {
   const shell = document.querySelector(".annotation-shell");
   const btn = document.getElementById("preview3dMaximizeBtn");
@@ -1369,10 +1544,8 @@ function initAnnFooter() {
     window.dispatchEvent(new CustomEvent("request-download-jaw-profile"));
   });
 
-  // Load Template Jaw: placeholder — surface a status message (not implemented yet).
-  document.getElementById("loadProposalBtn")?.addEventListener("click", () => {
-    setMessage("Load Template Jaw — coming soon.", false);
-  });
+  // Load Template Jaw: upload one or more Jaw Struct .txt files and apply them.
+  bindLoadTemplateJaw();
 
   initSidebar();
 

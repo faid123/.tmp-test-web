@@ -1535,6 +1535,144 @@ button.upload3d-row {
   color: #fff;
 }
 
+/* Load Template Jaw — file-upload modal */
+.load-template-modal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 1100;
+}
+
+.load-template-modal.is-hidden {
+  display: none;
+}
+
+.load-template-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(11, 18, 28, 0.45);
+}
+
+.load-template-panel {
+  position: relative;
+  width: min(460px, calc(100vw - 32px));
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #d7dce4;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.2);
+  padding: 18px;
+}
+
+.load-template-panel h3 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  color: #142434;
+}
+
+.load-template-hint {
+  margin: 0 0 14px;
+  font-size: 0.9rem;
+  color: #4a5663;
+  line-height: 1.4;
+}
+
+.load-template-hint code {
+  background: #eef1f6;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.85em;
+}
+
+.load-template-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 22px 16px;
+  border: 2px dashed #c2ccd8;
+  border-radius: 10px;
+  background: #f7f9fc;
+  color: #4a5663;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.load-template-dropzone:hover,
+.load-template-dropzone:focus-within,
+.load-template-dropzone.is-dragover {
+  border-color: var(--rose-500);
+  background: #fdf3f5;
+}
+
+.load-template-dropzone-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--rose-500);
+}
+
+.load-template-dropzone-text {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.load-template-file-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 132px;
+  overflow-y: auto;
+}
+
+.load-template-file-item {
+  font-size: 0.86rem;
+  color: #1d2b38;
+  background: #eef1f6;
+  border-radius: 6px;
+  padding: 6px 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.load-template-file-item::before {
+  content: "\1F4C4";
+  margin-right: 6px;
+}
+
+.load-template-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.load-template-actions button {
+  border: 1px solid #c9d1dc;
+  border-radius: 8px;
+  background: #fff;
+  color: #1d2b38;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.load-template-actions .is-primary {
+  background: var(--rose-500);
+  border-color: black;
+  color: #fff;
+}
+
+.load-template-actions .is-primary:disabled {
+  background: #d7b5bd;
+  border-color: #c9d1dc;
+  cursor: not-allowed;
+}
+
 .case-label {
   min-width: 230px;
   text-align: center;
@@ -3394,15 +3532,16 @@ button.upload3d-row {
    it so users don't have to scroll past it to reach the canvas controls.
    The DOM stays intact for renderComponentCatalog() to keep mutating
    state-tracked nodes; only the visual is suppressed. */
-/* Hide on phones (any orientation) and on tablets held in portrait. EXCEPTION:
-   landscape tablets (iPad 11"+ ≥1024px wide) have room for the tab strip, so we
-   DON'T force-hide there — #editModePanel falls back to its normal design-mode
-   toggle (visible once both arches are locked). We avoid `display: block`
-   !important on purpose: that would show the panel even when design mode is off. */
+/* Hide the desktop Components tab strip on all touch devices up to the tablet
+   ceiling (≤1200px, the same width where the layout stacks to one column) in
+   BOTH orientations — phones and tablets alike. On touch, the mobile component
+   sheet (useMobileSheet, triggered by pointer:coarse) replaces it, so the strip
+   is redundant. We avoid `display: block` !important on purpose: that would show
+   the panel even when design mode is off. */
 @media (pointer: coarse) and (orientation: portrait) {
   #editModePanel { display: none !important; }
 }
-@media (pointer: coarse) and (max-width: 1023px) {
+@media (pointer: coarse) and (max-width: 1200px) {
   #editModePanel { display: none !important; }
 }
 

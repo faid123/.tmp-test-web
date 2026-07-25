@@ -622,8 +622,7 @@ function getPreviewPixelRatioCap() {
 
 // ---- Mesh quality (HD/SD) and load progress ------------------------------
 
-// Opening a case no longer asks which quality — it loads high and shows progress.
-// The HD/SD toggle can still drop to low afterwards.
+// Opening a case loads high quality (no prompt); the HD/SD toggle can drop to low afterwards.
 const DEFAULT_MESH_QUALITY = "high";
 
 function beginMeshQualityLoad() {

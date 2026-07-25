@@ -1082,7 +1082,13 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  overflow-y: auto;
+  /* The pane itself doesn't scroll; only .cm-detail-body (the Case Details
+     header + fields) does, so the image/nav stay at top and the CTA stays
+     pinned at the bottom. Grid items default to min-height:auto and won't shrink
+     below their content — min-height:0 lets the pane match its 1fr row so the
+     inner scroll region has a bounded height. */
+  overflow: hidden;
+  min-height: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   margin: 5px ;
@@ -1231,6 +1237,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  overflow-y: auto;
 }
 
 .cm-detail-head {
@@ -2994,90 +3001,53 @@ body,
 
 
 /* ============================================================================
-   CASE DETAILS — fit the column to its height (no scroll) on desktop
+   CASE DETAILS — scrollable fields panel
    ----------------------------------------------------------------------------
-   The details column has a fixed height (the grid's 1fr row). Rather than
-   scrolling when the content is tall, the case-instructions box is made the
-   elastic element: it grows to absorb the leftover space (and scrolls
-   internally for very long notes), so the image, fields and the Start Case CTA
-   all stay visible without a panel scrollbar.
-
-   Scoped to >860px only. At ≤860px the details pane is a full-screen slide-in
-   (position: fixed; inset: 0) and KEEPS its scroll — otherwise a long note
-   could push the Start Case button off the bottom of the screen.
+   The details column has a fixed height (the grid's 1fr row on desktop, the
+   full-screen fixed pane on mobile). The image/nav sit at the top and the Start
+   Case CTA is pinned at the bottom — both at their natural size — while the
+   fields panel (.cm-detail-body) takes the space in between and scrolls
+   internally whenever the fields (including a long instructions note) are taller
+   than that space.
    ============================================================================ */
 @media (min-width: 786px) {
   .cm-detail {
     overflow: hidden;
     min-height: 0;
   }
-  /* The fields panel takes the space left after the image, nav and CTA; its own
-     overflow is clipped so that, on a viewport too short to fit everything, the
-     content can never spill out and paint over the CTA below it. */
+  /* The fields panel takes the space left after the image, nav and CTA and
+     SCROLLS internally when the fields are taller than that space. */
   .cm-detail-body {
     flex: 1 1 auto;
     min-height: 0;
-    overflow: hidden;
+    overflow-y: auto;
   }
-  /* Keep the image and the Start Case CTA at their natural size — only the
-     fields panel (and the instructions box) flexes, so the CTA stays visible. */
+  /* Keep the image and the Start Case CTA at their natural size so the CTA stays
+     pinned and visible while only the fields panel scrolls. */
   .cm-image-area { flex: 0 0 auto; }
   .cm-detail-cta { flex: 0 0 auto; }
-  /* The instructions row (and its textarea) is the part that stretches. */
-  .cm-field:has(.cm-instructions-wrap) {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-  .cm-instructions-wrap {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-  .cm-instructions {
-    flex: 1 1 auto;
-    min-height: 56px;   /* floor so it never collapses to nothing on short screens */
-    max-height: none;   /* fill the available height; long notes scroll inside */
-  }
 }
 
 
 /* ============================================================================
    CASE DETAILS — fill the full-screen pane on mobile (<786px)
-   ----------------------------------------------------------------------------
-   Below 786px the details pane is a full-screen slide-in. The desktop fit rule
-   above (min-width: 786px) doesn't apply here, so without this the fields sit
-   packed at the top and leave empty space on tall phones.
-
-   Here the instructions box stretches to absorb the leftover height so the
-   content fills the screen — but, unlike the desktop rule, the body may grow
-   (flex-grow) and NOT shrink (flex-shrink: 0) and nothing is clipped, so when a
-   case has enough content to exceed the screen the pane simply scrolls and the
-   Start Case CTA stays reachable.
    ============================================================================ */
 @media (max-width: 785px) {
+  .cm-detail {
+  border-left: 1px solid var(--line);
+  background: var(--bg);
+  border-radius: 0%;
+  padding: 10px;
+  margin: 0px ;
+}
+  /* Fields panel scrolls internally; the CTA stays pinned at the bottom. */
   .cm-detail-body {
-    flex: 1 0 auto;
+    flex: 1 1 auto;
     min-height: 0;
+    overflow-y: auto;
   }
   /* Keep the CTA at full size so it's never squeezed. */
   .cm-detail-cta {
     flex: 0 0 auto;
-  }
-  /* The instructions row (and its textarea) takes the slack. */
-  .cm-field:has(.cm-instructions-wrap) {
-    flex: 1 1 auto;
-    min-height: 0;
-  }
-  .cm-instructions-wrap {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-  .cm-instructions {
-    flex: 1 1 auto;
-    min-height: 96px;
-    max-height: none;
   }
 }

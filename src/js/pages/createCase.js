@@ -87,7 +87,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const saveInviteBtn = document.getElementById("saveInviteBtn");
 
   let activeTarget = null;
-  const uploadLimit = 2;
 
   // Display today as dd/mm/yyyy to match the request-date <input>'s shown format.
   const formatTodayDisplay = () => {
