@@ -139,7 +139,27 @@ export const HELP_TOPICS = [
       "Upload the upper and lower jaw STL scans.",
       "Add reference images if you have them, then save.",
     ],
-    related: ["upload-jaw-scans", "reference-images", "start-case", "case-status"],
+    related: ["upload-jaw-scans", "reference-images", "invite-during-create", "start-case", "case-status"],
+  },
+  {
+    id: "invite-during-create",
+    title: "Invite teammates while creating a case",
+    page: "case_list",
+    selector: "#ccInviteInput",
+    keywords: ["invite", "teammate", "user", "username", "create", "add", "share", "colleague"],
+    phrases: [
+      "how do i invite someone when creating a case",
+      "can i invite a teammate while creating a case",
+      "invite users in create case",
+    ],
+    answer:
+      "The Create Case form has its own Invite Users field — type a username and select Add (or press Enter) to queue it, and they're invited as part of creating the case. This is separate from Edit User Access, which shares a case that already exists.",
+    steps: [
+      "Open Create Case.",
+      "Type a username in Invite Users and press Enter or select Add.",
+      "Repeat for each person, then save the case — they're invited together with it.",
+    ],
+    related: ["create-case", "user-access"],
   },
   {
     id: "upload-jaw-scans",
@@ -344,7 +364,28 @@ export const HELP_TOPICS = [
       "Open the ☰ menu beside the case name.",
       "Choose Delete and confirm.",
     ],
-    related: ["case-menu", "duplicate-case", "version-history"],
+    related: ["case-menu", "duplicate-case", "version-history", "recover-deleted-case"],
+  },
+  {
+    id: "recover-deleted-case",
+    title: "Recover a deleted case",
+    page: "admin_case_list",
+    selector: "#retrieveCaseBtn",
+    keywords: ["recover", "restore", "deleted", "delete", "undelete", "retrieve", "admin", "bring", "back"],
+    phrases: [
+      "how do i recover a deleted case",
+      "can i recover a deleted case",
+      "how do i restore a deleted case",
+      "undo a case deletion",
+    ],
+    answer:
+      "Deleting a case is a soft delete — the case is hidden, not destroyed. An administrator can bring it back from the Admin Case List: deleted cases show struck through there, with a Retrieve the Case button to restore them. It isn't self-service for a regular user, so ask an administrator.",
+    steps: [
+      "Ask an administrator to open the Admin Case List.",
+      "They select the struck-through (deleted) case.",
+      "They select Retrieve the Case to restore it.",
+    ],
+    related: ["delete-case", "admin-users"],
   },
   {
     id: "download-2d",
@@ -376,7 +417,7 @@ export const HELP_TOPICS = [
       "Open the ☰ menu beside the case name.",
       "Choose Edit User Access and add or remove people.",
     ],
-    related: ["case-menu", "share-3d-link", "admin-users"],
+    related: ["case-menu", "share-3d-link", "admin-users", "invite-during-create"],
   },
   {
     id: "share-3d-link",
@@ -392,7 +433,23 @@ export const HELP_TOPICS = [
       "Find the 3D link row at the bottom of the detail panel.",
       "Use the copy button for the link, or the export button to open it.",
     ],
-    related: ["qr-code", "navigate-3d", "user-access"],
+    related: ["qr-code", "navigate-3d", "user-access", "share-link-privacy"],
+  },
+  {
+    id: "share-link-privacy",
+    title: "Is the shared 3D link safe to send?",
+    page: null,
+    keywords: ["safe", "privacy", "private", "secure", "expose", "patient", "encrypted", "confidential"],
+    phrases: [
+      "is the shared link safe",
+      "does the 3d link expose patient information",
+      "is the 3d viewer link private",
+      "is it safe to share the 3d link",
+    ],
+    answer:
+      "Yes — the case ID in a 3D Viewer link is encrypted, not a plain sequential number, and the page needs no sign-in identity beyond that link. Still, treat it like any link to patient-related data: only send it to people who should see the case.",
+    steps: [],
+    related: ["share-3d-link", "open-3d-viewer"],
   },
   {
     id: "qr-code",
@@ -888,7 +945,28 @@ export const HELP_TOPICS = [
       "Select the upload button on that row and pick the file.",
       "Wait for UPLOADING… to finish; the jaw then appears in the preview.",
     ],
-    related: ["upload-jaw-scans", "jaw-preview", "mesh-quality"],
+    related: ["upload-jaw-scans", "jaw-preview", "mesh-quality", "extra-reference-stl"],
+  },
+  {
+    id: "extra-reference-stl",
+    title: "Upload extra reference 3D files",
+    page: "annotation_2d",
+    selector: "#footerUpload3dBtn",
+    keywords: ["extra", "reference", "3d", "file", "stl", "slot", "upload", "other", "additional"],
+    phrases: [
+      "how do i upload extra 3d files",
+      "how do i add more stl files",
+      "what is upload other 3d files",
+      "how many extra 3d files can i add",
+    ],
+    answer:
+      "Upload other 3D files in the footer bar adds STL files beyond the main upper and lower jaw — up to four extra slots per case. They load into the 3D preview alongside the jaws and can be removed from there when no longer needed.",
+    steps: [
+      "Select Upload other 3D files in the footer bar.",
+      "Choose a file for an open slot (up to 4 per case).",
+      "Delete a slot's file first if all four are already in use.",
+    ],
+    related: ["upload-jaw-scans", "jaw-preview"],
   },
   {
     id: "mesh-quality",
@@ -990,6 +1068,45 @@ export const HELP_TOPICS = [
 
   // -------------------------------------------------------- troubleshooting
   {
+    id: "app-frozen",
+    title: "The app won't load or feels frozen",
+    page: null,
+    keywords: ["frozen", "stuck", "hang", "unresponsive", "crash", "freeze", "not", "responding"],
+    phrases: [
+      "the page wont load",
+      "the app is frozen",
+      "nothing is happening",
+      "the screen is stuck",
+      "why is the app not responding",
+    ],
+    answer:
+      "Start with a refresh — most stalls clear on a reload. If it stays stuck, check your connection, then sign out and back in. A case-list-specific slowdown has its own fix — see 'the case list is slow or empty'.",
+    steps: [
+      "Refresh the page.",
+      "Check your internet connection.",
+      "Sign out and back in if it's still stuck.",
+    ],
+    related: ["list-slow", "changes-not-saving", "report-a-problem"],
+  },
+  {
+    id: "report-a-problem",
+    title: "Report a bug or ask for help",
+    page: null,
+    selector: "#sidebarFeedbackBtn",
+    keywords: ["bug", "issue", "problem", "contact", "support", "feedback", "report", "broken", "escalate"],
+    phrases: [
+      "who do i contact for a bug",
+      "how do i report a problem",
+      "how do i give feedback",
+      "how do i report an issue",
+      "who do i ask for help",
+    ],
+    answer:
+      "Feedback in the footer menu is the working channel right now — it opens a short form the team monitors.",
+    steps: ["Open the menu in the footer bar.", "Select Feedback.", "Fill in the form — it opens in a new tab."],
+    related: ["case-chat", "app-frozen"],
+  },
+  {
     id: "list-slow",
     title: "The case list is slow or empty",
     page: null,
@@ -1002,7 +1119,7 @@ export const HELP_TOPICS = [
       "Give it a few seconds and scroll again.",
       "If it is still empty, sign out and back in.",
     ],
-    related: ["refresh-list", "images-missing", "changes-not-saving"],
+    related: ["refresh-list", "images-missing", "changes-not-saving", "app-frozen"],
   },
   {
     id: "images-missing",
@@ -1033,6 +1150,63 @@ export const HELP_TOPICS = [
       "Open Version History to confirm the version was written.",
     ],
     related: ["save-2d", "version-history", "list-slow"],
+  },
+
+  // ------------------------------------------------------------------- about
+  {
+    id: "about-ndcs",
+    title: "About NDCS",
+    page: null,
+    keywords: ["ndcs", "national", "dental", "centre", "center", "singapore", "hospital", "singhealth"],
+    phrases: [
+      "what is ndcs",
+      "what does ndcs stand for",
+      "who is ndcs",
+      "national dental centre singapore",
+    ],
+    answer:
+      "NDCS stands for National Dental Centre Singapore — the country's flagship specialist dental centre, part of the SingHealth group, based at the Singapore General Hospital campus. Alongside patient care across specialties like restorative dentistry and oral surgery, it trains dental professionals and runs research through the National Dental Research Institute Singapore, which is where SmartRPD was developed.",
+    steps: [],
+    related: ["smartrpd-origins", "rpd-meaning"],
+  },
+  {
+    id: "smartrpd-origins",
+    title: "Where SmartRPD came from",
+    page: null,
+    keywords: [
+      "smartrpd", "smart", "origin", "origins", "history", "developed", "invented",
+      "created", "made", "astar", "temasek", "workflow",
+    ],
+    phrases: [
+      "what is smartrpd",
+      "where did smartrpd come from",
+      "who made smartrpd",
+      "who created smartrpd",
+      "history of smartrpd",
+      "how was smartrpd developed",
+    ],
+    answer:
+      "SmartRPD is a digital denture workflow developed by NDCS, working with A*STAR's Institute of High Performance Computing since 2020, to design and 3D-print removable partial dentures. It replaces a manual process that left 20-30% of dentures needing rework with intra-oral scanning and automated design, cutting that error rate to around 3% and reducing the clinic visits a patient needs. Funding came from Temasek, Temasek Foundation, and the Ministry of Health's National Medical Research Council.",
+    steps: [],
+    related: ["about-ndcs", "rpd-meaning"],
+  },
+  {
+    id: "rpd-meaning",
+    title: "What RPD stands for",
+    page: null,
+    keywords: ["rpd", "stand", "meaning", "abbreviation", "acronym", "denture", "partial", "framework", "removable"],
+    phrases: [
+      "what does rpd stand for",
+      "what is rpd",
+      "what does rpd mean",
+      "rpd full form",
+      "rpd meaning",
+      "what is a removable partial denture",
+    ],
+    answer:
+      "RPD stands for removable partial denture — a dental appliance that replaces some missing teeth and that the patient can take in and out themselves, unlike a fixed bridge or implant. It's the type of device SmartRPD is built to design and manufacture.",
+    steps: [],
+    related: ["smartrpd-origins", "about-ndcs"],
   },
 ];
 

@@ -275,7 +275,7 @@ function renderUnsure(alternates) {
   const text = document.createElement("p");
   text.className = "hb-answer-text";
   text.textContent =
-    "I don't have an answer for that one. These are the closest things I know about — or use Report Issue in the menu to reach the team.";
+    "I don't have an answer for that one. These are the closest things I know about — or use Feedback in the menu to reach the team.";
   el.appendChild(text);
   renderChips(el, alternates, null);
   scrollToEnd();

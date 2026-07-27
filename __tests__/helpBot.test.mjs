@@ -253,6 +253,7 @@ describe("highlight selectors still exist in the source", () => {
     "src/pages/2DAnnotation.html",
     "src/pages/ThreeDViewer.html",
     "src/pages/admin/admin_users.html",
+    "src/pages/admin/admin_case_list.html",
     "src/js/2D/preview3D.js",
     "src/js/2D/preview3DSurvey.js",
     "src/js/2D/annotationCatalog.js",
