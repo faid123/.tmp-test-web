@@ -244,6 +244,67 @@ describe("3D surfaces are not conflated", () => {
   });
 });
 
+// "Show me" used to highlight whatever control was visible, so topics about
+// things inside a closed view pointed at the button that opens that view. Asking
+// how to upload an STL rang the Create Case button the user had already found
+// and stopped there. Targets now name the real control and delegate the opening
+// to `reveal`; these pin that split.
+describe("Show me points at the control, not at what opens it", () => {
+  const OPENERS = ["#createCaseBtn", ".cm-detail .dropdown-toggle"];
+  // The only two topics whose subject IS the opener.
+  const ABOUT_THE_OPENER = new Set(["create-case", "case-menu"]);
+
+  test("no topic targets an opener unless that opener is its subject", () => {
+    const offenders = HELP_TOPICS.filter(
+      (t) => t.selector && !ABOUT_THE_OPENER.has(t.id) && OPENERS.includes(t.selector)
+    ).map((t) => `${t.id} → ${t.selector}`);
+    expect(offenders).toEqual([]);
+  });
+
+  test("a reveal always differs from the target it uncovers", () => {
+    for (const topic of HELP_TOPICS) {
+      if (!topic.reveal) continue;
+      expect(topic.selector).toBeTruthy();
+      expect(topic.reveal).not.toBe(topic.selector);
+    }
+  });
+
+  test("uploading a jaw scan points into the create-case form", () => {
+    const topic = TOPIC_BY_ID.get("upload-jaw-scans");
+    expect(topic.selector).toBe("#uploadedJawModels");
+    expect(topic.reveal).toBe("#createCaseBtn");
+  });
+
+  test.each([
+    ["rename-case", "#renameBtn"],
+    ["duplicate-case", "#duplicateBtn"],
+    ["delete-case", "#deleteBtn"],
+    ["download-2d", "#download2dDesignBtn"],
+    ["user-access", "#editUserAccessBtn"],
+    ["dashboard", "#viewDashboardBtn"],
+  ])("%s points at its own item in the case-actions menu", (id, selector) => {
+    const topic = TOPIC_BY_ID.get(id);
+    expect(topic.selector).toBe(selector);
+    expect(topic.reveal).toBe(".cm-detail .dropdown-toggle");
+  });
+
+  test("every field inside the create-case view knows how to open it", () => {
+    for (const id of ["upload-jaw-scans", "reference-images", "invite-during-create"]) {
+      expect(TOPIC_BY_ID.get(id).reveal).toBe("#createCaseBtn");
+    }
+  });
+
+  // The app sidebar is closed whenever the help panel is open — it is the same
+  // menu the panel was launched from.
+  test("every sidebar item opens the footer menu first", () => {
+    const sidebarTopics = HELP_TOPICS.filter((t) => /^#sidebar/.test(t.selector || ""));
+    expect(sidebarTopics.length).toBeGreaterThan(0);
+    for (const topic of sidebarTopics) {
+      expect(topic.reveal).toBe("#footerMenuBtn");
+    }
+  });
+});
+
 // A "Show me" button is only offered when the topic's selector resolves on the
 // page, so a stale selector fails silently — the answer just loses its button.
 // This catches the rename that would cause it.
@@ -253,6 +314,7 @@ describe("highlight selectors still exist in the source", () => {
     "src/pages/2DAnnotation.html",
     "src/pages/ThreeDViewer.html",
     "src/pages/admin/admin_users.html",
+    "src/pages/admin/admin_case_list.html",
     "src/js/2D/preview3D.js",
     "src/js/2D/preview3DSurvey.js",
     "src/js/2D/annotationCatalog.js",
@@ -270,7 +332,9 @@ describe("highlight selectors still exist in the source", () => {
     })
     .join("\n");
 
-  const selectors = [...new Set(HELP_TOPICS.map((t) => t.selector).filter(Boolean))];
+  const selectors = [
+    ...new Set(HELP_TOPICS.flatMap((t) => [t.selector, t.reveal]).filter(Boolean)),
+  ];
 
   test("there are selectors to check", () => {
     expect(selectors.length).toBeGreaterThan(5);
