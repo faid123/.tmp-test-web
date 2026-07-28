@@ -7,9 +7,13 @@
 //   id        stable slug, referenced by `related`
 //   title     short label, shown as the answer heading and on suggestion chips
 //   page      page the feature lives on (see PAGE_LABELS), or null when global
-//   selector  optional CSS selector for the "Show me" highlight. Must resolve to
-//             a VISIBLE control — for items inside a closed dropdown or modal,
-//             point at the button that opens it and describe the item in `steps`
+//   selector  optional CSS selector for the "Show me" highlight. Point it at the
+//             control the topic is actually about, never at the button that
+//             opens the view containing it — that is what `reveal` is for
+//   reveal    optional selector for the control that opens the view `selector`
+//             lives in (the Create Case button, the ☰ case-actions toggle).
+//             "Show me" clicks it, waits for the target, then highlights the
+//             target. Only used when the target isn't already on screen
 //   keywords  words a user might type; weighted highest by the matcher
 //   phrases   whole-question forms; an exact containment match wins outright
 //   answer    one or two sentences of prose
@@ -43,9 +47,18 @@ export const PAGE_PATHS = {
   admin_case_list: "src/pages/admin/admin_case_list.html",
 };
 
-// The case-actions menu on the case list: its items live in a dropdown that is
-// closed by default, so every topic about them highlights the toggle instead.
+// The case-actions menu on the case list. Its items live in a dropdown that is
+// closed by default, so topics about them point at the item and name this as
+// their `reveal` — "Show me" opens the menu and rings the item itself.
 const CASE_MENU = ".cm-detail .dropdown-toggle";
+
+// The create-case view is a pair of panes hidden until Create Case is pressed,
+// so the fields inside it need the same treatment.
+const CREATE_CASE = "#createCaseBtn";
+
+// The app sidebar slides out from the footer menu button and is closed the rest
+// of the time — including while the help panel itself is open.
+const APP_MENU = "#footerMenuBtn";
 
 export const HELP_TOPICS = [
   // ---------------------------------------------------------------- account
@@ -99,6 +112,7 @@ export const HELP_TOPICS = [
     title: "Log out",
     page: null,
     selector: "#sidebarLogoutBtn",
+    reveal: APP_MENU,
     keywords: ["log", "out", "logout", "sign", "exit", "quit", "leave", "session"],
     phrases: ["how do i log out", "how do i sign out"],
     answer:
@@ -111,6 +125,7 @@ export const HELP_TOPICS = [
     title: "Change your password",
     page: null,
     selector: "#sidebarChangePasswordBtn",
+    reveal: APP_MENU,
     keywords: ["change", "password", "update", "new", "credentials", "security"],
     phrases: ["how do i change my password", "change account password"],
     answer:
@@ -146,6 +161,7 @@ export const HELP_TOPICS = [
     title: "Invite teammates while creating a case",
     page: "case_list",
     selector: "#ccInviteInput",
+    reveal: CREATE_CASE,
     keywords: ["invite", "teammate", "user", "username", "create", "add", "share", "colleague"],
     phrases: [
       "how do i invite someone when creating a case",
@@ -165,7 +181,8 @@ export const HELP_TOPICS = [
     id: "upload-jaw-scans",
     title: "Upload jaw scans (STL)",
     page: "case_list",
-    selector: "#createCaseBtn",
+    selector: "#uploadedJawModels",
+    reveal: CREATE_CASE,
     keywords: ["upload", "jaw", "scan", "stl", "model", "mesh", "import", "upper", "lower", "file"],
     phrases: ["how do i upload a scan", "how do i add an stl", "upload jaw model"],
     answer:
@@ -182,6 +199,7 @@ export const HELP_TOPICS = [
     title: "Add reference images",
     page: "case_list",
     selector: "#addRefImageBtn",
+    reveal: CREATE_CASE,
     keywords: ["reference", "image", "photo", "picture", "attach", "upload", "xray", "add"],
     phrases: ["how do i add a photo", "how do i attach an image", "add reference images"],
     answer:
@@ -307,7 +325,8 @@ export const HELP_TOPICS = [
     id: "rename-case",
     title: "Rename a case",
     page: "case_list",
-    selector: CASE_MENU,
+    selector: "#renameBtn",
+    reveal: CASE_MENU,
     keywords: ["rename", "name", "title", "change", "edit", "case"],
     phrases: ["how do i rename a case", "change the case name"],
     answer:
@@ -338,7 +357,8 @@ export const HELP_TOPICS = [
     id: "duplicate-case",
     title: "Duplicate a case",
     page: "case_list",
-    selector: CASE_MENU,
+    selector: "#duplicateBtn",
+    reveal: CASE_MENU,
     keywords: ["duplicate", "copy", "clone", "reuse", "template", "case"],
     phrases: ["how do i duplicate a case", "how do i copy a case"],
     answer:
@@ -354,7 +374,8 @@ export const HELP_TOPICS = [
     id: "delete-case",
     title: "Delete a case",
     page: "case_list",
-    selector: CASE_MENU,
+    selector: "#deleteBtn",
+    reveal: CASE_MENU,
     keywords: ["delete", "remove", "erase", "bin", "trash", "case", "get", "rid"],
     phrases: ["how do i delete a case", "how do i remove a case"],
     answer:
@@ -391,7 +412,8 @@ export const HELP_TOPICS = [
     id: "download-2d",
     title: "Download the 2D design",
     page: "case_list",
-    selector: CASE_MENU,
+    selector: "#download2dDesignBtn",
+    reveal: CASE_MENU,
     keywords: ["download", "export", "save", "2d", "design", "l2", "file", "get"],
     phrases: ["how do i download the design", "export the 2d design"],
     answer:
@@ -407,7 +429,8 @@ export const HELP_TOPICS = [
     id: "user-access",
     title: "Share a case with a colleague",
     page: "case_list",
-    selector: CASE_MENU,
+    selector: "#editUserAccessBtn",
+    reveal: CASE_MENU,
     keywords: ["share", "access", "user", "colleague", "permission", "invite", "assign", "collaborate", "owner"],
     phrases: ["how do i share a case", "how do i give someone access", "add a user to a case"],
     answer:
@@ -483,7 +506,8 @@ export const HELP_TOPICS = [
     id: "dashboard",
     title: "View the case dashboard",
     page: "case_list",
-    selector: CASE_MENU,
+    selector: "#viewDashboardBtn",
+    reveal: CASE_MENU,
     keywords: ["dashboard", "chart", "overview", "stats", "summary", "progress", "report"],
     phrases: ["how do i see the dashboard", "where are the case stats"],
     answer: "View Dashboard in the case-actions menu opens the summary view for the selected case.",
@@ -731,6 +755,7 @@ export const HELP_TOPICS = [
     title: "Save the 2D design",
     page: "annotation_2d",
     selector: "#sidebarSaveBtn",
+    reveal: APP_MENU,
     keywords: ["save", "keep", "store", "commit", "persist", "design", "work"],
     phrases: ["how do i save", "how do i save my design", "does it save automatically"],
     answer:
@@ -746,6 +771,7 @@ export const HELP_TOPICS = [
     title: "Go back to the case list",
     page: "annotation_2d",
     selector: "#sidebarReturnBtn",
+    reveal: APP_MENU,
     keywords: ["return", "back", "exit", "leave", "close", "list", "quit"],
     phrases: ["how do i go back", "how do i return to the case list"],
     answer:
@@ -1093,6 +1119,7 @@ export const HELP_TOPICS = [
     title: "Report a bug or ask for help",
     page: null,
     selector: "#sidebarFeedbackBtn",
+    reveal: APP_MENU,
     keywords: ["bug", "issue", "problem", "contact", "support", "feedback", "report", "broken", "escalate"],
     phrases: [
       "who do i contact for a bug",

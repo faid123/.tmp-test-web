@@ -19,6 +19,7 @@ import { localProvider, relatedTopics, suggestionsFor } from "./helpMatcher.js";
 const TRANSCRIPT_MAX = 30;
 const HIGHLIGHT_MS = 3200;
 const CLOSE_MS = 220;
+const REVEAL_TIMEOUT_MS = 1500;
 
 let provider = localProvider;
 let root = null;          // #help-bot, built on first open
@@ -75,16 +76,59 @@ function isVisible(el) {
   return !!el && el.getClientRects().length > 0;
 }
 
-// Scroll the control into view and ring it briefly. Returns false when the
-// control isn't on this page (or is inside something closed), so the caller can
-// offer a deep link instead.
-function showControl(selector) {
-  let el = null;
-  try {
-    el = document.querySelector(selector);
-  } catch {
-    return false;
-  }
+const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+
+// Poll until a control is on screen. Used after opening the view that contains
+// it — the create-case panes and the case-actions menu both appear synchronously
+// today, but a frame or two of slack costs nothing and survives an animation.
+function waitForVisible(selector, timeout = REVEAL_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    const deadline = Date.now() + timeout;
+    const tick = () => {
+      const el = safeQuery(selector);
+      if (isVisible(el)) return resolve(el);
+      if (Date.now() >= deadline) return resolve(null);
+      requestAnimationFrame(tick);
+    };
+    tick();
+  });
+}
+
+// Get the topic's control on screen, opening its container if that's what it
+// takes. `reveal` names the control that opens the view the target lives in (the
+// Create Case button, the ☰ case-actions toggle); we click it and wait for the
+// real target rather than highlighting the opener and calling it done.
+//
+// The opener is only clicked when the target isn't already visible — reopening
+// the create-case view calls resetCreateCaseForm(), which would throw away
+// whatever the user had already typed.
+async function resolveTarget(topic) {
+  const existing = safeQuery(topic.selector);
+  if (isVisible(existing)) return existing;
+  if (!topic.reveal) return null;
+  const opener = safeQuery(topic.reveal);
+  if (!isVisible(opener)) return null;
+
+  // Wait out the click that got us here before opening anything. The case-actions
+  // dropdown closes on any click outside itself, and our own "Show me" click is
+  // outside it — clicking the toggle mid-dispatch opens the menu only for that
+  // same event to close it again, leaving the ring on a control nobody can see.
+  await nextFrame();
+  opener.click();
+
+  const el = await waitForVisible(topic.selector);
+  // Confirm it stayed put: a container that opens and immediately closes again
+  // must count as a failed reveal, not a highlight on something invisible.
+  await nextFrame();
+  return isVisible(el) ? el : null;
+}
+
+// Scroll the topic's control into view and ring it briefly. Returns false when
+// it isn't reachable on this page, so the caller can offer a deep link instead.
+async function showControl(topic) {
+  // Resolved before the panel closes: a reveal that fails must not leave the
+  // user with a dismissed panel and nothing highlighted.
+  const el = await resolveTarget(topic);
   if (!isVisible(el)) return false;
 
   closePanel({ keepTranscript: true });
@@ -234,13 +278,17 @@ function renderAnswer(topic) {
   actions.className = "hb-actions";
 
   const onThisPage = !topic.page || topic.page === currentPageId();
-  const canPoint = onThisPage && topic.selector && isVisible(safeQuery(topic.selector));
+  // Reachable either directly, or by opening the view it lives in.
+  const canPoint =
+    onThisPage &&
+    topic.selector &&
+    (isVisible(safeQuery(topic.selector)) || (topic.reveal && isVisible(safeQuery(topic.reveal))));
   if (canPoint) {
     const show = document.createElement("button");
     show.type = "button";
     show.className = "hb-action";
     show.textContent = "Show me";
-    show.addEventListener("click", () => showControl(topic.selector));
+    show.addEventListener("click", () => showControl(topic));
     actions.appendChild(show);
   }
 
