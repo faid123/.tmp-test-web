@@ -80,19 +80,35 @@ function wireRightNavButton() {
   if (!btn || !icon) return;
 
   const basePath = getBasePath();
-  let isOpen = true;
-  icon.src = `${basePath}/assets/Icon_rightclose.png`;
+  let isOpen = false;
+  const syncButton = (open) => {
+    isOpen = Boolean(open);
+    icon.src = isOpen
+      ? `${basePath}/assets/Icon_rightclose.png`
+      : `${basePath}/assets/Icon_rightopen.png`;
+    const label = isOpen ? "Close more controls" : "Open more controls";
+    btn.setAttribute("aria-label", label);
+    btn.dataset.tooltip = label;
+    btn.setAttribute("aria-pressed", String(isOpen));
+  };
+  syncButton(false);
 
   btn.addEventListener("click", () => {
+    if (typeof window.toggleViewerAdvancedControls === "function") {
+      syncButton(window.toggleViewerAdvancedControls());
+      return;
+    }
+
+    // Fallback while the WebGL workspace is still loading.
     const rightNav = window.getViewerRightNav?.() || document.getElementById("viewer-right-nav");
     if (!rightNav) return;
     isOpen = !isOpen;
     rightNav.style.display = isOpen ? "" : "none";
-    icon.src = isOpen
-      ? `${basePath}/assets/Icon_rightclose.png`
-      : `${basePath}/assets/Icon_rightopen.png`;
-    btn.setAttribute("aria-label", isOpen ? "Close right panel" : "Open right panel");
-    btn.dataset.tooltip = isOpen ? "Close right panel" : "Open right panel";
+    syncButton(isOpen);
+  });
+
+  window.addEventListener("vieweradvancedcontrolschange", (event) => {
+    syncButton(Boolean(event.detail?.open));
   });
 }
 
@@ -151,7 +167,6 @@ function mountViewerPopupsIntoScene() {
   if (!viewerMain) return;
 
   const appSidebar = document.getElementById("appSidebar");
-  const chatWidget = document.getElementById("chat-widget");
 
   if (appSidebar && appSidebar.parentElement !== viewerMain) {
     viewerMain.appendChild(appSidebar);

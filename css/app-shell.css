@@ -1,0 +1,419 @@
+/* ============================================================================
+   app-shell.css — shared application shell (sidebar + footer)
+   ----------------------------------------------------------------------------
+   Single source of truth for the slide-in navigation sidebar and the bottom
+   status footer that case_list, 2DAnnotation and ThreeDViewer all share.
+
+   Each of those pages historically shipped its own near-duplicate copy of the
+   sidebar/footer CSS (in case_list.css, 2Dannotation.css and style.css), and
+   the annotation footer diverged into a separate rose-coloured ".ann-footer".
+   This file is loaded LAST on every page, so its rules win the same-specificity
+   tie and normalise all three into one premium, consistent look — the teal
+   footer and the same sidebar everywhere.
+
+   Self-contained: all colours come from --shell-* tokens defined here, so it
+   renders identically regardless of which page-level variables happen to exist.
+   ========================================================================== */
+
+:root {
+  --shell-teal: #3bae95;
+  --shell-teal-600: #2f9e83;
+  --shell-teal-700: #25735f;
+  --shell-teal-800: #1c5a4a;
+  --shell-ink: #0f172a;
+  --shell-ink-soft: #475569;
+  --shell-muted: #94a3b8;
+  --shell-line: #e2e8f0;
+  --shell-danger: #ef4444;
+
+  --shell-footer-h: 40px;
+  --shell-footer-grad: linear-gradient(180deg, #45b89e 0%, var(--shell-teal) 46%, var(--shell-teal-600) 100%);
+  --shell-header-grad: linear-gradient(135deg, #43b79c 0%, var(--shell-teal) 40%, var(--shell-teal-700) 100%);
+  --shell-radius: 12px;
+}
+
+/* ==========================================================================
+   1. BOTTOM STATUS FOOTER — unified across .cm-footer and .ann-footer
+   Only appearance is set here; each page keeps its own layout mode
+   (case_list = grid row, ThreeDViewer = flex item, 2DAnnotation = fixed).
+   ========================================================================== */
+.cm-footer,
+.ann-footer {
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: var(--shell-footer-h);
+  padding: 0 16px;
+  background: var(--shell-footer-grad);
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 -1px 0 rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 -6px 18px rgba(37, 115, 95, 0.14);
+  font-size: 14.5px;
+  color: #fff;
+}
+/* Keep the flex display each page already relies on. */
+.cm-footer { display: flex; }
+.ann-footer { display: flex; }
+
+.cm-footer-left,
+.cm-footer-right,
+.ann-footer-left,
+.ann-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cm-footer-right,
+.ann-footer-right { gap: 10px; }
+
+/* ---- footer buttons (both families share one look) ---- */
+.cm-footer-btn,
+.ann-footer-btn {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #fff;
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease;
+}
+.cm-footer-btn:hover,
+.ann-footer-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+.cm-footer-btn:active,
+.ann-footer-btn:active { transform: translateY(1px); }
+.cm-footer-btn:disabled,
+.ann-footer-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.cm-footer-btn:focus-visible,
+.ann-footer-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+/* Pressed/toggled tool buttons (viewer + annotation). */
+.cm-footer-tool-btn[aria-pressed="true"],
+.ann-footer-btn[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+/* ---- case label + user + connection ---- */
+.cm-footer-case-label,
+.ann-footer-case-label {
+  margin-left: 8px;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.88);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cm-footer-case-label #footerCaseName,
+.ann-footer-case-label #footerCaseName {
+  color: #fff;
+  font-weight: 700;
+}
+.cm-footer-user,
+.ann-footer-user {
+  font-size: 13px;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---- footer tooltips (shared premium dark bubble) ---- */
+.cm-footer [data-tooltip],
+.ann-footer [data-tooltip] { position: relative; }
+.cm-footer [data-tooltip]::after,
+.ann-footer [data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 9px);
+  transform: translate(-50%, 3px);
+  white-space: nowrap;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 60;
+}
+.cm-footer [data-tooltip]:hover::after,
+.cm-footer [data-tooltip]:focus-visible::after,
+.ann-footer [data-tooltip]:hover::after,
+.ann-footer [data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* ---- connectivity signal (populated by JS as #footerConnection) ---- */
+.conn-indicator {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 3px;
+  cursor: default;
+  color: rgba(255, 255, 255, 0.9);
+}
+.conn-wifi-icon { font-size: 15px; color: #fff; }
+.conn-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conn-indicator[data-online="0"] .conn-wifi-icon,
+.conn-indicator[data-online="0"] .conn-name { color: #fecaca; }
+.conn-tooltip {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  right: 0;
+  white-space: nowrap;
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: #0f172a;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.28);
+  z-index: 60;
+}
+.conn-indicator:hover .conn-tooltip,
+.conn-indicator:focus-visible .conn-tooltip { opacity: 1; transform: translateY(0); }
+
+/* ==========================================================================
+   2. SLIDE-IN SIDEBAR — unified premium look for all pages
+   ========================================================================== */
+.app-sidebar {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  pointer-events: none;
+}
+.app-sidebar.is-hidden { display: none; }
+
+.app-sidebar-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(11, 18, 28, 0.5);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.24s ease;
+  pointer-events: auto;
+}
+.app-sidebar.is-open .app-sidebar-backdrop { opacity: 1; }
+
+.app-sidebar-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(330px, 86vw);
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbfa 100%);
+  border-right: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow: 18px 0 60px rgba(15, 23, 42, 0.28);
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+}
+.app-sidebar.is-open .app-sidebar-panel { transform: translateX(0); }
+
+/* ---- header (brand + optional viewer kicker + close) ---- */
+.app-sidebar-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 18px 18px;
+  background: var(--shell-header-grad);
+  color: #fff;
+  overflow: hidden;
+}
+/* Subtle sheen so the header reads as a crafted surface, not a flat fill. */
+.app-sidebar-header::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 140% at 12% -20%, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 55%);
+  pointer-events: none;
+}
+.app-sidebar-header > * { position: relative; z-index: 1; }
+
+.app-sidebar-brand-logo {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  padding: 5px;
+}
+.app-sidebar-brand-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.app-sidebar-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+}
+.app-sidebar-brand-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.app-sidebar-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.09em;
+}
+.app-sidebar-version {
+  font-size: 10.5px;
+  color: #fff;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+
+/* ---- items ---- */
+.app-sidebar-list {
+  list-style: none;
+  margin: 0;
+  padding: 14px 12px 10px;
+  overflow-y: auto;
+  flex: 1;
+}
+.app-sidebar-list li { margin: 0; }
+.app-sidebar-item {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 14px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--shell-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.12s ease;
+}
+.app-sidebar-item::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 3px;
+  height: 20px;
+  border-radius: 3px;
+  background: var(--shell-teal);
+  transform: translateY(-50%) scaleY(0);
+  transition: transform 0.16s ease;
+}
+.app-sidebar-item:hover {
+  background: rgba(59, 174, 149, 0.12);
+  color: var(--shell-teal-700);
+  transform: translateX(2px);
+}
+.app-sidebar-item:hover::before { transform: translateY(-50%) scaleY(1); }
+.app-sidebar-item:focus-visible {
+  outline: 2px solid var(--shell-teal);
+  outline-offset: -2px;
+}
+.app-sidebar-item-icon {
+  width: 34px;
+  height: 34px;
+  --fa-display: inline-flex;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 34px;
+  text-align: center;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--shell-ink-soft);
+  font-size: 15px;
+  flex-shrink: 0;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+.app-sidebar-item:hover .app-sidebar-item-icon {
+  background: rgba(59, 174, 149, 0.18);
+  color: var(--shell-teal-700);
+}
+.app-sidebar-item-danger .app-sidebar-item-icon {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.app-sidebar-separator {
+  border: 0;
+  height: 1px;
+  background: rgba(15, 23, 42, 0.09);
+  margin: 8px 14px;
+}
+
+.app-sidebar-language {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 6px 12px 14px;
+  padding: 9px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 11px;
+  background: #f8fafc;
+}
+.app-sidebar-language-icon {
+  width: 20px;
+  text-align: center;
+  color: var(--shell-ink-soft);
+  font-size: 15px;
+}
+.app-sidebar-language select {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--shell-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+}

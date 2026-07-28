@@ -1,7 +1,7 @@
 // Case Dashboard — the "View Dashboard" view opened from the case list detail
 // pane. Recreates the SmartRPD desktop dashboard for the selected case: a left
-// column of process steps (per jaw), a centre "View Captures" area (2D / 3D
-// upper / 3D lower thumbnails from /thumbnails/get), and a right column with a
+// column of process steps (per jaw), a centre "View Captures" area (2D upper /
+// 2D lower / 3D upper / 3D lower thumbnails from /thumbnails/get), and a right column with a
 // "Case Access" panel (roles) above a "Viewcaptures" gallery (the noticeboard
 // 3D viewcapture photos from /noticeboard/view/get).
 //
@@ -140,7 +140,8 @@ function formatDateTime(ts) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-// Slot of a /thumbnails/get row: 0 = composite 2D, 1 = upper jaw, 2 = lower jaw.
+// Slot of a /thumbnails/get row: 0 = 2D upper, 100 = 2D lower, 1 = 3D upper,
+// 2 = 3D lower (reference images take 3, 4, 5, …).
 function thumbnailSlot(row) {
   const v = row?.slot ?? row?.slot_index ?? row?.slot_id;
   const n = Number(v);
@@ -172,9 +173,10 @@ export function countCompletedStages(steps) {
   return (steps || []).filter((s) => s.lines.every((l) => l.done)).length;
 }
 
-// Pure: map /thumbnails/get rows to their capture slot (0 = 2D, 1 = 3D upper,
-// 2 = 3D lower). Rows without a slot tag (older cases) fall back to positional
-// order. Exported (DOM-free) for unit testing. Returns Map<slot, base64data>.
+// Pure: map /thumbnails/get rows to their capture slot (0 = 2D upper, 100 = 2D
+// lower, 1 = 3D upper, 2 = 3D lower). Rows without a slot tag (older cases) fall
+// back to positional order. Exported (DOM-free) for unit testing. Returns
+// Map<slot, base64data>.
 export function resolveCaptureSlots(rows) {
   const bySlot = new Map();
   (rows || []).forEach((r) => {
@@ -284,7 +286,7 @@ function buildOverlay() {
           <div class="dash-preview-empty" id="dashPreviewEmpty">
             <i class="fa-solid fa-up-right-and-down-left-from-center"></i>
             <p>Select a capture to preview</p>
-            <span>2D · 3D Upper · 3D Lower</span>
+            <span>2D Upper · 2D Lower · 3D Upper · 3D Lower</span>
           </div>
           <img class="dash-preview-img hidden" id="dashPreviewImg" alt="Selected capture" />
         </div>
@@ -493,8 +495,11 @@ function renderCaptures(rows) {
   if (!host) return;
   const bySlot = resolveCaptureSlots(rows);
 
+  // Slot addresses (see annotationLocks.js / caseManagement.js THUMBNAIL_DISPLAY_RANK):
+  // 0 = 2D upper, 100 = 2D lower, 1 = 3D upper, 2 = 3D lower.
   const tiles = [
-    { slot: 0, label: "2D" },
+    { slot: 0, label: "2D Upper" },
+    { slot: 100, label: "2D Lower" },
     { slot: 1, label: "3D Upper" },
     { slot: 2, label: "3D Lower" },
   ];

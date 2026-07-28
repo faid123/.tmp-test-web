@@ -1297,10 +1297,8 @@ function commitTextInput() {
 
 const INITIAL_TEXT_FONT_PX = 22;
 
-// Fresh text box width — previously sized to ~5 words (then reduced 4×),
-// which wrapped typing after a word or two. Per feedback that cap is gone:
-// the box now stretches from its spawn point to the canvas's right edge, so
-// text wraps only at the canvas boundary — no artificial word limit.
+// Fresh text box width: stretches from its spawn point to the canvas's right
+// edge, so text wraps only at the canvas boundary (no artificial word cap).
 const TEXT_BOX_MIN_WIDTH = 70;
 
 function textBoxMaxWidth(startX = 0) {
@@ -2372,8 +2370,8 @@ export async function openInstructionEditor(options = {}) {
   resizeCanvas();
 
   // The case-ID watermark is now baked into the background image by
-  // composeJawCanvas (so it sits between the jaws even when one is taller),
-  // so we don't draw a second watermark on top.
+  // captureJawJpegDataUrl (below the arches — side by side on desktop, stacked
+  // on phones), so we don't draw a second watermark on top.
   if (typeof ResizeObserver !== "undefined") {
     resizeObserver = new ResizeObserver(() => resizeCanvas());
     resizeObserver.observe(canvas.parentElement);

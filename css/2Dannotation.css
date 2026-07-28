@@ -757,11 +757,49 @@ button.upload3d-row {
   color: #2b3440;
 }
 
-.jaw-preview-survey-btn {
-  /* Sits in the trailing 1fr track, pinned to the right — but offset left so it
-     clears the fullscreen/expand button pinned at the panel's top-right. */
+/* CANCEL + SET share the trailing 1fr track, pinned right — offset left so the
+   pair clears the fullscreen/expand button pinned at the panel's top-right. */
+.jaw-preview-survey-group {
   justify-self: end;
   margin-right: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Secondary action next to SET: quiet outline, red on hover. Hidden until a
+   jaw is armed. */
+.jaw-preview-survey-cancel-btn {
+  display: none;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 8px;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  align-items: center;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.jaw-preview-survey-cancel-btn.is-on {
+  display: inline-flex;
+}
+.jaw-preview-survey-cancel-btn:hover {
+  color: #b3261e;
+  border-color: #b3261e;
+  background: #fdf3f2;
+}
+.jaw-preview-survey-cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.jaw-preview-survey-btn {
   border: 1px solid var(--rose-500);
   background: #fff;
   color: var(--rose-700);
@@ -783,6 +821,86 @@ button.upload3d-row {
   background: var(--rose-050);
   border-color: var(--rose-600);
   color: var(--rose-800);
+}
+
+/* Armed state: the button has become the SET confirm for the jaw whose
+   placement arrow is currently showing in the 3D view. Filled teal so it reads
+   as "commit", matching the arrow's colour. */
+.jaw-preview-survey-btn.is-aiming {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+  padding: 0 26px;
+}
+.jaw-preview-survey-btn.is-aiming:hover {
+  background: #115e56;
+  border-color: #115e56;
+  color: #fff;
+}
+.jaw-preview-survey-btn[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Survey-aiming mode ring: a prominent border in the undercut colour (the
+   deepest heatmap band — keep in step with colorForSurveyingValue). Drawn as an
+   inset outline so the mount's size and radius are untouched. */
+.jaw-preview-3d-mount.is-aiming-survey {
+  outline: 3px solid #aa0003;
+  outline-offset: -3px;
+}
+
+/* Long-press engaged on touch: the mode ring brightens and thickens while the
+   finger is turning the jaw, so the tool switch is visible under the hand. */
+.jaw-preview-3d-mount.is-jaw-rotating {
+  outline-color: #d0342c;
+  outline-width: 5px;
+}
+
+/* While aiming, dragging swings the arrow rather than orbiting the arch, so the
+   canvas advertises grab instead of the default rotate cursor. */
+.jaw-preview-3d-mount.is-aiming-survey canvas {
+  cursor: grab;
+}
+.jaw-preview-3d-mount.is-aiming-survey canvas.is-aiming-drag {
+  cursor: grabbing;
+}
+
+/* Banner shown over the 3D view while a jaw is armed for surveying. */
+.jaw-preview-survey-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 8px;
+  z-index: 6;
+  max-width: calc(100% - 32px);
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.86);
+  color: #f8fafc;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.28);
+}
+.jaw-preview-survey-hint.is-on {
+  display: flex;
+}
+.jaw-preview-survey-hint-jaw {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #0f766e;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.jaw-preview-survey-hint-esc {
+  opacity: 0.65;
 }
 
 /* Inline upload progress shown in the SET SURVEY ANGLE slot while a freshly
@@ -897,16 +1015,6 @@ button.upload3d-row {
   z-index: 1;
 }
 
-.jaw-preview-3d-mount canvas.jaw-preview-survey-widget {
-  position: absolute;
-  left: 16px;
-  bottom: 16px;
-  width: 96px;
-  height: 96px;
-  z-index: 5;
-  pointer-events: none;
-}
-
 .jp-confirm-overlay {
   position: fixed;
   inset: 0;
@@ -978,16 +1086,53 @@ button.upload3d-row {
 
 .jaw-preview-undercut {
   position: absolute;
-  left: 16px;
-  top: 16px;
+  left: 8px;
+  top: 8px;
   z-index: 8;
+}
+
+/* Undercut icon button — the legend dropdown's anchor in the corner. */
+.jaw-preview-undercut-icon {
+  display: block;
+  width: 35px;
+  height: 35px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.jaw-preview-undercut-icon img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.jaw-preview-undercut-icon:hover {
+  transform: scale(1.08);
+}
+.jaw-preview-undercut-icon:active {
+  transform: scale(0.96);
+}
+
+/* The legend dropdown: borderless by design; the shadow alone lifts it off the mesh. */
+.jaw-preview-undercut-panel {
+  margin-top: 4px;
   background: #ffffff;
-  border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 4px 6px;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  box-shadow: 0 2px 8px rgba(26, 77, 63, 0.08);
+  box-shadow: 0 2px 10px rgba(26, 77, 63, 0.14);
+}
+.jaw-preview-undercut.is-off .jaw-preview-undercut-panel {
+  display: none;
+}
+
+/* Off state reads on the icon itself: greyed while the heatmap is hidden. */
+.jaw-preview-undercut.is-off .jaw-preview-undercut-icon img {
+  filter: grayscale(0.85);
+  opacity: 0.55;
 }
 
 /* View-navigation gizmo (square pad, bottom-right): isometric cube ringed by
@@ -1058,50 +1203,22 @@ button.upload3d-row {
 .jpnav-bottom { grid-area: 3 / 2; }
 
 .jaw-preview-undercut-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .jaw-preview-undercut-title {
-  font-size: 0.62rem;
+  font-size: 0.56rem;
   font-weight: 700;
   color: var(--rose-700);
   letter-spacing: 0.02em;
 }
 
-.jaw-preview-undercut-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: #fff;
-  color: var(--ink);
-  font-size: 10px;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-.jaw-preview-undercut-toggle:hover {
-  color: var(--rose-700, #25735f);
-  border-color: var(--rose-700, #25735f);
-}
-.jaw-preview-undercut.is-off .jaw-preview-undercut-toggle {
-  color: var(--muted);
-}
-.jaw-preview-undercut.is-off .jaw-preview-undercut-body {
-  opacity: 0.85;
-}
+
 
 .jaw-preview-undercut-body {
   display: grid;
-  grid-template-columns: 16px auto;
-  gap: 6px;
+  grid-template-columns: 12px auto;
+  gap: 5px;
   align-items: stretch;
 }
 
@@ -1109,15 +1226,17 @@ button.upload3d-row {
   height: 56px;
   display: grid;
   grid-template-rows: repeat(4, 1fr);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  overflow: hidden;
+  row-gap: 4px;
+}
+.jaw-preview-undercut-scale span {
+  border-radius: 2px;
 }
 
 .jaw-preview-undercut-labels {
   display: grid;
   grid-template-rows: repeat(4, 1fr);
-  font-size: 0.54rem;
+  row-gap: 4px;
+  font-size: 0.5rem;
   color: var(--muted);
   font-weight: 600;
 }
@@ -1414,6 +1533,144 @@ button.upload3d-row {
   background: var(--rose-500);
   border-color: black;
   color: #fff;
+}
+
+/* Load Template Jaw — file-upload modal */
+.load-template-modal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 1100;
+}
+
+.load-template-modal.is-hidden {
+  display: none;
+}
+
+.load-template-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(11, 18, 28, 0.45);
+}
+
+.load-template-panel {
+  position: relative;
+  width: min(460px, calc(100vw - 32px));
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #d7dce4;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.2);
+  padding: 18px;
+}
+
+.load-template-panel h3 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  color: #142434;
+}
+
+.load-template-hint {
+  margin: 0 0 14px;
+  font-size: 0.9rem;
+  color: #4a5663;
+  line-height: 1.4;
+}
+
+.load-template-hint code {
+  background: #eef1f6;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.85em;
+}
+
+.load-template-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 22px 16px;
+  border: 2px dashed #c2ccd8;
+  border-radius: 10px;
+  background: #f7f9fc;
+  color: #4a5663;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.load-template-dropzone:hover,
+.load-template-dropzone:focus-within,
+.load-template-dropzone.is-dragover {
+  border-color: var(--rose-500);
+  background: #fdf3f5;
+}
+
+.load-template-dropzone-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--rose-500);
+}
+
+.load-template-dropzone-text {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.load-template-file-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 132px;
+  overflow-y: auto;
+}
+
+.load-template-file-item {
+  font-size: 0.86rem;
+  color: #1d2b38;
+  background: #eef1f6;
+  border-radius: 6px;
+  padding: 6px 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.load-template-file-item::before {
+  content: "\1F4C4";
+  margin-right: 6px;
+}
+
+.load-template-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.load-template-actions button {
+  border: 1px solid #c9d1dc;
+  border-radius: 8px;
+  background: #fff;
+  color: #1d2b38;
+  font-weight: 600;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.load-template-actions .is-primary {
+  background: var(--rose-500);
+  border-color: black;
+  color: #fff;
+}
+
+.load-template-actions .is-primary:disabled {
+  background: #d7b5bd;
+  border-color: #c9d1dc;
+  cursor: not-allowed;
 }
 
 .case-label {
@@ -2871,8 +3128,13 @@ button.upload3d-row {
     text-overflow: ellipsis;
   }
 
-  .jaw-preview-survey-btn {
+  .jaw-preview-survey-group {
     justify-self: end;
+    gap: 6px;
+  }
+
+  .jaw-preview-survey-btn,
+  .jaw-preview-survey-cancel-btn {
     /* Drop the desktop 45px-gap margin on narrow screens so the
        "ALLOW PROCESSING" label keeps its space instead of collapsing. */
     margin-left: 0;
@@ -2895,22 +3157,14 @@ button.upload3d-row {
   .jaw-preview-undercut {
     left: 10px;
     top: 10px;
-    padding: 5px 6px;
   }
 
-  .jaw-preview-undercut-header {
-    margin-bottom: 4px;
-    gap: 6px;
+  .jaw-preview-undercut-panel {
+    padding: 5px 6px;
   }
 
   .jaw-preview-undercut-title {
     font-size: 0.56rem;
-  }
-
-  .jaw-preview-undercut-toggle {
-    width: 16px;
-    height: 16px;
-    font-size: 9px;
   }
 
   .jaw-preview-undercut-body {
@@ -2918,9 +3172,6 @@ button.upload3d-row {
     gap: 5px;
   }
 
-  .jaw-preview-undercut-scale {
-    height: 48px;
-  }
 
   .jaw-preview-undercut-labels {
     font-size: 0.5rem;
@@ -3281,15 +3532,16 @@ button.upload3d-row {
    it so users don't have to scroll past it to reach the canvas controls.
    The DOM stays intact for renderComponentCatalog() to keep mutating
    state-tracked nodes; only the visual is suppressed. */
-/* Hide on phones (any orientation) and on tablets held in portrait. EXCEPTION:
-   landscape tablets (iPad 11"+ ≥1024px wide) have room for the tab strip, so we
-   DON'T force-hide there — #editModePanel falls back to its normal design-mode
-   toggle (visible once both arches are locked). We avoid `display: block`
-   !important on purpose: that would show the panel even when design mode is off. */
+/* Hide the desktop Components tab strip on all touch devices up to the tablet
+   ceiling (≤1200px, the same width where the layout stacks to one column) in
+   BOTH orientations — phones and tablets alike. On touch, the mobile component
+   sheet (useMobileSheet, triggered by pointer:coarse) replaces it, so the strip
+   is redundant. We avoid `display: block` !important on purpose: that would show
+   the panel even when design mode is off. */
 @media (pointer: coarse) and (orientation: portrait) {
   #editModePanel { display: none !important; }
 }
-@media (pointer: coarse) and (max-width: 1023px) {
+@media (pointer: coarse) and (max-width: 1200px) {
   #editModePanel { display: none !important; }
 }
 

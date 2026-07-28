@@ -15,6 +15,10 @@
     rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
   />
+  <!-- Shared app shell (sidebar + footer). Loaded last so it unifies the look
+       with case_list and ThreeDViewer — including recolouring this page's
+       footer from rose to the shared teal. -->
+  <link rel="stylesheet" href="../../css/app-shell.css" />
   <script type="importmap">
     {
       "imports": {
@@ -480,6 +484,38 @@
         <button id="backConfirmCancel" type="button">Cancel</button>
         <button id="backConfirmBack" type="button">Return</button>
         <button id="backConfirmSaveBack" type="button">Save &amp; Return</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="loadTemplateJawModal" class="load-template-modal is-hidden" aria-hidden="true">
+    <div class="load-template-backdrop" aria-hidden="true"></div>
+    <div
+      class="load-template-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="loadTemplateTitle"
+    >
+      <h3 id="loadTemplateTitle">Load Template Jaw</h3>
+      <p class="load-template-hint">
+        Upload a Jaw Struct (<code>.txt</code>) file to load its design onto the arch.
+        You can select the upper and lower files together.
+      </p>
+      <label id="loadTemplateDropzone" class="load-template-dropzone" for="loadTemplateFileInput">
+        <span class="load-template-dropzone-icon" aria-hidden="true">&#8682;</span>
+        <span class="load-template-dropzone-text">Choose Jaw Struct file(s) or drop them here</span>
+        <input
+          id="loadTemplateFileInput"
+          type="file"
+          accept=".txt,text/plain"
+          multiple
+          hidden
+        />
+      </label>
+      <ul id="loadTemplateFileList" class="load-template-file-list"></ul>
+      <div class="load-template-actions">
+        <button id="loadTemplateCancelBtn" type="button">Cancel</button>
+        <button id="loadTemplateLoadBtn" type="button" class="is-primary" disabled>Load</button>
       </div>
     </div>
   </div>

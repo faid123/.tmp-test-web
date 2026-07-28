@@ -57,6 +57,19 @@
   border-color: var(--primary, #3BAE95);
 }
 
+/* Free-text case instructions. Inherits .modal-input's box styling; only the
+   textarea-specific bits are set here (textareas don't inherit the page font).
+   Height follows the content (autoGrowTextarea in createCase.js), so the drag
+   handle is off — it would fight the auto-sizing. Past the cap it scrolls. */
+.cc-textarea {
+  resize: none;
+  overflow-y: auto;
+  min-height: 76px;
+  max-height: 220px;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
 .cc-display {
   padding: 10px 12px;
   background: var(--line-soft, #f1f5f9);
