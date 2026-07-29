@@ -786,6 +786,17 @@ function statusDisplayText(apiStatus) {
   return statusLabel(apiStatus);
 }
 
+// Inner markup for a case-list status pill. The pill doubles as its own edit
+// control, so it carries a pencil beside the label. Built here rather than
+// inline because patchRowInPlace also repaints these — assigning textContent
+// there would silently drop the icon.
+function statusPillInner(apiStatus) {
+  return (
+    `<span class="cm-pill-label">${escapeAttr(statusDisplayText(apiStatus))}</span>` +
+    `<i class="fa-regular fa-pen-to-square cm-pill-pencil" aria-hidden="true"></i>`
+  );
+}
+
 // Paint the read-only STATUS pill (text + color) in the detail pane. The native
 // <select> is kept only as the (invisible) editing control, so the visible pill
 // is what reflects the current status.
@@ -923,7 +934,9 @@ function populateTable(cases) {
       <td class="cm-td-name">
         <span class="cm-row-name" title="${escapeAttr(caseItem.case_id || "")}">${escapeAttr(caseDisplayName)}</span>${pinned ? '<i class="fa-solid fa-flag cm-row-pin" title="Pinned"></i>' : ""}${dueBarHtml}
       </td>
-      <td class="cm-td-status"><span class="cm-pill ${statusPillClass(caseItem.new_status)}">${escapeAttr(statusDisplayText(caseItem.new_status))}</span></td>
+      <td class="cm-td-status">
+        <span class="cm-pill ${statusPillClass(caseItem.new_status)}" data-action="edit-status" role="button" tabindex="0" title="Change status">${statusPillInner(caseItem.new_status)}</span>
+      </td>
       <td class="cm-td-date" data-label="Created">${formatDateTime(caseItem.creation_date)}</td>
       <td class="cm-td-date cm-due-date ${dueInd ? dueInd.cls : ""}" data-label="Due">
         <span class="cm-due-text">${dueDate ? formatDateOnly(dueDate) : "N/A"}</span>
@@ -995,6 +1008,23 @@ function populateTable(cases) {
       const freshDue =
         caseItem.expected_date || caseItem.due_date || computeDefaultDueDate(caseItem.creation_date);
       openDueDateEditor(dueTd, caseItem, resolvedCaseId, freshDue);
+    });
+
+    // STATUS, which until now could only be changed from the detail pane after
+    // selecting the case. The pill is the control itself — no separate pencil.
+    const statusTd = row.querySelector(".cm-td-status");
+    const statusPill = row.querySelector('[data-action="edit-status"]');
+    statusPill?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openStatusEditor(statusTd, caseItem, resolvedCaseId);
+    });
+    // The row itself answers Enter/Space by selecting the case, so the pill has
+    // to claim those keys before they bubble.
+    statusPill?.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      e.stopPropagation();
+      openStatusEditor(statusTd, caseItem, resolvedCaseId);
     });
 
     body.appendChild(row);
@@ -1481,6 +1511,79 @@ function openDueDateEditor(anchorTd, caseItem, caseId, currentDue) {
       applyClientFilters();
     },
   });
+}
+
+// Swap a row's STATUS pill for a native <select> so the status can be changed
+// without selecting the case first. Built on demand, like the due-date calendar:
+// a permanent select per row would put twelve options in the DOM for every case
+// on the page.
+//
+// The options are cloned from the detail pane's #status rather than written out
+// again, so the two editors can never drift apart.
+function openStatusEditor(anchorTd, caseItem, caseId) {
+  if (!anchorTd || anchorTd.querySelector(".cm-status-inline")) return;
+  const template = document.getElementById("status");
+  if (!template) return;
+
+  const pill = anchorTd.querySelector(".cm-pill");
+  const select = document.createElement("select");
+  select.className = "cm-status-inline";
+  select.setAttribute("aria-label", "Change status");
+  select.innerHTML = template.innerHTML;
+  select.value = apiStatusToValue(caseItem.new_status);
+
+  // Leave the row's own click handler alone — selecting a case out from under
+  // the open editor would repaint the table and drop it.
+  select.addEventListener("click", (e) => e.stopPropagation());
+
+  let done = false;
+  // `refocus` only for a deliberate cancel (Escape): on blur the user has
+  // already clicked or tabbed elsewhere, and pulling focus back would fight them.
+  const close = ({ refocus = false } = {}) => {
+    if (done) return;
+    done = true;
+    select.remove();
+    if (pill) {
+      pill.hidden = false;
+      if (refocus) pill.focus();
+    }
+  };
+
+  select.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      close({ refocus: true });
+    }
+  });
+  // Dismissing without choosing (click away, Tab out) restores the pill.
+  select.addEventListener("blur", () => close());
+
+  select.addEventListener("change", async () => {
+    const apiValue = valueToApiStatus(select.value);
+    const previous = caseItem.new_status;
+    done = true;                 // the repaint below removes the row entirely
+    select.disabled = true;
+
+    try {
+      // postNewStatus re-reads the stored record and merges, so this is safe on
+      // a row lazy enrichment hasn't reached yet.
+      await postNewStatus(caseItem, apiValue);
+      caseItem.new_status = apiValue;
+      syncDetailPaneIfSelected(caseItem);
+      toast.success("Status updated.");
+    } catch (err) {
+      console.error("Status update failed:", err);
+      caseItem.new_status = previous;
+      toast.error("Failed to update status.");
+    }
+    // Repaint from the model: the pill, the stage filter counts and this row's
+    // place in them all follow the status.
+    applyClientFilters();
+  });
+
+  if (pill) pill.hidden = true;
+  anchorTd.appendChild(select);
+  select.focus();
 }
 
 // Compute a default due-date timestamp (ms) that's 14 days after the
@@ -3474,7 +3577,7 @@ function patchRowInPlace(caseObj) {
   const pill = row.querySelector(".cm-td-status .cm-pill");
   if (pill) {
     pill.className = `cm-pill ${statusPillClass(caseObj.new_status)}`;
-    pill.textContent = statusDisplayText(caseObj.new_status);
+    pill.innerHTML = statusPillInner(caseObj.new_status);
   }
 
   const dueDate =
@@ -3832,17 +3935,48 @@ async function saveCaseInstructions() {
   }
 }
 
+// Read the stored additionalcasedetails row for one case, or null when the case
+// has no record yet. Throws if the backend refuses, so a caller about to
+// overwrite the record can abort rather than guess at its contents.
+async function readCaseDetails(caseIntID, uuid) {
+  const res = await fetch(
+    "https://live.api.smartrpdai.com/api/smartrpd/additionalcasedetails/getall",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        { machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616", uuid, caseIntID },
+      ]),
+    }
+  );
+  logApi(res, 'POST /additionalcasedetails/getall');
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const rows = await res.json();
+  return (Array.isArray(rows) ? rows.at(-1) : null) || null;
+}
+
 async function postNewStatus(caseObj, newStatus) {
+  const uuid = getLoggedInUser().uuid;
+  const caseIntID = caseObj.id || caseObj.case_int_id;
+
+  // POST /additionalcasedetails replaces the whole row — every field this body
+  // leaves out comes back null. So read the record and merge into it rather than
+  // trusting the in-memory case: lazy enrichment marks a case "done" as soon as
+  // EITHER of its two fetches succeeds, so a row whose roles call landed and
+  // whose details call was throttled still carries no due date or comments, and
+  // sending those would erase them.
+  const stored = await readCaseDetails(caseIntID, uuid);
+
   const body = [
     {
       machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
-      uuid: getLoggedInUser().uuid,
-      caseIntID: caseObj.id || caseObj.case_int_id,
+      uuid,
+      caseIntID,
     },
     {
-      assigned_to: caseObj.assigned_to ?? null,
-      due_date: caseObj.expected_date ?? null, // 你的 clean 已改名
-      comments: caseObj.comments ?? null,
+      assigned_to: stored?.assigned_to ?? caseObj.assigned_to ?? null,
+      due_date: stored?.due_date ?? caseObj.expected_date ?? null, // 你的 clean 已改名
+      comments: stored?.comments ?? caseObj.comments ?? null,
       new_status: newStatus,
     },
   ];

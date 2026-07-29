@@ -2313,6 +2313,12 @@ button.upload3d-row {
   min-width: 0;
 }
 
+/* Assembly tab only: Circum carries five entries (and the longest labels), RPI &
+   RPA just two, so give Circum the extra width. MAJOR CONNECTOR stays 50/50. */
+.major-columns--assembly {
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+}
+
 .major-column {
   border: 1px solid var(--line);
   border-radius: 6px;

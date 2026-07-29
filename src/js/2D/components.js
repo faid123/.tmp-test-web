@@ -83,11 +83,14 @@ export const COMPONENT_CATALOG = [
     conflictsWith: [],
     actionUponFailure: ACTION_UPON_FAILURE.PREVENT_PLACEMENT,
   },
+  // RPI = mesial Rest + Proximal plate + I-bar; RPA swaps the I-bar for an Akers
+  // (circumferential) clasp. Both are distal-extension designs: offered only on an
+  // abutment whose distal neighbour is missing.
   {
-    id: "assembly-tbar",
-    label: "T-bar",
-    shortLabel: "TBA",
-    icon: "../../assets/menu-icon/Assembly/Bars/Assembly_Tbar.png",
+    id: "assembly-rpi",
+    label: "RPI",
+    shortLabel: "RPI",
+    icon: "../../assets/menu-icon/Assembly/Bars/Assembly_RPI.png",
     section: "bars",
     tab: "assembly",
     requiresPresence: true,
@@ -95,23 +98,11 @@ export const COMPONENT_CATALOG = [
     conflictsWith: [],
     actionUponFailure: ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
   },
-  // {
-  //   id: "assembly-tbar-mod",
-  //   label: "Mod. T-bar",
-  //   shortLabel: "TBM",
-  //   icon: "../../assets/menu-icon/Assembly/Bars/Assembly_TbarMod.png",
-  //   section: "bars",
-  //   tab: "assembly",
-  //   requiresPresence: true,
-  //   requiresMissing: false,
-  //   conflictsWith: [],
-  //   actionUponFailure: ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
-  // },
   {
-    id: "assembly-ibar",
-    label: "I-bar",
-    shortLabel: "IBA",
-    icon: "../../assets/menu-icon/Assembly/Bars/Assembly_Ibar.png",
+    id: "assembly-rpa",
+    label: "RPA",
+    shortLabel: "RPA",
+    icon: "../../assets/menu-icon/Assembly/Circum/Assembly_SimpleCircum.png",
     section: "bars",
     tab: "assembly",
     requiresPresence: true,
@@ -119,18 +110,6 @@ export const COMPONENT_CATALOG = [
     conflictsWith: [],
     actionUponFailure: ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
   },
-  // {
-  //   id: "assembly-rpi",
-  //   label: "RPI",
-  //   shortLabel: "RPI",
-  //   icon: "../../assets/menu-icon/Assembly/Bars/Assembly_RPI.png",
-  //   section: "bars",
-  //   tab: "assembly",
-  //   requiresPresence: true,
-  //   requiresMissing: false,
-  //   conflictsWith: ["assembly-circ"],
-  //   actionUponFailure: ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
-  // },
   {
     id: "assembly-circ",
     label: "Simple",
@@ -140,7 +119,7 @@ export const COMPONENT_CATALOG = [
     tab: "assembly",
     requiresPresence: true,
     requiresMissing: false,
-    conflictsWith: ["assembly-rpi"],
+    conflictsWith: [],
     actionUponFailure: ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
   },
   {
@@ -158,8 +137,8 @@ export const COMPONENT_CATALOG = [
   },
   {
     id: "assembly-circ-ring-support",
-    label: "Ring Support",
-    shortLabel: "RSP",
+    label: "Back-action",
+    shortLabel: "BAC",
     icon: "../../assets/menu-icon/Assembly/Circum/Assembly_RingSupp.png",
     section: "circum",
     tab: "assembly",
@@ -170,8 +149,8 @@ export const COMPONENT_CATALOG = [
   },
   {
     id: "assembly-circ-embrasure",
-    label: "EMB",
-    shortLabel: "EMB",
+    label: "Combine",
+    shortLabel: "CBC",
     icon: "../../assets/menu-icon/Assembly/Circum/Assembly_embrasure.png",
     section: "circum",
     tab: "assembly",
@@ -194,8 +173,8 @@ export const COMPONENT_CATALOG = [
   },
   {
     id: "assembly-circ-multi",
-    label: "Multi",
-    shortLabel: "MUL",
+    label: "Continuous",
+    shortLabel: "CC",
     icon: "../../assets/menu-icon/Assembly/Circum/Assembly_multiCircum.png",
     section: "circum",
     tab: "assembly",
@@ -310,9 +289,10 @@ export const COMPONENT_CATALOG = [
     id: "bar-t",
     label: "T Bar",
     shortLabel: "TB",
-    icon: "../../assets/menu-icon/Bars/Retainer_T-Bar.png",
+    // Retainer_Y-Bar.png is mislabelled art — it draws a T, not a Y — so it is the
+    // T Bar icon. `bar-y` still points at the same file for want of real Y art.
+    icon: "../../assets/menu-icon/Bars/Retainer_Y-Bar.png",
     tab: "bars",
-    hidden: true,
     requiresPresence: true,
     requiresMissing: false,
     conflictsWith: [],
@@ -456,6 +436,15 @@ export const COMPONENT_CATALOG = [
 
 export const COMPONENT_BY_ID = new Map(COMPONENT_CATALOG.map((entry) => [entry.id, entry]));
 
+/**
+ * Assemblies place by clicking a rest-seat suggestion dot. Derived from the tab rather
+ * than hand-listed: an assembly id is not an isRestComponent, so one missing from this
+ * set silently draws no suggestions at all and cannot be placed.
+ */
+export const ASSEMBLY_REST_SUGGESTION_IDS = new Set(
+  COMPONENT_CATALOG.filter((entry) => entry.tab === "assembly").map((entry) => entry.id)
+);
+
 export {
   cancelMeshInteractionDefer,
   deferMeshInteraction,
@@ -534,6 +523,7 @@ export {
   getMinorConnectorMidOffset,
   getMinorConnectorOffset,
   getMinorConnectorRenderScale,
+  getMinorConnectorSupportSides,
 } from "./components.minor.js";
 
 export {

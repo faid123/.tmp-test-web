@@ -36,6 +36,7 @@ import {
 } from "./annotationTeethModel.js";
 import {
   WORK_CATEGORY_OPTIONS,
+  workCategoryForJawMaterial,
   loadCaseNote,
   loadCaseDueDate,
   saveCaseDueDate,
@@ -165,7 +166,9 @@ export function renderComponentCatalog() {
   const groups = COMPONENT_GROUPS[state.selectedTab];
   if (groups) {
     const columns = document.createElement("div");
-    columns.className = "major-columns";
+    // Per-tab modifier so column widths can differ (assembly is lopsided: five
+    // Circum entries against two RPI/RPA ones).
+    columns.className = `major-columns major-columns--${state.selectedTab}`;
     groups.forEach((groupMeta) => {
       const groupItems = tabItems.filter((entry) => entry.section === groupMeta.key);
       columns.appendChild(createMajorColumn(groupMeta.title, groupItems));
@@ -484,16 +487,23 @@ export function handleDesignComponentSelect(componentId) {
     );
     return;
   }
+  if (componentId === "assembly-circ-ring-support") {
+    setMessage(
+      "Back-action Clasps selected. Click a mesial or distal rest-seat suggestion: the clasp goes on the opposite side, the reciprocating clasp stays on the rest's side.",
+      false
+    );
+    return;
+  }
   if (componentId === "assembly-circ-embrasure") {
     setMessage(
-      "Embrasure selected. Click distal rest-seat suggestion on a posterior tooth to place components on the selected tooth and its adjacent distal tooth.",
+      "Combine Clasps selected. Suggestions appear on the rest seats facing a missing tooth; clicking one brackets that gap on both abutments.",
       false
     );
     return;
   }
   if (componentId === "assembly-circ-multi") {
     setMessage(
-      "Multi selected. Click mesial rest-seat suggestion on a posterior tooth to place components on the selected tooth and its adjacent distal tooth.",
+      "Continuous Clasps selected. Click mesial rest-seat suggestion on a posterior tooth to place components on the selected tooth and its adjacent distal tooth.",
       false
     );
     return;
@@ -505,23 +515,16 @@ export function handleDesignComponentSelect(componentId) {
     );
     return;
   }
-  if (componentId === "assembly-tbar") {
+  if (componentId === "assembly-rpi") {
     setMessage(
-      "T-bar selected. Suggestions appear on posterior teeth adjacent to missing teeth (mesial for distal-adjacent, distal for mesial-adjacent).",
+      "RPI selected (mesial rest + proximal plate + distal I-bar). Click the mesial rest-seat suggestion on a posterior tooth whose distal neighbour is missing.",
       false
     );
     return;
   }
-  if (componentId === "assembly-tbar-mod") {
+  if (componentId === "assembly-rpa") {
     setMessage(
-      "Mod.T-bar selected. Suggestions appear on posterior teeth adjacent to missing teeth.",
-      false
-    );
-    return;
-  }
-  if (componentId === "assembly-ibar") {
-    setMessage(
-      "I-bar selected. Suggestions appear on posterior teeth adjacent to missing teeth.",
+      "RPA selected (mesial rest + proximal plate + mesial buccal clasp). Click the mesial rest-seat suggestion on a posterior tooth whose distal neighbour is missing.",
       false
     );
     return;
@@ -620,13 +623,19 @@ export function createCaseNoteForm() {
   });
   form.appendChild(shadeInput.row);
 
+  const autoCategory = workCategoryForJawMaterial(state.jawMaterial);
   const categorySelect = buildSelectRow(
     "Work Category",
     "case-note-category",
     WORK_CATEGORY_OPTIONS,
-    saved.workCategory || ""
+    (saved.workCategoryTouched ? saved.workCategory : autoCategory)||
+    saved.workCategory || 
+    ""
   );
   form.appendChild(categorySelect.row);
+
+  let userTouchedCategory = Boolean(saved.workCategoryTouched);
+  categorySelect.input.addEventListener("change",()=> {userTouchedCategory=true;});
 
   const commentField = buildTextareaRow("Comment", "case-note-comment", saved.comment || "");
   form.appendChild(commentField.row);
@@ -649,6 +658,7 @@ export function createCaseNoteForm() {
       dateRequired,
       toothShade: shadeInput.input.value,
       workCategory: categorySelect.input.value,
+      workCategoryTouched:userTouchedCategory,
       comment: commentField.input.value,
       updatedAt: new Date().toISOString(),
     };

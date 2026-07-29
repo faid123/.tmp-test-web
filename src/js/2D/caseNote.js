@@ -43,6 +43,15 @@ export const WORK_CATEGORY_LABELS = Object.fromEntries(
   WORK_CATEGORY_OPTIONS.filter((o) => o.value).map((o) => [o.value, o.label])
 );
 
+export const WORK_CATEGORY_JAW_MATERIAL = {
+  0:"metal",
+  1:"full-acrylic",
+}
+
+export function workCategoryForJawMaterial(material){
+  return WORK_CATEGORY_JAW_MATERIAL[material]?? "";
+}
+
 const STORAGE_PREFIX = "caseNote:";
 const DUE_DATE_PREFIX = "caseDueDate:";
 
@@ -152,7 +161,7 @@ export async function updateCaseDueDate(caseIntID, isoDate, comment) {
   ]);
   return res?.ok ?? false;
 }
-
+// The status string the backend stores for an approved 2D design
 export function loadCaseNote(caseIntID) {
   const raw = lsGet(storageKey(STORAGE_PREFIX, caseIntID));
   if (!raw) return {};

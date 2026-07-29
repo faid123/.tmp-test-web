@@ -214,6 +214,11 @@ export function renderJaw(jaw) {
   const ids = TOOTH_ORDER[jaw];
   pruneInvalidMajorConnectorPlacementsInJaw(state.teeth, COMPONENT_BY_ID, jaw);
   pruneInvalidBarPlacementsInJaw(state.teeth, jaw);
+  // Suggestion dots live in a layer above every tooth group. Placed clasp/rest art
+  // is a large mostly-transparent <image> with pointer-events:all, so a neighbour
+  // drawn later in TOOTH_ORDER (e.g. 26 over 25) would otherwise swallow clicks on
+  // the dots of the tooth before it.
+  const suggestionLayer = svgEl("g", { class: "tooth-suggestion-layer" });
   ids.forEach((toothId) => {
     const placement = getToothPlacement(jaw, toothId);
     if (!placement) return;
@@ -244,10 +249,18 @@ export function renderJaw(jaw) {
         group.classList.add(`tooth-bar-suggestible--${jaw}`);
       }
     }
-    group.setAttribute(
-      "transform",
-      `translate(${point.x.toFixed(2)} ${point.y.toFixed(2)}) rotate(${rotation.toFixed(2)})`
-    );
+    const toothTransform =
+      `translate(${point.x.toFixed(2)} ${point.y.toFixed(2)}) rotate(${rotation.toFixed(2)})`;
+    group.setAttribute("transform", toothTransform);
+
+    // Same tooth-local frame as `group`, but parented to the top suggestion layer.
+    const suggestionGroup = svgEl("g", {
+      class: "tooth-suggestions",
+      "data-tooth-id": toothId,
+      "data-jaw": jaw,
+      transform: toothTransform,
+    });
+    suggestionLayer.appendChild(suggestionGroup);
 
     group.appendChild(
       svgEl("circle", {
@@ -264,8 +277,8 @@ export function renderJaw(jaw) {
     appendToothPlateComponentVisuals(group, tooth, toothId, jaw);
     appendPlateSuggestionPoints(group, tooth, toothId, jaw);
     appendPlacedComponentMarkers(group, tooth, toothId, jaw);
-    appendRestSuggestionPoints(group, tooth, toothId, jaw);
-    appendRetainerClaspSuggestionPoints(group, tooth, toothId, jaw);
+    appendRestSuggestionPoints(suggestionGroup, tooth, toothId, jaw);
+    appendRetainerClaspSuggestionPoints(suggestionGroup, tooth, toothId, jaw);
 
     const toothClickKey = `mesh-tooth:${jaw}:${toothId}`;
     group.addEventListener("click", (event) => {
@@ -442,6 +455,8 @@ export function renderJaw(jaw) {
     appendPalatalPlateArchOverlay(svg);
     appendPalatalStrapArchOverlay(svg);
   }
+
+  svg.appendChild(suggestionLayer);
 }
 
 // Handle tooth click in selected mode (status/range) and block in design mode.

@@ -151,23 +151,30 @@ function fdiFromTooth(tooth) {
   return `${major}${minor}`;
 }
 
-/** Rest anchor surface from Pr Config (first position flagged present, default mesial). */
-function restSurfaceFromConfig(f) {
-  for (let i = 0; i < REST_POSITION_SURFACE.length; i += 1) {
-    if (f[PR_CONFIG_FIELDS[i]] === "0") return REST_POSITION_SURFACE[i];
-  }
-  return "mesial";
+/**
+ * Rest anchor surfaces from Pr Config. The triple is one flag PER POSITION
+ * (mesial/distal/lingual, 0 = present), not an enum, so a tooth can carry more than
+ * one rest — Half & Half is double-rested (mesial + distal). Defaults to ["mesial"].
+ */
+function restSurfacesFromConfig(f) {
+  const surfaces = REST_POSITION_SURFACE.filter((_, i) => f[PR_CONFIG_FIELDS[i]] === "0");
+  return surfaces.length ? surfaces : ["mesial"];
 }
 
 /**
- * Pr Config triple (0 = present) for a posterior rest surface — inverse of
- * restSurfaceFromConfig (unknown → mesial). The surface is web-owned, so Save derives
- * Pr Config from the live placement, else a surface edit (mesial → lingual) is dropped.
+ * Pr Config triple (0 = present) for the posterior rest surfaces — inverse of
+ * restSurfacesFromConfig (nothing recognised → mesial). The surface is web-owned, so
+ * Save derives Pr Config from the live placements, else a surface edit (mesial →
+ * lingual) is dropped.
  */
-function prConfigFromSurface(surface) {
-  const idx = REST_POSITION_SURFACE.indexOf(String(surface ?? "").toLowerCase());
-  const present = idx >= 0 ? idx : 0;
-  return REST_POSITION_SURFACE.map((_, i) => (i === present ? 0 : 1));
+function prConfigFromSurfaces(surfaces) {
+  const present = new Set();
+  for (const surface of surfaces) {
+    const idx = REST_POSITION_SURFACE.indexOf(String(surface ?? "").toLowerCase());
+    if (idx >= 0) present.add(idx);
+  }
+  if (!present.size) present.add(0);
+  return REST_POSITION_SURFACE.map((_, i) => (present.has(i) ? 0 : 1));
 }
 
 /** Clasp anchor surface from a Retainer Clasp/Ring Type field (default mesial_buccal). */
@@ -319,8 +326,15 @@ export function resolveJawStructDesign(parsed) {
     const prCode = Number(f[POSTERIOR_REST_FIELD]);
     if (Number.isFinite(prCode) && prCode > 0) {
       const id = POSTERIOR_REST_TYPE.get(prCode);
-      if (id) entry.placements.push({ componentId: id, surface: restSurfaceFromConfig(f) });
-      else reportUnmapped(POSTERIOR_REST_FIELD, prCode);
+      if (id === "rest-seat") {
+        // One seat per flagged position — a double-rested tooth flags two.
+        for (const surface of restSurfacesFromConfig(f)) {
+          entry.placements.push({ componentId: id, surface });
+        }
+      } else if (id) {
+        // rest-onlay (pr_full) covers the whole occlusal surface: always one.
+        entry.placements.push({ componentId: id, surface: restSurfacesFromConfig(f)[0] });
+      } else reportUnmapped(POSTERIOR_REST_FIELD, prCode);
     }
 
     // Anterior rest (cingulum/incisal) — rendered as rest-seat on a cingulum/incisal surface.
@@ -535,9 +549,12 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
   let anteriorRest = 0;
   let antCingulum = Number(rawOr(ANTERIOR_CINGULUM_FIELD, 0));
   let antIncisal = Number(rawOr(ANTERIOR_INCISAL_FIELD, 0));
-  const restPl = placements.find(
+  const restPlacements = placements.filter(
     (p) => p.componentId === "rest-seat" || p.componentId === "rest-onlay"
   );
+  // The rest TYPE is the same for every seat on a tooth; only Pr Config below
+  // distinguishes how many positions are seated.
+  const restPl = restPlacements[0];
   if (restPl) {
     const s = String(restPl.surface || "");
     if (restPl.componentId === "rest-onlay") {
@@ -560,7 +577,7 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
   // the loaded raw value (or the from-scratch default) for round-trip fidelity.
   const prConfig =
     posteriorRest === 2 && restPl
-      ? prConfigFromSurface(restPl.surface)
+      ? prConfigFromSurfaces(restPlacements.map((p) => p.surface))
       : [
           rawOr("Tooth Main.Tooth Rest.Pr Config 0", posteriorRest === 2 ? 0 : 1),
           rawOr("Tooth Main.Tooth Rest.Pr Config 1", 1),
