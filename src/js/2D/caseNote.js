@@ -43,13 +43,15 @@ export const WORK_CATEGORY_LABELS = Object.fromEntries(
   WORK_CATEGORY_OPTIONS.filter((o) => o.value).map((o) => [o.value, o.label])
 );
 
+// Work Category mirrors the case's denture-base material (state.jawMaterial:
+// 0 = metal, 2 = full acrylic, null = not chosen yet). "" when unset.
 export const WORK_CATEGORY_JAW_MATERIAL = {
-  0:"metal",
-  1:"full-acrylic",
-}
+  0: "metal",
+  2: "full-acrylic",
+};
 
-export function workCategoryForJawMaterial(material){
-  return WORK_CATEGORY_JAW_MATERIAL[material]?? "";
+export function workCategoryForJawMaterial(material) {
+  return WORK_CATEGORY_JAW_MATERIAL[material] ?? "";
 }
 
 const STORAGE_PREFIX = "caseNote:";
@@ -161,7 +163,29 @@ export async function updateCaseDueDate(caseIntID, isoDate, comment) {
   ]);
   return res?.ok ?? false;
 }
-// The status string the backend stores for an approved 2D design
+// The status string the backend stores for an approved 2D design.
+export const STATUS_2D_DESIGN_APPROVED = "2D design approved";
+
+// Set the case's status. Same full-upsert rule as updateCaseDueDate: read the
+// current row and carry assigned_to/due_date/comments forward, or they come back
+// null. Bails without writing if the read fails. Returns true on success.
+export async function updateCaseStatus(caseIntID, newStatus) {
+  const user = getLoggedInUser();
+  if (!user?.uuid || caseIntID == null) return false;
+  const { ok, detail } = await fetchAdditionalCaseDetails(caseIntID);
+  if (!ok) return false;
+  const res = await postJson("additionalcasedetails", [
+    { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID },
+    {
+      assigned_to: detail?.assigned_to ?? null,
+      due_date: detail?.due_date ?? null,
+      comments: detail?.comments ?? null,
+      new_status: newStatus,
+    },
+  ]);
+  return res?.ok ?? false;
+}
+
 export function loadCaseNote(caseIntID) {
   const raw = lsGet(storageKey(STORAGE_PREFIX, caseIntID));
   if (!raw) return {};

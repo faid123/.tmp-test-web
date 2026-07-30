@@ -36,6 +36,7 @@ import {
 } from "./annotationTeethModel.js";
 import {
   WORK_CATEGORY_OPTIONS,
+  STATUS_2D_DESIGN_APPROVED,
   workCategoryForJawMaterial,
   loadCaseNote,
   loadCaseDueDate,
@@ -44,8 +45,9 @@ import {
   toDateInputValue,
   fetchAdditionalCaseDetails,
   updateCaseDueDate,
+  updateCaseStatus,
 } from "./caseNote.js";
-import { toast, attachThemedCalendar } from "../shared/toast.js";
+import { toast, confirmModal, attachThemedCalendar } from "../shared/toast.js";
 
 // ── Material restrictions ────────────────────────────────────────────────────
 // A full-acrylic case (state.jawMaterial === 2) is an all-acrylic denture, so it
@@ -503,7 +505,7 @@ export function handleDesignComponentSelect(componentId) {
   }
   if (componentId === "assembly-circ-multi") {
     setMessage(
-      "Continuous Clasps selected. Click mesial rest-seat suggestion on a posterior tooth to place components on the selected tooth and its adjacent distal tooth.",
+      "Continuous Clasps selected. Suggestions appear on the rest seats facing a missing tooth; clicking one splints that abutment to the next tooth away from the gap.",
       false
     );
     return;
@@ -642,15 +644,27 @@ export function createCaseNoteForm() {
 
   const actions = document.createElement("div");
   actions.className = "case-note-actions";
-  const saveBtn = document.createElement("button");
-  saveBtn.type = "button";
-  saveBtn.className = "case-note-save-btn";
-  saveBtn.textContent = "Save";
+  // One button: it persists the note fields AND sets the case status in the same
+  // action, so a design can't be approved without its note being saved. Confirms
+  // first, since the status change is case-level and visible to everyone.
+  const approveBtn = document.createElement("button");
+  approveBtn.type = "button";
+  approveBtn.className = "case-note-save-btn";
+  approveBtn.textContent = "Approve";
   const status = document.createElement("span");
   status.className = "case-note-status";
   status.setAttribute("aria-live", "polite");
 
-  saveBtn.addEventListener("click", async () => {
+  approveBtn.addEventListener("click", async () => {
+    const confirmed = await confirmModal({
+      title: "Approve 2D design?",
+      message: `This saves the case note and sets case ${caseNumber} to "${STATUS_2D_DESIGN_APPROVED}".`,
+      confirmText: "Yes, approve",
+      cancelText: "Cancel",
+      variant: "warning",
+    });
+    if (!confirmed) return;
+
     const dateRequired = dateInput.input.value;
     const note = {
       caseOwner: ownerName,
@@ -658,7 +672,7 @@ export function createCaseNoteForm() {
       dateRequired,
       toothShade: shadeInput.input.value,
       workCategory: categorySelect.input.value,
-      workCategoryTouched:userTouchedCategory,
+      workCategoryTouched: userTouchedCategory,
       comment: commentField.input.value,
       updatedAt: new Date().toISOString(),
     };
@@ -666,40 +680,49 @@ export function createCaseNoteForm() {
     // written through to additionalcasedetails.due_date (shows in the case-list "Due"
     // column, shared across devices).
     const localOk = saveCaseNote(state.caseIntID, note);
-    saveBtn.disabled = true;
-    status.textContent = "Saving…";
+
+    approveBtn.disabled = true;
+    status.textContent = "Approving…";
     status.classList.remove("is-error");
-    // Write the date through to additionalcasedetails.due_date and the comment
-    // through to additionalcasedetails.comments (shared case-level comment).
+
+    // Both writes are full upserts of the same additionalcasedetails row, so they
+    // must stay sequential: the status write re-reads and carries forward the date
+    // and comment just written. The status write is skipped when the first fails,
+    // so a case is never marked approved with its note unsaved.
     const remoteOk = await updateCaseDueDate(
       state.caseIntID,
       dateRequired,
       commentField.input.value
     );
     if (remoteOk) saveCaseDueDate(state.caseIntID, dateRequired);
-    saveBtn.disabled = false;
+    const statusOk =
+      remoteOk && (await updateCaseStatus(state.caseIntID, STATUS_2D_DESIGN_APPROVED));
 
-    // The Case Note has its own Save button: it persists on its own and surfaces
-    // its own toast, independent of the back-dialog's "Save & Return" action.
-    if (remoteOk) {
-      status.textContent = "Saved.";
-      toast.success("Saved successfully");
-      setMessage("Case note saved.", false);
+    approveBtn.disabled = false;
+
+    if (statusOk) {
+      status.textContent = "Approved.";
+      toast.success("Case note saved and status set to 2D design approved.");
+      setMessage("2D design approved.", false);
       setTimeout(() => {
-        if (status.textContent === "Saved.") status.textContent = "";
+        if (status.textContent === "Approved.") status.textContent = "";
       }, 2000);
+    } else if (remoteOk) {
+      status.textContent = "Status not updated.";
+      status.classList.add("is-error");
+      toast.warning("Case note saved — couldn't set the case status.");
     } else if (localOk) {
       status.textContent = "Saved locally.";
       status.classList.add("is-error");
-      toast.warning("Saved locally — couldn't update the request date on the server.");
+      toast.warning("Saved locally — couldn't reach the server.");
     } else {
-      status.textContent = "Save failed.";
+      status.textContent = "Approve failed.";
       status.classList.add("is-error");
-      toast.error("Save failed.");
+      toast.error("Approve failed.");
     }
   });
 
-  actions.appendChild(saveBtn);
+  actions.appendChild(approveBtn);
   actions.appendChild(status);
   form.appendChild(actions);
 

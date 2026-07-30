@@ -315,6 +315,8 @@ describe("highlight selectors still exist in the source", () => {
     "src/pages/ThreeDViewer.html",
     "src/pages/admin/admin_users.html",
     "src/pages/admin/admin_case_list.html",
+    // Case-list rows are built in JS, so their controls appear in no HTML file.
+    "src/js/pages/caseManagement.js",
     "src/js/2D/preview3D.js",
     "src/js/2D/preview3DSurvey.js",
     "src/js/2D/annotationCatalog.js",

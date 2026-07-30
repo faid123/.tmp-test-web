@@ -102,7 +102,7 @@ import {
   renderJaws,
 } from "./2DAnnotation.js";
 import {
-  getEmbrasureNeighborToothId,
+  getContinuousClaspRestSurfaces,
   getGapFacingRestSurfaces,
   hasMeshedDistalSaddle,
   placeBackActionAssemblyOnTooth,
@@ -751,10 +751,7 @@ function canPlaceEmbrasureAtSurface(toothId, jaw, surface) {
   return getGapFacingRestSurfaces(toothId, jaw).includes(normalizeSurface(surface));
 }
 
-function canPlaceMultiAtTooth(toothId, jaw) {
-  const distalNeighbor = getEmbrasureNeighborToothId(toothId, jaw, "distal");
-  return Boolean(distalNeighbor && SIMPLE_CIRCUM_POSTERIOR_TOOTH_IDS.has(distalNeighbor));
-}
+const CONTINUOUS_CLASPS_ID = "assembly-circ-multi";
 
 // Only a distal-extension abutment gets an RPI/RPA suggestion, and only on its mesial.
 // RPI additionally needs the saddle meshed — its I-bar has nothing to base from
@@ -869,13 +866,13 @@ function handleRestSuggestionPick(jaw, toothId, pointSurface, anchor) {
     renderJaw(jaw);
     return;
   }
-  if (selectedComponent?.id === "assembly-circ-multi") {
+  if (selectedComponent?.id === CONTINUOUS_CLASPS_ID) {
     const surface = normalizeSurface(pointSurface);
-    if (surface !== "mesial") {
-      setMessage("Continuous Clasps supports mesial rest-seat suggestion only.", true);
+    if (surface !== "mesial" && surface !== "distal") {
+      setMessage("Continuous Clasps supports mesial or distal rest-seat suggestion only.", true);
       return;
     }
-    placeMultiCircumAssemblyOnTooth(toothId, jaw);
+    placeMultiCircumAssemblyOnTooth(toothId, jaw, surface);
     renderJaws();
     return;
   }
@@ -1074,7 +1071,7 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
     points = getCingulumAcSuggestionPointsForTooth(toothId) ?? [];
   } else {
     const allowedSurfaces =
-      selectedComponent.id === "assembly-circ-multi" || RPX_ASSEMBLY_IDS.has(selectedComponent.id)
+      RPX_ASSEMBLY_IDS.has(selectedComponent.id)
         ? new Set(["mesial"])
         : isAssembly
           ? new Set(["mesial", "distal"])
@@ -1085,8 +1082,9 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
     if (selectedComponent.id === COMBINE_CLASPS_ID) {
       points = points.filter((point) => canPlaceEmbrasureAtSurface(toothId, jaw, normalizeSurface(point.surface)));
     }
-    if (selectedComponent.id === "assembly-circ-multi") {
-      points = points.filter(() => canPlaceMultiAtTooth(toothId, jaw));
+    if (selectedComponent.id === CONTINUOUS_CLASPS_ID) {
+      const gapFacing = new Set(getContinuousClaspRestSurfaces(toothId, jaw));
+      points = points.filter((point) => gapFacing.has(normalizeSurface(point.surface)));
     }
     if (RPX_ASSEMBLY_IDS.has(selectedComponent.id)) {
       const allowedByDistalSaddle = new Set(

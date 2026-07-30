@@ -2290,6 +2290,11 @@ button.upload3d-row {
   border-color: var(--rose-700);
 }
 
+.case-note-save-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .case-note-status {
   font-size: 0.7rem;
   color: var(--rose-700);

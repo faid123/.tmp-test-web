@@ -466,10 +466,6 @@ export function getEmbrasureNeighborToothId(toothId, jaw, clickedSurface) {
   return neighbor ? String(neighbor) : null;
 }
 
-function getDistalNeighborToothId(toothId, jaw) {
-  return getEmbrasureNeighborToothId(toothId, jaw, "distal");
-}
-
 function clearRestAndCircumClaspsOnTooth(tooth) {
   tooth.componentPlacements = (tooth.componentPlacements || []).filter((entry) => {
     const cid = entry.componentId;
@@ -625,7 +621,29 @@ export function placeEmbrasureCircumAssemblyOnTooth(toothId, jaw, restSurface) {
   return true;
 }
 
-export function placeMultiCircumAssemblyOnTooth(toothId, jaw) {
+/**
+ * The tooth a Continuous Clasps click splints to: the neighbour AWAY from the gap, so a
+ * distal (gap-facing) rest pairs mesially. Null unless that neighbour exists and is present.
+ */
+function getContinuousClaspPartnerId(toothId, jaw, restSurface) {
+  const partnerId = getEmbrasureNeighborToothId(toothId, jaw, oppositeRestSurface(restSurface));
+  const partner = partnerId ? state.teeth[partnerId] : null;
+  return partner && partner.isPresent ? String(partnerId) : null;
+}
+
+/**
+ * Continuous Clasps splints an abutment to the next tooth away from the edentulous area,
+ * so — like RPI/RPA — its rest suggestions sit beside the missing tooth: on whichever
+ * surfaces face the gap, and only where there is a present tooth to splint back to.
+ * With 25 missing that is 24's distal (pairing 23) and 26's mesial (pairing 27).
+ */
+export function getContinuousClaspRestSurfaces(toothId, jaw) {
+  return getGapFacingRestSurfaces(toothId, jaw).filter((side) =>
+    Boolean(getContinuousClaspPartnerId(toothId, jaw, side))
+  );
+}
+
+export function placeMultiCircumAssemblyOnTooth(toothId, jaw, restSurface) {
   const id = String(toothId);
   const tooth = state.teeth[id];
   if (!tooth) {
@@ -633,18 +651,19 @@ export function placeMultiCircumAssemblyOnTooth(toothId, jaw) {
     return false;
   }
 
-  const neighborToothId = getDistalNeighborToothId(id, jaw);
-  if (!neighborToothId || !state.teeth[neighborToothId]) {
-    setMessage("No adjacent distal posterior tooth available for Continuous Clasps.", true);
+  const clicked = normalizeSurface(restSurface);
+  if (!getGapFacingRestSurfaces(id, jaw).includes(clicked)) {
+    setMessage("Continuous Clasps needs a rest seat facing a missing tooth.", true);
+    return false;
+  }
+
+  const neighborToothId = getContinuousClaspPartnerId(id, jaw, clicked);
+  if (!neighborToothId) {
+    setMessage("No adjacent tooth beyond the abutment to splint Continuous Clasps to.", true);
     return false;
   }
 
   const neighborTooth = state.teeth[neighborToothId];
-  if (!tooth.isPresent || !neighborTooth.isPresent) {
-    setMessage("Continuous Clasps requires both selected and adjacent distal teeth to be present.", true);
-    return false;
-  }
-
   ensureToothPlacementState(tooth);
   ensureToothPlacementState(neighborTooth);
 
@@ -653,13 +672,18 @@ export function placeMultiCircumAssemblyOnTooth(toothId, jaw) {
   clearReciprocatingPlateMeshOnTooth(tooth);
   clearReciprocatingPlateMeshOnTooth(neighborTooth);
 
-  placeCircumBundle(tooth, "mesial");
-  placeCircumBundle(neighborTooth, "distal");
+  // Rests at the two outer ends of the splinted pair; both clasps meet in the shared
+  // embrasure between them.
+  placeCircumBundle(tooth, clicked);
+  placeCircumBundle(neighborTooth, oppositeRestSurface(clicked));
 
   syncToothComponentsFromPlacements(tooth);
   syncToothComponentsFromPlacements(neighborTooth);
 
-  setMessage(`Placed Continuous Clasps on teeth ${id} and distal adjacent ${neighborToothId}.`, false);
+  setMessage(
+    `Placed Continuous Clasps on teeth ${id} (${clicked} rest) and ${neighborToothId}.`,
+    false
+  );
   return true;
 }
 

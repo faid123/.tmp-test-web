@@ -36,6 +36,7 @@ const RETAINER_BAR_TYPE_FIELD = "Tooth Main.Tooth Retainer.Retainer Bar Type";
 const RETAINER_CLASP_TYPE_FIELD = "Tooth Main.Tooth Retainer.Retainer Clasp Type";
 const RETAINER_RING_TYPE_FIELD = "Tooth Main.Tooth Retainer.Retainer Ring Type";
 const RECIPROCATING_FIELD = "Tooth Main.Tooth Reciprocating.Tooth Type";
+const RECIPROCATING_PATTERN_FIELD = "Tooth Main.Tooth Reciprocating.Tooth Pattern Type";
 const ANTERIOR_REST_FIELD = "Tooth Main.Tooth Rest.Anterior Rest";
 const ANTERIOR_CINGULUM_FIELD = "Tooth Main.Tooth Rest.Anterior Cingulum Rest Type";
 const ANTERIOR_INCISAL_FIELD = "Tooth Main.Tooth Rest.Anterior Incisal Rest Type";
@@ -205,6 +206,15 @@ function reciprocalClaspSurface(retainerSurface) {
   else if (s.includes("lingual")) s = s.replace("lingual", "buccal");
   return s;
 }
+
+// KNOWN LOSS: the arch-flip above is all a decode can recover, because nothing in the
+// interchange format carries the reciprocal's own corner. Tooth_Reciprocating is
+// {reciprocating_type, reciprocating_patterntype, PolyLines pl} — patterntype is the
+// crossmesh perforation shape, and the polyline geometry never reaches the text file.
+// So an assembly that seats the reciprocal at the OPPOSITE corner from the retainer
+// (Back-action, Half & Half) reopens showing the arch-flipped position.
+// Do NOT smuggle the corner into patterntype: the DLL reads it (0=circle, 1=square,
+// 2=crisscross) whenever reciprocating_type is 3.
 
 /**
  * Anterior rest -> rest-seat surface, or null when none.
@@ -627,6 +637,7 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
   else if (comps.includes("plate-prox")) reciprocatingType = 2;
   else reciprocatingType = 0;
 
+
   const fields = [
     ["Tooth Main.Tooth Index.Major Index", maj],
     ["Tooth Main.Tooth Index.Minor Index", min],
@@ -654,10 +665,14 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
     ["Tooth Main.Tooth Retainer.Retainer Bar Type", barType],
     ["Tooth Main.Tooth Retainer.Retainer Bar Category", barCategory],
     ["Tooth Main.Tooth Reciprocating.Tooth Type", reciprocatingType],
-    // Native emits a Pattern Type after the reciprocating Tooth Type. The web
-    // doesn't model it, so preserve the loaded value (round-trips for free) and
-    // default 0 for from-scratch. Omitting it desynced the per-tooth parse.
-    ["Tooth Main.Tooth Reciprocating.Tooth Pattern Type", rawOr("Tooth Main.Tooth Reciprocating.Tooth Pattern Type", 0)],
+    // Native emits a Pattern Type after the reciprocating Tooth Type. It is the
+    // crossmesh perforation shape (0=circle, 1=square, 2=crisscross, per the native
+    // Matrix_Table_Definitions.h) and only means anything when Tooth Type is 3
+    // (reciprocating_crossmesh); the DLL consumes it during mesh generation. Unity
+    // never writes it, so it is always 0 in practice. NOT a spare field — preserve the
+    // loaded value verbatim and never repurpose it. Omitting the line entirely desynced
+    // the per-tooth parse.
+    [RECIPROCATING_PATTERN_FIELD, rawOr(RECIPROCATING_PATTERN_FIELD, 0)],
   ];
   return fields.map(([k, v]) => `Tooth ${arrayIdx}: ${k}: ${v}`);
 }
