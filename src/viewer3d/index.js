@@ -349,22 +349,28 @@ function saveAnnotationBackground(storageKey, dataUrl) {
   }
 }
 
-// Gate shown when a non-logged-in viewer clicks "Annotate" in the 3D viewer.
-// Login -> full 2D annotation noticeboard; Continue as guest -> the read-only
-// Annotation History. Styled inline since the 3D viewer doesn't load
+// Gate shown when a non-logged-in viewer clicks "Annotate" (or Approve/Edit
+// 3D — see requireLoginFor3D below) in the 3D viewer. Login -> caller-defined
+// destination; Continue as guest -> caller-defined fallback (hidden unless
+// onGuest is passed in). Styled inline since the 3D viewer doesn't load
 // noticeboard.css.
-function openAnnotateGate({ onLogin, onGuest }) {
+function openAnnotateGate({
+  onLogin,
+  onGuest,
+  title = "Sign in to continue",
+  message = "Log in to open the 2D annotation noticeboard.",
+}) {
   const gate = document.createElement("div");
   gate.style.cssText =
     "position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,0.78);";
   gate.innerHTML = `
     <div style="width:min(92vw,420px);background:#fff;border-radius:14px;padding:28px 26px 24px;box-shadow:0 20px 60px rgba(0,0,0,.35);text-align:center;font-family:system-ui,-apple-system,sans-serif;">
-      <h2 style="margin:0 0 10px;font-size:20px;font-weight:700;color:#0f172a;">Sign in to continue</h2>
-      <p style="margin:0 0 22px;font-size:14px;line-height:1.5;color:#475569;">Log in to open the 2D annotation noticeboard.</p>
+      <h2 style="margin:0 0 10px;font-size:20px;font-weight:700;color:#0f172a;">${title}</h2>
+      <p style="margin:0 0 22px;font-size:14px;line-height:1.5;color:#475569;">${message}</p>
       <div style="display:flex;flex-direction:column;gap:10px;">
         <button type="button" data-gate-login style="width:100%;padding:12px 16px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;border:1px solid transparent;background:#3BAE95;color:#fff;">Login</button>
         <!-- TEMP: "Continue as guest" hidden for now — remove display:none to restore. -->
-        <button type="button" data-gate-guest style="display:none;width:100%;padding:12px 16px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;border:1px solid #cbd5e1;background:#fff;color:#334155;">Continue as guest</button>
+        <button type="button" data-gate-guest style="${onGuest ? "" : "display:none;"}width:100%;padding:12px 16px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;border:1px solid #cbd5e1;background:#fff;color:#334155;">Continue as guest</button>
       </div>
     </div>`;
   document.body.appendChild(gate);
@@ -4039,23 +4045,31 @@ btnContainer.appendChild(edit2DStatic); */
 		});
 		btnContainer2D.appendChild(editButton); */
 
+          // Approve/Edit 3D notify associated users and flip the case status —
+          // both require a logged-in account (the viewer link itself carries no
+          // identity; anyone with the link could otherwise trigger a false
+          // "approved" notification). See requireLoginFor3D / updateCaseStatus3D.
+
           // Create "Approve 3D" button
           const approveButton3D = document.createElement("button");
           approveButton3D.className = "smart-btn approve";
           approveButton3D.setAttribute("aria-label", "Approve 3D");
           approveButton3D.title = "Approve 3D";
           approveButton3D.innerHTML = `<img src="${basePath}/assets/Icon_approve.png" alt="Approve 3D">`;
-          approveButton3D.addEventListener("click", async function () {
-            const ok = await confirmModal({
-              title: "Approve 3D Design?",
-              message:
-                "This notifies the associated users that the 3D design has been approved. Do you want to continue?",
-              confirmText: "Approve",
-              cancelText: "Cancel",
-              variant: "info",
+          approveButton3D.addEventListener("click", function () {
+            requireLoginFor3D("approve this 3D design", async () => {
+              const ok = await confirmModal({
+                title: "Approve 3D Design?",
+                message:
+                  "This notifies the associated users that the 3D design has been approved. Do you want to continue?",
+                confirmText: "Approve",
+                cancelText: "Cancel",
+                variant: "info",
+              });
+              if (!ok) return;
+              sendEmail("Your 3D Design has been APPROVED.");
+              updateCaseStatus3D("3d_design_approved");
             });
-            if (!ok) return;
-            sendEmail("Your 3D Design has been APPROVED.");
           });
           btnContainer3D.appendChild(approveButton3D);
 
@@ -4066,9 +4080,12 @@ btnContainer.appendChild(edit2DStatic); */
           editButton3D.title = "Edit 3D";
           editButton3D.innerHTML = `<img src="${basePath}/assets/Icon_edit.png" alt="Edit 3D">`;
           editButton3D.addEventListener("click", function () {
-            sendEmail(
-              "Please do some modifications on 3D Design. See Notebox."
-            );
+            requireLoginFor3D("request changes on this 3D design", () => {
+              sendEmail(
+                "Please do some modifications on 3D Design. See Notebox."
+              );
+              updateCaseStatus3D("3d_design_pending");
+            });
           });
           btnContainer3D.appendChild(editButton3D);
 
@@ -5734,6 +5751,115 @@ btnContainer.appendChild(edit2DStatic); */
   const viewerURL = `https://faid123.github.io/.tmp-test-web/src/pages/ThreeDViewer.html?id=${encodeURIComponent(
     encryptedID
   )}`;
+
+  // Read the browser's logged-in account, if any (same localStorage shape
+  // used across the app — see caseManagement.js's getLoggedInUser()).
+  function getLoggedInUser3D() {
+    try {
+      return JSON.parse(localStorage.getItem("loggedInUser") || "null");
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Approve/Edit 3D notify other users and change case status, so both must
+  // be tied to a real account rather than anyone who happens to have the
+  // (unauthenticated) viewer link. Runs onProceed directly if already logged
+  // in; otherwise shows the login gate and re-runs onProceed after login by
+  // redirecting back to this same viewer URL.
+  function requireLoginFor3D(actionLabel, onProceed) {
+    if (getLoggedInUser3D()?.uuid) {
+      onProceed();
+      return;
+    }
+    openAnnotateGate({
+      title: "Sign in to continue",
+      message: `Log in to ${actionLabel}.`,
+      onLogin: () => {
+        try {
+          localStorage.setItem("postLoginRedirect", window.location.href);
+        } catch (_) {}
+        window.location.href = `${window.location.origin}${basePath}/index.html`;
+      },
+    });
+  }
+
+  // Flip the case's status to reflect an Approve/Edit action, so TRI doesn't
+  // have to remember to update it by hand. /case/get/:id (used to load this
+  // viewer) omits assigned_to/due_date/comments, and /additionalcasedetails
+  // replaces all of them together — so the current values are looked up from
+  // the logged-in user's case list first and re-sent unchanged, the same way
+  // caseManagement.js's postNewStatus() does it. If the case can't be found
+  // there (e.g. this account isn't actually shared on it), the write is
+  // skipped rather than risk clearing those fields.
+  async function updateCaseStatus3D(newStatus) {
+    const user = getLoggedInUser3D();
+    if (!user?.uuid) return;
+
+    const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
+
+    let current = null;
+    try {
+      const res = await fetch(
+        "https://live.api.smartrpdai.com/api/smartrpd/case/user/findall/get",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify([
+            { machine_id: MACHINE_ID, uuid: user.uuid },
+            { uuid: user.uuid },
+          ]),
+        }
+      );
+      logApi(res, "POST /case/user/findall/get");
+      if (res.ok) {
+        const list = await res.json();
+        current = Array.isArray(list)
+          ? list.find(
+              (c) => String(c.id ?? c.case_int_id) === String(paramValue)
+            ) || null
+          : null;
+      }
+    } catch (err) {
+      console.warn("[3D viewer] Failed to look up current case fields:", err);
+    }
+
+    if (!current) {
+      console.warn(
+        "[3D viewer] Case not found in this account's list — skipping status update to avoid clearing assigned_to/due_date/comments."
+      );
+      toast.error(
+        "Design status wasn't updated automatically — please update it manually."
+      );
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        "https://live.api.smartrpdai.com/api/smartrpd/additionalcasedetails",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify([
+            { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: paramValue },
+            {
+              assigned_to: current.assigned_to ?? null,
+              due_date: current.expected_date ?? null,
+              comments: current.comments ?? null,
+              new_status: newStatus,
+            },
+          ]),
+        }
+      );
+      logApi(res, "POST /additionalcasedetails");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      console.error("[3D viewer] Failed to update case status:", err);
+      toast.error(
+        "Design status wasn't updated automatically — please update it manually."
+      );
+    }
+  }
 
   // Function to send email for Approve or Edit action
   function sendEmail(actionType) {
