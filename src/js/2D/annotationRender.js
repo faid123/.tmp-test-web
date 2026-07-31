@@ -57,11 +57,40 @@ import {
 // as a named filter, referenced from CSS via `filter: url(#tint-...)`. Tooth tints bake the
 // drop-shadow in (chained url()+drop-shadow() is unreliable in Safari inside a transformed <g>).
 const SVG_TINT_FILTERS = {
-  "tint-tooth-base": { color: "#1f1f1f", shadow: true },
-  "tint-tooth-abutment": { color: "#1565c0", shadow: true },
-  "tint-tooth-compromised": { color: "#558b2f", shadow: true },
-  "tint-tooth-missing": { color: "#bdbdbd", shadow: true },
-  "tint-tooth-bar-suggestible": { color: "#7cb342", shadow: true },
+  // Present vs missing teeth read purely by tint value against the mid-grey arch:
+  // present sits near-black with a crisp shadow, missing sits pale with a faint one
+  // (further faded by `.tooth.is-missing .tooth-image` opacity in CSS).
+  "tint-tooth-base": { color: "#0d0d0d", shadow: true, shadowOpacity: 0.75 },
+  // Tooth art is line art with a transparent interior, so a flat tint colours only the
+  // strokes. `fillBody` closes the outline into a solid silhouette and paints it, leaving
+  // the tinted lines a shade darker on top so the tooth's anatomy stays readable. Each
+  // status paints its own hue: blue abutment, green compromised, grey missing.
+  "tint-tooth-abutment": {
+    color: "#1565c0",
+    fillBody: "#b9d7f5",
+    shadow: true,
+    shadowOpacity: 0.35,
+  },
+  "tint-tooth-compromised": {
+    color: "#558b2f",
+    fillBody: "#cbe3ae",
+    shadow: true,
+    shadowOpacity: 0.35,
+  },
+  "tint-tooth-missing": {
+    color: "#bdbdbd",
+    fillBody: "#dcdcdc",
+    shadow: true,
+    shadowOpacity: 0.18,
+  },
+  // Bar / rest-seat suggestions mark candidate abutments, so they paint in the abutment
+  // palette; the CSS opacity is what separates "candidate" from a committed abutment.
+  "tint-tooth-suggestible": {
+    color: "#1565c0",
+    fillBody: "#b9d7f5",
+    shadow: true,
+    shadowOpacity: 0.3,
+  },
   "tint-mesh": { color: "#5b21b6" },
   "tint-rpd-gray": { color: "#8a8a8a" },
   // Denture flange pink (acrylic gum) — used for the acrylic-case major connector
@@ -81,6 +110,10 @@ function hexToRgbFractions(hex) {
   return [((v >> 16) & 0xff) / 255, ((v >> 8) & 0xff) / 255, (v & 0xff) / 255];
 }
 
+// Dilate-then-erode radius (user units, ~1:1 with the tooth art's own pixels) that closes
+// the widest interior gap in the tooth outlines without bloating the silhouette.
+const TOOTH_BODY_FILL_RADIUS = 40;
+
 function appendSvgTintFilters(defs) {
   for (const [id, spec] of Object.entries(SVG_TINT_FILTERS)) {
     const [r, g, b] = hexToRgbFractions(spec.color);
@@ -88,9 +121,11 @@ function appendSvgTintFilters(defs) {
       id,
       "color-interpolation-filters": "sRGB",
       x: "-20%",
-      y: "-20%",
+      // The dilate pass must not clip against the filter region or the erode pass
+      // shaves that much off the silhouette, so a filled body needs deeper padding.
+      y: spec.fillBody ? "-60%" : "-20%",
       width: "140%",
-      height: "140%",
+      height: spec.fillBody ? "220%" : "140%",
     });
     filterEl.appendChild(
       svgEl("feColorMatrix", {
@@ -103,15 +138,51 @@ function appendSvgTintFilters(defs) {
         result: "tinted",
       })
     );
+    let painted = "tinted";
+    if (spec.fillBody) {
+      // Thicken the strokes first: they are faint and not everywhere closed, and a raw
+      // dilate leaks square kernel corners out through those gaps.
+      filterEl.appendChild(
+        svgEl("feGaussianBlur", { in: "SourceAlpha", stdDeviation: "2", result: "softLine" })
+      );
+      const boost = svgEl("feComponentTransfer", { in: "softLine", result: "solidLine" });
+      boost.appendChild(svgEl("feFuncA", { type: "linear", slope: "8", intercept: "-0.4" }));
+      filterEl.appendChild(boost);
+      filterEl.appendChild(
+        svgEl("feMorphology", {
+          in: "solidLine",
+          operator: "dilate",
+          radius: String(TOOTH_BODY_FILL_RADIUS),
+          result: "grown",
+        })
+      );
+      filterEl.appendChild(
+        svgEl("feMorphology", {
+          in: "grown",
+          operator: "erode",
+          radius: String(TOOTH_BODY_FILL_RADIUS),
+          result: "bodyAlpha",
+        })
+      );
+      filterEl.appendChild(svgEl("feFlood", { "flood-color": spec.fillBody, result: "bodyColor" }));
+      filterEl.appendChild(
+        svgEl("feComposite", { in: "bodyColor", in2: "bodyAlpha", operator: "in", result: "body" })
+      );
+      const merge = svgEl("feMerge", { result: "painted" });
+      merge.appendChild(svgEl("feMergeNode", { in: "body" }));
+      merge.appendChild(svgEl("feMergeNode", { in: "tinted" }));
+      filterEl.appendChild(merge);
+      painted = "painted";
+    }
     if (spec.shadow) {
       filterEl.appendChild(
         svgEl("feDropShadow", {
-          in: "tinted",
+          in: painted,
           dx: "0",
           dy: "0",
           stdDeviation: "1",
           "flood-color": "#000000",
-          "flood-opacity": "0.6",
+          "flood-opacity": String(spec.shadowOpacity ?? 0.6),
         })
       );
     }
@@ -277,7 +348,11 @@ export function renderJaw(jaw) {
     appendToothPlateComponentVisuals(group, tooth, toothId, jaw);
     appendPlateSuggestionPoints(group, tooth, toothId, jaw);
     appendPlacedComponentMarkers(group, tooth, toothId, jaw);
-    appendRestSuggestionPoints(suggestionGroup, tooth, toothId, jaw);
+    // A tooth carrying rest-seat suggestions is a candidate abutment, so paint it like
+    // one (same highlight the bar suggestions use).
+    if (appendRestSuggestionPoints(suggestionGroup, tooth, toothId, jaw)) {
+      group.classList.add("tooth-rest-suggestible");
+    }
     appendRetainerClaspSuggestionPoints(suggestionGroup, tooth, toothId, jaw);
 
     const toothClickKey = `mesh-tooth:${jaw}:${toothId}`;

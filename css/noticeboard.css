@@ -1008,27 +1008,37 @@
   display: none;
 }
 
-/* Shape mode takes over the editor the same way crop does: the editor's own
-   toolbar and × / send chrome are hidden, and the shapes UI shows its own
-   Cancel / Done at the bottom. */
-.instruction-editor-modal.is-shaping .ie-toolbar,
+/* Shape / text / brush modes hide only the × / send chrome. The toolbar stays
+   live so another tool can be picked without going through Done — each mode's
+   UI keeps its own Cancel / Done at the bottom. */
 .instruction-editor-modal.is-shaping #instructionEditorCancelBtn,
-.instruction-editor-modal.is-shaping #instructionEditorSaveBtn {
-  display: none;
-}
-
-/* Text mode takes over the editor like shape mode does. */
-.instruction-editor-modal.is-texting .ie-toolbar,
+.instruction-editor-modal.is-shaping #instructionEditorSaveBtn,
 .instruction-editor-modal.is-texting #instructionEditorCancelBtn,
-.instruction-editor-modal.is-texting #instructionEditorSaveBtn {
-  display: none;
-}
-
-/* Brush mode takes over the editor like shape mode does. */
-.instruction-editor-modal.is-brushing .ie-toolbar,
+.instruction-editor-modal.is-texting #instructionEditorSaveBtn,
 .instruction-editor-modal.is-brushing #instructionEditorCancelBtn,
 .instruction-editor-modal.is-brushing #instructionEditorSaveBtn {
   display: none;
+}
+
+/* The toolbar (top-center) and a mode's cluster (top-right) only clear each
+   other while the frame is wider than 2×cluster + 288px — 1000px for the
+   356px-wide shapes row, 616px for the ~164px text / brush rows. The desktop
+   frame is sized above that (see the min-width: 600px block at the end of the
+   file); below it there's no room for both on one line, so the cluster drops
+   under the toolbar. Dropped, it sits level with the colour bar, so it also
+   gives up the right margin the bar occupies. */
+@media (max-width: 1064px) {
+  .instruction-editor-modal.is-shaping .ie-shape-top {
+    top: 76px;
+    right: 58px;
+  }
+}
+@media (max-width: 660px) {
+  .instruction-editor-modal.is-texting .ie-text-top,
+  .instruction-editor-modal.is-brushing .ie-shape-top {
+    top: 76px;
+    right: 58px;
+  }
 }
 
 /* ---- Shapes UI (opens from the square toolbar icon) ----------------------
@@ -1648,9 +1658,17 @@
     left: 50%;
     right: auto;
     transform: translate(-50%, -50%);
-    width: min(94vw, 880px);
-    height: min(86vh, 560px);
+    /* Sized so the top-center toolbar and the mode clusters parked top-right
+       (widest: the 356px shapes row) sit on one line without overlapping —
+       that needs ≥1000px of frame. */
+    width: min(94vw, 1180px);
+    height: min(86vh, 740px);
     border: 1px solid var(--line);
     border-radius: 14px;
+  }
+
+  /* Sit the presets row (brush sizes / B-I-U) closer to the Cancel-Done bar. */
+  .ie-brush-presets {
+    bottom: 58px;
   }
 }

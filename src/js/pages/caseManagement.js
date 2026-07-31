@@ -531,8 +531,10 @@ async function fetchCaseStls(caseIntId, uuid) {
   return [];
 }
 
-async function fetchCaseJawStructL2(caseIntId, uuid) {
-  const res = await fetch(`${DL_API}/jawstruct/l2/getall`, {
+// The reference images attached to the case (create-case upload). Rows come back
+// as { image_name, image_data }, image_data being a data URL or bare base64.
+async function fetchCaseReferenceImages(caseIntId, uuid) {
+  const res = await fetch(`${DL_API}/referenceImages/getall`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify([
@@ -540,33 +542,113 @@ async function fetchCaseJawStructL2(caseIntId, uuid) {
       { case_id: caseIntId },
     ]),
   });
-  logApi(res, "POST /jawstruct/l2/getall");
+  logApi(res, "POST /referenceImages/getall");
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
-  return (Array.isArray(data) ? data : [data]).filter((row) => row?.data);
+  return (Array.isArray(data) ? data : [data]).filter((row) => row?.image_data || row?.data);
 }
 
-function jawStructDownloadName(row, base, index) {
-  const rawName = String(row?.filename || "").trim();
-  if (rawName) return rawName.replace(/[\\/:*?"<>|]+/g, "_");
-  const type = String(row?.type || "").toLowerCase();
-  if (type === "upper_jaw") return "JawUpper_Struct_L2.txt";
-  if (type === "lower_jaw") return "JawLower_Struct_L2.txt";
-  return `${base}_JawStruct_L2_${index + 1}.txt`;
+// Fallback source: every reference image uploaded through the web is also
+// mirrored into a thumbnail slot, where slots 0-2 are the 2D composite and the
+// upper/lower jaw renders and 3+ are the references. Used only when the
+// referenceImages table has no rows for the case (e.g. desktop-created cases).
+async function fetchReferenceThumbnails(caseIntId, uuid) {
+  try {
+    const res = await fetch(`${DL_API}/thumbnails/get`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        { machine_id: DL_MACHINE_ID, uuid, caseIntID: caseIntId },
+        { case_int_id: caseIntId },
+      ]),
+    });
+    logApi(res, "POST /thumbnails/get");
+    if (!res.ok) return [];
+    const rows = await res.json();
+    if (!Array.isArray(rows)) return [];
+    return rows.filter((r) => r?.data && (thumbnailSlot(r) ?? -1) >= 3);
+  } catch (err) {
+    console.warn("[case/download] reference thumbnail fetch failed", err);
+    return [];
+  }
 }
 
-function combinedJawStructText(records) {
-  const decoder = new TextDecoder();
-  return records
-    .map((record, index) => {
-      const label = record.type || record.filename || `record_${index + 1}`;
-      const text = decoder.decode(base64ToBytes(record.data));
-      return `===== ${label} =====\r\n${text}`;
-    })
-    .join("\r\n\r\n");
+function sniffImageExt(bytes) {
+  if (!bytes || bytes.length < 4) return "";
+  if (bytes[0] === 0x89 && bytes[1] === 0x50) return "png";
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return "jpg";
+  if (bytes[0] === 0x47 && bytes[1] === 0x49) return "gif";
+  if (bytes[0] === 0x42 && bytes[1] === 0x4d) return "bmp";
+  return "";
 }
 
-async function downloadCaseJawStructL2(caseIntId, caseLabel) {
+// Decode a stored image (data URL or bare base64) into bytes plus the extension
+// its bytes actually call for — the stored name is often extension-less.
+function decodeImagePayload(value) {
+  const raw = String(value || "").trim();
+  const isDataUrl = raw.startsWith("data:");
+  const base64 = (isDataUrl ? raw.slice(raw.indexOf(",") + 1) : raw).replace(/\s+/g, "");
+  const bytes = base64ToBytes(base64);
+  let ext = isDataUrl ? (/^data:([^;,]+)/.exec(raw)?.[1] || "").split("/")[1] || "" : "";
+  if (!ext) ext = sniffImageExt(bytes);
+  if (ext === "jpeg") ext = "jpg";
+  return { bytes, ext: ext || "png" };
+}
+
+function referenceImageName(row, index, ext, base) {
+  const raw = String(row?.image_name || row?.filename || row?.name || "").trim();
+  const cleaned = raw.replace(/[\\/:*?"<>|]+/g, "_");
+  if (cleaned) return /\.[a-z0-9]{2,5}$/i.test(cleaned) ? cleaned : `${cleaned}.${ext}`;
+  return `${base}_reference_${index + 1}.${ext}`;
+}
+
+// Two uploads can share a filename; the zip needs them distinct.
+function uniqueDownloadName(name, used) {
+  if (!used.has(name)) {
+    used.add(name);
+    return name;
+  }
+  const dot = name.lastIndexOf(".");
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : "";
+  let n = 2;
+  let candidate = `${stem}_${n}${ext}`;
+  while (used.has(candidate)) candidate = `${stem}_${++n}${ext}`;
+  used.add(candidate);
+  return candidate;
+}
+
+// The case's reference images as ready-to-write { name, bytes } files: the
+// referenceImages table first, the mirrored thumbnail slots as fallback. Rethrows
+// a failed primary fetch only when the fallback found nothing either, so callers
+// can tell "no images" apart from "the lookup broke". Shared by the menu action
+// and the bundle download so both ship the same files under the same names.
+async function collectReferenceImageFiles(caseIntId, uuid, base) {
+  let rows = [];
+  let primaryErr = null;
+  try {
+    rows = await fetchCaseReferenceImages(caseIntId, uuid);
+  } catch (err) {
+    primaryErr = err;
+  }
+  if (!rows.length) rows = await fetchReferenceThumbnails(caseIntId, uuid);
+  if (!rows.length && primaryErr) throw primaryErr;
+
+  const used = new Set();
+  const files = [];
+  rows.forEach((row, index) => {
+    try {
+      const { bytes, ext } = decodeImagePayload(row.image_data ?? row.data);
+      if (!bytes.length) return;
+      files.push({ bytes, name: uniqueDownloadName(referenceImageName(row, index, ext, base), used) });
+    } catch (err) {
+      console.warn("[case/download] skipped unreadable reference image", index, err);
+    }
+  });
+  return files;
+}
+
+async function downloadCaseReferenceImages(caseIntId, caseLabel) {
   const user = getLoggedInUser();
   if (!user?.uuid || caseIntId == null) {
     toast.warning("Unable to download: missing case info or login.");
@@ -574,41 +656,38 @@ async function downloadCaseJawStructL2(caseIntId, caseLabel) {
   }
 
   const base = safeDownloadBase(caseLabel, `case_${caseIntId}`);
-  toast.info("Preparing 2D design L2 download...");
+  toast.info("Preparing reference images...");
 
   try {
-    const records = await fetchCaseJawStructL2(caseIntId, user.uuid);
-    if (!records.length) {
-      toast.info("No 2D design L2 jaw struct found for this case.");
+    const files = await collectReferenceImageFiles(caseIntId, user.uuid, base);
+    if (!files.length) {
+      toast.info("No reference images found for this case.");
       return;
     }
 
-    if (records.length === 1) {
-      triggerBlobDownload(
-        base64ToBytes(records[0].data),
-        jawStructDownloadName(records[0], base, 0)
-      );
-      toast.success("2D design L2 download ready.");
+    if (files.length === 1) {
+      triggerBlobDownload(files[0].bytes, files[0].name);
+      toast.success("Reference image download ready.");
       return;
     }
 
     if (typeof window.JSZip === "function") {
       const zip = new window.JSZip();
-      records.forEach((record, index) => {
-        zip.file(jawStructDownloadName(record, base, index), base64ToBytes(record.data));
-      });
+      files.forEach((file) => zip.file(file.name, file.bytes));
       const blob = await zip.generateAsync({ type: "uint8array" });
-      triggerBlobDownload(blob, `${base}_JawStruct_L2.zip`);
+      triggerBlobDownload(blob, `${base}_reference_images.zip`);
     } else {
-      triggerBlobDownload(
-        new TextEncoder().encode(combinedJawStructText(records)),
-        `${base}_JawStruct_L2.txt`
-      );
+      // No zip library — save them one by one, spaced out so the browser does
+      // not treat the burst as a popup and drop all but the first.
+      for (const file of files) {
+        triggerBlobDownload(file.bytes, file.name);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
     }
-    toast.success("2D design L2 download ready.");
+    toast.success(`${files.length} reference images downloaded.`);
   } catch (err) {
-    console.error("Failed to download 2D design L2:", err);
-    toast.error(`Failed to download 2D design L2. ${err.message || err}`);
+    console.error("Failed to download reference images:", err);
+    toast.error(`Failed to download reference images. ${err.message || err}`);
   }
 }
 
@@ -662,8 +741,8 @@ async function fetchCase2dJpegBytes(caseIntId, uuid) {
 }
 
 // Action-column "Download files": bundle the case's STL files, its 2D design
-// JPEG, and the design report (.docx) into one zip. Each part is best-effort —
-// whatever's available goes in; only an empty result aborts.
+// JPEG, the reference images and the design report (.docx) into one zip. Each
+// part is best-effort — whatever's available goes in; only an empty result aborts.
 async function downloadCaseFiles(caseIntId, caseLabel, apiStatus) {
   const user = getLoggedInUser();
   if (!user?.uuid || caseIntId == null) {
@@ -733,7 +812,19 @@ async function downloadCaseFiles(caseIntId, caseLabel, apiStatus) {
     console.warn("[case/download] 2D JPEG failed", err);
   }
 
-  // 3) Design report as a Word .docx.
+  // 3) Reference images, kept in their own folder so they don't collide with
+  //     the STL/report names at the zip root.
+  try {
+    const refFiles = await collectReferenceImageFiles(caseIntId, user.uuid, base);
+    refFiles.forEach((file) => {
+      zip.file(`reference_images/${file.name}`, file.bytes);
+      added += 1;
+    });
+  } catch (err) {
+    console.warn("[case/download] reference images failed", err);
+  }
+
+  // 4) Design report as a Word .docx.
   try {
     const html = await buildReportHtml(caseIntId, { caseLabel, apiStatus });
     const docx = await reportHtmlToDocxBytes(html);
@@ -2948,10 +3039,10 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
     });
   }
 
-  const download2dDesignBtn = document.getElementById("download2dDesignBtn");
+  const downloadReferencesBtn = document.getElementById("downloadReferencesBtn");
 
-  if (download2dDesignBtn) {
-    download2dDesignBtn.addEventListener("click", async () => {
+  if (downloadReferencesBtn) {
+    downloadReferencesBtn.addEventListener("click", async () => {
       const caseId = window.selectedCaseId;
       if (!caseId) {
         toast.warning("Please select a case first.");
@@ -2962,11 +3053,11 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         return String(resolvedId) === String(caseId);
       }) || window.selectedCaseStub || null;
 
-      download2dDesignBtn.classList.add("is-disabled");
+      downloadReferencesBtn.classList.add("is-disabled");
       try {
-        await downloadCaseJawStructL2(caseId, caseObj?.case_id);
+        await downloadCaseReferenceImages(caseId, caseObj?.case_id);
       } finally {
-        download2dDesignBtn.classList.remove("is-disabled");
+        downloadReferencesBtn.classList.remove("is-disabled");
         dropdownMenu?.classList.add("hidden");
       }
     });

@@ -2113,13 +2113,27 @@ button.upload3d-row {
   border-radius: 8px;
   font-size: 0.8rem;
   font-weight: 600;
-  width: 50px;
-  height: 50px;
-  padding: 0;
+  width: 100%;
+  min-height: 50px;
+  padding: 6px 2px;
   cursor: pointer;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
+}
+
+/* Names the icons alone don't carry; the column is ~70px wide, so keep it small. */
+.status-btn-label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  letter-spacing: 0.01em;
+  /* "Compromised" is one long word: wrap it rather than spill out of the button. */
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .status-btn:hover {
@@ -2665,14 +2679,18 @@ button.upload3d-row {
   filter: url(#tint-tooth-compromised);
 }
 
+/* Missing teeth read as a filled light-grey placeholder (the fill is built in the
+   #tint-tooth-missing filter); opacity keeps them behind the present teeth. */
 .tooth.is-missing .tooth-image {
-  opacity: 1;
+  opacity: 0.62;
   -webkit-filter: url(#tint-tooth-missing);
   filter: url(#tint-tooth-missing);
 }
 .tooth.is-locked { opacity: 0.88; }
 
+/* Range selection targets missing teeth, so it must win back the missing-tooth fade. */
 .tooth.tooth-range-selected .tooth-image {
+  opacity: 1;
   -webkit-filter: drop-shadow(0 0 4px rgba(35, 170, 85, 0.75));
   filter: drop-shadow(0 0 4px rgba(35, 170, 85, 0.75));
 }
@@ -2904,16 +2922,19 @@ button.upload3d-row {
   opacity: 0.3;
   cursor: not-allowed;
 }
-/* Bar suggestions: light green to match retainer clasp base color. */
-.tooth.tooth-bar-suggestible .tooth-image {
-  -webkit-filter: url(#tint-tooth-bar-suggestible);
-  filter: url(#tint-tooth-bar-suggestible);
+/* Bar and rest-seat suggestions: candidate abutments, painted in the abutment colour
+   but translucent, so a suggestion never reads as a committed abutment. */
+.tooth.tooth-bar-suggestible .tooth-image,
+.tooth.tooth-rest-suggestible .tooth-image {
+  -webkit-filter: url(#tint-tooth-suggestible);
+  filter: url(#tint-tooth-suggestible);
   opacity: 0.62;
 }
 
-.tooth.tooth-bar-suggestible:hover .tooth-image {
-  -webkit-filter: url(#tint-tooth-bar-suggestible);
-  filter: url(#tint-tooth-bar-suggestible);
+.tooth.tooth-bar-suggestible:hover .tooth-image,
+.tooth.tooth-rest-suggestible:hover .tooth-image {
+  -webkit-filter: url(#tint-tooth-suggestible);
+  filter: url(#tint-tooth-suggestible);
   opacity: 0.78;
 }
 
@@ -4166,4 +4187,319 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   background: linear-gradient(180deg, #43bda2 0%, #2f9079 100%);
   border-top: 1px solid rgba(255, 255, 255, 0.18);
   box-shadow: 0 -2px 12px rgba(26, 77, 63, 0.18);
+}
+
+/* =========================================================================
+   Case Note approval dialog (caseNote.js). Mounted inside the shared
+   confirmModal's .app-confirm-content, so the overlay, box, title and the
+   Approve/Cancel row are styled by css/toast.css — only the innards live here.
+   ========================================================================= */
+.cn-approve {
+  display: grid;
+  gap: 16px;
+  text-align: left;
+}
+
+.cn-approve-lede {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.cn-approve-section {
+  display: grid;
+  gap: 8px;
+}
+
+/* Report left, recipients + message right. The right column is a fixed 280px —
+   a user list and a message box need a readable column, not a share of whatever
+   is left — so the report takes the remaining width instead of the two fighting
+   over it. minmax(0,…) keeps a wide report image from pushing past its cell. */
+.cn-approve-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 18px;
+  align-items: start;
+}
+
+.cn-approve-side {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* One column once half the dialog is too narrow to hold a legible A4 page. */
+@media (max-width: 860px) {
+  .cn-approve-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cn-approve-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cn-approve-section-title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rose-700, #25735f);
+}
+
+/* ---- report preview ---- */
+/* An <a download> pointing at the generated PDF blob, styled as a button. It
+   carries .is-disabled until the PDF exists. */
+.cn-approve-print-btn {
+  display: inline-block;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  border-radius: 6px;
+  border: 1px solid var(--rose-500, #3bae95);
+  background: #fff;
+  color: var(--rose-700, #25735f);
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.cn-approve-print-btn:hover:not(.is-disabled) {
+  background: var(--rose-500, #3bae95);
+  color: #fff;
+}
+.cn-approve-print-btn.is-disabled {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Scroll viewport for the sheet. Tinted rather than white so the A4 page reads
+   as paper sitting on a surface — the same cue a PDF viewer gives, without its
+   toolbar. */
+.cn-approve-preview {
+  position: relative;
+  /* No fixed height: at half the dialog the A4 sheet is short enough to show
+     whole, so the panel sizes to it and there is no nested scrollbar. The cap
+     only bites on short viewports and in the collapsed one-column layout. */
+  max-height: min(62vh, 620px);
+  min-height: 220px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  overflow: auto;
+  background: #eef2f6;
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+}
+
+/* A4 portrait: 210mm x 297mm. aspect-ratio holds the proportions at any width,
+   and the 4.762% padding is 10mm/210mm — the same @page margin jpegToPdfBlob
+   lays the bitmap inside — so the preview is the downloaded page, to scale.
+   No max-width: the sheet fills the panel at every breakpoint, so desktop and
+   tablet get the same edge-to-edge page mobile already had, with no dead
+   backdrop either side of it. */
+.cn-approve-page {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  width: 100%;
+  aspect-ratio: 210 / 297;
+  padding: 4.762%;
+  background: #fff;
+  box-shadow: 0 1px 8px rgba(15, 23, 42, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Fit inside the margins preserving aspect ratio, then centre — mirroring the
+   PDF's own placement, so nothing is cropped. */
+.cn-approve-page-img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.cn-approve-preview-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #64748b;
+  text-align: center;
+  padding: 12px;
+}
+.cn-approve-preview-state.is-error {
+  color: #b91c1c;
+}
+
+/* ---- recipients ---- */
+.cn-approve-users {
+  display: grid;
+  gap: 4px;
+  max-height: 168px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.cn-approve-users-state {
+  margin: 0;
+  padding: 8px 4px;
+  font-size: 13px;
+  color: #64748b;
+}
+.cn-approve-users-state.is-error {
+  color: #b91c1c;
+}
+
+/* Read-only roster row: person icon, then name + role. Nothing to click — the
+   list identifies who is on the case, it doesn't pick who gets mail. */
+.cn-approve-user {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: 6px;
+}
+
+.cn-approve-user-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.cn-approve-user-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cn-approve-user-username {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.cn-approve-user-role {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+}
+.cn-approve-user-role.is-owner {
+  background: #e0f2f1;
+  color: #25735f;
+}
+
+.cn-approve-user-username {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- message + send ---- */
+/* Stacked, not side by side: this shares a narrow column with the roster. */
+.cn-approve-message-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.cn-approve-email-input {
+  width: 100%;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 9px 10px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  color: #0f172a;
+  background: #fff;
+}
+.cn-approve-email-input:focus {
+  outline: none;
+  border-color: var(--rose-500, #3bae95);
+  box-shadow: 0 0 0 2px rgba(59, 174, 149, 0.15);
+}
+
+/* Send sits on the row beneath the box, with its status beside it — never
+   wrapping onto its own line, which is what nowrap + the flex rules below
+   guarantee in a column this narrow. */
+.cn-approve-message-side {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.cn-approve-send-btn {
+  /* Never squashed by a long status message — the status yields instead. */
+  flex: 0 0 auto;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--rose-500, #3bae95);
+  background: var(--rose-500, #3bae95);
+  color: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background 0.12s ease;
+}
+.cn-approve-send-btn:hover:not(:disabled) {
+  background: var(--rose-700, #25735f);
+  border-color: var(--rose-700, #25735f);
+}
+.cn-approve-send-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Takes whatever width is left beside the button and wraps inside it, rather
+   than forcing the row wider (min-width:0 is what lets a flex item shrink). */
+.cn-approve-send-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #64748b;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.cn-approve-send-status.is-error {
+  color: #b91c1c;
+}
+
+@media (max-width: 640px) {
+  .cn-approve-preview {
+    max-height: 320px;
+  }
 }

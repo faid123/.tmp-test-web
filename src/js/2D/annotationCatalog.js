@@ -37,6 +37,10 @@ import {
 import {
   WORK_CATEGORY_OPTIONS,
   STATUS_2D_DESIGN_APPROVED,
+  confirmCaseNoteApproval,
+  prepareApprovalReport,
+  sendCaseApprovalEmail,
+  sendCaseApprovalAlerts,
   workCategoryForJawMaterial,
   loadCaseNote,
   loadCaseDueDate,
@@ -47,7 +51,7 @@ import {
   updateCaseDueDate,
   updateCaseStatus,
 } from "./caseNote.js";
-import { toast, confirmModal, attachThemedCalendar } from "../shared/toast.js";
+import { toast, attachThemedCalendar } from "../shared/toast.js";
 
 // ── Material restrictions ────────────────────────────────────────────────────
 // A full-acrylic case (state.jawMaterial === 2) is an all-acrylic denture, so it
@@ -656,14 +660,26 @@ export function createCaseNoteForm() {
   status.setAttribute("aria-live", "polite");
 
   approveBtn.addEventListener("click", async () => {
-    const confirmed = await confirmModal({
-      title: "Approve 2D design?",
-      message: `This saves the case note and sets case ${caseNumber} to "${STATUS_2D_DESIGN_APPROVED}".`,
-      confirmText: "Yes, approve",
-      cancelText: "Cancel",
-      variant: "warning",
+    // The confirmation is a full dialog (report preview + the case's users + a
+    // notification message), but it still resolves to a plain boolean, so the
+    // commit chain below is unchanged. It waits on the report PDF before opening
+    // so the preview is there on arrival, hence the button-side progress: the
+    // wait is usually nil (warmed above) but is real after a fresh design edit.
+    approveBtn.disabled = true;
+    status.textContent = "Preparing report…";
+    status.classList.remove("is-error");
+    const confirmed = await confirmCaseNoteApproval({
+      caseIntID: state.caseIntID,
+      caseNumber,
+      caseOwner: ownerName,
+      statusLabel: STATUS_2D_DESIGN_APPROVED,
+      signature: getHistoryStateSignature(),
     });
-    if (!confirmed) return;
+    if (!confirmed) {
+      approveBtn.disabled = false;
+      status.textContent = "";
+      return;
+    }
 
     const dateRequired = dateInput.input.value;
     const note = {
@@ -681,9 +697,8 @@ export function createCaseNoteForm() {
     // column, shared across devices).
     const localOk = saveCaseNote(state.caseIntID, note);
 
-    approveBtn.disabled = true;
+    // Button is already disabled from the report wait above.
     status.textContent = "Approving…";
-    status.classList.remove("is-error");
 
     // Both writes are full upserts of the same additionalcasedetails row, so they
     // must stay sequential: the status write re-reads and carries forward the date
@@ -701,12 +716,33 @@ export function createCaseNoteForm() {
     approveBtn.disabled = false;
 
     if (statusOk) {
+      // Confirm the moment the approval lands. The notifications below are
+      // several seconds of network on top, and making the user stare at a
+      // disabled button until they finish reads as nothing having happened.
+      toast.success("Approved successfully");
       status.textContent = "Approved.";
-      toast.success("Case note saved and status set to 2D design approved.");
       setMessage("2D design approved.", false);
       setTimeout(() => {
         if (status.textContent === "Approved.") status.textContent = "";
       }, 2000);
+
+      // Fired only after the status actually flipped — telling everyone about an
+      // approval that didn't land would be worse than staying quiet. Independent
+      // endpoints, so they go out together. Not awaited: neither is allowed to
+      // hold up the approval, and only a failure is worth another toast.
+      Promise.all([
+        sendCaseApprovalEmail(state.caseIntID, {
+          caseName: state.caseName,
+          caseOwner: ownerName,
+          statusLabel: STATUS_2D_DESIGN_APPROVED,
+        }),
+        sendCaseApprovalAlerts(state.caseIntID, {
+          statusLabel: STATUS_2D_DESIGN_APPROVED,
+          alertMessage: "The 2D design report is ready for review.",
+        }),
+      ]).then(([emailOk, alertCount]) => {
+        if (!emailOk && !alertCount) toast.warning("Couldn't notify the case's users.");
+      });
     } else if (remoteOk) {
       status.textContent = "Status not updated.";
       status.classList.add("is-error");
@@ -725,6 +761,15 @@ export function createCaseNoteForm() {
   actions.appendChild(approveBtn);
   actions.appendChild(status);
   form.appendChild(actions);
+
+  // Start the approval report as soon as the Case Note is on screen, so pressing
+  // Approve opens straight onto a finished PDF. Fire-and-forget: the click path
+  // awaits the same cached build, and re-runs it there if the design has changed
+  // since (the signature is part of the cache key).
+  prepareApprovalReport(state.caseIntID, {
+    caseOwner: ownerName,
+    signature: getHistoryStateSignature(),
+  });
 
   return form;
 }

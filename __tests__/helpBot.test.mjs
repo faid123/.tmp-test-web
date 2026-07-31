@@ -279,7 +279,7 @@ describe("Show me points at the control, not at what opens it", () => {
     ["rename-case", "#renameBtn"],
     ["duplicate-case", "#duplicateBtn"],
     ["delete-case", "#deleteBtn"],
-    ["download-2d", "#download2dDesignBtn"],
+    ["download-references", "#downloadReferencesBtn"],
     ["user-access", "#editUserAccessBtn"],
     ["dashboard", "#viewDashboardBtn"],
   ])("%s points at its own item in the case-actions menu", (id, selector) => {

@@ -40,11 +40,9 @@ function isAnteriorToothId(toothId) {
   return Number.isFinite(unit) && unit >= 1 && unit <= 3;
 }
 
-// A bar clasp is a buccal retentive element; its reciprocation sits on the lingual
-// surface at the same mesial/distal corner (bar_d?_distal -> distal_lingual, etc.).
-function reciprocatingSurfaceForBarSurface(barSurface) {
-  return String(barSurface || "").includes("distal") ? "distal_lingual" : "mesial_lingual";
-}
+// Default reciprocating element for a retentive placement: the proximal (reciprocating)
+// plate. Surfaceless — it plates the whole tooth and encodes reciprocating=2.
+const DEFAULT_RECIPROCATING_COMPONENT_ID = "plate-prox";
 
 // A tooth's single reciprocating slot is a reciprocating clasp OR a proximal/mesh
 // plate (see annotationTeethModel.RECIPROCATING_SLOT_IDS).
@@ -53,6 +51,18 @@ function toothHasReciprocatingElement(tooth) {
     (entry) =>
       isReciprocatingClaspComponent(entry.componentId) || isPlateComponentId(entry.componentId)
   );
+}
+
+// Clasps, bars, and rests all need reciprocation: placing one auto-adds the default
+// reciprocating plate, unless the tooth already carries a reciprocating element
+// (clasp or plate) — which includes the case where the placement IS one.
+function autoPlaceDefaultReciprocatingElement(tooth, selectedComponent) {
+  const needsReciprocation =
+    isClaspComponent(selectedComponent) ||
+    isBarComponent(selectedComponent) ||
+    isRestComponent(selectedComponent);
+  if (!needsReciprocation || toothHasReciprocatingElement(tooth)) return;
+  addPlacement(tooth, DEFAULT_RECIPROCATING_COMPONENT_ID, null);
 }
 
 // Apply follow-up cleanup rules after removing a placement.
@@ -323,12 +333,7 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
   const criteriaResult = assessPlacementCriteria(tooth, selectedComponent, COMPONENT_BY_ID);
   if (criteriaResult.pass) {
     addPlacement(tooth, selectedComponent.id, targetSurface);
-    // A bar needs reciprocation: auto-place a reciprocating clasp on the bar's
-    // lingual side, unless the tooth already has a reciprocating element (clasp/
-    // plate). Mirrors the bar assemblies.
-    if (isBarComponent(selectedComponent) && !toothHasReciprocatingElement(tooth)) {
-      addPlacement(tooth, "reciprocating-clasp", reciprocatingSurfaceForBarSurface(targetSurface));
-    }
+    autoPlaceDefaultReciprocatingElement(tooth, selectedComponent);
     setMessage(
       `Placed ${selectedComponent.label}${targetSurface ? ` (${targetSurface})` : ""} on tooth ${toothId}.`,
       false
@@ -345,6 +350,7 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
   if (failureData.actionUponFailure === ACTION_UPON_FAILURE.REMOVE_THEN_PLACE) {
     removePlacementsByComponentIds(tooth, failureData.conflictingComponents || []);
     addPlacement(tooth, selectedComponent.id, targetSurface);
+    autoPlaceDefaultReciprocatingElement(tooth, selectedComponent);
     setMessage(
       `Replaced conflict and placed ${selectedComponent.label}${targetSurface ? ` (${targetSurface})` : ""} on tooth ${toothId}.`,
       false

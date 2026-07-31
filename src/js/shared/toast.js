@@ -124,6 +124,7 @@ function buildConfirmOverlay() {
         <h3 class="app-confirm-title"></h3>
       </div>
       <p class="app-confirm-message"></p>
+      <div class="app-confirm-content"></div>
       <div class="app-confirm-actions">
         <button type="button" class="app-confirm-btn app-confirm-cancel"></button>
         <button type="button" class="app-confirm-btn app-confirm-ok"></button>
@@ -133,12 +134,19 @@ function buildConfirmOverlay() {
   return overlay;
 }
 
+// `content` lets a caller mount its own DOM between the message and the
+// action row (the 2D case-note approval dialog puts a report preview, the
+// case's user list and a message box there). Passing it also switches Enter
+// off as a confirm shortcut — a rich dialog contains text fields, and Enter
+// inside one must not commit the action. `size: "lg"` widens the box.
 export function confirmModal({
   title = "Are you sure?",
   message = "",
   confirmText = "Confirm",
   cancelText = "Cancel",
   variant = "info", // "info" | "warning" | "danger"
+  content = null, // HTMLElement mounted above the buttons
+  size = "", // "" | "lg"
 } = {}) {
   return new Promise((resolve) => {
     // If a previous prompt is still open, dismiss it so the new one isn't
@@ -153,14 +161,21 @@ export function confirmModal({
     const iconEl = overlay.querySelector(".app-confirm-icon i");
     const titleEl = overlay.querySelector(".app-confirm-title");
     const msgEl = overlay.querySelector(".app-confirm-message");
+    const contentEl = overlay.querySelector(".app-confirm-content");
     const okBtn = overlay.querySelector(".app-confirm-ok");
     const cancelBtn = overlay.querySelector(".app-confirm-cancel");
 
     box.classList.add(`app-confirm-${variant}`);
+    if (size) box.classList.add(`app-confirm-box--${size}`);
     iconEl.classList.add(CONFIRM_ICONS[variant] || CONFIRM_ICONS.info);
     titleEl.textContent = title;
     // Support a multi-line message via plain text (escape for safety).
     msgEl.innerHTML = escapeHtml(message).replace(/\n/g, "<br>");
+    // An empty <p> would still contribute its bottom margin, which looks like a
+    // stray gap in a content-only dialog.
+    if (!message) msgEl.remove();
+    if (content) contentEl.appendChild(content);
+    else contentEl.remove();
     okBtn.textContent = confirmText;
     cancelBtn.textContent = cancelText;
 
@@ -169,7 +184,9 @@ export function confirmModal({
     requestAnimationFrame(() => overlay.classList.add("is-visible"));
 
     // Confirm button gets focus so Enter/Space activates it for keyboard users.
-    setTimeout(() => okBtn.focus(), 0);
+    // Not for a content dialog: focusing the commit button there invites an
+    // accidental Enter, and the content's own first field is the better target.
+    if (!content) setTimeout(() => okBtn.focus(), 0);
 
     const cleanup = (result) => {
       overlay.classList.remove("is-visible");
@@ -187,7 +204,9 @@ export function confirmModal({
       if (e.key === "Escape") {
         e.preventDefault();
         cleanup(false);
-      } else if (e.key === "Enter") {
+      } else if (e.key === "Enter" && !content) {
+        // Enter-to-confirm only on the plain text dialog. With mounted content
+        // the user is typing, and the buttons handle their own Enter natively.
         e.preventDefault();
         cleanup(true);
       }

@@ -23,6 +23,12 @@ const state = {
   // wrap; rotation = base (0/90/180/270 from the rotate button) + fine (the
   // ±45° dial). Total applied angle = base + fine.
   crop: { active: false, rect: null, base: 0, fine: 0, source: null },
+  // Applying a crop replaces the background and bakes the strokes into it, so
+  // the pixels outside the frame are otherwise gone. Each apply pushes a
+  // { bg, strokes } snapshot here; nothing is final until the editor is saved.
+  // Holds one background data URL per crop — a few MB each, so only as deep as
+  // the user actually crops.
+  cropHistory: [],
 };
 
 let canvas = null;
@@ -263,6 +269,10 @@ function ensureCropUI() {
     "</div>" +
     '<div class="ie-crop-bar">' +
     '<div class="ie-crop-bar-top">' +
+    // Steps back through applied crops. Hidden until there's one to undo.
+    '<button type="button" class="ie-crop-iconbtn is-hidden" id="ieCropUndo" aria-label="Undo crop" title="Undo crop">' +
+    UNDO_SVG +
+    "</button>" +
     '<button type="button" class="ie-crop-iconbtn" id="ieCropRotate90" aria-label="Rotate 90°" title="Rotate 90°">' +
     '<img src="../../assets/instruction%20editor/rotate.svg" alt="" class="ie-crop-iconimg" />' +
     "</button>" +
@@ -306,6 +316,7 @@ function ensureCropUI() {
   ui.querySelector("#ieCropDial").addEventListener("pointerdown", startDialDrag);
   ui.querySelector("#ieCropRotate90").addEventListener("click", () => rotate90());
   ui.querySelector("#ieCropAspect").addEventListener("click", () => openAspectMenu());
+  ui.querySelector("#ieCropUndo").addEventListener("click", () => undoCrop());
   ui.querySelector("#ieCropCancel").addEventListener("click", () => exitCropMode());
   ui.querySelector("#ieCropDone").addEventListener("click", () => applyCrop());
 
@@ -465,12 +476,15 @@ function enterCropMode() {
   state.crop.rect = initialCropRect();
   layoutCropFrame();
   updateDialValue();
+  updateCropUndoButton();
   cropUI()?.classList.remove("is-hidden");
   getModal()?.classList.add("is-cropping");
+  activeIeMode = "crop";
   redraw();
 }
 
 function exitCropMode() {
+  activeIeMode = null;
   state.crop.active = false;
   state.crop.source = null;
   cropUI()?.classList.add("is-hidden");
@@ -500,6 +514,13 @@ function applyCrop() {
   octx.fillRect(0, 0, sw, sh);
   octx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
   const dataUrl = out.toDataURL("image/png");
+  // Snapshot BEFORE the swap so the crop stays reversible until save.
+  if (state.bgImage?.src) {
+    state.cropHistory.push({
+      bg: state.bgImage.src,
+      strokes: JSON.parse(JSON.stringify(state.strokes)),
+    });
+  }
   loadBgImage(dataUrl).then(() => {
     // Drawings are now baked into the cropped background, so clear the live
     // strokes (keeping them would double-draw and they'd no longer line up).
@@ -509,6 +530,38 @@ function applyCrop() {
     updateUndoRedoButtons();
     exitCropMode();
   });
+}
+
+// Restore the background + strokes as they were before the last crop. Returns
+// false when there's nothing to restore, so undo() can fall through to it.
+function undoCrop() {
+  const snap = state.cropHistory.pop();
+  if (!snap) return false;
+  loadBgImage(snap.bg).then(() => {
+    state.strokes = snap.strokes;
+    state.redoStack = [];
+    state.currentStroke = null;
+    state.linePending = null;
+    clearSelection();
+    updateUndoRedoButtons();
+    if (state.crop.active) {
+      // crop.source was flattened from the cropped image, so it's stale now.
+      // Clearing active first makes enterCropMode re-flatten the restored
+      // composite instead of the rotated crop-mode render.
+      state.crop.active = false;
+      enterCropMode();
+    } else {
+      redraw();
+    }
+    updateCropUndoButton();
+  });
+  return true;
+}
+
+// The crop bar's undo button only means anything once a crop has been applied.
+function updateCropUndoButton() {
+  const btn = document.getElementById("ieCropUndo");
+  if (btn) btn.classList.toggle("is-hidden", state.cropHistory.length === 0);
 }
 
 // Text-box geometry shared by the renderer + hit-testing so they always agree.
@@ -1553,7 +1606,12 @@ function editExistingText(target) {
 }
 
 function undo() {
-  if (state.strokes.length === 0) return;
+  // Strokes first, then crops — plain LIFO across both, so a crop is only
+  // reached once everything drawn after it has been undone.
+  if (state.strokes.length === 0) {
+    undoCrop();
+    return;
+  }
   const last = state.strokes.pop();
   state.redoStack.push(last);
   redraw();
@@ -1582,7 +1640,9 @@ function clearAll() {
 function updateUndoRedoButtons() {
   const undoBtn = document.getElementById("undoDrawBtn");
   const redoBtn = document.getElementById("redoDrawBtn");
-  if (undoBtn) undoBtn.disabled = state.strokes.length === 0;
+  if (undoBtn) {
+    undoBtn.disabled = state.strokes.length === 0 && state.cropHistory.length === 0;
+  }
   if (redoBtn) redoBtn.disabled = state.redoStack.length === 0;
 }
 
@@ -1844,6 +1904,7 @@ function setShape(shape) {
 function enterShapeMode() {
   const ui = ensureShapePanel();
   if (!ui) return;
+  activeIeMode = "icon";
   shapeBackup = JSON.stringify(state.strokes);
   ui.classList.remove("is-hidden");
   getModal()?.classList.add("is-shaping");
@@ -1856,6 +1917,7 @@ function enterShapeMode() {
 }
 
 function exitShapeMode(commit) {
+  activeIeMode = null;
   if (!commit && shapeBackup != null) {
     state.strokes = JSON.parse(shapeBackup);
     state.redoStack = [];
@@ -2032,6 +2094,7 @@ function spawnCenteredTextInput() {
 function enterTextMode() {
   const ui = ensureTextUI();
   if (!ui) return;
+  activeIeMode = "text";
   state.tool = "text";
   ui.classList.remove("is-hidden");
   getModal()?.classList.add("is-texting");
@@ -2045,6 +2108,7 @@ function enterTextMode() {
 }
 
 function exitTextMode(commit) {
+  activeIeMode = null;
   if (commit) {
     if (textInputEl) commitTextInput();
   } else if (textInputEl) {
@@ -2177,6 +2241,7 @@ function setBrushPreset(p) {
 function enterBrushMode() {
   const ui = ensureBrushUI();
   if (!ui) return;
+  activeIeMode = "pencil";
   // Snapshot so Cancel can drop everything drawn during this session.
   brushBackup = JSON.stringify(state.strokes);
   ui.classList.remove("is-hidden");
@@ -2190,6 +2255,7 @@ function enterBrushMode() {
 }
 
 function exitBrushMode(commit) {
+  activeIeMode = null;
   if (!commit && brushBackup != null) {
     state.strokes = JSON.parse(brushBackup);
     state.redoStack = [];
@@ -2206,6 +2272,36 @@ function exitBrushMode(commit) {
 function exportComposedDataUrl() {
   if (!canvas) return null;
   return canvas.toDataURL("image/jpeg", 0.92);
+}
+
+// ===================== Mode switching =====================
+// Which takeover mode is open ("crop" | "icon" | "text" | "pencil" | null).
+// Kept in sync by the enter*/exit* pair so the panels' own Cancel/Done stay
+// authoritative — this only tracks what's open, it never drives it.
+let activeIeMode = null;
+
+const IE_MODE_ENTER = {
+  crop: enterCropMode,
+  icon: enterShapeMode,
+  text: enterTextMode,
+  pencil: enterBrushMode,
+};
+// Switching away commits: strokes/text already drawn are kept. Crop is the
+// exception — leaving it discards, since applying re-bakes the background.
+const IE_MODE_EXIT = {
+  crop: () => exitCropMode(),
+  icon: () => exitShapeMode(true),
+  text: () => exitTextMode(true),
+  pencil: () => exitBrushMode(true),
+};
+
+// Toolbar click swaps modes: the open tool box commits and closes, the next one
+// opens. Clicking the icon that's already open just closes it.
+function switchIeMode(next) {
+  const prev = activeIeMode;
+  if (prev) IE_MODE_EXIT[prev]?.();
+  if (prev === next) return;
+  IE_MODE_ENTER[next]?.();
 }
 
 function bindOnce() {
@@ -2233,23 +2329,12 @@ function bindOnce() {
   document.querySelectorAll("[data-instruction-tool]").forEach((btn) => {
     btn.addEventListener("click", () => setTool(btn.dataset.instructionTool));
   });
-  // Crop toolbar icon → enter crop & rotate mode.
-  document
-    .querySelector('[data-ie-tool="crop"]')
-    ?.addEventListener("click", () => enterCropMode());
-  // Square toolbar icon → open the shapes picker (line/curve/square/rectangle/
-  // triangle/circle), drawn with adjustable size + colour.
-  document
-    .querySelector('[data-ie-tool="icon"]')
-    ?.addEventListener("click", () => enterShapeMode());
-  // Text toolbar icon → enter text mode (alignment + background toggles).
-  document
-    .querySelector('[data-ie-tool="text"]')
-    ?.addEventListener("click", () => enterTextMode());
-  // Pencil toolbar icon → enter brush mode (freehand draw + eraser).
-  document
-    .querySelector('[data-ie-tool="pencil"]')
-    ?.addEventListener("click", () => enterBrushMode());
+  // Toolbar icons — crop & rotate / shapes picker / text / brush. The dataset
+  // values double as the IE_MODE_* keys. Each click swaps out whatever mode is
+  // open; clicking the open one closes it.
+  document.querySelectorAll("[data-ie-tool]").forEach((btn) => {
+    btn.addEventListener("click", () => switchIeMode(btn.dataset.ieTool));
+  });
   document.querySelectorAll("[data-instruction-color]").forEach((btn) => {
     btn.addEventListener("click", () => setColor(btn.dataset.instructionColor));
   });
@@ -2332,8 +2417,13 @@ export async function openInstructionEditor(options = {}) {
   state.isDrawing = false;
   state.linePending = null;
   state.caseLabel = null;
+  activeIeMode = null;
   // Make sure we never re-open straight into a stale crop session.
   state.crop = { active: false, rect: null, base: 0, fine: 0, source: null };
+  // Crops are only reversible within one editing session — once saved, the
+  // cropped image is what was committed.
+  state.cropHistory = [];
+  updateCropUndoButton();
   cropUI()?.classList.add("is-hidden");
   getModal()?.classList.remove("is-cropping");
   // Close the shapes picker, drop any shape-mode takeover, and clear its

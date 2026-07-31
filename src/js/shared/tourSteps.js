@@ -106,7 +106,7 @@ export const PAGE_TOURS = {
     },
     {
       title: "Case actions",
-      text: "The ☰ button beside the case name opens everything else you can do to a case — rename, duplicate, delete, user access, version history and the 2D design download.",
+      text: "The ☰ button beside the case name opens everything else you can do to a case — rename, duplicate, delete, user access, version history and the reference-image download.",
       selector: "#renameBtn",
       reveal: CASE_MENU,
       optional: true,
@@ -355,7 +355,6 @@ export const PAGE_TOURS = {
       text: "Download Jaw Profile offers two things: Download STL file gives you the upper and lower jaws together as a .zip, and Download as JPEG saves the arch annotation as an image.",
       selector: "#footerDownloadJawProfileBtn",
       optional: true,
-      topic: "download-2d",
     },
 
     // ---- inside the Noticeboard -----------------------------------------
