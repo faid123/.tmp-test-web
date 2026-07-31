@@ -1,0 +1,130 @@
+# npm audit report
+
+brace-expansion  <=5.0.7
+Severity: high
+brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash - https://github.com/advisories/GHSA-mh99-v99m-4gvg
+fix available via `npm audit fix --force`
+Will install babel-jest@23.6.0, which is a breaking change
+node_modules/brace-expansion
+  minimatch  2.0.0 - 10.0.2
+  Depends on vulnerable versions of brace-expansion
+  node_modules/minimatch
+    glob  4.3.0 - 10.5.0
+    Depends on vulnerable versions of minimatch
+    node_modules/glob
+      @jest/reporters  *
+      Depends on vulnerable versions of @jest/transform
+      Depends on vulnerable versions of glob
+      node_modules/@jest/reporters
+        @jest/core  *
+        Depends on vulnerable versions of @jest/reporters
+        Depends on vulnerable versions of @jest/transform
+        Depends on vulnerable versions of jest-config
+        Depends on vulnerable versions of jest-resolve-dependencies
+        Depends on vulnerable versions of jest-runner
+        Depends on vulnerable versions of jest-runtime
+        Depends on vulnerable versions of jest-snapshot
+        node_modules/@jest/core
+          jest  >=19.1.0-alpha.eed82034
+          Depends on vulnerable versions of @jest/core
+          Depends on vulnerable versions of jest-cli
+          node_modules/jest
+          jest-cli  >=19.1.0-alpha.eed82034
+          Depends on vulnerable versions of @jest/core
+          Depends on vulnerable versions of create-jest
+          Depends on vulnerable versions of jest-config
+          node_modules/jest-cli
+      jest-config  >=19.1.0-alpha.eed82034
+      Depends on vulnerable versions of babel-jest
+      Depends on vulnerable versions of glob
+      Depends on vulnerable versions of jest-circus
+      Depends on vulnerable versions of jest-runner
+      node_modules/jest-config
+        create-jest  >=29.7.0
+        Depends on vulnerable versions of jest-config
+        node_modules/create-jest
+      jest-runtime  >=24.0.0-alpha.0
+      Depends on vulnerable versions of @jest/globals
+      Depends on vulnerable versions of @jest/transform
+      Depends on vulnerable versions of glob
+      Depends on vulnerable versions of jest-snapshot
+      node_modules/jest-runtime
+        jest-circus  >=25.2.4
+        Depends on vulnerable versions of @jest/expect
+        Depends on vulnerable versions of jest-runtime
+        Depends on vulnerable versions of jest-snapshot
+        node_modules/jest-circus
+        jest-runner  >=24.0.0-alpha.0
+        Depends on vulnerable versions of @jest/transform
+        Depends on vulnerable versions of jest-runtime
+        node_modules/jest-runner
+      test-exclude  4.2.2 || 5.0.0 - 7.0.2
+      Depends on vulnerable versions of glob
+      Depends on vulnerable versions of minimatch
+      node_modules/test-exclude
+        babel-plugin-istanbul  5.0.1 - 7.0.1
+        Depends on vulnerable versions of test-exclude
+        node_modules/babel-plugin-istanbul
+          @jest/transform  *
+          Depends on vulnerable versions of babel-plugin-istanbul
+          node_modules/@jest/transform
+            babel-jest  >=24.0.0-alpha.0
+            Depends on vulnerable versions of @jest/transform
+            Depends on vulnerable versions of babel-plugin-istanbul
+            node_modules/babel-jest
+            jest-snapshot  >=27.0.0-next.0
+            Depends on vulnerable versions of @jest/transform
+            node_modules/jest-snapshot
+              @jest/expect  *
+              Depends on vulnerable versions of jest-snapshot
+              node_modules/@jest/expect
+                @jest/globals  >=28.0.0-alpha.0
+                Depends on vulnerable versions of @jest/expect
+                node_modules/@jest/globals
+              jest-resolve-dependencies  >=27.0.0-next.0
+              Depends on vulnerable versions of jest-snapshot
+              node_modules/jest-resolve-dependencies
+
+fast-uri  3.0.0 - 3.1.3
+Severity: high
+fast-uri vulnerable to host confusion via literal backslash authority delimiter - https://github.com/advisories/GHSA-v2hh-gcrm-f6hx
+fix available via `npm audit fix`
+node_modules/fast-uri
+
+postcss  <=8.5.17
+Severity: high
+PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure - https://github.com/advisories/GHSA-r28c-9q8g-f849
+fix available via `npm audit fix`
+node_modules/postcss
+
+uglify-js  <=2.5.0
+Severity: critical
+Regular Expression Denial of Service in uglify-js - https://github.com/advisories/GHSA-c9f4-xj24-8jqx
+Incorrect Handling of Non-Boolean Comparisons During Minification in uglify-js - https://github.com/advisories/GHSA-34r7-q49f-h37c
+fix available via `npm audit fix --force`
+Will install require@0.4.4, which is a breaking change
+node_modules/uglify-js
+  require  >=0.4.5
+  Depends on vulnerable versions of uglify-js
+  node_modules/require
+
+uuid  <11.1.1
+Severity: moderate
+uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided - https://github.com/advisories/GHSA-w5hq-g745-h8pq
+fix available via `npm audit fix --force`
+Will install webpack-dev-server@6.0.0, which is a breaking change
+node_modules/uuid
+  sockjs  >=0.3.17
+  Depends on vulnerable versions of uuid
+  node_modules/sockjs
+    webpack-dev-server  2.0.0-beta - 5.2.6
+    Depends on vulnerable versions of sockjs
+    node_modules/webpack-dev-server
+
+27 vulnerabilities (3 moderate, 23 high, 1 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force

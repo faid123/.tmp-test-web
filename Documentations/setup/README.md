@@ -42,3 +42,8 @@ the project running and just need one specific thing, jump straight to the relev
 Once your environment is running, [Documentations/onboarding/](../onboarding/2d-annotation.md)
 covers the codebase itself — architecture and feature deep-dives, starting with 2D Annotation
 (the RPD framework design workspace).
+
+The `.docx` documents in `Documentations/` (UAT reports, security protocol, traceability, etc.)
+are kept current by a weekly automated check rather than by memory — see
+[Weekly Documentation Review](../WEEKLY_DOC_REVIEW.md) for how that works and what to do with its
+reports.

@@ -1,0 +1,665 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "@jest/core": {
+      "name": "@jest/core",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@jest/reporters",
+        "@jest/transform",
+        "jest-config",
+        "jest-resolve-dependencies",
+        "jest-runner",
+        "jest-runtime",
+        "jest-snapshot"
+      ],
+      "effects": [
+        "jest",
+        "jest-cli"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@jest/core"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "25.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "@jest/expect": {
+      "name": "@jest/expect",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "jest-snapshot"
+      ],
+      "effects": [
+        "@jest/globals",
+        "jest-circus"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@jest/expect"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "25.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "@jest/globals": {
+      "name": "@jest/globals",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@jest/expect"
+      ],
+      "effects": [
+        "jest-runtime"
+      ],
+      "range": ">=28.0.0-alpha.0",
+      "nodes": [
+        "node_modules/@jest/globals"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "25.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "@jest/reporters": {
+      "name": "@jest/reporters",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@jest/transform",
+        "glob"
+      ],
+      "effects": [],
+      "range": "*",
+      "nodes": [
+        "node_modules/@jest/reporters"
+      ],
+      "fixAvailable": true
+    },
+    "@jest/transform": {
+      "name": "@jest/transform",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "babel-plugin-istanbul"
+      ],
+      "effects": [
+        "babel-jest",
+        "jest-runner",
+        "jest-runtime",
+        "jest-snapshot"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@jest/transform"
+      ],
+      "fixAvailable": {
+        "name": "babel-jest",
+        "version": "23.6.0",
+        "isSemVerMajor": true
+      }
+    },
+    "babel-jest": {
+      "name": "babel-jest",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@jest/transform",
+        "babel-plugin-istanbul"
+      ],
+      "effects": [
+        "jest-config"
+      ],
+      "range": ">=24.0.0-alpha.0",
+      "nodes": [
+        "node_modules/babel-jest"
+      ],
+      "fixAvailable": {
+        "name": "babel-jest",
+        "version": "23.6.0",
+        "isSemVerMajor": true
+      }
+    },
+    "babel-plugin-istanbul": {
+      "name": "babel-plugin-istanbul",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "test-exclude"
+      ],
+      "effects": [
+        "@jest/transform",
+        "babel-jest"
+      ],
+      "range": "5.0.1 - 7.0.1",
+      "nodes": [
+        "node_modules/babel-plugin-istanbul"
+      ],
+      "fixAvailable": {
+        "name": "babel-jest",
+        "version": "23.6.0",
+        "isSemVerMajor": true
+      }
+    },
+    "brace-expansion": {
+      "name": "brace-expansion",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1124334,
+          "name": "brace-expansion",
+          "dependency": "brace-expansion",
+          "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+          "url": "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+          "severity": "high",
+          "cwe": [
+            "CWE-400",
+            "CWE-770"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<=5.0.7"
+        }
+      ],
+      "effects": [
+        "minimatch"
+      ],
+      "range": "<=5.0.7",
+      "nodes": [
+        "node_modules/brace-expansion"
+      ],
+      "fixAvailable": {
+        "name": "babel-jest",
+        "version": "23.6.0",
+        "isSemVerMajor": true
+      }
+    },
+    "create-jest": {
+      "name": "create-jest",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "jest-config"
+      ],
+      "effects": [
+        "jest-cli"
+      ],
+      "range": ">=29.7.0",
+      "nodes": [
+        "node_modules/create-jest"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "25.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "fast-uri": {
+      "name": "fast-uri",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1124064,
+          "name": "fast-uri",
+          "dependency": "fast-uri",
+          "title": "fast-uri vulnerable to host confusion via literal backslash authority delimiter",
+          "url": "https://github.com/advisories/GHSA-v2hh-gcrm-f6hx",
+          "severity": "high",
+          "cwe": [
+            "CWE-436"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N"
+          },
+          "range": ">=3.0.0 <=3.1.3"
+        }
+      ],
+      "effects": [],
+      "range": "3.0.0 - 3.1.3",
+      "nodes": [
+        "node_modules/fast-uri"
+      ],
+      "fixAvailable": true
+    },
+    "glob": {
+      "name": "glob",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "minimatch"
+      ],
+      "effects": [
+        "@jest/reporters",
+        "jest-config",
+        "jest-runtime",
+        "test-exclude"
+      ],
+      "range": "4.3.0 - 10.5.0",
+      "nodes": [
+        "node_modules/glob"
+      ],
+      "fixAvailable": {
+        "name": "babel-jest",
+        "version": "23.6.0",
+        "isSemVerMajor": true
+      }
+    },
+    "jest": {
+      "name": "jest",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "@jest/core",
+        "jest-cli"
+      ],
+      "effects": [],
+      "range": ">=19.1.0-alpha.eed82034",
+      "nodes": [
+        "node_modules/jest"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "25.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "jest-circus": {
+      "name": "jest-circus",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@jest/expect",
+        "jest-runtime",
+        "jest-snapshot"
+      ],
+      "effects": [
+        "jest-config"
+      ],
+      "range": ">=25.2.4",
+      "nodes": [
+        "node_modules/jest-circus"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "25.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "jest-cli": {
+      "name": "jest-cli",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@jest/core",
+        "create-jest",
+        "jest-config"
+      ],
+      "effects": [
+        "jest"
+      ],
+      "range": ">=19.1.0-alpha.eed82034",
+      "nodes": [
+        "node_modules/jest-cli"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "25.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "jest-config": {
+      "name": "jest-config",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "babel-jest",
+        "glob",
+        "jest-circus",
+        "jest-runner"
+      ],
+      "effects": [
+        "create-jest",
+        "jest-cli"
+      ],
+      "range": ">=19.1.0-alpha.eed82034",
+      "nodes": [
+        "node_modules/jest-config"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "25.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "jest-resolve-dependencies": {
+      "name": "jest-resolve-dependencies",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "jest-snapshot"
+      ],
+      "effects": [],
+      "range": ">=27.0.0-next.0",
+      "nodes": [
+        "node_modules/jest-resolve-dependencies"
+      ],
+      "fixAvailable": true
+    },
+    "jest-runner": {
+      "name": "jest-runner",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@jest/transform",
+        "jest-runtime"
+      ],
+      "effects": [
+        "jest-config"
+      ],
+      "range": ">=24.0.0-alpha.0",
+      "nodes": [
+        "node_modules/jest-runner"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "25.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "jest-runtime": {
+      "name": "jest-runtime",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@jest/globals",
+        "@jest/transform",
+        "glob",
+        "jest-snapshot"
+      ],
+      "effects": [
+        "@jest/core",
+        "jest-circus",
+        "jest-runner"
+      ],
+      "range": ">=24.0.0-alpha.0",
+      "nodes": [
+        "node_modules/jest-runtime"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "25.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "jest-snapshot": {
+      "name": "jest-snapshot",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "@jest/transform"
+      ],
+      "effects": [
+        "@jest/core",
+        "@jest/expect",
+        "jest-circus",
+        "jest-resolve-dependencies",
+        "jest-runtime"
+      ],
+      "range": ">=27.0.0-next.0",
+      "nodes": [
+        "node_modules/jest-snapshot"
+      ],
+      "fixAvailable": {
+        "name": "jest",
+        "version": "25.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "minimatch": {
+      "name": "minimatch",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "brace-expansion"
+      ],
+      "effects": [
+        "glob",
+        "test-exclude"
+      ],
+      "range": "2.0.0 - 10.0.2",
+      "nodes": [
+        "node_modules/minimatch"
+      ],
+      "fixAvailable": {
+        "name": "babel-jest",
+        "version": "23.6.0",
+        "isSemVerMajor": true
+      }
+    },
+    "postcss": {
+      "name": "postcss",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1124288,
+          "name": "postcss",
+          "dependency": "postcss",
+          "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+          "url": "https://github.com/advisories/GHSA-r28c-9q8g-f849",
+          "severity": "high",
+          "cwe": [
+            "CWE-22"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+          },
+          "range": "<=8.5.17"
+        }
+      ],
+      "effects": [],
+      "range": "<=8.5.17",
+      "nodes": [
+        "node_modules/postcss"
+      ],
+      "fixAvailable": true
+    },
+    "require": {
+      "name": "require",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        "uglify-js"
+      ],
+      "effects": [],
+      "range": ">=0.4.5",
+      "nodes": [
+        "node_modules/require"
+      ],
+      "fixAvailable": {
+        "name": "require",
+        "version": "0.4.4",
+        "isSemVerMajor": true
+      }
+    },
+    "sockjs": {
+      "name": "sockjs",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "uuid"
+      ],
+      "effects": [
+        "webpack-dev-server"
+      ],
+      "range": ">=0.3.17",
+      "nodes": [
+        "node_modules/sockjs"
+      ],
+      "fixAvailable": {
+        "name": "webpack-dev-server",
+        "version": "6.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "test-exclude": {
+      "name": "test-exclude",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        "glob",
+        "minimatch"
+      ],
+      "effects": [
+        "babel-plugin-istanbul"
+      ],
+      "range": "4.2.2 || 5.0.0 - 7.0.2",
+      "nodes": [
+        "node_modules/test-exclude"
+      ],
+      "fixAvailable": {
+        "name": "babel-jest",
+        "version": "23.6.0",
+        "isSemVerMajor": true
+      }
+    },
+    "uglify-js": {
+      "name": "uglify-js",
+      "severity": "critical",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1091686,
+          "name": "uglify-js",
+          "dependency": "uglify-js",
+          "title": "Regular Expression Denial of Service in uglify-js",
+          "url": "https://github.com/advisories/GHSA-c9f4-xj24-8jqx",
+          "severity": "high",
+          "cwe": [
+            "CWE-1333"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<2.6.0"
+        },
+        {
+          "source": 1091710,
+          "name": "uglify-js",
+          "dependency": "uglify-js",
+          "title": "Incorrect Handling of Non-Boolean Comparisons During Minification in uglify-js",
+          "url": "https://github.com/advisories/GHSA-34r7-q49f-h37c",
+          "severity": "critical",
+          "cwe": [
+            "CWE-670",
+            "CWE-1254"
+          ],
+          "cvss": {
+            "score": 9.8,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+          },
+          "range": "<2.4.24"
+        }
+      ],
+      "effects": [
+        "require"
+      ],
+      "range": "<=2.5.0",
+      "nodes": [
+        "node_modules/uglify-js"
+      ],
+      "fixAvailable": {
+        "name": "require",
+        "version": "0.4.4",
+        "isSemVerMajor": true
+      }
+    },
+    "uuid": {
+      "name": "uuid",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1119441,
+          "name": "uuid",
+          "dependency": "uuid",
+          "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided",
+          "url": "https://github.com/advisories/GHSA-w5hq-g745-h8pq",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-787",
+            "CWE-1285"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N"
+          },
+          "range": "<11.1.1"
+        }
+      ],
+      "effects": [
+        "sockjs"
+      ],
+      "range": "<11.1.1",
+      "nodes": [
+        "node_modules/uuid"
+      ],
+      "fixAvailable": {
+        "name": "webpack-dev-server",
+        "version": "6.0.0",
+        "isSemVerMajor": true
+      }
+    },
+    "webpack-dev-server": {
+      "name": "webpack-dev-server",
+      "severity": "moderate",
+      "isDirect": true,
+      "via": [
+        "sockjs"
+      ],
+      "effects": [],
+      "range": "2.0.0-beta - 5.2.6",
+      "nodes": [
+        "node_modules/webpack-dev-server"
+      ],
+      "fixAvailable": {
+        "name": "webpack-dev-server",
+        "version": "6.0.0",
+        "isSemVerMajor": true
+      }
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 3,
+      "high": 23,
+      "critical": 1,
+      "total": 27
+    },
+    "dependencies": {
+      "prod": 19,
+      "dev": 868,
+      "optional": 33,
+      "peer": 0,
+      "peerOptional": 0,
+      "total": 886
+    }
+  }
+}

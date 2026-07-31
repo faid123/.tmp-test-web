@@ -23,7 +23,7 @@ its footer/modals:
 | **Noticeboard** | Gallery of instruction screenshots + 3D view captures, synced with the desktop app | — |
 | **Clinical Info** | A *second*, independent per-tooth chart for clinical condition (mobility, decay, crowns, etc.) | The main RPD design chart — different data, different backend endpoint |
 | **Case Note** | Small per-case form (owner, due date, shade, work category, comment) | Mostly `localStorage`-only; see below |
-| 3D preview panel | Live embedded Three.js viewer of the case's jaw STL files | — |
+| 3D preview panel | Live embedded Three.js viewer of the case's jaw STL files, including survey-angle targeting for undercuts | — |
 | Chat / Version History | Case comments and save-history side panels | Separate, simpler features |
 
 It's reached by opening a case from the case list: `2DAnnotation.html?id=<encrypted-case-id>`
@@ -87,12 +87,12 @@ It's reached by opening a case from the case list: `2DAnnotation.html?id=<encryp
 
 ## Codebase map
 
-29 files under `src/js/2D/` (~21k lines). Grouped by what they do:
+30 files under `src/js/2D/` (~23k lines). Grouped by what they do:
 
 **Orchestration**
 | File | Size | Purpose |
 |---|---|---|
-| `2DAnnotation.js` | 53KB | Entry point. Owns `state`, undo/redo history, tooth click-popup, remove-component dialog, save/load orchestration, panel layout, sidebar/footer wiring. Read this *last* — it's the glue. |
+| `2DAnnotation.js` | 60KB | Entry point. Owns `state`, undo/redo history, tooth click-popup, remove-component dialog, save/load orchestration (including Load Template Jaw — see below), panel layout, sidebar/footer wiring. Read this *last* — it's the glue. |
 
 **Canvas core** (tooth state, validation, rendering)
 | File | Size | Purpose |
@@ -105,7 +105,7 @@ It's reached by opening a case from the case list: `2DAnnotation.html?id=<encryp
 | `annotationPlacement.js` | 25KB | The placement engine — one function per component family, plus the assembly recipes and auto-reciprocation rule. |
 | `annotationRender.js` | 19KB | Draws both arches; owns the tooth click/right-click/double-click DOM listeners. |
 | `annotationVisuals.js` | 66KB | Pure SVG-fragment builders (icons, markers, overlays) — no events, no fetch. Only used by `annotationRender.js`. |
-| `annotationLocks.js` | 42KB | Lock/design-mode toggle, save-to-localStorage, JPEG/PNG export + thumbnail upload, bridges to the 3D preview. |
+| `annotationLocks.js` | 47KB | Lock/design-mode toggle, save-to-localStorage, JPEG/PNG export + thumbnail upload, bridges to the 3D preview. |
 
 **RPD component types** (geometry + per-family helpers, funneled through one barrel)
 | File | Size | Purpose |
@@ -140,7 +140,8 @@ It's reached by opening a case from the case list: `2DAnnotation.html?id=<encryp
 **3D preview**
 | File | Size | Purpose |
 |---|---|---|
-| `preview3D.js` | 126KB | The largest file by far. Only 3 exports (`loadInteractiveJawPreview`, `capture3DPreviewDataUrl`, `teardown3DPreview`); wired in via `annotationLocks.js` and `noticeboard.js`, not directly by `2DAnnotation.js`. |
+| `preview3D.js` | 128KB | The largest file by far. Only 3 exports (`loadInteractiveJawPreview`, `capture3DPreviewDataUrl`, `teardown3DPreview`); wired in via `annotationLocks.js` and `noticeboard.js`, not directly by `2DAnnotation.js`. |
+| `preview3DSurvey.js` | 37KB | Set Survey Angle: aim, save and apply jaw insertion angles for undercut surveying (`.jaw-preview-survey-btn`). Imports `state` from `2DAnnotation.js` and a chunk of `preview3D.js`'s internals (THREE, `preview3DState`, the undercut-surface builders); `preview3D.js` imports its entry points back (`handleSurveyButtonClick`, `exitSurveyAiming`, `autoApplySavedSurveyAngles`) — a call-time-only circular pair by design, the file's own top comment says so explicitly. |
 
 ## Architecture patterns worth understanding before you get confused
 
@@ -184,6 +185,16 @@ on case+type).
 `resolveJawStructDesign()` (`jawStructCodec.js`) → `applyJawStructDesign()`
 (`jawStructApply.js`, replays onto `state.teeth` via the same `addPlacement`/`hasPlacement`
 primitives so a loaded design behaves like a hand-placed one) → `renderJaws()`.
+
+**Loading a template** (`loadTemplateJawFromFiles()` in `2DAnnotation.js`, new): the "Load
+Template Jaw" button (`#loadProposalBtn`) opens a drag-and-drop modal accepting one or more Jaw
+Struct `.txt` files — the same text format the backend stores, tolerating a base64-wrapped body
+too (`templateTextToParsed()` falls back to `safeAtob()` if the file doesn't look like plain
+text). Each file's `Jaw Type` header (or its filename, as a fallback) picks which arch it
+applies to, so upper + lower can be loaded from two files at once. From there it reuses the
+*exact* `resolveJawStructDesign()` → `applyJawStructDesign()` pipeline the server-load path
+uses (above) — a loaded template behaves like a hand-placed design, not a special case — then
+re-renders the component catalog/edit-mode UI and both jaws, and records one undo step.
 
 ## The jawstruct L2 format
 
@@ -251,6 +262,10 @@ assume a fix in one encoder applies to the other.
   jaw STL files, embedded in the left panel and resizable via a splitter. Huge file, tiny public
   surface (3 exports) — treat it as a black box unless you're specifically working on 3D
   rendering.
+- **Survey angle targeting** (`preview3DSurvey.js`, new) — lets the user aim, save and apply
+  jaw insertion angles for undercut surveying from within the embedded 3D preview (gesture-drag
+  aiming, a placement arrow, saved-angle auto-apply on load). Shares `preview3D.js`'s state
+  rather than owning its own — read it alongside `preview3D.js`, not as a standalone module.
 
 ## Suggested reading order
 
@@ -263,7 +278,7 @@ assume a fix in one encoder applies to the other.
    save/load pipeline, in dependency order.
 6. `2DAnnotation.js` — now that you know what it's wiring together, the orchestrator makes sense.
 7. Whichever adjacent modal you actually need to touch (`noticeboard.js`, `clinicalInfo.js`,
-   `instructionEditor.js`, `preview3D.js`, `caseNote.js`).
+   `instructionEditor.js`, `preview3D.js`, `preview3DSurvey.js`, `caseNote.js`).
 
 Alongside the code, skim `__tests__/jawStructRoundTrip.test.mjs`,
 `__tests__/jawStructLingualPlate.test.mjs`, and `__tests__/reciprocatingExclusivity.test.mjs` —
