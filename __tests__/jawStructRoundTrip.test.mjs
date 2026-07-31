@@ -116,3 +116,47 @@ describe("jaw-struct load -> save round-trip (no edits)", () => {
     expect(savedText).toBe(loadedText);
   });
 });
+
+/**
+ * Pr Config is a per-position flag triple (mesial/distal/lingual, 0 = present), not a
+ * single-value enum, which is what lets a Half & Half tooth carry two rest seats.
+ * Encoding only the first placement would silently drop one rest on save.
+ */
+describe("a double-rested tooth (Half & Half) survives save -> load", () => {
+  const jawSide = "lower";
+  const fdi = "36";
+
+  function stateWithRests(...surfaces) {
+    const state = buildFreshState();
+    const decoded = decodeJawStructResponse(records);
+    if (decoded.lower) applyJawStructDesign(resolveJawStructDesign(decoded.lower), state);
+    const rec = state.teeth[fdi];
+    rec.isPresent = true;
+    rec.componentPlacements = surfaces.map((surface) => ({ componentId: "rest-seat", surface }));
+    rec.components = ["rest-seat"];
+    return state;
+  }
+
+  /** Save, then read back through the real decode + apply path. */
+  function saveAndReload(state) {
+    const text = encodeJawStructText(state, jawSide);
+    const reloaded = buildFreshState();
+    const parsed = decodeJawStructResponse([
+      { type: "lower_jaw", data: Buffer.from(text, "utf8").toString("base64") },
+    ]);
+    applyJawStructDesign(resolveJawStructDesign(parsed.lower), reloaded);
+    return reloaded.teeth[fdi].componentPlacements
+      .filter((p) => p.componentId === "rest-seat")
+      .map((p) => p.surface)
+      .sort();
+  }
+
+  it("keeps BOTH rests through a save/load cycle", () => {
+    expect(saveAndReload(stateWithRests("mesial", "distal"))).toEqual(["distal", "mesial"]);
+  });
+
+  it("still keeps a single rest single (no phantom second seat)", () => {
+    expect(saveAndReload(stateWithRests("distal"))).toEqual(["distal"]);
+    expect(saveAndReload(stateWithRests("mesial"))).toEqual(["mesial"]);
+  });
+});

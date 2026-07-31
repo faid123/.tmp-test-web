@@ -14,7 +14,7 @@
 import { toast, confirmModal, attachThemedCalendar } from "../shared/toast.js";
 import { logApi } from "../shared/apiLog.js";
 import { setupAppSidebar } from "../shared/appSidebar.js";
-import { setupConnectivityIndicator } from "../shared/accessibility.js";
+import { findIdentifierInPassword } from "../shared/passwordReset.js";
 
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
@@ -444,6 +444,13 @@ async function submitUserForm() {
     return;
   }
 
+  // A password must not contain the account's own username or email (2.3.2(h)).
+  // Only checked when a password is being set (blank on edit = keep existing).
+  if (password && findIdentifierInPassword(password, [username, email])) {
+    errEl.textContent = "The password can't contain the username or email address. Please choose another password.";
+    return;
+  }
+
   const btn = document.getElementById("saveUserBtn");
   btn.disabled = true;
   try {
@@ -609,9 +616,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // Footer hamburger opens the shared slide-in sidebar (same as the case list).
   // This page sits in src/pages/admin/, so index.html is three levels up.
   setupAppSidebar({ indexHref: "../../../index.html" });
-
-  // Footer connectivity (wifi) indicator, matching the case list.
-  setupConnectivityIndicator(document.getElementById("footerConnection"));
 
   // UI-only pre-gate; the server re-checks on every call anyway.
   if (Number(me.isAdmin) !== 1) {

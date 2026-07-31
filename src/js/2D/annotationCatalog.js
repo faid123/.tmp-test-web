@@ -36,6 +36,12 @@ import {
 } from "./annotationTeethModel.js";
 import {
   WORK_CATEGORY_OPTIONS,
+  STATUS_2D_DESIGN_APPROVED,
+  confirmCaseNoteApproval,
+  prepareApprovalReport,
+  sendCaseApprovalEmail,
+  sendCaseApprovalAlerts,
+  workCategoryForJawMaterial,
   loadCaseNote,
   loadCaseDueDate,
   saveCaseDueDate,
@@ -43,6 +49,7 @@ import {
   toDateInputValue,
   fetchAdditionalCaseDetails,
   updateCaseDueDate,
+  updateCaseStatus,
 } from "./caseNote.js";
 import { toast, attachThemedCalendar } from "../shared/toast.js";
 
@@ -165,7 +172,9 @@ export function renderComponentCatalog() {
   const groups = COMPONENT_GROUPS[state.selectedTab];
   if (groups) {
     const columns = document.createElement("div");
-    columns.className = "major-columns";
+    // Per-tab modifier so column widths can differ (assembly is lopsided: five
+    // Circum entries against two RPI/RPA ones).
+    columns.className = `major-columns major-columns--${state.selectedTab}`;
     groups.forEach((groupMeta) => {
       const groupItems = tabItems.filter((entry) => entry.section === groupMeta.key);
       columns.appendChild(createMajorColumn(groupMeta.title, groupItems));
@@ -484,16 +493,23 @@ export function handleDesignComponentSelect(componentId) {
     );
     return;
   }
+  if (componentId === "assembly-circ-ring-support") {
+    setMessage(
+      "Back-action Clasps selected. Click a mesial or distal rest-seat suggestion: the clasp goes on the opposite side, the reciprocating clasp stays on the rest's side.",
+      false
+    );
+    return;
+  }
   if (componentId === "assembly-circ-embrasure") {
     setMessage(
-      "Embrasure selected. Click distal rest-seat suggestion on a posterior tooth to place components on the selected tooth and its adjacent distal tooth.",
+      "Combine Clasps selected. Suggestions appear on the rest seats facing a missing tooth; clicking one brackets that gap on both abutments.",
       false
     );
     return;
   }
   if (componentId === "assembly-circ-multi") {
     setMessage(
-      "Multi selected. Click mesial rest-seat suggestion on a posterior tooth to place components on the selected tooth and its adjacent distal tooth.",
+      "Continuous Clasps selected. Suggestions appear on the rest seats facing a missing tooth; clicking one splints that abutment to the next tooth away from the gap.",
       false
     );
     return;
@@ -505,23 +521,16 @@ export function handleDesignComponentSelect(componentId) {
     );
     return;
   }
-  if (componentId === "assembly-tbar") {
+  if (componentId === "assembly-rpi") {
     setMessage(
-      "T-bar selected. Suggestions appear on posterior teeth adjacent to missing teeth (mesial for distal-adjacent, distal for mesial-adjacent).",
+      "RPI selected (mesial rest + proximal plate + distal I-bar). Click the mesial rest-seat suggestion on a posterior tooth whose distal neighbour is missing.",
       false
     );
     return;
   }
-  if (componentId === "assembly-tbar-mod") {
+  if (componentId === "assembly-rpa") {
     setMessage(
-      "Mod.T-bar selected. Suggestions appear on posterior teeth adjacent to missing teeth.",
-      false
-    );
-    return;
-  }
-  if (componentId === "assembly-ibar") {
-    setMessage(
-      "I-bar selected. Suggestions appear on posterior teeth adjacent to missing teeth.",
+      "RPA selected (mesial rest + proximal plate + mesial buccal clasp). Click the mesial rest-seat suggestion on a posterior tooth whose distal neighbour is missing.",
       false
     );
     return;
@@ -620,28 +629,58 @@ export function createCaseNoteForm() {
   });
   form.appendChild(shadeInput.row);
 
+  const autoCategory = workCategoryForJawMaterial(state.jawMaterial);
   const categorySelect = buildSelectRow(
     "Work Category",
     "case-note-category",
     WORK_CATEGORY_OPTIONS,
-    saved.workCategory || ""
+    (saved.workCategoryTouched ? saved.workCategory : autoCategory)||
+    saved.workCategory || 
+    ""
   );
   form.appendChild(categorySelect.row);
+
+  let userTouchedCategory = Boolean(saved.workCategoryTouched);
+  categorySelect.input.addEventListener("change",()=> {userTouchedCategory=true;});
 
   const commentField = buildTextareaRow("Comment", "case-note-comment", saved.comment || "");
   form.appendChild(commentField.row);
 
   const actions = document.createElement("div");
   actions.className = "case-note-actions";
-  const saveBtn = document.createElement("button");
-  saveBtn.type = "button";
-  saveBtn.className = "case-note-save-btn";
-  saveBtn.textContent = "Save";
+  // One button: it persists the note fields AND sets the case status in the same
+  // action, so a design can't be approved without its note being saved. Confirms
+  // first, since the status change is case-level and visible to everyone.
+  const approveBtn = document.createElement("button");
+  approveBtn.type = "button";
+  approveBtn.className = "case-note-save-btn";
+  approveBtn.textContent = "Approve";
   const status = document.createElement("span");
   status.className = "case-note-status";
   status.setAttribute("aria-live", "polite");
 
-  saveBtn.addEventListener("click", async () => {
+  approveBtn.addEventListener("click", async () => {
+    // The confirmation is a full dialog (report preview + the case's users + a
+    // notification message), but it still resolves to a plain boolean, so the
+    // commit chain below is unchanged. It waits on the report PDF before opening
+    // so the preview is there on arrival, hence the button-side progress: the
+    // wait is usually nil (warmed above) but is real after a fresh design edit.
+    approveBtn.disabled = true;
+    status.textContent = "Preparing report…";
+    status.classList.remove("is-error");
+    const confirmed = await confirmCaseNoteApproval({
+      caseIntID: state.caseIntID,
+      caseNumber,
+      caseOwner: ownerName,
+      statusLabel: STATUS_2D_DESIGN_APPROVED,
+      signature: getHistoryStateSignature(),
+    });
+    if (!confirmed) {
+      approveBtn.disabled = false;
+      status.textContent = "";
+      return;
+    }
+
     const dateRequired = dateInput.input.value;
     const note = {
       caseOwner: ownerName,
@@ -649,6 +688,7 @@ export function createCaseNoteForm() {
       dateRequired,
       toothShade: shadeInput.input.value,
       workCategory: categorySelect.input.value,
+      workCategoryTouched: userTouchedCategory,
       comment: commentField.input.value,
       updatedAt: new Date().toISOString(),
     };
@@ -656,42 +696,80 @@ export function createCaseNoteForm() {
     // written through to additionalcasedetails.due_date (shows in the case-list "Due"
     // column, shared across devices).
     const localOk = saveCaseNote(state.caseIntID, note);
-    saveBtn.disabled = true;
-    status.textContent = "Saving…";
-    status.classList.remove("is-error");
-    // Write the date through to additionalcasedetails.due_date and the comment
-    // through to additionalcasedetails.comments (shared case-level comment).
+
+    // Button is already disabled from the report wait above.
+    status.textContent = "Approving…";
+
+    // Both writes are full upserts of the same additionalcasedetails row, so they
+    // must stay sequential: the status write re-reads and carries forward the date
+    // and comment just written. The status write is skipped when the first fails,
+    // so a case is never marked approved with its note unsaved.
     const remoteOk = await updateCaseDueDate(
       state.caseIntID,
       dateRequired,
       commentField.input.value
     );
     if (remoteOk) saveCaseDueDate(state.caseIntID, dateRequired);
-    saveBtn.disabled = false;
+    const statusOk =
+      remoteOk && (await updateCaseStatus(state.caseIntID, STATUS_2D_DESIGN_APPROVED));
 
-    // The Case Note has its own Save button: it persists on its own and surfaces
-    // its own toast, independent of the back-dialog's "Save & Return" action.
-    if (remoteOk) {
-      status.textContent = "Saved.";
-      toast.success("Saved successfully");
-      setMessage("Case note saved.", false);
+    approveBtn.disabled = false;
+
+    if (statusOk) {
+      // Confirm the moment the approval lands. The notifications below are
+      // several seconds of network on top, and making the user stare at a
+      // disabled button until they finish reads as nothing having happened.
+      toast.success("Approved successfully");
+      status.textContent = "Approved.";
+      setMessage("2D design approved.", false);
       setTimeout(() => {
-        if (status.textContent === "Saved.") status.textContent = "";
+        if (status.textContent === "Approved.") status.textContent = "";
       }, 2000);
+
+      // Fired only after the status actually flipped — telling everyone about an
+      // approval that didn't land would be worse than staying quiet. Independent
+      // endpoints, so they go out together. Not awaited: neither is allowed to
+      // hold up the approval, and only a failure is worth another toast.
+      Promise.all([
+        sendCaseApprovalEmail(state.caseIntID, {
+          caseName: state.caseName,
+          caseOwner: ownerName,
+          statusLabel: STATUS_2D_DESIGN_APPROVED,
+        }),
+        sendCaseApprovalAlerts(state.caseIntID, {
+          statusLabel: STATUS_2D_DESIGN_APPROVED,
+          alertMessage: "The 2D design report is ready for review.",
+        }),
+      ]).then(([emailOk, alertCount]) => {
+        if (!emailOk && !alertCount) toast.warning("Couldn't notify the case's users.");
+      });
+    } else if (remoteOk) {
+      status.textContent = "Status not updated.";
+      status.classList.add("is-error");
+      toast.warning("Case note saved — couldn't set the case status.");
     } else if (localOk) {
       status.textContent = "Saved locally.";
       status.classList.add("is-error");
-      toast.warning("Saved locally — couldn't update the request date on the server.");
+      toast.warning("Saved locally — couldn't reach the server.");
     } else {
-      status.textContent = "Save failed.";
+      status.textContent = "Approve failed.";
       status.classList.add("is-error");
-      toast.error("Save failed.");
+      toast.error("Approve failed.");
     }
   });
 
-  actions.appendChild(saveBtn);
+  actions.appendChild(approveBtn);
   actions.appendChild(status);
   form.appendChild(actions);
+
+  // Start the approval report as soon as the Case Note is on screen, so pressing
+  // Approve opens straight onto a finished PDF. Fire-and-forget: the click path
+  // awaits the same cached build, and re-runs it there if the design has changed
+  // since (the signature is part of the cache key).
+  prepareApprovalReport(state.caseIntID, {
+    caseOwner: ownerName,
+    signature: getHistoryStateSignature(),
+  });
 
   return form;
 }

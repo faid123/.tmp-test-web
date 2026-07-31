@@ -147,6 +147,20 @@
   word-break: break-word;
 }
 
+/* Caller-mounted DOM (see confirmModal's `content` option). Scrolls on its own
+   so the title and the action row stay put on a short viewport. */
+.app-confirm-content {
+  margin: 0 0 16px;
+  overflow-y: auto;
+  max-height: min(62vh, 620px);
+}
+
+/* Wide variant for content dialogs (`size: "lg"`). Wide enough for a two-column
+   body, not so wide that it spans the screen. */
+.app-confirm-box--lg {
+  max-width: 700px;
+}
+
 .app-confirm-actions {
   display: flex;
   justify-content: flex-end;
@@ -226,6 +240,9 @@
   .app-confirm-box {
     padding: 18px 16px 14px;
     border-radius: 12px;
+  }
+  .app-confirm-content {
+    max-height: 56vh;
   }
   .app-confirm-actions {
     flex-direction: column-reverse;

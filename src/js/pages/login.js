@@ -418,7 +418,9 @@ async function submitNewPassword() {
     setError("forgot-error-message", "Please enter the key from your email.");
     return false;
   }
-  const invalid = validateNewPassword(newPassword, confirmPassword);
+  // Signed-out reset: the username isn't known here, so we guard against the
+  // one identifier we do have — the email the key was sent to (2.3.2(h)).
+  const invalid = validateNewPassword(newPassword, confirmPassword, [forgotEmail]);
   if (invalid) {
     setError("forgot-error-message", invalid);
     return false;

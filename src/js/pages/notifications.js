@@ -108,7 +108,10 @@ import { logApi } from "../shared/apiLog.js";
     if (!notifPopup.classList.contains("hidden")) loadNotifications();
   });
   document.addEventListener("click", e => {
-    if (!notifPopup.contains(e.target) && e.target !== notifBtn)
+    // contains(), not identity: the bell glyph and its badge are children of the
+    // button, so a click landing on either used to read as "outside" and shut the
+    // popup in the same tick the button had just opened it.
+    if (!notifPopup.contains(e.target) && !notifBtn.contains(e.target))
       notifPopup.classList.add("hidden");
   });
 
@@ -234,17 +237,15 @@ import { logApi } from "../shared/apiLog.js";
       }
 
       const div = document.createElement("div");
-      div.className = "notification-item" + (a.read_status ? "" : " unread");
+      div.className = "notification-item";
       div.innerHTML = `
-        <div class="notification-main">
-          ${a.read_status ? "" : '<span class="blue-dot"></span>'}
-          ${line}
-        </div>
+        <div class="notification-main">${line}</div>
         <div class="notification-time">${pretty(a.create_date)}</div>
       `;
       // ★ 绑定到 DOM（用补齐后的 case_int_id / _cid）
       div.dataset.alertId   = a.id;
       div.dataset.caseIntId = a.case_int_id || a._cid;
+      applyReadUI(div, a.read_status ? 1 : 0);
 
       notifList.appendChild(div);
     });
@@ -283,12 +284,32 @@ import { logApi } from "../shared/apiLog.js";
     return text;
   }
 
-  // 单条点击：先调接口成功，再改 UI（不刷新整块）
-  notifList.addEventListener("click", async (e) => {
-    const item = e.target.closest(".notification-item");
-    if (!item) return;
-    if (!item.classList.contains("unread")) return; // 已读不处理
+  // Bring one row's appearance in line with a read_status. Also the single place
+  // that knows the blue dot means "unread", so render and both gestures agree.
+  function applyReadUI(item, read) {
+    const unread = Number(read) !== 1;
+    item.classList.toggle("unread", unread);
+
+    const main = item.querySelector(".notification-main");
+    const dot  = item.querySelector(".blue-dot");
+    if (unread && !dot && main) {
+      const span = document.createElement("span");
+      span.className = "blue-dot";
+      main.prepend(span);
+    } else if (!unread) {
+      dot?.remove();
+    }
+
+    // The only signpost for a gesture nothing else advertises.
+    item.title = unread ? "Click to mark as read" : "Double-click to mark as unread";
+  }
+
+  // 单条：先调接口成功，再改 UI（不刷新整块）
+  async function setItemRead(item, read) {
     if (item.dataset.busy === "1") return;
+    // A reload between the click and the end of the double-click window leaves
+    // this row detached; acting on it would post for a row nobody can see.
+    if (!item.isConnected) return;
 
     const alertId   = item.dataset.alertId;
     const caseIntID = item.dataset.caseIntId;
@@ -299,18 +320,39 @@ import { logApi } from "../shared/apiLog.js";
 
     item.dataset.busy = "1";
     try {
-      await setReadStatus(alertId, caseIntID, 1);
-      item.classList.remove("unread");
-      item.querySelector(".blue-dot")?.remove();
+      await setReadStatus(alertId, caseIntID, read);
+      applyReadUI(item, read);
 
       // ★ 新增：单条设已读后刷新红点
       refreshNotifDotFromAPI();
     } catch (err) {
-      console.error("setReadStatus(one) failed:", err);
+      console.error(`setReadStatus(one, read=${read}) failed:`, err);
       // 失败就不改 UI
     } finally {
       item.dataset.busy = "0";
     }
+  }
+
+  // One click marks read, two marks unread again. The single-click action waits
+  // out the double-click window first: firing it straight away would send every
+  // "mark unread" through the read state, costing a wasted request and blinking
+  // the row on its way back to where it started.
+  const DOUBLE_CLICK_MS = 250;
+  let pendingRead = null;
+
+  notifList.addEventListener("click", (e) => {
+    const item = e.target.closest(".notification-item");
+    if (!item || !item.classList.contains("unread")) return; // 已读不处理
+    clearTimeout(pendingRead);
+    pendingRead = setTimeout(() => setItemRead(item, 1), DOUBLE_CLICK_MS);
+  });
+
+  notifList.addEventListener("dblclick", (e) => {
+    const item = e.target.closest(".notification-item");
+    if (!item) return;
+    clearTimeout(pendingRead);
+    if (item.classList.contains("unread")) return; // 已是未读
+    setItemRead(item, 0);
   });
 
   // 全部已读：逐条调用 setreadstatus（不刷新），最后保持当前列表
@@ -332,8 +374,7 @@ import { logApi } from "../shared/apiLog.js";
             if (!id || !cid) return;
             try {
               await setReadStatus(id, cid, 1);
-              el.classList.remove("unread");
-              el.querySelector(".blue-dot")?.remove();
+              applyReadUI(el, 1);
             } catch (e) {
               console.error("setReadStatus(all) failed:", e);
             }

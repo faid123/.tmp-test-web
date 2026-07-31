@@ -1506,9 +1506,6 @@ function initAnnFooter() {
   const userEl = document.getElementById("footerUserName");
   if (userEl) userEl.textContent = footerUser?.username || "—";
 
-  import("../shared/accessibility.js").then(({ setupConnectivityIndicator }) => {
-    setupConnectivityIndicator(document.getElementById("footerConnection"));
-  });
 
   // Screen capture lives at the lower-left of the 3D preview panel.
   document.getElementById("preview3dCaptureBtn")?.addEventListener("click", () => {

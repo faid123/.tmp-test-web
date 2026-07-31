@@ -36,6 +36,7 @@ const RETAINER_BAR_TYPE_FIELD = "Tooth Main.Tooth Retainer.Retainer Bar Type";
 const RETAINER_CLASP_TYPE_FIELD = "Tooth Main.Tooth Retainer.Retainer Clasp Type";
 const RETAINER_RING_TYPE_FIELD = "Tooth Main.Tooth Retainer.Retainer Ring Type";
 const RECIPROCATING_FIELD = "Tooth Main.Tooth Reciprocating.Tooth Type";
+const RECIPROCATING_PATTERN_FIELD = "Tooth Main.Tooth Reciprocating.Tooth Pattern Type";
 const ANTERIOR_REST_FIELD = "Tooth Main.Tooth Rest.Anterior Rest";
 const ANTERIOR_CINGULUM_FIELD = "Tooth Main.Tooth Rest.Anterior Cingulum Rest Type";
 const ANTERIOR_INCISAL_FIELD = "Tooth Main.Tooth Rest.Anterior Incisal Rest Type";
@@ -151,23 +152,30 @@ function fdiFromTooth(tooth) {
   return `${major}${minor}`;
 }
 
-/** Rest anchor surface from Pr Config (first position flagged present, default mesial). */
-function restSurfaceFromConfig(f) {
-  for (let i = 0; i < REST_POSITION_SURFACE.length; i += 1) {
-    if (f[PR_CONFIG_FIELDS[i]] === "0") return REST_POSITION_SURFACE[i];
-  }
-  return "mesial";
+/**
+ * Rest anchor surfaces from Pr Config. The triple is one flag PER POSITION
+ * (mesial/distal/lingual, 0 = present), not an enum, so a tooth can carry more than
+ * one rest — Half & Half is double-rested (mesial + distal). Defaults to ["mesial"].
+ */
+function restSurfacesFromConfig(f) {
+  const surfaces = REST_POSITION_SURFACE.filter((_, i) => f[PR_CONFIG_FIELDS[i]] === "0");
+  return surfaces.length ? surfaces : ["mesial"];
 }
 
 /**
- * Pr Config triple (0 = present) for a posterior rest surface — inverse of
- * restSurfaceFromConfig (unknown → mesial). The surface is web-owned, so Save derives
- * Pr Config from the live placement, else a surface edit (mesial → lingual) is dropped.
+ * Pr Config triple (0 = present) for the posterior rest surfaces — inverse of
+ * restSurfacesFromConfig (nothing recognised → mesial). The surface is web-owned, so
+ * Save derives Pr Config from the live placements, else a surface edit (mesial →
+ * lingual) is dropped.
  */
-function prConfigFromSurface(surface) {
-  const idx = REST_POSITION_SURFACE.indexOf(String(surface ?? "").toLowerCase());
-  const present = idx >= 0 ? idx : 0;
-  return REST_POSITION_SURFACE.map((_, i) => (i === present ? 0 : 1));
+function prConfigFromSurfaces(surfaces) {
+  const present = new Set();
+  for (const surface of surfaces) {
+    const idx = REST_POSITION_SURFACE.indexOf(String(surface ?? "").toLowerCase());
+    if (idx >= 0) present.add(idx);
+  }
+  if (!present.size) present.add(0);
+  return REST_POSITION_SURFACE.map((_, i) => (present.has(i) ? 0 : 1));
 }
 
 /** Clasp anchor surface from a Retainer Clasp/Ring Type field (default mesial_buccal). */
@@ -198,6 +206,15 @@ function reciprocalClaspSurface(retainerSurface) {
   else if (s.includes("lingual")) s = s.replace("lingual", "buccal");
   return s;
 }
+
+// KNOWN LOSS: the arch-flip above is all a decode can recover, because nothing in the
+// interchange format carries the reciprocal's own corner. Tooth_Reciprocating is
+// {reciprocating_type, reciprocating_patterntype, PolyLines pl} — patterntype is the
+// crossmesh perforation shape, and the polyline geometry never reaches the text file.
+// So an assembly that seats the reciprocal at the OPPOSITE corner from the retainer
+// (Back-action, Half & Half) reopens showing the arch-flipped position.
+// Do NOT smuggle the corner into patterntype: the DLL reads it (0=circle, 1=square,
+// 2=crisscross) whenever reciprocating_type is 3.
 
 /**
  * Anterior rest -> rest-seat surface, or null when none.
@@ -319,8 +336,15 @@ export function resolveJawStructDesign(parsed) {
     const prCode = Number(f[POSTERIOR_REST_FIELD]);
     if (Number.isFinite(prCode) && prCode > 0) {
       const id = POSTERIOR_REST_TYPE.get(prCode);
-      if (id) entry.placements.push({ componentId: id, surface: restSurfaceFromConfig(f) });
-      else reportUnmapped(POSTERIOR_REST_FIELD, prCode);
+      if (id === "rest-seat") {
+        // One seat per flagged position — a double-rested tooth flags two.
+        for (const surface of restSurfacesFromConfig(f)) {
+          entry.placements.push({ componentId: id, surface });
+        }
+      } else if (id) {
+        // rest-onlay (pr_full) covers the whole occlusal surface: always one.
+        entry.placements.push({ componentId: id, surface: restSurfacesFromConfig(f)[0] });
+      } else reportUnmapped(POSTERIOR_REST_FIELD, prCode);
     }
 
     // Anterior rest (cingulum/incisal) — rendered as rest-seat on a cingulum/incisal surface.
@@ -535,9 +559,12 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
   let anteriorRest = 0;
   let antCingulum = Number(rawOr(ANTERIOR_CINGULUM_FIELD, 0));
   let antIncisal = Number(rawOr(ANTERIOR_INCISAL_FIELD, 0));
-  const restPl = placements.find(
+  const restPlacements = placements.filter(
     (p) => p.componentId === "rest-seat" || p.componentId === "rest-onlay"
   );
+  // The rest TYPE is the same for every seat on a tooth; only Pr Config below
+  // distinguishes how many positions are seated.
+  const restPl = restPlacements[0];
   if (restPl) {
     const s = String(restPl.surface || "");
     if (restPl.componentId === "rest-onlay") {
@@ -560,7 +587,7 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
   // the loaded raw value (or the from-scratch default) for round-trip fidelity.
   const prConfig =
     posteriorRest === 2 && restPl
-      ? prConfigFromSurface(restPl.surface)
+      ? prConfigFromSurfaces(restPlacements.map((p) => p.surface))
       : [
           rawOr("Tooth Main.Tooth Rest.Pr Config 0", posteriorRest === 2 ? 0 : 1),
           rawOr("Tooth Main.Tooth Rest.Pr Config 1", 1),
@@ -610,6 +637,7 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
   else if (comps.includes("plate-prox")) reciprocatingType = 2;
   else reciprocatingType = 0;
 
+
   const fields = [
     ["Tooth Main.Tooth Index.Major Index", maj],
     ["Tooth Main.Tooth Index.Minor Index", min],
@@ -637,10 +665,14 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
     ["Tooth Main.Tooth Retainer.Retainer Bar Type", barType],
     ["Tooth Main.Tooth Retainer.Retainer Bar Category", barCategory],
     ["Tooth Main.Tooth Reciprocating.Tooth Type", reciprocatingType],
-    // Native emits a Pattern Type after the reciprocating Tooth Type. The web
-    // doesn't model it, so preserve the loaded value (round-trips for free) and
-    // default 0 for from-scratch. Omitting it desynced the per-tooth parse.
-    ["Tooth Main.Tooth Reciprocating.Tooth Pattern Type", rawOr("Tooth Main.Tooth Reciprocating.Tooth Pattern Type", 0)],
+    // Native emits a Pattern Type after the reciprocating Tooth Type. It is the
+    // crossmesh perforation shape (0=circle, 1=square, 2=crisscross, per the native
+    // Matrix_Table_Definitions.h) and only means anything when Tooth Type is 3
+    // (reciprocating_crossmesh); the DLL consumes it during mesh generation. Unity
+    // never writes it, so it is always 0 in practice. NOT a spare field — preserve the
+    // loaded value verbatim and never repurpose it. Omitting the line entirely desynced
+    // the per-tooth parse.
+    [RECIPROCATING_PATTERN_FIELD, rawOr(RECIPROCATING_PATTERN_FIELD, 0)],
   ];
   return fields.map(([k, v]) => `Tooth ${arrayIdx}: ${k}: ${v}`);
 }

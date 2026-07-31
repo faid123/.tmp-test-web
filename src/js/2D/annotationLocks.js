@@ -605,7 +605,8 @@ export function bindArchWhitespaceDismiss() {
     if (!(t instanceof Element)) return;
 
     // Tooth / arch placement targets — keep rest & clasp suggestion dots visible.
-    if (t.closest(".tooth")) return;
+    // Suggestion dots are parented to the top suggestion layer, not to `.tooth`.
+    if (t.closest(".tooth, .tooth-suggestions")) return;
 
     // All chrome controls (lock, eraser, catalog, actions, tabs, …).
     if (t.closest("button, a[href], input, select, textarea, label")) return;
