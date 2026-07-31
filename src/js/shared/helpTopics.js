@@ -7,9 +7,13 @@
 //   id        stable slug, referenced by `related`
 //   title     short label, shown as the answer heading and on suggestion chips
 //   page      page the feature lives on (see PAGE_LABELS), or null when global
-//   selector  optional CSS selector for the "Show me" highlight. Must resolve to
-//             a VISIBLE control — for items inside a closed dropdown or modal,
-//             point at the button that opens it and describe the item in `steps`
+//   selector  optional CSS selector for the "Show me" highlight. Point it at the
+//             control the topic is actually about, never at the button that
+//             opens the view containing it — that is what `reveal` is for
+//   reveal    optional selector for the control that opens the view `selector`
+//             lives in (the Create Case button, the ☰ case-actions toggle).
+//             "Show me" clicks it, waits for the target, then highlights the
+//             target. Only used when the target isn't already on screen
 //   keywords  words a user might type; weighted highest by the matcher
 //   phrases   whole-question forms; an exact containment match wins outright
 //   answer    one or two sentences of prose
@@ -43,9 +47,18 @@ export const PAGE_PATHS = {
   admin_case_list: "src/pages/admin/admin_case_list.html",
 };
 
-// The case-actions menu on the case list: its items live in a dropdown that is
-// closed by default, so every topic about them highlights the toggle instead.
+// The case-actions menu on the case list. Its items live in a dropdown that is
+// closed by default, so topics about them point at the item and name this as
+// their `reveal` — "Show me" opens the menu and rings the item itself.
 const CASE_MENU = ".cm-detail .dropdown-toggle";
+
+// The create-case view is a pair of panes hidden until Create Case is pressed,
+// so the fields inside it need the same treatment.
+const CREATE_CASE = "#createCaseBtn";
+
+// The app sidebar slides out from the footer menu button and is closed the rest
+// of the time — including while the help panel itself is open.
+const APP_MENU = "#footerMenuBtn";
 
 export const HELP_TOPICS = [
   // ---------------------------------------------------------------- account
@@ -99,6 +112,7 @@ export const HELP_TOPICS = [
     title: "Log out",
     page: null,
     selector: "#sidebarLogoutBtn",
+    reveal: APP_MENU,
     keywords: ["log", "out", "logout", "sign", "exit", "quit", "leave", "session"],
     phrases: ["how do i log out", "how do i sign out"],
     answer:
@@ -111,6 +125,7 @@ export const HELP_TOPICS = [
     title: "Change your password",
     page: null,
     selector: "#sidebarChangePasswordBtn",
+    reveal: APP_MENU,
     keywords: ["change", "password", "update", "new", "credentials", "security"],
     phrases: ["how do i change my password", "change account password"],
     answer:
@@ -139,13 +154,35 @@ export const HELP_TOPICS = [
       "Upload the upper and lower jaw STL scans.",
       "Add reference images if you have them, then save.",
     ],
-    related: ["upload-jaw-scans", "reference-images", "start-case", "case-status"],
+    related: ["upload-jaw-scans", "reference-images", "invite-during-create", "start-case", "case-status"],
+  },
+  {
+    id: "invite-during-create",
+    title: "Invite teammates while creating a case",
+    page: "case_list",
+    selector: "#ccInviteInput",
+    reveal: CREATE_CASE,
+    keywords: ["invite", "teammate", "user", "username", "create", "add", "share", "colleague"],
+    phrases: [
+      "how do i invite someone when creating a case",
+      "can i invite a teammate while creating a case",
+      "invite users in create case",
+    ],
+    answer:
+      "The Create Case form has its own Invite Users field — type a username and select Add (or press Enter) to queue it, and they're invited as part of creating the case. This is separate from Edit User Access, which shares a case that already exists.",
+    steps: [
+      "Open Create Case.",
+      "Type a username in Invite Users and press Enter or select Add.",
+      "Repeat for each person, then save the case — they're invited together with it.",
+    ],
+    related: ["create-case", "user-access"],
   },
   {
     id: "upload-jaw-scans",
     title: "Upload jaw scans (STL)",
     page: "case_list",
-    selector: "#createCaseBtn",
+    selector: "#uploadedJawModels",
+    reveal: CREATE_CASE,
     keywords: ["upload", "jaw", "scan", "stl", "model", "mesh", "import", "upper", "lower", "file"],
     phrases: ["how do i upload a scan", "how do i add an stl", "upload jaw model"],
     answer:
@@ -162,6 +199,7 @@ export const HELP_TOPICS = [
     title: "Add reference images",
     page: "case_list",
     selector: "#addRefImageBtn",
+    reveal: CREATE_CASE,
     keywords: ["reference", "image", "photo", "picture", "attach", "upload", "xray", "add"],
     phrases: ["how do i add a photo", "how do i attach an image", "add reference images"],
     answer:
@@ -287,7 +325,8 @@ export const HELP_TOPICS = [
     id: "rename-case",
     title: "Rename a case",
     page: "case_list",
-    selector: CASE_MENU,
+    selector: "#renameBtn",
+    reveal: CASE_MENU,
     keywords: ["rename", "name", "title", "change", "edit", "case"],
     phrases: ["how do i rename a case", "change the case name"],
     answer:
@@ -318,7 +357,8 @@ export const HELP_TOPICS = [
     id: "duplicate-case",
     title: "Duplicate a case",
     page: "case_list",
-    selector: CASE_MENU,
+    selector: "#duplicateBtn",
+    reveal: CASE_MENU,
     keywords: ["duplicate", "copy", "clone", "reuse", "template", "case"],
     phrases: ["how do i duplicate a case", "how do i copy a case"],
     answer:
@@ -334,7 +374,8 @@ export const HELP_TOPICS = [
     id: "delete-case",
     title: "Delete a case",
     page: "case_list",
-    selector: CASE_MENU,
+    selector: "#deleteBtn",
+    reveal: CASE_MENU,
     keywords: ["delete", "remove", "erase", "bin", "trash", "case", "get", "rid"],
     phrases: ["how do i delete a case", "how do i remove a case"],
     answer:
@@ -344,13 +385,35 @@ export const HELP_TOPICS = [
       "Open the ☰ menu beside the case name.",
       "Choose Delete and confirm.",
     ],
-    related: ["case-menu", "duplicate-case", "version-history"],
+    related: ["case-menu", "duplicate-case", "version-history", "recover-deleted-case"],
+  },
+  {
+    id: "recover-deleted-case",
+    title: "Recover a deleted case",
+    page: "admin_case_list",
+    selector: "#retrieveCaseBtn",
+    keywords: ["recover", "restore", "deleted", "delete", "undelete", "retrieve", "admin", "bring", "back"],
+    phrases: [
+      "how do i recover a deleted case",
+      "can i recover a deleted case",
+      "how do i restore a deleted case",
+      "undo a case deletion",
+    ],
+    answer:
+      "Deleting a case is a soft delete — the case is hidden, not destroyed. An administrator can bring it back from the Admin Case List: deleted cases show struck through there, with a Retrieve the Case button to restore them. It isn't self-service for a regular user, so ask an administrator.",
+    steps: [
+      "Ask an administrator to open the Admin Case List.",
+      "They select the struck-through (deleted) case.",
+      "They select Retrieve the Case to restore it.",
+    ],
+    related: ["delete-case", "admin-users"],
   },
   {
     id: "download-2d",
     title: "Download the 2D design",
     page: "case_list",
-    selector: CASE_MENU,
+    selector: "#download2dDesignBtn",
+    reveal: CASE_MENU,
     keywords: ["download", "export", "save", "2d", "design", "l2", "file", "get"],
     phrases: ["how do i download the design", "export the 2d design"],
     answer:
@@ -366,7 +429,8 @@ export const HELP_TOPICS = [
     id: "user-access",
     title: "Share a case with a colleague",
     page: "case_list",
-    selector: CASE_MENU,
+    selector: "#editUserAccessBtn",
+    reveal: CASE_MENU,
     keywords: ["share", "access", "user", "colleague", "permission", "invite", "assign", "collaborate", "owner"],
     phrases: ["how do i share a case", "how do i give someone access", "add a user to a case"],
     answer:
@@ -376,7 +440,7 @@ export const HELP_TOPICS = [
       "Open the ☰ menu beside the case name.",
       "Choose Edit User Access and add or remove people.",
     ],
-    related: ["case-menu", "share-3d-link", "admin-users"],
+    related: ["case-menu", "share-3d-link", "admin-users", "invite-during-create"],
   },
   {
     id: "share-3d-link",
@@ -392,7 +456,23 @@ export const HELP_TOPICS = [
       "Find the 3D link row at the bottom of the detail panel.",
       "Use the copy button for the link, or the export button to open it.",
     ],
-    related: ["qr-code", "navigate-3d", "user-access"],
+    related: ["qr-code", "navigate-3d", "user-access", "share-link-privacy"],
+  },
+  {
+    id: "share-link-privacy",
+    title: "Is the shared 3D link safe to send?",
+    page: null,
+    keywords: ["safe", "privacy", "private", "secure", "expose", "patient", "encrypted", "confidential"],
+    phrases: [
+      "is the shared link safe",
+      "does the 3d link expose patient information",
+      "is the 3d viewer link private",
+      "is it safe to share the 3d link",
+    ],
+    answer:
+      "Yes — the case ID in a 3D Viewer link is encrypted, not a plain sequential number, and the page needs no sign-in identity beyond that link. Still, treat it like any link to patient-related data: only send it to people who should see the case.",
+    steps: [],
+    related: ["share-3d-link", "open-3d-viewer"],
   },
   {
     id: "qr-code",
@@ -426,7 +506,8 @@ export const HELP_TOPICS = [
     id: "dashboard",
     title: "View the case dashboard",
     page: "case_list",
-    selector: CASE_MENU,
+    selector: "#viewDashboardBtn",
+    reveal: CASE_MENU,
     keywords: ["dashboard", "chart", "overview", "stats", "summary", "progress", "report"],
     phrases: ["how do i see the dashboard", "where are the case stats"],
     answer: "View Dashboard in the case-actions menu opens the summary view for the selected case.",
@@ -674,6 +755,7 @@ export const HELP_TOPICS = [
     title: "Save the 2D design",
     page: "annotation_2d",
     selector: "#sidebarSaveBtn",
+    reveal: APP_MENU,
     keywords: ["save", "keep", "store", "commit", "persist", "design", "work"],
     phrases: ["how do i save", "how do i save my design", "does it save automatically"],
     answer:
@@ -689,6 +771,7 @@ export const HELP_TOPICS = [
     title: "Go back to the case list",
     page: "annotation_2d",
     selector: "#sidebarReturnBtn",
+    reveal: APP_MENU,
     keywords: ["return", "back", "exit", "leave", "close", "list", "quit"],
     phrases: ["how do i go back", "how do i return to the case list"],
     answer:
@@ -888,7 +971,28 @@ export const HELP_TOPICS = [
       "Select the upload button on that row and pick the file.",
       "Wait for UPLOADING… to finish; the jaw then appears in the preview.",
     ],
-    related: ["upload-jaw-scans", "jaw-preview", "mesh-quality"],
+    related: ["upload-jaw-scans", "jaw-preview", "mesh-quality", "extra-reference-stl"],
+  },
+  {
+    id: "extra-reference-stl",
+    title: "Upload extra reference 3D files",
+    page: "annotation_2d",
+    selector: "#footerUpload3dBtn",
+    keywords: ["extra", "reference", "3d", "file", "stl", "slot", "upload", "other", "additional"],
+    phrases: [
+      "how do i upload extra 3d files",
+      "how do i add more stl files",
+      "what is upload other 3d files",
+      "how many extra 3d files can i add",
+    ],
+    answer:
+      "Upload other 3D files in the footer bar adds STL files beyond the main upper and lower jaw — up to four extra slots per case. They load into the 3D preview alongside the jaws and can be removed from there when no longer needed.",
+    steps: [
+      "Select Upload other 3D files in the footer bar.",
+      "Choose a file for an open slot (up to 4 per case).",
+      "Delete a slot's file first if all four are already in use.",
+    ],
+    related: ["upload-jaw-scans", "jaw-preview"],
   },
   {
     id: "mesh-quality",
@@ -990,6 +1094,46 @@ export const HELP_TOPICS = [
 
   // -------------------------------------------------------- troubleshooting
   {
+    id: "app-frozen",
+    title: "The app won't load or feels frozen",
+    page: null,
+    keywords: ["frozen", "stuck", "hang", "unresponsive", "crash", "freeze", "not", "responding"],
+    phrases: [
+      "the page wont load",
+      "the app is frozen",
+      "nothing is happening",
+      "the screen is stuck",
+      "why is the app not responding",
+    ],
+    answer:
+      "Start with a refresh — most stalls clear on a reload. If it stays stuck, check your connection, then sign out and back in. A case-list-specific slowdown has its own fix — see 'the case list is slow or empty'.",
+    steps: [
+      "Refresh the page.",
+      "Check your internet connection.",
+      "Sign out and back in if it's still stuck.",
+    ],
+    related: ["list-slow", "changes-not-saving", "report-a-problem"],
+  },
+  {
+    id: "report-a-problem",
+    title: "Report a bug or ask for help",
+    page: null,
+    selector: "#sidebarFeedbackBtn",
+    reveal: APP_MENU,
+    keywords: ["bug", "issue", "problem", "contact", "support", "feedback", "report", "broken", "escalate"],
+    phrases: [
+      "who do i contact for a bug",
+      "how do i report a problem",
+      "how do i give feedback",
+      "how do i report an issue",
+      "who do i ask for help",
+    ],
+    answer:
+      "Feedback in the footer menu is the working channel right now — it opens a short form the team monitors.",
+    steps: ["Open the menu in the footer bar.", "Select Feedback.", "Fill in the form — it opens in a new tab."],
+    related: ["case-chat", "app-frozen"],
+  },
+  {
     id: "list-slow",
     title: "The case list is slow or empty",
     page: null,
@@ -1002,7 +1146,7 @@ export const HELP_TOPICS = [
       "Give it a few seconds and scroll again.",
       "If it is still empty, sign out and back in.",
     ],
-    related: ["refresh-list", "images-missing", "changes-not-saving"],
+    related: ["refresh-list", "images-missing", "changes-not-saving", "app-frozen"],
   },
   {
     id: "images-missing",
@@ -1033,6 +1177,63 @@ export const HELP_TOPICS = [
       "Open Version History to confirm the version was written.",
     ],
     related: ["save-2d", "version-history", "list-slow"],
+  },
+
+  // ------------------------------------------------------------------- about
+  {
+    id: "about-ndcs",
+    title: "About NDCS",
+    page: null,
+    keywords: ["ndcs", "national", "dental", "centre", "center", "singapore", "hospital", "singhealth"],
+    phrases: [
+      "what is ndcs",
+      "what does ndcs stand for",
+      "who is ndcs",
+      "national dental centre singapore",
+    ],
+    answer:
+      "NDCS stands for National Dental Centre Singapore — the country's flagship specialist dental centre, part of the SingHealth group, based at the Singapore General Hospital campus. Alongside patient care across specialties like restorative dentistry and oral surgery, it trains dental professionals and runs research through the National Dental Research Institute Singapore, which is where SmartRPD was developed.",
+    steps: [],
+    related: ["smartrpd-origins", "rpd-meaning"],
+  },
+  {
+    id: "smartrpd-origins",
+    title: "Where SmartRPD came from",
+    page: null,
+    keywords: [
+      "smartrpd", "smart", "origin", "origins", "history", "developed", "invented",
+      "created", "made", "astar", "temasek", "workflow",
+    ],
+    phrases: [
+      "what is smartrpd",
+      "where did smartrpd come from",
+      "who made smartrpd",
+      "who created smartrpd",
+      "history of smartrpd",
+      "how was smartrpd developed",
+    ],
+    answer:
+      "SmartRPD is a digital denture workflow developed by NDCS, working with A*STAR's Institute of High Performance Computing since 2020, to design and 3D-print removable partial dentures. It replaces a manual process that left 20-30% of dentures needing rework with intra-oral scanning and automated design, cutting that error rate to around 3% and reducing the clinic visits a patient needs. Funding came from Temasek, Temasek Foundation, and the Ministry of Health's National Medical Research Council.",
+    steps: [],
+    related: ["about-ndcs", "rpd-meaning"],
+  },
+  {
+    id: "rpd-meaning",
+    title: "What RPD stands for",
+    page: null,
+    keywords: ["rpd", "stand", "meaning", "abbreviation", "acronym", "denture", "partial", "framework", "removable"],
+    phrases: [
+      "what does rpd stand for",
+      "what is rpd",
+      "what does rpd mean",
+      "rpd full form",
+      "rpd meaning",
+      "what is a removable partial denture",
+    ],
+    answer:
+      "RPD stands for removable partial denture — a dental appliance that replaces some missing teeth and that the patient can take in and out themselves, unlike a fixed bridge or implant. It's the type of device SmartRPD is built to design and manufacture.",
+    steps: [],
+    related: ["smartrpd-origins", "about-ndcs"],
   },
 ];
 
