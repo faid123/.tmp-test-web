@@ -1,7 +1,7 @@
 import { lol } from "../shared/crypt.js";
 import { toast, confirmModal, openThemedCalendar, attachThemedCalendar } from "../shared/toast.js";
 import { logApi, statusLabel } from "../shared/apiLog.js";
-import { setupConnectivityIndicator, reportHtmlToDocxBytes } from "../shared/accessibility.js";
+import { reportHtmlToDocxBytes } from "../shared/accessibility.js";
 import { setupAppSidebar } from "../shared/appSidebar.js";
 import { buildReportHtml } from "../2D/noticeboard.js";
 import { saveCaseDueDate, toDateInputValue, updateCaseDueDate } from "../2D/caseNote.js";
@@ -2501,7 +2501,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   // `is-admin` body class (see case_list.css). setupAdminCaseList() is a no-op
   // for non-admins.
   setupAdminCaseList();
-  setupConnectivityIndicator(document.getElementById("footerConnection"));
   // index.html is at the web root; admin_case_list.html lives one level deeper
   // (src/pages/admin/) than the normal case_list.html (src/pages/).
   const _inAdminDir = /\/admin\//.test(window.location.pathname);

@@ -163,47 +163,8 @@
   transform: translate(-50%, 0);
 }
 
-/* ---- connectivity signal (populated by JS as #footerConnection) ---- */
-.conn-indicator {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 3px;
-  cursor: default;
-  color: rgba(255, 255, 255, 0.9);
-}
-.conn-wifi-icon { font-size: 15px; color: #fff; }
-.conn-name {
-  font-size: 12.5px;
-  font-weight: 600;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.conn-indicator[data-online="0"] .conn-wifi-icon,
-.conn-indicator[data-online="0"] .conn-name { color: #fecaca; }
-.conn-tooltip {
-  position: absolute;
-  bottom: calc(100% + 7px);
-  right: 0;
-  white-space: nowrap;
-  padding: 5px 9px;
-  border-radius: 7px;
-  background: #0f172a;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 600;
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(2px);
-  transition: opacity 0.12s ease, transform 0.12s ease;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.28);
-  z-index: 60;
-}
-.conn-indicator:hover .conn-tooltip,
-.conn-indicator:focus-visible .conn-tooltip { opacity: 1; transform: translateY(0); }
+/* The footer Wi‑Fi / connectivity indicator was removed; the status bar now
+   ends with the Help and About buttons, which reuse the footer button styles. */
 
 /* ==========================================================================
    2. SLIDE-IN SIDEBAR — unified premium look for all pages
@@ -390,30 +351,71 @@
   margin: 8px 14px;
 }
 
-.app-sidebar-language {
+/* ---- language picker (trigger + inline dropdown) ----
+   The trigger is a plain .app-sidebar-item like every other row; only the
+   disclosure caret and the expanding submenu are extra. The list is built by
+   src/js/shared/appSidebar.js so the language set lives in one place.
+   The menu expands inline (rather than floating) because .app-sidebar-list
+   scrolls — an absolutely positioned panel would be clipped by it. */
+.app-sidebar-item-caret {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--shell-ink-soft);
+  transition: transform 0.16s ease, color 0.16s ease;
+}
+.app-sidebar-item[aria-expanded="true"] .app-sidebar-item-caret {
+  transform: rotate(180deg);
+  color: var(--shell-teal-700);
+}
+
+.app-sidebar-submenu {
+  list-style: none;
+  margin: 2px 0 2px 22px;
+  padding: 4px 0 4px 10px;
+  border-left: 2px solid rgba(15, 23, 42, 0.09);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.app-sidebar-submenu[hidden] { display: none; }
+
+.app-sidebar-subitem {
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 6px 12px 14px;
-  padding: 9px 12px;
-  border: 1px solid rgba(15, 23, 42, 0.1);
-  border-radius: 11px;
-  background: #f8fafc;
-}
-.app-sidebar-language-icon {
-  width: 20px;
-  text-align: center;
-  color: var(--shell-ink-soft);
-  font-size: 15px;
-}
-.app-sidebar-language select {
-  flex: 1;
+  gap: 8px;
+  padding: 8px 12px;
   border: 0;
+  border-radius: 9px;
   background: transparent;
-  color: var(--shell-ink);
-  font-size: 13.5px;
+  color: var(--shell-ink-soft);
+  font-size: 13px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  outline: none;
+  text-align: left;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+.app-sidebar-subitem:hover {
+  background: rgba(59, 174, 149, 0.12);
+  color: var(--shell-teal-700);
+}
+.app-sidebar-subitem:focus-visible {
+  outline: 2px solid var(--shell-teal);
+  outline-offset: -2px;
+}
+.app-sidebar-subitem[aria-checked="true"] {
+  color: var(--shell-ink);
+  background: rgba(59, 174, 149, 0.1);
+}
+/* Reserve the tick's space at all times so labels don't shift when the
+   selection moves between rows. */
+.app-sidebar-subitem-check {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--shell-teal);
+  visibility: hidden;
+}
+.app-sidebar-subitem[aria-checked="true"] .app-sidebar-subitem-check {
+  visibility: visible;
 }

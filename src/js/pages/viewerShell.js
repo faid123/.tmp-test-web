@@ -1,6 +1,5 @@
 import { lol } from "../shared/crypt.js";
 import { setupAppSidebar } from "../shared/appSidebar.js";
-import { setupConnectivityIndicator } from "../shared/accessibility.js";
 
 const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
@@ -67,10 +66,6 @@ function populateUserMeta() {
   const footerUserName = document.getElementById("footerUserName");
   if (footerUserName) {
     footerUserName.textContent = user?.username || "Guest";
-  }
-  const footerConnection = document.getElementById("footerConnection");
-  if (footerConnection) {
-    setupConnectivityIndicator(footerConnection);
   }
 }
 

@@ -53,12 +53,35 @@ export function computePasswordStrength(pw) {
   return { score, label: labels[score] };
 }
 
+// Reject a new password that embeds the account's own identity — its username
+// or email (requirement 2.3.2(h): a password must not be, or contain, the
+// account/user ID). The match is case-insensitive and substring-based, so a
+// username of "faid" is caught anywhere inside "myFaid2024!". Blank identifiers
+// are ignored, letting each caller pass whatever it knows: a signed-out reset
+// only has the email, while a signed-in change and the admin form also have the
+// username. Accepts a single string or an array. Returns the matched identifier
+// (trimmed, original case) or null when the password contains none of them.
+export function findIdentifierInPassword(password, identifiers = []) {
+  const pw = String(password || "").toLowerCase();
+  if (!pw) return null;
+  for (const raw of [].concat(identifiers)) {
+    const id = String(raw || "").trim().toLowerCase();
+    if (id && pw.includes(id)) return String(raw).trim();
+  }
+  return null;
+}
+
 // Validate the new-password pair before spending a network round-trip on it.
-// Returns null when the pair is acceptable, otherwise the message to show.
-export function validateNewPassword(newPassword, confirmPassword) {
+// `identifiers` is the username/email the password must not contain (a string
+// or array; see findIdentifierInPassword). Returns null when the pair is
+// acceptable, otherwise the message to show.
+export function validateNewPassword(newPassword, confirmPassword, identifiers = []) {
   if (!newPassword) return "Please enter a new password.";
   if (newPassword.length < MIN_PASSWORD_LENGTH) {
     return `Please use a password of at least ${MIN_PASSWORD_LENGTH} characters.`;
+  }
+  if (findIdentifierInPassword(newPassword, identifiers)) {
+    return "Your password can't contain your username or email address. Please choose another password.";
   }
   if (newPassword !== confirmPassword) return "The passwords don't match.";
   return null;

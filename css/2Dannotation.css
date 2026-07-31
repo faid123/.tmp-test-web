@@ -3813,50 +3813,8 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   .ann-footer-case-label { display: none; }
 }
 
-/* ---- connectivity signal bars (shared with case_list) ---- */
-.conn-indicator {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 4px;
-  cursor: default;
-  color: rgba(255, 255, 255, 0.85);
-}
-.conn-wifi-icon {
-  font-size: 14px;
-  color: #fff;
-}
-.conn-name {
-  font-size: 11px;
-  font-weight: 500;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.conn-indicator[data-online="0"] .conn-wifi-icon,
-.conn-indicator[data-online="0"] .conn-name { color: #ef4444; }
-
-.conn-tooltip {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  right: 0;
-  white-space: nowrap;
-  padding: 5px 8px;
-  border-radius: 6px;
-  background: #0f172a;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 500;
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(2px);
-  transition: opacity 0.12s ease, transform 0.12s ease;
-  z-index: 10;
-}
-.conn-indicator:hover .conn-tooltip,
-.conn-indicator:focus-visible .conn-tooltip { opacity: 1; transform: translateY(0); }
+/* The footer Wi‑Fi / connectivity indicator was removed; the status bar now
+   ends with the Help and About buttons, which use .ann-footer-btn above. */
 
 /* ============ slide-in sidebar (hamburger menu) ============ */
 .app-sidebar {

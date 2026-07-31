@@ -199,50 +199,8 @@ button {
 
 .cm-footer-chat-btn { color: #fff; }
 
-/* ---- connectivity signal bars (shared with 2DAnnotation) ---- */
-.conn-indicator {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 3px;
-  cursor: default;
-  color: rgba(255, 255, 255, 0.85);
-}
-.conn-wifi-icon {
-  font-size: 13px;
-  color: #fff;
-}
-.conn-name {
-  font-size: 11px;
-  font-weight: 500;
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.conn-indicator[data-online="0"] .conn-wifi-icon,
-.conn-indicator[data-online="0"] .conn-name { color: var(--danger, #ef4444); }
-
-.conn-tooltip {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  right: 0;
-  white-space: nowrap;
-  padding: 5px 8px;
-  border-radius: 6px;
-  background: #0f172a;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 500;
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(2px);
-  transition: opacity 0.12s ease, transform 0.12s ease;
-  z-index: 10;
-}
-.conn-indicator:hover .conn-tooltip,
-.conn-indicator:focus-visible .conn-tooltip { opacity: 1; transform: translateY(0); }
+/* The footer Wi‑Fi / connectivity indicator was removed; the status bar now
+   ends with the Help and About buttons, which use .cm-footer-btn above. */
 
 /* ============ slide-in sidebar (hamburger menu) ============ */
 .app-sidebar {
@@ -309,7 +267,7 @@ button {
   color: #ffffff;
   font-weight: 700;
   padding: 2px 8px;
-  border-radius: 999px;
+  /* border-radius: 999px; */
   background: rgba(255, 255, 255, 0.22);
 }
 .app-sidebar-close {
@@ -411,32 +369,73 @@ button {
   margin: 8px 14px;
 }
 
-.app-sidebar-language {
+/* ---- language picker (trigger + inline dropdown) ----
+   The trigger is a plain .app-sidebar-item like every other row; only the
+   disclosure caret and the expanding submenu are extra. The list is built by
+   src/js/shared/appSidebar.js so the language set lives in one place.
+   The menu expands inline (rather than floating) because .app-sidebar-list
+   scrolls — an absolutely positioned panel would be clipped by it. */
+.app-sidebar-item-caret {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--muted);
+  transition: transform 0.16s ease, color 0.15s ease;
+}
+.app-sidebar-item[aria-expanded="true"] .app-sidebar-item-caret {
+  transform: rotate(180deg);
+  color: var(--primary-dark);
+}
+
+.app-sidebar-submenu {
+  list-style: none;
+  margin: 2px 0 2px 20px;
+  padding: 4px 0 4px 10px;
+  border-left: 2px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.app-sidebar-submenu[hidden] { display: none; }
+
+.app-sidebar-subitem {
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 6px 12px 14px;
+  gap: 8px;
   padding: 8px 12px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 10px;
-  background: #f8fafc;
-}
-.app-sidebar-language-icon {
-  width: 20px;
-  text-align: center;
-  color: var(--ink-soft);
-  font-size: 15px;
-}
-.app-sidebar-language select {
-  flex: 1;
   border: 0;
+  border-radius: 8px;
   background: transparent;
-  color: var(--ink);
-  font-size: 13.5px;
+  color: var(--ink-soft);
+  font-size: 13px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  outline: none;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.app-sidebar-subitem:hover {
+  background: rgba(59, 174, 149, 0.1);
+  color: var(--primary-dark);
+}
+.app-sidebar-subitem:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+.app-sidebar-subitem[aria-checked="true"] {
+  color: var(--ink);
+  background: rgba(59, 174, 149, 0.08);
+}
+/* Reserve the tick's space at all times so labels don't shift when the
+   selection moves between rows. */
+.app-sidebar-subitem-check {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--primary);
+  visibility: hidden;
+}
+.app-sidebar-subitem[aria-checked="true"] .app-sidebar-subitem-check {
+  visibility: visible;
 }
 
 .cm-main {
@@ -822,7 +821,7 @@ button {
   min-height: 0;
   overflow: auto;
   background: var(--panel);
-  border-radius: var(--radius);
+  border-radius: 8px;
   box-shadow: var(--shadow-sm);
 }
 
@@ -1017,7 +1016,7 @@ button {
 .cm-row-icon {
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: 4px;
   color: var(--muted);
   display: inline-flex;
   align-items: center;
@@ -1042,8 +1041,8 @@ button {
 .cm-pill {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
-  border-radius: 10px;
+  padding: 6px 10px;
+  border-radius: 5px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -2967,9 +2966,11 @@ body,
 .cm-btn-primary:active { transform: translateY(0); }
 
 /* ---- table: elevated card with a refined header ---- */
+/* No border-radius here on purpose: the corner rounding is owned by the
+   ".cm-table-wrap" rule in the "case table" section above, and by its ≤640px
+   reset. Re-declaring it in this late pass silently overrode both. */
 .cm-table-wrap {
   border: 1px solid rgba(15, 23, 42, 0.06);
-  border-radius: 16px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 18px 40px -24px rgba(15, 23, 42, 0.4);
 }
 .cm-table thead th {

@@ -13,7 +13,7 @@
 // A conversation lasts one open: dismissing the panel clears it, and nothing is
 // stored, so Help always starts at the page greeting.
 
-import { PAGE_LABELS, PAGE_PATHS } from "./helpTopics.js";
+import { PAGE_LABELS, PAGE_PATHS, TOPIC_BY_ID } from "./helpTopics.js";
 import { localProvider, relatedTopics, suggestionsFor } from "./helpMatcher.js";
 
 const TRANSCRIPT_MAX = 30;
@@ -398,13 +398,19 @@ function resetConversation({ focus = true } = {}) {
 
 // Same open/close choreography as the app sidebar and case chat: reveal, then
 // transform on the next frame; on close, wait for the transition before hiding.
-export function openHelpBot() {
+// `topicId` opens straight onto one answer instead of the page greeting — the
+// hand-off from a guided tour step's "Read more", where the question has
+// already been chosen for the user.
+export function openHelpBot({ topicId } = {}) {
   if (!root) {
     buildPanel();
     renderGreeting();
   } else {
     root.querySelector("#hbContext").textContent = PAGE_LABELS[currentPageId()] || "";
   }
+
+  const topic = topicId ? TOPIC_BY_ID.get(topicId) : null;
+  if (topic) answerTopic(topic, { echo: topic.title });
   // Reopening inside the close animation: drop the pending hide-and-reset, or it
   // would fire on the panel we just brought back.
   clearTimeout(closeTimer);
