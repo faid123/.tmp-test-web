@@ -1,4 +1,12 @@
 import { getComponentTemplateToothId } from "./components.mesh.js";
+import { isBarComponent } from "./components.bar.js";
+import {
+  isReciprocatingClaspComponent,
+  isRetainerClaspComponent,
+  isRingClaspComponent,
+} from "./components.clasp.js";
+import { isRestComponent } from "./components.rest.js";
+import { normalizeSurface } from "./toothUtils.js";
 
 const MINOR_CONNECTOR_ASSET_BASE = "../../assets/RPD_Component/MinorConnector";
 
@@ -169,4 +177,75 @@ export function getMinorConnectorMidOffset(toothId) {
     MINOR_CONNECTOR_MID_OFFSET_OVERRIDE_BY_TEMPLATE_TOOTH[template] ??
     MINOR_CONNECTOR_OFFSET_SEED_BY_TEMPLATE_TOOTH[template];
   return mirrorTemplateRowForTooth(toothId, row);
+}
+
+/**
+ * Back-action geometry: the retentive clasp and the reciprocating clasp sit at OPPOSITE
+ * mesial/distal corners. Simple Circum keeps them at the SAME corner (the reciprocal is
+ * the retainer arch-flipped), so this only matches an arm that wraps the tooth — today
+ * Back-action Clasps and Half & Half. Returns the clasp's own side, or null when the
+ * tooth isn't in that geometry.
+ */
+function getWrappedArmConnectorSide(tooth) {
+  let claspSide = null;
+  let reciprocalSide = null;
+  for (const placement of tooth.componentPlacements) {
+    const surface = normalizeSurface(placement?.surface);
+    if (!surface) continue;
+    const side = surface.includes("mesial")
+      ? "mesial"
+      : surface.includes("distal")
+        ? "distal"
+        : null;
+    if (!side) continue;
+    const id = placement?.componentId;
+    if (isRetainerClaspComponent(id) || isRingClaspComponent(id)) claspSide = side;
+    else if (isReciprocatingClaspComponent(id)) reciprocalSide = side;
+  }
+  if (!claspSide || !reciprocalSide || claspSide === reciprocalSide) return null;
+  return claspSide;
+}
+
+/**
+ * Which embrasure side(s) a tooth's minor connector attaches on, from placed components
+ * (mirrors desktop GetConnectorData + isMesio): a rest/bar sits on its own surface; a
+ * retentive clasp anchors at its ORIGIN, opposite the tip (mesial-tip → connects distally).
+ * A reciprocating clasp isn't a retainer, so it's ignored. Returns `{ mesial, distal }`.
+ *
+ * Exception: a wrapped arm (see getWrappedArmConnectorSide) joins at the clasp's own
+ * side, which replaces the derivation rather than adding to it.
+ */
+export function getMinorConnectorSupportSides(tooth) {
+  const sides = { mesial: false, distal: false };
+  if (!tooth || !Array.isArray(tooth.componentPlacements)) return sides;
+
+  const wrappedArmSide = getWrappedArmConnectorSide(tooth);
+  if (wrappedArmSide) {
+    sides[wrappedArmSide] = true;
+    return sides;
+  }
+
+  for (const placement of tooth.componentPlacements) {
+    const id = placement?.componentId;
+    // A mesh plate (cross-mesh) spans the tooth proximally and joins the major on both
+    // embrasures, so it carries a minor connector despite no anchor surface. (plate-prox
+    // under a major is already joined by the connector fill, so not added here.)
+    if (id === "plate-crossmesh") {
+      sides.mesial = true;
+      sides.distal = true;
+      continue;
+    }
+    const surface = normalizeSurface(placement?.surface);
+    if (!surface) continue;
+    if (isRestComponent(id) || isBarComponent(id)) {
+      if (surface.includes("mesial")) sides.mesial = true;
+      else if (surface.includes("distal")) sides.distal = true;
+      else if (surface === "lingual") { sides.mesial = true; sides.distal = true; } // full cingulum
+    } else if (isRetainerClaspComponent(id) || isRingClaspComponent(id)) {
+      // Retentive clasp origin (where the minor connector attaches) is opposite the tip.
+      if (surface.includes("mesial")) sides.distal = true;
+      else if (surface.includes("distal")) sides.mesial = true;
+    }
+  }
+  return sides;
 }

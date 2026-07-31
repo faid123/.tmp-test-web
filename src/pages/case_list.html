@@ -391,8 +391,8 @@
                 <button class="dropdown-item" id="viewVersionBtn" type="button" role="menuitem">
                   <i class="fa fa-clock-rotate-left" aria-hidden="true"></i><span>View Version History</span>
                 </button>
-                <button class="dropdown-item" id="download2dDesignBtn" type="button" role="menuitem">
-                  <i class="fa fa-download" aria-hidden="true"></i><span>Download 2D Design L2</span>
+                <button class="dropdown-item" id="downloadReferencesBtn" type="button" role="menuitem">
+                  <i class="fa fa-images" aria-hidden="true"></i><span>Download Reference Images</span>
                 </button>
                 <button class="dropdown-item" id="duplicateBtn" type="button" role="menuitem">
                   <i class="fa fa-clone" aria-hidden="true"></i><span>Duplicate</span>
@@ -596,7 +596,12 @@
 
         <div class="cm-footer-right">
           <span class="cm-footer-user" id="footerUserName">—</span>
-          <span class="cm-footer-conn" id="footerConnection"></span>
+          <button type="button" class="cm-footer-btn" id="footerHelpBtn" aria-label="Help" data-tooltip="Help">
+            <i class="fa fa-circle-question" aria-hidden="true"></i>
+          </button>
+          <button type="button" class="cm-footer-btn" id="footerAboutBtn" aria-label="About" data-tooltip="About">
+            <i class="fa fa-circle-info" aria-hidden="true"></i>
+          </button>
         </div>
       </footer>
     </div>
@@ -734,11 +739,11 @@
               <span>About</span>
             </button>
           </li>
-          <li class="app-sidebar-language">
-            <i class="fa fa-globe app-sidebar-language-icon" aria-hidden="true"></i>
-            <select id="sidebarLanguageSelect" aria-label="Language">
-              <option value="en">English</option>
-            </select>
+          <li>
+            <button type="button" id="sidebarLanguageBtn" class="app-sidebar-item" aria-label="Language: English">
+              <i class="fa fa-globe app-sidebar-item-icon" aria-hidden="true"></i>
+              <span>English</span>
+            </button>
           </li>
         </ul>
       </nav>

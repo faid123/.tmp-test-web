@@ -75,7 +75,7 @@ export const COMPONENT_GROUPS = Object.freeze({
   ],
   assembly: [
     { key: "circum", title: "Circum" },
-    { key: "bars", title: "Bars" },
+    { key: "bars", title: "RPI & RPA" },
   ],
 });
 

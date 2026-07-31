@@ -378,6 +378,8 @@ function init3DPreview(area) {
   controls.minDistance = 35;
   controls.maxDistance = 700;
   controls.target.set(0, 0, 0);
+  controls.mouseButtons.LEFT = 2;
+  controls.mouseButtons.RIGHT = 0;
 
   rowUpper.surveyBtn.addEventListener("click", () =>
     handleSurveyButtonClick("upper", rowUpper.surveyBtn)
