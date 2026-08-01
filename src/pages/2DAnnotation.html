@@ -209,14 +209,18 @@
         <section id="selectTeethPanel" class="select-teeth-panel">
           <div class="panel-mini-title">Select Teeth</div>
           <div class="status-picker">
+            <!-- Icons are decorative (alt=""): the visible label is the button's name. -->
             <button class="status-btn is-active" data-status="presence">
-              <img class="status-icon" src="../../assets/PresenceToothIconGreen.png" alt="Presence" />
+              <img class="status-icon" src="../../assets/PresenceToothIconGreen.png" alt="" />
+              <span class="status-btn-label">Presence</span>
             </button>
             <button class="status-btn" data-status="abutment">
-              <img class="status-icon" src="../../assets/AbutmentToothIconBlue.png" alt="Abutment" />
+              <img class="status-icon" src="../../assets/AbutmentToothIconBlue.png" alt="" />
+              <span class="status-btn-label">Abutment</span>
             </button>
             <button class="status-btn" data-status="compromised">
-              <img class="status-icon" src="../../assets/CompromisedToothIconYellow.png" alt="Compromised" />
+              <img class="status-icon" src="../../assets/CompromisedToothIconYellow.png" alt="" />
+              <span class="status-btn-label">Compromised</span>
             </button>
           </div>
         </section>
@@ -266,7 +270,12 @@
 
     <div class="ann-footer-right">
       <span class="ann-footer-user" id="footerUserName">—</span>
-      <span class="ann-footer-conn" id="footerConnection"></span>
+      <button type="button" class="ann-footer-btn" id="footerHelpBtn" aria-label="Help" data-tooltip="Help">
+        <i class="fa fa-circle-question" aria-hidden="true"></i>
+      </button>
+      <button type="button" class="ann-footer-btn" id="footerAboutBtn" aria-label="About" data-tooltip="About">
+        <i class="fa fa-circle-info" aria-hidden="true"></i>
+      </button>
       <button type="button" class="ann-footer-btn ann-footer-chat-btn" id="footerChatBtn" aria-label="Open chat" data-tooltip="Chat">
         <i class="fa-regular fa-comment" aria-hidden="true"></i>
       </button>
@@ -734,11 +743,11 @@
             <span>About</span>
           </button>
         </li>
-        <li class="app-sidebar-language">
-          <i class="fa fa-globe app-sidebar-language-icon" aria-hidden="true"></i>
-          <select id="sidebarLanguageSelect" aria-label="Language">
-            <option value="en">English</option>
-          </select>
+        <li>
+          <button type="button" id="sidebarLanguageBtn" class="app-sidebar-item" aria-label="Language: English">
+            <i class="fa fa-globe app-sidebar-item-icon" aria-hidden="true"></i>
+            <span>English</span>
+          </button>
         </li>
       </ul>
     </nav>

@@ -52,6 +52,16 @@ function sessionEmail() {
   }
 }
 
+// The signed-in username. The new password must not contain it (2.3.2(h)); an
+// empty value simply skips that check in validateNewPassword.
+function sessionUsername() {
+  try {
+    return JSON.parse(localStorage.getItem("loggedInUser") || "null")?.username || "";
+  } catch {
+    return "";
+  }
+}
+
 function setMessage(text, kind = "error") {
   const el = root.querySelector("#cpMessage");
   el.textContent = text || "";
@@ -119,7 +129,7 @@ async function handleSubmit(event) {
     setMessage("Please enter the key from your email.");
     return;
   }
-  const invalid = validateNewPassword(newPassword, confirmPassword);
+  const invalid = validateNewPassword(newPassword, confirmPassword, [sessionUsername(), email]);
   if (invalid) {
     setMessage(invalid);
     return;

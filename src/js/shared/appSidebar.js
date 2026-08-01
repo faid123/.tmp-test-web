@@ -6,10 +6,38 @@
 
 import { toast, confirmModal } from "./toast.js";
 
+// Languages offered by the sidebar picker, labelled in their own script so a
+// speaker recognises their language without reading English first. Single
+// source of truth: the pages only ship the trigger button (#sidebarLanguageBtn)
+// and the dropdown under it is built from this list, so adding a language here
+// adds it everywhere #appSidebar is embedded.
+const LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "zh", label: "中文" },
+  { code: "ms", label: "Bahasa Melayu" },
+  { code: "hi", label: "हिन्दी" },
+];
+const LANGUAGE_STORAGE_KEY = "appLanguage";
+
+// Falls back to English for a missing, unknown or unreadable stored value.
+function readStoredLanguage() {
+  try {
+    const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    if (LANGUAGES.some((lang) => lang.code === stored)) return stored;
+  } catch {
+    /* storage blocked (private mode / disabled cookies) — use the default */
+  }
+  return LANGUAGES[0].code;
+}
+
 export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../../index.html" } = {}) {
   const sidebar = document.getElementById("appSidebar");
   const trigger = document.getElementById(triggerId);
   if (!sidebar) return { open() {}, close() {} };
+
+  // Assigned further down (after the common items are wired). Only read from
+  // inside callbacks, which can't run before that assignment.
+  let languageMenu = null;
 
   const open = () => {
     sidebar.classList.remove("is-hidden");
@@ -17,6 +45,8 @@ export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../.
     sidebar.setAttribute("aria-hidden", "false");
   };
   const close = () => {
+    // Collapse the language dropdown so the panel reopens in its resting state.
+    languageMenu?.collapse();
     sidebar.classList.remove("is-open");
     sidebar.setAttribute("aria-hidden", "true");
     setTimeout(() => sidebar.classList.add("is-hidden"), 220);
@@ -117,7 +147,7 @@ export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../.
   });
   // Help opens the in-app assistant. Imported on click so the panel, its
   // knowledge base and its stylesheet only load for users who ask for help.
-  document.getElementById("sidebarHelpBtn")?.addEventListener("click", async () => {
+  const openHelp = async () => {
     close();
     try {
       const { openHelpBot } = await import("./helpBot.js");
@@ -126,6 +156,26 @@ export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../.
       console.error("[appSidebar] help assistant failed to load:", err);
       toast.error("Help is unavailable right now.");
     }
+  };
+  // About replays the page's guided tour — the spotlight walk a first-time
+  // visitor gets automatically. Imported on click for the same reason Help is:
+  // a page whose tour is never asked for should not pay for the overlay.
+  const showAbout = async () => {
+    close();
+    try {
+      const { startPageTour, tourPageLabel } = await import("./pageTour.js");
+      if (!startPageTour()) toast.info(`No guided tour for ${tourPageLabel()} yet.`);
+    } catch (err) {
+      console.error("[appSidebar] guided tour failed to load:", err);
+      toast.error("The guided tour is unavailable right now.");
+    }
+  };
+
+  // Help and About are reachable from two places: the sidebar row and the
+  // footer status-bar button. Same action either way, so they share a handler
+  // (close() is a harmless no-op when the click came from the footer).
+  ["sidebarHelpBtn", "footerHelpBtn"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("click", openHelp);
   });
   document.getElementById("sidebarReportIssueBtn")?.addEventListener("click", () => {
     close();
@@ -139,12 +189,181 @@ export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../.
       "noopener,noreferrer"
     );
   });
-  document.getElementById("sidebarAboutBtn")?.addEventListener("click", () => {
-    close();
-    toast.info("About — coming soon.");
+  ["sidebarAboutBtn", "footerAboutBtn"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("click", showAbout);
   });
 
+  languageMenu = setupLanguageMenu();
+
+  // First visit to a page that has a tour: run it once, unprompted. It waits for
+  // the page's own toolbar to exist before deciding, and does nothing on every
+  // later visit — About is how you get it back.
+  import("./pageTour.js")
+    .then(({ maybeAutoStartTour }) => maybeAutoStartTour())
+    .catch((err) => console.error("[appSidebar] guided tour failed to load:", err));
+
   return { open, close };
+}
+
+// Builds the language dropdown under #sidebarLanguageBtn and keeps the choice
+// in localStorage so it survives navigation between pages.
+//
+// Scope note: this stores and reflects a *preference* only. There is no i18n
+// layer in the app yet, so picking a language does not translate the UI — the
+// toast says as much rather than leaving the user waiting for a change that
+// never comes. Wire the real string lookup to LANGUAGES/LANGUAGE_STORAGE_KEY
+// when that layer lands.
+//
+// Returns a small handle so the sidebar's close() can collapse the dropdown.
+function setupLanguageMenu() {
+  let current = readStoredLanguage();
+  // Worth doing even when the trigger is absent (pages that embed the sidebar
+  // without the language row): it keeps the document's declared language in
+  // step with the stored preference for screen readers and spell-checkers.
+  document.documentElement.lang = current;
+
+  const trigger = document.getElementById("sidebarLanguageBtn");
+  const row = trigger?.closest("li");
+  if (!trigger || !row) return null;
+
+  const label = trigger.querySelector("span");
+  const menuId = "sidebarLanguageMenu";
+
+  const caret = document.createElement("i");
+  caret.className = "fa fa-chevron-down app-sidebar-item-caret";
+  caret.setAttribute("aria-hidden", "true");
+  trigger.append(caret);
+
+  trigger.setAttribute("aria-haspopup", "true");
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.setAttribute("aria-controls", menuId);
+
+  const menu = document.createElement("ul");
+  menu.id = menuId;
+  menu.className = "app-sidebar-submenu";
+  menu.setAttribute("role", "menu");
+  menu.setAttribute("aria-label", "Language");
+  menu.hidden = true;
+
+  const options = LANGUAGES.map(({ code, label: text }) => {
+    const li = document.createElement("li");
+    // The <li>s are only grouping markup here; role=none keeps them out of the
+    // menu's accessibility tree so it reports 4 items, not 4 list items.
+    li.setAttribute("role", "none");
+
+    const option = document.createElement("button");
+    option.type = "button";
+    option.className = "app-sidebar-subitem";
+    option.dataset.lang = code;
+    // menuitemradio, not menuitem: exactly one language is active at a time.
+    option.setAttribute("role", "menuitemradio");
+    option.setAttribute("aria-checked", String(code === current));
+
+    const optionLabel = document.createElement("span");
+    optionLabel.textContent = text;
+    const tick = document.createElement("i");
+    tick.className = "fa fa-check app-sidebar-subitem-check";
+    tick.setAttribute("aria-hidden", "true");
+    option.append(optionLabel, tick);
+
+    li.append(option);
+    menu.append(li);
+    return option;
+  });
+
+  row.append(menu);
+
+  const isOpen = () => !menu.hidden;
+
+  const openMenu = ({ focusActive = false } = {}) => {
+    menu.hidden = false;
+    trigger.setAttribute("aria-expanded", "true");
+    if (focusActive) (options.find((o) => o.dataset.lang === current) ?? options[0]).focus();
+  };
+
+  const closeMenu = ({ returnFocus = false } = {}) => {
+    if (!isOpen()) return;
+    menu.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+    if (returnFocus) trigger.focus();
+  };
+
+  const applyLanguage = (code, { notify = true } = {}) => {
+    const picked = LANGUAGES.find((lang) => lang.code === code);
+    if (!picked) return;
+    current = picked.code;
+
+    options.forEach((option) => {
+      option.setAttribute("aria-checked", String(option.dataset.lang === current));
+    });
+    if (label) label.textContent = picked.label;
+    // aria-label overrides the button's text, so it has to carry the value too.
+    trigger.setAttribute("aria-label", `Language: ${picked.label}`);
+    document.documentElement.lang = current;
+
+    try {
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, current);
+    } catch {
+      /* storage blocked — the choice just won't persist past this page */
+    }
+
+    if (notify && current !== LANGUAGES[0].code) {
+      toast.info(`${picked.label} selected — interface translation is coming soon.`);
+    }
+  };
+
+  trigger.addEventListener("click", () => {
+    if (isOpen()) closeMenu();
+    else openMenu();
+  });
+
+  trigger.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    openMenu({ focusActive: true });
+  });
+
+  menu.addEventListener("click", (e) => {
+    const option = e.target.closest(".app-sidebar-subitem");
+    if (!option) return;
+    applyLanguage(option.dataset.lang);
+    // Keep the sidebar open: the updated label is the confirmation that the
+    // choice landed.
+    closeMenu({ returnFocus: true });
+  });
+
+  menu.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      // Stop the sidebar's document-level Escape handler from also closing the
+      // whole panel — one Escape should collapse one layer.
+      e.stopPropagation();
+      closeMenu({ returnFocus: true });
+      return;
+    }
+
+    const moves = { ArrowDown: 1, ArrowUp: -1 };
+    const index = options.indexOf(document.activeElement);
+    if (e.key in moves && index !== -1) {
+      e.preventDefault();
+      const next = (index + moves[e.key] + options.length) % options.length;
+      options[next].focus();
+      return;
+    }
+    if (e.key === "Home" || e.key === "End") {
+      e.preventDefault();
+      (e.key === "Home" ? options[0] : options[options.length - 1]).focus();
+    }
+  });
+
+  // Clicking anywhere else in the sidebar (or page) collapses the dropdown.
+  document.addEventListener("click", (e) => {
+    if (isOpen() && !row.contains(e.target)) closeMenu();
+  });
+
+  // Paint the stored choice without a toast — this is a restore, not a change.
+  applyLanguage(current, { notify: false });
+
+  return { collapse: () => closeMenu() };
 }
 
 // ---------------------------------------------------------------------------

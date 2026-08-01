@@ -1,6 +1,7 @@
 import {
   ACTION_UPON_FAILURE,
   COMPONENT_BY_ID,
+  getBarPlacementSurfaceForTooth,
   getMajorConnectorAssetReference,
   hasPalatalHolePlacementOnUpperArch,
   isBarComponent,
@@ -39,11 +40,9 @@ function isAnteriorToothId(toothId) {
   return Number.isFinite(unit) && unit >= 1 && unit <= 3;
 }
 
-// A bar clasp is a buccal retentive element; its reciprocation sits on the lingual
-// surface at the same mesial/distal corner (bar_d?_distal -> distal_lingual, etc.).
-function reciprocatingSurfaceForBarSurface(barSurface) {
-  return String(barSurface || "").includes("distal") ? "distal_lingual" : "mesial_lingual";
-}
+// Default reciprocating element for a retentive placement: the proximal (reciprocating)
+// plate. Surfaceless — it plates the whole tooth and encodes reciprocating=2.
+const DEFAULT_RECIPROCATING_COMPONENT_ID = "plate-prox";
 
 // A tooth's single reciprocating slot is a reciprocating clasp OR a proximal/mesh
 // plate (see annotationTeethModel.RECIPROCATING_SLOT_IDS).
@@ -52,6 +51,18 @@ function toothHasReciprocatingElement(tooth) {
     (entry) =>
       isReciprocatingClaspComponent(entry.componentId) || isPlateComponentId(entry.componentId)
   );
+}
+
+// Clasps, bars, and rests all need reciprocation: placing one auto-adds the default
+// reciprocating plate, unless the tooth already carries a reciprocating element
+// (clasp or plate) — which includes the case where the placement IS one.
+function autoPlaceDefaultReciprocatingElement(tooth, selectedComponent) {
+  const needsReciprocation =
+    isClaspComponent(selectedComponent) ||
+    isBarComponent(selectedComponent) ||
+    isRestComponent(selectedComponent);
+  if (!needsReciprocation || toothHasReciprocatingElement(tooth)) return;
+  addPlacement(tooth, DEFAULT_RECIPROCATING_COMPONENT_ID, null);
 }
 
 // Apply follow-up cleanup rules after removing a placement.
@@ -322,12 +333,7 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
   const criteriaResult = assessPlacementCriteria(tooth, selectedComponent, COMPONENT_BY_ID);
   if (criteriaResult.pass) {
     addPlacement(tooth, selectedComponent.id, targetSurface);
-    // A bar needs reciprocation: auto-place a reciprocating clasp on the bar's
-    // lingual side, unless the tooth already has a reciprocating element (clasp/
-    // plate). Mirrors the bar assemblies.
-    if (isBarComponent(selectedComponent) && !toothHasReciprocatingElement(tooth)) {
-      addPlacement(tooth, "reciprocating-clasp", reciprocatingSurfaceForBarSurface(targetSurface));
-    }
+    autoPlaceDefaultReciprocatingElement(tooth, selectedComponent);
     setMessage(
       `Placed ${selectedComponent.label}${targetSurface ? ` (${targetSurface})` : ""} on tooth ${toothId}.`,
       false
@@ -344,6 +350,7 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
   if (failureData.actionUponFailure === ACTION_UPON_FAILURE.REMOVE_THEN_PLACE) {
     removePlacementsByComponentIds(tooth, failureData.conflictingComponents || []);
     addPlacement(tooth, selectedComponent.id, targetSurface);
+    autoPlaceDefaultReciprocatingElement(tooth, selectedComponent);
     setMessage(
       `Replaced conflict and placed ${selectedComponent.label}${targetSurface ? ` (${targetSurface})` : ""} on tooth ${toothId}.`,
       false
@@ -403,6 +410,55 @@ export function placeSimpleCircumAssemblyOnTooth(toothId, restSurface) {
   return true;
 }
 
+/**
+ * Back-action Clasps. Both rest dots are offered; the clasp goes on the corner OPPOSITE
+ * the rest and the reciprocal stays on the rest's own corner:
+ *
+ *   45 missing -> 44: distal rest, mesio-buccal clasp, disto-lingual reciprocal
+ *                 46: mesial rest, disto-buccal clasp, mesio-lingual reciprocal
+ *
+ * That reciprocal placement is what separates it from Simple Circum, where the
+ * reciprocal is the retainer arch-flipped at the SAME corner (mesial rest -> distal
+ * clasp AND distal reciprocal).
+ */
+export function placeBackActionAssemblyOnTooth(toothId, restSurface) {
+  const id = String(toothId);
+  const tooth = state.teeth[id];
+  if (!tooth) {
+    setMessage("Unknown tooth.", true);
+    return false;
+  }
+
+  const rest = normalizeSurface(restSurface);
+  if (rest !== "mesial" && rest !== "distal") {
+    setMessage("Back-action Clasps supports mesial or distal rest seat only.", true);
+    return false;
+  }
+
+  if (!tooth.isPresent) {
+    setMessage("Back-action Clasps requires a present abutment tooth.", true);
+    return false;
+  }
+
+  const clasp = `${oppositeRestSurface(rest)}_buccal`;
+  const reciprocating = `${rest}_lingual`;
+
+  ensureToothPlacementState(tooth);
+  clearRestAndCircumClaspsOnTooth(tooth);
+  clearReciprocatingPlateMeshOnTooth(tooth);
+
+  addPlacement(tooth, "rest-seat", rest);
+  addPlacement(tooth, "retainer-clasp", clasp);
+  addPlacement(tooth, "reciprocating-clasp", reciprocating);
+  syncToothComponentsFromPlacements(tooth);
+
+  setMessage(
+    `Placed Back-action Clasps on tooth ${id} (${rest} rest, ${clasp} clasp, ${reciprocating} reciprocating).`,
+    false
+  );
+  return true;
+}
+
 export function getEmbrasureNeighborToothId(toothId, jaw, clickedSurface) {
   const order = TOOTH_ORDER[jaw] || [];
   const idx = order.indexOf(String(toothId));
@@ -414,10 +470,6 @@ export function getEmbrasureNeighborToothId(toothId, jaw, clickedSurface) {
   if (!step) return null;
   const neighbor = order[idx + step];
   return neighbor ? String(neighbor) : null;
-}
-
-function getDistalNeighborToothId(toothId, jaw) {
-  return getEmbrasureNeighborToothId(toothId, jaw, "distal");
 }
 
 function clearRestAndCircumClaspsOnTooth(tooth) {
@@ -446,6 +498,99 @@ function placeCircumBundle(tooth, mode) {
   addPlacement(tooth, "reciprocating-clasp", "mesial_lingual");
 }
 
+// Which of a present tooth's mesial/distal surfaces face an adjacent missing tooth.
+// Combine Clasps brackets an edentulous area, so its rest seats sit on exactly these
+// surfaces — e.g. with 23 missing, 22 offers distal and 24 offers mesial.
+export function getGapFacingRestSurfaces(toothId, jaw) {
+  const tooth = state.teeth[String(toothId)];
+  if (!tooth || !tooth.isPresent) return [];
+  const surfaces = [];
+  for (const side of ["mesial", "distal"]) {
+    const neighbourId = getEmbrasureNeighborToothId(toothId, jaw, side);
+    const neighbour = neighbourId ? state.teeth[neighbourId] : null;
+    if (neighbour && !neighbour.isPresent) surfaces.push(side);
+  }
+  return surfaces;
+}
+
+// The abutment bracketing the far end of the gap that `side` opens onto, skipping the
+// whole edentulous run (23 + 24 missing -> 22's partner is 25). Null when the gap runs
+// off the end of the arch, i.e. a free-end saddle with a single abutment.
+function getAbutmentAcrossGap(toothId, jaw, side) {
+  const id = String(toothId);
+  const order = TOOTH_ORDER[jaw] || [];
+  const idx = order.indexOf(id);
+  if (idx < 0) return null;
+  const quadrant = Number(id.charAt(0));
+  const mesialStep = quadrant === 1 || quadrant === 3 ? 1 : -1;
+  const step = side === "mesial" ? mesialStep : -mesialStep;
+
+  let i = idx + step;
+  const isMissingAt = (n) => Boolean(order[n] && state.teeth[order[n]] && !state.teeth[order[n]].isPresent);
+  if (!isMissingAt(i)) return null;
+  while (isMissingAt(i)) i += step;
+
+  const acrossId = order[i];
+  const across = acrossId ? state.teeth[acrossId] : null;
+  return across && across.isPresent ? String(acrossId) : null;
+}
+
+const oppositeRestSurface = (surface) => (surface === "mesial" ? "distal" : "mesial");
+
+/**
+ * Combine Clasps bundles, keyed by tier. `side` is the mesial/distal label that points
+ * at the edentulous area — the same label for both tiers, since an outward neighbour
+ * faces its abutment across the matching surface.
+ *
+ * Worked example, 15 missing (so side = "distal" on the mesial run):
+ *   14 (abutment): mesial + distal rests, disto-buccal clasp, disto-lingual reciprocal
+ *   13 (outward) : distal rest,           mesio-buccal clasp, mesio-lingual reciprocal
+ * 16/17 mirror it with side = "mesial".
+ *
+ * The abutment carries both arms on its gap-facing corner; the outward tooth carries
+ * both on the corner away from its abutment. Either way the reciprocal is the retainer
+ * arch-flipped at the SAME corner, matching the rest of the app.
+ */
+function placeCombineClaspAbutmentBundle(tooth, side) {
+  addPlacement(tooth, "rest-seat", "mesial");
+  addPlacement(tooth, "rest-seat", "distal");
+  addPlacement(tooth, "retainer-clasp", `${side}_buccal`);
+  addPlacement(tooth, "reciprocating-clasp", `${side}_lingual`);
+}
+
+function placeCombineClaspOutwardBundle(tooth, side) {
+  addPlacement(tooth, "rest-seat", side);
+  addPlacement(tooth, "retainer-clasp", `${oppositeRestSurface(side)}_buccal`);
+  addPlacement(tooth, "reciprocating-clasp", `${oppositeRestSurface(side)}_lingual`);
+}
+
+/**
+ * Teeth a Combine Clasps click builds, as {toothId, side, tier} records:
+ *   tier "abutment" — the teeth bracketing the gap, `side` facing it (15 missing ->
+ *                     14 distal, 16 mesial);
+ *   tier "outward"  — the next present tooth beyond each abutment (-> 13, 17).
+ */
+function collectCombineClaspTargets(toothId, jaw, clickedSurface) {
+  const abutments = [{ toothId: String(toothId), side: clickedSurface, tier: "abutment" }];
+
+  const partnerId = getAbutmentAcrossGap(toothId, jaw, clickedSurface);
+  if (partnerId) {
+    abutments.push({ toothId: partnerId, side: oppositeRestSurface(clickedSurface), tier: "abutment" });
+  }
+
+  const targets = [...abutments];
+  const claimed = new Set(abutments.map((t) => t.toothId));
+  for (const abutment of abutments) {
+    const outwardSide = oppositeRestSurface(abutment.side);
+    const nextId = getEmbrasureNeighborToothId(abutment.toothId, jaw, outwardSide);
+    const next = nextId ? state.teeth[nextId] : null;
+    if (!next || !next.isPresent || claimed.has(nextId)) continue;
+    claimed.add(nextId);
+    targets.push({ toothId: nextId, side: abutment.side, tier: "outward" });
+  }
+  return targets;
+}
+
 export function placeEmbrasureCircumAssemblyOnTooth(toothId, jaw, restSurface) {
   const id = String(toothId);
   const tooth = state.teeth[id];
@@ -455,42 +600,56 @@ export function placeEmbrasureCircumAssemblyOnTooth(toothId, jaw, restSurface) {
   }
 
   const clicked = normalizeSurface(restSurface);
-  if (clicked !== "distal") {
-    setMessage("Embrasure Assembly supports distal rest-seat suggestion only.", true);
+  if (!getGapFacingRestSurfaces(id, jaw).includes(clicked)) {
+    setMessage("Combine Clasps needs a rest seat facing a missing tooth.", true);
     return false;
   }
 
-  const neighborToothId = getEmbrasureNeighborToothId(id, jaw, "distal");
-  if (!neighborToothId || !state.teeth[neighborToothId]) {
-    setMessage("No adjacent posterior tooth available for Embrasure Assembly.", true);
-    return false;
+  const targets = collectCombineClaspTargets(id, jaw, clicked);
+
+  // Clear every target first: an outward neighbour may already carry components from
+  // an earlier click, and clearing as we go would wipe a bundle just placed.
+  for (const target of targets) {
+    const rec = state.teeth[target.toothId];
+    ensureToothPlacementState(rec);
+    clearRestAndCircumClaspsOnTooth(rec);
+    clearReciprocatingPlateMeshOnTooth(rec);
+  }
+  for (const target of targets) {
+    const rec = state.teeth[target.toothId];
+    if (target.tier === "abutment") placeCombineClaspAbutmentBundle(rec, target.side);
+    else placeCombineClaspOutwardBundle(rec, target.side);
+    syncToothComponentsFromPlacements(rec);
   }
 
-  const neighborTooth = state.teeth[neighborToothId];
-  if (!tooth.isPresent || !neighborTooth.isPresent) {
-    setMessage("Embrasure Assembly requires both adjacent teeth to be present.", true);
-    return false;
-  }
-
-  ensureToothPlacementState(tooth);
-  ensureToothPlacementState(neighborTooth);
-
-  clearRestAndCircumClaspsOnTooth(tooth);
-  clearRestAndCircumClaspsOnTooth(neighborTooth);
-  clearReciprocatingPlateMeshOnTooth(tooth);
-  clearReciprocatingPlateMeshOnTooth(neighborTooth);
-
-  placeCircumBundle(tooth, "distal");
-  placeCircumBundle(neighborTooth, "mesial");
-
-  syncToothComponentsFromPlacements(tooth);
-  syncToothComponentsFromPlacements(neighborTooth);
-
-  setMessage(`Placed Embrasure Assembly on teeth ${id} and ${neighborToothId}.`, false);
+  const summary = targets.map((t) => `${t.toothId} (${t.side})`).join(", ");
+  setMessage(`Placed Combine Clasps on ${summary}.`, false);
   return true;
 }
 
-export function placeMultiCircumAssemblyOnTooth(toothId, jaw) {
+/**
+ * The tooth a Continuous Clasps click splints to: the neighbour AWAY from the gap, so a
+ * distal (gap-facing) rest pairs mesially. Null unless that neighbour exists and is present.
+ */
+function getContinuousClaspPartnerId(toothId, jaw, restSurface) {
+  const partnerId = getEmbrasureNeighborToothId(toothId, jaw, oppositeRestSurface(restSurface));
+  const partner = partnerId ? state.teeth[partnerId] : null;
+  return partner && partner.isPresent ? String(partnerId) : null;
+}
+
+/**
+ * Continuous Clasps splints an abutment to the next tooth away from the edentulous area,
+ * so — like RPI/RPA — its rest suggestions sit beside the missing tooth: on whichever
+ * surfaces face the gap, and only where there is a present tooth to splint back to.
+ * With 25 missing that is 24's distal (pairing 23) and 26's mesial (pairing 27).
+ */
+export function getContinuousClaspRestSurfaces(toothId, jaw) {
+  return getGapFacingRestSurfaces(toothId, jaw).filter((side) =>
+    Boolean(getContinuousClaspPartnerId(toothId, jaw, side))
+  );
+}
+
+export function placeMultiCircumAssemblyOnTooth(toothId, jaw, restSurface) {
   const id = String(toothId);
   const tooth = state.teeth[id];
   if (!tooth) {
@@ -498,18 +657,19 @@ export function placeMultiCircumAssemblyOnTooth(toothId, jaw) {
     return false;
   }
 
-  const neighborToothId = getDistalNeighborToothId(id, jaw);
-  if (!neighborToothId || !state.teeth[neighborToothId]) {
-    setMessage("No adjacent distal posterior tooth available for Multi Assembly.", true);
+  const clicked = normalizeSurface(restSurface);
+  if (!getGapFacingRestSurfaces(id, jaw).includes(clicked)) {
+    setMessage("Continuous Clasps needs a rest seat facing a missing tooth.", true);
+    return false;
+  }
+
+  const neighborToothId = getContinuousClaspPartnerId(id, jaw, clicked);
+  if (!neighborToothId) {
+    setMessage("No adjacent tooth beyond the abutment to splint Continuous Clasps to.", true);
     return false;
   }
 
   const neighborTooth = state.teeth[neighborToothId];
-  if (!tooth.isPresent || !neighborTooth.isPresent) {
-    setMessage("Multi Assembly requires both selected and adjacent distal teeth to be present.", true);
-    return false;
-  }
-
   ensureToothPlacementState(tooth);
   ensureToothPlacementState(neighborTooth);
 
@@ -518,13 +678,18 @@ export function placeMultiCircumAssemblyOnTooth(toothId, jaw) {
   clearReciprocatingPlateMeshOnTooth(tooth);
   clearReciprocatingPlateMeshOnTooth(neighborTooth);
 
-  placeCircumBundle(tooth, "mesial");
-  placeCircumBundle(neighborTooth, "distal");
+  // Rests at the two outer ends of the splinted pair; both clasps meet in the shared
+  // embrasure between them.
+  placeCircumBundle(tooth, clicked);
+  placeCircumBundle(neighborTooth, oppositeRestSurface(clicked));
 
   syncToothComponentsFromPlacements(tooth);
   syncToothComponentsFromPlacements(neighborTooth);
 
-  setMessage(`Placed Multi Assembly on teeth ${id} and distal adjacent ${neighborToothId}.`, false);
+  setMessage(
+    `Placed Continuous Clasps on teeth ${id} (${clicked} rest) and ${neighborToothId}.`,
+    false
+  );
   return true;
 }
 
@@ -546,29 +711,56 @@ export function placeHalfAndHalfAssemblyOnTooth(toothId, restSurface) {
   clearRestAndCircumClaspsOnTooth(tooth);
   clearReciprocatingPlateMeshOnTooth(tooth);
 
+  // Half & Half is double-rested: the retentive and reciprocal arms arise from
+  // opposite directions, so each gets its own rest seat.
+  addPlacement(tooth, "rest-seat", "mesial");
+  addPlacement(tooth, "rest-seat", "distal");
+
+  // Retentive arm buccal, reciprocal arm lingual, at opposite mesial/distal corners.
   if (clicked === "mesial") {
     addPlacement(tooth, "retainer-clasp", "distal_buccal");
-    addPlacement(tooth, "reciprocating-clasp", "mesial_buccal");
+    addPlacement(tooth, "reciprocating-clasp", "mesial_lingual");
   } else {
     addPlacement(tooth, "retainer-clasp", "mesial_buccal");
-    addPlacement(tooth, "reciprocating-clasp", "distal_buccal");
+    addPlacement(tooth, "reciprocating-clasp", "distal_lingual");
   }
 
   syncToothComponentsFromPlacements(tooth);
-  setMessage(`Placed Half & Half on tooth ${id}.`, false);
+  setMessage(`Placed Half & Half on tooth ${id} (mesial + distal rests).`, false);
   return true;
 }
 
-export function placeAssemblyTBarOnTooth(toothId, jaw, restSurface) {
-  return placeAssemblyBarOnTooth(toothId, jaw, restSurface, {
-    barComponentId: "bar-t",
-    label: "T-bar",
-    getReciprocatingSurface: (clicked) =>
-      clicked === "mesial" ? "distal_lingual" : "mesial_lingual",
-  });
+// The immediately-distal neighbour (away from the midline), or null at the arch end.
+function getDistalNeighbourId(toothId, jaw) {
+  const id = String(toothId);
+  const order = TOOTH_ORDER[jaw] || [];
+  const idx = order.indexOf(id);
+  if (idx < 0) return null;
+  const quadrant = Number(id.charAt(0));
+  const mesialStep = quadrant === 1 || quadrant === 3 ? 1 : -1;
+  return order[idx - mesialStep] || null;
 }
 
-function getAssemblyBarContext(toothId, jaw, restSurface, label) {
+// True when `toothId` is a distal-extension abutment: its distal neighbour is missing.
+// RPI/RPA are only defined for that case — the rest sits mesial and the retentive
+// element plus proximal plate face the saddle on the distal.
+export function hasMissingDistalNeighbour(toothId, jaw) {
+  const distalId = getDistalNeighbourId(toothId, jaw);
+  return Boolean(distalId && state.teeth[distalId] && !state.teeth[distalId].isPresent);
+}
+
+// An I-bar bases from the denture saddle, which this tool represents as a mesh
+// placement. Without one, pruneInvalidBarPlacementsInJaw drops the bar on the very
+// next render — so RPI needs the distal saddle actually meshed, matching the rule
+// the BARS tab already enforces via getBarSuggestibleToothIdSet.
+export function hasMeshedDistalSaddle(toothId, jaw) {
+  const distalId = getDistalNeighbourId(toothId, jaw);
+  const distalTooth = distalId ? state.teeth[distalId] : null;
+  if (!distalTooth || distalTooth.isPresent) return false;
+  return (distalTooth.componentPlacements || []).some((entry) => isMeshComponent(entry.componentId));
+}
+
+function getRpxAssemblyContext(toothId, jaw, restSurface, label) {
   const id = String(toothId);
   const tooth = state.teeth[id];
   if (!tooth) {
@@ -576,84 +768,92 @@ function getAssemblyBarContext(toothId, jaw, restSurface, label) {
     return null;
   }
 
-  const clicked = normalizeSurface(restSurface);
-  if (clicked !== "mesial" && clicked !== "distal") {
-    setMessage(`${label} Assembly supports mesial or distal rest-seat suggestion only.`, true);
+  if (normalizeSurface(restSurface) !== "mesial") {
+    setMessage(`${label} places its rest on the mesial only.`, true);
+    return null;
+  }
+
+  if (!tooth.isPresent) {
+    setMessage(`${label} requires a present abutment tooth.`, true);
+    return null;
+  }
+
+  if (!hasMissingDistalNeighbour(id, jaw)) {
+    setMessage(`${label} needs a distal-extension abutment (the distal neighbour must be missing).`, true);
     return null;
   }
 
   ensureToothPlacementState(tooth);
-
-  const order = TOOTH_ORDER[jaw] || [];
-  const idx = order.indexOf(id);
-  if (idx < 0) {
-    setMessage("Unknown jaw for this tooth.", true);
-    return null;
-  }
-  const prevId = idx > 0 ? order[idx - 1] : null;
-  const nextId = idx < order.length - 1 ? order[idx + 1] : null;
-  const prevMissing = Boolean(prevId && state.teeth[prevId] && !state.teeth[prevId].isPresent);
-  const nextMissing = Boolean(nextId && state.teeth[nextId] && !state.teeth[nextId].isPresent);
-
-  if (!prevMissing && !nextMissing) {
-    setMessage("Choose a tooth adjacent to a missing tooth.", true);
-    return null;
-  }
-
-  const quadrant = Number(id.charAt(0));
-  const mesialStep = quadrant === 1 || quadrant === 3 ? 1 : -1;
-  const missingNeighborStep = prevMissing ? -1 : 1;
-  const missingOnMesial = missingNeighborStep === mesialStep;
-  const barSurface = missingOnMesial ? "bar_d1_distal" : "bar_d1_mesial";
-
-  return { id, tooth, clicked, barSurface, missingOnMesial };
+  return { id, tooth };
 }
 
-function placeAssemblyBarOnTooth(toothId, jaw, restSurface, config) {
-  const context = getAssemblyBarContext(toothId, jaw, restSurface, config.label);
+// Resolve the I-bar's placement surface from the real mesh layout rather than
+// hardcoding it: the `bar_d?_{mesial|distal}` label is keyed to per-tooth offset and
+// scale tuning and is NOT the anatomical side of the saddle, so deriving it here
+// keeps RPI consistent with the BARS tab and with pruneInvalidBarPlacementsInJaw.
+function getRpiBarSurface(toothId, jaw) {
+  const surface = getBarPlacementSurfaceForTooth(toothId, jaw, state.teeth);
+  return surface && surface.startsWith("bar_d1_") ? surface : null;
+}
+
+// Shared RPI/RPA placement: mesial rest + proximal (reciprocal) plate + one distal
+// retentive element. `config.resolveRetentiveElement` returns the {componentId, surface}
+// to place, or null when this abutment can't carry it.
+function placeRpxAssemblyOnTooth(toothId, jaw, restSurface, config) {
+  const context = getRpxAssemblyContext(toothId, jaw, restSurface, config.label);
   if (!context) return false;
-  const { id, tooth, clicked, barSurface, missingOnMesial } = context;
+  const { id, tooth } = context;
+
+  const retentive = config.resolveRetentiveElement(id, jaw);
+  if (!retentive) {
+    setMessage(config.retentiveFailureReason, true);
+    return false;
+  }
 
   tooth.componentPlacements = (tooth.componentPlacements || []).filter((entry) => {
     const cid = entry.componentId;
-    return !(cid === "rest-seat" || isReciprocatingClaspComponent(cid) || cid === "bar-t" || cid === "bar-i");
+    return !(
+      cid === "rest-seat" ||
+      isRetainerClaspComponent(cid) ||
+      isReciprocatingClaspComponent(cid) ||
+      isBarComponent(cid) ||
+      isPlateComponentId(cid) ||
+      isMeshComponent(cid)
+    );
   });
 
-  tooth.componentPlacements = tooth.componentPlacements.filter((entry) => {
-    const cid = entry.componentId;
-    return !(isPlateComponentId(cid) || isMeshComponent(cid));
-  });
-
-  if (clicked === "mesial") {
-    addPlacement(tooth, config.barComponentId, barSurface);
-    addPlacement(tooth, "reciprocating-clasp", config.getReciprocatingSurface(clicked, missingOnMesial));
-    addPlacement(tooth, "rest-seat", "mesial");
-  } else if (clicked === "distal") {
-    addPlacement(tooth, config.barComponentId, barSurface);
-    addPlacement(tooth, "reciprocating-clasp", config.getReciprocatingSurface(clicked, missingOnMesial));
-    addPlacement(tooth, "rest-seat", "distal");
-  }
+  addPlacement(tooth, "rest-seat", "mesial");
+  addPlacement(tooth, retentive.componentId, retentive.surface);
+  // Last: plate-prox owns the reciprocating slot, so it clears any stray
+  // reciprocating clasp the retentive element may have brought with it.
+  addPlacement(tooth, "plate-prox", null);
 
   syncToothComponentsFromPlacements(tooth);
-  setMessage(`Placed ${config.label} Assembly on tooth ${id}.`, false);
+  setMessage(`Placed ${config.label} on tooth ${id} (mesial rest, proximal plate, ${config.retentiveLabel}).`, false);
   return true;
 }
 
-export function placeAssemblyModTBarOnTooth(toothId, jaw, restSurface) {
-  return placeAssemblyBarOnTooth(toothId, jaw, restSurface, {
-    barComponentId: "bar-t",
-    label: "Mod.T-bar",
-    getReciprocatingSurface: (clicked) =>
-      clicked === "mesial" ? "distal_lingual" : "mesial_lingual",
+export function placeAssemblyRpiOnTooth(toothId, jaw, restSurface) {
+  return placeRpxAssemblyOnTooth(toothId, jaw, restSurface, {
+    label: "RPI",
+    retentiveLabel: "I-bar off the distal saddle",
+    retentiveFailureReason:
+      "RPI needs a saddle to base the I-bar from — place a mesh on the missing distal tooth first.",
+    resolveRetentiveElement: (id, jawKey) => {
+      const surface = getRpiBarSurface(id, jawKey);
+      return surface ? { componentId: "bar-i", surface } : null;
+    },
   });
 }
 
-export function placeAssemblyIBarOnTooth(toothId, jaw, restSurface) {
-  return placeAssemblyBarOnTooth(toothId, jaw, restSurface, {
-    barComponentId: "bar-i",
-    label: "I-bar",
-    getReciprocatingSurface: (clicked) =>
-      clicked === "mesial" ? "distal_lingual" : "mesial_lingual",
+export function placeAssemblyRpaOnTooth(toothId, jaw, restSurface) {
+  return placeRpxAssemblyOnTooth(toothId, jaw, restSurface, {
+    label: "RPA",
+    // The Akers arm originates at the mesial rest and faces it, so unlike Simple
+    // Circum (mesial rest -> distal_buccal retainer) the clasp stays on the mesial.
+    retentiveLabel: "mesial buccal clasp",
+    retentiveFailureReason: "RPA could not resolve a clasp position for this tooth.",
+    resolveRetentiveElement: () => ({ componentId: "retainer-clasp", surface: "mesial_buccal" }),
   });
 }
 

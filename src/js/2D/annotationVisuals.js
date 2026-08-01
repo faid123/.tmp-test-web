@@ -1,4 +1,5 @@
 import {
+  ASSEMBLY_REST_SUGGESTION_IDS,
   augmentTeethForPalatalBarConnectorNeighbors,
   COMPONENT_BY_ID,
   getBarUserOffset,
@@ -24,6 +25,7 @@ import {
   getMinorConnectorMidOffset,
   getMinorConnectorOffset,
   getMinorConnectorRenderScale,
+  getMinorConnectorSupportSides,
   getMajorConnectorPlacementImageSize,
   getMajorConnectorPlacementOffset,
   getMajorConnectorRenderScaleMultiplier,
@@ -100,12 +102,15 @@ import {
   renderJaws,
 } from "./2DAnnotation.js";
 import {
-  getEmbrasureNeighborToothId,
-  placeAssemblyIBarOnTooth,
-  placeAssemblyModTBarOnTooth,
+  getContinuousClaspRestSurfaces,
+  getGapFacingRestSurfaces,
+  hasMeshedDistalSaddle,
+  placeBackActionAssemblyOnTooth,
+  hasMissingDistalNeighbour,
+  placeAssemblyRpaOnTooth,
+  placeAssemblyRpiOnTooth,
   placeEmbrasureCircumAssemblyOnTooth,
   placeHalfAndHalfAssemblyOnTooth,
-  placeAssemblyTBarOnTooth,
   placeMultiCircumAssemblyOnTooth,
   placeSelectedComponentOnTooth,
   placeSimpleCircumAssemblyOnTooth,
@@ -358,39 +363,8 @@ function restMarkerAnchorSurface(placementSurface, toothId) {
   return s;
 }
 
-/**
- * Which embrasure side(s) a tooth's minor connector attaches on, from placed components
- * (mirrors desktop GetConnectorData + isMesio): a rest/bar sits on its own surface; a
- * retentive clasp anchors at its ORIGIN, opposite the tip (mesial-tip → connects distally).
- * A reciprocating clasp isn't a retainer, so it's ignored. Returns `{ mesial, distal }`.
- */
-function getMinorConnectorSupportSides(tooth) {
-  const sides = { mesial: false, distal: false };
-  if (!tooth || !Array.isArray(tooth.componentPlacements)) return sides;
-  for (const placement of tooth.componentPlacements) {
-    const id = placement?.componentId;
-    // A mesh plate (cross-mesh) spans the tooth proximally and joins the major on both
-    // embrasures, so it carries a minor connector despite no anchor surface. (plate-prox
-    // under a major is already joined by the connector fill, so not added here.)
-    if (id === "plate-crossmesh") {
-      sides.mesial = true;
-      sides.distal = true;
-      continue;
-    }
-    const surface = normalizeSurface(placement?.surface);
-    if (!surface) continue;
-    if (isRestComponent(id) || isBarComponent(id)) {
-      if (surface.includes("mesial")) sides.mesial = true;
-      else if (surface.includes("distal")) sides.distal = true;
-      else if (surface === "lingual") { sides.mesial = true; sides.distal = true; } // full cingulum
-    } else if (isRetainerClaspComponent(id) || isRingClaspComponent(id)) {
-      // Retentive clasp origin (where the minor connector attaches) is opposite the tip.
-      if (surface.includes("mesial")) sides.distal = true;
-      else if (surface.includes("distal")) sides.mesial = true;
-    }
-  }
-  return sides;
-}
+// getMinorConnectorSupportSides now lives in components.minor.js — it is pure tooth-record
+// logic, and tests need it without booting this DOM-heavy module.
 
 /**
  * If the embrasure on `side` of `toothId` is shared (the neighbour across it also supports
@@ -755,15 +729,14 @@ function isCingulumRestSurface(surface) {
   return Boolean(s && CINGULUM_REST_SURFACES.has(s));
 }
 
-const ASSEMBLY_REST_SUGGESTION_IDS = new Set([
-  "assembly-circ",
-  "assembly-circ-embrasure",
-  "assembly-circ-multi",
-  "assembly-circ-half-n-half",
-  "assembly-tbar",
-  "assembly-tbar-mod",
-  "assembly-ibar",
-]);
+// ASSEMBLY_REST_SUGGESTION_IDS is derived from the catalog in components.js, so a new
+// assembly gets its suggestion dots without being registered anywhere by hand.
+
+// RPI/RPA anchor their rest on the mesial and everything else on the distal saddle.
+const RPX_ASSEMBLY_IDS = new Set(["assembly-rpi", "assembly-rpa"]);
+
+// Back-action is Simple pinned to its mesial-rest form (id kept from its "Ring Support" days).
+const BACK_ACTION_ID = "assembly-circ-ring-support";
 
 const SIMPLE_CIRCUM_POSTERIOR_TOOTH_IDS = new Set([
   "14", "15", "16", "17", "18",
@@ -772,27 +745,22 @@ const SIMPLE_CIRCUM_POSTERIOR_TOOTH_IDS = new Set([
   "44", "45", "46", "47", "48",
 ]);
 
+const COMBINE_CLASPS_ID = "assembly-circ-embrasure";
+
 function canPlaceEmbrasureAtSurface(toothId, jaw, surface) {
-  const neighbor = getEmbrasureNeighborToothId(toothId, jaw, surface);
-  return Boolean(neighbor && SIMPLE_CIRCUM_POSTERIOR_TOOTH_IDS.has(neighbor));
+  return getGapFacingRestSurfaces(toothId, jaw).includes(normalizeSurface(surface));
 }
 
-function canPlaceMultiAtTooth(toothId, jaw) {
-  const distalNeighbor = getEmbrasureNeighborToothId(toothId, jaw, "distal");
-  return Boolean(distalNeighbor && SIMPLE_CIRCUM_POSTERIOR_TOOTH_IDS.has(distalNeighbor));
-}
+const CONTINUOUS_CLASPS_ID = "assembly-circ-multi";
 
-function getAssemblyTBarAllowedRestSurfaces(toothId, jaw) {
-  const id = String(toothId);
-  const order = TOOTH_ORDER[jaw] || [];
-  const idx = order.indexOf(id);
-  if (idx < 0) return [];
-  const prevId = idx > 0 ? order[idx - 1] : null;
-  const nextId = idx < order.length - 1 ? order[idx + 1] : null;
-  const hasMissingAdjacent =
-    Boolean(prevId && state.teeth[prevId] && !state.teeth[prevId].isPresent) ||
-    Boolean(nextId && state.teeth[nextId] && !state.teeth[nextId].isPresent);
-  return hasMissingAdjacent ? ["mesial", "distal"] : [];
+// Only a distal-extension abutment gets an RPI/RPA suggestion, and only on its mesial.
+// RPI additionally needs the saddle meshed — its I-bar has nothing to base from
+// otherwise, and pruneInvalidBarPlacementsInJaw would drop it on the next render.
+function getRpxAssemblyAllowedRestSurfaces(componentId, toothId, jaw) {
+  const eligible = componentId === "assembly-rpi"
+    ? hasMeshedDistalSaddle(toothId, jaw)
+    : hasMissingDistalNeighbour(toothId, jaw);
+  return eligible ? ["mesial"] : [];
 }
 
 
@@ -898,13 +866,13 @@ function handleRestSuggestionPick(jaw, toothId, pointSurface, anchor) {
     renderJaw(jaw);
     return;
   }
-  if (selectedComponent?.id === "assembly-circ-multi") {
+  if (selectedComponent?.id === CONTINUOUS_CLASPS_ID) {
     const surface = normalizeSurface(pointSurface);
-    if (surface !== "mesial") {
-      setMessage("Multi Assembly supports mesial rest-seat suggestion only.", true);
+    if (surface !== "mesial" && surface !== "distal") {
+      setMessage("Continuous Clasps supports mesial or distal rest-seat suggestion only.", true);
       return;
     }
-    placeMultiCircumAssemblyOnTooth(toothId, jaw);
+    placeMultiCircumAssemblyOnTooth(toothId, jaw, surface);
     renderJaws();
     return;
   }
@@ -918,43 +886,38 @@ function handleRestSuggestionPick(jaw, toothId, pointSurface, anchor) {
     renderJaw(jaw);
     return;
   }
-  if (selectedComponent?.id === "assembly-circ-embrasure") {
+  if (selectedComponent?.id === BACK_ACTION_ID) {
     const surface = normalizeSurface(pointSurface);
-    if (surface !== "distal") {
-      setMessage("Embrasure Assembly supports distal rest-seat suggestion only.", true);
+    if (surface !== "mesial" && surface !== "distal") {
+      setMessage("Back-action Clasps supports mesial or distal rest seat only.", true);
+      return;
+    }
+    placeBackActionAssemblyOnTooth(toothId, surface);
+    renderJaw(jaw);
+    return;
+  }
+  if (selectedComponent?.id === COMBINE_CLASPS_ID) {
+    const surface = normalizeSurface(pointSurface);
+    if (surface !== "mesial" && surface !== "distal") {
+      setMessage("Combine Clasps supports mesial or distal rest-seat suggestion only.", true);
       return;
     }
     placeEmbrasureCircumAssemblyOnTooth(toothId, jaw, surface);
     renderJaws();
     return;
   }
-  if (selectedComponent?.id === "assembly-tbar") {
+  if (RPX_ASSEMBLY_IDS.has(selectedComponent?.id)) {
     const surface = normalizeSurface(pointSurface);
-    if (surface !== "mesial" && surface !== "distal") {
-      setMessage("T-bar Assembly supports mesial or distal rest-seat suggestion only.", true);
+    const label = selectedComponent.id === "assembly-rpi" ? "RPI" : "RPA";
+    if (surface !== "mesial") {
+      setMessage(`${label} places its rest on the mesial only.`, true);
       return;
     }
-    placeAssemblyTBarOnTooth(toothId, jaw, surface);
-    renderJaw(jaw);
-    return;
-  }
-  if (selectedComponent?.id === "assembly-tbar-mod") {
-    const surface = normalizeSurface(pointSurface);
-    if (surface !== "mesial" && surface !== "distal") {
-      setMessage("Mod.T-bar Assembly supports mesial or distal rest-seat suggestion only.", true);
-      return;
+    if (selectedComponent.id === "assembly-rpi") {
+      placeAssemblyRpiOnTooth(toothId, jaw, surface);
+    } else {
+      placeAssemblyRpaOnTooth(toothId, jaw, surface);
     }
-    placeAssemblyModTBarOnTooth(toothId, jaw, surface);
-    renderJaw(jaw);
-    return;
-  }
-  if (selectedComponent?.id === "assembly-ibar") {
-    const surface = normalizeSurface(pointSurface);
-    if (surface !== "mesial" && surface !== "distal") {
-      setMessage("I-bar Assembly supports mesial or distal rest-seat suggestion only.", true);
-      return;
-    }
-    placeAssemblyIBarOnTooth(toothId, jaw, surface);
     renderJaw(jaw);
     return;
   }
@@ -1080,15 +1043,23 @@ function appendPlateSuggestionPoints(group, tooth, toothId, jaw) {
 }
 
 // Draw clickable rest guidance points when a rest component is selected.
+// Returns true when this tooth got any, so the caller can highlight it as a candidate.
 function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
-  if (!shouldShowRestSuggestions()) return;
-  if (!tooth.isPresent) return;
+  if (!shouldShowRestSuggestions()) return false;
+  if (!tooth.isPresent) return false;
 
   const selectedComponent = COMPONENT_BY_ID.get(state.selectedComponentId || "");
-  if (!selectedComponent) return;
+  if (!selectedComponent) return false;
   const isAssembly = ASSEMBLY_REST_SUGGESTION_IDS.has(selectedComponent.id);
-  if (!isAssembly && !isRestComponent(selectedComponent)) return;
-  if (isAssembly && !SIMPLE_CIRCUM_POSTERIOR_TOOTH_IDS.has(String(toothId))) return;
+  if (!isAssembly && !isRestComponent(selectedComponent)) return false;
+  // Combine Clasps brackets an edentulous area anywhere on the arch, so it is exempt
+  // from the posterior-only gate the circum assemblies share (with 23 missing, the
+  // abutments are 22 and 24 — one of them anterior).
+  if (
+    isAssembly &&
+    selectedComponent.id !== COMBINE_CLASPS_ID &&
+    !SIMPLE_CIRCUM_POSTERIOR_TOOTH_IDS.has(String(toothId))
+  ) return false;
 
   ensureToothPlacementState(tooth);
 
@@ -1100,9 +1071,8 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
   ) {
     points = getCingulumAcSuggestionPointsForTooth(toothId) ?? [];
   } else {
-    const allowedSurfaces = selectedComponent.id === "assembly-circ-embrasure"
-      ? new Set(["distal"])
-      : selectedComponent.id === "assembly-circ-multi"
+    const allowedSurfaces =
+      RPX_ASSEMBLY_IDS.has(selectedComponent.id)
         ? new Set(["mesial"])
         : isAssembly
           ? new Set(["mesial", "distal"])
@@ -1110,15 +1080,18 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
     points = [...getRestSurfacePointMap(toothId, jaw, selectedComponent.id).values()].filter((point) =>
       allowedSurfaces.has(normalizeSurface(point.surface))
     );
-    if (selectedComponent.id === "assembly-circ-embrasure") {
+    if (selectedComponent.id === COMBINE_CLASPS_ID) {
       points = points.filter((point) => canPlaceEmbrasureAtSurface(toothId, jaw, normalizeSurface(point.surface)));
     }
-    if (selectedComponent.id === "assembly-circ-multi") {
-      points = points.filter(() => canPlaceMultiAtTooth(toothId, jaw));
+    if (selectedComponent.id === CONTINUOUS_CLASPS_ID) {
+      const gapFacing = new Set(getContinuousClaspRestSurfaces(toothId, jaw));
+      points = points.filter((point) => gapFacing.has(normalizeSurface(point.surface)));
     }
-    if (selectedComponent.id === "assembly-tbar" || selectedComponent.id === "assembly-tbar-mod" || selectedComponent.id === "assembly-ibar") {
-      const allowedByMissingAdjacency = new Set(getAssemblyTBarAllowedRestSurfaces(toothId, jaw));
-      points = points.filter((point) => allowedByMissingAdjacency.has(normalizeSurface(point.surface)));
+    if (RPX_ASSEMBLY_IDS.has(selectedComponent.id)) {
+      const allowedByDistalSaddle = new Set(
+        getRpxAssemblyAllowedRestSurfaces(selectedComponent.id, toothId, jaw)
+      );
+      points = points.filter((point) => allowedByDistalSaddle.has(normalizeSurface(point.surface)));
     }
   }
   const radius = getRestSuggestionRadius();
@@ -1183,6 +1156,8 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
     });
     group.appendChild(point);
   }
+
+  return points.length > 0;
 }
 
 function handleRetainerClaspSuggestionPick(jaw, toothId, surface) {
