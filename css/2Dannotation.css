@@ -2922,17 +2922,15 @@ button.upload3d-row {
   opacity: 0.3;
   cursor: not-allowed;
 }
-/* Bar and rest-seat suggestions: candidate abutments, painted in the abutment colour
-   but translucent, so a suggestion never reads as a committed abutment. */
-.tooth.tooth-bar-suggestible .tooth-image,
-.tooth.tooth-rest-suggestible .tooth-image {
+/* Bar suggestions: candidate abutments, painted in the abutment colour but translucent,
+   so a suggestion never reads as a committed abutment. */
+.tooth.tooth-bar-suggestible .tooth-image {
   -webkit-filter: url(#tint-tooth-suggestible);
   filter: url(#tint-tooth-suggestible);
   opacity: 0.62;
 }
 
-.tooth.tooth-bar-suggestible:hover .tooth-image,
-.tooth.tooth-rest-suggestible:hover .tooth-image {
+.tooth.tooth-bar-suggestible:hover .tooth-image {
   -webkit-filter: url(#tint-tooth-suggestible);
   filter: url(#tint-tooth-suggestible);
   opacity: 0.78;

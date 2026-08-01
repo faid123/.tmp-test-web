@@ -454,7 +454,7 @@ export function resolveJawStructDesign(parsed) {
 // `rawOr` (positions, Pr Config, bar side, clasp/ring orientation, reciprocating
 // flag, the Minor Connector grid + Ball connectors). With loaded raw, a load→Save
 // round-trips byte-identical except the re-stamped time line (validated in
-// __tests__/jawStructRoundTrip.test.mjs); from-scratch has no raw → desktop defaults.
+// __tests__/jawStruct.test.mjs); from-scratch has no raw → desktop defaults.
 
 // Array slot -> FDI, per StructData.cs get_array_index (major 1/3 reversed).
 const UPPER_FDI_ORDER = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];

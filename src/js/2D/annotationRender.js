@@ -348,11 +348,7 @@ export function renderJaw(jaw) {
     appendToothPlateComponentVisuals(group, tooth, toothId, jaw);
     appendPlateSuggestionPoints(group, tooth, toothId, jaw);
     appendPlacedComponentMarkers(group, tooth, toothId, jaw);
-    // A tooth carrying rest-seat suggestions is a candidate abutment, so paint it like
-    // one (same highlight the bar suggestions use).
-    if (appendRestSuggestionPoints(suggestionGroup, tooth, toothId, jaw)) {
-      group.classList.add("tooth-rest-suggestible");
-    }
+    appendRestSuggestionPoints(suggestionGroup, tooth, toothId, jaw);
     appendRetainerClaspSuggestionPoints(suggestionGroup, tooth, toothId, jaw);
 
     const toothClickKey = `mesh-tooth:${jaw}:${toothId}`;
