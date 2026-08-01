@@ -5,7 +5,8 @@
 // modules the suite imports, and webpack only validates the viewer bundle —
 // the other pages ship raw ESM that nothing verifies until a browser 404s.
 // This test exists because both recent breakages were exactly that class:
-// a module committed everywhere except git (mergeInstructions.js), and a
+// a module committed everywhere except git (a 2D helper, since folded back into
+// noticeboard.js), and a
 // repo-wide folder reorganization touching ~50 specifiers.
 //
 // Checks:
@@ -33,7 +34,7 @@ function walk(dir, exts) {
 }
 
 // Drop full-line comments (// and JSDoc *) so specifiers quoted in prose —
-// e.g. the annotationTeethModel note in jawStructRoundTrip.test.mjs — don't
+// e.g. the annotationTeethModel note in jawStruct.test.mjs — don't
 // register as imports.
 function codeLines(text) {
   return text

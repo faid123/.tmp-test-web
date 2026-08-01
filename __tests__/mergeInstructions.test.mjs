@@ -1,12 +1,25 @@
-// __tests__/mergeInstructions.test.mjs
-//
-// Exercises the REAL mergeInstructions() (src/js/2D/mergeInstructions.js, which
-// noticeboard.js imports). It dedupes local and server noticeboard items by a
-// stable key (title → id → preview) and lets server fields win on a key
-// collision while keeping local-only fields. These tests pin that key
-// precedence and the shallow-merge / server-wins behaviour.
+/**
+ * @jest-environment jsdom
+ *
+ * Exercises the REAL mergeInstructions(), exported from its only consumer,
+ * src/js/2D/noticeboard.js. It dedupes local and server noticeboard items by a
+ * stable key (title → id → preview) and lets server fields win on a key
+ * collision while keeping local-only fields. These tests pin that key
+ * precedence and the shallow-merge / server-wins behaviour.
+ *
+ * noticeboard.js reaches the DOM-heavy 2DAnnotation.js entry for `state`, so that
+ * one module is mocked; the rest of the import tree (three.js via preview3D.js
+ * included) loads for real, which is what the ~1s import costs.
+ */
+import { jest } from '@jest/globals';
 
-import { mergeInstructions } from '../src/js/2D/mergeInstructions.js';
+jest.mock('../src/js/2D/2DAnnotation.js', () => ({
+  state: { teeth: {} },
+  setMessage: () => {},
+  fetchCaseDetail: async () => ({}),
+}));
+
+import { mergeInstructions } from '../src/js/2D/noticeboard.js';
 
 describe('mergeInstructions()', () => {
   test('merges a server item onto the local item sharing the same title key', () => {

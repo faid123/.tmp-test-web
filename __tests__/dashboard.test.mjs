@@ -32,15 +32,9 @@ describe("statusRank()", () => {
     expect(statusRank("done")).toBe(0);
   });
 
-  test("matches confirmed exact value jaw_prepared -> 1", () => {
-    expect(statusRank("jaw_prepared")).toBe(1);
-  });
-
-  test("ranks the real case-1723 value 'polylines' -> 4", () => {
-    expect(statusRank("polylines")).toBe(4);
-  });
-
   test("infers rank from a keyword regardless of exact wording", () => {
+    expect(statusRank("jaw_prepared")).toBe(1); // confirmed exact value
+    expect(statusRank("polylines")).toBe(4); // the real case-1723 value
     expect(statusRank("surface_generated")).toBe(5);
     expect(statusRank("3d_surface")).toBe(5);
     expect(statusRank("polyline_done")).toBe(4);
