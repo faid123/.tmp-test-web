@@ -7,8 +7,6 @@
 //
 // Runs in the default node environment — neither module touches the DOM.
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   normalize,
   tokenize,
@@ -21,6 +19,7 @@ import {
   MIN_SCORE,
 } from "../src/js/shared/helpMatcher.js";
 import { HELP_TOPICS, TOPIC_BY_ID, PAGE_LABELS, PAGE_PATHS } from "../src/js/shared/helpTopics.js";
+import { undefinedSelectorParts } from "./helpers/appSources.mjs";
 
 const idsOf = (matches) => matches.map((m) => m.topic.id);
 
@@ -33,17 +32,11 @@ describe("text preparation", () => {
     expect(tokenize("how do i create a case")).toEqual(["create", "case"]);
   });
 
-  test("canonicalize folds a word onto its canonical form", () => {
+  test("canonicalize folds a word onto its canonical form, replacing rather than adding", () => {
     expect(canonicalize(["photos"])).toEqual(["image"]);
-  });
-
-  test("canonicalize replaces rather than adds, so one word can only score once", () => {
     // Keeping both "photos" and "image" would let a single query word hit the
-    // same topic twice.
+    // same topic twice; folding two spellings must not score twice either.
     expect(canonicalize(["photos"])).not.toContain("photos");
-  });
-
-  test("canonicalize dedupes words that fold onto the same form", () => {
     expect(canonicalize(["photo", "photos", "picture"])).toEqual(["image"]);
   });
 });
@@ -162,34 +155,20 @@ describe("suggestionsFor()", () => {
 // The knowledge base is hand-maintained, so these guard the shape a topic must
 // keep for the panel to render it and for matching to reach it.
 describe("knowledge base integrity", () => {
-  test("topic ids are unique", () => {
+  test("topic ids are unique, and TOPIC_BY_ID covers every one", () => {
     const ids = HELP_TOPICS.map((t) => t.id);
     expect(new Set(ids).size).toBe(ids.length);
+    expect(TOPIC_BY_ID.size).toBe(HELP_TOPICS.length);
   });
 
-  test("every topic has a title, an answer and keywords", () => {
+  test("every topic has a title, an answer, keywords, real related ids and a known page", () => {
     for (const topic of HELP_TOPICS) {
       expect(typeof topic.title).toBe("string");
       expect(topic.title.length).toBeGreaterThan(0);
       expect(topic.answer.length).toBeGreaterThan(0);
       expect(topic.keywords.length).toBeGreaterThan(0);
-    }
-  });
-
-  test("every related id resolves to a real topic", () => {
-    for (const topic of HELP_TOPICS) {
       expect(relatedTopics(topic)).toHaveLength(topic.related.length);
-    }
-  });
-
-  test("no topic lists itself as related", () => {
-    for (const topic of HELP_TOPICS) {
       expect(topic.related).not.toContain(topic.id);
-    }
-  });
-
-  test("every page a topic claims has a label and a path", () => {
-    for (const topic of HELP_TOPICS) {
       if (topic.page === null) continue;
       expect(PAGE_LABELS[topic.page]).toBeTruthy();
       expect(PAGE_PATHS[topic.page]).toBeTruthy();
@@ -203,10 +182,6 @@ describe("knowledge base integrity", () => {
         expect(idsOf(matches)).toContain(topic.id);
       }
     }
-  });
-
-  test("TOPIC_BY_ID covers every topic", () => {
-    expect(TOPIC_BY_ID.size).toBe(HELP_TOPICS.length);
   });
 });
 
@@ -309,31 +284,6 @@ describe("Show me points at the control, not at what opens it", () => {
 // page, so a stale selector fails silently — the answer just loses its button.
 // This catches the rename that would cause it.
 describe("highlight selectors still exist in the source", () => {
-  const SOURCES = [
-    "src/pages/case_list.html",
-    "src/pages/2DAnnotation.html",
-    "src/pages/ThreeDViewer.html",
-    "src/pages/admin/admin_users.html",
-    "src/pages/admin/admin_case_list.html",
-    // Case-list rows are built in JS, so their controls appear in no HTML file.
-    "src/js/pages/caseManagement.js",
-    "src/js/2D/preview3D.js",
-    "src/js/2D/preview3DSurvey.js",
-    "src/js/2D/annotationCatalog.js",
-    "src/viewer3d/index.js",
-  ]
-    .map((f) => {
-      // Resolved from the repo root (jest runs there), matching
-      // importResolution.test.mjs — these files are transpiled to CJS, so
-      // import.meta is not available here.
-      try {
-        return readFileSync(join(process.cwd(), f), "utf8");
-      } catch {
-        return "";
-      }
-    })
-    .join("\n");
-
   const selectors = [
     ...new Set(HELP_TOPICS.flatMap((t) => [t.selector, t.reveal]).filter(Boolean)),
   ];
@@ -343,10 +293,6 @@ describe("highlight selectors still exist in the source", () => {
   });
 
   test.each(selectors)("%s is defined somewhere in the app", (selector) => {
-    // Check the last simple part ("#id", ".class") — compound selectors like
-    // ".cm-detail .dropdown-toggle" are positional, only the target matters.
-    const target = selector.trim().split(/\s+/).pop();
-    const name = target.replace(/^[#.]/, "");
-    expect(SOURCES).toContain(name);
+    expect(undefinedSelectorParts(selector)).toEqual([]);
   });
 });

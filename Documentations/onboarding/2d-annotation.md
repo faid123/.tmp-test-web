@@ -42,8 +42,8 @@ It's reached by opening a case from the case list: `2DAnnotation.html?id=<encryp
   web app "wants" the format that way. When something looks unnecessarily convoluted (byte-level
   encoders, "preserve this raw field we can't regenerate"), that's almost always why — see
   [The jawstruct L2 format](#the-jawstruct-l2-format) below.
-- **The tests are the best spec of the trickiest behavior.** `__tests__/jawStructRoundTrip.test.mjs`,
-  `jawStructLingualPlate.test.mjs`, and `reciprocatingExclusivity.test.mjs` encode real, hard-won
+- **The tests are the best spec of the trickiest behavior.** `__tests__/jawStruct.test.mjs`
+  (round-trip + bar/plate switch) and `__tests__/placementRules.test.mjs` encode real, hard-won
   rules as executable examples — reading them is often faster than reading the prose comments.
 - Console logs are prefixed by module for a reason: `[jawStructApi]`, `[jawStructApply]`,
   `[2D-post]`, `[annotationCatalog]`, etc. Filter the DevTools console by these when debugging.
@@ -127,12 +127,11 @@ It's reached by opening a case from the case list: `2DAnnotation.html?id=<encryp
 | `jawStructApply.js` | 5KB | Replays a decoded design onto live `state` using the real placement primitives. |
 | `jawStructApi.js` | 4KB | HTTP layer: `POST /jawstruct/l2/getall` (load) and `POST /jawstruct/l2` (save). |
 | `dotnetBinaryFormatter.js` | 6KB | Byte-level .NET BinaryFormatter encoder, used by `noticeboard.js` only. |
-| `mergeInstructions.js` | 0.8KB | Pure dedupe helper for noticeboard local+server merge. |
 
 **Adjacent modal features** (embedded in the same page)
 | File | Size | Purpose |
 |---|---|---|
-| `noticeboard.js` | 63KB | Instruction/screenshot gallery + printable case-report generator. Most API-heavy file here. |
+| `noticeboard.js` | 63KB | Instruction/screenshot gallery + printable case-report generator. Most API-heavy file here. Exports the pure `mergeInstructions()` (local+server dedupe) for its unit test. |
 | `instructionEditor.js` | 83KB | The actual canvas image-annotation modal (crop/sticker/text/pencil). Self-contained, one export. |
 | `clinicalInfo.js` | 24KB | The separate clinical-condition tooth chart. |
 | `caseNote.js` | 6KB | Data-only (no UI) helpers for the Case Note fields; the form itself lives in `annotationCatalog.js`. |
@@ -200,7 +199,7 @@ compatibility layer with a **desktop Windows app's file format** (originally a U
   position coordinates) are preserved verbatim from what was loaded, because the web can't
   regenerate them. A from-scratch design (nothing loaded) still encodes a complete, valid file
   using sane defaults.
-- **Round-trip fidelity is tested, not assumed** — `__tests__/jawStructRoundTrip.test.mjs` loads
+- **Round-trip fidelity is tested, not assumed** — `__tests__/jawStruct.test.mjs` loads
   a real fixture, runs it through the full decode→resolve→apply→encode pipeline, and asserts the
   output is byte-identical to the original (modulo the re-stamped timestamp). If you change
   anything in this pipeline, run this test.
@@ -265,9 +264,9 @@ assume a fix in one encoder applies to the other.
 7. Whichever adjacent modal you actually need to touch (`noticeboard.js`, `clinicalInfo.js`,
    `instructionEditor.js`, `preview3D.js`, `caseNote.js`).
 
-Alongside the code, skim `__tests__/jawStructRoundTrip.test.mjs`,
-`__tests__/jawStructLingualPlate.test.mjs`, and `__tests__/reciprocatingExclusivity.test.mjs` —
-they're concrete, runnable examples of the rules described above.
+Alongside the code, skim `__tests__/jawStruct.test.mjs`, `__tests__/placementRules.test.mjs`,
+and `__tests__/assemblies.test.mjs` — they're concrete, runnable examples of the rules
+described above.
 
 See also [Documentations/setup/](../setup/README.md) for environment/deployment setup, and the
 existing `Documentations/Maintenance and Operational Runbook.docx` for release/incident process.

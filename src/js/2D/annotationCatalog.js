@@ -18,6 +18,7 @@ import {
   ensureMajorConnectorPlacementsOnSupportedTeethInJaws,
   ensurePalatalBarPlacementsOnConnectorTeeth,
   removeMajorPlacementsFromPalatalBarExcludedUpperTeeth,
+  switchMajorConnectorInJaws,
   syncReciprocatingPlatesToMajorConnector,
 } from "./components.js";
 import { COMPONENT_GROUPS, forEachTooth, TOOTH_ORDER } from "./constants.js";
@@ -385,17 +386,13 @@ export function handleDesignComponentSelect(componentId) {
   if (isMajorConnectorComponent(selected)) {
     state.selectedComponentId = componentId;
     state.archOverlayPalatalHoleActive = isPalatalHoleMajorComponent(componentId);
+
+    // The outgoing bar is cleared by switchMajorConnectorInJaws below — which snapshots the
+    // coverage first, so nothing may strip placements ahead of it.
     if (componentId === "major-lower-lingual-bar") {
       state.hideLowerPlateVisuals = true;
     } else if (componentId === "major-lower-lingual-plate") {
       state.hideLowerPlateVisuals = false;
-      for (const toothId of TOOTH_ORDER.lower) {
-        const tooth = state.teeth[toothId];
-        if (!tooth || !Array.isArray(tooth.componentPlacements)) continue;
-        tooth.componentPlacements = tooth.componentPlacements.filter(
-          (entry) => entry.componentId !== "major-lower-lingual-bar"
-        );
-      }
     }
 
     const jawKeys = String(componentId).startsWith("major-lower-")
@@ -408,25 +405,9 @@ export function handleDesignComponentSelect(componentId) {
       ensurePalatalBarPlacementsOnConnectorTeeth(state.teeth, COMPONENT_BY_ID);
       removeMajorPlacementsFromPalatalBarExcludedUpperTeeth(state.teeth);
     } else {
-      // Clear major connectors from the target arch only so the new connector replaces
-      // whatever was there without disturbing the opposite arch.
-      for (const jawKey of jawKeys) {
-        forEachTooth((toothId, jaw) => {
-          if (jaw !== jawKey) return;
-          const tooth = state.teeth[toothId];
-          if (!tooth || !Array.isArray(tooth.componentPlacements)) return;
-          tooth.componentPlacements = tooth.componentPlacements.filter(
-            (entry) => !isMajorConnectorComponent(entry.componentId)
-          );
-        });
-      }
-      ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
-        state.teeth,
-        componentId,
-        COMPONENT_BY_ID,
-        jawKeys,
-        { fullAcrylic: isFullAcrylic() }
-      );
+      switchMajorConnectorInJaws(state.teeth, componentId, COMPONENT_BY_ID, jawKeys, {
+        fullAcrylic: isFullAcrylic(),
+      });
     }
 
     // Keep per-tooth plate-prox in step with the new connector: plate/strap/horseshoe

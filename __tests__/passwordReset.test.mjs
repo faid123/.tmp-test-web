@@ -24,24 +24,14 @@ describe("computePasswordStrength()", () => {
     expect(computePasswordStrength("")).toEqual({ score: 0, label: "" });
   });
 
-  test("anything under the minimum length is Weak however varied", () => {
-    expect(computePasswordStrength("aB3$x").label).toBe("Weak");
-  });
-
-  test("length alone, with one character class, is still Weak", () => {
-    expect(computePasswordStrength("aaaaaaaaaaaaaaa").label).toBe("Weak");
-  });
-
-  test("two character classes at length is Fair", () => {
-    expect(computePasswordStrength("abcdefgh1").label).toBe("Fair");
-  });
-
-  test("three classes is Good until it is also long", () => {
-    expect(computePasswordStrength("Abcdefg1").label).toBe("Good");
-  });
-
-  test("12+ characters with three classes is Strong", () => {
-    expect(computePasswordStrength("Abcdefghijk1").label).toBe("Strong");
+  test.each([
+    ["aB3$x", "Weak", "under the minimum length, however varied"],
+    ["aaaaaaaaaaaaaaa", "Weak", "length alone, with one character class"],
+    ["abcdefgh1", "Fair", "two character classes at length"],
+    ["Abcdefg1", "Good", "three classes, until it is also long"],
+    ["Abcdefghijk1", "Strong", "12+ characters with three classes"],
+  ])("%s is %s — %s", (password, label) => {
+    expect(computePasswordStrength(password).label).toBe(label);
   });
 
   test("score and label always agree", () => {
