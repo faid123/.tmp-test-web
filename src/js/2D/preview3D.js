@@ -601,10 +601,13 @@ function hidePreviewLoading(area) {
 async function ensureThreeDeps() {
   if (THREE && TrackballControls && STLLoader) return true;
   try {
+    // Bare specifiers: 2DAnnotation.html's importmap maps them to the local
+    // vendor/three copy — the same entry createCase.js resolves, so both
+    // modules share one THREE instance.
     const [threeMod, trackballMod, stlMod] = await Promise.all([
-      import("https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"),
-      import("https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/TrackballControls.js"),
-      import("https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/STLLoader.js"),
+      import("three"),
+      import("three/addons/controls/TrackballControls.js"),
+      import("three/addons/loaders/STLLoader.js"),
     ]);
     THREE = threeMod;
     TrackballControls = trackballMod.TrackballControls;

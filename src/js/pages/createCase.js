@@ -17,15 +17,17 @@ function appAsset(relFromRoot) {
 let THREE;
 let STLLoader;
 
-// Lazy-load Three.js + STLLoader from a CDN. Bare specifiers ("three") only
-// resolve behind a bundler; the GitHub Pages deployment serves raw src/ files,
-// where the browser sees "three" as a relative URL and 404s. Matching the
-// version + CDN preview3D.js uses keeps both modules on a single instance.
+// Lazy-load Three.js + STLLoader. Bare specifiers resolve both ways this
+// module is delivered: the case-list pages' <script type="importmap"> maps
+// them to vendor/three (same entry preview3D.js resolves — one shared
+// instance), and the webpack viewer bundle resolves them from node_modules.
+// webpackMode eager keeps the bundle single-file — an async chunk would never
+// be copied by deploy.yml, which ships dist/bundle.js alone.
 async function loadThreeDeps() {
   if (THREE && STLLoader) return;
   const [threeMod, loaderMod] = await Promise.all([
-    import("https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"),
-    import("https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/STLLoader.js"),
+    import(/* webpackMode: "eager" */ "three"),
+    import(/* webpackMode: "eager" */ "three/addons/loaders/STLLoader.js"),
   ]);
   THREE = threeMod;
   STLLoader = loaderMod.STLLoader;
