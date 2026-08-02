@@ -22,6 +22,7 @@ import {
   removeVisibilityAndTransparencyControls,
 } from "./newControls.js";
 import { createArtificialTeethRenderer } from "./artificialTeeth.js";
+import { API_BASE, MACHINE_ID, getLoggedInUser } from "../js/shared/api.js";
 
 const LOG_VIEWER_LOAD_TIMINGS_TO_CONSOLE = false;
 const LOG_VIEWER_OBJECT_COUNTS_TO_CONSOLE = false;
@@ -147,7 +148,7 @@ const materialsurface_non_metal = new THREE.MeshStandardMaterial({
 });
 
 // Create an instance of the ApiClient with the base URL
-const apiClient = new ApiClient("https://live.api.smartrpdai.com/api/smartrpd");
+const apiClient = new ApiClient(API_BASE);
 const parentObject = new THREE.Object3D();
 scene.add(parentObject);
 const artificialTeethRenderer = createArtificialTeethRenderer({
@@ -3059,7 +3060,7 @@ async function fetchAndRenderPolylines(caseIntID) {
 
   const polylinePayload = [
     {
-      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      machine_id: MACHINE_ID,
       // Fallback UUID keeps direct/shared viewer URLs able to load case assets.
       // Prefer loggedInUser.uuid if this viewer is later wired to authenticated sessions.
       uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
@@ -3485,7 +3486,7 @@ function removeViewerLoadingScreen() {
   //datas :)
   // this for the undercut upper and the main json data use to retrieve stuff
   const data = {
-    machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+    machine_id: MACHINE_ID,
     // Fallback UUID keeps direct/shared viewer URLs able to load case assets.
     // Prefer loggedInUser.uuid if this viewer is later wired to authenticated sessions.
     uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
@@ -3496,7 +3497,7 @@ function removeViewerLoadingScreen() {
   };
   // this for the undercut lower
   const data2 = {
-    machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+    machine_id: MACHINE_ID,
     // Fallback UUID keeps direct/shared viewer URLs able to load case assets.
     // Prefer loggedInUser.uuid if this viewer is later wired to authenticated sessions.
     uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
@@ -4140,7 +4141,7 @@ btnContainer.appendChild(edit2DStatic); */
               };
 
               const response = await fetch(
-                "https://live.api.smartrpdai.com/api/smartrpd/mailinglist/add",
+                `${API_BASE}/mailinglist/add`,
                 {
                   method: "POST",
                   headers: {
@@ -5754,13 +5755,7 @@ btnContainer.appendChild(edit2DStatic); */
 
   // Read the browser's logged-in account, if any (same localStorage shape
   // used across the app — see caseManagement.js's getLoggedInUser()).
-  function getLoggedInUser3D() {
-    try {
-      return JSON.parse(localStorage.getItem("loggedInUser") || "null");
-    } catch (_) {
-      return null;
-    }
-  }
+  const getLoggedInUser3D = getLoggedInUser;
 
   // Approve/Edit 3D notify other users and change case status, so both must
   // be tied to a real account rather than anyone who happens to have the
@@ -5796,12 +5791,11 @@ btnContainer.appendChild(edit2DStatic); */
     const user = getLoggedInUser3D();
     if (!user?.uuid) return;
 
-    const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
     let current = null;
     try {
       const res = await fetch(
-        "https://live.api.smartrpdai.com/api/smartrpd/case/user/findall/get",
+        `${API_BASE}/case/user/findall/get`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -5836,7 +5830,7 @@ btnContainer.appendChild(edit2DStatic); */
 
     try {
       const res = await fetch(
-        "https://live.api.smartrpdai.com/api/smartrpd/additionalcasedetails",
+        `${API_BASE}/additionalcasedetails`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -5863,7 +5857,7 @@ btnContainer.appendChild(edit2DStatic); */
 
   // Function to send email for Approve or Edit action
   function sendEmail(actionType) {
-    const apiUrl = "https://live.api.smartrpdai.com/api/smartrpd/sendEmail";
+    const apiUrl = `${API_BASE}/sendEmail`;
 
     const emailData = {
       //userEmail: "faid_akatsuki@live.com",  // replace as needed
@@ -5913,7 +5907,7 @@ btnContainer.appendChild(edit2DStatic); */
       return;
     }
 
-    let apiUrl = "https://live.api.smartrpdai.com/api/smartrpd/sendCustomEmail";
+    let apiUrl = `${API_BASE}/sendCustomEmail`;
 
     let emailData = {
       customEmail: email,
@@ -5937,7 +5931,7 @@ btnContainer.appendChild(edit2DStatic); */
     const apiUrl = "/stl/slot/get"; // only the endpoint, since apiClient handles base URL
 
     const authPayload = {
-        machine_id: '3a0df9c37b50873c63cebecd7bed73152a5ef616',
+        machine_id: MACHINE_ID,
         uuid: 'AC4gRQXZJoNz9EhhW36Q8jMJXBsf',
         caseIntID: paramValue // This is your numeric case ID from decrypted param
     };
@@ -5983,7 +5977,7 @@ btnContainer.appendChild(edit2DStatic); */
     const apiUrl = "/stl/slot/get";
 
     const authPayload = {
-      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      machine_id: MACHINE_ID,
       uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
       caseIntID: paramValue,
     };

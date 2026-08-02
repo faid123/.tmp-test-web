@@ -1,20 +1,11 @@
 import { lol } from "../shared/crypt.js";
 import { setupAppSidebar } from "../shared/appSidebar.js";
+import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 
-const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
-const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 const NOTES_STORAGE_KEY = "smartrpd_clinical_notes";
 
 function getBasePath() {
   return window.location.hostname.includes("github.io") ? "/.tmp-test-web" : "";
-}
-
-function getLoggedInUser() {
-  try {
-    return JSON.parse(localStorage.getItem("loggedInUser") || "null");
-  } catch {
-    return null;
-  }
 }
 
 function getEncryptedCaseId() {

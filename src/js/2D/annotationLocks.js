@@ -28,6 +28,7 @@ import {
 import { loadInteractiveJawPreview, teardown3DPreview } from "./preview3D.js";
 import { logApi } from "../shared/apiLog.js";
 import { toast } from "../shared/toast.js";
+import { API_BASE, MACHINE_ID } from "../shared/api.js";
 
 // Bind tooth status picker buttons (presence/abutment/compromised).
 export function bindStatusPicker() {
@@ -1128,7 +1129,7 @@ async function uploadCaseThumbnail(dataUrl, slot) {
 
   const payload = [
     {
-      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      machine_id: MACHINE_ID,
       uuid: loggedInUser.uuid,
       caseIntID: state.caseIntID,
     },
@@ -1141,7 +1142,7 @@ async function uploadCaseThumbnail(dataUrl, slot) {
 
   try {
     const res = await fetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/thumbnails",
+      `${API_BASE}/thumbnails`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

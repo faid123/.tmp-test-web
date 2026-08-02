@@ -8,6 +8,10 @@ import {
   updateSurveyPlacementArrow,
   autoApplySavedSurveyAngles,
 } from "./preview3DSurvey.js";
+import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
+
+// Re-exported: sibling 2D modules import it from here.
+export { getLoggedInUser };
 
 // ---- Module state, constants and shared config ---------------------------
 
@@ -17,11 +21,11 @@ let TrackballControls = null;
 
 let STLLoader = null;
 
-export const PREVIEW_MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
+export const PREVIEW_MACHINE_ID = MACHINE_ID;
 
 export const PREVIEW_FALLBACK_UUID = "AC4gRQXZJoNz9EhhW36Q8jMJXBsf";
 
-export const SMARTRPD_API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
+export const SMARTRPD_API_BASE = API_BASE;
 
 // Default RPD jaw color used as the "no undercut" base in vertex-color renders.
 const DEFAULT_TOOTH_COLOR = [208 / 255, 190 / 255, 141 / 255];
@@ -947,15 +951,6 @@ function createDisplayGeometry(geometry, label = "mesh") {
 }
 
 // ---- Case data and API fetches -------------------------------------------
-
-export function getLoggedInUser() {
-  try {
-    const raw = localStorage.getItem("loggedInUser");
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
 
 // Reuse the shared /case/get round-trip from 2D init instead of duplicating it.
 // Only used to preserve the other jaw's survey angles, so a null result is harmless.

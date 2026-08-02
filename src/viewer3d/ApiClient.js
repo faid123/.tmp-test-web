@@ -1,5 +1,6 @@
 import { logApi } from "../js/shared/apiLog.js";
 import { LOGIN_CREDENTIALS, MACHINE_ID, VIEWER_UUID } from "../js/shared/config.js";
+import { API_BASE } from "../js/shared/api.js";
 export class ApiClient {
   constructor(baseUrl) {
     this.baseUrl = baseUrl;
@@ -134,7 +135,7 @@ async function login() {
     uuid: VIEWER_UUID,
   };
 
-  const urllogin = 'https://live.api.smartrpdai.com/api/smartrpd/user/login';
+  const urllogin = `${API_BASE}/user/login`;
   try {
     const response = await fetch(urllogin, {
       method: 'POST',

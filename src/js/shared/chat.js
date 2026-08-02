@@ -1,6 +1,7 @@
 // 引入加密解密函数
 import { lol } from './crypt.js';
 import { logApi } from "./apiLog.js";
+import { API_BASE } from "./api.js";
 
 // DOM elements are resolved lazily (bindDom) so this module can be imported on
 // any page — including ones where the chat widget is injected after scripts run
@@ -138,7 +139,7 @@ async function fetchNotes() {
     notesInFlight = true;
     const t0 = performance.now();
     try {
-        const response = await fetch(`https://live.api.smartrpdai.com/api/smartrpd/notes/get/${caseId}`, {
+        const response = await fetch(`${API_BASE}/notes/get/${caseId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({}),
@@ -311,7 +312,7 @@ function displayMessages() {
 async function createNote(content, imageBase64 = null) {
     if (!caseId) return;
     try {
-        const response = await fetch('https://live.api.smartrpdai.com/api/smartrpd/notes/create', {
+        const response = await fetch(`${API_BASE}/notes/create`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

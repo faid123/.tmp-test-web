@@ -2,6 +2,7 @@
 import { lol } from "../shared/crypt.js";
 import { toast, flashToast, confirmModal, attachThemedCalendar } from "../shared/toast.js";
 import { logApi } from "../shared/apiLog.js";
+import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 
 // Resolve an asset path relative to the app root (everything before "/src/") so
 // it loads whether this shared module runs from src/pages/ (case_list) or the
@@ -608,7 +609,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (loadingOverlay) loadingOverlay.classList.add("hidden");
     };
 
-    const machine_id = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
+    const machine_id = MACHINE_ID;
     const uuid = loggedInUser.uuid;
     const hasUpper = !!jawContainer.querySelector(
       '.uploaded-model[data-jaw="upper"]'
@@ -635,7 +636,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     let caseIntID = null;
     try {
       const res = await fetch(
-        "https://live.api.smartrpdai.com/api/smartrpd/case",
+        `${API_BASE}/case`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -722,7 +723,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       for (const username of pendingInvites) {
         try {
           const checkRes = await fetch(
-            "https://live.api.smartrpdai.com/api/smartrpd/user/checkifusernameexists/get",
+            `${API_BASE}/user/checkifusernameexists/get`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -736,7 +737,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             continue;
           }
           const targetUUID = checkData.uuid;
-          const roleInviteRes = await fetch("https://live.api.smartrpdai.com/api/smartrpd/role", {
+          const roleInviteRes = await fetch(`${API_BASE}/role`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify([
@@ -745,7 +746,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             ]),
           });
           logApi(roleInviteRes, 'POST /role');
-          const alertInviteRes = await fetch("https://live.api.smartrpdai.com/api/smartrpd/alerts", {
+          const alertInviteRes = await fetch(`${API_BASE}/alerts`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify([
@@ -812,7 +813,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       try {
         // 1️⃣ 检查用户是否存在
         const checkRes = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/user/checkifusernameexists/get",
+          `${API_BASE}/user/checkifusernameexists/get`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -829,7 +830,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // 2️⃣ 添加为 co-owner
         const roleRes = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/role",
+          `${API_BASE}/role`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -845,7 +846,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // Send an in-app notification to the invitee. Failures are non-fatal.
         try {
           const from_user = getLoggedInUser()?.username || "";
-          const alertSendRes = await fetch("https://live.api.smartrpdai.com/api/smartrpd/alerts", {
+          const alertSendRes = await fetch(`${API_BASE}/alerts`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify([
@@ -867,7 +868,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         // Refresh the shared-user list from the server.
         const refreshed = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/role/all/get",
+          `${API_BASE}/role/all/get`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -909,15 +910,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 });
 
-function getLoggedInUser() {
-  try {
-    return JSON.parse(localStorage.getItem("loggedInUser"));
-  } catch (err) {
-    console.warn("无法解析 loggedInUser", err);
-    return null;
-  }
-}
-
 async function uploadSTL(
   jawType,
   wrapperEl,
@@ -958,7 +950,7 @@ async function uploadSTL(
 
         // 1) Raw STL bucket — what the web 3D preview pulls from.
         const rawRes = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/stl/raw",
+          `${API_BASE}/stl/raw`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -986,7 +978,7 @@ async function uploadSTL(
           },
         ];
         const stlRes = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/stl",
+          `${API_BASE}/stl`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1088,7 +1080,7 @@ function renderSharedUserList() {
         try {
           const { caseIntID, uuid, machine_id } = window._inviteContext;
           const res = await fetch(
-            "https://live.api.smartrpdai.com/api/smartrpd/role/delete",
+            `${API_BASE}/role/delete`,
             {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
@@ -1160,7 +1152,7 @@ async function uploadReferenceImage(
         ];
 
         const res = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/referenceimages",
+          `${API_BASE}/referenceimages`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1209,7 +1201,7 @@ async function saveCaseInstructions(machine_id, uuid, caseIntID, text) {
   ];
   try {
     const res = await fetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/additionalcasedetails",
+      `${API_BASE}/additionalcasedetails`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1240,7 +1232,7 @@ async function uploadCaseThumbnail(machine_id, uuid, caseIntID, slot, dataUrl) {
   ];
   try {
     const res = await fetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/thumbnails",
+      `${API_BASE}/thumbnails`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1271,7 +1263,7 @@ async function createCaseHistory({ machine_id, uuid, caseIntID, user_id, action 
   // case already existed on the server — making the user retry and create
   // duplicates.
   try {
-    const res = await fetch("https://live.api.smartrpdai.com/api/smartrpd/casehistory", {
+    const res = await fetch(`${API_BASE}/casehistory`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)

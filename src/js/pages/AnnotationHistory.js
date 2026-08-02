@@ -2,18 +2,13 @@ import { lol } from "../shared/crypt.js";
 import { logApi } from "../shared/apiLog.js";
 import { setupAppSidebar } from "../shared/appSidebar.js";
 import { VIEWER_UUID } from "../shared/config.js";
+import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   initFooter();
   initSidebar();
   loadHistory();
 });
-
-function getLoggedInUser() {
-  try {
-    return JSON.parse(localStorage.getItem("loggedInUser") || "null");
-  } catch { return null; }
-}
 
 function initFooter() {
   const user = getLoggedInUser();
@@ -41,7 +36,6 @@ async function loadHistory() {
 
   const caseIntID  = lol(encryptedId);
   const case_id    = caseIntID;
-  const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
   // Populate case label in header and footer
   const caseLabel   = document.getElementById("ahCaseLabel");
@@ -62,7 +56,7 @@ async function loadHistory() {
   let rows = [];
   try {
     const res = await fetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/noticeboard/editedview/get",
+      `${API_BASE}/noticeboard/editedview/get`,
       { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload) }
     );

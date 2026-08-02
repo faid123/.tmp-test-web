@@ -6,9 +6,8 @@
  * The Save button drives the write.
  */
 import { encodeJawStructBase64 } from "./jawStructCodec.js";
+import { API_BASE, MACHINE_ID } from "../shared/api.js";
 
-const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
-const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
 function buildPayload(caseIntID, uuid, extra = {}) {
   return [
