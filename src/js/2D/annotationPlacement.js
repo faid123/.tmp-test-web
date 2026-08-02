@@ -1,8 +1,11 @@
 import {
   ACTION_UPON_FAILURE,
+  ASSEMBLY_REST_SUGGESTION_IDS,
   COMPONENT_BY_ID,
   getBarPlacementSurfaceForTooth,
   getMajorConnectorAssetReference,
+  getMajorConnectorSpanTeeth,
+  majorConnectorRunsToMidline,
   hasPalatalHolePlacementOnUpperArch,
   isBarComponent,
   isReciprocatingClaspComponent,
@@ -103,6 +106,18 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
   // refuse the placement even if a stale selection slips through the catalog gate.
   if (isComponentBlockedByMaterial(selectedComponent.id)) {
     setMessage("This component isn't available for a full acrylic case.", true);
+    return;
+  }
+
+  // Assemblies are macros: each places its own components from a rest-seat suggestion
+  // dot (handleRestSuggestionPick -> placeXAssemblyOnTooth). They need no surface, so a
+  // tap on the tooth body would otherwise fall through and store the assembly id itself
+  // as a placement — not a real component, and it then shows up in the remove list.
+  if (ASSEMBLY_REST_SUGGESTION_IDS.has(selectedComponent.id)) {
+    setMessage(
+      `For ${selectedComponent.label}, click a rest suggestion point (mesial or distal).`,
+      true
+    );
     return;
   }
 
@@ -895,14 +910,22 @@ export function shouldBlockMajorConnectorRemoval(toothId, placementEntry, teeth)
 }
 
 
-export function toothSupportsMajorConnectorOverlay(tooth, toothId, majorComponentId) {
+export function toothSupportsMajorConnectorOverlay(tooth, toothId, majorComponentId, teeth = state.teeth) {
   if (resolveMajorConnectorAnchorComponentId(tooth) !== null) return true;
-  if (isPalatalHoleMajorComponent(majorComponentId) && TOOTH_ORDER.upper.includes(String(toothId))) return true;
-  if (isPalatalBarMajorComponent(majorComponentId) && PALATAL_BAR_CONNECTOR_TOOTH_IDS.has(String(toothId))) return true;
-  if (
-    majorComponentId === "major-lower-lingual-bar" &&
-    TOOTH_ORDER.lower.includes(String(toothId)) &&
-    getMajorConnectorAssetReference(toothId, "lower")
-  ) return true;
-  return false;
+  // Past here the tooth anchors nothing, so it can only be carried by a run that reaches it.
+  const id = String(toothId);
+  const jaw = TOOTH_ORDER.upper.includes(id) ? "upper" : TOOTH_ORDER.lower.includes(id) ? "lower" : null;
+  if (!jaw) return false;
+  // A posterior-only major (palatal bar/strap) is placed per anchored tooth and carries
+  // nobody, so an unanchored tooth is never its own — matching the catalog's own
+  // "click teeth with mesh or plate".
+  if (!majorConnectorRunsToMidline(majorComponentId)) return false;
+  // A midline-reaching major DOES carry bare teeth, but only the ones between its run's start
+  // and the midline — which the span walk itself decides. Asking anything looser (the old
+  // "any upper tooth" / "any lower tooth with art") offers the terminal molars 18/28/38/48:
+  // they sit distal of every anchor, so no run reaches them, and the arch then ghosts — and
+  // lets you click — a connector stub hanging off the back of the design.
+  return getMajorConnectorSpanTeeth(teeth, majorComponentId, COMPONENT_BY_ID, jaw, {
+    includeExistingPlacements: true,
+  }).includes(id);
 }

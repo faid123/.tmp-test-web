@@ -2,6 +2,11 @@ import { TOOTH_ORDER, TOOTH_POSITION_MAP } from "./constants.js";
 
 const MAJOR_TAB = "major";
 
+/** Majors that are a band only: they plate no tooth (see syncReciprocatingPlatesToMajorConnector). */
+const BAR_MAJOR_CONNECTOR_IDS = Object.freeze(
+  new Set(["major-lower-lingual-bar", "major-upper-palatal-bar"])
+);
+
 // No major connector excludes the third molars (*8) anymore — every connector may
 // span them when those teeth anchor it. The only remaining exclusion is the palatal
 // strap's anterior teeth (11-13 / 21-23), a separate rule.
@@ -905,14 +910,35 @@ function placeMajorConnectorPerTooth(teeth, majorComponentId, componentById, jaw
 }
 
 /**
- * Desktop-style span fill for midline-reaching majors. Per side, scan distal → midline,
- * start the run at the first anchor tooth (mesh saddle or plate/clasp abutment), then place
- * the major on EVERY subsequent tooth with connector art to the midline (bare anteriors
+ * Desktop-style span for midline-reaching majors, as a tooth list. Per side, scan distal →
+ * midline, start the run at the first anchor tooth (mesh saddle or plate/clasp abutment),
+ * then take EVERY subsequent tooth with connector art to the midline (bare anteriors
  * included). Mirrors the isStartFound continuation in CheckAndSetTop.
+ *
+ * Exported because the click/preview gate asks the SAME walk whether a bare tooth is in the
+ * span (toothSupportsMajorConnectorOverlay). Kept as one function so the arch can never
+ * offer a tooth the fill will not reach: the run only ever grows midline-ward from its
+ * start, so a terminal molar sitting distal of every anchor is outside the span no matter
+ * how far the run gets.
+ *
+ * `options.includeExistingPlacements` also starts the run at a tooth that already CARRIES a
+ * major. Only the gate passes it, and it exists for the bar: a bar plates nothing, so
+ * switching to one strips the plate-prox anchors out from under its own span. Deriving from
+ * anchors alone would then declare most of the bar's arch unplaceable, and a segment removed
+ * by hand could not be put back — the "can't place the MJ again" failure. A run that is
+ * already drawn is its own start. Placement must NOT pass this, or a run could never shrink.
  */
-function fillMajorConnectorSpanInArch(teeth, majorComponentId, componentById, jawKey) {
+export function getMajorConnectorSpanTeeth(
+  teeth,
+  majorComponentId,
+  componentById,
+  jawKey,
+  options = {}
+) {
   const order = TOOTH_ORDER && Array.isArray(TOOTH_ORDER[jawKey]) ? TOOTH_ORDER[jawKey] : [];
-  if (order.length === 0) return;
+  const covered = [];
+  if (order.length === 0 || !teeth) return covered;
+  const startsAtExistingRun = options.includeExistingPlacements === true;
   const mid = Math.floor(order.length / 2);
   // Each quadrant is scanned distal -> midline. The right quadrant is reversed so both
   // walks run from the back of the mouth toward the central incisors.
@@ -927,14 +953,24 @@ function fillMajorConnectorSpanInArch(teeth, majorComponentId, componentById, ja
       if (!started) {
         // The run begins at the first anchor tooth that can carry the major.
         if (excluded || !hasArt) continue;
-        if (!toothAnchorsMajorConnector(tooth, componentById)) continue;
+        if (
+          !toothAnchorsMajorConnector(tooth, componentById) &&
+          !(startsAtExistingRun && toothHasMajorConnectorPlacement(tooth))
+        ) continue;
         started = true;
       } else if (excluded || !hasArt) {
         // Skip teeth with no connector art / excluded; the run carries on past them.
         continue;
       }
-      placeMajorConnectorOnce(tooth, majorComponentId);
+      covered.push(toothId);
     }
+  }
+  return covered;
+}
+
+function fillMajorConnectorSpanInArch(teeth, majorComponentId, componentById, jawKey) {
+  for (const toothId of getMajorConnectorSpanTeeth(teeth, majorComponentId, componentById, jawKey)) {
+    placeMajorConnectorOnce(teeth[toothId], majorComponentId);
   }
 }
 
@@ -966,6 +1002,68 @@ export function placeMajorConnectorOnExactTeeth(
     const tooth = teeth[toothId];
     if (!tooth) continue;
     placeMajorConnectorOnce(tooth, majorComponentId);
+  }
+}
+
+/**
+ * Switch the given jaws to `majorComponentId`, keeping the coverage the outgoing connector
+ * had. The order matters and is the whole point of this function living here rather than in
+ * the catalog handler: the span is snapshotted BEFORE anything is cleared, because
+ * re-deriving it from anchors alone loses ground on a plate -> bar -> plate round trip. A
+ * bar carries no plating, so switching to one strips every plate-prox in the jaw; on the way
+ * back the plated abutments anchor nothing, the span comes back short — or not at all — and
+ * the connector can then be placed neither from the catalog nor by clicking a tooth.
+ *
+ * Not for the upper palatal bar, which has its own placement path.
+ */
+export function switchMajorConnectorInJaws(
+  teeth,
+  majorComponentId,
+  componentById,
+  jawKeys,
+  options = {}
+) {
+  if (!teeth || !Array.isArray(jawKeys)) return;
+
+  const previousSpanByJaw = {};
+  for (const jawKey of jawKeys) {
+    previousSpanByJaw[jawKey] = (TOOTH_ORDER?.[jawKey] || []).filter((toothId) =>
+      (teeth[toothId]?.componentPlacements || []).some((entry) =>
+        isMajorConnectorComponent(entry.componentId)
+      )
+    );
+  }
+
+  // Clear the target arches only, so the new connector replaces whatever was there without
+  // disturbing the opposite arch.
+  for (const jawKey of jawKeys) {
+    for (const toothId of TOOTH_ORDER?.[jawKey] || []) {
+      const tooth = teeth[toothId];
+      if (!tooth || !Array.isArray(tooth.componentPlacements)) continue;
+      tooth.componentPlacements = tooth.componentPlacements.filter(
+        (entry) => !isMajorConnectorComponent(entry.componentId)
+      );
+    }
+  }
+
+  ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
+    teeth,
+    majorComponentId,
+    componentById,
+    jawKeys,
+    options
+  );
+
+  // Re-cover whatever the outgoing connector reached but the anchor scan missed. The new
+  // connector's own exclusions still apply (a strap never takes the anteriors).
+  for (const jawKey of jawKeys) {
+    placeMajorConnectorOnExactTeeth(
+      teeth,
+      majorComponentId,
+      componentById,
+      jawKey,
+      previousSpanByJaw[jawKey]
+    );
   }
 }
 
@@ -1191,6 +1289,21 @@ export function pruneInvalidMajorConnectorPlacementsInJaw(teeth, componentById, 
     Array.isArray(tooth.componentPlacements) &&
     tooth.componentPlacements.some((entry) => isMajorConnectorComponent(entry.componentId));
 
+  // A BAR carries no plating at all — switching to one strips every plate-prox in the jaw
+  // (else it would encode Reciprocating.Tooth Type = 2 and reopen as a plate). On a design
+  // whose abutments were plated rather than clasped that removes the very anchors this test
+  // reads, so a bar would delete itself the moment it was picked, and the plate could never
+  // be picked back. Plating is not a bar's anchor, so it is not judged by one.
+  const runIsBarOnly = (fromIndex, toIndex) => {
+    for (let k = fromIndex; k < toIndex; k += 1) {
+      const majors = (teeth[order[k]]?.componentPlacements || []).filter((e) =>
+        isMajorConnectorComponent(e.componentId)
+      );
+      if (majors.some((e) => !BAR_MAJOR_CONNECTOR_IDS.has(String(e.componentId)))) return false;
+    }
+    return true;
+  };
+
   let i = 0;
   while (i < order.length) {
     if (!majorOnTooth(teeth[order[i]])) {
@@ -1206,7 +1319,7 @@ export function pruneInvalidMajorConnectorPlacementsInJaw(teeth, componentById, 
       }
       runEnd += 1;
     }
-    if (!runAnchored) {
+    if (!runAnchored && !runIsBarOnly(i, runEnd)) {
       for (let k = i; k < runEnd; k += 1) {
         const stray = teeth[order[k]];
         const beforeLen = stray.componentPlacements.length;

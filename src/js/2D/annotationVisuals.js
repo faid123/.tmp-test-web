@@ -1043,15 +1043,14 @@ function appendPlateSuggestionPoints(group, tooth, toothId, jaw) {
 }
 
 // Draw clickable rest guidance points when a rest component is selected.
-// Returns true when this tooth got any, so the caller can highlight it as a candidate.
 function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
-  if (!shouldShowRestSuggestions()) return false;
-  if (!tooth.isPresent) return false;
+  if (!shouldShowRestSuggestions()) return;
+  if (!tooth.isPresent) return;
 
   const selectedComponent = COMPONENT_BY_ID.get(state.selectedComponentId || "");
-  if (!selectedComponent) return false;
+  if (!selectedComponent) return;
   const isAssembly = ASSEMBLY_REST_SUGGESTION_IDS.has(selectedComponent.id);
-  if (!isAssembly && !isRestComponent(selectedComponent)) return false;
+  if (!isAssembly && !isRestComponent(selectedComponent)) return;
   // Combine Clasps brackets an edentulous area anywhere on the arch, so it is exempt
   // from the posterior-only gate the circum assemblies share (with 23 missing, the
   // abutments are 22 and 24 — one of them anterior).
@@ -1059,7 +1058,7 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
     isAssembly &&
     selectedComponent.id !== COMBINE_CLASPS_ID &&
     !SIMPLE_CIRCUM_POSTERIOR_TOOTH_IDS.has(String(toothId))
-  ) return false;
+  ) return;
 
   ensureToothPlacementState(tooth);
 
@@ -1156,8 +1155,6 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
     });
     group.appendChild(point);
   }
-
-  return points.length > 0;
 }
 
 function handleRetainerClaspSuggestionPick(jaw, toothId, surface) {
