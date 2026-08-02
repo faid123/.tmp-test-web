@@ -6407,7 +6407,7 @@ btnContainer.appendChild(edit2DStatic); */
   // Instantiate the OFFLoader
   // Load the OFF file
 
-  finished = true;
+  window.finished = true; // window property (declared at top) — a bare `finished` only resolves through it
   // Instantiate a new renderer and set its size
   // antialias on: fissures are sub-pixel at normal zoom and alias into noise
   // without it. Do NOT add setPixelRatio here — resizeViewerStage() calls
