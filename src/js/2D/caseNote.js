@@ -7,21 +7,11 @@
 // The Approve button's confirmation dialog lives at the bottom of this file
 // (confirmCaseNoteApproval) along with the case-users/email calls it needs.
 
-import { MACHINE_ID } from "../shared/config.js";
 import { confirmModal, toast } from "../shared/toast.js";
+import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 
-// API_BASE + getLoggedInUser kept local to match sibling 2D modules — ApiClient.js
-// authenticates as the shared VIEWER_UUID, but these case endpoints need the
-// logged-in user's uuid. MACHINE_ID is centralized in config.js, so import it.
-const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
-
-function getLoggedInUser() {
-  try {
-    return JSON.parse(localStorage.getItem("loggedInUser") || "null");
-  } catch {
-    return null;
-  }
-}
+// getLoggedInUser rather than ApiClient.js's shared VIEWER_UUID: these case
+// endpoints authenticate as the signed-in user.
 
 // POST `body` as JSON to `${API_BASE}/${path}`. Returns the Response, or null if
 // the request itself throws (offline / CORS). Callers check `res?.ok`.

@@ -5,8 +5,9 @@
 // all DOM row-patching stay in caseManagement.js, which feeds the responses of
 // resilientFetch(...) into applyEnrichmentResponses().
 
-const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
-const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
+// uuid is passed in by the caller (the enrich queue already has the session
+// user), so this module takes the constants only — not callerIdentity().
+import { API_BASE, MACHINE_ID } from "./api.js";
 
 // Deliberately small: the backend 403-throttles request bursts (that's why the
 // eager all-cases fan-out was removed). Bump only with backend coordination.

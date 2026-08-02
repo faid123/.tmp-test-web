@@ -12,60 +12,13 @@
 // api object + normalizeUser below so adjustments stay one-line.
 
 import { toast, confirmModal, attachThemedCalendar } from "../shared/toast.js";
-import { logApi } from "../shared/apiLog.js";
 import { setupAppSidebar } from "../shared/appSidebar.js";
 import { findIdentifierInPassword } from "../shared/passwordReset.js";
-
-const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
-const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
-
-function getLoggedInUser() {
-  try {
-    return JSON.parse(localStorage.getItem("loggedInUser") || "null");
-  } catch {
-    return null;
-  }
-}
+import { apiPost, ApiError, getLoggedInUser } from "../shared/api.js";
 
 // ---------------------------------------------------------------------------
 // API layer
 // ---------------------------------------------------------------------------
-
-class ApiError extends Error {
-  constructor(message, status, data = null) {
-    super(message);
-    this.status = status;
-    this.data = data; // full parsed error body (code/sqlMessage/sql, etc.)
-  }
-}
-
-async function apiPost(path, payload, label) {
-  const caller = { machine_id: MACHINE_ID, uuid: getLoggedInUser()?.uuid };
-  const body = payload === undefined ? [caller] : [caller, payload];
-
-  const res = await fetch(`${API_BASE}/${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  logApi(res, label || `POST /${path}`);
-
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {
-    /* some endpoints may answer with an empty body */
-  }
-
-  if (!res.ok) {
-    // serverErrorMessage is sometimes just "..."; prefer a meaningful field.
-    const message =
-      (data?.serverErrorMessage && data.serverErrorMessage !== "..." && data.serverErrorMessage) ||
-      data?.sqlMessage || data?.code || `HTTP ${res.status}`;
-    throw new ApiError(message, res.status, data);
-  }
-  return data;
-}
 
 // user/getall → User.getAll(fromDate, toDate, search, sortBy, sortByAscending,
 // limitStartIndex, limitAmount) — parameter names confirmed from the backend

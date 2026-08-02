@@ -1,10 +1,10 @@
 import * as THREE from "three";
+import { MACHINE_ID } from "../js/shared/api.js";
 
 const ARTIFICIAL_TOOTH_ENDPOINTS = [
   "/toothPlacementData/get",
 ];
 
-const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 const FALLBACK_UUID = "AC4gRQXZJoNz9EhhW36Q8jMJXBsf";
 
 function getLoggedInUuid() {

@@ -1,6 +1,6 @@
 import { logApi } from "../shared/apiLog.js";
+import { API_BASE, MACHINE_ID } from "../shared/api.js";
 (function () {
-  const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
   const notifBtn   = document.getElementById("notificationBtn");
   const notifPopup = document.getElementById("notificationPopup");
@@ -33,7 +33,7 @@ import { logApi } from "../shared/apiLog.js";
   async function refreshNotifDotFromAPI() {
     try {
       const caseRes2 = await fetch(
-        "https://live.api.smartrpdai.com/api/smartrpd/case/user/findall/get",
+        `${API_BASE}/case/user/findall/get`,
         {
           method : "POST",
           headers: { "Content-Type": "application/json" },
@@ -51,7 +51,7 @@ import { logApi } from "../shared/apiLog.js";
 
       let unreadCount = 0;
       const aRes2 = await fetch(
-        "https://live.api.smartrpdai.com/api/smartrpd/alerts/getallbytouser",
+        `${API_BASE}/alerts/getallbytouser`,
         {
           method : "POST",
           headers: { "Content-Type": "application/json" },
@@ -128,7 +128,7 @@ import { logApi } from "../shared/apiLog.js";
     try {
       // A. 先拿当前用户的所有 case
       const caseRes = await fetch(
-        "https://live.api.smartrpdai.com/api/smartrpd/case/user/findall/get",
+        `${API_BASE}/case/user/findall/get`,
         {
           method : "POST",
           headers: { "Content-Type": "application/json" },
@@ -154,7 +154,7 @@ import { logApi } from "../shared/apiLog.js";
       const allAlerts = [];
       const caseIDSet = new Set(caseIDs.map(id => String(id)));
       const aRes = await fetch(
-        "https://live.api.smartrpdai.com/api/smartrpd/alerts/getallbytouser",
+        `${API_BASE}/alerts/getallbytouser`,
         {
           method : "POST",
           headers: { "Content-Type": "application/json" },
@@ -188,7 +188,7 @@ import { logApi } from "../shared/apiLog.js";
       await Promise.all(missingIds.map(async cid => {
         try {
           const r = await fetch(
-            `https://live.api.smartrpdai.com/api/smartrpd/case/get/${cid}`,
+            `${API_BASE}/case/get/${cid}`,
             {
               method : "POST",
               headers: { "Content-Type": "application/json" },
@@ -270,7 +270,7 @@ import { logApi } from "../shared/apiLog.js";
       { id: Number(alertId), read_status: Number(read) }
     ];
     const res  = await fetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/alerts/setreadstatus",
+      `${API_BASE}/alerts/setreadstatus`,
       {
         method : "POST",
         headers: { "Content-Type": "application/json" },

@@ -18,10 +18,9 @@
 // is no endpoint that verifies a current password, so a signed-in change goes
 // through the same key.
 
-import { MACHINE_ID } from "./config.js";
 import { logApi } from "./apiLog.js";
+import { API_BASE, MACHINE_ID } from "./api.js";
 
-const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 
 // Minimum length we require before accepting a new password. The backend
 // enforces nothing, so this guard lives entirely on the client.

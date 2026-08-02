@@ -13,7 +13,7 @@
   <link rel="icon" href="../../assets/profile.png" type="image/png" />
   <link
     rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    href="../../vendor/font-awesome/css/all.min.css"
   />
   <!-- Shared app shell (sidebar + footer). Loaded last so it unifies the look
        with case_list and ThreeDViewer — including recolouring this page's
@@ -22,17 +22,17 @@
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+        "three": "../../vendor/three/build/three.module.js",
+        "three/addons/": "../../vendor/three/examples/jsm/"
       }
     }
   </script>
   <!-- Used by "Download Jaw Profile → Download STL file" to bundle the upper +
        lower jaw STLs into a single .zip. -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <link rel="modulepreload" crossorigin href="https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js" />
-  <link rel="modulepreload" crossorigin href="https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/TrackballControls.js" />
-  <link rel="modulepreload" crossorigin href="https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/loaders/STLLoader.js" />
+  <script src="../../vendor/jszip/jszip.min.js"></script>
+  <link rel="modulepreload" href="../../vendor/three/build/three.module.js" />
+  <link rel="modulepreload" href="../../vendor/three/examples/jsm/controls/TrackballControls.js" />
+  <link rel="modulepreload" href="../../vendor/three/examples/jsm/loaders/STLLoader.js" />
 </head>
 <body>
   <main class="annotation-shell">

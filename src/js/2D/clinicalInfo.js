@@ -1,10 +1,9 @@
 import { state, setMessage } from "./2DAnnotation.js";
 import { loadCaseNote, WORK_CATEGORY_LABELS } from "./caseNote.js";
 import { logApi } from "../shared/apiLog.js";
+import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 
 const ASSET_BASE = "../../assets/clinicalInfo";
-const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
-const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 // .NET BinaryFormatter "single System.String" envelope — must match the desktop
 // SmartRPD app byte-for-byte so it can deserialize web-saved clinical info (and
 // vice-versa). Layout: HEADER(17) + STRING_RECORD(5) + <7-bit length> + UTF-8 JSON + END(1).
@@ -585,14 +584,6 @@ async function openClinicalInfo() {
   populateNoteFields();
   modal.classList.remove("is-hidden");
   modal.setAttribute("aria-hidden", "false");
-}
-
-function getLoggedInUser() {
-  try {
-    return JSON.parse(localStorage.getItem("loggedInUser") || "null");
-  } catch {
-    return null;
-  }
 }
 
 function setNoteField(id, value) {

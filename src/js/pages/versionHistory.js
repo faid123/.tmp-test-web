@@ -10,17 +10,10 @@
 import { lol } from "../shared/crypt.js";
 import { toast } from "../shared/toast.js";
 import { logApi } from "../shared/apiLog.js";
+import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 
-const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
 // ---------- Utils ----------
-function getLoggedInUser() {
-  try {
-    const s = localStorage.getItem("loggedInUser");
-    return s ? JSON.parse(s) : null;
-  } catch { return null; }
-}
-
 function getActiveCaseId() {
   // Case management: selected row or explicit window value
   if (window.selectedCaseId) return window.selectedCaseId;
@@ -68,7 +61,7 @@ const TYPE_ICON = {
 // ---------- Fetch helpers ----------
 async function fetchUserIndexForCase(caseIntID, uuid) {
   try {
-    const res = await fetch("https://live.api.smartrpdai.com/api/smartrpd/role/all/get", {
+    const res = await fetch(`${API_BASE}/role/all/get`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify([
@@ -98,7 +91,7 @@ async function fetchUserIndexForCase(caseIntID, uuid) {
 }
 
 async function fetchCaseHistory(caseIntID, uuid) {
-  const res = await fetch("https://live.api.smartrpdai.com/api/smartrpd/casehistory/getall", {
+  const res = await fetch(`${API_BASE}/casehistory/getall`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify([{ machine_id: MACHINE_ID, uuid, caseIntID }])

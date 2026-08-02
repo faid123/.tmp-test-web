@@ -13,10 +13,9 @@ import {
 import { WORK_CATEGORY_LABELS, loadCaseNote, fetchAdditionalCaseDetails } from "./caseNote.js";
 import { statusLabel } from "../shared/apiLog.js";
 import { encodeEditedViewColumns } from "./dotnetBinaryFormatter.js";
+import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 
 //Add constants
-const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
-const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
 // Dedupe local + server noticeboard items by a stable key (title -> id ->
 // preview). On a key collision the server fields win, but local-only fields on
@@ -38,15 +37,6 @@ export function mergeInstructions(localItems, serverItems) {
 }
 
 //Add helper to read logged-in user
-function getLoggedInUser(){
-  try{
-    return JSON.parse(localStorage.getItem("loggedInUser") || "null");
-  }
-  catch{
-    return null;
-  }
-}
-
 // A "guest" is anyone who reached this page via a shared link without signing
 // in (no logged-in uuid). Guests can't write to the server endpoints, so their
 // noticeboard is mirrored to localStorage instead. See openNoticeboard().

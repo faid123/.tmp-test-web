@@ -23,10 +23,13 @@
 // exports a report. Pages that already carry the tag (case_list.html loads
 // html2canvas) short-circuit to the existing global.
 
-// Pinned CDN builds, same host/style as the <script> tags on the case-list page.
+// Vendored builds (html2canvas 1.4.1 / jspdf 4.2.1). Resolved against this
+// module's own URL, not the document — pages load from two different depths
+// (src/pages/ and src/pages/admin/). import.meta is safe here: this module is
+// NOT in the webpack viewer bundle, where UMD output rejects it.
 const LIB_URLS = {
-  html2canvas: "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
-  jspdf: "https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js",
+  html2canvas: new URL("../../../vendor/html2canvas/html2canvas.min.js", import.meta.url).href,
+  jspdf: new URL("../../../vendor/jspdf/jspdf.umd.min.js", import.meta.url).href,
 };
 
 const scriptPromises = new Map();
