@@ -601,9 +601,9 @@ function hidePreviewLoading(area) {
 async function ensureThreeDeps() {
   if (THREE && TrackballControls && STLLoader) return true;
   try {
-    // Bare specifiers: Vite resolves them from node_modules in dev and build;
-    // the split chunk is shared with createCase.js, so both modules stay on a
-    // single THREE instance.
+    // Bare specifiers: 2DAnnotation.html's importmap maps them to the local
+    // vendor/three copy — the same entry createCase.js resolves, so both
+    // modules share one THREE instance.
     const [threeMod, trackballMod, stlMod] = await Promise.all([
       import("three"),
       import("three/addons/controls/TrackballControls.js"),

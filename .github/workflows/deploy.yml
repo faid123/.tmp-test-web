@@ -48,18 +48,17 @@ jobs:
           path: coverage/
           if-no-files-found: ignore
 
-      - name: Build (Vite multi-page)
+      - name: Build (production webpack)
         run: |
           npm run build
-          test -f dist/index.html || { echo "❌ build produced no dist/index.html"; exit 1; }
+          test -f dist/bundle.js || { echo "❌ build produced no dist/bundle.js"; exit 1; }
 
       - name: Manifest (revision + digest)
         run: |
           CREATED=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          # Digest of the exact content being deployed (everything in dist/).
-          # -print0/-0 keeps filenames with spaces (e.g. assets/instruction editor/) intact.
-          DIGEST=$(find dist -type f -print0 | LC_ALL=C sort -zu | xargs -0 sha256sum | sha256sum | cut -d" " -f1)
-          cat > dist/manifest.json <<EOF
+          # -z/-0 keeps filenames with spaces (e.g. assets/instruction editor/) intact.
+          DIGEST=$({ git ls-files -z; printf 'dist/bundle.js\0'; } | LC_ALL=C sort -zu | xargs -0 sha256sum | sha256sum | cut -d" " -f1)
+          cat > manifest.json <<EOF
           {
             "app": "smartrpd",
             "revision": "${GITHUB_SHA}",
@@ -72,7 +71,7 @@ jobs:
           }
           EOF
           echo "🔒 Artifact digest: sha256:${DIGEST}"
-          cat dist/manifest.json
+          cat manifest.json
 
       - name: Checkout Pages branch
         uses: actions/checkout@v4
@@ -82,11 +81,13 @@ jobs:
 
       - name: Deploy to Pages branch
         run: |
-          # Replace branch content with exactly this verified BUILT site (dist/):
-          # hashed bundles + mirrored page paths + the verbatim runtime dirs.
+          # Replace branch content with exactly this verified revision + built bundle.
           # History is preserved — every previous deploy is one commit back for rollback.
           find .pages-branch -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-          cp -R dist/. .pages-branch/
+          git archive "${GITHUB_SHA}" | tar -x -C .pages-branch
+          mkdir -p .pages-branch/dist
+          cp dist/bundle.js .pages-branch/dist/
+          cp manifest.json .pages-branch/
           touch .pages-branch/.nojekyll
           cd .pages-branch
           test -f index.html || { echo "❌ deploy missing index.html"; exit 1; }

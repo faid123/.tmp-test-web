@@ -17,14 +17,17 @@ function appAsset(relFromRoot) {
 let THREE;
 let STLLoader;
 
-// Lazy-load Three.js + STLLoader. Vite resolves the bare specifiers from
-// node_modules in both dev and build; the split chunk is shared with
-// preview3D.js, so both modules stay on a single THREE instance.
+// Lazy-load Three.js + STLLoader. Bare specifiers resolve both ways this
+// module is delivered: the case-list pages' <script type="importmap"> maps
+// them to vendor/three (same entry preview3D.js resolves — one shared
+// instance), and the webpack viewer bundle resolves them from node_modules.
+// webpackMode eager keeps the bundle single-file — an async chunk would never
+// be copied by deploy.yml, which ships dist/bundle.js alone.
 async function loadThreeDeps() {
   if (THREE && STLLoader) return;
   const [threeMod, loaderMod] = await Promise.all([
-    import("three"),
-    import("three/addons/loaders/STLLoader.js"),
+    import(/* webpackMode: "eager" */ "three"),
+    import(/* webpackMode: "eager" */ "three/addons/loaders/STLLoader.js"),
   ]);
   THREE = threeMod;
   STLLoader = loaderMod.STLLoader;

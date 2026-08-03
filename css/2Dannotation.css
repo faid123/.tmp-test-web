@@ -1,15 +1,15 @@
 :root {
   --bg: #f5fdfa;
   --panel: #ffffff;
-  --line: var(--brand-500);
+  --line: #3BAE95;
   --ink: #1a4d3f;
   --muted: #528d7f;
   --dark-block: #2f9079;
   --rose-050: #eaf7f4;
   --rose-100: #cfeae3;
-  --rose-500: var(--brand-500);
+  --rose-500: #3BAE95;
   --rose-600: #2f9079;
-  --rose-700: var(--brand-700);
+  --rose-700: #25735f;
   --rose-800: #1a5645;
 }
 

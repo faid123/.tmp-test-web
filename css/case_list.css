@@ -14,9 +14,9 @@
   --line: #e2e8f0;
   --line-soft: #f1f5f9;
 
-  --primary: var(--brand-500);
+  --primary: #3BAE95;
   --primary-soft: #d4f0e8;
-  --primary-dark: var(--brand-700);
+  --primary-dark: #25735f;
 
   --status-pending-bg: #fef3c7;
   --status-pending-fg: #92400e;
@@ -42,7 +42,38 @@
   font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
 }
 
-/* (a second, identical :root token block lived here — deduped 2026-08-02) */
+:root {
+  --bg: #f5f6fa;
+  --panel: #ffffff;
+  --ink: #0f172a;
+  --ink-soft: #475569;
+  --muted: #94a3b8;
+  --line: #e2e8f0;
+  --line-soft: #f1f5f9;
+
+  --primary: #3BAE95;
+  --primary-soft: #d4f0e8;
+  --primary-dark: #25735f;
+
+  --status-pending-bg: #fef3c7;
+  --status-pending-fg: #92400e;
+  --status-progress-bg: #dbeafe;
+  --status-progress-fg: #1e40af;
+  --status-completed-bg: #d1fae5;
+  --status-completed-fg: #047857;
+  --status-na-bg: #e2e8f0;
+  --status-na-fg: #475569;
+  --status-danger-bg: #fee2e2;
+  --status-danger-fg: #b91c1c;
+
+  --danger: #ef4444;
+  --warning: #f59e0b;
+
+  --radius: 14px;
+  --radius-sm: 10px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
 
 html,
 body {

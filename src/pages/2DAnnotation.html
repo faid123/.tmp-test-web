@@ -19,10 +19,20 @@
        with case_list and ThreeDViewer — including recolouring this page's
        footer from rose to the shared teal. -->
   <link rel="stylesheet" href="../../css/app-shell.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "../../vendor/three/build/three.module.js",
+        "three/addons/": "../../vendor/three/examples/jsm/"
+      }
+    }
+  </script>
   <!-- Used by "Download Jaw Profile → Download STL file" to bundle the upper +
        lower jaw STLs into a single .zip. -->
   <script src="../../vendor/jszip/jszip.min.js"></script>
-  <link rel="stylesheet" href="../../css/tokens.css" />
+  <link rel="modulepreload" href="../../vendor/three/build/three.module.js" />
+  <link rel="modulepreload" href="../../vendor/three/examples/jsm/controls/TrackballControls.js" />
+  <link rel="modulepreload" href="../../vendor/three/examples/jsm/loaders/STLLoader.js" />
 </head>
 <body>
   <main class="annotation-shell">

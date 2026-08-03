@@ -16,9 +16,9 @@
    ========================================================================== */
 
 :root {
-  --shell-teal: var(--brand-500);
+  --shell-teal: #3bae95;
   --shell-teal-600: #2f9e83;
-  --shell-teal-700: var(--brand-700);
+  --shell-teal-700: #25735f;
   --shell-teal-800: #1c5a4a;
   --shell-ink: #0f172a;
   --shell-ink-soft: #475569;

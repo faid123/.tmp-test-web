@@ -61,7 +61,6 @@
         margin-top: 8px;
       }
     </style>
-    <link rel="stylesheet" href="../../css/tokens.css" />
   </head>
   <body>
     <div class="ah-page">
@@ -138,8 +137,11 @@
       </nav>
     </aside>
 
-    <!-- Static relative tag — Vite builds this page in place, so the old
-         github.io basePath switcher is unnecessary. -->
-    <script type="module" src="../js/pages/AnnotationHistory.js"></script>
+    <script>
+      const hostname = window.location.hostname;
+      const isGitHubPages = hostname.includes("github.io");
+      const basePath = isGitHubPages ? "/.tmp-test-web" : "";
+      document.write(`<script type="module" src="${basePath}/src/js/pages/AnnotationHistory.js"></` + `script>`);
+    </script>
   </body>
 </html>
