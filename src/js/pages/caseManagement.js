@@ -3082,7 +3082,8 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
       const uuid = user.uuid;
       const machine_id = MACHINE_ID;
 
-      // ✅ 打开弹窗
+      // ✅ 打开弹窗 (explicit lookup — was leaning on the implicit window.<id> global)
+      const userAccessModal = document.getElementById("userAccessModal");
       userAccessModal.classList.remove("hidden");
       userAccessModal.classList.add("show");
 
@@ -3125,7 +3126,8 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         renderSharedUserList(); // ✅ 渲染已有成员
       } catch (err) {
         console.error("❌ Failed to fetch roles:", err);
-        sharedUserList.innerHTML = "<li>Failed to load users.</li>";
+        const listEl = document.getElementById("sharedUserList");
+        if (listEl) listEl.innerHTML = "<li>Failed to load users.</li>";
       }
     });
   }
@@ -3210,10 +3212,8 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         el.textContent = newCaseName;
       });
 
-      if (typeof renderCaseTable === "function") {
-        renderCaseTable(currentCases);
-      }
-
+      // (renderCaseTable no longer exists anywhere — the typeof-guarded call was
+      // dead code; the rename above already patches the visible row.)
       console.log("✅ Case renamed successfully:", newCaseName);
       closeRenameModal();
     } catch (error) {

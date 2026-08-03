@@ -196,7 +196,9 @@ async function fetchNotes() {
             if (pendingImageBase64) messages.push(buildPendingPreviewMessage());
             displayMessages();
         } else {
-            if (firstLoad) chatBox.innerHTML = '';
+            // (A stale `firstLoad` clear lived here — the flag no longer exists,
+            // so reading it threw and the catch swallowed this whole branch.
+            // The cached-paint design keeps prior messages visible on failure.)
             console.error('❌ Failed to fetch notes:', await response.text());
         }
     } catch (err) {

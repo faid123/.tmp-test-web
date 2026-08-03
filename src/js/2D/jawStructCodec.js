@@ -22,10 +22,12 @@ import {
   RECIPROCATING_TYPE,
   MESH_TYPE,
   MAJOR_CONNECTOR_TYPE,
+  TOOTH_CONDITION,
   inverseOf,
 } from "./jawStructCodes.js";
 
 const PRESENCE_FIELD = "Tooth Main.Tooth Index.Tooth Presence";
+const CONDITION_FIELD = "Tooth Main.Tooth Index.Tooth Condition";
 const MAJOR_INDEX_FIELD = "Tooth Main.Tooth Index.Major Index";
 const MINOR_INDEX_FIELD = "Tooth Main.Tooth Index.Minor Index";
 const MESH_PRESENCE_FIELD = "Tooth Main.Tooth Index.Mesh Presence";
@@ -326,9 +328,11 @@ export function resolveJawStructDesign(parsed) {
     design.rawByFdi[fdi] = { ...f };
 
     const present = f[PRESENCE_FIELD] === PRESENCE_PRESENT;
+    // Select Teeth status (abutment/compromised); null = plain presence.
+    const condition = TOOTH_CONDITION.get(Number(f[CONDITION_FIELD])) ?? null;
     // placements: rests/clasps with their anchor surface; bars: shape ids whose
     // surface is computed from arch geometry at apply time.
-    const entry = { present, placements: [], bars: [] };
+    const entry = { present, condition, placements: [], bars: [] };
     design.teeth[fdi] = entry;
     if (!present) continue; // components live on present (abutment) teeth only
 
@@ -548,7 +552,7 @@ function encodeToothLines(arrayIdx, fdi, rec, hasMesh) {
   const min = fdi % 10;
   const toothType = min < 4 ? 1 : 0;       // Tooth_Type: anterior=1, posterior=0
   const present = rec?.isPresent ? 0 : 1;  // Tooth_Presence: present=0, missing=1
-  const condition = rec?.status === "abutment" ? 1 : rec?.status === "compromised" ? 2 : 0;
+  const condition = inverseOf(TOOTH_CONDITION).get(rec?.status) ?? 0; // 0 = normal
   const comps = componentList(rec);
   const placements = Array.isArray(rec?.componentPlacements) ? rec.componentPlacements : [];
 

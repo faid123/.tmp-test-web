@@ -154,9 +154,9 @@ export const PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS = Object.freeze(
  */
 export const PALATAL_BAR_ARCH_OVERLAY = Object.freeze({
   file: "P_Bar.svg",
-  x: 220,
-  y: 194,
-  width: 195,
+  x: 228,
+  y: 157,
+  width: 180,
   height: 186,
 });
 
@@ -318,7 +318,7 @@ export function shouldUseMajorConnectorEndAsset(toothId, teeth) {
  * @param {string} toothId
  * @param {string} jaw
  * @param {Record<string, unknown> | null | undefined} [teeth]
- * @param {{ palatalBarSecondMolarDistal?: boolean, palatalBarFirstPremolarMesial?: boolean }} [options] Palatal bar: `palatalBarSecondMolarDistal` makes `17` / `27` use `{17}_distal.svg` (set only while `18` / `28` have no palatal-bar placement); `palatalBarFirstPremolarMesial` makes `14` / `24` use `{14}_mesial.svg` (the bar's anterior cap — set whenever the palatal bar is rendering, since the posterior bar span always terminates at 14/24).
+ * @param {{ palatalBarDistalEnd?: boolean, palatalBarFirstPremolarMesial?: boolean }} [options] Palatal bar: `palatalBarDistalEnd` caps the tooth ending the run distally with `{n}_distal.svg` (see isPalatalBarDistalRunEnd — the run need not reach the second molar); `palatalBarFirstPremolarMesial` makes `14` / `24` use `{14}_mesial.svg` (the bar's anterior cap — set whenever the palatal bar is rendering, since the posterior bar span always terminates at 14/24).
  */
 export function getMajorConnectorAssetReference(toothId, jaw, teeth, options) {
   const id = String(toothId);
@@ -332,7 +332,7 @@ export function getMajorConnectorAssetReference(toothId, jaw, teeth, options) {
     const u = Number(id[1]);
     const file = q === 1 ? id : `1${u}`;
 
-    if (options?.palatalBarSecondMolarDistal && (id === "17" || id === "27")) {
+    if (options?.palatalBarDistalEnd) {
       if (MAJOR_CONNECTOR_MESIAL_DISTAL_TEMPLATES.has(file)) {
         return `${baseDir}/${file}_distal.svg`;
       }
@@ -533,24 +533,32 @@ function toothHasPalatalBarPlacementOnTooth(tooth) {
 }
 
 /**
- * Palatal bar: distal second-molar caps (17_distal / mirrored 27) only while 18/28
- * have no real palatal-bar placement. After tagging 18/28, augmented neighbors make
- * getMajorConnectorAssetReference return body art so segments connect.
+ * Palatal bar: whether this tooth ends its bar run distally, so the segment takes the
+ * `{n}_distal` cap (`{n}_end.svg` is the same art) instead of straight body art.
+ *
+ * Must read the UN-augmented arch: augmentTeethForPalatalBarConnectorNeighbors tags
+ * every connector tooth, so the augmented view shows a distal neighbour on all of them
+ * and no run end would ever be found. A run ending short of the second molar (e.g. at
+ * 15, when 16-18 carry no bar) is what this catches.
  * @param {string} toothId
  * @param {Record<string, unknown> | null | undefined} teeth Un-augmented arch state.
  */
-export function shouldUsePalatalBarSecondMolarDistalTemplate(toothId, teeth) {
+export function isPalatalBarDistalRunEnd(toothId, teeth) {
   const id = String(toothId);
-  if (id !== "17" && id !== "27") {
+  if (!PALATAL_BAR_CONNECTOR_TOOTH_IDS.has(id)) {
     return false;
   }
   if (!teeth || typeof teeth !== "object") {
     return true;
   }
-  if (id === "17") {
-    return !toothHasPalatalBarPlacementOnTooth(teeth["18"]);
+  const order = TOOTH_ORDER.upper;
+  const idx = order.indexOf(id);
+  if (idx < 0) {
+    return false;
   }
-  return !toothHasPalatalBarPlacementOnTooth(teeth["28"]);
+  // Distal runs toward 18 in Q1 (earlier in arch order) and toward 28 in Q2 (later).
+  const distalId = Number(id[0]) === 1 ? order[idx - 1] : order[idx + 1];
+  return !distalId || !toothHasPalatalBarPlacementOnTooth(teeth[distalId]);
 }
 
 /**

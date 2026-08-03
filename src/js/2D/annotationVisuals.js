@@ -71,7 +71,7 @@ import {
   getPalatalHoleArchOverlayLayers,
   getPalatalPlateArchOverlayFrame,
   shouldMajorConnectorIgnoreMeshPlateAnchor,
-  shouldUsePalatalBarSecondMolarDistalTemplate,
+  isPalatalBarDistalRunEnd,
   getMajorConnectorAssetReference,
   getPalatalPlateOverlayIndexFromUpperPlacements,
    } from "./components.js";
@@ -241,7 +241,13 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
       tooth.components.includes("plate-prox") &&
       !tooth.components.some((id) => isReciprocatingClaspComponent(id))
     ) {
-      const plate = createComponentVisual("plate-prox", toothId, jaw);
+      // A palatal bar's last plate is the run's visible terminus, and the plate art
+      // stops on a straight cut — round it so the end reads finished like the
+      // connector's own _distal cap next to it.
+      const plate = createComponentVisual("plate-prox", toothId, jaw, {
+        roundDistalEnd:
+          isPalatalBarMajorComponent(majorId) && isPalatalBarDistalRunEnd(toothId, state.teeth),
+      });
       if (plate) group.appendChild(plate);
     }
     const under = createMajorConnectorVisual(majorId, tooth, toothId, jaw);
@@ -1458,9 +1464,9 @@ function createMajorConnectorVisual(majorComponentId, tooth, toothId, jaw) {
       ? augmentTeethForPalatalBarConnectorNeighbors(state.teeth)
       : state.teeth;
   const connectorHref = getMajorConnectorAssetReference(toothId, jaw, teethForConnector, {
-    palatalBarSecondMolarDistal:
+    palatalBarDistalEnd:
       isPalatalBarMajorComponent(majorComponentId) &&
-      shouldUsePalatalBarSecondMolarDistalTemplate(toothId, state.teeth),
+      isPalatalBarDistalRunEnd(toothId, state.teeth),
     // The palatal bar's posterior span always terminates at 14/24, so cap those
     // with the mesial end art even when the load-time auto-placer tagged 13/23.
     palatalBarFirstPremolarMesial:
@@ -1537,8 +1543,29 @@ function createMajorConnectorVisual(majorComponentId, tooth, toothId, jaw) {
   return visual;
 }
 
+// Rounded cap for a plate whose distal edge terminates a connector run. The plate art
+// sits in the upper-right of its image box and ends on a straight cut, so the cap is a
+// circle that just clips that corner away — a box-edge rounding would miss the art
+// entirely. Centre/radius are fractions of the image half-extents (tuned on 17/27, which
+// share a template; Q2 mirrors with the frame's own scaleX).
+const DISTAL_CAP_CENTRE_X_RATIO = 0.30;
+const DISTAL_CAP_CENTRE_Y_RATIO = -0.19;
+const DISTAL_CAP_RADIUS_RATIO = 0.69;
+
+function buildDistalCapClipPath(clipId, halfW, halfH) {
+  const clip = svgEl("clipPath", { id: clipId, clipPathUnits: "userSpaceOnUse" });
+  clip.appendChild(
+    svgEl("circle", {
+      cx: (halfW * DISTAL_CAP_CENTRE_X_RATIO).toFixed(2),
+      cy: (halfH * DISTAL_CAP_CENTRE_Y_RATIO).toFixed(2),
+      r: (halfH * DISTAL_CAP_RADIUS_RATIO).toFixed(2),
+    })
+  );
+  return clip;
+}
+
 // Compose one component image overlay aligned with a given tooth transform.
-function createComponentVisual(componentId, toothId, jaw) {
+function createComponentVisual(componentId, toothId, jaw, options) {
   const assetHref = getComponentAssetReference(componentId, toothId);
   if (!assetHref) {
     return null;
@@ -1595,17 +1622,23 @@ function createComponentVisual(componentId, toothId, jaw) {
         : "component-image plate-image"
       : "component-image";
 
-  visual.appendChild(
-    svgEl("image", {
-      href: assetHref,
-      x: String(-halfW),
-      y: String(-halfH),
-      width: String(imgW),
-      height: String(imgH),
-      preserveAspectRatio: "xMidYMid meet",
-      class: imageClass,
-    })
-  );
+  const image = svgEl("image", {
+    href: assetHref,
+    x: String(-halfW),
+    y: String(-halfH),
+    width: String(imgW),
+    height: String(imgH),
+    preserveAspectRatio: "xMidYMid meet",
+    class: imageClass,
+  });
+
+  if (options?.roundDistalEnd) {
+    const clipId = `distal-cap-${jaw}-${toothId}-${componentId}`;
+    visual.appendChild(buildDistalCapClipPath(clipId, halfW, halfH));
+    image.setAttribute("clip-path", `url(#${clipId})`);
+  }
+
+  visual.appendChild(image);
 
   return visual;
 }

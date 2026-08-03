@@ -55,6 +55,14 @@ export const RECIPROCATING_TYPE = new Map([
   [3, "plate-crossmesh"],  // reciprocating_crossmesh -> mesh plate
 ]);
 
+// Tooth_Condition { normal=0, abutment=1, compromised=2 } -- the Select Teeth status.
+// The desktop leaves clasped abutments at 0, so a desktop-authored case (sample 03:
+// 0 on every tooth) loads as plain presence.
+export const TOOTH_CONDITION = new Map([
+  [1, "abutment"],
+  [2, "compromised"],
+]);
+
 // Major_Connector_Type { mc_none=0, mc_palatal_strap=1, mc_horseshoe=2, mc_hole=3,
 //   mc_palatal_bar=4, mc_palatal_full_plate=5, mc_lingual_bar=6, mc_lingual_plate=7,
 //   mc_lingual_kennedy=8, mc_cingulum_bar=9 }
