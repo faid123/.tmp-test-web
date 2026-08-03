@@ -11,9 +11,8 @@
 
 import { toast } from "../shared/toast.js";
 import { logApi, statusLabel } from "../shared/apiLog.js";
+import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 
-const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
-const API = "https://live.api.smartrpdai.com/api/smartrpd";
 // Resolve an asset path relative to the app root (everything before "/src/"),
 // so icons load whether this shared module runs from a src/pages/ page
 // (case_list) or the deeper src/pages/admin/ one (admin_case_list). A fixed
@@ -25,11 +24,6 @@ function appAsset(relFromRoot) {
   return i !== -1 ? href.slice(0, i + 1) + relFromRoot : "../../" + relFromRoot;
 }
 const ICON_BASE = appAsset("assets/Dashboard_Icon");
-
-function getLoggedInUser() {
-  const user = localStorage.getItem("loggedInUser");
-  return user ? JSON.parse(user) : null;
-}
 
 // Pipeline status progression. A jaw's `upper_status` / `lower_status` string
 // (from the backend `case_status` table — read-only here, written by the
@@ -749,7 +743,7 @@ export async function openCaseDashboard(caseId, caseStub = null) {
   const auth = { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: caseId };
 
   const [detail, thumbs, viewcaptures, roles] = await Promise.all([
-    postJson(`${API}/case/get/${caseId}`, [auth], "POST /case/get/:id").catch(
+    postJson(`${API_BASE}/case/get/${caseId}`, [auth], "POST /case/get/:id").catch(
       (err) => {
         console.warn("[dashboard] case detail failed", err);
         return caseStub || {};
@@ -758,20 +752,20 @@ export async function openCaseDashboard(caseId, caseStub = null) {
     // Numeric case_int_id, not the case-name string — the backend's admin-path
     // thumbnail lookup parses the payload id as caseIntID, so string names 404
     // for admin accounts (non-admin path works either way).
-    postJson(`${API}/thumbnails/get`, [auth, { case_int_id: caseId }], "POST /thumbnails/get").catch(
+    postJson(`${API_BASE}/thumbnails/get`, [auth, { case_int_id: caseId }], "POST /thumbnails/get").catch(
       (err) => {
         console.warn("[dashboard] thumbnails failed", err);
         return [];
       }
     ),
-    postJson(`${API}/noticeboard/view/get`, [auth, { case_id: caseId }], "POST /noticeboard/view/get").catch(
+    postJson(`${API_BASE}/noticeboard/view/get`, [auth, { case_id: caseId }], "POST /noticeboard/view/get").catch(
       (err) => {
         // 404 = no viewcaptures saved yet; treat as empty, not an error.
         console.warn("[dashboard] viewcaptures failed", err);
         return null;
       }
     ),
-    postJson(`${API}/role/all/get`, [auth, { case_int_id: caseId }], "POST /role/all/get").catch(
+    postJson(`${API_BASE}/role/all/get`, [auth, { case_int_id: caseId }], "POST /role/all/get").catch(
       (err) => {
         console.warn("[dashboard] roles failed", err);
         return [];

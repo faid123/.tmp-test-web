@@ -11,11 +11,7 @@ import {
   buildEnrichRequests,
   applyEnrichmentResponses,
 } from "../shared/caseEnrichment.js";
-
-function getLoggedInUser() {
-  const user = localStorage.getItem("loggedInUser");
-  return user ? JSON.parse(user) : null;
-}
+import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 
 // Per-user cache of the last case list so the table can paint instantly on load
 // instead of waiting on /case/user/findall/get — which can lag when the API host
@@ -105,7 +101,7 @@ async function fetchCases() {
 
   const requestBody = JSON.stringify([
     {
-      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      machine_id: MACHINE_ID,
       uuid: loggedInUser.uuid,
     },
     { uuid: loggedInUser.uuid },
@@ -113,7 +109,7 @@ async function fetchCases() {
 
   try {
     const response = await fetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/case/user/findall/get",
+      `${API_BASE}/case/user/findall/get`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -182,7 +178,7 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
 
   const requestBody = JSON.stringify([
     {
-      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      machine_id: MACHINE_ID,
       uuid: user.uuid,
       caseIntID: caseIdForApi,
     },
@@ -193,7 +189,7 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
 
   try {
     const response = await fetch(
-      `https://live.api.smartrpdai.com/api/smartrpd/case/delete/${caseIdForApi}`,
+      `${API_BASE}/case/delete/${caseIdForApi}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -340,7 +336,7 @@ async function duplicateCaseById(caseId, { skipConfirm = false } = {}) {
 
   const requestBody = JSON.stringify([
     {
-      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      machine_id: MACHINE_ID,
       uuid: user.uuid,
       caseIntID: caseIdForApi,
     },
@@ -351,7 +347,7 @@ async function duplicateCaseById(caseId, { skipConfirm = false } = {}) {
 
   try {
     const response = await fetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/case/duplicate",
+      `${API_BASE}/case/duplicate`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -499,8 +495,6 @@ function triggerBlobDownload(bytes, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-const DL_API = "https://live.api.smartrpdai.com/api/smartrpd";
-const DL_MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
 function safeDownloadBase(name, fallback = "case") {
   return String(name || fallback).replace(/[^a-z0-9_\-]+/gi, "_").replace(/^_+|_+$/g, "") || fallback;
@@ -509,17 +503,17 @@ function safeDownloadBase(name, fallback = "case") {
 // Fetch the case's STL files, preferring processed STLs and falling back to raw.
 async function fetchCaseStls(caseIntId, uuid) {
   const payload = [
-    { machine_id: DL_MACHINE_ID, uuid, caseIntID: caseIntId },
+    { machine_id: MACHINE_ID, uuid, caseIntID: caseIntId },
     { case_int_id: caseIntId },
   ];
-  for (const endpoint of [`${DL_API}/stl/get`, `${DL_API}/stl/raw/get`]) {
+  for (const endpoint of [`${API_BASE}/stl/get`, `${API_BASE}/stl/raw/get`]) {
     try {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      logApi(res, `POST ${endpoint.replace(DL_API, "")}`);
+      logApi(res, `POST ${endpoint.replace(API_BASE, "")}`);
       if (!res.ok) continue;
       const data = await res.json();
       const files = (Array.isArray(data) ? data : [data]).filter((i) => i && i.data);
@@ -534,11 +528,11 @@ async function fetchCaseStls(caseIntId, uuid) {
 // The reference images attached to the case (create-case upload). Rows come back
 // as { image_name, image_data }, image_data being a data URL or bare base64.
 async function fetchCaseReferenceImages(caseIntId, uuid) {
-  const res = await fetch(`${DL_API}/referenceImages/getall`, {
+  const res = await fetch(`${API_BASE}/referenceImages/getall`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify([
-      { machine_id: DL_MACHINE_ID, uuid, caseIntID: caseIntId },
+      { machine_id: MACHINE_ID, uuid, caseIntID: caseIntId },
       { case_id: caseIntId },
     ]),
   });
@@ -554,11 +548,11 @@ async function fetchCaseReferenceImages(caseIntId, uuid) {
 // referenceImages table has no rows for the case (e.g. desktop-created cases).
 async function fetchReferenceThumbnails(caseIntId, uuid) {
   try {
-    const res = await fetch(`${DL_API}/thumbnails/get`, {
+    const res = await fetch(`${API_BASE}/thumbnails/get`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify([
-        { machine_id: DL_MACHINE_ID, uuid, caseIntID: caseIntId },
+        { machine_id: MACHINE_ID, uuid, caseIntID: caseIntId },
         { case_int_id: caseIntId },
       ]),
     });
@@ -717,11 +711,11 @@ async function dataUrlToJpegBytes(data) {
 // The case's 2D design image (thumbnail slot 0 = composite 2D) as JPEG bytes.
 async function fetchCase2dJpegBytes(caseIntId, uuid) {
   try {
-    const res = await fetch(`${DL_API}/thumbnails/get`, {
+    const res = await fetch(`${API_BASE}/thumbnails/get`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify([
-        { machine_id: DL_MACHINE_ID, uuid, caseIntID: caseIntId },
+        { machine_id: MACHINE_ID, uuid, caseIntID: caseIntId },
         // Numeric id, not the case-name string — the admin-path lookup parses
         // this as caseIntID (string names 404 for admin accounts).
         { case_int_id: caseIntId },
@@ -1145,7 +1139,7 @@ async function handleRowClick(caseId) {
 
   const requestBody = JSON.stringify([
     {
-      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      machine_id: MACHINE_ID,
       uuid: loggedInUser.uuid,
       caseIntID: caseId,
     },
@@ -1153,7 +1147,7 @@ async function handleRowClick(caseId) {
 
   try {
     const response = await fetch(
-      `https://live.api.smartrpdai.com/api/smartrpd/case/get/${caseId}`,
+      `${API_BASE}/case/get/${caseId}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1235,7 +1229,7 @@ function bumpLocalLastUpdated(caseId) {
 // last_updated as a side effect of the write — which is what the sort keys on.
 async function fireLastOpenedBump(caseId, detail, user) {
   const auth = {
-    machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+    machine_id: MACHINE_ID,
     uuid: user.uuid,
     caseIntID: caseId,
   };
@@ -1251,7 +1245,7 @@ async function fireLastOpenedBump(caseId, detail, user) {
     process_lower: Number(detail?.process_lower) || 0,
   };
   const res = await fetch(
-    `https://live.api.smartrpdai.com/api/smartrpd/case/${caseId}`,
+    `${API_BASE}/case/${caseId}`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -2002,7 +1996,7 @@ async function fetchThumbnails(caseId) {
   // live-verified to return rows for both roles (2026-07-10).
   const requestBody = JSON.stringify([
     {
-      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      machine_id: MACHINE_ID,
       uuid: loggedInUser.uuid,
       caseIntID: caseId,
     },
@@ -2018,7 +2012,7 @@ async function fetchThumbnails(caseId) {
     // fresh per-call breaker means pure retry: it can't be tripped/held open by
     // the shared enrichment breaker, and one click is at most a few requests.
     const res = await resilientFetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/thumbnails/get",
+      `${API_BASE}/thumbnails/get`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2156,11 +2150,11 @@ function scheduleAdminStats() {
 // Resolve a username → uuid via user/uuid/get. Returns the uuid string or null.
 async function resolveUuidByUsername(username) {
   const me = getLoggedInUser();
-  const res = await fetch(`${DL_API}/user/uuid/get`, {
+  const res = await fetch(`${API_BASE}/user/uuid/get`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify([
-      { machine_id: DL_MACHINE_ID, uuid: me?.uuid },
+      { machine_id: MACHINE_ID, uuid: me?.uuid },
       { username },
     ]),
   });
@@ -2232,11 +2226,11 @@ async function submitOwnershipTransfer() {
       return;
     }
     const me = getLoggedInUser();
-    const res = await fetch(`${DL_API}/role/owner`, {
+    const res = await fetch(`${API_BASE}/role/owner`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify([
-        { machine_id: DL_MACHINE_ID, uuid: me?.uuid },
+        { machine_id: MACHINE_ID, uuid: me?.uuid },
         { uuid: newUuid, case_int_id: Number(caseId) },
       ]),
     });
@@ -2341,10 +2335,10 @@ async function retrieveSelectedCase() {
 
   try {
     const me = getLoggedInUser();
-    const res = await fetch(`${DL_API}/case/undelete/${Number(caseId)}`, {
+    const res = await fetch(`${API_BASE}/case/undelete/${Number(caseId)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([{ machine_id: DL_MACHINE_ID, uuid: me?.uuid }]),
+      body: JSON.stringify([{ machine_id: MACHINE_ID, uuid: me?.uuid }]),
     });
     logApi(res, "POST /case/undelete/:id");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -2399,11 +2393,11 @@ async function deleteSelectedCase() {
 
   try {
     const me = getLoggedInUser();
-    const res = await fetch(`${DL_API}/case/delete/${Number(caseId)}`, {
+    const res = await fetch(`${API_BASE}/case/delete/${Number(caseId)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify([
-        { machine_id: DL_MACHINE_ID, uuid: me?.uuid, caseIntID: Number(caseId) },
+        { machine_id: MACHINE_ID, uuid: me?.uuid, caseIntID: Number(caseId) },
         { case_int_id: Number(caseId) },
       ]),
     });
@@ -3086,7 +3080,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
       const caseName = caseObj.case_id;
       const caseIntID = caseObj.id;
       const uuid = user.uuid;
-      const machine_id = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
+      const machine_id = MACHINE_ID;
 
       // ✅ 打开弹窗
       userAccessModal.classList.remove("hidden");
@@ -3113,7 +3107,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         ];
 
         const roleRes = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/role/all/get",
+          `${API_BASE}/role/all/get`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -3178,7 +3172,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
 
     const requestData = [
       {
-        machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+        machine_id: MACHINE_ID,
         uuid: user.uuid,
         caseIntID: caseObj.id,
       },
@@ -3188,7 +3182,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
     confirmRenameBtn.disabled = true;
     try {
       const response = await fetch(
-        `https://live.api.smartrpdai.com/api/smartrpd/case/rename/${caseObj.id}`,
+        `${API_BASE}/case/rename/${caseObj.id}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -3393,7 +3387,7 @@ function renderSharedUserList() {
         ];
 
         const res = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/role/delete",
+          `${API_BASE}/role/delete`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -3743,13 +3737,12 @@ function scheduleEnrichCacheSave() {
 // Same "extra STL slot" mechanism the 2D annotation page's 3D preview uses
 // (POST /stl/slot/), surfaced here so a clinic can attach an STL without opening
 // the case first. Slots 1–4 sit alongside the case's real upper/lower jaws.
-const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 const EXTRA_STL_SLOTS = [1, 2, 3, 4];
 
 function extraSlotAuth(caseIntId) {
   const user = getLoggedInUser();
   return {
-    machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+    machine_id: MACHINE_ID,
     uuid: user?.uuid || "",
     caseIntID: caseIntId,
   };
@@ -3916,13 +3909,13 @@ async function fetchAdditionalCaseDetails(caseIntId) {
   if (!user?.uuid || caseIntId == null) return { ok: false, detail: null };
   try {
     const res = await fetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/additionalcasedetails/getall",
+      `${API_BASE}/additionalcasedetails/getall`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify([
           {
-            machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+            machine_id: MACHINE_ID,
             uuid: user.uuid,
             caseIntID: caseIntId,
           },
@@ -3976,13 +3969,13 @@ async function saveCaseInstructions() {
 
   try {
     const res = await fetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/additionalcasedetails",
+      `${API_BASE}/additionalcasedetails`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify([
           {
-            machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+            machine_id: MACHINE_ID,
             uuid: user.uuid,
             caseIntID: caseIntId,
           },
@@ -4030,12 +4023,12 @@ async function saveCaseInstructions() {
 // overwrite the record can abort rather than guess at its contents.
 async function readCaseDetails(caseIntID, uuid) {
   const res = await fetch(
-    "https://live.api.smartrpdai.com/api/smartrpd/additionalcasedetails/getall",
+    `${API_BASE}/additionalcasedetails/getall`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify([
-        { machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616", uuid, caseIntID },
+        { machine_id: MACHINE_ID, uuid, caseIntID },
       ]),
     }
   );
@@ -4059,7 +4052,7 @@ async function postNewStatus(caseObj, newStatus) {
 
   const body = [
     {
-      machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+      machine_id: MACHINE_ID,
       uuid,
       caseIntID,
     },
@@ -4072,7 +4065,7 @@ async function postNewStatus(caseObj, newStatus) {
   ];
 
   const res = await fetch(
-    "https://live.api.smartrpdai.com/api/smartrpd/additionalcasedetails",
+    `${API_BASE}/additionalcasedetails`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4093,7 +4086,6 @@ await createStatusAlerts(
 
 /*  当状态改完以后，为同一 case 的其它成员创建通知                    */
 async function createStatusAlerts(caseObj, fromUser, newStatus) {
-  const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
   const me         = getLoggedInUser();
   const myUuid     = me.uuid;
   const caseIntID  = caseObj.id || caseObj.case_int_id;
@@ -4102,7 +4094,7 @@ async function createStatusAlerts(caseObj, fromUser, newStatus) {
   let recipients = [];
   try {
     const res = await fetch(
-      "https://live.api.smartrpdai.com/api/smartrpd/role/all/get",
+      `${API_BASE}/role/all/get`,
       {
         method : "POST",
         headers: { "Content-Type": "application/json" },
@@ -4156,7 +4148,7 @@ async function createStatusAlerts(caseObj, fromUser, newStatus) {
 
       try {
         const alertRes = await fetch(
-          "https://live.api.smartrpdai.com/api/smartrpd/alerts",
+          `${API_BASE}/alerts`,
           {
             method : "POST",
             headers: { "Content-Type": "application/json" },

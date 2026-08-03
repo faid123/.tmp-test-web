@@ -10,6 +10,7 @@ import {
   requestResetKey as apiRequestResetKey,
   resetPassword as apiResetPassword,
 } from "../shared/passwordReset.js";
+import { API_BASE, MACHINE_ID } from "../shared/api.js";
 
 // Local copy of apiLog.js's dedup contract: log success once per label. Kept
 // inline (rather than imported) only because the rest of this file predates
@@ -25,8 +26,6 @@ function logApi(res, label) {
   console.log(`[API] ✓ ${label} status=${res.status}`);
 }
 
-const API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
-const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 
 // "Remember me" persists just the username so the field is pre-filled next
 // visit (the password is never stored). Cleared when the box is unchecked.

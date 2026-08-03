@@ -25,6 +25,7 @@ import { applyJawStructDesign } from "./jawStructApply.js";
 import { logApi } from "../shared/apiLog.js";
 import { toast, flashToast } from "../shared/toast.js";
 import { VIEWER_UUID } from "../shared/config.js";
+import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 
 /** Autosave on every edit (history hook). Off by default: Save button is the
  *  trigger, avoids a POST per placement. POST /jawstruct/l2 verified. */
@@ -267,14 +268,6 @@ function bindHistoryControls() {
 
 export function titleCase(value) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : "";
-}
-
-function getLoggedInUser() {
-  try {
-    return JSON.parse(localStorage.getItem("loggedInUser") || "null");
-  } catch {
-    return null;
-  }
 }
 
 export function setMessage(message, isError) {
@@ -900,13 +893,13 @@ export function fetchCaseDetail() {
   const loggedInUser = getLoggedInUser();
   if (!loggedInUser?.uuid) return Promise.resolve(null);
   state.__caseDetailPromise = fetch(
-    `https://live.api.smartrpdai.com/api/smartrpd/case/get/${state.caseIntID}`,
+    `${API_BASE}/case/get/${state.caseIntID}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify([
         {
-          machine_id: "3a0df9c37b50873c63cebecd7bed73152a5ef616",
+          machine_id: MACHINE_ID,
           uuid: loggedInUser.uuid,
           caseIntID: state.caseIntID,
         },
