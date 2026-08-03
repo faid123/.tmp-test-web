@@ -430,6 +430,12 @@ function createHamburgerButton() {
 
   const content = document.createElement("div");
   content.id = "hamburger-drawer-content";
+  // The drawer is a launcher: it covers the model, so whatever a control in it
+  // opens (objects panel, polylines, legend) has to be looked at with the
+  // drawer out of the way.
+  content.addEventListener("click", (event) => {
+    if (event.target.closest("button")) closeHamburgerDrawer();
+  });
   drawer.appendChild(content);
 
   overlayHost.appendChild(drawer);
@@ -1746,6 +1752,8 @@ function extractPolylineSegments(candidate) {
 function getLoadedPolylineJawKeys() {
   const keys = new Set();
   parentObject.children.forEach((child) => {
+    // Which of the CASE's jaws are loaded — an uploaded slot STL is not one.
+    if (child.userData?.isDesignSlot) return;
     const jawKey = normalizeJawKey(child.userData?.jaw_type ?? child.name);
     if (jawKey) keys.add(jawKey);
   });
@@ -1925,6 +1933,10 @@ function shouldSeatPolylineComponentOnJaw(component) {
 function getJawMeshForPolyline(jawType) {
   const jawText = jawType.toLowerCase();
   return parentObject.children.find((child) => {
+    // Slot STLs sit in this list too, carry a jaw_type, and are added first
+    // (they are the landing view), so an unfiltered search returns one of them
+    // and the polylines inherit ITS transform instead of the case jaw's.
+    if (child.userData?.isDesignSlot) return false;
     const type = String(child.userData?.jaw_type || child.name || "").toLowerCase();
     return type.includes(jawText);
   });
@@ -3324,8 +3336,23 @@ function attachPolylineDragHandlers(domElement) {
 }
 
 
+// True only for a screen that is still driving progress. One that is mid-fade
+// still answers getElementById but has already given up window.viewerLoadingEls,
+// so callers must treat it as gone.
+function hasLiveViewerLoadingScreen() {
+  const screen = document.getElementById("viewer-loading-screen");
+  return !!screen && !screen.classList.contains("vls-fade");
+}
+
 function createViewerLoadingScreen() {
-  if (document.getElementById("viewer-loading-screen")) return;
+  const existing = document.getElementById("viewer-loading-screen");
+  if (existing) {
+    // Returning early on a fading screen would leave the caller with no bar to
+    // drive — the entry screen fades out just as the slot download starts.
+    if (!existing.classList.contains("vls-fade")) return;
+    existing.remove();
+    document.getElementById("viewer-loading-screen-style")?.remove();
+  }
   const style = document.createElement("style");
   style.id = "viewer-loading-screen-style";
   style.textContent = `
@@ -3892,6 +3919,12 @@ btnContainer.appendChild(edit2DStatic); */
   // to get the undercut and occulsion values
   let undercut_values = [];
 
+  // Heatmaps are per-vertex RGBA arrays for the case's own jaws — megabytes on a
+  // real case, and only the case view can display them. Fetched as part of the
+  // on-demand bundle (loadCaseAssets), never on entry. The design view doesn't
+  // want them either: uploads carry no surveying data, so slot meshes fall back
+  // to the loaders' "stl" (no-heatmap) sentinel.
+  async function fetchUndercutHeatmaps() {
   try {
     // Call the post method and wait for the response
 
@@ -3930,6 +3963,7 @@ btnContainer.appendChild(edit2DStatic); */
   } catch (error) {
     console.error("Error:", error);
   }
+  }
 
   //Processing mesh
 
@@ -3940,12 +3974,23 @@ btnContainer.appendChild(edit2DStatic); */
   let responseDatas = [];
   let responseData;
 
+  // The viewer opens on the design (the uploaded slot STLs) and does not fetch
+  // the case's own assets at all until the 3D button asks for them — the case
+  // mesh is ~50 MB that the landing view never shows. This flag makes the
+  // fetch below a no-op on entry; loadCaseAssets() flips it and reruns the same
+  // path, so there is exactly one implementation of the fetch.
+  let caseMeshRequested = false;
+
   // Pre-start both mesh downloads in parallel so denture downloads while jaw is being
   // fetched and processed. The promises are consumed inside the loop below.
-  const meshPromises = !close ? {
-    "/parameterisation/mesh/getall": apiClient.post("/parameterisation/mesh/getall", [data], false, "Jaw mesh"),
-    "/surface/getall":               apiClient.post("/surface/getall",               [data], false, "Denture mesh"),
-  } : {};
+  const startMeshDownloads = () =>
+    !close && caseMeshRequested
+      ? {
+          "/parameterisation/mesh/getall": apiClient.post("/parameterisation/mesh/getall", [data], false, "Jaw mesh"),
+          "/surface/getall":               apiClient.post("/surface/getall",               [data], false, "Denture mesh"),
+        }
+      : {};
+  let meshPromises = startMeshDownloads();
 
   try {
     // Call the post method and wait for the response
@@ -3960,20 +4005,24 @@ btnContainer.appendChild(edit2DStatic); */
         } else if (url == "/surface/getall") {
           name_of_mesh = "Denture mesh";
         }
-        // Await the pre-started promise instead of issuing a new request
-        responseData = await meshPromises[url];
+        // Await the pre-started promise instead of issuing a new request.
+        // Skipped entirely on the landing pass — the UI below still gets built,
+        // it just has no case mesh to work with yet.
+        responseData = caseMeshRequested ? await meshPromises[url] : "stl";
         //console.log(responseData);
         if (isObject(responseData)) {
           responseDatas = responseDatas.concat(responseData);
         }
         if (url == "/parameterisation/mesh/getall") {
           //check for closed.off
-          const test = await apiClient.post(
-            "/stl/get",
-            [data],
-            "test",
-            "Closed Jaw Mesh Check"
-          );
+          const test = caseMeshRequested
+            ? await apiClient.post(
+                "/stl/get",
+                [data],
+                "test",
+                "Closed Jaw Mesh Check"
+              )
+            : "stl";
 
           if (test != "stl") {
             /* // Create a button element
@@ -4178,24 +4227,37 @@ btnContainer.appendChild(edit2DStatic); */
           document.body.appendChild(emailWrapperContainer);
           btnContainer3D.appendChild(addEmailBtn);
 
-          // Create "Load Other STLs" button
+          // Switches between the uploaded design (the landing view) and the
+          // case's own scan + polylines + artificial teeth. Both stay loaded, so
+          // this is a visibility flip, not a reload.
           const loadOtherStlButton = document.createElement("button");
           loadOtherStlButton.id = "center-load-button";
           loadOtherStlButton.className = "smart-btn other-stl";
-          loadOtherStlButton.setAttribute("aria-label", "Show me 3D RPD design");
-          loadOtherStlButton.title = "Show me 3D RPD design";
-          loadOtherStlButton.innerHTML = `<img src="${basePath}/assets/Icon_showdesign2.png" alt="Show me 3D RPD design">`;
-          loadOtherStlButton.addEventListener("click", () => {
-            loadAllSTLSlots(); // You can change slot number accordingly
-
-            // After loading, change the button to become a "Back" button
-            loadOtherStlButton.textContent = "🔙 Back to Original Jaw";
-            loadOtherStlButton.onclick = () => {
-              // Remove ?slots=true from URL and reload
-              //const cleanURL = window.location.origin + window.location.pathname;
-              //window.location.href = cleanURL;
-              window.location.reload();
-            };
+          loadOtherStlButton.innerHTML = `<img src="${basePath}/assets/Icon_showdesign2.png" alt="Switch between design and case view">`;
+          let viewSwitchBusy = false;
+          const setDesignButtonState = (isDesignShown) => {
+            const label = isDesignShown
+              ? "Show original 3D scan"
+              : "Show me 3D RPD design";
+            loadOtherStlButton.setAttribute("aria-label", label);
+            loadOtherStlButton.setAttribute("aria-pressed", String(isDesignShown));
+            loadOtherStlButton.title = label;
+            loadOtherStlButton.classList.toggle("active", isDesignShown);
+          };
+          window.syncDesignViewButton = setDesignButtonState;
+          setDesignButtonState(false);
+          loadOtherStlButton.addEventListener("click", async () => {
+            if (viewSwitchBusy) return;
+            viewSwitchBusy = true;
+            loadOtherStlButton.disabled = true;
+            try {
+              if (isDesignViewActive()) await showCaseView();
+              else await showDesignView();
+              setDesignButtonState(isDesignViewActive());
+            } finally {
+              viewSwitchBusy = false;
+              loadOtherStlButton.disabled = false;
+            }
           });
           btnContainer3D.appendChild(loadOtherStlButton);
 
@@ -4220,6 +4282,7 @@ btnContainer.appendChild(edit2DStatic); */
       }
 
       if (
+        caseMeshRequested &&
         responseData == "stl" &&
         url == "/parameterisation/mesh/getall" &&
         !close
@@ -4362,6 +4425,132 @@ btnContainer.appendChild(edit2DStatic); */
 
   .smart-btn.other-stl {
       background-color: #007bff;
+  }
+
+  /* Design overlay is currently on top of the jaw. */
+  /* Shown when a case has no uploaded 3D files — the "+" slots mirror the
+     3D preview panel's empty rows. */
+  #design-upload-prompt {
+      position: absolute;
+      inset: 0;
+      z-index: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      pointer-events: auto;
+  }
+
+  #design-upload-prompt .dup-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      max-width: min(560px, 92vw);
+      padding: 26px 30px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 16px;
+      background: rgba(17, 24, 39, 0.88);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+      text-align: center;
+      font-family: "Montserrat", Arial, sans-serif;
+      color: #f1f5f9;
+  }
+
+  #design-upload-prompt .dup-heading {
+      font-size: 18px;
+      font-weight: 700;
+  }
+
+  #design-upload-prompt .dup-sub {
+      font-size: 13px;
+      opacity: 0.75;
+  }
+
+  #design-upload-prompt .dup-slots {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 6px;
+  }
+
+  #design-upload-prompt .dup-slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 132px;
+      height: 96px;
+      padding: 8px;
+      border: 1px dashed rgba(255, 255, 255, 0.35);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.06);
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+  }
+
+  #design-upload-prompt .dup-slot:hover {
+      border-color: #4fa3e8;
+      background: rgba(79, 163, 232, 0.16);
+  }
+
+  #design-upload-prompt .dup-plus {
+      font-size: 28px;
+      font-weight: 300;
+      line-height: 1;
+  }
+
+  #design-upload-prompt .dup-slot-label {
+      font-size: 12px;
+      opacity: 0.85;
+  }
+
+  #design-upload-prompt .dup-status {
+      min-height: 18px;
+      font-size: 12.5px;
+      opacity: 0.9;
+  }
+
+  #design-upload-prompt .dup-open-scan {
+      margin-top: 4px;
+      padding: 8px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 8px;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+  }
+
+  #design-upload-prompt .dup-open-scan:hover {
+      background: rgba(255, 255, 255, 0.12);
+  }
+
+  #design-upload-prompt .dup-open-scan:disabled {
+      opacity: 0.5;
+      cursor: progress;
+  }
+
+  @media (max-width: 640px) {
+    #design-upload-prompt .dup-slot {
+        width: 108px;
+        height: 84px;
+    }
+  }
+
+  .smart-btn.other-stl.active {
+      background-color: #0b5ed7;
+      box-shadow: 0 0 0 2px #38bdf8, 0 0 10px rgba(56, 189, 248, 0.35);
+  }
+
+  .smart-btn:disabled {
+      opacity: 0.6;
+      cursor: progress;
   }
 
   .smart-btn.legend-toggle-btn {
@@ -5971,7 +6160,456 @@ btnContainer.appendChild(edit2DStatic); */
     }
 } */
 
-  async function loadAllSTLSlots() {
+  // The viewer LANDS on the design (the uploaded slot STLs); the case's own
+  // mesh, polylines and artificial teeth are loaded but hidden until the 3D
+  // button asks for them. Both sets stay in memory, so switching is instant.
+  const designSlotMeshes = [];
+  let designViewActive = false;
+
+  // Fixed slot layout, mirroring EXTRA_STL_SLOT_NAMES in 2D/preview3D.js:
+  // 1 upper jaw, 2 upper metal RPD, 3 lower jaw, 4 lower metal RPD.
+  const EXTRA_STL_SLOT_JAW = { 1: "upper", 2: "upper", 3: "lower", 4: "lower" };
+  const METAL_RPD_SLOTS = new Set([2, 4]);
+  // Row label + icon per slot, same as the 3D preview panel's "Other 3D files".
+  const EXTRA_STL_SLOT_NAMES = {
+    1: "Upper jaw",
+    2: "Upper metal RPD",
+    3: "Lower jaw",
+    4: "Lower metal RPD",
+  };
+  const EXTRA_STL_SLOT_ICONS = {
+    1: "Icon_UpperJaw_Occlusal.png",
+    2: "upper.svg",
+    3: "Icon_LowerJaw_Occlusal.png",
+    4: "lower.svg",
+  };
+  // Slot colours are kept identical to the 3D preview panel so the same upload
+  // reads the same in both places (EXTRA_STL_COLOR / METAL_RPD_COLOR there).
+  const EXTRA_STL_COLOR = 0xb0875a; // jaw tan
+  const METAL_RPD_COLOR = 0xd6dadf; // brushed cobalt-chrome / stainless
+
+  // One 0–100% bar across the whole slot download. ApiClient drives
+  // window.viewerLoadingEls.progressBar per request — max = that file's bytes,
+  // value back to 0 each time — so a plain hand-off makes the bar restart four
+  // times. This lends it a stand-in whose writes are folded into the overall
+  // figure, and paints the real element itself. The speed readout (displayBox)
+  // stays wired to ApiClient, which is the one thing it reports per file.
+  function createSlotProgressBridge(slotCount) {
+    const els = window.viewerLoadingEls;
+    if (!els) return { begin() {}, complete() {}, restore() {} };
+
+    let completed = 0;
+    let fileMax = 1;
+    let fileValue = 0;
+    let shown = 0;
+
+    const paint = () => {
+      const fraction = Math.min(
+        (completed + Math.min(fileValue / fileMax, 1)) / slotCount,
+        1
+      );
+      // Never goes backwards: any other request in flight (the nav thumbnail,
+      // on entry) writes its own byte counts through this same stand-in, and
+      // its smaller totals would otherwise drag the bar back.
+      shown = Math.max(shown, Math.round(fraction * 100));
+      const percent = shown;
+      els.progressBar.max = 100;
+      els.progressBar.value = percent;
+      els.progressBar.style.display = "block";
+      els.percentage.textContent = `${percent}%`;
+    };
+
+    const progressStandIn = {
+      style: {},
+      get max() {
+        return fileMax;
+      },
+      set max(bytes) {
+        fileMax = Number(bytes) || 1;
+      },
+      get value() {
+        return fileValue;
+      },
+      set value(bytes) {
+        fileValue = Number(bytes) || 0;
+        paint();
+      },
+    };
+
+    window.viewerLoadingEls = {
+      ...els,
+      progressBar: progressStandIn,
+      // Swallows ApiClient's per-file percentage so it can't fight paint().
+      percentage: { textContent: "" },
+    };
+
+    return {
+      begin(slot) {
+        fileMax = 1;
+        fileValue = 0;
+        // ApiClient only rewrites this line once bytes start arriving, so
+        // without this it still names the previous slot while the next one is
+        // in flight — contradicting the status line right above it.
+        els.displayBox.textContent = `Requesting Slot ${slot}…`;
+        paint();
+      },
+      // Empty slots 404 without ever touching the bar, so the step comes from
+      // here rather than from the byte counter reaching max.
+      complete() {
+        completed += 1;
+        fileMax = 1;
+        fileValue = 0;
+        paint();
+      },
+      restore() {
+        window.viewerLoadingEls = els;
+      },
+    };
+  }
+
+  function disposeDesignSlotMesh(mesh) {
+    parentObject.remove(mesh);
+    mesh.geometry?.dispose?.();
+    const materials = Array.isArray(mesh.material)
+      ? mesh.material
+      : [mesh.material];
+    materials.forEach((entry) => entry?.dispose?.());
+    // STLMeshLoader returns geometry variants (normal/occlusion/undercut) in
+    // this map, not materials — dispose them too.
+    all_mesh_mat[mesh.name]?.forEach?.((entry) => entry?.dispose?.());
+    delete all_mesh_mat[mesh.name];
+  }
+
+  function isDesignViewActive() {
+    return designViewActive;
+  }
+
+  // While the design view is up the objects panel lists the four slots instead
+  // of the case's jaw/mesh rows. Empty slots still get a row (disabled) so the
+  // panel always reads as the fixed 4-slot set, like the preview panel.
+  // Returns [] in case view, which restores the normal rows.
+  function getDesignSlotRoster() {
+    if (!designViewActive || !designSlotMeshes.length) return [];
+    return [1, 2, 3, 4].map((slot) => ({
+      slot,
+      label: `Slot ${slot}: ${EXTRA_STL_SLOT_NAMES[slot]}`,
+      iconPath: `${basePath}/assets/${EXTRA_STL_SLOT_ICONS[slot]}`,
+      mesh: designSlotMeshes.find((m) => m.userData?.designSlot === slot) || null,
+    }));
+  }
+
+  // What was hidden to show the design, with the visibility each item had
+  // beforehand, so switching back restores exactly what was on screen.
+  const hiddenCaseMeshes = [];
+  const hiddenCaseOverlays = [];
+  const hiddenDesignMeshes = [];
+
+  const JAW_KEYS = ["upper", "lower"];
+
+  // Hide the case's meshes plus its polyline and artificial-teeth overlays —
+  // all three belong to the scanned case, not to the uploads. Safe to call
+  // again: the overlays finish loading in the background well after the design
+  // is already on screen, and this picks them up without double-recording.
+  function hideCaseAssetsForDesign() {
+    parentObject.children.forEach((child) => {
+      if (!child.isMesh || child.userData?.isDesignSlot) return;
+      if (hiddenCaseMeshes.some((entry) => entry.mesh === child)) return;
+      hiddenCaseMeshes.push({ mesh: child, visible: child.visible });
+      child.visible = false;
+    });
+
+    JAW_KEYS.forEach((jaw) => {
+      if (hiddenCaseOverlays.some((entry) => entry.jaw === jaw)) return;
+      hiddenCaseOverlays.push({
+        jaw,
+        polyline: window.getPolylineJawVisibility?.(jaw) ?? true,
+        teeth: artificialTeethRenderer.getJawVisibility?.(jaw) ?? true,
+      });
+      window.setPolylineJawVisibility?.(jaw, false);
+      artificialTeethRenderer.setJawVisibility?.(jaw, false);
+    });
+  }
+
+  function restoreCaseAssets() {
+    hiddenCaseMeshes.splice(0).forEach(({ mesh, visible }) => {
+      mesh.visible = visible;
+    });
+    hiddenCaseOverlays.splice(0).forEach(({ jaw, polyline, teeth }) => {
+      window.setPolylineJawVisibility?.(jaw, polyline);
+      artificialTeethRenderer.setJawVisibility?.(jaw, teeth);
+    });
+    window.syncArtificialTeethToJaw?.();
+  }
+
+  // Slot meshes are kept in memory when the case view is showing, so coming
+  // back to the design costs nothing.
+  function hideDesignMeshes() {
+    designSlotMeshes.forEach((mesh) => {
+      hiddenDesignMeshes.push({ mesh, visible: mesh.visible });
+      mesh.visible = false;
+    });
+  }
+
+  function showDesignMeshes() {
+    if (!hiddenDesignMeshes.length) return;
+    hiddenDesignMeshes.splice(0).forEach(({ mesh, visible }) => {
+      mesh.visible = visible;
+    });
+  }
+
+  function rebuildObjectsPanel() {
+    removeVisibilityAndTransparencyControls();
+    addVisibilityAndTransparencyControls(
+      parentObject,
+      name,
+      all_mesh_mat,
+      getDesignSlotRoster()
+    );
+  }
+
+  // Show the uploaded 3D files. Fetches them on first use; afterwards it is
+  // just a visibility flip. Returns false when the case has no uploads — the
+  // caller then offers the upload affordance instead.
+  async function showDesignView({ silent = false } = {}) {
+    if (!designSlotMeshes.length) {
+      const loaded = await loadAllSTLSlots({ silent });
+      if (!loaded) return false;
+    } else {
+      showDesignMeshes();
+    }
+    removeDesignUploadPrompt();
+    designViewActive = true;
+    hideCaseAssetsForDesign();
+    updateViewerRotationOrigin();
+    syncPolylineFocusMode();
+    controls.update();
+    rebuildObjectsPanel();
+    return true;
+  }
+
+  // ── Upload affordance for a case with no uploads ────────────────────────
+  // Mirrors the 3D preview panel's empty slot rows: a "+" per slot that opens a
+  // file picker and POSTs to /stl/slot/, then reloads the design view.
+  function removeDesignUploadPrompt() {
+    document.getElementById("design-upload-prompt")?.remove();
+  }
+
+  function uploadSlotStl(payload) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${API_BASE}/stl/slot/`);
+      xhr.setRequestHeader("Content-Type", "application/json");
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        window.updateViewerLoading?.(
+          `Uploading… ${Math.round((event.loaded / event.total) * 100)}%`
+        );
+      };
+      xhr.onload = () =>
+        xhr.status >= 200 && xhr.status < 300
+          ? resolve(xhr.responseText)
+          : reject(new Error(`HTTP ${xhr.status}`));
+      xhr.onerror = () => reject(new Error("network error"));
+      xhr.send(payload);
+    });
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",").pop());
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function pickAndUploadSlot(slot, statusEl) {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".stl";
+    input.hidden = true;
+    document.body.appendChild(input);
+    const file = await new Promise((resolve) => {
+      input.addEventListener("change", () => resolve(input.files?.[0] || null));
+      input.click();
+    });
+    input.remove();
+    if (!file) return;
+    if (!/\.stl$/i.test(file.name)) {
+      statusEl.textContent = "Only .stl files are supported.";
+      return;
+    }
+
+    statusEl.textContent = `Uploading ${file.name}…`;
+    try {
+      const base64 = await fileToBase64(file);
+      await uploadSlotStl(
+        JSON.stringify([
+          {
+            machine_id: MACHINE_ID,
+            uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
+            caseIntID: paramValue,
+          },
+          { slotNumber: slot, filename: file.name, data: base64 },
+        ])
+      );
+      statusEl.textContent = `${file.name} uploaded. Loading…`;
+      const shown = await showDesignView({ silent: true });
+      window.syncDesignViewButton?.(shown);
+    } catch (error) {
+      console.error("[viewer3D] slot upload failed", error);
+      statusEl.textContent = "Upload failed. Please try again.";
+    }
+  }
+
+  // Shown in place of the design when the case has no uploads at all.
+  function showDesignUploadPrompt() {
+    if (document.getElementById("design-upload-prompt")) return;
+
+    const prompt = document.createElement("div");
+    prompt.id = "design-upload-prompt";
+    // Own card + background: the viewer stage can be light or dark depending on
+    // the case, and the text has to stay readable either way.
+    const card = document.createElement("div");
+    card.className = "dup-card";
+
+    const heading = document.createElement("div");
+    heading.className = "dup-heading";
+    heading.textContent = "No 3D RPD design uploaded yet";
+
+    const sub = document.createElement("div");
+    sub.className = "dup-sub";
+    sub.textContent = "Add an STL to a slot, or open the 3D scan.";
+
+    const slotsRow = document.createElement("div");
+    slotsRow.className = "dup-slots";
+
+    const status = document.createElement("div");
+    status.className = "dup-status";
+
+    [1, 2, 3, 4].forEach((slot) => {
+      const tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "dup-slot";
+      tile.title = `Upload ${EXTRA_STL_SLOT_NAMES[slot]}`;
+      tile.setAttribute("aria-label", `Upload ${EXTRA_STL_SLOT_NAMES[slot]}`);
+      tile.innerHTML =
+        `<span class="dup-plus" aria-hidden="true">+</span>` +
+        `<span class="dup-slot-label">${EXTRA_STL_SLOT_NAMES[slot]}</span>`;
+      tile.addEventListener("click", () => pickAndUploadSlot(slot, status));
+      slotsRow.appendChild(tile);
+    });
+
+    const openScan = document.createElement("button");
+    openScan.type = "button";
+    openScan.className = "dup-open-scan";
+    openScan.textContent = "Open the 3D scan instead";
+    openScan.addEventListener("click", async () => {
+      openScan.disabled = true;
+      await showCaseView();
+      window.syncDesignViewButton?.(false);
+    });
+
+    card.append(heading, sub, slotsRow, status, openScan);
+    prompt.appendChild(card);
+    (viewerContainer || document.body).appendChild(prompt);
+  }
+
+  // ── Case assets, loaded on demand ───────────────────────────────────────
+  // Nothing here is fetched on entry. The 3D button is what pulls the case's
+  // mesh, polylines and artificial teeth down, once; afterwards switching views
+  // is just a visibility flip.
+  let caseAssetsPromise = null;
+
+  // Same endpoints and fallback the eager path used: parameterisation meshes
+  // first, /stl/get when that is unavailable (which also sets `stl`, the flag
+  // that decides the upper jaw's orientation).
+  async function fetchCaseMeshData() {
+    const fetched = [];
+    const jawMesh = await apiClient.post(
+      "/parameterisation/mesh/getall",
+      [data],
+      false,
+      "Jaw mesh"
+    );
+    if (isObject(jawMesh)) {
+      fetched.push(...[].concat(jawMesh));
+    } else {
+      console.log("[viewer3D] STL source selected: /stl/get (parameterisation fallback)");
+      const rawStl = await apiClient.post("/stl/get", [data], false, "Jaw mesh");
+      if (isObject(rawStl)) {
+        fetched.push(...[].concat(rawStl));
+        stl = true;
+      }
+    }
+
+    const dentureMesh = await apiClient.post(
+      "/surface/getall",
+      [data],
+      false,
+      "Denture mesh"
+    );
+    if (isObject(dentureMesh)) fetched.push(...[].concat(dentureMesh));
+
+    return fetched;
+  }
+
+  async function loadCaseAssets() {
+    const startedAt = performance.now();
+    caseMeshRequested = true;
+    const ownsLoadingScreen = !document.getElementById("viewer-loading-screen");
+    if (ownsLoadingScreen) createViewerLoadingScreen();
+    window.updateViewerLoading?.("Loading 3D scan…");
+
+    try {
+      // Heatmaps first: renderCaseMeshes colours the jaws from undercut_values.
+      await fetchUndercutHeatmaps();
+      const fetched = await fetchCaseMeshData();
+      window.updateViewerLoading?.("Preparing 3D scan…");
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      renderCaseMeshes(fetched);
+      // The design is still on screen at this point, so these land hidden (see
+      // renderCaseMeshes) and are revealed by showCaseView below.
+      window.updateViewerLoading?.("Loading design lines…");
+      await fetchAndRenderCaseOverlays(paramValue).catch((error) => {
+        console.warn("Case overlays failed to load:", error);
+      });
+      if (isDesignViewActive()) hideCaseAssetsForDesign();
+      addViewerLoadTiming("case assets (on demand)", performance.now() - startedAt);
+    } finally {
+      if (ownsLoadingScreen) removeViewerLoadingScreen();
+    }
+  }
+
+  function ensureCaseAssets() {
+    if (!caseAssetsPromise) {
+      caseAssetsPromise = loadCaseAssets().catch((error) => {
+        // Let a failed load be retried by the next click rather than wedging
+        // the button on a rejected promise forever.
+        caseAssetsPromise = null;
+        throw error;
+      });
+    }
+    return caseAssetsPromise;
+  }
+
+  // Show the case's own mesh, polylines and artificial teeth (the 3D button).
+  async function showCaseView() {
+    await ensureCaseAssets();
+    removeDesignUploadPrompt();
+    designViewActive = false;
+    hideDesignMeshes();
+    restoreCaseAssets();
+    updateViewerRotationOrigin();
+    syncPolylineFocusMode();
+    controls.update();
+    rebuildObjectsPanel();
+  }
+
+  // Fetches the four upload slots and adds them to the scene. Visibility and
+  // the objects panel are the caller's job (showDesignView). `silent` skips the
+  // alerts, for the automatic load on entry. Returns true if anything loaded.
+  async function loadAllSTLSlots({ silent = false } = {}) {
     const slotLoadStartedAt = performance.now();
     startViewerLoadTimer("viewer: framework/denture mesh loading");
     const apiUrl = "/stl/slot/get";
@@ -5982,15 +6620,9 @@ btnContainer.appendChild(edit2DStatic); */
       caseIntID: paramValue,
     };
 
-    // Clear all scene content: jaw meshes, polylines, and artificial teeth.
-    while (parentObject.children.length > 0) {
-      const child = parentObject.children[0];
-      parentObject.remove(child);
-      if (child.geometry) child.geometry.dispose();
-      if (child.material) child.material.dispose();
-    }
-    clearPolylineOverlay();
-    artificialTeethRenderer.clear();
+    // Drop any previous slot meshes so a re-load can't stack copies.
+    designSlotMeshes.splice(0).forEach(disposeDesignSlotMesh);
+    hiddenDesignMeshes.splice(0);
 
     // Remove previous GUI controls if any
     const oldGui = document.querySelector(".dg.ac");
@@ -6010,127 +6642,155 @@ btnContainer.appendChild(edit2DStatic); */
     );
     if (guiBlackBox) guiBlackBox.remove();
 
+    // Reuse the viewer's own loading screen: ApiClient.post drives
+    // window.viewerLoadingEls (bar, percentage, speed) whenever it exists, so
+    // this gets real download progress instead of ApiClient's fallback
+    // container. Only tear it down if we put it up — the initial page load owns
+    // the screen if it is still running.
+    const ownsLoadingScreen = !hasLiveViewerLoadingScreen();
+    if (ownsLoadingScreen) createViewerLoadingScreen();
+    window.updateViewerLoading?.("Loading 3D RPD design…");
+    const slotProgress = createSlotProgressBridge(4);
+
     let anyLoaded = false;
 
-    for (let slot = 1; slot <= 4; slot++) {
-      //for (let slot = 4; slot>0; slot--){
-      const slotStartedAt = performance.now();
-      const payload = [authPayload, { slotNumber: slot }];
-
-      try {
-        const result = await apiClient.post(
-          apiUrl,
-          payload,
-          false,
-          `Slot ${slot}`
-        );
-
-        // Match the 3D preview panel (preview3D.fetchExtraStlsForCase): the
-        // /stl/slot/get endpoint may return a single object OR a one-element
-        // array ([{ filename, data, ... }]). Newly created slot STLs come back
-        // array-wrapped, so read result[0] when it's an array — otherwise the
-        // viewer silently skipped them.
-        const slotItem = Array.isArray(result) ? result[0] : result;
-
-        if (!slotItem || !slotItem.data) {
-          console.log(`❌ Slot ${slot}: No STL data found.`);
-          continue;
+    // The backend throttles bursts of requests and the rejection comes back
+    // without CORS headers, so the browser reports it as a CORS failure rather
+    // than a status. Loading on entry puts slot 1 right behind the case-mesh
+    // downloads, which was enough to lose it — pause and retry before dropping
+    // a slot. Same reason the case list loads its rows lazily.
+    const fetchSlot = async (payload, slot) => {
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          return await apiClient.post(apiUrl, payload, false, `Slot ${slot}`);
+        } catch (error) {
+          if (attempt >= 3) throw error;
+          console.warn(
+            `[viewer3D] Slot ${slot} attempt ${attempt} failed (${error.message || error}) — retrying`
+          );
+          await new Promise((resolve) => setTimeout(resolve, 1200 * attempt));
         }
-
-        const binarySTL = atob(slotItem.data);
-        // Assign a unique color per slot
-        const slotColors = {
-          1: {
-            color: new THREE.Color(197 / 255, 173 / 255, 137 / 255),
-            opacity: 255 / 255,
-          },
-          2: {
-            color: new THREE.Color(71 / 255, 86 / 255, 105 / 255),
-            opacity: 255 / 255,
-          },
-          3: {
-            color: new THREE.Color(197 / 255, 173 / 255, 137 / 255),
-            opacity: 255 / 255,
-          },
-          4: {
-            color: new THREE.Color(71 / 255, 86 / 255, 105 / 255),
-            opacity: 255 / 255,
-          },
-        };
-
-        const slotColorInfo = slotColors[slot] || {
-          color: new THREE.Color(1, 1, 1),
-          opacity: 1,
-        };
-
-        const slotMaterial = new THREE.MeshStandardMaterial({
-          color: slotColorInfo.color,
-          opacity: slotColorInfo.opacity,
-          transparent: false,
-          side: THREE.DoubleSide,
-          depthTest: true,
-          depthWrite: true,
-          metalness: 0.0,
-          roughness: 0.7,
-        });
-
-        /* const slotColors = {
-				1: 0xffb3ba, // soft pink
-				2: 0xbaffc9, // mint green
-				3: 0xbae1ff, // baby blue
-				4: 0xffffba  // pale yellow
-			}; */
-
-        /* 			const slotMaterial = new THREE.MeshStandardMaterial({
-				color: slotColors[slot] || 0xaaaaaa,
-				metalness: 0.0,
-				roughness: 0.7
-			}); */
-
-        const slotFilename = slotItem.filename || `Slot ${slot}`;
-        const isLower = slotFilename.toLowerCase().includes("lower");
-        const undercutForSlot =
-          (isLower ? undercut_values[0] : undercut_values[1]) ?? "stl";
-
-        const stlLoader = new STLMeshLoader(slotMaterial);
-        const [mesh, meshMaterials] = stlLoader.load(
-          binarySTL,
-          undercutForSlot
-        );
-        all_mesh_mat[slotFilename] = meshMaterials.slice();
-
-        mesh.name = slotFilename;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        mesh.userData = {
-          jaw_type: mesh.name.toLowerCase().includes("lower") ? "lower" : "upper",
-          archLabel: mesh.name.toLowerCase().includes("lower")
-            ? "Lower Arch"
-            : "Upper Arch",
-        };
-
-        // Apply the same transform as the original OFF upper jaw so slot STLs
-        // land in the same orientation. Lower jaw is already axis-aligned.
-        if (!isLower) {
-          changeMeshRotation(mesh, 1, 1, 180);
-          mesh.position.y += 5;
-        }
-
-        enforceOpaqueJawMesh(mesh);
-        parentObject.add(mesh);
-
-        console.log(`✅ Loaded STL from slot ${slot}`);
-        anyLoaded = true;
-      } catch (error) {
-        console.warn(`⚠️ Slot ${slot} failed:`, error.message || error);
       }
-    }
+    };
 
-    // Recalculate orbit target and sync polyline focus once, after all slots loaded.
-    if (anyLoaded) {
-      updateViewerRotationOrigin();
-      syncPolylineFocusMode();
-      controls.update();
+    try {
+      for (let slot = 1; slot <= 4; slot++) {
+        //for (let slot = 4; slot>0; slot--){
+        const slotStartedAt = performance.now();
+        const payload = [authPayload, { slotNumber: slot }];
+
+        try {
+          window.updateViewerLoading?.(
+            `Loading 3D RPD design — file ${slot} of 4`
+          );
+          slotProgress.begin(slot);
+          const result = await fetchSlot(payload, slot);
+
+          // Match the 3D preview panel (preview3D.fetchExtraStlsForCase): the
+          // /stl/slot/get endpoint may return a single object OR a one-element
+          // array ([{ filename, data, ... }]). Newly created slot STLs come back
+          // array-wrapped, so read result[0] when it's an array — otherwise the
+          // viewer silently skipped them.
+          const slotItem = Array.isArray(result) ? result[0] : result;
+
+          if (!slotItem || !slotItem.data) {
+            console.log(`❌ Slot ${slot}: No STL data found.`);
+            continue;
+          }
+
+          // Parsing a 15–20 MB STL blocks the main thread, so hand the browser a
+          // frame to paint this status before it freezes — otherwise the bar sits
+          // at 100% with no explanation for several seconds per file.
+          window.updateViewerLoading?.(`Preparing file ${slot} of 4…`);
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+
+          const binarySTL = atob(slotItem.data);
+          // Same finish the 3D preview panel gives these files (renderExtraStl in
+          // 2D/preview3D.js): jaw uploads in the jaw tan, metal-RPD slots in
+          // brushed cobalt-chrome.
+          const isMetalRpd = METAL_RPD_SLOTS.has(slot);
+          const slotMaterial = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(isMetalRpd ? METAL_RPD_COLOR : EXTRA_STL_COLOR),
+            opacity: 1,
+            transparent: false,
+            side: THREE.DoubleSide,
+            depthTest: true,
+            depthWrite: true,
+            metalness: isMetalRpd ? 0.85 : 0.05,
+            roughness: isMetalRpd ? 0.32 : 0.6,
+          });
+
+          /* const slotColors = {
+  				1: 0xffb3ba, // soft pink
+  				2: 0xbaffc9, // mint green
+  				3: 0xbae1ff, // baby blue
+  				4: 0xffffba  // pale yellow
+  			}; */
+
+          /* 			const slotMaterial = new THREE.MeshStandardMaterial({
+  				color: slotColors[slot] || 0xaaaaaa,
+  				metalness: 0.0,
+  				roughness: 0.7
+  			}); */
+
+          // Jaw side comes from the slot number, not the filename: the slots are
+          // fixed (1 upper jaw, 2 upper metal RPD, 3 lower jaw, 4 lower metal RPD
+          // — see EXTRA_STL_SLOT_NAMES in 2D/preview3D.js) and uploads are named
+          // freely, so "jawSTLSlot3.stl" and "ATC-C-05L.stl" (both lower) were
+          // being treated as upper and given the upper jaw's transform.
+          const isLower = EXTRA_STL_SLOT_JAW[slot] === "lower";
+          const undercutForSlot =
+            (isLower ? undercut_values[0] : undercut_values[1]) ?? "stl";
+          // Names key all_mesh_mat, so keep them unique even if two slots hold
+          // files with the same name.
+          const slotFilename = `Slot ${slot}: ${slotItem.filename || "3D file"}`;
+
+          const stlLoader = new STLMeshLoader(slotMaterial);
+          const [mesh, meshMaterials] = stlLoader.load(
+            binarySTL,
+            undercutForSlot
+          );
+          all_mesh_mat[slotFilename] = meshMaterials.slice();
+
+          mesh.name = slotFilename;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          mesh.userData = {
+            jaw_type: isLower ? "lower" : "upper",
+            archLabel: isLower ? "Lower Arch" : "Upper Arch",
+            // Marks this as a design-slot mesh and carries which slot it came
+            // from, so the objects panel can give each slot its own row.
+            isDesignSlot: true,
+            designSlot: slot,
+          };
+
+          // No transform: slot STLs are uploaded straight from the scanner and
+          // all four share one frame in which the arches already sit in
+          // occlusion (upper y above lower y, same x/z). The 180° Z flip the OFF
+          // upper jaw needs turns the upper arch upside down and drops it
+          // through the lower one, so it must not be applied here. Same as the
+          // 3D preview panel, which renders extras untransformed.
+
+          enforceOpaqueJawMesh(mesh);
+          parentObject.add(mesh);
+          designSlotMeshes.push(mesh);
+
+          console.log(`✅ Loaded STL from slot ${slot}`);
+          anyLoaded = true;
+        } catch (error) {
+          console.warn(`⚠️ Slot ${slot} failed:`, error.message || error);
+        } finally {
+          // Empty and failed slots have to step the bar too, or it stalls short
+          // of 100% on any case that doesn't fill all four.
+          slotProgress.complete();
+        }
+      }
+
+    } finally {
+      // Always drop the screen — a thrown slot must not leave the viewer
+      // permanently covered.
+      slotProgress.restore();
+      if (ownsLoadingScreen) removeViewerLoadingScreen();
     }
 
     endViewerLoadTimer("viewer: framework/denture mesh loading");
@@ -6139,211 +6799,220 @@ btnContainer.appendChild(edit2DStatic); */
       performance.now() - slotLoadStartedAt
     );
 
-    if (!anyLoaded) {
-      alert("❌ No STL files found in slots 1 to 4.");
-    } else {
-      alert("✅ STL loading completed.");
-      removeVisibilityAndTransparencyControls();
-      // 🧩 Re-enable visibility/transparency controls after loading
-      addVisibilityAndTransparencyControls(
-        parentObject,
-        name,
-        all_mesh_mat,
-        undercut_type
+    // On entry this runs unattended, so a case with no uploads must fall back
+    // to the case view quietly rather than opening with an alert.
+    if (!silent) {
+      alert(
+        anyLoaded
+          ? "✅ STL loading completed."
+          : "❌ No STL files found in slots 1 to 4."
       );
+    } else if (!anyLoaded) {
+      console.log("[viewer3D] No slot STLs for this case — showing case mesh.");
     }
+
+    return anyLoaded;
   }
 
   //console.log(responseDatas);
-  const meshCpuStartedAt = performance.now();
-  let jawMeshCpuMs = 0;
-  let frameworkMeshCpuMs = 0;
-  startViewerLoadTimer("viewer: mesh decode/parse/render");
+  // Decode/parse/add the case's own meshes. Extracted so the 3D button can
+  // run it later: on entry `responseDatas` is empty (nothing was fetched) and
+  // this is a no-op.
+  function renderCaseMeshes(responseDatas) {
+    const meshCpuStartedAt = performance.now();
+    let jawMeshCpuMs = 0;
+    let frameworkMeshCpuMs = 0;
+    startViewerLoadTimer("viewer: mesh decode/parse/render");
 
-  // Normalize each mesh entry so the `.includes()` checks below never throw and
-  // jaw-side detection matches the 3D preview panel (getJawKeyFromFile). The
-  // /stl/get fallback can return a NUMERIC `type` (1=upper, 2=lower) or omit
-  // `filename`; calling `.includes()` on a number threw here, halting the parse
-  // loop and leaving the loader stuck at 100%.
-  for (const f of responseDatas) {
-    if (typeof f.filename !== "string") f.filename = String(f.filename ?? "");
-    const t = String(f.type ?? "").toLowerCase();
-    if (!t.includes("upper") && !t.includes("lower")) {
-      const name = f.filename.toLowerCase();
-      if (f.type === 1 || f.type === "1" || name.includes("upper")) f.type = "upper_jaw";
-      else if (f.type === 2 || f.type === "2" || name.includes("lower")) f.type = "lower_jaw";
-      else f.type = t;
-    }
-  }
-
-  const jawFirstResponseDatas = [...responseDatas].sort((left, right) => {
-    const leftIsSurface = left.filename.includes("surface");
-    const rightIsSurface = right.filename.includes("surface");
-    return Number(leftIsSurface) - Number(rightIsSurface);
-  });
-  for (const offFile of jawFirstResponseDatas) {
-    const meshFileStartedAt = performance.now();
-    let meshDecodeMs = 0;
-    let meshParseMs = 0;
-    let meshAddMs = 0;
-    const meshCategory = offFile.filename.includes("surface")
-      ? "framework/denture"
-      : "jaw";
-    let loader;
-    //console.log(offFile)
-    if (offFile.filename.includes("surface")) {
-      loader = new OFFLoader(
-        materialsurface.clone(),
-        materialsurface_non_metal.clone()
-      );
-    } else {
-      loader = new OFFLoader(material.clone());
-    }
-
-    // Fetch the OFF file data
-    //const offData = await apiClient.get(offFile); // Assuming the ApiClient has a get method for fetching data
-    const meshDecodeStartedAt = performance.now();
-    const offdata = atob(offFile.data);
-    meshDecodeMs = performance.now() - meshDecodeStartedAt;
-    let x;
-    if (
-      offFile.filename.includes("ParameterisationMesh") ||
-      offFile.filename.includes("closed")
-    ) {
-      x = true;
-    }
-    // Load the OFF file
-    //console.log('check stl:' + stl)
-    const meshParseStartedAt = performance.now();
-
-    // `stl` only records that /parameterisation/mesh/getall was unavailable and
-    // we fell back to /stl/get — it does NOT guarantee the bytes are STL. That
-    // fallback route serves OFF meshes for some cases (e.g. upperjawclosed.off),
-    // and feeding OFF text into the STL loader throws
-    // "RangeError: Offset is outside the bounds of the DataView", which escapes
-    // this loop and leaves the loader stuck at 100% (the 3D preview panel avoids
-    // this by sniffing each payload — see preview3D.inspectMeshPayload). Detect
-    // the real format from the decoded head and route OFF data to the OFF loader
-    // regardless of the flag; keep `stl` for orientation (closed OFF jaws, like
-    // real STLs, are already world-oriented and must NOT get the +180 flip).
-    const isOffData = offdata.trimStart().slice(0, 3).toUpperCase() === "OFF";
-    // "stl" is the loaders' no-heatmap sentinel — an undefined surface would
-    // throw inside OFFLoader ('surveying_values' in undefined) and re-create
-    // the stuck-at-100% hang.
-    const undercutForJaw =
-      (offFile.type.includes("upper")
-        ? undercut_values[1]
-        : undercut_values[0]) ?? "stl";
-    const jawSideKnown =
-      offFile.type.includes("upper") || offFile.type.includes("lower");
-    if (jawSideKnown) {
-      if (stl && !isOffData) {
-        const stlMeshLoader = new STLMeshLoader(material);
-        mesh_geo = stlMeshLoader.load(offdata, undercutForJaw);
-      } else {
-        mesh_geo = loader.parse(offdata, undercutForJaw, x);
+    // Normalize each mesh entry so the `.includes()` checks below never throw and
+    // jaw-side detection matches the 3D preview panel (getJawKeyFromFile). The
+    // /stl/get fallback can return a NUMERIC `type` (1=upper, 2=lower) or omit
+    // `filename`; calling `.includes()` on a number threw here, halting the parse
+    // loop and leaving the loader stuck at 100%.
+    for (const f of responseDatas) {
+      if (typeof f.filename !== "string") f.filename = String(f.filename ?? "");
+      const t = String(f.type ?? "").toLowerCase();
+      if (!t.includes("upper") && !t.includes("lower")) {
+        const name = f.filename.toLowerCase();
+        if (f.type === 1 || f.type === "1" || name.includes("upper")) f.type = "upper_jaw";
+        else if (f.type === 2 || f.type === "2" || name.includes("lower")) f.type = "lower_jaw";
+        else f.type = t;
       }
     }
-    meshParseMs = performance.now() - meshParseStartedAt;
 
-    // If the jaw side couldn't be resolved (unexpected `type`) or the loader
-    // rejected the payload (OFFLoader.parse returns the string "stl" on a bad
-    // header), mesh_geo isn't a [mesh, materials] pair — skip rather than throw
-    // (a throw here halts the loop and leaves the loading screen stuck at 100%).
-    if (!mesh_geo || typeof mesh_geo === "string" || !mesh_geo[0]) {
-      console.warn(
-        `[viewer3D] Skipping mesh with unresolved geometry: ${offFile.filename} (type=${offFile.type})`
-      );
-      continue;
-    }
-
-    const meshAddStartedAt = performance.now();
-    const mesh = mesh_geo[0];
-    mesh.name = offFile.filename;
-
-    mesh.userData = {
-      jaw_type: offFile.type,
-      archLabel: offFile.type.includes("upper") ? "Upper Arch" : "Lower Arch",
-    };
-    if (all_mesh_mat != null) {
-      all_mesh_mat[offFile.filename] = mesh_geo[1].slice();
-    }
-
-    //addVisibilityControl(mesh, 'BoxMesh');
-    //addTransparencyControl(material, 'BoxMesh');
-    /*
-    if(offFile.filename.includes('surface')[])
-      {
-        if(offFile.filename.includes('upper'))
-          {
-            changeMeshRotation(mesh,pos['upper'][0],pos['upper'][1],pos['upper'][2]);
-          }
-          else{
-            changeMeshRotation(mesh,pos['lower'][0],pos['lower'][1],pos['lower'][2]);
-          }
-      }
-          */
-    // Add the mesh to the parent object
-
-    if (offFile.type.includes("upper") && !stl && !close) {
-      //console.log('check');
-      changeMeshRotation(mesh, 1, 1, 180);
-      mesh.position.y += 5;
-    }
-
-    //console.log(mesh)
-    /*
-    if(stl)
-      {
-        changeMeshRotation(mesh,0,105,0);
-      }
-        */
-    enforceOpaqueJawMesh(mesh);
-    parentObject.add(mesh);
-    syncPolylineFocusMode();
-    meshAddMs = performance.now() - meshAddStartedAt;
-
-    const meshTotalMs = performance.now() - meshFileStartedAt;
-    if (meshCategory === "jaw") {
-      jawMeshCpuMs += meshTotalMs;
-    } else {
-      frameworkMeshCpuMs += meshTotalMs;
-    }
-    addViewerMeshTiming({
-      file: offFile.filename,
-      type: offFile.type,
-      category: meshCategory,
-      decodeMs: meshDecodeMs,
-      parseMs: meshParseMs,
-      addMs: meshAddMs,
-      totalMs: meshTotalMs,
-      vertices: mesh.geometry?.attributes?.position?.count ?? null,
-      children: mesh.children?.length ?? 0,
+    const jawFirstResponseDatas = [...responseDatas].sort((left, right) => {
+      const leftIsSurface = left.filename.includes("surface");
+      const rightIsSurface = right.filename.includes("surface");
+      return Number(leftIsSurface) - Number(rightIsSurface);
     });
-  }
-  endViewerLoadTimer("viewer: mesh decode/parse/render");
-  addViewerLoadTiming(
-    "mesh decode/parse/render",
-    performance.now() - meshCpuStartedAt,
-    { files: responseDatas.length }
-  );
-  if (LOG_VIEWER_LOAD_TIMINGS_TO_CONSOLE) {
-    console.log(`viewer: load jaw mesh: ${jawMeshCpuMs.toFixed(2)} ms`);
-    console.log(
-      `viewer: load framework/denture mesh: ${frameworkMeshCpuMs.toFixed(2)} ms`
+    for (const offFile of jawFirstResponseDatas) {
+      const meshFileStartedAt = performance.now();
+      let meshDecodeMs = 0;
+      let meshParseMs = 0;
+      let meshAddMs = 0;
+      const meshCategory = offFile.filename.includes("surface")
+        ? "framework/denture"
+        : "jaw";
+      let loader;
+      //console.log(offFile)
+      if (offFile.filename.includes("surface")) {
+        loader = new OFFLoader(
+          materialsurface.clone(),
+          materialsurface_non_metal.clone()
+        );
+      } else {
+        loader = new OFFLoader(material.clone());
+      }
+
+      // Fetch the OFF file data
+      //const offData = await apiClient.get(offFile); // Assuming the ApiClient has a get method for fetching data
+      const meshDecodeStartedAt = performance.now();
+      const offdata = atob(offFile.data);
+      meshDecodeMs = performance.now() - meshDecodeStartedAt;
+      let x;
+      if (
+        offFile.filename.includes("ParameterisationMesh") ||
+        offFile.filename.includes("closed")
+      ) {
+        x = true;
+      }
+      // Load the OFF file
+      //console.log('check stl:' + stl)
+      const meshParseStartedAt = performance.now();
+
+      // `stl` only records that /parameterisation/mesh/getall was unavailable and
+      // we fell back to /stl/get — it does NOT guarantee the bytes are STL. That
+      // fallback route serves OFF meshes for some cases (e.g. upperjawclosed.off),
+      // and feeding OFF text into the STL loader throws
+      // "RangeError: Offset is outside the bounds of the DataView", which escapes
+      // this loop and leaves the loader stuck at 100% (the 3D preview panel avoids
+      // this by sniffing each payload — see preview3D.inspectMeshPayload). Detect
+      // the real format from the decoded head and route OFF data to the OFF loader
+      // regardless of the flag; keep `stl` for orientation (closed OFF jaws, like
+      // real STLs, are already world-oriented and must NOT get the +180 flip).
+      const isOffData = offdata.trimStart().slice(0, 3).toUpperCase() === "OFF";
+      // "stl" is the loaders' no-heatmap sentinel — an undefined surface would
+      // throw inside OFFLoader ('surveying_values' in undefined) and re-create
+      // the stuck-at-100% hang.
+      const undercutForJaw =
+        (offFile.type.includes("upper")
+          ? undercut_values[1]
+          : undercut_values[0]) ?? "stl";
+      const jawSideKnown =
+        offFile.type.includes("upper") || offFile.type.includes("lower");
+      if (jawSideKnown) {
+        if (stl && !isOffData) {
+          const stlMeshLoader = new STLMeshLoader(material);
+          mesh_geo = stlMeshLoader.load(offdata, undercutForJaw);
+        } else {
+          mesh_geo = loader.parse(offdata, undercutForJaw, x);
+        }
+      }
+      meshParseMs = performance.now() - meshParseStartedAt;
+
+      // If the jaw side couldn't be resolved (unexpected `type`) or the loader
+      // rejected the payload (OFFLoader.parse returns the string "stl" on a bad
+      // header), mesh_geo isn't a [mesh, materials] pair — skip rather than throw
+      // (a throw here halts the loop and leaves the loading screen stuck at 100%).
+      if (!mesh_geo || typeof mesh_geo === "string" || !mesh_geo[0]) {
+        console.warn(
+          `[viewer3D] Skipping mesh with unresolved geometry: ${offFile.filename} (type=${offFile.type})`
+        );
+        continue;
+      }
+
+      const meshAddStartedAt = performance.now();
+      const mesh = mesh_geo[0];
+      mesh.name = offFile.filename;
+
+      mesh.userData = {
+        jaw_type: offFile.type,
+        archLabel: offFile.type.includes("upper") ? "Upper Arch" : "Lower Arch",
+      };
+      if (all_mesh_mat != null) {
+        all_mesh_mat[offFile.filename] = mesh_geo[1].slice();
+      }
+
+      //addVisibilityControl(mesh, 'BoxMesh');
+      //addTransparencyControl(material, 'BoxMesh');
+      /*
+      if(offFile.filename.includes('surface')[])
+        {
+          if(offFile.filename.includes('upper'))
+            {
+              changeMeshRotation(mesh,pos['upper'][0],pos['upper'][1],pos['upper'][2]);
+            }
+            else{
+              changeMeshRotation(mesh,pos['lower'][0],pos['lower'][1],pos['lower'][2]);
+            }
+        }
+            */
+      // Add the mesh to the parent object
+
+      if (offFile.type.includes("upper") && !stl && !close) {
+        //console.log('check');
+        changeMeshRotation(mesh, 1, 1, 180);
+        mesh.position.y += 5;
+      }
+
+      //console.log(mesh)
+      /*
+      if(stl)
+        {
+          changeMeshRotation(mesh,0,105,0);
+        }
+          */
+      enforceOpaqueJawMesh(mesh);
+      parentObject.add(mesh);
+      syncPolylineFocusMode();
+      meshAddMs = performance.now() - meshAddStartedAt;
+
+      const meshTotalMs = performance.now() - meshFileStartedAt;
+      if (meshCategory === "jaw") {
+        jawMeshCpuMs += meshTotalMs;
+      } else {
+        frameworkMeshCpuMs += meshTotalMs;
+      }
+      addViewerMeshTiming({
+        file: offFile.filename,
+        type: offFile.type,
+        category: meshCategory,
+        decodeMs: meshDecodeMs,
+        parseMs: meshParseMs,
+        addMs: meshAddMs,
+        totalMs: meshTotalMs,
+        vertices: mesh.geometry?.attributes?.position?.count ?? null,
+        children: mesh.children?.length ?? 0,
+      });
+    }
+    endViewerLoadTimer("viewer: mesh decode/parse/render");
+    addViewerLoadTiming(
+      "mesh decode/parse/render",
+      performance.now() - meshCpuStartedAt,
+      { files: responseDatas.length }
     );
+    if (LOG_VIEWER_LOAD_TIMINGS_TO_CONSOLE) {
+      console.log(`viewer: load jaw mesh: ${jawMeshCpuMs.toFixed(2)} ms`);
+      console.log(
+        `viewer: load framework/denture mesh: ${frameworkMeshCpuMs.toFixed(2)} ms`
+      );
+    }
+    addViewerLoadTiming("load jaw mesh", jawMeshCpuMs);
+    addViewerLoadTiming("load framework/denture mesh", frameworkMeshCpuMs);
+    logViewerObjectCounts("after jaw/framework mesh load");
+    updateViewerRotationOrigin();
   }
-  addViewerLoadTiming("load jaw mesh", jawMeshCpuMs);
-  addViewerLoadTiming("load framework/denture mesh", frameworkMeshCpuMs);
-  logViewerObjectCounts("after jaw/framework mesh load");
-  updateViewerRotationOrigin();
+
+  renderCaseMeshes(responseDatas);
   //console.log(all_mesh_mat);
 
   // Show "No STL/3D Scan File Found!" when the API returned no jaw mesh data.
+  // Only meaningful once the scan has actually been requested — on entry
+  // nothing is fetched, and an empty `responseDatas` just means "not asked for".
   const hasJawFiles = responseDatas.some(
     (f) => f.filename && !f.filename.includes("surface")
   );
-  if (!hasJawFiles) {
+  if (caseMeshRequested && !hasJawFiles) {
     const noScanOverlay = document.createElement("div");
     noScanOverlay.id = "no-scan-overlay";
     noScanOverlay.style.cssText =
@@ -6589,7 +7258,11 @@ btnContainer.appendChild(edit2DStatic); */
   const finalSceneRenderStartedAt = performance.now();
   startViewerLoadTimer("viewer: final scene render/update");
   animate();
-  removeViewerLoadingScreen();
+  // The loading screen is NOT dropped here. The scene is ready at this point
+  // (~1.5s) but it is empty: the landing content is the slot STLs, which are
+  // still tens of MB from arriving. Dropping it here left a blank stage with no
+  // progress for the whole download. It comes down once the design view settles
+  // (see designViewPromise below).
   endViewerLoadTimer("viewer: page/viewer initialization");
   addViewerLoadTiming(
     "page/viewer initialization",
@@ -6600,12 +7273,7 @@ btnContainer.appendChild(edit2DStatic); */
   const controlsStartedAt = performance.now();
   startViewerLoadTimer("viewer: controls setup");
   removeVisibilityAndTransparencyControls();
-  addVisibilityAndTransparencyControls(
-    parentObject,
-    name,
-    all_mesh_mat,
-    undercut_type
-  );
+  addVisibilityAndTransparencyControls(parentObject, name, all_mesh_mat);
   endViewerLoadTimer("viewer: controls setup");
   addViewerLoadTiming("controls setup", performance.now() - controlsStartedAt);
   addViewerLoadTiming(
@@ -6615,31 +7283,39 @@ btnContainer.appendChild(edit2DStatic); */
   logViewerObjectCounts("initial viewer usable");
   logViewerPerformanceSummary();
 
-  const overlayLoadPromise = fetchAndRenderCaseOverlays(paramValue).catch(
-    (error) => {
-      console.warn("Case overlays failed to load:", error);
-    }
-  );
+  // Polylines and artificial teeth are case assets: they are fetched by
+  // loadCaseAssets() when the 3D button asks for them, not on entry.
 
-  const logoutAfterBackgroundLoad = async () => {
-    const urlLogout = ["/user/logout"];
-    try {
-      // Call the post method and wait for the response
-      for (const urldata of urlLogout) {
-        const check = await apiClient.post(urldata, [data]);
-        //console.log('Success logout:', check)
-      }
-    } catch (error) {
-      console.error("Error:", error);
-    }
-  };
+  // The viewer lands on the uploaded 3D files. Silent, so a case with no
+  // uploads shows the upload affordance instead of opening with an alert.
+  const designViewPromise = showDesignView({ silent: true })
+    .then((shown) => {
+      window.syncDesignViewButton?.(shown);
+      // No uploads for this case: offer the "+" slots rather than an empty
+      // viewer. The case scan is one tap away via the prompt or the 3D button.
+      if (!shown) showDesignUploadPrompt();
+    })
+    .catch((error) => {
+      console.warn("[viewer3D] Design view failed to load:", error);
+    });
+
+  // No /user/logout here any more. It used to fire once the entry load
+  // finished, which ended the shared server-side session while the page was
+  // still open — the 3D button then 401'd on its first request and only
+  // recovered through ApiClient's re-login. With the case assets, uploads and
+  // status changes all happening after entry, the session has to outlive it.
 
   addViewerLoadTiming(
     "total viewer load",
     performance.now() - viewerTotalStartedAt
   );
   logViewerPerformanceSummary();
-  overlayLoadPromise.finally(logoutAfterBackgroundLoad);
+  designViewPromise.finally(() => {
+    // Owns the teardown for the whole entry load, success or failure — the
+    // screen must never outlive it.
+    removeViewerLoadingScreen();
+    logViewerObjectCounts("entry load complete");
+  });
 })();
 
 function isMobileDevice() {

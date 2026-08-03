@@ -163,6 +163,16 @@
   transform: translate(-50%, 0);
 }
 
+/* Touch devices never show these, and their white-space:nowrap width still
+   counted towards the footer's scroll width — enough to scroll the page
+   sideways on a phone. */
+@media (hover: none) {
+  .cm-footer [data-tooltip]::after,
+  .ann-footer [data-tooltip]::after {
+    content: none;
+  }
+}
+
 /* The footer Wi‑Fi / connectivity indicator was removed; the status bar now
    ends with the Help and About buttons, which reuse the footer button styles. */
 

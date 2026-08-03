@@ -222,11 +222,17 @@ html, body {
   align-items: center;
   gap: 6px;
   flex: 1;
+  /* Without this the groups refuse to shrink below their content width, so on a
+     phone the right-hand icons were pushed off the edge instead of the case
+     label ellipsising. */
+  min-width: 0;
 }
 
 .cm-footer-right {
   gap: 10px;
   justify-content: flex-end;
+  /* Icons keep their size; the case label on the left truncates instead. */
+  flex: 0 0 auto;
 }
 
 .cm-footer-center {
@@ -1296,9 +1302,69 @@ html, body {
     font-size: 10px !important;
   }
 
+  /* Objects panel as a bottom sheet. It used to be allowed to grow to almost
+     the full height (calc(100% - 184px)), which put it straight over the model;
+     cap it to the band between the jaws and the bottom dock and scroll the rows
+     inside instead. */
   .component-panel {
-    bottom: calc(166px + env(safe-area-inset-bottom, 0px)) !important;
-    max-height: calc(100% - 184px) !important;
+    top: auto !important;
+    left: 10px !important;
+    right: 10px !important;
+    width: auto !important;
+    /* Offsets here are relative to #container3D, which already stops above the
+       footer — so this only has to clear the bottom dock (77px) plus a gap. */
+    bottom: calc(90px + env(safe-area-inset-bottom, 0px)) !important;
+    max-height: min(32vh, 250px) !important;
+    /* Header pinned, rows scroll — with a capped height the header would
+       otherwise scroll out of reach. */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden !important;
+  }
+
+  .component-panel .component-panel-header {
+    flex: 0 0 auto;
+  }
+
+  .component-panel .component-panel-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* The body is a grid; once its height is bounded, auto rows shrink to share
+     the space and the rows collapse into each other (18px tall, content
+     overlapping). Size rows to their content and scroll the overflow. */
+  .component-panel .component-panel-body {
+    grid-auto-rows: max-content;
+    align-content: start;
+  }
+
+  /* Footer: tighter so the icon row fits a phone without clipping. */
+  .viewer-footer {
+    gap: 8px;
+    padding: 0 8px;
+  }
+
+  .viewer-footer .cm-footer-right {
+    gap: 2px;
+  }
+
+  .viewer-footer .cm-footer-btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .viewer-footer .cm-footer-case-label {
+    margin-left: 4px;
+    font-size: 12px;
+  }
+
+  .viewer-footer .cm-footer-user {
+    max-width: 72px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   #polyline-visibility-panel,

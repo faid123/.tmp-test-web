@@ -118,6 +118,26 @@ function waitForVisible(selectors, timeout = REVEAL_TIMEOUT_MS) {
   });
 }
 
+// The 3D viewer covers its whole stage until the case's 3D files have
+// downloaded — tens of MB, so tens of seconds. Highlighting controls nobody can
+// see yet is worse than starting late, so hold the tour until the screen lifts.
+// Resolves false if it is still up after the cap, which skips the tour for this
+// visit and leaves it unseen for the next one.
+const LOADING_SCREEN_SELECTOR = "#viewer-loading-screen";
+const LOADING_SCREEN_TIMEOUT_MS = 180000;
+
+function waitForLoadingScreen(timeout = LOADING_SCREEN_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    const deadline = Date.now() + timeout;
+    const tick = () => {
+      if (!document.querySelector(LOADING_SCREEN_SELECTOR)) return resolve(true);
+      if (Date.now() >= deadline) return resolve(false);
+      setTimeout(tick, 250);
+    };
+    tick();
+  });
+}
+
 const asList = (v) => (Array.isArray(v) ? v : v ? [v] : []);
 
 // First of these selectors that is actually on screen. Order is the preference
@@ -513,6 +533,10 @@ export async function maybeAutoStartTour({ pageId = currentPageId() } = {}) {
     // One more frame so the rest of the toolbar lands before we filter steps.
     await nextFrame();
   }
+  // Checked after the anchor wait, not before: this module is imported
+  // dynamically, so on a fast connection it can get here before the viewer has
+  // even put its loading screen up.
+  if (!(await waitForLoadingScreen())) return false;
   // Someone who started working (or opened Help) in the meantime is not waiting
   // for a tour to take over their screen.
   if (running || document.querySelector("#help-bot.is-open")) return false;

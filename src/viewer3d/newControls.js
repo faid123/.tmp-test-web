@@ -649,6 +649,7 @@ function createComponentPanel(groups) {
     const rowTitle = document.createElement("div");
     rowTitle.className = "component-row-title";
     rowTitle.textContent = group.label;
+    rowTitle.title = group.label; // labels ellipsize at this width
     main.appendChild(rowTitle);
 
     const controls = document.createElement("div");
@@ -818,7 +819,40 @@ function removeVisibilityAndTransparencyControls() {
   document.getElementById("component-panel-toggle")?.remove();
 }
 
-function addVisibilityAndTransparencyControls(parentObject, name, materialArray) {
+// One row per design slot: icon, "Slot N: <name>", eye toggle and opacity.
+// Slots the case has no upload for still get a row, disabled via hasContent.
+function buildDesignSlotGroups(designSlots) {
+  return designSlots.map((entry) => {
+    const meshes = entry.mesh ? [entry.mesh] : [];
+    return {
+      key: `design-slot-${entry.slot}`,
+      label: entry.label,
+      type: "overlay",
+      iconPath: entry.iconPath,
+      meshes,
+      supportsAnalysis: false, // uploads carry no surveying/occlusion data
+      hasContent: () => meshes.length > 0,
+      getVisible: () => areAnyVisible(meshes),
+      setVisible: (isVisible) => setMeshGroupVisible(meshes, isVisible),
+      getOpacity: () => getMeshGroupOpacity(meshes),
+      setOpacity: (opacity) => setMeshGroupOpacity(meshes, opacity),
+    };
+  });
+}
+
+function addVisibilityAndTransparencyControls(
+  parentObject,
+  name,
+  materialArray,
+  designSlots = []
+) {
+  // The design overlay replaces the case's meshes on screen, so the panel
+  // lists the slots that are actually visible rather than the hidden jaws.
+  if (designSlots.length) {
+    createComponentPanel(buildDesignSlotGroups(designSlots));
+    return;
+  }
+
   const meshesByJaw = {
     upper: { jaw: [], surface: [] },
     lower: { jaw: [], surface: [] },
@@ -834,6 +868,11 @@ function addVisibilityAndTransparencyControls(parentObject, name, materialArray)
 
   parentObject.children.forEach((child) => {
     if (!child.isMesh) return;
+    // Slot STLs stay in the scene, parked hidden, while the case view is up.
+    // They carry a jaw_type, so they would land in the case's jaw groups and
+    // the jaw eye toggle would switch them back on over the case mesh. They get
+    // their own rows in design view (buildDesignSlotGroups).
+    if (child.userData?.isDesignSlot) return;
     child.userData.baseGeometry = child.userData.baseGeometry || child.geometry;
     const jawKey = getJawKey(child);
     if (!jawKey) return;
