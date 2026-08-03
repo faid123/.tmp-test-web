@@ -13,6 +13,7 @@
       rel="stylesheet"
       href="../../vendor/font-awesome/css/all.min.css"
     />
+    <link rel="stylesheet" href="../../css/tokens.css" />
   </head>
   <body>
     <div class="viewer-shell">
@@ -187,24 +188,13 @@
     <img id="modalImage" src="" alt="Zoomed" />
   </div>
 
-    <script>
-      const hostname = window.location.hostname;
-      const isGitHubPages = hostname.includes("github.io");
-      const isAWS = /^[0-9.]+$/.test(hostname);
-      const basePath = isGitHubPages ? "/.tmp-test-web" : "";
-      const bundlePath = isGitHubPages
-        ? `${basePath}/dist/bundle.js`
-        : isAWS
-          ? "/dist/bundle.js"
-          : "/dist/bundle.js";
-
-      document.write(`
-        <link rel="stylesheet" href="${basePath}/css/style.css" />
-        <link rel="stylesheet" href="${basePath}/css/app-shell.css" />
-        <script type="module" src="${bundlePath}"></` + `script>
-        <script type="module" src="${basePath}/src/js/pages/viewerShell.js"></` + `script>
-        <script type="module" src="${basePath}/src/js/pages/versionHistory.js"></` + `script>
-      `);
-    </script>
+    <!-- Static relative tags — the old document.write basePath switcher only
+         existed to compute an absolute /dist/bundle.js URL per host; Vite
+         builds this page in place, so relative paths work everywhere. -->
+    <link rel="stylesheet" href="../../css/style.css" />
+    <link rel="stylesheet" href="../../css/app-shell.css" />
+    <script type="module" src="../viewer3d/index.js"></script>
+    <script type="module" src="../js/pages/viewerShell.js"></script>
+    <script type="module" src="../js/pages/versionHistory.js"></script>
   </body>
 </html>

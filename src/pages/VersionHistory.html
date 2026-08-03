@@ -30,6 +30,7 @@
       .vh-page-title { font-size: 18px; font-weight: 600; flex: 1; }
       .vh-case-label { font-size: 13px; color: #888; }
     </style>
+    <link rel="stylesheet" href="../../css/tokens.css" />
   </head>
   <body>
     <div class="vh-page">
@@ -45,15 +46,9 @@
       </main>
     </div>
 
-    <script>
-      const hostname = window.location.hostname;
-      const isGitHubPages = hostname.includes("github.io");
-      const basePath = isGitHubPages ? "/.tmp-test-web" : "";
-
-      document.write(`
-        <link rel="stylesheet" href="${basePath}/css/versionHistory.css" />
-        <script type="module" src="${basePath}/src/js/pages/versionHistory.js"></` + `script>
-      `);
-    </script>
+    <!-- Static relative tags — Vite builds this page in place, so the old
+         github.io basePath switcher is unnecessary. -->
+    <link rel="stylesheet" href="../../css/versionHistory.css" />
+    <script type="module" src="../js/pages/versionHistory.js"></script>
   </body>
 </html>

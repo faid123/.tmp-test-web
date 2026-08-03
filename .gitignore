@@ -7,3 +7,6 @@ coverage/
 # Webpack build output
 
 .idea/
+
+# Build output (Vite)
+dist/

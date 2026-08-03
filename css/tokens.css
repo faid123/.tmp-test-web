@@ -1,0 +1,13 @@
+/* Cross-page design tokens — the brand constants every page theme derives
+ * from. Loaded by every page BEFORE its own stylesheet; the per-page palettes
+ * (case_list --primary, 2Dannotation --rose-*, app-shell --shell-teal*) alias
+ * these instead of repeating the hex, so a brand change is a one-line edit.
+ *
+ * Deliberately tiny: only values shared VERBATIM by multiple page themes
+ * belong here. Page-specific palettes (the slate case-list neutrals vs the
+ * teal-tinted 2D ones) are intentional theming, not duplication — leave them
+ * in their own files. */
+:root {
+  --brand-500: #3bae95; /* SmartRPD teal — buttons, links, accents */
+  --brand-700: #25735f; /* dark variant — hovers, gradients */
+}
