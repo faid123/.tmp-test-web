@@ -42,7 +42,10 @@ export function applyJawStructDesign(design, state) {
     if (design.rawByFdi[fdi]) rec.rawJawStructFields = design.rawByFdi[fdi];
     if (t.present) {
       rec.isPresent = true;
-      if (rec.status === "missing") rec.status = "presence";
+      // Backend is authoritative on load, so Tooth Condition overwrites the local
+      // status outright — keeping a stale local "abutment" here would survive a
+      // desktop edit that cleared it.
+      rec.status = t.condition || "presence";
     } else {
       rec.isPresent = false;
       rec.status = "missing";

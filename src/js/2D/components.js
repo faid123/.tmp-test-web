@@ -578,6 +578,6 @@ export {
   hasPalatalPlatePlacementOnUpperArch,
   isPalatalPlateMajorComponent,
   shouldUseMajorConnectorEndAsset,
-  shouldUsePalatalBarSecondMolarDistalTemplate,
+  isPalatalBarDistalRunEnd,
   toothHasMajorConnectorPlacement,
 } from "./components.major.js";
