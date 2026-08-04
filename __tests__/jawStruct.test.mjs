@@ -295,3 +295,51 @@ describe("a double-rested tooth (Half & Half) survives save -> load", () => {
     expect(restsAfterReload("mesial")).toEqual(["mesial"]);
   });
 });
+
+/**
+ * Tooth Condition (Select Teeth status) used to be encode-only: save wrote 1/2, but
+ * resolve read Tooth Presence alone, so every abutment/compromised tooth reopened as
+ * plain "presence".
+ */
+describe("tooth condition (abutment / compromised) survives save -> load", () => {
+  const statusesAfterReload = (byTooth) => {
+    const state = buildFreshState();
+    applyJawStructDesign(resolveJawStructDesign(decodeJawStructResponse(records).lower), state);
+    for (const [toothId, status] of Object.entries(byTooth)) {
+      Object.assign(state.teeth[toothId], { isPresent: true, status });
+    }
+    const teeth = saveAndReload(state);
+    return Object.fromEntries(Object.keys(byTooth).map((id) => [id, teeth[id].status]));
+  };
+
+  it("round-trips each status, and leaves untouched teeth on presence", () => {
+    expect(statusesAfterReload({ 36: "abutment", 37: "compromised", 35: "presence" })).toEqual({
+      36: "abutment",
+      37: "compromised",
+      35: "presence",
+    });
+  });
+
+  it("encodes the desktop enum (abutment = 1, compromised = 2, presence = 0)", () => {
+    const state = buildFreshState();
+    applyJawStructDesign(resolveJawStructDesign(decodeJawStructResponse(records).lower), state);
+    Object.assign(state.teeth["36"], { isPresent: true, status: "abutment" });
+    Object.assign(state.teeth["37"], { isPresent: true, status: "compromised" });
+
+    const conditions = encodeJawStructText(state, "lower")
+      .split(/\r?\n/)
+      .filter((l) => l.includes("Tooth Main.Tooth Index.Tooth Condition"))
+      .map((l) => l.trim().split(": ").pop());
+    expect(conditions.filter((v) => v === "1").length).toBe(1);
+    expect(conditions.filter((v) => v === "2").length).toBe(1);
+  });
+
+  // Backend wins on open: a design saved elsewhere with the abutment cleared must not
+  // leave the local status behind.
+  it("clears a stale local abutment when the loaded design says normal", () => {
+    const state = buildFreshState();
+    state.teeth["36"].status = "abutment";
+    applyJawStructDesign(resolveJawStructDesign(decodeJawStructResponse(records).lower), state);
+    expect(state.teeth["36"].status).toBe("presence");
+  });
+});

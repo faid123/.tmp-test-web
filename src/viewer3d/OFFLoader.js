@@ -88,9 +88,9 @@ if(check){
       const rgbaColorsArray = new Float32Array(arrayBuffer);
 
 
-        var colors = new Float32Array(geometry.attributes.position.count * 3);
+        colors = new Float32Array(geometry.attributes.position.count * 3);
       
-            for (var i = 0; i < geometry.attributes.position.count; i++) {
+            for (i = 0; i < geometry.attributes.position.count; i++) {
               var r = rgbaColorsArray[i * 4];
               var g = rgbaColorsArray[i * 4 + 1];
               var b = rgbaColorsArray[i * 4 + 2];
@@ -131,12 +131,12 @@ if(check){
           const rgbaColorsArray = new Float32Array(arrayBuffer);
 
     
-            var colors = new Float32Array(geometry.attributes.position.count * 3);
+            colors = new Float32Array(geometry.attributes.position.count * 3);
           
-                for (var i = 0; i < geometry.attributes.position.count; i++) {
-                  var r = rgbaColorsArray[i * 4];
-                  var g = rgbaColorsArray[i * 4 + 1];
-                  var b = rgbaColorsArray[i * 4 + 2];
+                for (i = 0; i < geometry.attributes.position.count; i++) {
+                  r = rgbaColorsArray[i * 4];
+                  g = rgbaColorsArray[i * 4 + 1];
+                  b = rgbaColorsArray[i * 4 + 2];
                   if(r==1)
                     {
                       r= 208/255;
