@@ -689,6 +689,112 @@ describe("the walk through the Case Note", () => {
   });
 });
 
+// Where the card lands. The 3D viewer is the page that forces the sheet layout: its
+// controls are all in a 35px footer, so a sheet pinned to the bottom of a phone screen
+// covered the very buttons those steps point at.
+describe("fitting the card to the screen", () => {
+  const DESKTOP = { width: 1280, height: 800 };
+  const setViewport = ({ width, height }) => {
+    Object.defineProperty(window, "innerWidth", { value: width, writable: true, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: height, writable: true, configurable: true });
+  };
+
+  // The viewer, laid out like the real page: the stage fills everything above a 35px
+  // footer, and the chat button sits inside that footer.
+  function buildViewerPage({ width, height }) {
+    setViewport({ width, height });
+    buildPage(
+      `<div id="container3D"></div>
+       <footer class="cm-footer viewer-footer"><button id="footerChatBtn">Chat</button></footer>`,
+      "#container3D, #footerChatBtn",
+      "/src/pages/ThreeDViewer.html"
+    );
+    // Then the boxes that matter: the stage fills the window, the button is in the footer.
+    makeVisible($("container3D"), { top: 0, left: 0, width, height: height - 35 });
+    makeVisible($("footerChatBtn"), { top: height - 33, left: width - 40, width: 30, height: 30 });
+  }
+
+  const card = () => $("ptCard");
+  // jsdom lays nothing out, so the card reports no content height — and the sheet is
+  // sized never to fall below it. A typical card is a little over 200px tall.
+  const CARD_CONTENT_H = 205;
+  beforeEach(() => {
+    if ($("ptCard")) {
+      Object.defineProperty($("ptCard"), "scrollHeight", { value: CARD_CONTENT_H, configurable: true });
+    }
+  });
+  afterEach(() => setViewport(DESKTOP));
+
+  test("a phone flips the sheet above a footer control instead of sitting on it", async () => {
+    buildViewerPage({ width: 390, height: 844 });
+    expect(await runTo("viewer_3d", "Case chat")).toBe(true);
+
+    expect(card().classList.contains("is-sheet")).toBe(true);
+    expect(card().classList.contains("is-sheet-top")).toBe(true);
+    expect(card().style.top).toBe("0px");
+    expect(card().style.bottom).toBe("");
+    // The footer starts at 809 — the sheet has to end well above it.
+    expect(parseInt(card().style.maxHeight, 10)).toBeLessThan(809);
+  });
+
+  test("a full-bleed target gets a short sheet, so the model stays visible behind it", async () => {
+    // #container3D is the whole stage: there is no clear edge, and a sheet sized to the
+    // window would leave nothing of the thing the step is describing.
+    buildViewerPage({ width: 390, height: 844 });
+    await start("viewer_3d");
+    await next(); // on to "Moving around"
+
+    expect(card().classList.contains("is-sheet")).toBe(true);
+    expect(card().classList.contains("is-sheet-top")).toBe(false);
+    expect(card().style.bottom).toBe("0px");
+    // A leftover inline top would win over bottom and unstick the sheet.
+    expect(card().style.top).toBe("");
+    // Tall enough for the card's own buttons, short enough to leave the stage visible.
+    const height = parseInt(card().style.maxHeight, 10);
+    expect(height).toBeGreaterThanOrEqual(CARD_CONTENT_H);
+    expect(height).toBeLessThanOrEqual(844 * 0.6);
+  });
+
+  test("a phone held sideways is a sheet too, though it is wider than a phone", async () => {
+    // The width-only breakpoint this replaced missed landscape entirely: 844px wide reads
+    // as a desktop, but 390px tall has no room for a floating card beside a spotlight.
+    buildViewerPage({ width: 844, height: 390 });
+    expect(await runTo("viewer_3d", "Case chat")).toBe(true);
+
+    expect(card().classList.contains("is-sheet")).toBe(true);
+    expect(parseInt(card().style.maxHeight, 10)).toBeLessThanOrEqual(390);
+  });
+
+  test("a desktop keeps the floating card, placed beside the control", async () => {
+    buildViewerPage(DESKTOP);
+    expect(await runTo("viewer_3d", "Case chat")).toBe(true);
+
+    expect(card().classList.contains("is-sheet")).toBe(false);
+    expect(card().style.bottom).toBe("");
+    expect(card().style.top).toMatch(/px$/);
+    expect(card().style.left).toMatch(/px$/);
+  });
+
+  test("the welcome card is centred, not sheeted, on a phone", async () => {
+    buildViewerPage({ width: 390, height: 844 });
+    await start("viewer_3d");
+
+    expect(card().classList.contains("is-sheet")).toBe(false);
+    expect(card().style.transform).toBe("translate(-50%, -50%)");
+  });
+
+  test("tapping the dimmed page moves on", async () => {
+    // The dimming is the mask's box-shadow, so those clicks land on the root — binding
+    // this to the mask alone meant only the spotlight itself advanced the tour.
+    buildViewerPage({ width: 390, height: 844 });
+    await start("viewer_3d");
+
+    $("page-tour").click();
+    await flush();
+    expect($("ptCount").textContent).toMatch(/^Step 2 /);
+  });
+});
+
 // The case-actions step points inside a dropdown that is closed by default, so the engine
 // has to open it and then ring the item, not the toggle that opened it. That is the
 // case-list tour's only `reveal` step.

@@ -3825,8 +3825,15 @@ async function uploadCaseStlFile(file) {
     }
     toast.info(`Uploading ${file.name}…`);
     const data = await stlFileToBase64(file);
+    // case_id has to ride in this object, not the auth one — the writer reads it
+    // from here (same as POST /stl). Without it the insert runs `case_id = NULL`
+    // and 500s, with no CORS header on the error, so the browser reports only
+    // "Failed to fetch".
     await uploadStlSlotXHR(
-      JSON.stringify([extraSlotAuth(caseIntId), { slotNumber, filename: file.name, data }])
+      JSON.stringify([
+        extraSlotAuth(caseIntId),
+        { case_id: caseIntId, slotNumber, filename: file.name, data },
+      ])
     );
     toast.success(`${file.name} uploaded.`);
   } catch (err) {

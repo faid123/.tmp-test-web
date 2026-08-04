@@ -2610,7 +2610,11 @@ async function deleteExtraStl(slotNumber) {
     const res = await fetch(`${SMARTRPD_API_BASE}/stl/slot/delete`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([extraSlotAuth(), { slotNumber }]),
+      // Same contract as the upload: the case id has to be in this object.
+      body: JSON.stringify([
+        extraSlotAuth(),
+        { case_id: state.caseIntID, slotNumber },
+      ]),
     });
     if (!res.ok) {
       console.error(`[preview3D] ✕ POST /stl/slot/delete (slot ${slotNumber}) status=${res.status}`);
@@ -2662,9 +2666,18 @@ async function uploadExtraStl(file, targetSlot = null) {
   setMessage?.(`Uploading ${file.name}...`);
   try {
     const base64 = await fileToBase64(file);
+    // case_id goes in the data object, not the auth one — the writer reads it
+    // from here (same as POST /stl). Without it the insert runs `case_id = NULL`
+    // and 500s, and that 500 has no CORS header so it surfaces as a bare
+    // "Failed to fetch".
     const payload = JSON.stringify([
       extraSlotAuth(),
-      { slotNumber: freeSlot, filename: file.name, data: base64 },
+      {
+        case_id: state.caseIntID,
+        slotNumber: freeSlot,
+        filename: file.name,
+        data: base64,
+      },
     ]);
     await uploadSlotXHR(payload, (frac) => setUpload3dBusy(true, frac));
     preview3DState.occupiedSlots.add(freeSlot);
