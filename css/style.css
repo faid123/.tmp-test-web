@@ -74,49 +74,6 @@ html, body {
   margin: 0;
 }
 
-
-#viewer-meta-bar {
-  position: absolute;
-  left: 10px;
-  top: 8px;
-  z-index: 1002;
-  display: grid;
-  grid-template-columns: minmax(0, 250px) 56px;
-  grid-template-rows: auto auto;
-  align-items: center;
-  gap: 8px;
-  max-width: calc(100vw - 268px);
-}
-
-.viewer-meta-bubble {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 250px;
-  min-height: 30px;
-  height: auto;
-  box-sizing: border-box;
-  overflow-wrap: anywhere;
-}
-
-.viewer-meta-bubble[data-position="bottom-left"] {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.viewer-meta-bubble[data-position="bottom-left2"] {
-  grid-column: 1;
-  grid-row: 2;
-}
-
-#viewer-meta-bar #chat-icon {
-  position: static;
-  grid-column: 2;
-  grid-row: 2;
-  flex: 0 0 56px;
-  width: 56px;
-  height: 56px;
-}
-
 @media (min-width: 769px) and (max-width: 1024px) {
   :root {
     --viewer-stage-width: 100vw;
@@ -131,13 +88,6 @@ html, body {
     min-height: 100%;
     overflow-x: hidden;
     overflow-y: auto;
-  }
-
-  #viewer-meta-bar {
-    top: 8px;
-    bottom: auto;
-    max-width: calc(100vw - 20px);
-    grid-template-columns: minmax(0, 250px) 56px;
   }
 
 }
@@ -158,21 +108,6 @@ html, body {
     overflow-y: auto;
   }
 
-  #viewer-meta-bar {
-    top: 8px;
-    bottom: auto;
-    gap: 6px;
-    max-width: calc(100vw - 20px);
-    grid-template-columns: minmax(0, min(220px, 64vw)) 52px;
-    padding-bottom: 0;
-  }
-
-  .viewer-meta-bubble {
-    flex: 0 0 auto;
-    width: min(220px, 64vw);
-    font-size: 13px !important;
-  }
-
 }
 
 .viewer-shell {
@@ -183,7 +118,6 @@ html, body {
   height: 100dvh;
   overflow: hidden;
 }
-
 
 .viewer-main {
   position: relative;
@@ -783,8 +717,6 @@ html, body {
   outline: none;
 }
 
-
-
 @media (max-width: 768px) {
   .cm-footer {
     height: 42px;
@@ -805,11 +737,8 @@ html, body {
   }
 }
 
-
-
 /* ── Premium 3D command dock ───────────────────────────────────────────── */
-#container3D.viewer-command-dock-ready > #viewer-right-nav,
-#container3D.viewer-command-dock-ready > #sidebar-hamburger-btn {
+#container3D.viewer-command-dock-ready > #viewer-right-nav {
   display: none !important;
 }
 
@@ -1186,11 +1115,11 @@ html, body {
   }
 
   .component-panel {
-    bottom: calc(188px + env(safe-area-inset-bottom, 0px)) !important;
+    top: 16px !important;
+    bottom: auto !important;
   }
 
-  #polyline-visibility-panel,
-  .legend-container {
+  #polyline-visibility-panel {
     top: auto !important;
     bottom: calc(188px + env(safe-area-inset-bottom, 0px)) !important;
     transform: none !important;
@@ -1302,18 +1231,15 @@ html, body {
     font-size: 10px !important;
   }
 
-  /* Objects panel as a bottom sheet. It used to be allowed to grow to almost
-     the full height (calc(100% - 184px)), which put it straight over the model;
-     cap it to the band between the jaws and the bottom dock and scroll the rows
-     inside instead. */
+  /* Objects panel as a top sheet, in the corner the toggle occupies — same
+     placement as desktop. Height stays capped so the rows scroll inside rather
+     than the panel covering the model. */
   .component-panel {
-    top: auto !important;
+    top: 12px !important;
+    bottom: auto !important;
     left: 10px !important;
     right: 10px !important;
     width: auto !important;
-    /* Offsets here are relative to #container3D, which already stops above the
-       footer — so this only has to clear the bottom dock (77px) plus a gap. */
-    bottom: calc(90px + env(safe-area-inset-bottom, 0px)) !important;
     max-height: min(32vh, 250px) !important;
     /* Header pinned, rows scroll — with a capped height the header would
        otherwise scroll out of reach. */
@@ -1367,8 +1293,7 @@ html, body {
     white-space: nowrap;
   }
 
-  #polyline-visibility-panel,
-  .legend-container {
+  #polyline-visibility-panel {
     top: auto !important;
     bottom: calc(166px + env(safe-area-inset-bottom, 0px)) !important;
     max-height: calc(100% - 184px) !important;
@@ -1397,9 +1322,12 @@ html, body {
     min-height: 32px;
   }
 
-  .component-panel,
-  #polyline-visibility-panel,
-  .legend-container {
+  .component-panel {
+    top: 12px !important;
+    bottom: auto !important;
+  }
+
+  #polyline-visibility-panel {
     bottom: calc(116px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }

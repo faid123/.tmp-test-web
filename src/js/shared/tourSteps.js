@@ -501,13 +501,6 @@ export const PAGE_TOURS = {
       topic: "navigate-3d",
     },
     {
-      title: "Undercut heatmap",
-      text: "The Heatmap button shows the stored undercut shading and its measurement legend. The viewer displays what was surveyed in the 2D design — the angle is set there, not here.",
-      selector: ".legend-toggle-btn",
-      optional: true,
-      topic: "heatmap-viewer",
-    },
-    {
       title: "Draw on the model",
       text: "The pen and eraser mark up the view, with undo and redo beside them.",
       selector: "#footerPenBtn",

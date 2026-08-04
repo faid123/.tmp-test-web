@@ -63,7 +63,16 @@
 
 .pt-card {
   position: absolute;
+  box-sizing: border-box;
   width: min(360px, calc(100vw - 24px));
+  /* A card taller than the window has to scroll, not run off the top of it: the
+     3D viewer is used on phones held sideways, where the whole viewport is
+     around 390px high. */
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   background: var(--pt-card);
   color: var(--pt-ink);
   border-radius: 12px;
@@ -197,17 +206,34 @@
   text-decoration: underline;
 }
 
-/* On a phone the card is a sheet at the bottom — a floating card next to a
-   spotlight has nowhere to go on a narrow screen. */
-@media (max-width: 560px) {
-  .pt-card {
-    top: auto !important;
-    bottom: 0;
-    left: 0 !important;
-    width: 100%;
-    border-radius: 14px 14px 0 0;
-    transform: none !important;
-  }
+/* On a phone the card is a full-width sheet against one edge — a floating card
+   next to a spotlight has nowhere to go on a narrow (or short) screen.
+
+   Which edge, and how tall, is pageTour.js's call: it puts the sheet on the side
+   of the target with the most room. A media query can't do that, and one that
+   pinned the sheet to the bottom unconditionally sat straight on top of the
+   3D viewer's footer buttons — the very controls those steps point at. */
+.pt-card.is-sheet {
+  left: 0;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 14px 14px 0 0;
+  transform: none;
+  /* Sits above the home indicator on a notched phone. */
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+.pt-card.is-sheet-top {
+  border-radius: 0 0 14px 14px;
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  padding-bottom: 16px;
+}
+
+/* The sheet itself scrolls; a second scroller nested inside it is a trap on a
+   touch screen. */
+.pt-card.is-sheet .pt-list {
+  max-height: none;
+  overflow-y: visible;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -16,13 +16,13 @@ import { addResetButton } from "./resetButton.js";
 import { lol } from "../js/shared/crypt.js";
 import "../js/pages/createCase.js";
 import { logApi } from "../js/shared/apiLog.js";
-import { toast, confirmModal } from "../js/shared/toast.js";
+import { toast } from "../js/shared/toast.js";
 import {
   addVisibilityAndTransparencyControls,
   removeVisibilityAndTransparencyControls,
 } from "./newControls.js";
 import { createArtificialTeethRenderer } from "./artificialTeeth.js";
-import { API_BASE, MACHINE_ID, getLoggedInUser } from "../js/shared/api.js";
+import { API_BASE, MACHINE_ID } from "../js/shared/api.js";
 
 const LOG_VIEWER_LOAD_TIMINGS_TO_CONSOLE = false;
 const LOG_VIEWER_OBJECT_COUNTS_TO_CONSOLE = false;
@@ -191,7 +191,6 @@ const POLYLINE_TUBE_RADIUS = 0.75;
 const POLYLINE_TUBE_RADIAL_SEGMENTS = 8;
 let isPolylineOverlayVisible = true;
 let activePolylineDrag = null;
-let polylineMenuButton = null;
 let polylineMenuList = null;
 let polylineDepthTestEnabled = true;
 const polylineUndoStack = [];
@@ -350,11 +349,10 @@ function saveAnnotationBackground(storageKey, dataUrl) {
   }
 }
 
-// Gate shown when a non-logged-in viewer clicks "Annotate" (or Approve/Edit
-// 3D — see requireLoginFor3D below) in the 3D viewer. Login -> caller-defined
-// destination; Continue as guest -> caller-defined fallback (hidden unless
-// onGuest is passed in). Styled inline since the 3D viewer doesn't load
-// noticeboard.css.
+// Gate shown when a non-logged-in viewer clicks "Annotate" in the 3D viewer.
+// Login -> caller-defined destination; Continue as guest -> caller-defined
+// fallback (hidden unless onGuest is passed in). Styled inline since the 3D
+// viewer doesn't load noticeboard.css.
 function openAnnotateGate({
   onLogin,
   onGuest,
@@ -389,89 +387,6 @@ function openAnnotateGate({
   });
 }
 
-// ── Hamburger menu ──────────────────────────────────────────────────────────
-
-function createHamburgerButton() {
-  if (document.getElementById("sidebar-hamburger-btn")) return;
-  const overlayHost = viewerContainer || document.body;
-
-  const btn = document.createElement("button");
-  btn.id = "sidebar-hamburger-btn";
-  btn.setAttribute("aria-label", "More controls");
-  btn.setAttribute("aria-expanded", "false");
-  btn.innerHTML = `<svg width="22" height="18" viewBox="0 0 22 18" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <rect width="22" height="2.5" rx="1.25" fill="currentColor"/>
-    <rect y="7.75" width="22" height="2.5" rx="1.25" fill="currentColor"/>
-    <rect y="15.5" width="22" height="2.5" rx="1.25" fill="currentColor"/>
-  </svg>`;
-  btn.addEventListener("click", toggleHamburgerDrawer);
-  overlayHost.appendChild(btn);
-
-  const backdrop = document.createElement("div");
-  backdrop.id = "hamburger-backdrop";
-  backdrop.addEventListener("click", closeHamburgerDrawer);
-  overlayHost.appendChild(backdrop);
-
-  const drawer = document.createElement("div");
-  drawer.id = "hamburger-drawer";
-
-  const header = document.createElement("div");
-  header.id = "hamburger-drawer-header";
-  const title = document.createElement("span");
-  title.textContent = "Controls";
-  const closeBtn = document.createElement("button");
-  closeBtn.id = "hamburger-drawer-close";
-  closeBtn.setAttribute("aria-label", "Close menu");
-  closeBtn.textContent = "×";
-  closeBtn.addEventListener("click", closeHamburgerDrawer);
-  header.appendChild(title);
-  header.appendChild(closeBtn);
-  drawer.appendChild(header);
-
-  const content = document.createElement("div");
-  content.id = "hamburger-drawer-content";
-  // The drawer is a launcher: it covers the model, so whatever a control in it
-  // opens (objects panel, polylines, legend) has to be looked at with the
-  // drawer out of the way.
-  content.addEventListener("click", (event) => {
-    if (event.target.closest("button")) closeHamburgerDrawer();
-  });
-  drawer.appendChild(content);
-
-  overlayHost.appendChild(drawer);
-}
-
-function populateHamburgerDrawer() {
-  const content = document.getElementById("hamburger-drawer-content");
-  const nav = getViewerRightNav();
-  if (!content || !nav) return;
-
-  [
-    nav.querySelector("#component-panel-toggle"),
-    nav.querySelector("#polyline-visibility-menu"),
-    nav.querySelector(".smart-btn-container-3d"),
-    nav.querySelector("#viewer-meta-dates"),
-  ]
-    .filter(Boolean)
-    .forEach((el) => content.appendChild(el));
-}
-
-function toggleHamburgerDrawer() {
-  const drawer = document.getElementById("hamburger-drawer");
-  const btn = document.getElementById("sidebar-hamburger-btn");
-  if (!drawer) return;
-  populateHamburgerDrawer();
-  const isOpen = drawer.classList.toggle("open");
-  document.getElementById("hamburger-backdrop")?.classList.toggle("open", isOpen);
-  btn?.setAttribute("aria-expanded", String(isOpen));
-}
-
-function closeHamburgerDrawer() {
-  document.getElementById("hamburger-drawer")?.classList.remove("open");
-  document.getElementById("hamburger-backdrop")?.classList.remove("open");
-  document.getElementById("sidebar-hamburger-btn")?.setAttribute("aria-expanded", "false");
-}
-
 // ────────────────────────────────────────────────────────────────────────────
 
 function getViewerRightNav() {
@@ -486,6 +401,22 @@ function getViewerRightNav() {
 }
 
 window.getViewerRightNav = getViewerRightNav;
+
+// One row holding the design/upload pair and the reset/lock pair. Both are
+// built by different modules at different times, so they share this host and
+// contribute their buttons to it via display: contents.
+function getViewerNavToolbar() {
+  let toolbar = document.getElementById("viewer-nav-toolbar");
+  if (toolbar) return toolbar;
+
+  toolbar = document.createElement("div");
+  toolbar.id = "viewer-nav-toolbar";
+  toolbar.style.order = "4";
+  getViewerRightNav().appendChild(toolbar);
+  return toolbar;
+}
+
+window.getViewerNavToolbar = getViewerNavToolbar;
 
 window.viewerPanelManager = (() => {
   const _panels = {};
@@ -531,19 +462,6 @@ window.viewerPanelManager = (() => {
     },
   };
 })();
-
-function getViewerMetaBar() {
-  let metaBar = document.getElementById("viewer-meta-bar");
-  if (metaBar) return metaBar;
-
-  metaBar = document.createElement("div");
-  metaBar.id = "viewer-meta-bar";
-  metaBar.setAttribute("aria-label", "Case information and chat");
-  metaBar.style.top = "8px";
-  metaBar.style.bottom = "auto";
-  (viewerContainer || document.body).appendChild(metaBar);
-  return metaBar;
-}
 
 function getViewerObjectCounts() {
   let jawMeshes = 0;
@@ -2671,14 +2589,6 @@ function syncPolylineOverlayVisibility() {
     applyPolylineJawOpacity(arch);
   });
 
-  if (polylineMenuButton) {
-    const componentCount = getPolylineComponentSummary().filter(({ points }) => points > 0).length;
-    const _polylineLabel = isPolylineOverlayVisible
-      ? `Polylines (${componentCount})`
-      : `Polylines hidden (${componentCount})`;
-    polylineMenuButton.setAttribute("aria-label", _polylineLabel);
-    polylineMenuButton.title = _polylineLabel;
-  }
   syncPolylineFocusMode();
 }
 
@@ -2770,7 +2680,7 @@ function updatePolylineComponentMenu() {
     }
   });
 
-  if (!polylineMenuList || !polylineMenuButton) return;
+  if (!polylineMenuList) return;
 
   polylineMenuList.replaceChildren();
   if (!summary.length) {
@@ -2843,37 +2753,12 @@ function setPolylineMenuVisibility(filterSummaryItem, isVisible) {
   updatePolylineComponentMenu();
 }
 
+// The panel has no toggle of its own — it is opened from the polyline rows of
+// the objects panel (see window.polylinePanelController).
 function createPolylineVisibilityToggle(container, domElement) {
-  if (document.getElementById("polyline-visibility-menu")) return;
+  if (document.getElementById("polyline-visibility-panel")) return;
 
-  const wrapper = document.createElement("div");
-  wrapper.id = "polyline-visibility-menu";
-  wrapper.style.position = "static";
-  wrapper.style.zIndex = "1000";
-  wrapper.style.display = "flex";
-  wrapper.style.flexDirection = "column";
-  wrapper.style.alignItems = "stretch";
-  wrapper.style.gap = "8px";
-  wrapper.style.pointerEvents = "none";
-  wrapper.style.order = "60";
-
-  const button = document.createElement("button");
-  button.id = "polyline-visibility-toggle";
-  button.type = "button";
-  button.setAttribute("aria-label", "Polylines (0)");
-  button.title = "Polylines (0)";
   const _polylineBp = window.location.hostname.includes("github.io") ? "/.tmp-test-web" : "";
-  button.innerHTML = `<img src="${_polylineBp}/assets/Icon_Hide_SkeletalPrev.png" alt="Polylines">`;
-  button.style.padding = "10px 14px";
-  button.style.border = "none";
-  button.style.borderRadius = "5px";
-  button.style.background = "#6f35ff";
-  button.style.color = "white";
-  button.style.fontWeight = "bold";
-  button.style.cursor = "pointer";
-  button.style.width = "100%";
-  button.style.height = "40px";
-  button.style.pointerEvents = "auto";
 
   const panel = document.createElement("div");
   panel.id = "polyline-visibility-panel";
@@ -2904,8 +2789,6 @@ function createPolylineVisibilityToggle(container, domElement) {
     const phone = window.innerWidth <= 768;
     const tablet = window.innerWidth <= 1024;
     const compact = window.innerWidth <= 640 || window.innerHeight <= 720;
-    button.style.width = phone ? "128px" : tablet ? "140px" : "100%";
-    button.style.height = phone ? "60px" : tablet ? "64px" : "56px";
     if (phone) {
       panel.style.left = "12px";
       panel.style.right = "auto";
@@ -3031,29 +2914,18 @@ function createPolylineVisibilityToggle(container, domElement) {
   panel.appendChild(actions);
   panel.appendChild(list);
 
-  button.addEventListener("click", () => {
-    if (window.viewerPanelManager) {
-      window.viewerPanelManager.toggle("polylines-panel");
-      return;
-    }
-    const willOpen = panel.style.display === "none";
-    panel.style.display = willOpen ? "block" : "none";
-    if (willOpen) updatePolylineMenuLayout();
-  });
   window.addEventListener("resize", updatePolylineMenuLayout);
 
-  wrapper.appendChild(button);
-  getViewerRightNav().appendChild(wrapper);
   (container || document.getElementById("container3D") || document.body).appendChild(panel);
-  window.viewerPanelManager?.register(
-    "polylines-panel",
-    button,
-    () => { panel.style.display = "block"; updatePolylineMenuLayout(); },
-    () => { panel.style.display = "none"; }
-  );
+  // The objects panel is rebuilt on every case/design view switch, so it
+  // registers its own polyline button against these handlers each time.
+  window.polylinePanelController = {
+    open: () => { panel.style.display = "block"; updatePolylineMenuLayout(); },
+    close: () => { panel.style.display = "none"; },
+    isOpen: () => panel.style.display === "block",
+  };
   updatePolylineMenuLayout();
 
-  polylineMenuButton = button;
   polylineMenuList = list;
   updatePolylineComponentMenu();
   attachPolylineDragHandlers(domElement);
@@ -3335,20 +3207,12 @@ function attachPolylineDragHandlers(domElement) {
   });
 }
 
-
-// True only for a screen that is still driving progress. One that is mid-fade
-// still answers getElementById but has already given up window.viewerLoadingEls,
-// so callers must treat it as gone.
-function hasLiveViewerLoadingScreen() {
-  const screen = document.getElementById("viewer-loading-screen");
-  return !!screen && !screen.classList.contains("vls-fade");
-}
-
 function createViewerLoadingScreen() {
   const existing = document.getElementById("viewer-loading-screen");
   if (existing) {
     // Returning early on a fading screen would leave the caller with no bar to
-    // drive — the entry screen fades out just as the slot download starts.
+    // drive: a screen mid-fade still answers getElementById but has already
+    // given up window.viewerLoadingEls.
     if (!existing.classList.contains("vls-fade")) return;
     existing.remove();
     document.getElementById("viewer-loading-screen-style")?.remove();
@@ -3558,25 +3422,6 @@ function removeViewerLoadingScreen() {
     window.username = positionData.username;
   } catch (error) {
     console.error("Error fetching case info:", error);
-  }
-
-  const metaDatesSection = document.createElement("div");
-  metaDatesSection.id = "viewer-meta-dates";
-  metaDatesSection.style.order = "85";
-  getViewerRightNav().appendChild(metaDatesSection);
-
-  //for all the text info — added to sidebar
-  if (positionData) {
-    const time = unixToHumanReadable(positionData.creation_date);
-    const update_time = unixToHumanReadable(positionData.last_updated);
-    createTextbox("Creation Date: " + time, "bottom-left");
-    createTextbox(
-      "Last Updated: " +
-        update_time +
-        " — " +
-        positionData.username,
-      "bottom-left2"
-    );
   }
 
   try {
@@ -3851,7 +3696,6 @@ btnContainer.appendChild(edit2DStatic); */
             // 插入按钮
             btnContainer2D.appendChild(annotateBtn);
 
-
             twodGroup.appendChild(btnContainer2D);
             overlay.appendChild(twodGroup);
             document.body.appendChild(overlay);
@@ -4095,145 +3939,13 @@ btnContainer.appendChild(edit2DStatic); */
 		});
 		btnContainer2D.appendChild(editButton); */
 
-          // Approve/Edit 3D notify associated users and flip the case status —
-          // both require a logged-in account (the viewer link itself carries no
-          // identity; anyone with the link could otherwise trigger a false
-          // "approved" notification). See requireLoginFor3D / updateCaseStatus3D.
-
-          // Create "Approve 3D" button
-          const approveButton3D = document.createElement("button");
-          approveButton3D.className = "smart-btn approve";
-          approveButton3D.setAttribute("aria-label", "Approve 3D");
-          approveButton3D.title = "Approve 3D";
-          approveButton3D.innerHTML = `<img src="${basePath}/assets/Icon_approve.png" alt="Approve 3D">`;
-          approveButton3D.addEventListener("click", function () {
-            requireLoginFor3D("approve this 3D design", async () => {
-              const ok = await confirmModal({
-                title: "Approve 3D Design?",
-                message:
-                  "This notifies the associated users that the 3D design has been approved. Do you want to continue?",
-                confirmText: "Approve",
-                cancelText: "Cancel",
-                variant: "info",
-              });
-              if (!ok) return;
-              sendEmail("Your 3D Design has been APPROVED.");
-              updateCaseStatus3D("3d_design_approved");
-            });
-          });
-          btnContainer3D.appendChild(approveButton3D);
-
-          // Create "Edit 3D" button
-          const editButton3D = document.createElement("button");
-          editButton3D.className = "smart-btn edit";
-          editButton3D.setAttribute("aria-label", "Edit 3D");
-          editButton3D.title = "Edit 3D";
-          editButton3D.innerHTML = `<img src="${basePath}/assets/Icon_edit.png" alt="Edit 3D">`;
-          editButton3D.addEventListener("click", function () {
-            requireLoginFor3D("request changes on this 3D design", () => {
-              sendEmail(
-                "Please do some modifications on 3D Design. See Notebox."
-              );
-              updateCaseStatus3D("3d_design_pending");
-            });
-          });
-          btnContainer3D.appendChild(editButton3D);
-
-          const emailWrapperContainer = document.createElement("div");
-          emailWrapperContainer.className = "mail-popup hidden";
-
-          const emailPopupHeader = document.createElement("div");
-          emailPopupHeader.className = "mail-popup-header";
-          emailPopupHeader.textContent = "Add email to mailing list";
-
-          const emailInputWrapper = document.createElement("div");
-          emailInputWrapper.className = "mail-popup-fields";
-
-          // Create the Email Input Field
-          const emailInput = document.createElement("input");
-          emailInput.type = "email";
-          emailInput.placeholder = "Enter email address";
-
-          const submitEmailBtn = document.createElement("button");
-          submitEmailBtn.textContent = "Add";
-          submitEmailBtn.className = "smart-btn mail-submit";
-
-          const closeEmailPopupBtn = document.createElement("button");
-          closeEmailPopupBtn.textContent = "Cancel";
-          closeEmailPopupBtn.className = "smart-btn mail-cancel";
-
-          const addEmailBtn = document.createElement("button");
-          addEmailBtn.className = "smart-btn mail-open";
-          addEmailBtn.setAttribute("aria-label", "Add to Mail");
-          addEmailBtn.title = "Add to Mail";
-          addEmailBtn.innerHTML = `<img src="${basePath}/assets/Icon_addtomail2.png" alt="Add to Mail">`;
-          addEmailBtn.addEventListener("click", () => {
-            emailWrapperContainer.classList.remove("hidden");
-            emailInput.focus();
-          });
-
-          closeEmailPopupBtn.addEventListener("click", () => {
-            emailWrapperContainer.classList.add("hidden");
-          });
-
-          submitEmailBtn.addEventListener("click", async () => {
-            const email = emailInput.value.trim();
-            if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
-              alert("Please enter a valid email address.");
-              return;
-            }
-
-            try {
-              const payload = {
-                case_int_id: paramValue, // assuming you have paramValue as the current caseIntID
-                email: email,
-              };
-
-              const response = await fetch(
-                `${API_BASE}/mailinglist/add`,
-                {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify(payload),
-                }
-              );
-              logApi(response, 'POST /mailinglist/add');
-              const result = await response.json();
-              if (response.ok) {
-                alert("✅ Email added to mailing list.");
-                emailInput.value = "";
-                emailWrapperContainer.classList.add("hidden");
-              } else {
-                console.error(result);
-                alert(
-                  "❌ Failed to add email: " +
-                    (result.message || "Unknown error")
-                );
-              }
-            } catch (err) {
-              console.error(err);
-              alert("❌ Server error while adding email.");
-            }
-          });
-
-          emailWrapperContainer.appendChild(emailPopupHeader);
-          emailInputWrapper.appendChild(emailInput);
-          emailInputWrapper.appendChild(submitEmailBtn);
-          emailInputWrapper.appendChild(closeEmailPopupBtn);
-
-          emailWrapperContainer.appendChild(emailInputWrapper);
-          document.body.appendChild(emailWrapperContainer);
-          btnContainer3D.appendChild(addEmailBtn);
-
           // Switches between the uploaded design (the landing view) and the
           // case's own scan + polylines + artificial teeth. Both stay loaded, so
           // this is a visibility flip, not a reload.
           const loadOtherStlButton = document.createElement("button");
           loadOtherStlButton.id = "center-load-button";
           loadOtherStlButton.className = "smart-btn other-stl";
-          loadOtherStlButton.innerHTML = `<img src="${basePath}/assets/Icon_showdesign2.png" alt="Switch between design and case view">`;
+          loadOtherStlButton.innerHTML = `<img src="${basePath}/assets/Icon_showdesign2.svg" alt="Switch between design and case view">`;
           let viewSwitchBusy = false;
           const setDesignButtonState = (isDesignShown) => {
             const label = isDesignShown
@@ -4261,23 +3973,30 @@ btnContainer.appendChild(edit2DStatic); */
           });
           btnContainer3D.appendChild(loadOtherStlButton);
 
-          const legendToggleBtn = document.createElement("button");
-          legendToggleBtn.className = "smart-btn legend-toggle-btn";
-          legendToggleBtn.setAttribute("aria-label", "Heatmap");
-          legendToggleBtn.title = "Heatmap";
-          legendToggleBtn.innerHTML = `<img src="${basePath}/assets/Icon_heatmap2.png" alt="Heatmap">`;
-          legendToggleBtn.addEventListener("click", () => {
-            window.toggleMeasurementLegend?.();
+          // Opens the slot manager at any time, not just on a case that has no
+          // uploads — otherwise the four slots are only ever fillable before the
+          // first file lands.
+          const uploadSlotsButton = document.createElement("button");
+          uploadSlotsButton.id = "upload-slots-button";
+          uploadSlotsButton.className = "smart-btn upload-slots";
+          uploadSlotsButton.title = "Upload 3D files";
+          uploadSlotsButton.setAttribute("aria-label", "Upload 3D files");
+          uploadSlotsButton.innerHTML = `<img src="${basePath}/assets/cloud_upload.png" alt="Upload 3D files">`;
+          uploadSlotsButton.addEventListener("click", () => {
+            if (document.getElementById("design-upload-prompt")) {
+              window.removeDesignUploadPrompt?.();
+              return;
+            }
+            window.showDesignUploadPrompt?.();
           });
-          btnContainer3D.appendChild(legendToggleBtn);
+          btnContainer3D.appendChild(uploadSlotsButton);
 
           // Append the container to the body
           if (btnContainer.children.length > 0) {
             document.body.appendChild(btnContainer);
           }
           //document.body.appendChild(btnContainer2D);
-          btnContainer3D.style.order = "70";
-          getViewerRightNav().appendChild(btnContainer3D);
+          getViewerNavToolbar().prepend(btnContainer3D);
         }
       }
 
@@ -4394,15 +4113,6 @@ btnContainer.appendChild(edit2DStatic); */
       pointer-events: none;
   }
 
-  #polyline-visibility-toggle img {
-      width: 36px;
-      height: 36px;
-      object-fit: contain;
-      display: block;
-      margin: 0 auto;
-      pointer-events: none;
-  }
-
   .smart-btn.nudge {
       background-color: #007bff;
   }
@@ -4424,7 +4134,7 @@ btnContainer.appendChild(edit2DStatic); */
   }
 
   .smart-btn.other-stl {
-      background-color: #007bff;
+      background-color: transparent;
   }
 
   /* Design overlay is currently on top of the jaw. */
@@ -4441,6 +4151,9 @@ btnContainer.appendChild(edit2DStatic); */
       pointer-events: auto;
   }
 
+  /* Frosted glass over the model, same recipe as the objects panel. The tint
+     stays fairly opaque because the scene behind renders near-white, and white
+     card text has to stay readable against it. */
   #design-upload-prompt .dup-card {
       display: flex;
       flex-direction: column;
@@ -4448,13 +4161,18 @@ btnContainer.appendChild(edit2DStatic); */
       gap: 12px;
       max-width: min(560px, 92vw);
       padding: 26px 30px;
-      border: 1px solid rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.22);
       border-radius: 16px;
-      background: rgba(17, 24, 39, 0.88);
-      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+      background: rgba(17, 24, 39, 0.55);
+      -webkit-backdrop-filter: blur(18px) saturate(140%);
+      backdrop-filter: blur(18px) saturate(140%);
+      box-shadow:
+        0 18px 48px rgba(0, 0, 0, 0.32),
+        inset 0 1px 0 rgba(255, 255, 255, 0.14);
       text-align: center;
       font-family: "Montserrat", Arial, sans-serif;
       color: #f1f5f9;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
   }
 
   #design-upload-prompt .dup-heading {
@@ -4475,6 +4193,10 @@ btnContainer.appendChild(edit2DStatic); */
       margin-top: 6px;
   }
 
+  #design-upload-prompt .dup-slot-wrap {
+      position: relative;
+  }
+
   #design-upload-prompt .dup-slot {
       display: flex;
       flex-direction: column;
@@ -4484,18 +4206,77 @@ btnContainer.appendChild(edit2DStatic); */
       width: 132px;
       height: 96px;
       padding: 8px;
-      border: 1px dashed rgba(255, 255, 255, 0.35);
+      border: 1px dashed rgba(255, 255, 255, 0.42);
       border-radius: 12px;
-      background: rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.10);
       color: inherit;
       font: inherit;
       cursor: pointer;
       transition: background 0.15s ease, border-color 0.15s ease;
   }
 
-  #design-upload-prompt .dup-slot:hover {
+  #design-upload-prompt .dup-slot:hover:not(:disabled) {
       border-color: #4fa3e8;
       background: rgba(79, 163, 232, 0.16);
+  }
+
+  /* Per-slot progress: each file reports itself in its own tile, replacing the
+     single pooled bar that could not say which of the four was slow. */
+  #design-upload-prompt .dup-slot-bar,
+  #design-upload-prompt .dup-slot-note {
+      display: none;
+  }
+
+  #design-upload-prompt .dup-slot-wrap.is-busy .dup-slot-bar {
+      display: block;
+      width: 88px;
+      height: 5px;
+  }
+
+  #design-upload-prompt .dup-slot-wrap.is-busy .dup-slot-note {
+      display: block;
+      font-size: 11px;
+      opacity: 0.75;
+  }
+
+  /* The tick/plus and the filename give way to the bar while a slot is working,
+     so a 96px tile does not have to hold both. */
+  #design-upload-prompt .dup-slot-wrap.is-busy .dup-plus,
+  #design-upload-prompt .dup-slot-wrap.is-busy .dup-slot-file {
+      display: none;
+  }
+
+  #design-upload-prompt .dup-slot-delete {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 50%;
+      background: #2b3242;
+      color: #f8fafc;
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+  }
+
+  #design-upload-prompt .dup-slot-delete:hover {
+      border-color: #f87171;
+      background: #b91c1c;
+  }
+
+  #design-upload-prompt .dup-slot-delete:disabled {
+      opacity: 0.4;
+      cursor: default;
+  }
+
+  #design-upload-prompt .dup-slot-wrap.is-busy .dup-slot-delete {
+      display: none;
   }
 
   #design-upload-prompt .dup-plus {
@@ -4507,6 +4288,40 @@ btnContainer.appendChild(edit2DStatic); */
   #design-upload-prompt .dup-slot-label {
       font-size: 12px;
       opacity: 0.85;
+  }
+
+  /* A slot that already holds a file: solid border, tick instead of "+", and the
+     filename underneath. Not clickable — use its × to free the slot first. */
+  #design-upload-prompt .dup-slot-wrap.is-filled .dup-slot {
+      border-style: solid;
+      border-color: rgba(74, 222, 128, 0.55);
+      background: rgba(74, 222, 128, 0.12);
+      cursor: default;
+  }
+
+  #design-upload-prompt .dup-slot-wrap.is-filled .dup-plus {
+      font-size: 20px;
+      color: #4ade80;
+  }
+
+  #design-upload-prompt .dup-slot-file {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 11px;
+      opacity: 0.7;
+  }
+
+  /* A filled tile is disabled by design, so only an empty one that is disabled
+     is actually waiting on something. */
+  #design-upload-prompt .dup-slot-wrap:not(.is-filled) .dup-slot:disabled {
+      opacity: 0.45;
+      cursor: progress;
+  }
+
+  #design-upload-prompt .dup-slot-wrap.is-busy .dup-slot:disabled {
+      opacity: 1;
   }
 
   #design-upload-prompt .dup-status {
@@ -4544,21 +4359,17 @@ btnContainer.appendChild(edit2DStatic); */
   }
 
   .smart-btn.other-stl.active {
-      background-color: #0b5ed7;
-      box-shadow: 0 0 0 2px #38bdf8, 0 0 10px rgba(56, 189, 248, 0.35);
+      background-color: transparent;
+      box-shadow: 0 0 0 2px #38bdf8;
+  }
+
+  .smart-btn.upload-slots img {
+      filter: brightness(0) invert(1);
   }
 
   .smart-btn:disabled {
       opacity: 0.6;
       cursor: progress;
-  }
-
-  .smart-btn.legend-toggle-btn {
-      background-color: #4a5568;
-  }
-
-  .smart-btn.legend-toggle-btn:hover {
-      background-color: #5a6478;
   }
 
   #viewer-right-nav {
@@ -4588,196 +4399,17 @@ btnContainer.appendChild(edit2DStatic); */
     pointer-events: auto;
   }
 
-  /* ── Hamburger button (all screen sizes) ── */
-  #sidebar-hamburger-btn {
-    display: flex;
-    position: absolute;
-    right: 16px;
-    bottom: 16px;
-    z-index: 1060;
-    align-items: center;
-    justify-content: center;
-    width: 64px;
-    height: 64px;
-    padding: 0;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    border-radius: 8px;
-    background: rgba(48, 48, 48, 0.92);
-    color: #ffffff;
-    cursor: pointer;
-  }
-
-  #sidebar-hamburger-btn:hover {
-    background: rgba(68, 68, 68, 0.98);
-  }
-
-  /* ── Always hide hamburger items from the nav (all sizes) ── */
-  #viewer-right-nav > #component-panel-toggle,
-  #viewer-right-nav > #polyline-visibility-menu,
-  #viewer-right-nav > .smart-btn-container-3d,
-  #viewer-right-nav > #viewer-meta-dates {
-    display: none !important;
-  }
-
-  /* ── Hamburger backdrop ── */
-  #hamburger-backdrop {
-    display: none;
-    position: absolute;
-    inset: 0;
-    z-index: 1040;
-    background: rgba(0, 0, 0, 0.45);
-  }
-
-  #hamburger-backdrop.open { display: block; }
-
-  /* ── Drawer: desktop — panel sliding in from the right, left of the sidebar ── */
-  #hamburger-drawer {
-    display: none;
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    right: 0;
-    left: auto;
-    width: 210px;
-    max-height: 100dvh;
-    z-index: 1045;
-    flex-direction: column;
-    background: rgba(18, 18, 18, 0.98);
-    border-left: 1px solid rgba(255, 255, 255, 0.12);
-    border-right: none;
-    border-radius: 0;
-    box-shadow: -4px 0 18px rgba(0, 0, 0, 0.32);
-    backdrop-filter: blur(8px);
-    overflow: hidden;
-  }
-
-  #hamburger-drawer.open { display: flex; }
-
-  #hamburger-drawer-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    font: 700 14px Arial, sans-serif;
-    color: #ffffff;
-    flex: 0 0 auto;
-    background: rgba(28, 28, 28, 0.98);
-  }
-
-  #hamburger-drawer-close {
-    width: 30px;
-    height: 30px;
-    border: 1px solid #ef4444;
-    border-radius: 5px;
-    background: #b91c1c;
-    color: #ffffff;
-    font-size: 20px;
-    font-weight: 800;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
-  }
-
-  #hamburger-drawer-content {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 14px 16px;
-    overflow-y: auto;
-    flex: 1;
-  }
-
-  /* Items inside the drawer fill the full width */
-  #hamburger-drawer-content > * {
-    width: 100% !important;
-    flex: 0 0 auto;
-    pointer-events: auto;
-    box-sizing: border-box;
-  }
-
-  #hamburger-drawer-content .smart-btn-container-3d {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  #hamburger-drawer-content .smart-btn,
-  #hamburger-drawer-content .component-panel-toggle {
-    width: 100% !important;
-    min-width: 0;
-  }
-
-  /* ── Tablet: slide-up from above bottom bar ── */
-  @media (min-width: 769px) and (max-width: 1024px) {
-    #hamburger-drawer {
-      top: 16px;
-      left: auto;
-      right: 0;
-      bottom: auto;
-      width: 176px;
-      height: auto;
-      max-height: calc(100dvh - 136px - env(safe-area-inset-bottom, 0px));
-      border-left: 1px solid rgba(255, 255, 255, 0.18);
-      border-top: none;
-      border-radius: 16px 0 0 16px;
-      box-shadow: -10px 0 36px rgba(0, 0, 0, 0.5);
-    }
-  }
-
-  /* ── Mobile: slide-up from above bottom bar ── */
-  @media (max-width: 768px) {
-    #hamburger-drawer {
-      top: 12px;
-      left: auto;
-      right: 0;
-      bottom: calc(92px + env(safe-area-inset-bottom, 0px));
-      width: 164px;
-      max-height: none;
-      border-left: 1px solid rgba(255, 255, 255, 0.18);
-      border-top: none;
-      border-radius: 16px 0 0 16px;
-      box-shadow: -10px 0 36px rgba(0, 0, 0, 0.5);
-    }
-  }
-
-  #viewer-right-nav-top-row {
+  #viewer-nav-toolbar {
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 8px;
-    flex: 0 0 auto;
-    position: absolute;
-    right: 88px;
-    bottom: 16px;
-    z-index: 1060;
-  }
-
-  #reset-button,
-  #lock-rotation-button {
-    width: 64px;
-    min-width: 64px;
-    height: 64px;
-    padding: 8px;
-  }
-
-  #reset-icon {
-    width: 42px;
-    height: 42px;
-  }
-
-  #viewer-meta-dates {
-    display: flex;
-    flex-direction: column;
+    justify-content: center;
     gap: 6px;
+    flex: 0 0 auto;
   }
 
-  #viewer-meta-dates .viewer-meta-bubble {
-    max-width: none;
-    width: 100%;
-    box-sizing: border-box;
+  #viewer-right-nav-top-row {
+    display: contents;
   }
 
 /*   .smart-btn-container-2d {
@@ -4791,82 +4423,34 @@ btnContainer.appendChild(edit2DStatic); */
 	} */
 
 	.smart-btn-container-3d {
-		position: static;
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		z-index: 1000;
-        pointer-events: none;
+		display: contents;
 	}
 
-  .smart-btn.mail-open {
-    background-color: #6c757d;
-  }
-
-  .mail-popup {
-    position: absolute;
-    left: 16px;
-    right: auto;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 1002;
-    width: min(360px, calc(100vw - 240px));
-    max-height: calc(100% - 40px);
-    overflow: auto;
-    padding: 14px;
-    background: rgba(20, 20, 26, 0.97);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 8px;
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  /* Nav toolbar buttons are bare icons — no plate behind them. */
+  #viewer-nav-toolbar .smart-btn {
+    flex: 0 0 auto;
+    width: 46px;
+    min-width: 0;
+    height: 46px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    box-shadow: none;
     pointer-events: auto;
   }
 
-  .mail-popup.hidden {
-    display: none;
-  }
-
-  .mail-popup-header {
-    color: #f0eff4;
-    font-size: 14px;
-    font-weight: 700;
-    margin-bottom: 10px;
-  }
-
-  .mail-popup-fields {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    gap: 8px;
-    align-items: center;
-  }
-
-  .mail-popup input {
-    min-width: 0;
-    padding: 9px 10px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 5px;
-    font-size: 14px;
-    background: rgba(255, 255, 255, 0.08);
-    color: #f0eff4;
-  }
-
-  .smart-btn.mail-submit,
-  .smart-btn.mail-cancel {
-    min-width: auto;
-    padding: 9px 12px;
-  }
-
-  .smart-btn.mail-submit {
-    background-color: #28a745;
-  }
-
-  .smart-btn.mail-cancel {
-    background-color: #6c757d;
+  #viewer-nav-toolbar .smart-btn img {
+    width: 30px;
+    height: 30px;
   }
 
   .preset-view-panel {
-    position: absolute;
+    position: static;
+    order: 10;
+    margin-top: auto;
     z-index: 1000;
-    width: 224px;
+    width: 100%;
     padding: 0;
     background: transparent;
     border: 0;
@@ -4876,8 +4460,6 @@ btnContainer.appendChild(edit2DStatic); */
     font-family: Arial, sans-serif;
     text-align: center;
     pointer-events: none;
-    right: 16px;
-    bottom: 92px;
   }
 
   .preset-view-pad {
@@ -5042,21 +4624,8 @@ btnContainer.appendChild(edit2DStatic); */
       font-size: 12px;
     }
 
-    .smart-btn-container-3d {
-      gap: 8px;
-    }
-
-    .mail-popup {
-      left: 8px;
-      right: auto;
-      width: min(300px, 58vw);
-      max-height: 60dvh;
-      overflow-y: auto;
-      padding: 10px;
-    }
-
-    .mail-popup-fields {
-      grid-template-columns: 1fr;
+    #viewer-nav-toolbar {
+      gap: 4px;
     }
 
     .preset-view-panel {
@@ -5067,12 +4636,6 @@ btnContainer.appendChild(edit2DStatic); */
 
   /* Tablet toolbar: compact cluster at bottom-left above footer. */
   @media (min-width: 769px) and (max-width: 1024px) {
-    #sidebar-hamburger-btn {
-      right: 16px;
-      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-      width: 64px;
-      height: 64px;
-    }
 
     #viewer-right-nav {
       top: auto;
@@ -5120,10 +4683,6 @@ btnContainer.appendChild(edit2DStatic); */
       background: rgba(68, 68, 68, 0.98);
     }
 
-    #viewer-right-nav-top-row {
-      flex-direction: row;
-    }
-
     #viewer-right-nav > * {
       flex: 0 0 auto;
       position: static;
@@ -5131,6 +4690,7 @@ btnContainer.appendChild(edit2DStatic); */
 
     .preset-view-panel {
       position: static;
+      margin-top: 0;
       flex: 0 0 auto;
       display: flex;
       align-items: center;
@@ -5363,86 +4923,47 @@ btnContainer.appendChild(edit2DStatic); */
       content: "\\2192";
     }
 
-    #viewer-right-nav-top-row {
+    #viewer-right-nav-top-row,
+    .smart-btn-container-3d {
+      display: contents;
+    }
+
+    #viewer-nav-toolbar {
       position: static;
       flex: 0 0 auto;
       display: flex;
       flex-direction: row;
+      align-items: center;
       gap: 8px;
       z-index: auto;
-      order: 15;
+      order: 4;
     }
 
     #reset-button,
-    #lock-rotation-button {
+    #lock-rotation-button,
+    #viewer-nav-toolbar .smart-btn {
       display: flex !important;
       flex: 0 0 auto;
-      width: 64px;
-      min-width: 64px;
-      height: 64px;
-      padding: 8px;
+      width: 52px;
+      min-width: 52px;
+      height: 52px;
+      padding: 0;
     }
 
     #reset-icon {
-      width: 42px;
-      height: 42px;
+      width: 32px;
+      height: 32px;
     }
 
-    .smart-btn-container-3d {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
+    #viewer-nav-toolbar .smart-btn img {
+      width: 32px;
+      height: 32px;
     }
 
-    .smart-btn-container-3d .smart-btn {
-      min-width: 140px;
-      height: 64px;
-      white-space: nowrap;
-      margin: 0 auto;
-    }
-
-    #hamburger-drawer-content {
-      flex: 0 0 auto;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 12px 10px;
-    }
-
-    #hamburger-drawer-content .smart-btn,
-    #hamburger-drawer-content .component-panel-toggle,
-    #hamburger-drawer-content #polyline-visibility-toggle {
-      width: 140px !important;
-      min-width: 140px !important;
-      height: 64px !important;
-      margin: 0 auto;
-      white-space: normal !important;
-      text-align: center;
-      line-height: 1.2;
-      padding: 8px 10px !important;
-    }
-
-    .mail-popup,
-    #polyline-visibility-panel {
-      left: 16px !important;
-      right: auto !important;
-      top: auto !important;
-      bottom: calc(130px + env(safe-area-inset-bottom, 0px)) !important;
-      transform: none !important;
-      width: min(360px, calc(100vw - 32px)) !important;
-      max-height: calc(100% - 154px) !important;
-    }
   }
 
   /* Phone toolbar: compact cluster at bottom-left above footer. */
   @media (max-width: 768px) {
-    #sidebar-hamburger-btn {
-      right: 12px;
-      bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-      width: 60px;
-      height: 60px;
-    }
 
     #viewer-right-nav {
       top: auto;
@@ -5486,10 +5007,6 @@ btnContainer.appendChild(edit2DStatic); */
       flex: 0 0 auto;
     }
 
-    #viewer-right-nav-top-row {
-      flex-direction: row;
-    }
-
     #viewer-right-nav > * {
       flex: 0 0 auto;
       position: static;
@@ -5497,6 +5014,7 @@ btnContainer.appendChild(edit2DStatic); */
 
     .preset-view-panel {
       position: static;
+      margin-top: 0;
       flex: 0 0 auto;
       display: flex;
       align-items: center;
@@ -5728,76 +5246,44 @@ btnContainer.appendChild(edit2DStatic); */
       content: "\\2192";
     }
 
-    #viewer-right-nav-top-row {
+    #viewer-right-nav-top-row,
+    .smart-btn-container-3d {
+      display: contents;
+    }
+
+    #viewer-nav-toolbar {
       position: static;
       flex: 0 0 auto;
       display: flex;
       flex-direction: row;
-      gap: 8px;
+      align-items: center;
+      gap: 6px;
       z-index: auto;
-      order: 15;
+      order: 4;
     }
 
     #reset-button,
-    #lock-rotation-button {
+    #lock-rotation-button,
+    #viewer-nav-toolbar .smart-btn {
       display: flex !important;
       flex: 0 0 auto;
-      width: 60px;
-      min-width: 60px;
-      height: 60px;
-      padding: 6px;
+      width: 48px;
+      min-width: 48px;
+      height: 48px;
+      padding: 0;
     }
 
     #reset-icon {
-      width: 40px;
-      height: 40px;
+      width: 30px;
+      height: 30px;
       margin-right: 0;
     }
 
-    .smart-btn-container-3d {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
+    #viewer-nav-toolbar .smart-btn img {
+      width: 30px;
+      height: 30px;
     }
 
-    .smart-btn-container-3d .smart-btn {
-      min-width: 128px;
-      height: 60px;
-      padding: 10px 14px;
-      white-space: nowrap;
-      margin: 0 auto;
-    }
-
-    #hamburger-drawer-content {
-      align-items: center;
-      gap: 8px;
-      padding: 10px 8px;
-    }
-
-    #hamburger-drawer-content .smart-btn,
-    #hamburger-drawer-content .component-panel-toggle,
-    #hamburger-drawer-content #polyline-visibility-toggle {
-      width: 128px !important;
-      min-width: 128px !important;
-      height: 60px !important;
-      margin: 0 auto;
-      white-space: normal !important;
-      text-align: center;
-      line-height: 1.2;
-      padding: 8px 10px !important;
-    }
-
-    .mail-popup,
-    #polyline-visibility-panel {
-      left: 12px !important;
-      right: auto !important;
-      top: auto !important;
-      bottom: calc(86px + env(safe-area-inset-bottom, 0px)) !important;
-      transform: none !important;
-      width: min(340px, calc(100vw - 24px)) !important;
-      max-height: calc(100% - 112px) !important;
-    }
   }
 
   @media (max-width: 430px) {
@@ -5871,7 +5357,6 @@ btnContainer.appendChild(edit2DStatic); */
   height: 30px;
 }
 
-
   
   #center-load-button {
     position: static;
@@ -5941,108 +5426,6 @@ btnContainer.appendChild(edit2DStatic); */
   const viewerURL = `https://faid123.github.io/.tmp-test-web/src/pages/ThreeDViewer.html?id=${encodeURIComponent(
     encryptedID
   )}`;
-
-  // Read the browser's logged-in account, if any (same localStorage shape
-  // used across the app — see caseManagement.js's getLoggedInUser()).
-  const getLoggedInUser3D = getLoggedInUser;
-
-  // Approve/Edit 3D notify other users and change case status, so both must
-  // be tied to a real account rather than anyone who happens to have the
-  // (unauthenticated) viewer link. Runs onProceed directly if already logged
-  // in; otherwise shows the login gate and re-runs onProceed after login by
-  // redirecting back to this same viewer URL.
-  function requireLoginFor3D(actionLabel, onProceed) {
-    if (getLoggedInUser3D()?.uuid) {
-      onProceed();
-      return;
-    }
-    openAnnotateGate({
-      title: "Sign in to continue",
-      message: `Log in to ${actionLabel}.`,
-      onLogin: () => {
-        try {
-          localStorage.setItem("postLoginRedirect", window.location.href);
-        } catch (_) {}
-        window.location.href = `${window.location.origin}${basePath}/index.html`;
-      },
-    });
-  }
-
-  // Flip the case's status to reflect an Approve/Edit action, so TRI doesn't
-  // have to remember to update it by hand. /case/get/:id (used to load this
-  // viewer) omits assigned_to/due_date/comments, and /additionalcasedetails
-  // replaces all of them together — so the current values are looked up from
-  // the logged-in user's case list first and re-sent unchanged, the same way
-  // caseManagement.js's postNewStatus() does it. If the case can't be found
-  // there (e.g. this account isn't actually shared on it), the write is
-  // skipped rather than risk clearing those fields.
-  async function updateCaseStatus3D(newStatus) {
-    const user = getLoggedInUser3D();
-    if (!user?.uuid) return;
-
-
-    let current = null;
-    try {
-      const res = await fetch(
-        `${API_BASE}/case/user/findall/get`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify([
-            { machine_id: MACHINE_ID, uuid: user.uuid },
-            { uuid: user.uuid },
-          ]),
-        }
-      );
-      logApi(res, "POST /case/user/findall/get");
-      if (res.ok) {
-        const list = await res.json();
-        current = Array.isArray(list)
-          ? list.find(
-              (c) => String(c.id ?? c.case_int_id) === String(paramValue)
-            ) || null
-          : null;
-      }
-    } catch (err) {
-      console.warn("[3D viewer] Failed to look up current case fields:", err);
-    }
-
-    if (!current) {
-      console.warn(
-        "[3D viewer] Case not found in this account's list — skipping status update to avoid clearing assigned_to/due_date/comments."
-      );
-      toast.error(
-        "Design status wasn't updated automatically — please update it manually."
-      );
-      return;
-    }
-
-    try {
-      const res = await fetch(
-        `${API_BASE}/additionalcasedetails`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify([
-            { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: paramValue },
-            {
-              assigned_to: current.assigned_to ?? null,
-              due_date: current.expected_date ?? null,
-              comments: current.comments ?? null,
-              new_status: newStatus,
-            },
-          ]),
-        }
-      );
-      logApi(res, "POST /additionalcasedetails");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch (err) {
-      console.error("[3D viewer] Failed to update case status:", err);
-      toast.error(
-        "Design status wasn't updated automatically — please update it manually."
-      );
-    }
-  }
 
   // Function to send email for Approve or Edit action
   function sendEmail(actionType) {
@@ -6188,85 +5571,6 @@ btnContainer.appendChild(edit2DStatic); */
   const EXTRA_STL_COLOR = 0xb0875a; // jaw tan
   const METAL_RPD_COLOR = 0xd6dadf; // brushed cobalt-chrome / stainless
 
-  // One 0–100% bar across the whole slot download. ApiClient drives
-  // window.viewerLoadingEls.progressBar per request — max = that file's bytes,
-  // value back to 0 each time — so a plain hand-off makes the bar restart four
-  // times. This lends it a stand-in whose writes are folded into the overall
-  // figure, and paints the real element itself. The speed readout (displayBox)
-  // stays wired to ApiClient, which is the one thing it reports per file.
-  function createSlotProgressBridge(slotCount) {
-    const els = window.viewerLoadingEls;
-    if (!els) return { begin() {}, complete() {}, restore() {} };
-
-    let completed = 0;
-    let fileMax = 1;
-    let fileValue = 0;
-    let shown = 0;
-
-    const paint = () => {
-      const fraction = Math.min(
-        (completed + Math.min(fileValue / fileMax, 1)) / slotCount,
-        1
-      );
-      // Never goes backwards: any other request in flight (the nav thumbnail,
-      // on entry) writes its own byte counts through this same stand-in, and
-      // its smaller totals would otherwise drag the bar back.
-      shown = Math.max(shown, Math.round(fraction * 100));
-      const percent = shown;
-      els.progressBar.max = 100;
-      els.progressBar.value = percent;
-      els.progressBar.style.display = "block";
-      els.percentage.textContent = `${percent}%`;
-    };
-
-    const progressStandIn = {
-      style: {},
-      get max() {
-        return fileMax;
-      },
-      set max(bytes) {
-        fileMax = Number(bytes) || 1;
-      },
-      get value() {
-        return fileValue;
-      },
-      set value(bytes) {
-        fileValue = Number(bytes) || 0;
-        paint();
-      },
-    };
-
-    window.viewerLoadingEls = {
-      ...els,
-      progressBar: progressStandIn,
-      // Swallows ApiClient's per-file percentage so it can't fight paint().
-      percentage: { textContent: "" },
-    };
-
-    return {
-      begin(slot) {
-        fileMax = 1;
-        fileValue = 0;
-        // ApiClient only rewrites this line once bytes start arriving, so
-        // without this it still names the previous slot while the next one is
-        // in flight — contradicting the status line right above it.
-        els.displayBox.textContent = `Requesting Slot ${slot}…`;
-        paint();
-      },
-      // Empty slots 404 without ever touching the bar, so the step comes from
-      // here rather than from the byte counter reaching max.
-      complete() {
-        completed += 1;
-        fileMax = 1;
-        fileValue = 0;
-        paint();
-      },
-      restore() {
-        window.viewerLoadingEls = els;
-      },
-    };
-  }
-
   function disposeDesignSlotMesh(mesh) {
     parentObject.remove(mesh);
     mesh.geometry?.dispose?.();
@@ -6278,6 +5582,79 @@ btnContainer.appendChild(edit2DStatic); */
     // this map, not materials — dispose them too.
     all_mesh_mat[mesh.name]?.forEach?.((entry) => entry?.dispose?.());
     delete all_mesh_mat[mesh.name];
+  }
+
+  // Build one slot's mesh and put it in the scene. Shared by the initial load
+  // and by an upload, which renders the bytes it just sent instead of asking
+  // for them back — same as the 3D preview panel's renderExtraStl.
+  function addDesignSlotMesh(slot, filename, binarySTL) {
+    // Re-uploading a slot replaces what was there.
+    const previous = designSlotMeshes.findIndex(
+      (mesh) => mesh.userData?.designSlot === slot
+    );
+    if (previous !== -1) {
+      disposeDesignSlotMesh(designSlotMeshes[previous]);
+      designSlotMeshes.splice(previous, 1);
+    }
+
+    // Same finish the 3D preview panel gives these files: jaw uploads in the jaw
+    // tan, metal-RPD slots in brushed cobalt-chrome.
+    const isMetalRpd = METAL_RPD_SLOTS.has(slot);
+    const slotMaterial = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(isMetalRpd ? METAL_RPD_COLOR : EXTRA_STL_COLOR),
+      opacity: 1,
+      transparent: false,
+      side: THREE.DoubleSide,
+      depthTest: true,
+      depthWrite: true,
+      metalness: isMetalRpd ? 0.85 : 0.05,
+      roughness: isMetalRpd ? 0.32 : 0.6,
+    });
+
+    // Jaw side comes from the slot number, not the filename: the slots are fixed
+    // (1 upper jaw, 2 upper metal RPD, 3 lower jaw, 4 lower metal RPD) and
+    // uploads are named freely, so "jawSTLSlot3.stl" and "ATC-C-05L.stl" (both
+    // lower) were being treated as upper and given the upper jaw's transform.
+    const isLower = EXTRA_STL_SLOT_JAW[slot] === "lower";
+    const undercutForSlot =
+      (isLower ? undercut_values[0] : undercut_values[1]) ?? "stl";
+    // Names key all_mesh_mat, so keep them unique even if two slots hold files
+    // with the same name.
+    const slotFilename = `Slot ${slot}: ${filename || "3D file"}`;
+
+    const stlLoader = new STLMeshLoader(slotMaterial);
+    const [mesh, meshMaterials] = stlLoader.load(binarySTL, undercutForSlot);
+    all_mesh_mat[slotFilename] = meshMaterials.slice();
+
+    mesh.name = slotFilename;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.userData = {
+      jaw_type: isLower ? "lower" : "upper",
+      archLabel: isLower ? "Lower Arch" : "Upper Arch",
+      // Marks this as a design-slot mesh and carries which slot it came from, so
+      // the objects panel can give each slot its own row.
+      isDesignSlot: true,
+      designSlot: slot,
+      // Raw upload name, for the slot manager's row label.
+      sourceFilename: filename || "3D file",
+    };
+
+    // No transform: slot STLs are rendered exactly as uploaded, so what the
+    // viewer shows is what is in the files. The 180° Z flip the OFF upper jaw
+    // needs turns the upper arch upside down and drops it through the lower
+    // one, so it must not be applied here. Same as the 3D preview panel, which
+    // renders extras untransformed.
+    //
+    // Uploads are not guaranteed to share a coordinate frame — on case 2967
+    // both casts were exported teeth-up over the same Z band (~20mm of
+    // interpenetration) with the denture in a third frame. Nothing here
+    // compensates for that; an articulated export is what fixes it.
+
+    enforceOpaqueJawMesh(mesh);
+    parentObject.add(mesh);
+    designSlotMeshes.push(mesh);
+    return mesh;
   }
 
   function isDesignViewActive() {
@@ -6378,13 +5755,21 @@ btnContainer.appendChild(edit2DStatic); */
       showDesignMeshes();
     }
     removeDesignUploadPrompt();
+    activateDesignView();
+    return true;
+  }
+
+  // Put the scene into design view with whatever slot meshes are loaded. Split
+  // out of showDesignView so an upload can switch to what it just added without
+  // going back to the network for all four slots.
+  function activateDesignView() {
     designViewActive = true;
     hideCaseAssetsForDesign();
     updateViewerRotationOrigin();
     syncPolylineFocusMode();
     controls.update();
     rebuildObjectsPanel();
-    return true;
+    window.syncDesignViewButton?.(true);
   }
 
   // ── Upload affordance for a case with no uploads ────────────────────────
@@ -6394,16 +5779,14 @@ btnContainer.appendChild(edit2DStatic); */
     document.getElementById("design-upload-prompt")?.remove();
   }
 
-  function uploadSlotStl(payload) {
+  function uploadSlotStl(payload, onProgress) {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", `${API_BASE}/stl/slot/`);
       xhr.setRequestHeader("Content-Type", "application/json");
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return;
-        window.updateViewerLoading?.(
-          `Uploading… ${Math.round((event.loaded / event.total) * 100)}%`
-        );
+        onProgress?.(event.loaded / event.total);
       };
       xhr.onload = () =>
         xhr.status >= 200 && xhr.status < 300
@@ -6441,6 +5824,8 @@ btnContainer.appendChild(edit2DStatic); */
     }
 
     statusEl.textContent = `Uploading ${file.name}…`;
+    setUploadPromptBusy(true);
+    setSlotTileBusy(slot, "Reading file");
     try {
       const base64 = await fileToBase64(file);
       await uploadSlotStl(
@@ -6450,21 +5835,244 @@ btnContainer.appendChild(edit2DStatic); */
             uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
             caseIntID: paramValue,
           },
-          { slotNumber: slot, filename: file.name, data: base64 },
-        ])
+          // case_id belongs in THIS object, not the auth one: the writer reads
+          // it from here (same as POST /stl) and without it the insert runs
+          // `case_id = NULL` and 500s. The 500 carries no CORS header, so the
+          // browser only ever saw "Failed to fetch".
+          {
+            case_id: paramValue,
+            slotNumber: slot,
+            filename: file.name,
+            data: base64,
+          },
+        ]),
+        (fraction) => setSlotTileBusy(slot, "Uploading", fraction)
       );
-      statusEl.textContent = `${file.name} uploaded. Loading…`;
-      const shown = await showDesignView({ silent: true });
-      window.syncDesignViewButton?.(shown);
+
+      // Render the bytes we just sent instead of reloading the design: the old
+      // path called showDesignView(), which re-downloaded every slot AND tore
+      // the panel down, so the first upload ended the session — there was no way
+      // to add the other three files. Same approach as the 3D preview panel.
+      statusEl.textContent = `${file.name} uploaded. Preparing…`;
+      setSlotTileBusy(slot, "Preparing");
+      // Parsing blocks the main thread, so let the tile paint "Preparing…" first.
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      addDesignSlotMesh(slot, file.name, atob(base64));
+      activateDesignView();
+      statusEl.textContent = `${file.name} uploaded.`;
     } catch (error) {
       console.error("[viewer3D] slot upload failed", error);
       statusEl.textContent = "Upload failed. Please try again.";
+    } finally {
+      clearSlotTileBusy(slot);
+      setUploadPromptBusy(false);
     }
   }
 
-  // Shown in place of the design when the case has no uploads at all.
+  // Which slot numbers already hold a file, from the meshes themselves — a slot
+  // is occupied exactly when something is rendered for it.
+  function getUploadedSlotName(slot) {
+    return designSlotMeshes.find((mesh) => mesh.userData?.designSlot === slot)
+      ?.userData?.sourceFilename;
+  }
+
+  function getSlotWrap(slot) {
+    return document.querySelector(
+      `#design-upload-prompt .dup-slot-wrap[data-slot="${slot}"]`
+    );
+  }
+
+  // Put one slot's tile into its working state: a bar of its own, per slot, so
+  // each file reports itself instead of four downloads sharing one number.
+  // fraction null draws an indeterminate bar (parsing, deleting — no byte count).
+  function setSlotTileBusy(slot, note, fraction = null) {
+    const wrap = getSlotWrap(slot);
+    if (!wrap) return;
+    wrap.classList.add("is-busy");
+    const bar = wrap.querySelector(".dup-slot-bar");
+    const noteEl = wrap.querySelector(".dup-slot-note");
+    if (bar) {
+      if (fraction == null) {
+        bar.removeAttribute("value");
+      } else {
+        bar.value = Math.round(Math.min(Math.max(fraction, 0), 1) * 100);
+      }
+    }
+    if (noteEl) {
+      noteEl.textContent =
+        fraction == null ? `${note}…` : `${note} ${Math.round(fraction * 100)}%`;
+    }
+  }
+
+  function clearSlotTileBusy(slot) {
+    const wrap = getSlotWrap(slot);
+    if (!wrap) return;
+    wrap.classList.remove("is-busy");
+    const bar = wrap.querySelector(".dup-slot-bar");
+    if (bar) bar.value = 0;
+    const noteEl = wrap.querySelector(".dup-slot-note");
+    if (noteEl) noteEl.textContent = "";
+  }
+
+  // Hands ApiClient a per-slot stand-in for the loading screen's progress
+  // elements, so a slot's download bytes land in that slot's own tile. Restore()
+  // must run before the next slot starts.
+  function routeSlotDownloadProgress(slot) {
+    const previous = window.viewerLoadingEls;
+    let fileMax = 1;
+    let fileValue = 0;
+    const progressStandIn = {
+      style: {},
+      get max() {
+        return fileMax;
+      },
+      set max(bytes) {
+        fileMax = Number(bytes) || 1;
+      },
+      get value() {
+        return fileValue;
+      },
+      set value(bytes) {
+        fileValue = Number(bytes) || 0;
+        setSlotTileBusy(slot, "Downloading", Math.min(fileValue / fileMax, 1));
+      },
+    };
+    window.viewerLoadingEls = {
+      progressBar: progressStandIn,
+      // ApiClient writes a percentage and a speed readout; the tile shows its own.
+      percentage: { textContent: "" },
+      displayBox: { textContent: "" },
+    };
+    return {
+      restore() {
+        if (previous) window.viewerLoadingEls = previous;
+        else delete window.viewerLoadingEls;
+      },
+    };
+  }
+
+  // Paint every tile from current slot state: filled slots show their filename
+  // and a delete button, empty ones keep the "+". Called after each upload so
+  // the panel stays open for the next file, the way the 3D preview panel's
+  // "Other 3D files" list does.
+  function refreshUploadPromptSlots() {
+    const prompt = document.getElementById("design-upload-prompt");
+    if (!prompt) return;
+
+    prompt.querySelectorAll(".dup-slot-wrap").forEach((wrap) => {
+      const slot = Number(wrap.dataset.slot);
+      const filename = getUploadedSlotName(slot);
+      const label = EXTRA_STL_SLOT_NAMES[slot];
+      const tile = wrap.querySelector(".dup-slot");
+      const deleteBtn = wrap.querySelector(".dup-slot-delete");
+
+      wrap.classList.toggle("is-filled", Boolean(filename));
+      tile.disabled = Boolean(filename);
+      tile.title = filename ? `${label}: ${filename}` : `Upload ${label}`;
+      tile.setAttribute(
+        "aria-label",
+        filename ? `${label}: ${filename}` : `Upload ${label}`
+      );
+      tile.querySelector(".dup-plus").textContent = filename ? "✓" : "+";
+      tile.querySelector(".dup-slot-label").textContent = label;
+      tile.querySelector(".dup-slot-file").textContent = filename || "";
+
+      deleteBtn.hidden = !filename;
+      deleteBtn.title = filename ? `Delete ${filename}` : "";
+      deleteBtn.setAttribute(
+        "aria-label",
+        filename ? `Delete ${filename} from ${label}` : "Delete"
+      );
+    });
+
+    const anyUploaded = designSlotMeshes.length > 0;
+    const heading = prompt.querySelector(".dup-heading");
+    if (heading) {
+      heading.textContent = anyUploaded
+        ? "3D RPD design files"
+        : "No 3D RPD design uploaded yet";
+    }
+    const sub = prompt.querySelector(".dup-sub");
+    if (sub) {
+      sub.textContent = anyUploaded
+        ? "Add another file to an empty slot, or close this to view the design."
+        : "Add an STL to a slot, or open the 3D scan.";
+    }
+    const closeBtn = prompt.querySelector(".dup-open-scan");
+    if (closeBtn) {
+      closeBtn.textContent = anyUploaded
+        ? "Done — view the design"
+        : "Open the 3D scan instead";
+    }
+  }
+
+  // An upload or delete holds the whole panel: two at once would race the slot
+  // list, and the file being parsed already blocks the main thread.
+  function setUploadPromptBusy(isBusy) {
+    const prompt = document.getElementById("design-upload-prompt");
+    if (!prompt) return;
+    prompt.classList.toggle("is-busy", isBusy);
+    prompt
+      .querySelectorAll("button")
+      .forEach((button) => (button.disabled = isBusy));
+    // Re-disables the filled tiles, which are never clickable.
+    if (!isBusy) refreshUploadPromptSlots();
+  }
+
+  // Free the slot on the backend, then drop its mesh. Confirmed first: the file
+  // is gone for every viewer of the case and re-uploading means finding the
+  // original STL again.
+  async function deleteSlotFile(slot, statusEl) {
+    const filename = getUploadedSlotName(slot);
+    if (!filename) return;
+    const label = EXTRA_STL_SLOT_NAMES[slot];
+    if (!window.confirm(`Delete "${filename}" from ${label}?`)) return;
+
+    setUploadPromptBusy(true);
+    setSlotTileBusy(slot, "Deleting");
+    if (statusEl) statusEl.textContent = `Deleting ${filename}…`;
+    try {
+      const response = await fetch(`${API_BASE}/stl/slot/delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Same contract as the upload: case_id rides in the second object.
+        body: JSON.stringify([
+          {
+            machine_id: MACHINE_ID,
+            uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
+            caseIntID: paramValue,
+          },
+          { case_id: paramValue, slotNumber: slot },
+        ]),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const index = designSlotMeshes.findIndex(
+        (mesh) => mesh.userData?.designSlot === slot
+      );
+      if (index !== -1) {
+        disposeDesignSlotMesh(designSlotMeshes[index]);
+        designSlotMeshes.splice(index, 1);
+      }
+      rebuildObjectsPanel();
+      if (statusEl) statusEl.textContent = `${filename} deleted.`;
+    } catch (error) {
+      console.error(`[viewer3D] slot ${slot} delete failed`, error);
+      if (statusEl) statusEl.textContent = "Delete failed. Please try again.";
+    } finally {
+      clearSlotTileBusy(slot);
+      setUploadPromptBusy(false);
+    }
+  }
+
+  // The slot manager: four tiles, one per slot, mirroring the 3D preview panel's
+  // "Other 3D files" list. Opens automatically when a case has no uploads at
+  // all, and on demand from the toolbar button.
   function showDesignUploadPrompt() {
-    if (document.getElementById("design-upload-prompt")) return;
+    if (document.getElementById("design-upload-prompt")) {
+      refreshUploadPromptSlots();
+      return;
+    }
 
     const prompt = document.createElement("div");
     prompt.id = "design-upload-prompt";
@@ -6475,11 +6083,9 @@ btnContainer.appendChild(edit2DStatic); */
 
     const heading = document.createElement("div");
     heading.className = "dup-heading";
-    heading.textContent = "No 3D RPD design uploaded yet";
 
     const sub = document.createElement("div");
     sub.className = "dup-sub";
-    sub.textContent = "Add an STL to a slot, or open the 3D scan.";
 
     const slotsRow = document.createElement("div");
     slotsRow.className = "dup-slots";
@@ -6488,32 +6094,63 @@ btnContainer.appendChild(edit2DStatic); */
     status.className = "dup-status";
 
     [1, 2, 3, 4].forEach((slot) => {
+      // The delete button can't live inside the tile (a button in a button), so
+      // each slot is a wrapper holding the tile, its own progress bar and the ×.
+      const wrap = document.createElement("div");
+      wrap.className = "dup-slot-wrap";
+      wrap.dataset.slot = String(slot);
+
       const tile = document.createElement("button");
       tile.type = "button";
       tile.className = "dup-slot";
-      tile.title = `Upload ${EXTRA_STL_SLOT_NAMES[slot]}`;
-      tile.setAttribute("aria-label", `Upload ${EXTRA_STL_SLOT_NAMES[slot]}`);
       tile.innerHTML =
-        `<span class="dup-plus" aria-hidden="true">+</span>` +
-        `<span class="dup-slot-label">${EXTRA_STL_SLOT_NAMES[slot]}</span>`;
+        `<span class="dup-plus" aria-hidden="true"></span>` +
+        `<span class="dup-slot-label"></span>` +
+        `<span class="dup-slot-file"></span>` +
+        `<progress class="dup-slot-bar" max="100" value="0"></progress>` +
+        `<span class="dup-slot-note"></span>`;
       tile.addEventListener("click", () => pickAndUploadSlot(slot, status));
-      slotsRow.appendChild(tile);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "dup-slot-delete";
+      deleteBtn.textContent = "×";
+      deleteBtn.hidden = true;
+      deleteBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        deleteSlotFile(slot, status);
+      });
+
+      wrap.append(tile, deleteBtn);
+      slotsRow.appendChild(wrap);
     });
 
-    const openScan = document.createElement("button");
-    openScan.type = "button";
-    openScan.className = "dup-open-scan";
-    openScan.textContent = "Open the 3D scan instead";
-    openScan.addEventListener("click", async () => {
-      openScan.disabled = true;
+    // Doubles as "done" once something is uploaded: with files in the scene
+    // there is a design to go back to, so closing the panel is the useful
+    // action rather than switching to the case scan.
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "dup-open-scan";
+    closeBtn.addEventListener("click", async () => {
+      closeBtn.disabled = true;
+      if (designSlotMeshes.length) {
+        removeDesignUploadPrompt();
+        return;
+      }
       await showCaseView();
       window.syncDesignViewButton?.(false);
     });
 
-    card.append(heading, sub, slotsRow, status, openScan);
+    card.append(heading, sub, slotsRow, status, closeBtn);
     prompt.appendChild(card);
     (viewerContainer || document.body).appendChild(prompt);
+    refreshUploadPromptSlots();
   }
+
+  // The toolbar is built in another scope (same as syncDesignViewButton), so the
+  // slot manager is reached through the window.
+  window.showDesignUploadPrompt = showDesignUploadPrompt;
+  window.removeDesignUploadPrompt = removeDesignUploadPrompt;
 
   // ── Case assets, loaded on demand ───────────────────────────────────────
   // Nothing here is fetched on entry. The 3D button is what pulls the case's
@@ -6642,15 +6279,15 @@ btnContainer.appendChild(edit2DStatic); */
     );
     if (guiBlackBox) guiBlackBox.remove();
 
-    // Reuse the viewer's own loading screen: ApiClient.post drives
-    // window.viewerLoadingEls (bar, percentage, speed) whenever it exists, so
-    // this gets real download progress instead of ApiClient's fallback
-    // container. Only tear it down if we put it up — the initial page load owns
-    // the screen if it is still running.
-    const ownsLoadingScreen = !hasLiveViewerLoadingScreen();
-    if (ownsLoadingScreen) createViewerLoadingScreen();
-    window.updateViewerLoading?.("Loading 3D RPD design…");
-    const slotProgress = createSlotProgressBridge(4);
+    // The slot manager is the progress UI: each of the four tiles reports its
+    // own file. That replaced a single bar on the loading screen that pooled all
+    // four downloads into one number — you could not tell which file was slow,
+    // or which slots the case even had until the whole thing finished.
+    showDesignUploadPrompt();
+    const prompt = document.getElementById("design-upload-prompt");
+    prompt?.classList.add("is-loading");
+    setUploadPromptBusy(true);
+    [1, 2, 3, 4].forEach((slot) => setSlotTileBusy(slot, "Waiting"));
 
     let anyLoaded = false;
 
@@ -6679,11 +6316,10 @@ btnContainer.appendChild(edit2DStatic); */
         const slotStartedAt = performance.now();
         const payload = [authPayload, { slotNumber: slot }];
 
+        // Bytes for this slot go to this slot's bar.
+        const slotProgress = routeSlotDownloadProgress(slot);
         try {
-          window.updateViewerLoading?.(
-            `Loading 3D RPD design — file ${slot} of 4`
-          );
-          slotProgress.begin(slot);
+          setSlotTileBusy(slot, "Downloading", 0);
           const result = await fetchSlot(payload, slot);
 
           // Match the 3D preview panel (preview3D.fetchExtraStlsForCase): the
@@ -6701,96 +6337,30 @@ btnContainer.appendChild(edit2DStatic); */
           // Parsing a 15–20 MB STL blocks the main thread, so hand the browser a
           // frame to paint this status before it freezes — otherwise the bar sits
           // at 100% with no explanation for several seconds per file.
-          window.updateViewerLoading?.(`Preparing file ${slot} of 4…`);
+          setSlotTileBusy(slot, "Preparing");
           await new Promise((resolve) => requestAnimationFrame(resolve));
 
-          const binarySTL = atob(slotItem.data);
-          // Same finish the 3D preview panel gives these files (renderExtraStl in
-          // 2D/preview3D.js): jaw uploads in the jaw tan, metal-RPD slots in
-          // brushed cobalt-chrome.
-          const isMetalRpd = METAL_RPD_SLOTS.has(slot);
-          const slotMaterial = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(isMetalRpd ? METAL_RPD_COLOR : EXTRA_STL_COLOR),
-            opacity: 1,
-            transparent: false,
-            side: THREE.DoubleSide,
-            depthTest: true,
-            depthWrite: true,
-            metalness: isMetalRpd ? 0.85 : 0.05,
-            roughness: isMetalRpd ? 0.32 : 0.6,
-          });
-
-          /* const slotColors = {
-  				1: 0xffb3ba, // soft pink
-  				2: 0xbaffc9, // mint green
-  				3: 0xbae1ff, // baby blue
-  				4: 0xffffba  // pale yellow
-  			}; */
-
-          /* 			const slotMaterial = new THREE.MeshStandardMaterial({
-  				color: slotColors[slot] || 0xaaaaaa,
-  				metalness: 0.0,
-  				roughness: 0.7
-  			}); */
-
-          // Jaw side comes from the slot number, not the filename: the slots are
-          // fixed (1 upper jaw, 2 upper metal RPD, 3 lower jaw, 4 lower metal RPD
-          // — see EXTRA_STL_SLOT_NAMES in 2D/preview3D.js) and uploads are named
-          // freely, so "jawSTLSlot3.stl" and "ATC-C-05L.stl" (both lower) were
-          // being treated as upper and given the upper jaw's transform.
-          const isLower = EXTRA_STL_SLOT_JAW[slot] === "lower";
-          const undercutForSlot =
-            (isLower ? undercut_values[0] : undercut_values[1]) ?? "stl";
-          // Names key all_mesh_mat, so keep them unique even if two slots hold
-          // files with the same name.
-          const slotFilename = `Slot ${slot}: ${slotItem.filename || "3D file"}`;
-
-          const stlLoader = new STLMeshLoader(slotMaterial);
-          const [mesh, meshMaterials] = stlLoader.load(
-            binarySTL,
-            undercutForSlot
-          );
-          all_mesh_mat[slotFilename] = meshMaterials.slice();
-
-          mesh.name = slotFilename;
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
-          mesh.userData = {
-            jaw_type: isLower ? "lower" : "upper",
-            archLabel: isLower ? "Lower Arch" : "Upper Arch",
-            // Marks this as a design-slot mesh and carries which slot it came
-            // from, so the objects panel can give each slot its own row.
-            isDesignSlot: true,
-            designSlot: slot,
-          };
-
-          // No transform: slot STLs are uploaded straight from the scanner and
-          // all four share one frame in which the arches already sit in
-          // occlusion (upper y above lower y, same x/z). The 180° Z flip the OFF
-          // upper jaw needs turns the upper arch upside down and drops it
-          // through the lower one, so it must not be applied here. Same as the
-          // 3D preview panel, which renders extras untransformed.
-
-          enforceOpaqueJawMesh(mesh);
-          parentObject.add(mesh);
-          designSlotMeshes.push(mesh);
+          addDesignSlotMesh(slot, slotItem.filename, atob(slotItem.data));
 
           console.log(`✅ Loaded STL from slot ${slot}`);
           anyLoaded = true;
         } catch (error) {
           console.warn(`⚠️ Slot ${slot} failed:`, error.message || error);
         } finally {
-          // Empty and failed slots have to step the bar too, or it stalls short
-          // of 100% on any case that doesn't fill all four.
-          slotProgress.complete();
+          slotProgress.restore();
+          clearSlotTileBusy(slot);
+          refreshUploadPromptSlots();
         }
       }
 
     } finally {
-      // Always drop the screen — a thrown slot must not leave the viewer
-      // permanently covered.
-      slotProgress.restore();
-      if (ownsLoadingScreen) removeViewerLoadingScreen();
+      // A thrown slot must not leave the panel stuck in its loading state.
+      const loadedPrompt = document.getElementById("design-upload-prompt");
+      loadedPrompt?.classList.remove("is-loading");
+      setUploadPromptBusy(false);
+      // Files arrived, so the design itself is what the user wants to see. A
+      // case with none keeps the panel up — it is the upload affordance.
+      if (anyLoaded) removeDesignUploadPrompt();
     }
 
     endViewerLoadTimer("viewer: framework/denture mesh loading");
@@ -7038,29 +6608,6 @@ btnContainer.appendChild(edit2DStatic); */
 
   // Example usage
 
-  function createTextbox(text, position) {
-    const textbox = document.createElement("div");
-    textbox.textContent = text;
-    textbox.className = "viewer-meta-bubble";
-    textbox.style.backgroundColor = "rgba(255, 255, 255, 0.06)";
-    textbox.style.padding = "7px 10px";
-    textbox.style.border = "1px solid rgba(255, 255, 255, 0.12)";
-    textbox.style.borderRadius = "5px";
-    textbox.style.fontFamily = "Arial, sans-serif";
-    textbox.style.fontSize = "14px";
-    textbox.style.color = "rgba(255, 255, 255, 0.75)";
-    textbox.style.lineHeight = "1.4";
-    textbox.style.wordBreak = "break-word";
-
-    textbox.dataset.position = position;
-    const datesSection = document.getElementById("viewer-meta-dates");
-    if (datesSection) {
-      datesSection.appendChild(textbox);
-    } else {
-      getViewerMetaBar().appendChild(textbox);
-    }
-  }
-
   function unixToHumanReadable(unixTimestamp) {
     const date = new Date(unixTimestamp * 1000); // Multiply by 1000 to convert seconds to milliseconds
     const year = date.getFullYear();
@@ -7251,18 +6798,15 @@ btnContainer.appendChild(edit2DStatic); */
     return target?.clone?.() || null;
   });
   createPresetViewControls();
-  createHamburgerButton();
   //console.log(camera)
 
   // Start the 3D rendering
   const finalSceneRenderStartedAt = performance.now();
   startViewerLoadTimer("viewer: final scene render/update");
   animate();
-  // The loading screen is NOT dropped here. The scene is ready at this point
-  // (~1.5s) but it is empty: the landing content is the slot STLs, which are
-  // still tens of MB from arriving. Dropping it here left a blank stage with no
-  // progress for the whole download. It comes down once the design view settles
-  // (see designViewPromise below).
+  // Scene is ready — the slot STLs are still arriving, but their progress is
+  // reported per file by the slot manager, which this screen would cover.
+  removeViewerLoadingScreen();
   endViewerLoadTimer("viewer: page/viewer initialization");
   addViewerLoadTiming(
     "page/viewer initialization",
@@ -7311,8 +6855,8 @@ btnContainer.appendChild(edit2DStatic); */
   );
   logViewerPerformanceSummary();
   designViewPromise.finally(() => {
-    // Owns the teardown for the whole entry load, success or failure — the
-    // screen must never outlive it.
+    // Defensive: the screen is dropped as soon as the scene is ready, but a
+    // throw before that point must not leave it up.
     removeViewerLoadingScreen();
     logViewerObjectCounts("entry load complete");
   });

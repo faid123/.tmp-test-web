@@ -385,8 +385,7 @@ export async function sendCaseApprovalAlerts(
 //   • a read-only roster of the users attached to the case.
 //   • a typed email address + Send Email, so the notification can go out before
 //     the status flips rather than as a separate errand afterwards. Typed rather
-//     than picked because no non-admin endpoint returns other users' addresses —
-//     the same reason the 3D viewer's "Add to Mail" asks for one.
+//     than picked because no non-admin endpoint returns other users' addresses.
 //   • Approve / Cancel, which resolve the returned promise.
 //
 // Sending email is deliberately independent of the Approve/Cancel result: the
@@ -541,8 +540,7 @@ function buildPreviewSection(caseIntID, report) {
 
 // A read-only roster: who is attached to the case, by username and role. It is
 // NOT a recipient picker — /role/all/get carries no usable email address, so
-// there is nothing to select. Mail goes to an address typed by hand below,
-// exactly as the 3D viewer's "Add to Mail" does.
+// there is nothing to select. Mail goes to an address typed by hand below.
 function buildRecipientsSection(caseIntID) {
   const section = el("section", "cn-approve-section");
   section.appendChild(el("h4", "cn-approve-section-title", "Users on this case"));
@@ -619,8 +617,8 @@ async function approvalEmailBody(caseIntID, { caseOwner, statusLabel }) {
   return lines.join("\n");
 }
 
-// One typed address, like the 3D viewer's "Add to Mail" popup. Not a recipient
-// picker: /role/all/get gives no addresses, so there is nothing to pick from.
+// One typed address. Not a recipient picker: /role/all/get gives no addresses,
+// so there is nothing to pick from.
 function buildEmailSection(caseIntID, { caseOwner, statusLabel }) {
   const section = el("section", "cn-approve-section");
   section.appendChild(el("h4", "cn-approve-section-title", "Send email"));

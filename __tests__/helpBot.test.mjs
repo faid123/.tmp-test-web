@@ -211,11 +211,13 @@ describe("3D surfaces are not conflated", () => {
     }
   });
 
-  test("each screen answers the heatmap question with its own heatmap", async () => {
+  // The 3D Viewer has no heatmap control of its own, so the heatmap question is
+  // answered by the 2D jaw preview's topic from either screen.
+  test("the heatmap question routes to the jaw preview from every screen", async () => {
     const inPreview = await localProvider("what do the colours mean", { pageId: "annotation_2d" });
     const inViewer = await localProvider("what do the colours mean", { pageId: "viewer_3d" });
     expect(inPreview.topic.id).toBe("undercut-heatmap");
-    expect(inViewer.topic.id).toBe("heatmap-viewer");
+    expect(inViewer.topic.id).toBe("undercut-heatmap");
   });
 });
 

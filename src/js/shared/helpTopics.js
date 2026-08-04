@@ -819,7 +819,7 @@ export const HELP_TOPICS = [
       "Scroll or pinch to zoom.",
       "Right-drag or two-finger drag to pan.",
     ],
-    related: ["heatmap-viewer", "annotate-3d", "jaw-preview"],
+    related: ["annotate-3d", "jaw-preview"],
   },
   {
     id: "open-3d-viewer",
@@ -836,27 +836,6 @@ export const HELP_TOPICS = [
     related: ["share-3d-link", "qr-code", "viewer-vs-preview"],
   },
   {
-    id: "heatmap-viewer",
-    title: "Undercut heatmap in the 3D Viewer",
-    page: "viewer_3d",
-    selector: ".legend-toggle-btn",
-    keywords: ["heatmap", "undercut", "legend", "measurement", "toggle", "colour", "color", "viewer"],
-    // Shares "what do the colours mean" with the jaw-preview heatmap topic on
-    // purpose: whichever screen you ask from is the one that answers.
-    phrases: [
-      "how do i turn on the heatmap in the 3d viewer",
-      "where is the heatmap button",
-      "what do the colours mean",
-    ],
-    answer:
-      "The Heatmap button beside the model turns the stored undercut shading and its measurement legend on and off. The viewer only displays what was already surveyed — change the angle in the 2D design's jaw preview.",
-    steps: [
-      "Open the case in the 3D Viewer.",
-      "Select the Heatmap button to show the shading and legend.",
-    ],
-    related: ["undercut-heatmap", "survey-angle", "viewer-vs-preview"],
-  },
-  {
     id: "undercut-heatmap",
     title: "Read the undercut heatmap (jaw preview)",
     page: "annotation_2d",
@@ -870,7 +849,7 @@ export const HELP_TOPICS = [
       "Select the undercut icon at the top-left of the panel to turn the heatmap on.",
       "Read the depths against the Undercut (mm) legend below the icon.",
     ],
-    related: ["survey-angle", "jaw-preview", "heatmap-viewer"],
+    related: ["survey-angle", "jaw-preview"],
   },
   {
     id: "survey-angle",
