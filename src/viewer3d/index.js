@@ -4874,45 +4874,50 @@ function removeViewerLoadingScreen() {
       z-index: auto;
       order: 4;
       /* Matches .twod-mobile-trigger / .preset-view-current's height at this
-         breakpoint. The reset/lock buttons live inside this toolbar (appended
-         here by resetButton.js's topRow), so without an explicit height the
-         toolbar is only as tall as its ~52px buttons — shorter than its 58px
-         siblings — and the outer row's align-items: center then sinks the
-         whole toolbar (all 4 icons) below the 2D/preset-view buttons instead
-         of keeping every icon on one line. */
+         breakpoint, now that every button in the toolbar is grown to the same
+         58px as its siblings (see --toolbar-btn-size and .smart-btn below) —
+         keeps every icon sitting in one visual line instead of the smaller
+         "bare icon" buttons reading as a different, disconnected row. */
       height: 58px;
       /* The one place #reset-button/#lock-rotation-button's size is set for
          this breakpoint — resetButton.js's own stylesheet reads this variable
          instead of hardcoding a width/height, so there's no second, tied
          declaration to fight with (see the var() comment in resetButton.js). */
-      --toolbar-btn-size: 52px;
+      --toolbar-btn-size: 58px;
     }
 
     #viewer-nav-toolbar .smart-btn {
       display: flex !important;
+      /* Without these, the button is a flex container with no cross-axis
+         alignment set, so its icon (34-36px) sits flush at the top of the
+         button's now much taller 56-58px box instead of centered — the img's
+         own margin: 0 auto (from the base .smart-btn img rule) is honored as
+         flex auto-margin centering horizontally, but there's no vertical
+         equivalent, so it read as "floating" at the top. #reset-button /
+         #lock-rotation-button never had this because their own rule already
+         sets align-items/justify-content directly. */
+      align-items: center;
+      justify-content: center;
       flex: 0 0 auto;
-      width: 52px;
-      min-width: 52px;
-      height: 52px;
+      width: 58px;
+      min-width: 58px;
+      height: 58px;
       padding: 0;
     }
 
-    #reset-icon {
-      width: 32px;
-      height: 32px;
+    #reset-icon,
+    #lock-icon {
+      width: 36px;
+      height: 36px;
       /* reset.png/lock.png read slightly lower than the other toolbar icons
          once centered in their button — nudge both up a touch. Tablet/mobile
          only; desktop reset button is unaffected. */
       margin-bottom: 3px;
     }
 
-    #lock-rotation-button img {
-      margin-bottom: 3px;
-    }
-
     #viewer-nav-toolbar .smart-btn img {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
     }
 
   }
@@ -5216,28 +5221,33 @@ function removeViewerLoadingScreen() {
       z-index: auto;
       order: 4;
       /* Matches .twod-mobile-trigger / .preset-view-current's height at this
-         breakpoint — see the tablet rule above for why this is needed: without
-         it the toolbar (which holds the reset/lock buttons too) is shorter
-         than its siblings and the whole cluster of icons visibly sinks below
-         the 2D and preset-view buttons instead of sitting in one line. */
+         breakpoint, now that every button in the toolbar is grown to the same
+         56px as its siblings (see --toolbar-btn-size and .smart-btn below) —
+         keeps every icon sitting in one visual line instead of the smaller
+         "bare icon" buttons reading as a different, disconnected row. */
       height: 56px;
       /* See the tablet rule above — the only place reset/lock's size is set
          for this breakpoint, read by resetButton.js's var(). */
-      --toolbar-btn-size: 48px;
+      --toolbar-btn-size: 56px;
     }
 
     #viewer-nav-toolbar .smart-btn {
       display: flex !important;
+      /* See the tablet rule above — without these, the icon sits flush at
+         the top of the button's box instead of centered ("floating top"). */
+      align-items: center;
+      justify-content: center;
       flex: 0 0 auto;
-      width: 48px;
-      min-width: 48px;
-      height: 48px;
+      width: 56px;
+      min-width: 56px;
+      height: 56px;
       padding: 0;
     }
 
-    #reset-icon {
-      width: 30px;
-      height: 30px;
+    #reset-icon,
+    #lock-icon {
+      width: 34px;
+      height: 34px;
       margin-right: 0;
       /* reset.png/lock.png read slightly lower than the other toolbar icons
          once centered in their button — nudge both up a touch. Phone/tablet
@@ -5245,13 +5255,9 @@ function removeViewerLoadingScreen() {
       margin-bottom: 3px;
     }
 
-    #lock-rotation-button img {
-      margin-bottom: 3px;
-    }
-
     #viewer-nav-toolbar .smart-btn img {
-      width: 30px;
-      height: 30px;
+      width: 34px;
+      height: 34px;
     }
 
   }

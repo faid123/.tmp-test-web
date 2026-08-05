@@ -95,7 +95,12 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
             transform: scale(1.06);
         }
 
-        #lock-rotation-button img {
+        /* Parallel to #reset-icon: sized here (not inline on the element) so
+           index.js's breakpoints can grow it to match the toolbar's other
+           icons on tablet/mobile, the way #reset-icon already does. */
+        #lock-icon {
+            width: 30px;
+            height: 30px;
             filter: brightness(0) invert(1);
         }
     `;
@@ -199,8 +204,11 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
         const img = document.createElement('img');
         img.src = imageUrl;
         img.alt = rotationLocked ? 'Locked' : 'Unlocked';
-        img.style.width = '30px';
-        img.style.height = '30px';
+        // Sized via #lock-icon in this file's <style> block, not inline —
+        // inline width/height would beat every breakpoint override below it,
+        // the same way #reset-icon is already sized purely through CSS so it
+        // can grow on tablet/mobile.
+        img.id = 'lock-icon';
 
         // Append the icon only (no text label)
         lockRotationButton.appendChild(img);
