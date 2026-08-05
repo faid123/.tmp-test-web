@@ -1815,9 +1815,16 @@ export function createArtificialTeethRenderer({
     }
   };
 
+  // Uploaded slot STLs (the viewer's landing view) live in parentObject next to
+  // the case's jaws and carry the same jaw_type. They are not case jaws: seating
+  // teeth on one puts the whole arch in the wrong place, because the case's OFF
+  // upper jaw is flipped 180° on load and a raw slot upload is not.
+  const isCaseJawMesh = (child) => !child.userData?.isDesignSlot;
+
   const getLoadedJawKeys = () => {
     const keys = new Set();
     parentObject.children.forEach((child) => {
+      if (!isCaseJawMesh(child)) return;
       const jawKey = normalizeJawKey(child.userData?.jaw_type ?? child.name);
       if (jawKey) keys.add(jawKey);
     });
@@ -1827,6 +1834,7 @@ export function createArtificialTeethRenderer({
   const getJawMesh = (jawType) => {
     const jawText = jawType.toLowerCase();
     return parentObject.children.find((child) => {
+      if (!isCaseJawMesh(child)) return false;
       const type = String(child.userData?.jaw_type || child.name || "").toLowerCase();
       return type.includes(jawText);
     });

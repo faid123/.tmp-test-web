@@ -21,14 +21,29 @@ export class ApiClient {
     const downloadLabel = what === undefined ? '' : `Downloading: ${what} | `;
     await getSessionLogin();
 
-
-    const response = await fetch(url, {
+    const send = () => fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(data)
     });
+
+    let response = await send();
+
+    // The backend session lives server-side, keyed by machine_id + uuid (no
+    // cookie is set), and this client logs in once per page load. Anything that
+    // logs that shared account out — session TTL, another tab, another client —
+    // makes every later call 401 "user is logged out", which is what broke the
+    // design-overlay button: the page loaded fine, then the click 401'd on all
+    // four slots. Re-login once and retry instead of failing the call.
+    if (response.status === 401) {
+      console.warn(`[ApiClient] session expired on POST ${endpoint} — re-logging in`);
+      resetSessionLogin();
+      await getSessionLogin();
+      response = await send();
+    }
+
     logApi(response, `POST ${endpoint}`);
     if (!response.ok) {
       if (response.status == 500 || response.status == 404) {
@@ -44,7 +59,9 @@ export class ApiClient {
     const contentLength = response.headers.get('content-length');
     if (!contentLength) {
       // Server used chunked transfer encoding — no progress bar possible.
-      if (container) document.body.removeChild(container);
+      // Nothing to tear down here: the fallback container is only created
+      // below, and touching it at this point threw a TDZ ReferenceError that
+      // failed the whole request.
       return response.json();
     }
 
@@ -116,6 +133,11 @@ export class ApiClient {
 }
 
 let sessionLoginPromise = null;
+
+// Drop the memoized session so the next call logs in again.
+function resetSessionLogin() {
+  sessionLoginPromise = null;
+}
 
 function getSessionLogin() {
   if (!sessionLoginPromise) {

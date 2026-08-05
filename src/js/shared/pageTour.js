@@ -23,6 +23,14 @@ const AUTOSTART_TIMEOUT_MS = 4000;
 const CARD_GAP = 14;      // space between the spotlight and the card
 const VIEWPORT_PAD = 12;  // keep the card this far off every edge
 
+// Below either of these the card stops being a floating card and becomes a
+// full-width sheet against one edge. Height counts as much as width: a phone
+// held sideways is around 390px tall — wide enough to miss a width-only
+// breakpoint, far too short for a card that has to clear a spotlight.
+const SHEET_MAX_WIDTH = 560;
+const SHEET_MAX_HEIGHT = 520;
+const SHEET_MAX_FRACTION = 0.6; // the sheet never eats more of the screen than this
+
 let root = null;      // #page-tour, built on first run
 let maskEl = null;
 let cardEl = null;
@@ -113,6 +121,29 @@ function waitForVisible(selectors, timeout = REVEAL_TIMEOUT_MS) {
       if (el) return resolve(el);
       if (Date.now() >= deadline) return resolve(null);
       requestAnimationFrame(tick);
+    };
+    tick();
+  });
+}
+
+// The 3D viewer covers its whole stage until the case's 3D files have
+// downloaded — tens of MB, so tens of seconds. Highlighting controls nobody can
+// see yet is worse than starting late, so hold the tour until the screen lifts.
+// Resolves false if it is still up after the cap, which skips the tour for this
+// visit and leaves it unseen for the next one.
+// Two stages cover the viewer: its own loading screen while the scene builds,
+// then the slot manager while the case's 3D files download into it.
+const LOADING_SCREEN_SELECTOR =
+  "#viewer-loading-screen, #design-upload-prompt.is-loading";
+const LOADING_SCREEN_TIMEOUT_MS = 180000;
+
+function waitForLoadingScreen(timeout = LOADING_SCREEN_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    const deadline = Date.now() + timeout;
+    const tick = () => {
+      if (!document.querySelector(LOADING_SCREEN_SELECTOR)) return resolve(true);
+      if (Date.now() >= deadline) return resolve(false);
+      setTimeout(tick, 250);
     };
     tick();
   });
@@ -246,11 +277,21 @@ function buildOverlay() {
 
   // Clicking the dimmed page moves on rather than doing nothing — the overlay is
   // swallowing that click anyway, and a stuck-looking tour is worse than one
-  // that advances a step early.
-  maskEl.addEventListener("click", () => goTo(index + 1));
+  // that advances a step early. Bound on the root, not the mask: the mask is only
+  // the hole, so the dimming (which is its shadow, and belongs to the root as far
+  // as hit-testing goes) took no clicks at all. Matters most on a phone, where
+  // tapping the veil is how people expect to move on.
+  root.addEventListener("click", (e) => {
+    if (e.target === root || e.target === maskEl) goTo(index + 1);
+  });
 
   document.addEventListener("keydown", onKeydown, true);
   window.addEventListener("resize", scheduleReflow);
+  // Mobile browsers resize the visual viewport, not the window, when the address
+  // bar slides away or a keyboard opens — without these the sheet is left
+  // measuring a window that is no longer the size of the screen.
+  window.visualViewport?.addEventListener("resize", scheduleReflow);
+  window.visualViewport?.addEventListener("scroll", scheduleReflow);
   // Capture phase: the spotlight has to follow the target through a scrolling
   // pane, not just the window.
   document.addEventListener("scroll", scheduleReflow, true);
@@ -304,13 +345,62 @@ function positionFor(el) {
   maskEl.style.left = `${r.left - pad}px`;
   maskEl.style.width = `${r.width + pad * 2}px`;
   maskEl.style.height = `${r.height + pad * 2}px`;
-  placeCardNear(r);
+  if (isSheetLayout()) placeCardAsSheet(r);
+  else placeCardNear(r);
 }
 
 function centreCard() {
+  clearSheet();
   cardEl.style.top = "50%";
   cardEl.style.left = "50%";
   cardEl.style.transform = "translate(-50%, -50%)";
+}
+
+// Phone-shaped viewport — by width, or by height for a phone held sideways.
+function isSheetLayout() {
+  return window.innerWidth <= SHEET_MAX_WIDTH || window.innerHeight <= SHEET_MAX_HEIGHT;
+}
+
+function clearSheet() {
+  cardEl.classList.remove("is-sheet", "is-sheet-top");
+  cardEl.style.bottom = "";
+  cardEl.style.maxHeight = "";
+}
+
+// Full-width sheet against whichever edge the target leaves most room beside, so
+// the card cannot land on the control the step is describing. The 3D viewer is
+// the case that forces this: its pen, notes and chat buttons are all in a 35px
+// footer, and a sheet pinned to the bottom covered every one of them.
+//
+// Capped to a share of the window as well as to the free space, so a step
+// against a full-bleed target — the viewer's #container3D is the whole stage —
+// gets a short sheet with the model still visible above it rather than a card
+// filling the screen.
+function placeCardAsSheet(r) {
+  cardEl.classList.add("is-sheet");
+  cardEl.style.transform = "none";
+  cardEl.style.left = "0px";
+
+  const above = Math.max(0, r.top);
+  const below = Math.max(0, window.innerHeight - r.bottom);
+  const toTop = above > below;
+
+  // Free space is what the sheet gets, but never less than the card needs to
+  // show its own buttons: against a full-bleed target — the viewer's #container3D
+  // is the whole stage — there is no free space at all, and a sheet sized to it
+  // pushed Back and Next off the bottom of the screen.
+  cardEl.style.maxHeight = "";
+  const natural = cardEl.scrollHeight;
+  const cap = Math.min(window.innerHeight - VIEWPORT_PAD * 2, Math.round(window.innerHeight * SHEET_MAX_FRACTION));
+  const room = Math.round((toTop ? above : below) - CARD_GAP);
+  cardEl.style.maxHeight = `${Math.min(cap, Math.max(natural, room))}px`;
+
+  // One edge is pinned and the other is cleared rather than set to "auto" — an
+  // inline top left over from the previous step would otherwise win over bottom
+  // and leave the sheet floating mid-screen.
+  cardEl.classList.toggle("is-sheet-top", toTop);
+  cardEl.style.top = toTop ? "0px" : "";
+  cardEl.style.bottom = toTop ? "" : "0px";
 }
 
 // Below the spotlight by preference, then above, then beside it — and only as a
@@ -321,6 +411,7 @@ function centreCard() {
 // fail and a card centred over the target would hide the very thing the step is
 // pointing at.
 function placeCardNear(r) {
+  clearSheet();
   cardEl.style.transform = "none";
   const box = cardEl.getBoundingClientRect();
   const clampX = (x) => Math.min(Math.max(x, VIEWPORT_PAD), window.innerWidth - box.width - VIEWPORT_PAD);
@@ -513,6 +604,10 @@ export async function maybeAutoStartTour({ pageId = currentPageId() } = {}) {
     // One more frame so the rest of the toolbar lands before we filter steps.
     await nextFrame();
   }
+  // Checked after the anchor wait, not before: this module is imported
+  // dynamically, so on a fast connection it can get here before the viewer has
+  // even put its loading screen up.
+  if (!(await waitForLoadingScreen())) return false;
   // Someone who started working (or opened Help) in the meantime is not waiting
   // for a tour to take over their screen.
   if (running || document.querySelector("#help-bot.is-open")) return false;
