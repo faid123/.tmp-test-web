@@ -8,7 +8,8 @@
 // (confirmCaseNoteApproval) along with the case-users/email calls it needs.
 
 import { confirmModal, toast } from "../shared/toast.js";
-import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
+import { API_BASE, MACHINE_ID, getLoggedInUser, apiPost } from "../shared/api.js";
+import { buildThreeDViewerUrl } from "../shared/caseLinks.js";
 
 // getLoggedInUser rather than ApiClient.js's shared VIEWER_UUID: these case
 // endpoints authenticate as the signed-in user.
@@ -157,8 +158,10 @@ export async function updateCaseDueDate(caseIntID, isoDate, comment) {
   ]);
   return res?.ok ?? false;
 }
-// The status string the backend stores for an approved 2D design.
+// The status strings the backend stores for an approved design. Both are values
+// the case list already filters on (see its status <select>) — not new labels.
 export const STATUS_2D_DESIGN_APPROVED = "2D design approved";
+export const STATUS_3D_DESIGN_APPROVED = "3D design approved";
 
 // Set the case's status. Same full-upsert rule as updateCaseDueDate: read the
 // current row and carry assigned_to/due_date/comments forward, or they come back
@@ -211,12 +214,12 @@ export const EMAIL_RE = /^\S+@\S+\.\S+$/;
 // ok=false means the request failed (offline / refused), which the caller shows
 // differently from a case that genuinely has no rows.
 //
-// `email` is unreliable — role rows generally don't carry one, and there is no
-// non-admin endpoint that maps a username to an address (user/getall is
-// is_admin-gated). So this is a roster, NOT a recipient list: the approval
-// dialog shows the names and takes the address by hand. Per-case addresses do
-// exist server-side via POST /mailinglist/add, but that endpoint is write-only —
-// a mailinglist read would be what makes automatic recipients possible.
+// `email` is unreliable — role rows generally don't carry one. Sharing a case
+// never captures an address either: it resolves a typed username to a uuid and
+// writes a role row, and the invite is an in-app /alerts row, not mail. See
+// fetchCaseUsersWithEmails for the two lookups that fill the gaps. Per-case
+// addresses do exist server-side via POST /mailinglist/add, but that endpoint is
+// write-only — a mailinglist read would make recipients reliable.
 export async function fetchCaseUsers(caseIntID) {
   const user = getLoggedInUser();
   if (!user?.uuid || caseIntID == null) return { ok: false, users: [] };
@@ -269,54 +272,214 @@ export function roleLabel(role) {
   return role || "—";
 }
 
+// Join an email's lines into its wire form. The mailer renders /sendCustomEmail's
+// message as HTML, where a "\n" is just whitespace — a body joined with newlines
+// arrives as one long run-on line — so the breaks have to be <br>. Text is escaped
+// first or a case name carrying & or < would break the markup, and the trailing
+// "\n" keeps the raw source readable. Every custom email this app sends goes
+// through here; pass "" for a blank line.
+export function emailBodyHtml(lines) {
+  return lines
+    .map((line) =>
+      String(line).replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]))
+    )
+    .join("<br>\n");
+}
+
 // Send one message to one address via POST /sendCustomEmail. Unlike the
 // case endpoints above this takes a FLAT body — no [{auth}, {payload}] wrapper —
 // and no uuid, matching the 3D viewer's existing call. The endpoint sends to a
 // single address, so a multi-recipient send is one request per person.
+//
+// `images` are [{ src, alt }] with src a data URL; the mailer renders them under
+// the message. Omitted from the payload when empty, so a text-only send stays the
+// exact request it has always been.
 // Returns true on success.
-export async function sendCustomEmail({ email, subject, message }) {
+export async function sendCustomEmail({ email, subject, message, images }) {
   if (!email || !EMAIL_RE.test(email)) return false;
   const res = await postJson("sendCustomEmail", {
     customEmail: email,
     subject: subject || "SmartRPD notification",
     message: message || "",
+    ...(images?.length ? { images } : {}),
   });
   return res?.ok ?? false;
 }
 
-// Notify everyone attached to the case, the way the 3D viewer's Approve/Edit
-// buttons do. POST /sendEmail takes the CASE, not a recipient — the backend
-// resolves who to mail from case_int_id — so this is the only call that reaches
-// all the case's users without needing an address for each of them (there is no
-// non-admin endpoint that would give us those; see fetchCaseUsers).
+// The backend renders this verbatim on the email's "Action:" line and derives
+// the subject from it, so the wording is part of the email's format — changing
+// it changes the subject line too. Only reaches the fallback path below.
+const ACTION_2D_APPROVED = "Your 2D Design has been APPROVED.";
+
+// user/getall is the only endpoint that maps a username to an email address —
+// role rows don't carry one — and it is admin-gated, answering 401 for everyone
+// else. Filter mirrors adminUsers.js: no date bounds, no search, and
+// limitStartIndex/limitAmount both 0 so the model omits its LIMIT clause and
+// returns every user in one call.
+const ALL_USERS_FILTER = {
+  fromDate: 0,
+  toDate: 0,
+  search: "",
+  sortBy: 1,
+  sortByAscending: true,
+  limitStartIndex: 0,
+  limitAmount: 0,
+};
+
+// Per-user lookup by username — the same call the case-share box makes to turn a
+// typed name into a user before writing its role row. Unlike user/getall it takes
+// no uuid and is not is_admin-gated, so it is the only address source a non-admin
+// has. Whether the row it returns carries an `email` at all is the backend's
+// call; "" here means it didn't, which is not an error.
+async function lookupUserEmail(username) {
+  if (!username) return "";
+  const res = await postJson("user/checkifusernameexists/get", [
+    { machine_id: MACHINE_ID },
+    { username },
+  ]);
+  if (!res?.ok) return "";
+  try {
+    const body = await res.json();
+    const email = (Array.isArray(body) ? body[0] : body)?.email || "";
+    return EMAIL_RE.test(email) ? email : "";
+  } catch {
+    return "";
+  }
+}
+
+// fetchCaseUsers plus each user's address where one can be resolved. Three
+// sources, cheapest first, each only covering what the previous left missing:
+// the roster row itself, then user/getall (one call, admins only), then a
+// per-username lookup (one call each). `email` is "" for anyone still
+// unresolved. Used by the notification below and by the 3D approval dialog's
+// recipient checkboxes.
+export async function fetchCaseUsersWithEmails(caseIntID) {
+  const { ok, users } = await fetchCaseUsers(caseIntID);
+  if (!ok || !users.length) return { ok, users };
+
+  // Whatever addresses the roster already carries win; the admin call is only
+  // needed for the rest, and is skipped entirely when nothing is missing.
+  const byName = new Map(
+    users.filter((u) => u.email).map((u) => [u.username.toLowerCase(), u.email])
+  );
+  if (byName.size < users.length) {
+    try {
+      const rows = await apiPost("user/getall", ALL_USERS_FILTER);
+      for (const row of Array.isArray(rows) ? rows : []) {
+        const name = String(row?.username || "").toLowerCase();
+        if (name && row?.email && !byName.has(name)) byName.set(name, row.email);
+      }
+    } catch {
+      /* 401 for non-admins, or offline — keep whatever the roster gave us */
+    }
+  }
+
+  // Still missing: ask per username. Bounded by the case's user count (a handful)
+  // and skipped entirely when the steps above already resolved everyone, so this
+  // never becomes a burst against the throttler.
+  const unresolved = users.filter((u) => !byName.has(u.username.toLowerCase()));
+  if (unresolved.length) {
+    const found = await Promise.all(unresolved.map((u) => lookupUserEmail(u.username)));
+    unresolved.forEach((u, i) => {
+      if (found[i]) byName.set(u.username.toLowerCase(), found[i]);
+    });
+  }
+
+  return {
+    ok,
+    users: users.map((u) => ({ ...u, email: byName.get(u.username.toLowerCase()) || "" })),
+  };
+}
+
+// Addresses for the people attached to the case, as [{ username, email }].
+// Returns [] when the caller isn't an admin or the lookup fails, which is the
+// signal to fall back to the server-templated /sendEmail broadcast rather than
+// drop the notification.
+async function fetchCaseUserEmails(caseIntID) {
+  const { users } = await fetchCaseUsersWithEmails(caseIntID);
+  return users
+    .map((u) => ({ username: u.username, email: u.email }))
+    .filter((u) => EMAIL_RE.test(u.email));
+}
+
+// The approval notification, composed in full here. /sendCustomEmail takes a
+// literal subject and message, where /sendEmail renders a server-side template
+// (a "SmartRPD Viewer Notification" heading plus Action/Last Edited/Edited By
+// rows) that no field in its payload can change.
+function approvalBroadcast(caseLabel, viewerUrl) {
+  return {
+    subject: `CASE ${caseLabel} 3D Ready`,
+    message: emailBodyHtml([`Case ID: ${caseLabel}`, "", "Case Link:", viewerUrl]),
+  };
+}
+
+// Notify everyone attached to the case. POST /sendEmail takes the CASE, not a
+// recipient — the backend resolves who to mail from case_int_id — so this is the
+// only call that reaches all the case's users without needing an address for
+// each of them (there is no non-admin endpoint that would give us those; see
+// fetchCaseUsers).
 //
-// Flat body, no [{auth}, {payload}] wrapper and no uuid, matching
-// viewer3d/index.js sendEmail(). `action` is the message text despite its name.
+// Flat body, no [{auth}, {payload}] wrapper and no uuid. Every field maps to one
+// labelled line of the backend's "SmartRPD Viewer Notification" template:
+// action → Action, case_id → Case ID, last_edited → Last Edited, username →
+// Edited By, viewer_url → Case Link, thumbnail → 2D Preview. The template itself
+// is server-side; this payload is the whole of what the web app controls.
 //
-// The generated report page rides along in `thumbnail` as a PNG data URL — the
-// same form the 3D viewer sends, and the only slot in this payload that takes a
-// file. Even downscaled it is much larger than a real thumbnail, so a send that
-// fails is retried once without it: a notification that arrives without the
-// report beats no notification.
+// The report page rides along in `thumbnail` as a PNG data URL — the only slot
+// in this payload that takes a file. Even downscaled it is much larger than a
+// real thumbnail, so a send that fails is retried once without it: a
+// notification that arrives without the report beats no notification.
 export async function sendCaseApprovalEmail(
   caseIntID,
-  { caseName = "", caseOwner = "", statusLabel = "", viewerUrl = "" } = {}
+  { caseName = "", caseOwner = "" } = {}
 ) {
+  const caseLabel = caseName || resolveCaseLabel(caseIntID);
+  const viewerUrl = buildThreeDViewerUrl(caseIntID, { forShare: true });
+
+  // Preferred path: one message per person, with the subject and the whole body
+  // written here. Needs an address for each recipient, so it only runs when the
+  // approver is an admin (see fetchCaseUserEmails). One failed recipient doesn't
+  // sink the rest — any success counts as sent.
+  const recipients = await fetchCaseUserEmails(caseIntID);
+  if (recipients.length) {
+    const { subject, message } = approvalBroadcast(caseLabel, viewerUrl);
+    const sent = await Promise.all(
+      recipients.map((r) => sendCustomEmail({ email: r.email, subject, message }))
+    );
+    if (sent.some(Boolean)) return true;
+    console.warn("[API] ✗ POST /sendCustomEmail failed for every recipient");
+  }
+
+  // Fallback: the server-templated broadcast. Its layout and subject are not
+  // ours to set, but it needs no addresses — so it is what reaches the case's
+  // users when the approver isn't an admin — and it carries the report image.
   const body = {
-    action: `Your 2D Design has been APPROVED. Status: ${statusLabel}.`,
-    case_id: caseName,
+    action: ACTION_2D_APPROVED,
+    case_id: caseLabel,
     case_int_id: caseIntID,
-    // We have just written the note and flipped the status, so "now" is the
-    // truthful last-edited stamp; the 3D viewer reads its own from /case/get.
+    // We have just edited the design, so "now" is the truthful last-edited
+    // stamp; the 3D viewer read its own from /case/get.
     last_edited: new Date().toLocaleString("sv-SE").replace("T", " ").slice(0, 19),
-    username: caseOwner,
-    viewer_url: viewerUrl || window.location.href,
+    // Required: /sendEmail 400s with "Missing action, case_id, or username" if
+    // this is absent or empty, so it falls back to the signed-in user rather
+    // than sending "".
+    username: caseOwner || getLoggedInUser()?.username || "Unknown",
+    viewer_url: viewerUrl,
     thumbnail: await cachedReportPng(),
   };
 
   let res = await postJson("sendEmail", body);
   if (!res?.ok && body.thumbnail) {
     res = await postJson("sendEmail", { ...body, thumbnail: null });
+  }
+  // A failed send is otherwise silent apart from a generic toast, and the
+  // payload is the only part of this email the web app controls — so log what
+  // the server actually said about it.
+  if (!res?.ok) {
+    console.warn(
+      `[API] ✗ POST /sendEmail status=${res?.status ?? "network error"}`,
+      res ? await res.text().catch(() => "") : ""
+    );
   }
   return res?.ok ?? false;
 }
@@ -400,7 +563,7 @@ export async function sendCaseApprovalAlerts(
 
 // The topbar label ("Case: UID 12 : name") is what the user sees on screen, so
 // the report should carry the same string. Falls back to the numeric id.
-function resolveCaseLabel(caseIntID) {
+export function resolveCaseLabel(caseIntID) {
   const topbarLabel = (document.getElementById("caseLabel")?.textContent || "")
     .replace(/^Case:\s*/i, "")
     .trim();
@@ -539,8 +702,10 @@ function buildPreviewSection(caseIntID, report) {
 // ── who is on the case ──────────────────────────────────────────────────────
 
 // A read-only roster: who is attached to the case, by username and role. It is
-// NOT a recipient picker — /role/all/get carries no usable email address, so
-// there is nothing to select. Mail goes to an address typed by hand below.
+// NOT a recipient picker — this dialog reads the plain /role/all/get rows, which
+// mostly carry no address. Mail goes to an address typed by hand below, plus the
+// broadcast approving fires. (The 3D approval dialog does pick recipients, off
+// fetchCaseUsersWithEmails — switch this list to that if the same is wanted here.)
 function buildRecipientsSection(caseIntID) {
   const section = el("section", "cn-approve-section");
   section.appendChild(el("h4", "cn-approve-section-title", "Users on this case"));
@@ -586,40 +751,34 @@ function buildRecipientsSection(caseIntID) {
 
 // ── custom email + send ─────────────────────────────────────────────────────
 
-// The body is composed here rather than typed: /sendCustomEmail carries no case
-// context of its own, so everything the recipient needs has to be in the text.
+// THE email this app sends — both Send Email buttons (the 2D Case Note dialog and
+// the 3D Request dialog) use this one body, so the wording is edited here and
+// nowhere else. Composed rather than typed because /sendCustomEmail carries no
+// case context of its own: everything the recipient needs has to be in the text.
 //
-// The 2D link is this page's own URL — the dialog only ever runs on the 2D
-// annotation page, so window.location.href already carries the right host and
-// the encrypted `id` query param, with no need to re-encrypt the case id.
-//
-// Due date is read live from additionalcasedetails (the source of truth for the
-// case-list "Due" column), falling back to the localStorage stash the Case Note
-// form keeps, so a throttled request still yields the date on screen.
-async function approvalEmailBody(caseIntID, { caseOwner, statusLabel }) {
-  const { ok, detail } = await fetchAdditionalCaseDetails(caseIntID);
-  const dueDate =
-    (ok && toDateInputValue(detail?.due_date)) || loadCaseDueDate(caseIntID) || "Not set";
+//   recipient — a case user, so the mail can open with their name. The one
+//               hand-typed address in each dialog has no user behind it, and is
+//               sent the same body without the greeting.
+//   link      — where to go: the 2D dialog sends this page's own URL, the 3D one
+//               the viewer's.
+export function caseEmailBody(caseIntID, { recipient, link } = {}) {
   const sender = getLoggedInUser()?.username || "";
-
-  const lines = [
+  const lines = [];
+  if (recipient?.username) lines.push(`Hi ${recipient.username}`, "");
+  lines.push(
     `Case: ${resolveCaseLabel(caseIntID)}`,
-    `Due date: ${dueDate}`,
-    `User: ${caseOwner || "—"}`,
-    `Status: ${statusLabel}`,
     "",
-    "Open the 2D design:",
-    window.location.href,
+    `Here is the: ${link}`,
     "",
-    "The generated design report is available from this case in SmartRPD.",
-  ];
+    "Please confirm if it is ok to go on?",
+    "Thanks"
+  );
   if (sender) lines.push("", `Sent by ${sender}.`);
-  return lines.join("\n");
+  return emailBodyHtml(lines);
 }
 
-// One typed address. Not a recipient picker: /role/all/get gives no addresses,
-// so there is nothing to pick from.
-function buildEmailSection(caseIntID, { caseOwner, statusLabel }) {
+// One typed address, since the roster above this is read-only.
+function buildEmailSection(caseIntID) {
   const section = el("section", "cn-approve-section");
   section.appendChild(el("h4", "cn-approve-section-title", "Send email"));
 
@@ -660,8 +819,10 @@ function buildEmailSection(caseIntID, { caseOwner, statusLabel }) {
     setStatus("Sending…");
     const ok = await sendCustomEmail({
       email,
-      subject: `SmartRPD — Case ${resolveCaseLabel(caseIntID)}`,
-      message: await approvalEmailBody(caseIntID, { caseOwner, statusLabel }),
+      subject: `${resolveCaseLabel(caseIntID)} 3D Ready`,
+      // This dialog only ever runs on the 2D annotation page, so the page's own
+      // URL already carries the right host and the encrypted `id` param.
+      message: caseEmailBody(caseIntID, { link: window.location.href }),
     });
     sendBtn.disabled = false;
 
@@ -734,7 +895,7 @@ export async function confirmCaseNoteApproval({
 
   const side = el("div", "cn-approve-side");
   side.appendChild(buildRecipientsSection(caseIntID));
-  side.appendChild(buildEmailSection(caseIntID, { caseOwner, statusLabel }));
+  side.appendChild(buildEmailSection(caseIntID));
   cols.appendChild(side);
 
   content.appendChild(cols);

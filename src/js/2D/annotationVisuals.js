@@ -81,6 +81,7 @@ import {
   COMPONENT_IMAGE_WIDTH,
   COMPONENT_SCALE_BY_JAW,
   COMPONENT_SCALE_BY_TOOTH,
+  getNeighborToothIds,
   JAW_IMAGE_FLIP_X,
   PLATE_SUGGESTION_TRANSFORM_BY_JAW,
   PRESENCE_TOOTH_ASSET,
@@ -372,27 +373,29 @@ function restMarkerAnchorSurface(placementSurface, toothId) {
 // getMinorConnectorSupportSides now lives in components.minor.js — it is pure tooth-record
 // logic, and tests need it without booting this DOM-heavy module.
 
+/** Neighbouring tooth records across each embrasure, for getMinorConnectorSupportSides. */
+function getNeighborTeeth(toothId, jaw) {
+  const ids = getNeighborToothIds(toothId, jaw);
+  return {
+    mesial: ids.mesial ? state.teeth[ids.mesial] || null : null,
+    distal: ids.distal ? state.teeth[ids.distal] || null : null,
+  };
+}
+
 /**
  * If the embrasure on `side` of `toothId` is shared (the neighbour across it also supports
  * back), return that neighbour's id, else null. A shared embrasure gets one `mid` (full)
  * connector; a solo side draws the `mesial`/`distal` half. (Caller renders `mid` once.)
  */
 function getMinorConnectorSharedNeighborId(toothId, jaw, side) {
-  const order = TOOTH_ORDER[jaw];
-  if (!Array.isArray(order)) return null;
-  const idx = order.indexOf(String(toothId));
-  if (idx < 0) return null;
-  const mid = order.length / 2;
-  // Mesial = toward the midline (order centre); distal = toward the back (order ends).
-  const step = side === "mesial" ? (idx < mid ? 1 : -1) : (idx < mid ? -1 : 1);
-  const neighborId = order[idx + step];
+  const neighborId = getNeighborToothIds(toothId, jaw)[side];
   const neighbor = neighborId ? state.teeth[neighborId] : null;
   if (!neighbor) return null;
   // Side of the neighbour that faces back toward this tooth (mesial-to-mesial at the midline).
-  const nIdx = order.indexOf(neighborId);
-  const neighborMesialId = order[nIdx + (nIdx < mid ? 1 : -1)];
-  const facingSide = neighborMesialId === String(toothId) ? "mesial" : "distal";
-  return getMinorConnectorSupportSides(neighbor)[facingSide] ? String(neighborId) : null;
+  const facingSide =
+    getNeighborToothIds(neighborId, jaw).mesial === String(toothId) ? "mesial" : "distal";
+  const neighborSides = getMinorConnectorSupportSides(neighbor, getNeighborTeeth(neighborId, jaw));
+  return neighborSides[facingSide] ? String(neighborId) : null;
 }
 
 /** Build + append one minor-connector image for a tooth side ("mesial"/"distal") and variant. */
@@ -435,7 +438,12 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
     const hasBarPlacement = tooth.componentPlacements.some((placement) =>
       isBarComponent(placement.componentId) && isBarPlacementSurface(normalizeSurface(placement.surface))
     );
-    if (!hasBarPlacement) return;
+    // A meshed saddle carries its own minor connectors (see getMinorConnectorSupportSides);
+    // the rest/clasp/bar passes below are component-filtered, so they stay no-ops here.
+    const hasMeshPlacement = tooth.componentPlacements.some((placement) =>
+      isMeshComponent(placement.componentId)
+    );
+    if (!hasBarPlacement && !hasMeshPlacement) return;
   }
 
   const radius = getRestSuggestionRadius() + 0.6;
@@ -449,7 +457,10 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
   // One minor connector per supported embrasure side. A shared embrasure is bridged by a single
   // `mid` (full) connector drawn ONCE (owner = higher-id/more-distal tooth, e.g. 44 distal + 45
   // mesial → 45 owns it), using that tooth's mid offset; a solo side draws its directional half.
-  const minorConnectorSupportSides = getMinorConnectorSupportSides(tooth);
+  const minorConnectorSupportSides = getMinorConnectorSupportSides(
+    tooth,
+    getNeighborTeeth(toothId, jaw)
+  );
   for (const side of ["mesial", "distal"]) {
     if (!minorConnectorSupportSides[side]) continue;
     const sharedNeighborId = getMinorConnectorSharedNeighborId(toothId, jaw, side);

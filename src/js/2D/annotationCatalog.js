@@ -715,7 +715,6 @@ export function createCaseNoteForm() {
         sendCaseApprovalEmail(state.caseIntID, {
           caseName: state.caseName,
           caseOwner: ownerName,
-          statusLabel: STATUS_2D_DESIGN_APPROVED,
         }),
         sendCaseApprovalAlerts(state.caseIntID, {
           statusLabel: STATUS_2D_DESIGN_APPROVED,
