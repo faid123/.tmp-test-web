@@ -4147,6 +4147,15 @@ function removeViewerLoadingScreen() {
       background: rgba(79, 163, 232, 0.16);
   }
 
+  /* A file dragged over an empty, idle slot — same highlight as hover, plus a
+     solid border so the drop target reads clearly while the pointer is busy
+     carrying a file instead of showing a normal cursor. */
+  #design-upload-prompt .dup-slot-wrap.is-dragover .dup-slot {
+      border-style: solid;
+      border-color: #4fa3e8;
+      background: rgba(79, 163, 232, 0.22);
+  }
+
   /* Per-slot progress: each file reports itself in its own tile, replacing the
      single pooled bar that could not say which of the four was slow. */
   #design-upload-prompt .dup-slot-bar,
@@ -4864,10 +4873,21 @@ function removeViewerLoadingScreen() {
       gap: 8px;
       z-index: auto;
       order: 4;
+      /* Matches .twod-mobile-trigger / .preset-view-current's height at this
+         breakpoint. The reset/lock buttons live inside this toolbar (appended
+         here by resetButton.js's topRow), so without an explicit height the
+         toolbar is only as tall as its ~52px buttons — shorter than its 58px
+         siblings — and the outer row's align-items: center then sinks the
+         whole toolbar (all 4 icons) below the 2D/preset-view buttons instead
+         of keeping every icon on one line. */
+      height: 58px;
+      /* The one place #reset-button/#lock-rotation-button's size is set for
+         this breakpoint — resetButton.js's own stylesheet reads this variable
+         instead of hardcoding a width/height, so there's no second, tied
+         declaration to fight with (see the var() comment in resetButton.js). */
+      --toolbar-btn-size: 52px;
     }
 
-    #reset-button,
-    #lock-rotation-button,
     #viewer-nav-toolbar .smart-btn {
       display: flex !important;
       flex: 0 0 auto;
@@ -4880,6 +4900,14 @@ function removeViewerLoadingScreen() {
     #reset-icon {
       width: 32px;
       height: 32px;
+      /* reset.png/lock.png read slightly lower than the other toolbar icons
+         once centered in their button — nudge both up a touch. Tablet/mobile
+         only; desktop reset button is unaffected. */
+      margin-bottom: 3px;
+    }
+
+    #lock-rotation-button img {
+      margin-bottom: 3px;
     }
 
     #viewer-nav-toolbar .smart-btn img {
@@ -5187,10 +5215,17 @@ function removeViewerLoadingScreen() {
       gap: 6px;
       z-index: auto;
       order: 4;
+      /* Matches .twod-mobile-trigger / .preset-view-current's height at this
+         breakpoint — see the tablet rule above for why this is needed: without
+         it the toolbar (which holds the reset/lock buttons too) is shorter
+         than its siblings and the whole cluster of icons visibly sinks below
+         the 2D and preset-view buttons instead of sitting in one line. */
+      height: 56px;
+      /* See the tablet rule above — the only place reset/lock's size is set
+         for this breakpoint, read by resetButton.js's var(). */
+      --toolbar-btn-size: 48px;
     }
 
-    #reset-button,
-    #lock-rotation-button,
     #viewer-nav-toolbar .smart-btn {
       display: flex !important;
       flex: 0 0 auto;
@@ -5204,6 +5239,14 @@ function removeViewerLoadingScreen() {
       width: 30px;
       height: 30px;
       margin-right: 0;
+      /* reset.png/lock.png read slightly lower than the other toolbar icons
+         once centered in their button — nudge both up a touch. Phone/tablet
+         only; desktop reset button is unaffected. */
+      margin-bottom: 3px;
+    }
+
+    #lock-rotation-button img {
+      margin-bottom: 3px;
     }
 
     #viewer-nav-toolbar .smart-btn img {
@@ -5652,17 +5695,10 @@ function removeViewerLoadingScreen() {
     });
   }
 
-  async function pickAndUploadSlot(slot, statusEl) {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".stl";
-    input.hidden = true;
-    document.body.appendChild(input);
-    const file = await new Promise((resolve) => {
-      input.addEventListener("change", () => resolve(input.files?.[0] || null));
-      input.click();
-    });
-    input.remove();
+  // Shared by the file-picker flow (pickAndUploadSlot) and drag-and-drop
+  // (wireSlotDropTarget): validates, uploads and renders one file into one
+  // slot. Either entry point just has to hand it a File.
+  async function uploadFileToSlot(file, slot, statusEl) {
     if (!file) return;
     if (!/\.stl$/i.test(file.name)) {
       statusEl.textContent = "Only .stl files are supported.";
@@ -5713,6 +5749,50 @@ function removeViewerLoadingScreen() {
       clearSlotTileBusy(slot);
       setUploadPromptBusy(false);
     }
+  }
+
+  async function pickAndUploadSlot(slot, statusEl) {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".stl";
+    input.hidden = true;
+    document.body.appendChild(input);
+    const file = await new Promise((resolve) => {
+      input.addEventListener("change", () => resolve(input.files?.[0] || null));
+      input.click();
+    });
+    input.remove();
+    await uploadFileToSlot(file, slot, statusEl);
+  }
+
+  // Lets a slot tile accept a dragged-in STL directly, instead of only
+  // opening the file picker. Mirrors the click path's guard: a filled or
+  // busy slot won't accept a drop, the same as its tile being disabled.
+  function wireSlotDropTarget(wrap, slot, statusEl) {
+    const canAcceptDrop = () =>
+      !wrap.classList.contains("is-filled") && !wrap.classList.contains("is-busy");
+
+    wrap.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = canAcceptDrop() ? "copy" : "none";
+      if (canAcceptDrop()) wrap.classList.add("is-dragover");
+    });
+    wrap.addEventListener("dragleave", (event) => {
+      // Children re-fire dragenter/dragleave as the pointer crosses them —
+      // only clear the highlight once the pointer has actually left wrap.
+      if (wrap.contains(event.relatedTarget)) return;
+      wrap.classList.remove("is-dragover");
+    });
+    wrap.addEventListener("drop", (event) => {
+      event.preventDefault();
+      wrap.classList.remove("is-dragover");
+      if (!canAcceptDrop()) {
+        statusEl.textContent = "Delete the existing file before replacing it.";
+        return;
+      }
+      const file = event.dataTransfer.files?.[0];
+      if (file) uploadFileToSlot(file, slot, statusEl);
+    });
   }
 
   // Which slot numbers already hold a file, from the meshes themselves — a slot
@@ -5956,6 +6036,7 @@ function removeViewerLoadingScreen() {
         `<progress class="dup-slot-bar" max="100" value="0"></progress>` +
         `<span class="dup-slot-note"></span>`;
       tile.addEventListener("click", () => pickAndUploadSlot(slot, status));
+      wireSlotDropTarget(wrap, slot, status);
 
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
@@ -5991,6 +6072,12 @@ function removeViewerLoadingScreen() {
     prompt.appendChild(card);
     (viewerContainer || document.body).appendChild(prompt);
     refreshUploadPromptSlots();
+
+    // A drop that lands on the card but misses a tile (gap between slots,
+    // heading, etc.) still has to be swallowed here — without this the
+    // browser's default action is to navigate to/open the dropped file.
+    prompt.addEventListener("dragover", (event) => event.preventDefault());
+    prompt.addEventListener("drop", (event) => event.preventDefault());
   }
 
   // The toolbar is built in another scope (same as syncDesignViewButton), so the
