@@ -39,7 +39,7 @@ import {
   getMinorConnectorSupportSides,
 } from "../src/js/2D/components.js";
 import { encodeJawStructText } from "../src/js/2D/jawStructCodec.js";
-import { TOOTH_ORDER } from "../src/js/2D/constants.js";
+import { getNeighborToothIds, TOOTH_ORDER } from "../src/js/2D/constants.js";
 import { freshTeeth, rowsOn } from "./helpers/teeth.mjs";
 import { saveAndReload } from "./helpers/jawStructIO.mjs";
 
@@ -67,6 +67,14 @@ const restsOn = (id) =>
     .map((p) => p.surface)
     .sort();
 const minorConnectorSides = (id) => getMinorConnectorSupportSides(state.teeth[id]);
+/** Same, with the neighbours the mesh rule needs (arch-order mesial/distal records). */
+const minorConnectorSidesInArch = (id, jaw) => {
+  const ids = getNeighborToothIds(id, jaw);
+  return getMinorConnectorSupportSides(state.teeth[id], {
+    mesial: state.teeth[ids.mesial] || null,
+    distal: state.teeth[ids.distal] || null,
+  });
+};
 
 /**
  * Back-action once shipped invisible because its id was missing from a hand-written
@@ -291,6 +299,57 @@ describe("derived minor-connector side", () => {
     ];
     // No reciprocal: general rule, so the mesial-tip clasp anchors distally.
     expect(minorConnectorSides("16")).toEqual({ mesial: true, distal: true });
+  });
+});
+
+/**
+ * The mesh rule: a meshed saddle reaches the major connector through an adjacent
+ * reciprocating element (plate / reciprocating clasp) or a continuing mesh. Where an
+ * embrasure has neither, the saddle bridges it with its own minor connector.
+ */
+describe("mesh minor-connector sides", () => {
+  const plated = {
+    components: ["plate-prox"],
+    componentPlacements: [{ componentId: "plate-prox", surface: null }],
+  };
+
+  it("bridges both sides when neither neighbour reciprocates or meshes", () => {
+    setupArches(["36"], { "36": meshed });
+    expect(minorConnectorSidesInArch("36", "lower")).toEqual({ mesial: true, distal: true });
+  });
+
+  it("skips the side already carried by a neighbouring plate", () => {
+    setupArches(["36"], { "36": meshed, "35": plated });
+    // 35 is mesial of 36, so its plate covers the mesh's mesial embrasure.
+    expect(minorConnectorSidesInArch("36", "lower")).toEqual({ mesial: false, distal: true });
+  });
+
+  it("skips the side where the saddle continues into another mesh", () => {
+    setupArches(["36", "37"], { "36": meshed, "37": meshed });
+    expect(minorConnectorSidesInArch("36", "lower")).toEqual({ mesial: true, distal: false });
+    expect(minorConnectorSidesInArch("37", "lower")).toEqual({ mesial: false, distal: true });
+  });
+
+  it("has nothing to bridge to across a missing, unmeshed neighbour or the arch end", () => {
+    setupArches(["36", "37"], { "36": meshed });
+    expect(minorConnectorSidesInArch("36", "lower")).toEqual({ mesial: true, distal: false });
+
+    setupArches(["38"], { "38": meshed });
+    expect(minorConnectorSidesInArch("38", "lower")).toEqual({ mesial: true, distal: false });
+  });
+
+  it("mirrors across quadrants and the midline", () => {
+    setupArches(["26"], { "26": meshed });
+    expect(minorConnectorSidesInArch("26", "upper")).toEqual({ mesial: true, distal: true });
+
+    setupArches(["41"], { "41": meshed, "31": plated });
+    // 31 sits across the midline from 41 — mesial to it.
+    expect(minorConnectorSidesInArch("41", "lower")).toEqual({ mesial: false, distal: true });
+  });
+
+  it("leaves an unmeshed missing site alone", () => {
+    setupArches(["36"]);
+    expect(minorConnectorSidesInArch("36", "lower")).toEqual({ mesial: false, distal: false });
   });
 });
 

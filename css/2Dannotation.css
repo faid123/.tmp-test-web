@@ -314,8 +314,9 @@ body.is-panel-resizing {
 
 /* ===== Upload other 3D files modal ===== */
 /* Drop-up popover that emerges from the footer "Upload other 3D files" icon.
-   The overlay is just a positioning/click-catch layer; the panel is placed
-   next to the icon by positionUpload3dPanel() in preview3D.js. */
+   The overlay is a positioning layer only — pointer-events stay off it so clicks
+   around the panel reach the 3D view instead of closing the popover; the panel is
+   placed next to the icon by positionUpload3dPanel() in preview3D.js. */
 .upload3d-modal {
   position: fixed;
   inset: 0;
@@ -325,15 +326,6 @@ body.is-panel-resizing {
 
 .upload3d-modal.is-hidden {
   display: none;
-}
-
-/* Transparent full-screen catcher: a click anywhere outside the panel closes
-   the popover, but the screen isn't dimmed like a modal. */
-.upload3d-modal-backdrop {
-  position: absolute;
-  inset: 0;
-  background: transparent;
-  pointer-events: auto;
 }
 
 .upload3d-modal-panel {
@@ -365,12 +357,44 @@ body.is-panel-resizing {
   margin-bottom: 8px;
 }
 
+/* Title + Approve travel together on the left; the close X stays right. */
+.upload3d-modal-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .upload3d-modal-title {
   margin: 0;
   font-size: 0.85rem;
   font-weight: 800;
   letter-spacing: 0.02em;
   color: var(--ink, #2b3440);
+}
+
+.upload3d-approve-btn {
+  padding: 4px 11px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--rose-500, #3bae95);
+  border: 1px solid var(--rose-500, #3bae95);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.upload3d-approve-btn:hover:not(:disabled) {
+  background: var(--rose-700, #25735f);
+  border-color: var(--rose-700, #25735f);
+}
+.upload3d-approve-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .upload3d-modal-close {
@@ -4363,8 +4387,9 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   color: #b91c1c;
 }
 
-/* Read-only roster row: person icon, then name + role. Nothing to click — the
-   list identifies who is on the case, it doesn't pick who gets mail. */
+/* Roster row: leading marker (person icon in the 2D dialog, a checkbox in the 3D
+   one — see .p3da-user), then name + role. The 2D list is read-only: it says who
+   is on the case, it doesn't pick who gets mail. */
 .cn-approve-user {
   display: flex;
   align-items: center;
@@ -4500,4 +4525,131 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   .cn-approve-preview {
     max-height: 320px;
   }
+}
+
+/* ---- 3D approval dialog (preview3DApproval.js) -------------------------- */
+/* Reuses the .cn-approve-* frame above; only what differs is defined here: the
+   two arch renders on the left, and recipient checkboxes on the roster rows. */
+
+/* Upper above lower, each sized to the render's own aspect — the captures come
+   off a wide canvas, so a fixed frame height would letterbox them. */
+.p3da-shots {
+  display: grid;
+  gap: 12px;
+}
+
+.p3da-shot {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+/* The caption is the checkbox's label: ticking it attaches that render. */
+.p3da-shot-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.p3da-shot-check {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--rose-500, #3bae95);
+  cursor: pointer;
+}
+.p3da-shot-check:disabled {
+  cursor: default;
+}
+
+.p3da-shot-frame {
+  display: grid;
+  place-items: center;
+  min-height: 84px;
+  padding: 6px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 8px;
+  background: #eef2f6;
+}
+
+/* Height-capped rather than width-filled: the captures come off a wide canvas, so
+   at width:100% their aspect ratio alone made each panel ~190px tall. max-width
+   keeps them from overflowing a narrow dialog. */
+.p3da-shot-img {
+  display: block;
+  max-width: 100%;
+  max-height: 150px;
+  object-fit: contain;
+}
+
+.p3da-shot-empty {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+/* Roster row as a recipient picker: the whole row is the checkbox's label, with
+   the address on its own line under the name (side by side, the two ellipse each
+   other away in a 280px column). */
+.p3da-user {
+  align-items: flex-start;
+  cursor: pointer;
+}
+.p3da-user:hover {
+  background: #f8fafc;
+}
+
+.p3da-user-check {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  accent-color: var(--rose-500, #3bae95);
+  cursor: pointer;
+}
+
+.p3da-user-text {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.p3da-user .cn-approve-user-role {
+  white-space: nowrap;
+}
+
+.p3da-user-email {
+  min-width: 0;
+  font-size: 11px;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Two-line rows need more room before the list starts scrolling than the 2D
+   dialog's single-line ones. */
+.cn-approve-users:has(.p3da-user) {
+  max-height: 232px;
+}
+
+/* No resolvable address (role rows carry none and user/getall is admin-only):
+   the row still lists the person, but can't be ticked. */
+.p3da-user.is-unreachable {
+  cursor: default;
+}
+.p3da-user.is-unreachable:hover {
+  background: none;
+}
+.p3da-user.is-unreachable .cn-approve-user-username {
+  color: #64748b;
+}
+.p3da-user.is-unreachable .p3da-user-check {
+  cursor: default;
 }

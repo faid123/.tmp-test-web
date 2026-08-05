@@ -9,6 +9,8 @@ import {
   autoApplySavedSurveyAngles,
 } from "./preview3DSurvey.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
+import { updateCaseStatus, STATUS_3D_DESIGN_APPROVED } from "./caseNote.js";
+import { confirmPreview3DApproval, sendApprovalEmails } from "./preview3DApproval.js";
 
 // Re-exported: sibling 2D modules import it from here.
 export { getLoggedInUser };
@@ -74,6 +76,13 @@ export const preview3DState = {
   extraGroups: {},
   extraFileNames: {},
   occupiedSlots: null,
+  // Extras are hidden on page entry; opening the "Other 3D files" panel stages them
+  // (maximize + jaws hidden) and that stage OUTLIVES the panel — closing it changes
+  // nothing. extrasPrevStage = jaw visibility + camera to restore if the extras all go
+  // away · stageHiddenJaws = jaws the stage is holding off screen.
+  extrasVisible: false,
+  extrasPrevStage: null,
+  stageHiddenJaws: new Set(),
   // Slot currently uploading (drives that row's inline progress bar), plus the
   // live progress-bar element refs for that row so setUpload3dBusy can update it.
   uploadingSlot: null,
@@ -81,6 +90,7 @@ export const preview3DState = {
   upload3dModal: null,
   upload3dKeyHandler: null,
   uploadCleanup: null,
+  panelModeCleanup: null,
   area: null,
   activeView: "both",
   surveyPrevVisibility: null,
@@ -217,6 +227,9 @@ function init3DPreview(area) {
   preview3DState.extraGroups = {};
   preview3DState.extraFileNames = {};
   preview3DState.occupiedSlots = new Set();
+  preview3DState.extrasVisible = false;
+  preview3DState.extrasPrevStage = null;
+  preview3DState.stageHiddenJaws = new Set();
 
   const shell = document.createElement("section");
   shell.className = "jaw-preview-shell";
@@ -305,6 +318,19 @@ function init3DPreview(area) {
   window.addEventListener("request-open-upload-3d", handleOpenUpload3d);
   preview3DState.uploadCleanup = () => {
     window.removeEventListener("request-open-upload-3d", handleOpenUpload3d);
+  };
+
+  // Restoring the split view (2DAnnotation.js's maximize button) is the way OUT of
+  // the extra-STL stage: minimising puts the original jaws back on screen.
+  const handlePanelMode = (e) => {
+    if (e.detail?.mode !== "split") return;
+    if (!preview3DState.extrasPrevStage) return; // nothing staged to undo
+    exitExtraStlStage();
+  };
+  preview3DState.panelModeCleanup?.();
+  window.addEventListener("preview-panel-mode", handlePanelMode);
+  preview3DState.panelModeCleanup = () => {
+    window.removeEventListener("preview-panel-mode", handlePanelMode);
   };
 
   shell.appendChild(toolbar);
@@ -425,6 +451,9 @@ function init3DPreview(area) {
     const group = preview3DState.groups[jaw];
     if (!group) return;
     group.visible = !group.visible;
+    // Bringing a jaw back by hand releases the extras stage's hold on it, so a later
+    // HD/SD re-render doesn't hide it again.
+    if (group.visible) preview3DState.stageHiddenJaws.delete(jaw);
     const row = jaw === "upper" ? rowUpper.row : rowLower.row;
     row.classList.toggle("is-hidden-jaw", !group.visible);
   };
@@ -525,6 +554,9 @@ export function teardown3DPreview() {
   preview3DState.extraGroups = {};
   preview3DState.extraFileNames = {};
   preview3DState.occupiedSlots = null;
+  preview3DState.extrasVisible = false;
+  preview3DState.extrasPrevStage = null;
+  preview3DState.stageHiddenJaws = new Set();
   preview3DState.area = null;
   preview3DState.topControls = null;
   closeUpload3dModal();
@@ -552,6 +584,10 @@ export function teardown3DPreview() {
   if (preview3DState.uploadCleanup) {
     preview3DState.uploadCleanup();
     preview3DState.uploadCleanup = null;
+  }
+  if (preview3DState.panelModeCleanup) {
+    preview3DState.panelModeCleanup();
+    preview3DState.panelModeCleanup = null;
   }
   preview3DState.capturing = false;
 }
@@ -2021,15 +2057,38 @@ function applyJawVisibility() {
   const view = preview3DState.activeView;
   if (upper) upper.visible = view === "both" || view === "upper";
   if (lower) lower.visible = view === "both" || view === "lower";
+  // Jaws the "Other 3D files" stage is holding off screen stay hidden through an HD/SD
+  // re-render; the jaw row icon is what takes a jaw back out of that set.
+  for (const jaw of preview3DState.stageHiddenJaws || []) {
+    const group = preview3DState.groups[jaw];
+    if (group) group.visible = false;
+  }
 }
 
-function fitPreviewCamera() {
+// World bounds of only the VISIBLE meshes under `root`. Box3.setFromObject ignores
+// `.visible`, so a hidden jaw (or a hidden extra STL) would otherwise still drive the fit.
+function visibleModelBounds(root) {
+  const box = new THREE.Box3();
+  root.updateMatrixWorld(true);
+  root.traverseVisible((obj) => {
+    if (obj.geometry) box.expandByObject(obj);
+  });
+  return box;
+}
+
+// `visibleOnly` fits to what is actually on screen — used when the extra-STL stage
+// hides the jaws, so the camera frames the extras instead of the whole model root.
+// `worldView` ({ dir, up }) aims the camera from an explicit WORLD direction; the
+// default is the gentle three-quarter view. Deliberately not PREVIEW_VIEW_PRESETS:
+// those are model-local and their names read inverted here (the gizmo's "front" is
+// this view's straight-down), which is a trap when the point is "90° from above".
+function fitPreviewCamera({ visibleOnly = false, worldView = null } = {}) {
   const root = preview3DState.modelRoot;
   const camera = preview3DState.camera;
   const controls = preview3DState.controls;
   if (!root || !camera || !controls) return;
 
-  const box = new THREE.Box3().setFromObject(root);
+  const box = visibleOnly ? visibleModelBounds(root) : new THREE.Box3().setFromObject(root);
   if (box.isEmpty()) return;
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
@@ -2043,8 +2102,13 @@ function fitPreviewCamera() {
   const distH = Math.max(size.x, 1) / 2 / Math.tan(hFov / 2);
   const fitDist = Math.max(distV, distH) * FIT_PADDING;
   // Normalised so fitDist IS the camera distance.
-  const viewOffset = new THREE.Vector3(0, 0.35, 1.25).normalize();
-  camera.up.set(0, 1, 0);
+  let viewOffset = new THREE.Vector3(0, 0.35, 1.25).normalize();
+  let viewUp = new THREE.Vector3(0, 1, 0);
+  if (worldView) {
+    viewOffset = new THREE.Vector3(...worldView.dir).normalize();
+    viewUp = new THREE.Vector3(...worldView.up).normalize();
+  }
+  camera.up.copy(viewUp);
   camera.position.copy(center).addScaledVector(viewOffset, fitDist);
   controls.target.copy(center);
   controls.update();
@@ -2557,7 +2621,11 @@ async function loadExtraStlsIntoPreview() {
       );
     }
   }
-  if (extras.length) {
+  // Extras stay off the stage on page entry — they are only shown while the "Other 3D
+  // files" panel is open. Exception: with no jaw meshes at all, hiding them too would
+  // leave an empty viewport, so show them right away.
+  if (extras.length && !preview3DState.groups.upper && !preview3DState.groups.lower) {
+    setExtraStlsVisible(true);
     centerRootOnCombinedBounds(preview3DState.modelRoot);
     fitPreviewCamera();
   }
@@ -2587,6 +2655,8 @@ async function renderExtraStl({ slotNumber, filename, data }) {
   const mesh = new THREE.Mesh(geometry, material);
   const group = new THREE.Group();
   group.add(mesh);
+  // Follow the current stage: hidden unless the "Other 3D files" panel is showing extras.
+  group.visible = !!preview3DState.extrasVisible;
   root.add(group);
 
   preview3DState.extraFileNames[slotNumber] = filename;
@@ -2601,6 +2671,9 @@ function removeExtraStlMesh(slotNumber) {
   disposeObject3D(entry.group);
   delete preview3DState.extraGroups[slotNumber];
   if (preview3DState.modelRoot) centerRootOnCombinedBounds(preview3DState.modelRoot);
+  // Deleting the last extra would leave the staged view empty (jaws are hidden), so
+  // hand the stage back to the jaws.
+  if (!Object.keys(preview3DState.extraGroups).length) exitExtraStlStage();
 }
 
 // Permanently delete an extra STL (modal X): frees the backend slot, then drops
@@ -2682,7 +2755,11 @@ async function uploadExtraStl(file, targetSlot = null) {
     await uploadSlotXHR(payload, (frac) => setUpload3dBusy(true, frac));
     preview3DState.occupiedSlots.add(freeSlot);
     await renderExtraStl({ slotNumber: freeSlot, filename: file.name, data: base64 });
-    if (preview3DState.modelRoot) {
+    // Uploads always come from the open panel, so stage the new file (this is what puts
+    // the FIRST extra on screen — opening an all-empty panel doesn't stage anything).
+    if (isUpload3dModalOpen()) {
+      enterExtraStlStage();
+    } else if (preview3DState.modelRoot) {
       centerRootOnCombinedBounds(preview3DState.modelRoot);
       fitPreviewCamera();
     }
@@ -2726,6 +2803,216 @@ function toggleExtraStlVisibility(slot, iconEl) {
   iconEl?.classList.toggle("is-hidden-extra", !entry.group.visible);
 }
 
+// Show/hide every loaded extra STL at once; the panel rows re-render so their icons
+// reflect the new state.
+function setExtraStlsVisible(visible) {
+  preview3DState.extrasVisible = visible;
+  for (const entry of Object.values(preview3DState.extraGroups || {})) {
+    if (entry?.group) entry.group.visible = visible;
+  }
+  renderUpload3dList();
+}
+
+// Set one jaw's mesh visibility and keep its toolbar row in sync (same as the row icon).
+function setJawVisible(jaw, visible) {
+  const group = preview3DState.groups?.[jaw];
+  if (!group) return;
+  group.visible = visible;
+  const rowKey = jaw === "upper" ? "rowUpper" : "rowLower";
+  preview3DState.topControls?.[rowKey]?.row?.classList.toggle("is-hidden-jaw", !visible);
+}
+
+// Opening the "Other 3D files" panel focuses the stage on the extras: maximize the preview,
+// hide the original jaws, reveal the extras and frame them. Idempotent — a first upload
+// re-enters to stage the newly rendered file. Deliberately NOT undone when the panel
+// closes: the maximized extras view stays up until the user changes it themselves
+// (jaw row icons, the maximize button, or deleting the last extra).
+function enterExtraStlStage() {
+  const camera = preview3DState.camera;
+  const controls = preview3DState.controls;
+  if (!preview3DState.extrasPrevStage) {
+    preview3DState.extrasPrevStage = {
+      // `undefined` = that jaw had no mesh when the panel opened; nothing to restore.
+      upper: preview3DState.groups?.upper?.visible,
+      lower: preview3DState.groups?.lower?.visible,
+      camera:
+        camera && controls
+          ? { position: camera.position.clone(), up: camera.up.clone(), target: controls.target.clone() }
+          : null,
+    };
+  }
+  for (const jaw of ["upper", "lower"]) {
+    if (!preview3DState.groups?.[jaw]) continue;
+    preview3DState.stageHiddenJaws.add(jaw);
+    setJawVisible(jaw, false);
+  }
+  setExtraStlsVisible(true);
+  const shell = document.querySelector(".annotation-shell");
+  if (shell && !shell.classList.contains("preview-maximized")) {
+    // Route through the maximize button so 2DAnnotation.js owns panel-mode state.
+    document.getElementById("preview3dMaximizeBtn")?.click();
+  }
+  fitPreviewCamera({ visibleOnly: true });
+}
+
+// Hand the stage back to the jaws when the extras can no longer hold it (the last one was
+// deleted). The maximize is left alone — it's the user's now. Closing the panel does NOT
+// come through here.
+function exitExtraStlStage() {
+  const prev = preview3DState.extrasPrevStage;
+  // Extras go back off stage — unless there are no jaw meshes to hand it back to
+  // (same fallback loadExtraStlsIntoPreview uses), which would leave a blank viewport.
+  const hasJaws = !!(preview3DState.groups?.upper || preview3DState.groups?.lower);
+  setExtraStlsVisible(!hasJaws);
+  preview3DState.stageHiddenJaws.clear();
+  if (prev) {
+    if (prev.upper !== undefined) setJawVisible("upper", !!prev.upper);
+    if (prev.lower !== undefined) setJawVisible("lower", !!prev.lower);
+  }
+  preview3DState.extrasPrevStage = null;
+  const camera = preview3DState.camera;
+  const controls = preview3DState.controls;
+  if (prev?.camera && camera && controls) {
+    camera.position.copy(prev.camera.position);
+    camera.up.copy(prev.camera.up);
+    controls.target.copy(prev.camera.target);
+    controls.update();
+  }
+}
+
+// ---- Approve the 3D design -----------------------------------------------
+
+// Which slots belong to each arch, for the approval dialog's two panels.
+const UPPER_EXTRA_SLOTS = [1, 2];
+const LOWER_EXTRA_SLOTS = [3, 4];
+
+// Captures are downscaled to this width before becoming data URLs. The preview
+// canvas is up to ~2700px across on a retina display, and these are both shown in
+// a ~360px dialog panel AND attached to every approval email — two full-size PNGs
+// per message would be megabytes on the wire.
+const APPROVAL_SHOT_MAX_WIDTH = 900;
+
+// Camera angle per arch for the approval captures, as an explicit WORLD direction
+// ({ dir, up }); null keeps the default three-quarter view. modelRoot already lays
+// the occlusal plane flat, so +Y is straight up over the arch.
+const EXTRA_SHOT_VIEWS = {
+  upper: null,
+  // Straight down at 90°, looking at the occlusal surface. The three-quarter angle
+  // showed the lower arch edge-on. `up` is -Z so the arch's front faces the bottom
+  // of the frame, the way an occlusal photo is normally printed.
+  lower: { dir: [0, 1, 0], up: [0, 0, -1] },
+};
+
+// The current frame as a PNG data URL, scaled to APPROVAL_SHOT_MAX_WIDTH. Must be
+// called straight after renderer.render(): the renderer keeps no drawing buffer,
+// so both toDataURL and drawImage only see the frame within the same tick.
+function renderedShotDataUrl(renderer) {
+  const source = renderer.domElement;
+  const scale = Math.min(1, APPROVAL_SHOT_MAX_WIDTH / (source.width || 1));
+  if (scale >= 1) return source.toDataURL("image/png");
+  const scaled = document.createElement("canvas");
+  scaled.width = Math.round(source.width * scale);
+  scaled.height = Math.round(source.height * scale);
+  scaled.getContext("2d").drawImage(source, 0, 0, scaled.width, scaled.height);
+  return scaled.toDataURL("image/png");
+}
+
+// One PNG per arch, rendered off the live canvas: everything but that arch's
+// slots is hidden and the camera is fitted to what's left, so each panel shows
+// its files framed rather than a corner of the shared view. Visibility and camera
+// are restored before returning — the on-screen view must be untouched.
+// A `null` for an arch means it has no loaded 3D file.
+function captureExtraSlotShots() {
+  const { renderer, scene, camera, controls, modelRoot } = preview3DState;
+  if (!renderer || !scene || !camera || !modelRoot) return { upper: null, lower: null };
+
+  const staged = [
+    ...Object.values(preview3DState.groups || {}),
+    ...Object.values(preview3DState.extraGroups || {}).map((e) => e?.group),
+  ].filter(Boolean);
+  const prevVisible = new Map(staged.map((group) => [group, group.visible]));
+  const prevCam = {
+    position: camera.position.clone(),
+    up: camera.up.clone(),
+    target: controls?.target.clone() || null,
+  };
+
+  const shoot = (slots, worldView) => {
+    const groups = slots
+      .map((slot) => preview3DState.extraGroups?.[slot]?.group)
+      .filter(Boolean);
+    if (!groups.length) return null;
+    for (const group of staged) group.visible = groups.includes(group);
+    fitPreviewCamera({ visibleOnly: true, worldView });
+    renderer.render(scene, camera);
+    return renderedShotDataUrl(renderer);
+  };
+
+  try {
+    return {
+      upper: shoot(UPPER_EXTRA_SLOTS, EXTRA_SHOT_VIEWS.upper),
+      lower: shoot(LOWER_EXTRA_SLOTS, EXTRA_SHOT_VIEWS.lower),
+    };
+  } catch (err) {
+    console.warn("[preview3D] extra slot capture failed", err);
+    return { upper: null, lower: null };
+  } finally {
+    for (const [group, visible] of prevVisible) group.visible = visible;
+    camera.position.copy(prevCam.position);
+    camera.up.copy(prevCam.up);
+    if (controls && prevCam.target) {
+      controls.target.copy(prevCam.target);
+      controls.update();
+    }
+    renderer.render(scene, camera);
+  }
+}
+
+// Approve = flip the case status, exactly as the 2D Case Note's Approve does with
+// its own status, then mail the users ticked in the dialog (/sendCustomEmail, one
+// request each). The mail goes out only after the status write lands — the same
+// rule the 2D approval follows, so an approval that failed is never announced.
+async function openPreview3DApproval(btn) {
+  if (!state.caseIntID) {
+    toast.error("Open a case before approving.");
+    return;
+  }
+  if (btn) btn.disabled = true;
+  try {
+    // Captured once: the dialog shows these, and the ones left ticked there come
+    // back as `sendShots` to ride along on the email.
+    const { confirmed, recipients, shots: sendShots } = await confirmPreview3DApproval({
+      caseIntID: state.caseIntID,
+      caseNumber: preview3DState.caseData?.case_id ?? state.caseIntID,
+      statusLabel: STATUS_3D_DESIGN_APPROVED,
+      shots: captureExtraSlotShots(),
+    });
+    if (!confirmed) return;
+
+    const ok = await updateCaseStatus(state.caseIntID, STATUS_3D_DESIGN_APPROVED);
+    if (!ok) {
+      toast.error("Couldn't set the case status.");
+      setMessage?.("Status not updated.", true);
+      return;
+    }
+    toast.success("Approved successfully");
+    setMessage?.("3D design approved.", false);
+
+    if (!recipients.length) return;
+    const sent = await sendApprovalEmails(state.caseIntID, recipients, sendShots);
+    if (sent === recipients.length) {
+      toast.success(`Email sent to ${recipients.map((r) => r.email).join(", ")}.`);
+    } else if (sent) {
+      toast.warning(`Email failed for ${recipients.length - sent} recipient(s).`);
+    } else {
+      // The approval itself stands; only the notification failed.
+      toast.error("Approved, but the email couldn't be sent.");
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 // Read a File as base64 (chunked to stay off the call stack for big STLs).
 async function fileToBase64(file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -2767,10 +3054,8 @@ function ensureUpload3dModal() {
   overlay.className = "upload3d-modal is-hidden";
   overlay.setAttribute("aria-hidden", "true");
 
-  const backdrop = document.createElement("div");
-  backdrop.className = "upload3d-modal-backdrop";
-  backdrop.addEventListener("click", closeUpload3dModal);
-
+  // No backdrop: clicking the white space around the popover must not close it, and the
+  // 3D view behind it stays draggable. Close is the X or Esc only.
   const panel = document.createElement("div");
   panel.className = "upload3d-modal-panel";
   panel.setAttribute("role", "dialog");
@@ -2783,13 +3068,28 @@ function ensureUpload3dModal() {
   title.id = "upload3dModalTitle";
   title.className = "upload3d-modal-title";
   title.textContent = "Other 3D files";
+
+  // Request sits with the title (not out by the X) so it reads as an action on
+  // the listed files. Opens the same style of dialog as the 2D Case Note's.
+  const approveBtn = document.createElement("button");
+  approveBtn.type = "button";
+  approveBtn.className = "upload3d-approve-btn";
+  approveBtn.textContent = "Request";
+  approveBtn.title = "Email the 3D files to the users on this case";
+  approveBtn.addEventListener("click", () => openPreview3DApproval(approveBtn));
+
+  const heading = document.createElement("div");
+  heading.className = "upload3d-modal-heading";
+  heading.appendChild(title);
+  heading.appendChild(approveBtn);
+
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
   closeBtn.className = "upload3d-modal-close";
   closeBtn.setAttribute("aria-label", "Close");
   closeBtn.innerHTML = '<i class="fa fa-xmark" aria-hidden="true"></i>';
   closeBtn.addEventListener("click", closeUpload3dModal);
-  header.appendChild(title);
+  header.appendChild(heading);
   header.appendChild(closeBtn);
 
   const card = document.createElement("div");
@@ -2801,7 +3101,6 @@ function ensureUpload3dModal() {
   card.appendChild(list);
   panel.appendChild(header);
   panel.appendChild(card);
-  overlay.appendChild(backdrop);
   overlay.appendChild(panel);
   document.body.appendChild(overlay);
 
@@ -2809,11 +3108,19 @@ function ensureUpload3dModal() {
   return preview3DState.upload3dModal;
 }
 
+function isUpload3dModalOpen() {
+  const overlay = preview3DState.upload3dModal?.overlay;
+  return !!overlay && !overlay.classList.contains("is-hidden");
+}
+
 function openUpload3dModal() {
   const modal = ensureUpload3dModal();
   renderUpload3dList();
   modal.overlay.classList.remove("is-hidden");
   modal.overlay.setAttribute("aria-hidden", "false");
+  // Stage the extras only once there is something to show — with all four slots empty,
+  // hiding the jaws would just leave a blank viewport behind the panel.
+  if (Object.keys(preview3DState.extraGroups || {}).length) enterExtraStlStage();
   positionUpload3dPanel();
   if (!preview3DState.upload3dKeyHandler) {
     preview3DState.upload3dKeyHandler = (e) => {

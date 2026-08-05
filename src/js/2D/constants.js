@@ -79,6 +79,19 @@ export const COMPONENT_GROUPS = Object.freeze({
   ],
 });
 
+/** Tooth ids across each embrasure of `toothId`: mesial = toward the midline (the arch
+ *  order's centre), distal = toward the back (its ends). Arch end → null on that side. */
+export function getNeighborToothIds(toothId, jaw) {
+  const order = TOOTH_ORDER[jaw];
+  const idx = Array.isArray(order) ? order.indexOf(String(toothId)) : -1;
+  if (idx < 0) return { mesial: null, distal: null };
+  const mesialStep = idx < order.length / 2 ? 1 : -1;
+  return {
+    mesial: order[idx + mesialStep] || null,
+    distal: order[idx - mesialStep] || null,
+  };
+}
+
 // Iterate every tooth in both arches in configured FDI order.
 export function forEachTooth(callback) {
   for (const jaw of Object.keys(TOOTH_ORDER)) {
