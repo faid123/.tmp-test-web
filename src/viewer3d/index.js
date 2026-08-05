@@ -15,8 +15,6 @@ import { ApiClient } from "./ApiClient.js";
 import { addResetButton } from "./resetButton.js";
 import { lol } from "../js/shared/crypt.js";
 import "../js/pages/createCase.js";
-import { logApi } from "../js/shared/apiLog.js";
-import { toast } from "../js/shared/toast.js";
 import {
   addVisibilityAndTransparencyControls,
   removeVisibilityAndTransparencyControls,
@@ -3488,18 +3486,6 @@ function removeViewerLoadingScreen() {
           btnContainer.style.flexDirection = "column";
           btnContainer.style.gap = "6px";
 
-          /* const approve2DStatic = document.createElement('button');
-approve2DStatic.className = 'smart-btn approve';
-approve2DStatic.textContent = 'Approve 2D';
-approve2DStatic.onclick = () => sendEmail("Your 2D Design has been APPROVED.");
-btnContainer.appendChild(approve2DStatic);
-
-const edit2DStatic = document.createElement('button');
-edit2DStatic.className = 'smart-btn edit';
-edit2DStatic.textContent = 'Edit 2D';
-edit2DStatic.onclick = () => sendEmail("Please do some modifications on 2D Design. See Notebox.");
-btnContainer.appendChild(edit2DStatic); */
-
           // Append buttons to wrapper
           thumbWrapper.appendChild(btnContainer);
 
@@ -3573,26 +3559,6 @@ btnContainer.appendChild(edit2DStatic); */
             // Buttons container
             const btnContainer2D = document.createElement("div");
             btnContainer2D.className = "smart-btn-container-2d";
-
-            const approve2D = document.createElement("button");
-            approve2D.className = "smart-btn approve";
-            approve2D.setAttribute("aria-label", "Approve 2D");
-            approve2D.title = "Approve 2D";
-            approve2D.innerHTML = `<img src="${basePath}/assets/Icon_approve.png" alt="Approve 2D">`;
-            approve2D.onclick = () =>
-              sendEmail("Your 2D Design has been APPROVED.");
-            btnContainer2D.appendChild(approve2D);
-
-            const edit2D = document.createElement("button");
-            edit2D.className = "smart-btn edit";
-            edit2D.setAttribute("aria-label", "Edit 2D");
-            edit2D.title = "Edit 2D";
-            edit2D.innerHTML = `<img src="${basePath}/assets/Icon_edit.png" alt="Edit 2D">`;
-            edit2D.onclick = () =>
-              sendEmail(
-                "Please do some modifications on 2D Design. See Notebox."
-              );
-            btnContainer2D.appendChild(edit2D);
 
             // 🟣 创建 Annotate 按钮（跳转到 2DAnnotate.html）
             const annotateBtn = document.createElement("button");
@@ -3735,18 +3701,6 @@ btnContainer.appendChild(edit2DStatic); */
 			  // Buttons container
 			  const btnContainer2D = document.createElement('div');
 			  btnContainer2D.className = 'smart-btn-container-2d';
-
-			  const approve2D = document.createElement('button');
-			  approve2D.className = 'smart-btn approve';
-			  approve2D.textContent = 'Approve 2D';
-			  approve2D.onclick = () => sendEmail("Your 2D Design has been APPROVED.");
-			  btnContainer2D.appendChild(approve2D);
-
-			  const edit2D = document.createElement('button');
-			  edit2D.className = 'smart-btn edit';
-			  edit2D.textContent = 'Edit 2D';
-			  edit2D.onclick = () => sendEmail("Please do some modifications on 2D Design. See Notebox.");
-			  btnContainer2D.appendChild(edit2D);
 
 			  twodGroup.appendChild(btnContainer2D);
 			  overlay.appendChild(twodGroup);
@@ -3911,33 +3865,6 @@ btnContainer.appendChild(edit2DStatic); */
           // === NEW: Container for 3D Buttons under Chat ===
           const btnContainer3D = document.createElement("div");
           btnContainer3D.className = "smart-btn-container-3d";
-
-          // Create "Nudge" button
-          /* 		const nudgeButton = document.createElement('button');
-		nudgeButton.textContent = 'Nudge';
-		nudgeButton.className = 'smart-btn nudge';
-		nudgeButton.addEventListener('click', function () {
-			sendEmail("You have received a NUDGE. Please check your case.");
-		});
-		btnContainer.appendChild(nudgeButton); */
-
-          /* 		// Create "Approve" button
-		const approveButton = document.createElement('button');
-		approveButton.textContent = 'Approve 2D';
-		approveButton.className = 'smart-btn approve';
-		approveButton.addEventListener('click', function () {
-			sendEmail("Your 2D Design has been APPROVED.");
-		});
-		btnContainer2D.appendChild(approveButton);
-
-		// Create "Edit" button
-		const editButton = document.createElement('button');
-		editButton.textContent = 'Edit 2D';
-		editButton.className = 'smart-btn edit';
-		editButton.addEventListener('click', function () {
-			sendEmail("Please do some modifications on 2D Design. See Notebox.");
-		});
-		btnContainer2D.appendChild(editButton); */
 
           // Switches between the uploaded design (the landing view) and the
           // case's own scan + polylines + artificial teeth. Both stay loaded, so
@@ -5417,87 +5344,6 @@ btnContainer.appendChild(edit2DStatic); */
   }
 `;
   document.head.appendChild(style);
-
-  // Extract encrypted case ID from address bar
-  const urlParams = new URLSearchParams(window.location.search);
-  const encryptedID = urlParams.get("id");
-
-  // Use the full viewer URL in the email
-  const viewerURL = `https://faid123.github.io/.tmp-test-web/src/pages/ThreeDViewer.html?id=${encodeURIComponent(
-    encryptedID
-  )}`;
-
-  // Function to send email for Approve or Edit action
-  function sendEmail(actionType) {
-    const apiUrl = `${API_BASE}/sendEmail`;
-
-    const emailData = {
-      //userEmail: "faid_akatsuki@live.com",  // replace as needed
-      action: actionType,
-      case_id: window.caseID,
-      case_int_id: paramValue, // for database queries (e.g., 1199)
-      last_edited: window.lastEdited,
-      username: window.username,
-      viewer_url: viewerURL, // include this as a new field
-      thumbnail: window.thumbnailBase64
-        ? `data:image/png;base64,${window.thumbnailBase64}`
-        : null,
-    };
-
-    fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(emailData),
-    })
-      .then(async (response) => {
-        logApi(response, 'POST /sendEmail');
-        const contentType = response.headers.get("content-type");
-        const isJson =
-          contentType && contentType.indexOf("application/json") !== -1;
-
-        const data = isJson ? await response.json() : await response.text();
-
-        if (!response.ok) {
-          throw new Error(data.message || data || "Unknown error");
-        }
-
-        console.log("Email sent successfully:", data);
-        toast.success("Email sent successfully to associated users.");
-      })
-      .catch((error) => {
-        console.error("Error sending email:", error);
-        toast.error("Failed to send email. Please try again.");
-      });
-  }
-
-  // Function to send email to a custom email address
-  function sendCustomEmail(email) {
-    if (!email) {
-      alert("Please enter a valid email address.");
-      return;
-    }
-
-    let apiUrl = `${API_BASE}/sendCustomEmail`;
-
-    let emailData = {
-      customEmail: email,
-      subject: "SmartRPD Custom Notification",
-      message: "This is a custom email message for your SmartRPD case.",
-    };
-
-    fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(emailData),
-    })
-      .then((response) => { logApi(response, 'POST /sendCustomEmail'); return response.json(); })
-      .then((data) => console.log("Custom email sent successfully:", data))
-      .catch((error) => console.error("Error sending custom email:", error));
-  }
 
   /* async function loadAllSTLSlots() {
     const apiUrl = "/stl/slot/get"; // only the endpoint, since apiClient handles base URL
