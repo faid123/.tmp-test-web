@@ -321,11 +321,13 @@ function init3DPreview(area) {
   };
 
   // Restoring the split view (2DAnnotation.js's maximize button) is the way OUT of
-  // the extra-STL stage: minimising puts the original jaws back on screen.
+  // the extra-STL stage: minimising puts the original jaws back on screen and
+  // closes the "Other 3D files" panel, so the whole interaction ends together.
   const handlePanelMode = (e) => {
     if (e.detail?.mode !== "split") return;
     if (!preview3DState.extrasPrevStage) return; // nothing staged to undo
     exitExtraStlStage();
+    closeUpload3dModal();
   };
   preview3DState.panelModeCleanup?.();
   window.addEventListener("preview-panel-mode", handlePanelMode);
