@@ -584,7 +584,7 @@
   padding: 30px;
   box-shadow: 0 6px 30px rgba(0, 0, 0, 0.15);
   position: relative;
-  font-family: "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
 }
 
 .close-btn {

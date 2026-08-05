@@ -17,7 +17,7 @@
 
 body {
   margin: 0;
-  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  font-family: var(--font-sans);
   background: linear-gradient(180deg, hsl(0, 0%, 100%) 0%, var(--bg) 100%);
   color: var(--ink);
 }
@@ -28,7 +28,7 @@ body {
   grid-template-columns: minmax(320px, var(--preview-width)) 8px minmax(420px, 1fr);
   gap: 0;
   min-height: 100vh;
-  padding: 16px;
+  padding: 8px;
 }
 
 .panel-splitter {
@@ -85,10 +85,12 @@ body.is-panel-resizing {
   flex-direction: column;
 }
 
+/* Insets are measured from the frame's border box now that .is-3d-ready
+   removed its padding; they line up with .jaw-preview-toolbar's own padding. */
 .preview-3d-max-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 12px;
+  right: 14px;
   z-index: 10;
   width: 30px;
   height: 30px;
@@ -113,8 +115,8 @@ body.is-panel-resizing {
    maximize button (top-right) and is shown only once the 3D view is ready. */
 .preview-3d-capture-btn {
   position: absolute;
-  left: 28px;
-  bottom: 28px;
+  left: 14px;
+  bottom: 14px;
   z-index: 10;
   width: 30px;
   height: 30px;
@@ -152,7 +154,7 @@ body.is-panel-resizing {
   flex: 1 1 0;
   min-height: 0;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 0;
   background: #ffffff;
   display: flex;
   flex-direction: column;
@@ -177,8 +179,39 @@ body.is-panel-resizing {
   color: var(--muted);
 }
 
+/* One box: the tool band is the upper part and spans the full frame width; the
+   3D render sits below it as an inset card. */
 .preview-frame.is-3d-ready {
-  padding: 8px;
+  padding: 0;
+  gap: 0;
+  background: #ffffff;
+}
+
+.preview-frame.is-3d-ready .jaw-preview-shell {
+  padding: 0;
+  gap: 0;
+  background: transparent;
+}
+
+.preview-frame.is-3d-ready .jaw-preview-toolbar {
+  /* border-bottom spans the full frame width, so it divides the two halves of
+     one box instead of underlining an inset group. The 52px right gutter clears
+     the maximize button (30px wide at a 14px inset) so both rows share one
+     right edge — that clearance used to be a margin on each row's survey group. */
+  padding: 10px 52px 10px 14px;
+}
+
+.preview-frame.is-3d-ready .jaw-preview-3d-mount {
+  /* Border rather than a tinted surround: the renderer clears to white and the
+     frame is white, so this is what makes the inset read. Same softened teal as
+     the frame border and the tool-row buttons. */
+  border: 1px solid rgba(59, 174, 149, 0.35);
+  border-radius: 10px;
+  /* auto rather than the base 100%: as a stretched grid item it fills the row
+     minus the margin, instead of overflowing by the margin. */
+  width: auto;
+  height: auto;
+  margin: 10px;
 }
 
 .jaw-preview-shell {
@@ -194,11 +227,18 @@ body.is-panel-resizing {
   overflow: hidden;
 }
 
+/* Tinted band so the tools read as the box's upper half, distinct from the
+   white 3D stage below it. */
+/* Neutral chrome: the undercut heatmap and arch markers in this panel use
+   colour as data, so the surrounding surfaces stay white. */
 .jaw-preview-toolbar {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  border-bottom: 1px solid var(--line);
+  gap: 8px;
+  background: #ffffff;
+  /* Carries the whole tools/preview split now that the band is the same white
+     as the frame. */
+  border-bottom: 3px solid var(--rose-500);
   padding-bottom: 12px;
 }
 
@@ -212,18 +252,18 @@ body.is-panel-resizing {
   /* Left group (jaw icon + ALLOW PROCESSING + delete) stays tight; the trailing
      1fr spacer pushes SET SURVEY ANGLE to the far right so the delete button no
      longer floats in the middle on wide (iPad) layouts. */
-  grid-template-columns: 26px auto 32px 1fr;
+  grid-template-columns: 34px auto 32px 1fr;
   align-items: center;
-  column-gap: 18px;
-  padding: 2px 4px;
+  column-gap: 12px;
+  padding: 0;
 }
 
 .jaw-preview-row-icon {
-  width: 26px;
-  height: 26px;
+  width: 34px;
+  height: 34px;
   object-fit: contain;
-  -webkit-filter: brightness(0) saturate(0) opacity(0.75);
-  filter: brightness(0) saturate(0) opacity(0.75);
+  -webkit-filter: brightness(0) saturate(0) opacity(0.85);
+  filter: brightness(0) saturate(0) opacity(0.85);
   cursor: pointer;
   border-radius: 4px;
 }
@@ -235,11 +275,11 @@ body.is-panel-resizing {
 .jaw-preview-row-check {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-size: 0.74rem;
-  font-weight: 700;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
   color: var(--ink);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -253,7 +293,7 @@ body.is-panel-resizing {
 }
 
 .jaw-preview-delete-btn {
-  border: 1px solid var(--line);
+  border: 1px solid rgba(59, 174, 149, 0.35);
   border-radius: 8px;
   background: #fff;
   height: 32px;
@@ -267,7 +307,7 @@ body.is-panel-resizing {
 }
 
 .jaw-preview-delete-btn:hover {
-  background: var(--rose-050);
+  background: #fff;
   color: var(--rose-700);
   border-color: var(--rose-500);
 }
@@ -275,7 +315,7 @@ body.is-panel-resizing {
 /* Empty-jaw upload icon: same footprint as the trash button, shown in its
    place when a jaw has no STL loaded. */
 .jaw-preview-upload-btn {
-  border: 1px solid var(--line);
+  border: 1px solid rgba(59, 174, 149, 0.35);
   border-radius: 8px;
   background: #fff;
   height: 32px;
@@ -290,9 +330,19 @@ body.is-panel-resizing {
 }
 
 .jaw-preview-upload-btn:hover {
-  background: var(--rose-050);
+  background: #fff;
   color: var(--rose-700);
   border-color: var(--rose-500);
+}
+
+/* shadcn focus ring: a 3px translucent ring in the brand hue. Applied to all
+   three tool-row controls so keyboard focus is visible on the tinted band. */
+.jaw-preview-survey-btn:focus-visible,
+.jaw-preview-delete-btn:focus-visible,
+.jaw-preview-upload-btn:focus-visible,
+.jaw-preview-survey-cancel-btn:focus-visible {
+  outline: 3px solid rgba(59, 174, 149, 0.45);
+  outline-offset: 1px;
 }
 
 /* Dim the jaw icon while its row is in the empty/upload state. */
@@ -783,9 +833,10 @@ button.upload3d-row {
 
 /* CANCEL + SET share the trailing 1fr track, pinned right — offset left so the
    pair clears the fullscreen/expand button pinned at the panel's top-right. */
+/* The maximize-button clearance now lives in .jaw-preview-toolbar's right
+   padding, so this no longer carries its own 44px margin. */
 .jaw-preview-survey-group {
   justify-self: end;
-  margin-right: 44px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -795,15 +846,15 @@ button.upload3d-row {
    jaw is armed. */
 .jaw-preview-survey-cancel-btn {
   display: none;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(59, 174, 149, 0.35);
   background: #fff;
   color: var(--muted);
   border-radius: 8px;
   height: 32px;
   padding: 0 12px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
   cursor: pointer;
   font-family: inherit;
   white-space: nowrap;
@@ -823,26 +874,31 @@ button.upload3d-row {
   cursor: default;
 }
 
+/* shadcn "outline" variant at size sm: h-8, rounded-md (8px), px-3, gap-1.5,
+   text weight 500-600 with minimal tracking. The old 0.7rem/700/0.05em was the
+   dated part — cramped, heavy and over-tracked. */
 .jaw-preview-survey-btn {
   border: 1px solid var(--rose-500);
   background: #fff;
   color: var(--rose-700);
   border-radius: 8px;
   height: 32px;
-  padding: 0 16px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  padding: 0 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
   cursor: pointer;
   font-family: inherit;
   white-space: nowrap;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  gap: 6px;
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
 .jaw-preview-survey-btn:hover {
-  background: var(--rose-050);
+  background: #fff;
   border-color: var(--rose-600);
   color: var(--rose-800);
 }
@@ -948,9 +1004,9 @@ button.upload3d-row {
 }
 
 .jaw-preview-survey-loading-label {
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
   color: var(--rose-700);
   white-space: nowrap;
 }
@@ -1783,7 +1839,7 @@ button.upload3d-row {
   border-radius: 10px;
   box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
   padding: 10px 14px;
-  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.5;
   color: #0f172a;
@@ -3165,13 +3221,25 @@ button.upload3d-row {
     padding-bottom: 10px;
   }
 
+  /* Matches the specificity of the unified-box rule above so the phone keeps a
+     tighter inset. Right gutter still clears the maximize button. */
+  .preview-frame.is-3d-ready .jaw-preview-toolbar {
+    padding: 10px 50px 10px 10px;
+  }
+
   .jaw-preview-row {
-    grid-template-columns: 26px minmax(0, 1fr) 32px auto;
+    /* Icon a step down from the desktop 34px so the label keeps room here. */
+    grid-template-columns: 30px minmax(0, 1fr) 32px auto;
     column-gap: 10px;
   }
 
+  .jaw-preview-row-icon {
+    width: 30px;
+    height: 30px;
+  }
+
   .jaw-preview-row-check {
-    font-size: 0.7rem;
+    font-size: 0.74rem;
     letter-spacing: 0.02em;
     min-width: 0;
   }
@@ -4067,11 +4135,29 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   --pp-grad: linear-gradient(135deg, #43bda2 0%, #2f9079 100%);
 }
 
-/* ---- Elevated surfaces ---- */
+/* ---- Recessed surfaces ---- */
+/* The preview reads as a well cut into the page rather than a card floating
+   above it: the outer drop shadow is gone and an inset ring is drawn instead.
+   The ring has to live on a pseudo-element — .jaw-preview-shell paints an
+   opaque white background that would cover a box-shadow:inset on the frame. */
 .preview-frame {
   border-color: rgba(59, 174, 149, 0.35);
-  border-radius: 16px;
-  box-shadow: var(--pp-shadow-md);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.preview-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  /* Above the 3D canvas (z-index auto) but below the in-frame controls, which
+     sit at 6, 8 and 10 — the well shades the render, never the buttons. */
+  z-index: 5;
+  box-shadow:
+    inset 0 2px 6px rgba(26, 77, 63, 0.13),
+    inset 0 1px 2px rgba(26, 77, 63, 0.07);
 }
 
 /* ---- Top labels & section headings ---- */

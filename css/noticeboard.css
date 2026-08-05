@@ -646,7 +646,7 @@
   border: 1px dashed var(--rose-500);
   border-radius: 4px;
   padding: 2px 6px;
-  font-family: "Montserrat", "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   font-weight: 600;
   outline: none;
   min-width: 60px;

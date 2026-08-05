@@ -18,7 +18,7 @@
 
 body {
   margin: 0;
-  font-family: "Manrope", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-sans);
   color: var(--gray-900);
 }
 

@@ -22,7 +22,7 @@
   inset: 0;
   z-index: 1300; /* above the app sidebar (1100) and case chat (1200) */
   pointer-events: none;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
 #help-bot.is-hidden {
   display: none;
@@ -55,7 +55,7 @@
   padding: 12px;
   pointer-events: auto;
   color: var(--hb-ink);
-  font-family: Arial, sans-serif;
+  font-family: var(--font-sans);
 }
 #help-bot.is-open .hb-panel {
   transform: translateX(0);
