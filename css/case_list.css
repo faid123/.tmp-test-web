@@ -818,15 +818,22 @@ button {
 .cm-row.is-active:hover { background: #e6f5ef; }
 
 .cm-td-name { min-width: 160px; max-width: 240px; position: relative; }
+/* Name + rename pencil + pin flag on one baseline. Flex (not inline flow) so a
+   name that wraps onto a second line keeps the icons beside it, vertically
+   centred, instead of pushing them onto a line of their own. */
+.cm-name-line {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
 .cm-row-name {
   font-weight: 600;
   color: var(--ink);
   /* Wrap a long name onto multiple lines instead of stretching the column. */
-  display: inline-block;
-  max-width: 100%;
+  min-width: 0;
   overflow-wrap: anywhere;
   word-break: break-word;
-  vertical-align: middle;
 }
 
 /* Due-date urgency bar: vertical indicator at the far-left edge of the row
@@ -847,10 +854,13 @@ button {
 .cm-due-bar.is-soon { background: #2563eb; }
 .cm-due-bar.is-ok { background: #16a34a; }
 .cm-row-pin {
-  margin-left: 8px;
+  flex: none;
+  margin-left: 6px;
   color: var(--primary);
   font-size: 11px;
 }
+/* Icons in the name line keep their size when the name is long. */
+.cm-name-line .cm-inline-edit { flex: none; }
 
 /* Give the status pill room to stay on one line (e.g. "3D design pending"). */
 .cm-td-status { min-width: 150px; }
@@ -896,10 +906,12 @@ button {
 
 .cm-td-date { white-space: nowrap; }
 
-/* Inline "Edit due date" affordance in the Due column. The pencil sits next to
-   the date and stays subtle until the row is hovered. */
+/* Inline edit affordances inside cells: the Due column's pencil, the Case Name
+   rename pencil and the Shared With "manage users" pencil. Each sits next to
+   the value it edits and stays subtle until the row is hovered. */
 .cm-due-date { position: relative; }
-.cm-due-edit {
+.cm-due-edit,
+.cm-inline-edit {
   border: none;
   background: none;
   cursor: pointer;
@@ -908,11 +920,15 @@ button {
   margin-left: 4px;
   border-radius: 6px;
   opacity: 0;
+  vertical-align: middle;
   transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 .cm-row:hover .cm-due-edit,
-.cm-due-edit:focus-visible { opacity: 1; }
-.cm-due-edit:hover { background: var(--line); color: var(--ink); }
+.cm-row:hover .cm-inline-edit,
+.cm-due-edit:focus-visible,
+.cm-inline-edit:focus-visible { opacity: 1; }
+.cm-due-edit:hover,
+.cm-inline-edit:hover { background: var(--line); color: var(--ink); }
 
 /* Themed date calendar styles live in the shared css/toast.css. */
 
@@ -1836,46 +1852,77 @@ button {
   .cm-table tr,
   .cm-table td { display: block; }
 
-  .cm-row {
+  /* Compact card: case name on top, status and due date on one line under it.
+     Created / Owner / Shared With / row actions stacked into a ~280px card that
+     fit barely two cases on a phone, and all of them are in the detail pane —
+     which is what tapping the card opens. The due date stays because "how soon
+     is this due" is what you scan a case list for. */
+  /* `.cm-table td` above turns every cell into a block and outranks a bare
+     `.cm-td-*`, so these have to be at least as specific to hide at all. */
+  .cm-table td.cm-td-date:not(.cm-due-date),
+  .cm-table td.cm-td-owner,
+  .cm-table td.cm-td-shared,
+  .cm-table td.cm-td-actions { display: none; }
+  /* Rename / shared-users pencils go with the actions; due date is edited from
+     the detail pane too, so its pencil would be a dead-looking target here.
+     The urgency bar goes as well — the due date now carries that colour
+     itself, so the bar was saying the same thing twice. */
+  .cm-inline-edit,
+  .cm-due-edit,
+  .cm-due-bar { display: none; }
+
+  /* Exactly two lines: the name spans both columns, then status and due date
+     share the row under it. A grid rather than wrapped flex so a long status
+     label can never push the date onto a third line. */
+  .cm-table tr.cm-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name name"
+      "status due";
+    align-items: center;
+    gap: 6px 10px;
     background: var(--panel);
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
-    padding: 14px 16px;
-    margin-bottom: 10px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
   }
   .cm-row:hover { background: var(--panel); } /* drop the table-row hover */
   .cm-row.is-active { background: #f0faf7; }
 
-  .cm-table tbody td { padding: 4px 0; border: none; }
+  .cm-table tbody td { padding: 0 !important; border: none; }
   .cm-table tbody tr:last-child td { border: none; }
 
-  /* Name as the card heading, status pill just below. */
-  .cm-td-name { padding: 0 0 6px !important; }
-  .cm-row-name { font-size: 15px; }
-  .cm-td-status { padding: 0 0 10px !important; }
+  .cm-td-name { grid-area: name; }
+  .cm-row-name {
+    font-size: 15px;
+    /* One line: a name wrapping to three was most of the old card height. */
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Clips rather than shoves the date off-card if a status label runs long on a
+     very narrow phone. */
+  .cm-td-status { grid-area: status; min-width: 0; overflow: hidden; }
 
-  /* Field rows: small label prefix from the data-label attribute, then value.
-     `white-space: normal` lets long dates wrap instead of push the card wide. */
-  .cm-td-date,
-  .cm-td-owner,
-  .cm-td-shared { white-space: normal; }
-  .cm-td-shared .cm-shared-names { max-width: none; white-space: normal; }
-  .cm-td-date::before,
-  .cm-td-owner::before,
-  .cm-td-shared::before {
-    content: attr(data-label) ": ";
+  /* Due date at the end of the status line, coloured by urgency — grey overdue,
+     red due today, blue within 3 days, green within 10, plain beyond that. */
+  .cm-table td.cm-due-date {
+    grid-area: due;
+    justify-self: end;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .cm-td-date.cm-due-date::before {
+    content: "Due ";
     color: var(--muted);
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    margin-right: 6px;
   }
-
-  /* Mobile: the left urgency bar is hidden; the DUE value text carries the
-     color instead — <0 grey, 0 red, 1-5 blue, 6-14 green, >14 unchanged.
-     The "DUE:" prefix keeps its own muted color via the ::before rule above. */
-  .cm-due-bar { display: none; }
   .cm-due-date.is-overdue,
   .cm-due-date.is-due,
   .cm-due-date.is-soon,
@@ -1884,17 +1931,6 @@ button {
   .cm-due-date.is-due { color: var(--danger, #ef4444); }
   .cm-due-date.is-soon { color: #2563eb; }
   .cm-due-date.is-ok { color: #16a34a; }
-  /* No hover on touch — keep the edit pencil visible. (The status pill needs
-     nothing here: it is always visible, being the value itself.) */
-  .cm-due-edit { opacity: 1; }
-
-  /* Actions in their own row, divider above, right-aligned. */
-  .cm-td-actions {
-    text-align: right;
-    padding-top: 10px !important;
-    margin-top: 8px;
-    border-top: 1px solid var(--line-soft);
-  }
 
   .cm-shared-name { max-width: 110px; }
 }
@@ -1918,6 +1954,148 @@ button {
    action; the .cm-row-icon.is-pinned color is set in the table section. */
 .cm-row-icon.is-pinned:hover {
   filter: brightness(0.9);
+}
+
+/* ============ upload chooser modal ============ */
+/* Injected by caseManagement.js when the detail pane's upload button is hit —
+   the case can take either a reference image or an extra STL, so it asks. */
+#uploadChoiceModal .modal-content.upload-choice-modal {
+  width: 520px;
+  max-width: 90%;
+  padding: 28px 28px 24px;
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+  font-family: inherit;
+}
+#uploadChoiceModal .modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+#uploadChoiceModal .close-btn {
+  top: 14px;
+  right: 18px;
+  color: var(--muted);
+}
+#uploadChoiceModal .close-btn:hover { color: var(--ink); }
+.upload-choice-sub {
+  margin: 0 0 18px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.upload-choice-sub strong { color: var(--ink); }
+.upload-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.upload-choice-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 18px 16px;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.upload-choice-card:hover,
+.upload-choice-card:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  background: #f0faf7;
+  box-shadow: 0 0 0 3px rgba(59, 174, 149, 0.18);
+}
+.upload-choice-card > i {
+  font-size: 20px;
+  color: var(--primary);
+  margin-bottom: 2px;
+}
+.upload-choice-title { font-size: 14px; font-weight: 700; color: var(--ink); }
+.upload-choice-desc { font-size: 12px; line-height: 1.45; color: var(--muted); }
+#uploadChoiceModal .upload-choice-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 22px;
+}
+
+/* --- preview stage: picked files, reviewed before anything is sent --- */
+.upload-preview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 46vh;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.upload-preview-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.upload-preview-list li:last-child { border-bottom: none; }
+.upload-preview-thumb {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--line-soft);
+  color: var(--primary);
+  font-size: 17px;
+}
+.upload-preview-thumb img { width: 100%; height: 100%; object-fit: cover; }
+/* min-width:0 so a long filename ellipsises instead of pushing the remove
+   button off the row. */
+.upload-preview-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.upload-preview-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-preview-size { font-size: 12px; color: var(--muted); }
+.upload-preview-remove {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.upload-preview-remove:hover { background: var(--status-danger-bg); color: var(--danger); }
+#uploadChoiceModal .upload-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+/* "Add more" sits at the left, the commit pair at the right. */
+#uploadChoiceModal .upload-add-more { margin-right: auto; }
+#uploadChoiceModal .upload-preview-actions button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+#uploadChoiceModal.is-uploading .upload-preview-remove { display: none; }
+
+/* Stack the two options once they'd be too narrow to read side by side. */
+@media (max-width: 560px) {
+  .upload-choice-grid { grid-template-columns: 1fr; }
 }
 
 /* ============ rename case modal ============ */
@@ -1990,14 +2168,16 @@ button {
 
 /* ============ Admin read-only view ============ */
 /* When logged in as an admin, hide the Start Case button, the 3D viewer link
-   row, the table's Actions column (header + all body cells) and the inline
-   due-date edit pencil (due-date writes don't work from the admin view). Only
-   the View Dashboard button remains in the detail CTA. */
+   row, the table's Actions column (header + all body cells) and every inline
+   cell-edit pencil (due date / rename / shared users — those writes don't work
+   from the admin view). Only the View Dashboard button remains in the detail
+   CTA. */
 body.is-admin .start-case-button,
 body.is-admin #view3dLinkRow,
 body.is-admin .cm-th-actions,
 body.is-admin .cm-td-actions,
-body.is-admin .cm-due-edit {
+body.is-admin .cm-due-edit,
+body.is-admin .cm-inline-edit {
   display: none !important;
 }
 

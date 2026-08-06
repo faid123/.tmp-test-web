@@ -1,6 +1,8 @@
 body {
   margin: 0;
-  font-family: "Montserrat", sans-serif;
+  /* Montserrat was declared here but never vendored or linked, so every page
+     using this sheet fell back to the browser default. */
+  font-family: var(--font-sans);
   background-color: #f8f5fb;
 }
 
@@ -144,8 +146,8 @@ html, body {
   gap: 16px;
   height: 35px;
   padding: 0 16px;
-  background: #3BAE95;
-  border-top: 1px solid #25735f;
+  background: var(--primary-strong);
+  border-top: 1px solid var(--primary-stronger);
   font-size: 13px;
   color: #fff;
 }
@@ -785,7 +787,7 @@ html, body {
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
   -webkit-backdrop-filter: blur(22px) saturate(145%);
   backdrop-filter: blur(22px) saturate(145%);
-  font-family: Inter, Montserrat, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   pointer-events: auto;
   isolation: isolate;
 }

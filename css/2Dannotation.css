@@ -433,7 +433,9 @@ body.is-panel-resizing {
   color: #fff;
   background: var(--rose-500, #3bae95);
   border: 1px solid var(--rose-500, #3bae95);
-  border-radius: 999px;
+  /* Squared off like the rest of the panel's controls (the close button beside
+     it, the Upload button below) rather than the pill it used to be. */
+  border-radius: 8px;
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.12s ease, border-color 0.12s ease;
@@ -4308,6 +4310,15 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   text-align: left;
 }
 
+/* The "[For Lab Only]" qualifier in the 3D dialog's title: red and a size down,
+   so it reads as an aside on the heading rather than part of it. */
+.cn-approve-title-note {
+  font-size: 0.85em;
+  font-weight: 700;
+  color: #b91c1c;
+  white-space: nowrap;
+}
+
 .cn-approve-lede {
   margin: 0;
   font-size: 13px;
@@ -4320,15 +4331,23 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   gap: 8px;
 }
 
-/* Report left, recipients + message right. The right column is a fixed 280px —
-   a user list and a message box need a readable column, not a share of whatever
-   is left — so the report takes the remaining width instead of the two fighting
-   over it. minmax(0,…) keeps a wide report image from pushing past its cell. */
+/* What is being approved on the left, recipients + message right. The right
+   column is a fixed 280px — a user list and a message box need a readable
+   column, not a share of whatever is left — so the renders take the remaining
+   width instead of the two fighting over it. minmax(0,…) keeps a wide capture
+   from pushing past its cell. */
 .cn-approve-cols {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;
   gap: 18px;
   align-items: start;
+}
+
+/* The left column's own stack: the renders, then whatever is attached to them. */
+.cn-approve-main {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
 }
 
 .cn-approve-side {
@@ -4337,18 +4356,11 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   min-width: 0;
 }
 
-/* One column once half the dialog is too narrow to hold a legible A4 page. */
+/* One column once half the dialog is too narrow to show the renders legibly. */
 @media (max-width: 860px) {
   .cn-approve-cols {
     grid-template-columns: minmax(0, 1fr);
   }
-}
-
-.cn-approve-section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
 }
 
 .cn-approve-section-title {
@@ -4358,97 +4370,6 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--rose-700, #25735f);
-}
-
-/* ---- report preview ---- */
-/* An <a download> pointing at the generated PDF blob, styled as a button. It
-   carries .is-disabled until the PDF exists. */
-.cn-approve-print-btn {
-  display: inline-block;
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.5;
-  border-radius: 6px;
-  border: 1px solid var(--rose-500, #3bae95);
-  background: #fff;
-  color: var(--rose-700, #25735f);
-  cursor: pointer;
-  font-family: inherit;
-  text-decoration: none;
-  white-space: nowrap;
-  transition: background 0.12s ease, color 0.12s ease;
-}
-.cn-approve-print-btn:hover:not(.is-disabled) {
-  background: var(--rose-500, #3bae95);
-  color: #fff;
-}
-.cn-approve-print-btn.is-disabled {
-  opacity: 0.5;
-  cursor: default;
-  pointer-events: none;
-}
-
-/* Scroll viewport for the sheet. Tinted rather than white so the A4 page reads
-   as paper sitting on a surface — the same cue a PDF viewer gives, without its
-   toolbar. */
-.cn-approve-preview {
-  position: relative;
-  /* No fixed height: at half the dialog the A4 sheet is short enough to show
-     whole, so the panel sizes to it and there is no nested scrollbar. The cap
-     only bites on short viewports and in the collapsed one-column layout. */
-  max-height: min(62vh, 620px);
-  min-height: 220px;
-  border: 1px solid var(--line, #e2e8f0);
-  border-radius: 8px;
-  overflow: auto;
-  background: #eef2f6;
-  display: flex;
-  justify-content: center;
-  padding: 8px;
-}
-
-/* A4 portrait: 210mm x 297mm. aspect-ratio holds the proportions at any width,
-   and the 4.762% padding is 10mm/210mm — the same @page margin jpegToPdfBlob
-   lays the bitmap inside — so the preview is the downloaded page, to scale.
-   No max-width: the sheet fills the panel at every breakpoint, so desktop and
-   tablet get the same edge-to-edge page mobile already had, with no dead
-   backdrop either side of it. */
-.cn-approve-page {
-  flex: 0 0 auto;
-  align-self: flex-start;
-  width: 100%;
-  aspect-ratio: 210 / 297;
-  padding: 4.762%;
-  background: #fff;
-  box-shadow: 0 1px 8px rgba(15, 23, 42, 0.16);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Fit inside the margins preserving aspect ratio, then centre — mirroring the
-   PDF's own placement, so nothing is cropped. */
-.cn-approve-page-img {
-  display: block;
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-}
-
-.cn-approve-preview-state {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  color: #64748b;
-  text-align: center;
-  padding: 12px;
-}
-.cn-approve-preview-state.is-error {
-  color: #b91c1c;
 }
 
 /* ---- recipients ---- */
@@ -4473,28 +4394,14 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   color: #b91c1c;
 }
 
-/* Roster row: leading marker (person icon in the 2D dialog, a checkbox in the 3D
-   one — see .p3da-user), then name + role. The 2D list is read-only: it says who
-   is on the case, it doesn't pick who gets mail. */
+/* Roster row: a checkbox, then name + role. Both approval dialogs use it as a
+   recipient picker — see the .is-pick rules further down. */
 .cn-approve-user {
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 7px 8px;
   border-radius: 6px;
-}
-
-.cn-approve-user-icon {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: #f1f5f9;
-  color: #64748b;
-  font-size: 11px;
 }
 
 .cn-approve-user-name {
@@ -4607,31 +4514,25 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   color: #b91c1c;
 }
 
-@media (max-width: 640px) {
-  .cn-approve-preview {
-    max-height: 320px;
-  }
-}
 
-/* ---- 3D approval dialog (preview3DApproval.js) -------------------------- */
-/* Reuses the .cn-approve-* frame above; only what differs is defined here: the
-   two arch renders on the left, and recipient checkboxes on the roster rows. */
-
-/* Upper above lower, each sized to the render's own aspect — the captures come
-   off a wide canvas, so a fixed frame height would letterbox them. */
-.p3da-shots {
+/* ---- what is being approved (caseNote.js buildShotsSection) ------------- */
+/* Shared by both approval dialogs: the 2D one shows the arch designs, the 3D one
+   the uploaded files. Upper above lower, each sized to the render's own aspect —
+   the captures come off a wide canvas, so a fixed frame height would letterbox
+   them. */
+.cn-approve-shots {
   display: grid;
   gap: 12px;
 }
 
-.p3da-shot {
+.cn-approve-shot {
   margin: 0;
   display: grid;
   gap: 6px;
 }
 
 /* The caption is the checkbox's label: ticking it attaches that render. */
-.p3da-shot-label {
+.cn-approve-shot-label {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -4643,17 +4544,17 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   cursor: pointer;
 }
 
-.p3da-shot-check {
+.cn-approve-shot-check {
   width: 15px;
   height: 15px;
   accent-color: var(--rose-500, #3bae95);
   cursor: pointer;
 }
-.p3da-shot-check:disabled {
+.cn-approve-shot-check:disabled {
   cursor: default;
 }
 
-.p3da-shot-frame {
+.cn-approve-shot-frame {
   display: grid;
   place-items: center;
   min-height: 84px;
@@ -4666,31 +4567,153 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
 /* Height-capped rather than width-filled: the captures come off a wide canvas, so
    at width:100% their aspect ratio alone made each panel ~190px tall. max-width
    keeps them from overflowing a narrow dialog. */
-.p3da-shot-img {
+.cn-approve-shot-img {
   display: block;
   max-width: 100%;
   max-height: 150px;
   object-fit: contain;
 }
 
-.p3da-shot-empty {
+.cn-approve-shot-empty {
   margin: 0;
   font-size: 13px;
   color: #64748b;
 }
 
-/* Roster row as a recipient picker: the whole row is the checkbox's label, with
-   the address on its own line under the name (side by side, the two ellipse each
-   other away in a 280px column). */
-.p3da-user {
+/* ---- attachments (caseNote.js buildAttachmentsSection) ------------------ */
+/* The upload tile under the renders. A <button>, not a label wrapping the file
+   input, so it can also be a drop target — the input itself is off-screen. */
+.cn-approve-attach-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  padding: 14px 12px;
+  border: 1px dashed var(--line, #cbd5e1);
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #64748b;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+.cn-approve-attach-drop:hover,
+.cn-approve-attach-drop.is-over {
+  border-color: var(--rose-500, #3bae95);
+  background: #f0fbf8;
+  color: var(--rose-700, #25735f);
+}
+.cn-approve-attach-drop .fa {
+  font-size: 20px;
+}
+
+.cn-approve-attach-drop-text {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cn-approve-attach-drop-hint {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* Off-screen rather than display:none — a hidden input can't be opened by
+   .click() in every browser, and this one is driven by the tile above it. */
+.cn-approve-attach-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Wraps rather than scrolls: the tiles are small and the column is the taller
+   axis here, so a second row reads better than a hidden overflow. */
+.cn-approve-attach-list:not(:empty) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cn-approve-attach-tile {
+  position: relative;
+  margin: 0;
+  width: 84px;
+  display: grid;
+  gap: 3px;
+}
+
+.cn-approve-attach-thumb {
+  display: block;
+  width: 84px;
+  height: 62px;
+  object-fit: cover;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 6px;
+  background: #fff;
+}
+
+/* Sits on the corner of its own thumbnail — the tiles are too small to give the
+   control a row of its own. */
+.cn-approve-attach-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 50%;
+  background: #fff;
+  color: #64748b;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.16);
+}
+.cn-approve-attach-remove:hover {
+  border-color: #b91c1c;
+  color: #b91c1c;
+}
+
+.cn-approve-attach-name {
+  font-size: 10px;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cn-approve-attach-status {
+  margin: 0;
+  font-size: 11px;
+  color: #64748b;
+}
+.cn-approve-attach-status.is-error {
+  color: #b91c1c;
+}
+
+/* ---- roster row as a recipient picker ---------------------------------- */
+/* The whole row is the checkbox's label, with the address on its own line under
+   the name (side by side, the two ellipse each other away in a 280px column). */
+.cn-approve-user.is-pick {
   align-items: flex-start;
   cursor: pointer;
 }
-.p3da-user:hover {
+.cn-approve-user.is-pick:hover {
   background: #f8fafc;
 }
 
-.p3da-user-check {
+.cn-approve-user-check {
   flex-shrink: 0;
   width: 15px;
   height: 15px;
@@ -4699,18 +4722,18 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   cursor: pointer;
 }
 
-.p3da-user-text {
+.cn-approve-user-text {
   display: grid;
   gap: 2px;
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.p3da-user .cn-approve-user-role {
+.cn-approve-user.is-pick .cn-approve-user-role {
   white-space: nowrap;
 }
 
-.p3da-user-email {
+.cn-approve-user-email {
   min-width: 0;
   font-size: 11px;
   color: #94a3b8;
@@ -4719,23 +4742,23 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   white-space: nowrap;
 }
 
-/* Two-line rows need more room before the list starts scrolling than the 2D
-   dialog's single-line ones. */
-.cn-approve-users:has(.p3da-user) {
+/* Two-line rows need more room before the list starts scrolling than a
+   single-line roster would. */
+.cn-approve-users:has(.is-pick) {
   max-height: 232px;
 }
 
 /* No resolvable address (role rows carry none and user/getall is admin-only):
    the row still lists the person, but can't be ticked. */
-.p3da-user.is-unreachable {
+.cn-approve-user.is-unreachable {
   cursor: default;
 }
-.p3da-user.is-unreachable:hover {
+.cn-approve-user.is-unreachable:hover {
   background: none;
 }
-.p3da-user.is-unreachable .cn-approve-user-username {
+.cn-approve-user.is-unreachable .cn-approve-user-username {
   color: #64748b;
 }
-.p3da-user.is-unreachable .p3da-user-check {
+.cn-approve-user.is-unreachable .cn-approve-user-check {
   cursor: default;
 }

@@ -5456,8 +5456,16 @@ function removeViewerLoadingScreen() {
     4: "lower.svg",
   };
   // Slot colours are kept identical to the 3D preview panel so the same upload
-  // reads the same in both places (EXTRA_STL_COLOR / METAL_RPD_COLOR there).
-  const EXTRA_STL_COLOR = 0xb0875a; // jaw tan
+  // reads the same in both places (extraJawColor / METAL_RPD_COLOR there).
+  //
+  // The jaw slots take the same light tan as the viewer's OWN jaw meshes, whose
+  // vertex colours are 208/190/141 (see STLMeshLoader). Float components go into
+  // THREE.Color unconverted — three treats them as already-linear — which is what
+  // makes it that light cream. The 0xb0875a hex this replaced took the other path
+  // (a hex is read as sRGB and converted to linear) and landed a much darker
+  // brown, so an uploaded jaw read as a different material from the scan it
+  // sits beside.
+  const EXTRA_STL_JAW_COLOR = new THREE.Color(208 / 255, 190 / 255, 141 / 255);
   const METAL_RPD_COLOR = 0xd6dadf; // brushed cobalt-chrome / stainless
 
   function disposeDesignSlotMesh(mesh) {
@@ -5490,7 +5498,9 @@ function removeViewerLoadingScreen() {
     // tan, metal-RPD slots in brushed cobalt-chrome.
     const isMetalRpd = METAL_RPD_SLOTS.has(slot);
     const slotMaterial = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(isMetalRpd ? METAL_RPD_COLOR : EXTRA_STL_COLOR),
+      // Passing a Color copies it into the material's own instance, so the shared
+      // jaw constant above is never mutated by a slot.
+      color: isMetalRpd ? new THREE.Color(METAL_RPD_COLOR) : EXTRA_STL_JAW_COLOR,
       opacity: 1,
       transparent: false,
       side: THREE.DoubleSide,
