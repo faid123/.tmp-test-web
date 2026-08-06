@@ -5461,9 +5461,11 @@ function removeViewerLoadingScreen() {
     3: "Icon_LowerJaw_Occlusal.png",
     4: "lower.svg",
   };
-  // Slot colours are kept identical to the 3D preview panel so the same upload
-  // reads the same in both places (EXTRA_STL_COLOR / METAL_RPD_COLOR there).
-  const EXTRA_STL_COLOR = 0xb0875a; // jaw tan
+  // Jaw tan, three tones lighter than the 2D preview panel's EXTRA_STL_COLOR
+  // (0xb0875a) — this 3D viewer's version was reading too dark next to the
+  // original jaw mesh's tan. Deliberately not kept in sync with the preview
+  // panel's colour anymore.
+  const EXTRA_STL_COLOR = 0xbe9d78; // jaw tan
   const METAL_RPD_COLOR = 0xd6dadf; // brushed cobalt-chrome / stainless
 
   function disposeDesignSlotMesh(mesh) {
@@ -6135,7 +6137,7 @@ function removeViewerLoadingScreen() {
     caseMeshRequested = true;
     const ownsLoadingScreen = !document.getElementById("viewer-loading-screen");
     if (ownsLoadingScreen) createViewerLoadingScreen();
-    window.updateViewerLoading?.("Loading 3D scan…");
+    window.updateViewerLoading?.("Loading Original 3D Scan…");
 
     try {
       // Heatmaps first: renderCaseMeshes colours the jaws from undercut_values.

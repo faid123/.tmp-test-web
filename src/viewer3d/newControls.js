@@ -631,8 +631,22 @@ function createComponentPanel(groups) {
       : "Show all available objects";
   };
 
+  // Some cases don't have polylines/artificial teeth generated yet, so their
+  // rows render disabled (row.hasContent below). Left in their fixed
+  // jaw/mesh/polylines/teeth slots, an unavailable row can sit above
+  // components the user actually has, forcing a scroll past dead rows to
+  // reach them. Sinking unavailable rows to the bottom keeps everything
+  // usable within reach at the top. Array#sort is stable, so rows that share
+  // an availability state keep their original relative order.
+  const reorderRows = () => {
+    [...rowControllers]
+      .sort((a, b) => Number(b.hasContent()) - Number(a.hasContent()))
+      .forEach(({ row }) => body.appendChild(row));
+  };
+
   const syncAllRows = () => {
     rowControllers.forEach((controller) => controller.sync());
+    reorderRows();
     syncShowHideButton();
   };
 
@@ -812,6 +826,12 @@ function createComponentPanel(groups) {
     body.appendChild(row);
 
     rowControllers.push({
+      row,
+      // Not every case has polylines/artificial teeth generated yet, so a
+      // component can go from unavailable to available (or back) after the
+      // panel was built. Read fresh each reorder rather than cached at
+      // creation time.
+      hasContent: () => group.hasContent?.() ?? true,
       sync: () => {
         const hasContent = group.hasContent?.() ?? true;
         const isVisible = hasContent && (group.getVisible?.() ?? true);

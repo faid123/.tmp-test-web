@@ -17,7 +17,11 @@ import { PAGE_LABELS, PAGE_PATHS, TOPIC_BY_ID } from "./helpTopics.js";
 import { localProvider, relatedTopics, suggestionsFor } from "./helpMatcher.js";
 
 const TRANSCRIPT_MAX = 30;
-const HIGHLIGHT_MS = 3200;
+const HIGHLIGHT_MS = 6000;
+// The dimming fades on its own well before the ring does — it's there to catch
+// the eye onto the right control, not to keep the rest of the page darkened for
+// the whole highlight.
+const SPOTLIGHT_MS = 4000;
 const CLOSE_MS = 220;
 const REVEAL_TIMEOUT_MS = 1500;
 
@@ -123,6 +127,57 @@ async function resolveTarget(topic) {
   return isVisible(el) ? el : null;
 }
 
+// Dims the rest of the page around the "Show me" target, the same spotlight
+// trick pageTour.js uses: a box-shadow with a huge spread paints everywhere
+// OUTSIDE the element's own rect, so the rect itself stays transparent and the
+// real control shows through it — no extra z-index juggling needed. A ring
+// alone can get lost on a busy screen; the dimming is what makes it obvious.
+let spotlightEl = null;
+let spotlightCleanup = null;
+
+function ensureSpotlight() {
+  if (spotlightEl) return spotlightEl;
+  spotlightEl = document.createElement("div");
+  spotlightEl.className = "hb-spotlight";
+  document.body.appendChild(spotlightEl);
+  return spotlightEl;
+}
+
+function positionSpotlight(el) {
+  const r = el.getBoundingClientRect();
+  const pad = 6;
+  spotlightEl.style.top = `${r.top - pad}px`;
+  spotlightEl.style.left = `${r.left - pad}px`;
+  spotlightEl.style.width = `${r.width + pad * 2}px`;
+  spotlightEl.style.height = `${r.height + pad * 2}px`;
+}
+
+// Follows `el` through the smooth scroll that just brought it into view (and
+// any resize), then fades itself out after SPOTLIGHT_MS — shorter than the
+// ring's HIGHLIGHT_MS, since the dimming only needs to catch the eye, not stay
+// dark for the whole highlight.
+function showSpotlight(el) {
+  hideSpotlight();
+  ensureSpotlight();
+  const reposition = () => positionSpotlight(el);
+  reposition();
+  window.addEventListener("scroll", reposition, true);
+  window.addEventListener("resize", reposition);
+  const fadeTimer = setTimeout(() => spotlightEl.classList.remove("is-visible"), SPOTLIGHT_MS);
+  spotlightCleanup = () => {
+    window.removeEventListener("scroll", reposition, true);
+    window.removeEventListener("resize", reposition);
+    clearTimeout(fadeTimer);
+  };
+  requestAnimationFrame(() => spotlightEl.classList.add("is-visible"));
+}
+
+function hideSpotlight() {
+  spotlightEl?.classList.remove("is-visible");
+  spotlightCleanup?.();
+  spotlightCleanup = null;
+}
+
 // Scroll the topic's control into view and ring it briefly. Returns false when
 // it isn't reachable on this page, so the caller can offer a deep link instead.
 async function showControl(topic) {
@@ -135,9 +190,11 @@ async function showControl(topic) {
   clearHighlight?.();
   el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
   el.classList.add("hb-highlight");
+  showSpotlight(el);
 
   const done = () => {
     el.classList.remove("hb-highlight");
+    hideSpotlight();
     document.removeEventListener("pointerdown", done, true);
     clearHighlight = null;
   };
