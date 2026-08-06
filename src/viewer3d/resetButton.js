@@ -35,8 +35,15 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 46px;
-            height: 46px;
+            /* Single source of truth for size: index.js's responsive rules set
+               --toolbar-btn-size on an ancestor (#viewer-nav-toolbar) per
+               breakpoint instead of declaring their own width/height here —
+               two separately-injected <style> tags both hardcoding a width
+               for #reset-button used to tie on specificity, and which one won
+               depended on script load order. Reading a variable means there's
+               only ever one declaration in effect, so there's no tie to win. */
+            width: var(--toolbar-btn-size, 46px);
+            height: var(--toolbar-btn-size, 46px);
             box-shadow: none;
             transition: filter 0.2s, transform 0.2s;
         }
@@ -72,8 +79,9 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
             color: #ffffff;
             font-family: Arial, sans-serif;
             cursor: pointer;
-            width: 46px;
-            height: 46px;
+            /* See #reset-button above — same single-source-of-truth variable. */
+            width: var(--toolbar-btn-size, 46px);
+            height: var(--toolbar-btn-size, 46px);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -119,7 +127,11 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
     function handleResetButtonClick() {
         // Add class to trigger animation
         resetButton.classList.add('clicked');
-        camera.copy(clone)
+        // `false` = non-recursive copy: only transform/zoom are restored.
+        // A recursive copy (the default) would re-add clones of the camera's
+        // light children (key/fill/rim lights parented to the camera) on top
+        // of the existing ones every click, additively brightening the scene.
+        camera.copy(clone, false)
         // Reset the camera zoom
         camera.zoom = 7;
         camera.updateProjectionMatrix();

@@ -1226,22 +1226,16 @@ function bindPreviewPanelToggle() {
       if (restoreIcon) restoreIcon.style.display = "none";
     }
     shell._previewMode = mode;
-    try {
-      localStorage.setItem("previewPanelMode", mode);
-    } catch {
-      // ignore storage failures
-    }
+    // Restoring the split view is also how the 3D panel's extra-STL stage is
+    // dismissed: preview3D.js listens for this and puts the original jaws back.
+    window.dispatchEvent(new CustomEvent("preview-panel-mode", { detail: { mode } }));
     window.dispatchEvent(new Event("resize"));
   };
 
-  let mode = "split";
-  try {
-    const stored = localStorage.getItem("previewPanelMode");
-    if (stored === "max" || stored === "split") mode = stored;
-  } catch {
-    mode = "split";
-  }
-  applyMode(mode);
+  // Every load starts split, showing the original jaws — the mode is deliberately
+  // NOT remembered, since the maximize is mostly driven by opening "Other 3D
+  // files" (and by survey aiming), not by a standing preference.
+  applyMode("split");
 
   btn.addEventListener("click", () => {
     applyMode(shell._previewMode === "max" ? "split" : "max");

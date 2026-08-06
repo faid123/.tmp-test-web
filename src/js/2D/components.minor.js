@@ -1,10 +1,11 @@
-import { getComponentTemplateToothId } from "./components.mesh.js";
+import { getComponentTemplateToothId, isMeshComponent } from "./components.mesh.js";
 import { isBarComponent } from "./components.bar.js";
 import {
   isReciprocatingClaspComponent,
   isRetainerClaspComponent,
   isRingClaspComponent,
 } from "./components.clasp.js";
+import { isPlateComponentId } from "./components.plate.js";
 import { isRestComponent } from "./components.rest.js";
 import { normalizeSurface } from "./toothUtils.js";
 
@@ -206,16 +207,47 @@ function getWrappedArmConnectorSide(tooth) {
   return claspSide;
 }
 
+/** A site already reaches the major connector when it carries a reciprocating element
+ *  (reciprocating clasp / plate) or is itself meshed — the saddle continues into it. */
+function hasReciprocatingOrMeshElement(tooth) {
+  if (!tooth || !Array.isArray(tooth.componentPlacements)) return false;
+  return tooth.componentPlacements.some(
+    ({ componentId }) =>
+      isReciprocatingClaspComponent(componentId) ||
+      isPlateComponentId(componentId) ||
+      isMeshComponent(componentId)
+  );
+}
+
+/** Sides a meshed saddle must bridge itself: the neighbour across that embrasure is a
+ *  present tooth carrying no reciprocating element and no mesh, so nothing else joins
+ *  the mesh to the major connector there. Needs `neighbors` — without it, no mesh sides. */
+function getMeshMinorConnectorSides(tooth, neighbors) {
+  const sides = { mesial: false, distal: false };
+  if (!neighbors) return sides;
+  if (!tooth.componentPlacements.some((entry) => isMeshComponent(entry.componentId))) return sides;
+  for (const side of ["mesial", "distal"]) {
+    const neighbor = neighbors[side];
+    if (!neighbor || !neighbor.isPresent) continue;
+    if (hasReciprocatingOrMeshElement(neighbor)) continue;
+    sides[side] = true;
+  }
+  return sides;
+}
+
 /**
  * Which embrasure side(s) a tooth's minor connector attaches on, from placed components
  * (mirrors desktop GetConnectorData + isMesio): a rest/bar sits on its own surface; a
  * retentive clasp anchors at its ORIGIN, opposite the tip (mesial-tip → connects distally).
  * A reciprocating clasp isn't a retainer, so it's ignored. Returns `{ mesial, distal }`.
  *
+ * `neighbors` — `{ mesial, distal }` tooth records across each embrasure — enables the
+ * mesh rule (see getMeshMinorConnectorSides); omit it for pure single-tooth derivation.
+ *
  * Exception: a wrapped arm (see getWrappedArmConnectorSide) joins at the clasp's own
  * side, which replaces the derivation rather than adding to it.
  */
-export function getMinorConnectorSupportSides(tooth) {
+export function getMinorConnectorSupportSides(tooth, neighbors = null) {
   const sides = { mesial: false, distal: false };
   if (!tooth || !Array.isArray(tooth.componentPlacements)) return sides;
 
@@ -224,6 +256,10 @@ export function getMinorConnectorSupportSides(tooth) {
     sides[wrappedArmSide] = true;
     return sides;
   }
+
+  const meshSides = getMeshMinorConnectorSides(tooth, neighbors);
+  sides.mesial = meshSides.mesial;
+  sides.distal = meshSides.distal;
 
   for (const placement of tooth.componentPlacements) {
     const id = placement?.componentId;

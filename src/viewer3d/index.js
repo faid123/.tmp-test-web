@@ -15,8 +15,6 @@ import { ApiClient } from "./ApiClient.js";
 import { addResetButton } from "./resetButton.js";
 import { lol } from "../js/shared/crypt.js";
 import "../js/pages/createCase.js";
-import { logApi } from "../js/shared/apiLog.js";
-import { toast } from "../js/shared/toast.js";
 import {
   addVisibilityAndTransparencyControls,
   removeVisibilityAndTransparencyControls,
@@ -3488,18 +3486,6 @@ function removeViewerLoadingScreen() {
           btnContainer.style.flexDirection = "column";
           btnContainer.style.gap = "6px";
 
-          /* const approve2DStatic = document.createElement('button');
-approve2DStatic.className = 'smart-btn approve';
-approve2DStatic.textContent = 'Approve 2D';
-approve2DStatic.onclick = () => sendEmail("Your 2D Design has been APPROVED.");
-btnContainer.appendChild(approve2DStatic);
-
-const edit2DStatic = document.createElement('button');
-edit2DStatic.className = 'smart-btn edit';
-edit2DStatic.textContent = 'Edit 2D';
-edit2DStatic.onclick = () => sendEmail("Please do some modifications on 2D Design. See Notebox.");
-btnContainer.appendChild(edit2DStatic); */
-
           // Append buttons to wrapper
           thumbWrapper.appendChild(btnContainer);
 
@@ -3573,26 +3559,6 @@ btnContainer.appendChild(edit2DStatic); */
             // Buttons container
             const btnContainer2D = document.createElement("div");
             btnContainer2D.className = "smart-btn-container-2d";
-
-            const approve2D = document.createElement("button");
-            approve2D.className = "smart-btn approve";
-            approve2D.setAttribute("aria-label", "Approve 2D");
-            approve2D.title = "Approve 2D";
-            approve2D.innerHTML = `<img src="${basePath}/assets/Icon_approve.png" alt="Approve 2D">`;
-            approve2D.onclick = () =>
-              sendEmail("Your 2D Design has been APPROVED.");
-            btnContainer2D.appendChild(approve2D);
-
-            const edit2D = document.createElement("button");
-            edit2D.className = "smart-btn edit";
-            edit2D.setAttribute("aria-label", "Edit 2D");
-            edit2D.title = "Edit 2D";
-            edit2D.innerHTML = `<img src="${basePath}/assets/Icon_edit.png" alt="Edit 2D">`;
-            edit2D.onclick = () =>
-              sendEmail(
-                "Please do some modifications on 2D Design. See Notebox."
-              );
-            btnContainer2D.appendChild(edit2D);
 
             // 🟣 创建 Annotate 按钮（跳转到 2DAnnotate.html）
             const annotateBtn = document.createElement("button");
@@ -3735,18 +3701,6 @@ btnContainer.appendChild(edit2DStatic); */
 			  // Buttons container
 			  const btnContainer2D = document.createElement('div');
 			  btnContainer2D.className = 'smart-btn-container-2d';
-
-			  const approve2D = document.createElement('button');
-			  approve2D.className = 'smart-btn approve';
-			  approve2D.textContent = 'Approve 2D';
-			  approve2D.onclick = () => sendEmail("Your 2D Design has been APPROVED.");
-			  btnContainer2D.appendChild(approve2D);
-
-			  const edit2D = document.createElement('button');
-			  edit2D.className = 'smart-btn edit';
-			  edit2D.textContent = 'Edit 2D';
-			  edit2D.onclick = () => sendEmail("Please do some modifications on 2D Design. See Notebox.");
-			  btnContainer2D.appendChild(edit2D);
 
 			  twodGroup.appendChild(btnContainer2D);
 			  overlay.appendChild(twodGroup);
@@ -3911,33 +3865,6 @@ btnContainer.appendChild(edit2DStatic); */
           // === NEW: Container for 3D Buttons under Chat ===
           const btnContainer3D = document.createElement("div");
           btnContainer3D.className = "smart-btn-container-3d";
-
-          // Create "Nudge" button
-          /* 		const nudgeButton = document.createElement('button');
-		nudgeButton.textContent = 'Nudge';
-		nudgeButton.className = 'smart-btn nudge';
-		nudgeButton.addEventListener('click', function () {
-			sendEmail("You have received a NUDGE. Please check your case.");
-		});
-		btnContainer.appendChild(nudgeButton); */
-
-          /* 		// Create "Approve" button
-		const approveButton = document.createElement('button');
-		approveButton.textContent = 'Approve 2D';
-		approveButton.className = 'smart-btn approve';
-		approveButton.addEventListener('click', function () {
-			sendEmail("Your 2D Design has been APPROVED.");
-		});
-		btnContainer2D.appendChild(approveButton);
-
-		// Create "Edit" button
-		const editButton = document.createElement('button');
-		editButton.textContent = 'Edit 2D';
-		editButton.className = 'smart-btn edit';
-		editButton.addEventListener('click', function () {
-			sendEmail("Please do some modifications on 2D Design. See Notebox.");
-		});
-		btnContainer2D.appendChild(editButton); */
 
           // Switches between the uploaded design (the landing view) and the
           // case's own scan + polylines + artificial teeth. Both stay loaded, so
@@ -4218,6 +4145,15 @@ btnContainer.appendChild(edit2DStatic); */
   #design-upload-prompt .dup-slot:hover:not(:disabled) {
       border-color: #4fa3e8;
       background: rgba(79, 163, 232, 0.16);
+  }
+
+  /* A file dragged over an empty, idle slot — same highlight as hover, plus a
+     solid border so the drop target reads clearly while the pointer is busy
+     carrying a file instead of showing a normal cursor. */
+  #design-upload-prompt .dup-slot-wrap.is-dragover .dup-slot {
+      border-style: solid;
+      border-color: #4fa3e8;
+      background: rgba(79, 163, 232, 0.22);
   }
 
   /* Per-slot progress: each file reports itself in its own tile, replacing the
@@ -4937,10 +4873,21 @@ btnContainer.appendChild(edit2DStatic); */
       gap: 8px;
       z-index: auto;
       order: 4;
+      /* Matches .twod-mobile-trigger / .preset-view-current's height at this
+         breakpoint. The reset/lock buttons live inside this toolbar (appended
+         here by resetButton.js's topRow), so without an explicit height the
+         toolbar is only as tall as its ~52px buttons — shorter than its 58px
+         siblings — and the outer row's align-items: center then sinks the
+         whole toolbar (all 4 icons) below the 2D/preset-view buttons instead
+         of keeping every icon on one line. */
+      height: 58px;
+      /* The one place #reset-button/#lock-rotation-button's size is set for
+         this breakpoint — resetButton.js's own stylesheet reads this variable
+         instead of hardcoding a width/height, so there's no second, tied
+         declaration to fight with (see the var() comment in resetButton.js). */
+      --toolbar-btn-size: 52px;
     }
 
-    #reset-button,
-    #lock-rotation-button,
     #viewer-nav-toolbar .smart-btn {
       display: flex !important;
       flex: 0 0 auto;
@@ -4953,6 +4900,14 @@ btnContainer.appendChild(edit2DStatic); */
     #reset-icon {
       width: 32px;
       height: 32px;
+      /* reset.png/lock.png read slightly lower than the other toolbar icons
+         once centered in their button — nudge both up a touch. Tablet/mobile
+         only; desktop reset button is unaffected. */
+      margin-bottom: 3px;
+    }
+
+    #lock-rotation-button img {
+      margin-bottom: 3px;
     }
 
     #viewer-nav-toolbar .smart-btn img {
@@ -5260,10 +5215,17 @@ btnContainer.appendChild(edit2DStatic); */
       gap: 6px;
       z-index: auto;
       order: 4;
+      /* Matches .twod-mobile-trigger / .preset-view-current's height at this
+         breakpoint — see the tablet rule above for why this is needed: without
+         it the toolbar (which holds the reset/lock buttons too) is shorter
+         than its siblings and the whole cluster of icons visibly sinks below
+         the 2D and preset-view buttons instead of sitting in one line. */
+      height: 56px;
+      /* See the tablet rule above — the only place reset/lock's size is set
+         for this breakpoint, read by resetButton.js's var(). */
+      --toolbar-btn-size: 48px;
     }
 
-    #reset-button,
-    #lock-rotation-button,
     #viewer-nav-toolbar .smart-btn {
       display: flex !important;
       flex: 0 0 auto;
@@ -5277,6 +5239,14 @@ btnContainer.appendChild(edit2DStatic); */
       width: 30px;
       height: 30px;
       margin-right: 0;
+      /* reset.png/lock.png read slightly lower than the other toolbar icons
+         once centered in their button — nudge both up a touch. Phone/tablet
+         only; desktop reset button is unaffected. */
+      margin-bottom: 3px;
+    }
+
+    #lock-rotation-button img {
+      margin-bottom: 3px;
     }
 
     #viewer-nav-toolbar .smart-btn img {
@@ -5417,87 +5387,6 @@ btnContainer.appendChild(edit2DStatic); */
   }
 `;
   document.head.appendChild(style);
-
-  // Extract encrypted case ID from address bar
-  const urlParams = new URLSearchParams(window.location.search);
-  const encryptedID = urlParams.get("id");
-
-  // Use the full viewer URL in the email
-  const viewerURL = `https://faid123.github.io/.tmp-test-web/src/pages/ThreeDViewer.html?id=${encodeURIComponent(
-    encryptedID
-  )}`;
-
-  // Function to send email for Approve or Edit action
-  function sendEmail(actionType) {
-    const apiUrl = `${API_BASE}/sendEmail`;
-
-    const emailData = {
-      //userEmail: "faid_akatsuki@live.com",  // replace as needed
-      action: actionType,
-      case_id: window.caseID,
-      case_int_id: paramValue, // for database queries (e.g., 1199)
-      last_edited: window.lastEdited,
-      username: window.username,
-      viewer_url: viewerURL, // include this as a new field
-      thumbnail: window.thumbnailBase64
-        ? `data:image/png;base64,${window.thumbnailBase64}`
-        : null,
-    };
-
-    fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(emailData),
-    })
-      .then(async (response) => {
-        logApi(response, 'POST /sendEmail');
-        const contentType = response.headers.get("content-type");
-        const isJson =
-          contentType && contentType.indexOf("application/json") !== -1;
-
-        const data = isJson ? await response.json() : await response.text();
-
-        if (!response.ok) {
-          throw new Error(data.message || data || "Unknown error");
-        }
-
-        console.log("Email sent successfully:", data);
-        toast.success("Email sent successfully to associated users.");
-      })
-      .catch((error) => {
-        console.error("Error sending email:", error);
-        toast.error("Failed to send email. Please try again.");
-      });
-  }
-
-  // Function to send email to a custom email address
-  function sendCustomEmail(email) {
-    if (!email) {
-      alert("Please enter a valid email address.");
-      return;
-    }
-
-    let apiUrl = `${API_BASE}/sendCustomEmail`;
-
-    let emailData = {
-      customEmail: email,
-      subject: "SmartRPD Custom Notification",
-      message: "This is a custom email message for your SmartRPD case.",
-    };
-
-    fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(emailData),
-    })
-      .then((response) => { logApi(response, 'POST /sendCustomEmail'); return response.json(); })
-      .then((data) => console.log("Custom email sent successfully:", data))
-      .catch((error) => console.error("Error sending custom email:", error));
-  }
 
   /* async function loadAllSTLSlots() {
     const apiUrl = "/stl/slot/get"; // only the endpoint, since apiClient handles base URL
@@ -5806,17 +5695,10 @@ btnContainer.appendChild(edit2DStatic); */
     });
   }
 
-  async function pickAndUploadSlot(slot, statusEl) {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".stl";
-    input.hidden = true;
-    document.body.appendChild(input);
-    const file = await new Promise((resolve) => {
-      input.addEventListener("change", () => resolve(input.files?.[0] || null));
-      input.click();
-    });
-    input.remove();
+  // Shared by the file-picker flow (pickAndUploadSlot) and drag-and-drop
+  // (wireSlotDropTarget): validates, uploads and renders one file into one
+  // slot. Either entry point just has to hand it a File.
+  async function uploadFileToSlot(file, slot, statusEl) {
     if (!file) return;
     if (!/\.stl$/i.test(file.name)) {
       statusEl.textContent = "Only .stl files are supported.";
@@ -5867,6 +5749,50 @@ btnContainer.appendChild(edit2DStatic); */
       clearSlotTileBusy(slot);
       setUploadPromptBusy(false);
     }
+  }
+
+  async function pickAndUploadSlot(slot, statusEl) {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".stl";
+    input.hidden = true;
+    document.body.appendChild(input);
+    const file = await new Promise((resolve) => {
+      input.addEventListener("change", () => resolve(input.files?.[0] || null));
+      input.click();
+    });
+    input.remove();
+    await uploadFileToSlot(file, slot, statusEl);
+  }
+
+  // Lets a slot tile accept a dragged-in STL directly, instead of only
+  // opening the file picker. Mirrors the click path's guard: a filled or
+  // busy slot won't accept a drop, the same as its tile being disabled.
+  function wireSlotDropTarget(wrap, slot, statusEl) {
+    const canAcceptDrop = () =>
+      !wrap.classList.contains("is-filled") && !wrap.classList.contains("is-busy");
+
+    wrap.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = canAcceptDrop() ? "copy" : "none";
+      if (canAcceptDrop()) wrap.classList.add("is-dragover");
+    });
+    wrap.addEventListener("dragleave", (event) => {
+      // Children re-fire dragenter/dragleave as the pointer crosses them —
+      // only clear the highlight once the pointer has actually left wrap.
+      if (wrap.contains(event.relatedTarget)) return;
+      wrap.classList.remove("is-dragover");
+    });
+    wrap.addEventListener("drop", (event) => {
+      event.preventDefault();
+      wrap.classList.remove("is-dragover");
+      if (!canAcceptDrop()) {
+        statusEl.textContent = "Delete the existing file before replacing it.";
+        return;
+      }
+      const file = event.dataTransfer.files?.[0];
+      if (file) uploadFileToSlot(file, slot, statusEl);
+    });
   }
 
   // Which slot numbers already hold a file, from the meshes themselves — a slot
@@ -6110,6 +6036,7 @@ btnContainer.appendChild(edit2DStatic); */
         `<progress class="dup-slot-bar" max="100" value="0"></progress>` +
         `<span class="dup-slot-note"></span>`;
       tile.addEventListener("click", () => pickAndUploadSlot(slot, status));
+      wireSlotDropTarget(wrap, slot, status);
 
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
@@ -6145,6 +6072,12 @@ btnContainer.appendChild(edit2DStatic); */
     prompt.appendChild(card);
     (viewerContainer || document.body).appendChild(prompt);
     refreshUploadPromptSlots();
+
+    // A drop that lands on the card but misses a tile (gap between slots,
+    // heading, etc.) still has to be swallowed here — without this the
+    // browser's default action is to navigate to/open the dropped file.
+    prompt.addEventListener("dragover", (event) => event.preventDefault());
+    prompt.addEventListener("drop", (event) => event.preventDefault());
   }
 
   // The toolbar is built in another scope (same as syncDesignViewButton), so the

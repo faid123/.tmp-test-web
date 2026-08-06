@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>tour probe</title>
+    <link rel="stylesheet" href="../../css/style.css" />
+  </head>
+  <body>
+    <div class="viewer-shell">
+      <div class="viewer-main">
+        <div id="container3D" style="background:linear-gradient(#dfe7ef,#b9c6d4);display:flex;align-items:center;justify-content:center;font:600 20px Arial;color:#5b6b7d">3D stage</div>
+      </div>
+      <footer class="cm-footer viewer-footer">
+        <div class="cm-footer-left">
+          <button type="button" class="cm-footer-btn" id="footerMenuBtn">M</button>
+          <span class="cm-footer-case-label">Case : <span id="footerCaseName">1234</span></span>
+        </div>
+        <div class="cm-footer-right">
+          <span class="cm-footer-user">user</span>
+          <button type="button" class="cm-footer-btn" id="footerHelpBtn">?</button>
+          <button type="button" class="cm-footer-btn" id="footerAboutBtn">i</button>
+          <button type="button" class="cm-footer-btn cm-footer-chat-btn" id="footerChatBtn">C</button>
+        </div>
+      </footer>
+    </div>
+    <script type="module">
+      import { startPageTour } from "../js/shared/pageTour.js";
+      window.__next = () => document.getElementById("ptNext").click();
+      startPageTour({ pageId: "viewer_3d" });
+    </script>
+  </body>
+</html>
