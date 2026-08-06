@@ -887,8 +887,10 @@ function initializeCaseIds() {
 // Shared, memoized POST /case/get/:id. Reused by fetchCaseOwner and preview3D's
 // SET-SURVEY-ANGLE path (one request, not two). Started early in init() to overlap
 // module downloads. Resolves the detail object, or null on any failure.
-export function fetchCaseDetail() {
-  if (state.__caseDetailPromise) return state.__caseDetailPromise;
+// `force` re-reads instead of returning the memoized copy — required before any
+// full-row PUT /case/:id write, which must not send stale/partial fields.
+export function fetchCaseDetail({ force = false } = {}) {
+  if (!force && state.__caseDetailPromise) return state.__caseDetailPromise;
   if (!state.caseIntID) return Promise.resolve(null);
   const loggedInUser = getLoggedInUser();
   if (!loggedInUser?.uuid) return Promise.resolve(null);

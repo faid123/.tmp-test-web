@@ -4874,45 +4874,50 @@ function removeViewerLoadingScreen() {
       z-index: auto;
       order: 4;
       /* Matches .twod-mobile-trigger / .preset-view-current's height at this
-         breakpoint. The reset/lock buttons live inside this toolbar (appended
-         here by resetButton.js's topRow), so without an explicit height the
-         toolbar is only as tall as its ~52px buttons — shorter than its 58px
-         siblings — and the outer row's align-items: center then sinks the
-         whole toolbar (all 4 icons) below the 2D/preset-view buttons instead
-         of keeping every icon on one line. */
+         breakpoint, now that every button in the toolbar is grown to the same
+         58px as its siblings (see --toolbar-btn-size and .smart-btn below) —
+         keeps every icon sitting in one visual line instead of the smaller
+         "bare icon" buttons reading as a different, disconnected row. */
       height: 58px;
       /* The one place #reset-button/#lock-rotation-button's size is set for
          this breakpoint — resetButton.js's own stylesheet reads this variable
          instead of hardcoding a width/height, so there's no second, tied
          declaration to fight with (see the var() comment in resetButton.js). */
-      --toolbar-btn-size: 52px;
+      --toolbar-btn-size: 58px;
     }
 
     #viewer-nav-toolbar .smart-btn {
       display: flex !important;
+      /* Without these, the button is a flex container with no cross-axis
+         alignment set, so its icon (34-36px) sits flush at the top of the
+         button's now much taller 56-58px box instead of centered — the img's
+         own margin: 0 auto (from the base .smart-btn img rule) is honored as
+         flex auto-margin centering horizontally, but there's no vertical
+         equivalent, so it read as "floating" at the top. #reset-button /
+         #lock-rotation-button never had this because their own rule already
+         sets align-items/justify-content directly. */
+      align-items: center;
+      justify-content: center;
       flex: 0 0 auto;
-      width: 52px;
-      min-width: 52px;
-      height: 52px;
+      width: 58px;
+      min-width: 58px;
+      height: 58px;
       padding: 0;
     }
 
-    #reset-icon {
-      width: 32px;
-      height: 32px;
+    #reset-icon,
+    #lock-icon {
+      width: 36px;
+      height: 36px;
       /* reset.png/lock.png read slightly lower than the other toolbar icons
          once centered in their button — nudge both up a touch. Tablet/mobile
          only; desktop reset button is unaffected. */
       margin-bottom: 3px;
     }
 
-    #lock-rotation-button img {
-      margin-bottom: 3px;
-    }
-
     #viewer-nav-toolbar .smart-btn img {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
     }
 
   }
@@ -5216,28 +5221,33 @@ function removeViewerLoadingScreen() {
       z-index: auto;
       order: 4;
       /* Matches .twod-mobile-trigger / .preset-view-current's height at this
-         breakpoint — see the tablet rule above for why this is needed: without
-         it the toolbar (which holds the reset/lock buttons too) is shorter
-         than its siblings and the whole cluster of icons visibly sinks below
-         the 2D and preset-view buttons instead of sitting in one line. */
+         breakpoint, now that every button in the toolbar is grown to the same
+         56px as its siblings (see --toolbar-btn-size and .smart-btn below) —
+         keeps every icon sitting in one visual line instead of the smaller
+         "bare icon" buttons reading as a different, disconnected row. */
       height: 56px;
       /* See the tablet rule above — the only place reset/lock's size is set
          for this breakpoint, read by resetButton.js's var(). */
-      --toolbar-btn-size: 48px;
+      --toolbar-btn-size: 56px;
     }
 
     #viewer-nav-toolbar .smart-btn {
       display: flex !important;
+      /* See the tablet rule above — without these, the icon sits flush at
+         the top of the button's box instead of centered ("floating top"). */
+      align-items: center;
+      justify-content: center;
       flex: 0 0 auto;
-      width: 48px;
-      min-width: 48px;
-      height: 48px;
+      width: 56px;
+      min-width: 56px;
+      height: 56px;
       padding: 0;
     }
 
-    #reset-icon {
-      width: 30px;
-      height: 30px;
+    #reset-icon,
+    #lock-icon {
+      width: 34px;
+      height: 34px;
       margin-right: 0;
       /* reset.png/lock.png read slightly lower than the other toolbar icons
          once centered in their button — nudge both up a touch. Phone/tablet
@@ -5245,13 +5255,9 @@ function removeViewerLoadingScreen() {
       margin-bottom: 3px;
     }
 
-    #lock-rotation-button img {
-      margin-bottom: 3px;
-    }
-
     #viewer-nav-toolbar .smart-btn img {
-      width: 30px;
-      height: 30px;
+      width: 34px;
+      height: 34px;
     }
 
   }
@@ -5456,8 +5462,16 @@ function removeViewerLoadingScreen() {
     4: "lower.svg",
   };
   // Slot colours are kept identical to the 3D preview panel so the same upload
-  // reads the same in both places (EXTRA_STL_COLOR / METAL_RPD_COLOR there).
-  const EXTRA_STL_COLOR = 0xb0875a; // jaw tan
+  // reads the same in both places (extraJawColor / METAL_RPD_COLOR there).
+  //
+  // The jaw slots take the same light tan as the viewer's OWN jaw meshes, whose
+  // vertex colours are 208/190/141 (see STLMeshLoader). Float components go into
+  // THREE.Color unconverted — three treats them as already-linear — which is what
+  // makes it that light cream. The 0xb0875a hex this replaced took the other path
+  // (a hex is read as sRGB and converted to linear) and landed a much darker
+  // brown, so an uploaded jaw read as a different material from the scan it
+  // sits beside.
+  const EXTRA_STL_JAW_COLOR = new THREE.Color(208 / 255, 190 / 255, 141 / 255);
   const METAL_RPD_COLOR = 0xd6dadf; // brushed cobalt-chrome / stainless
 
   function disposeDesignSlotMesh(mesh) {
@@ -5490,7 +5504,9 @@ function removeViewerLoadingScreen() {
     // tan, metal-RPD slots in brushed cobalt-chrome.
     const isMetalRpd = METAL_RPD_SLOTS.has(slot);
     const slotMaterial = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(isMetalRpd ? METAL_RPD_COLOR : EXTRA_STL_COLOR),
+      // Passing a Color copies it into the material's own instance, so the shared
+      // jaw constant above is never mutated by a slot.
+      color: isMetalRpd ? new THREE.Color(METAL_RPD_COLOR) : EXTRA_STL_JAW_COLOR,
       opacity: 1,
       transparent: false,
       side: THREE.DoubleSide,
@@ -6129,7 +6145,7 @@ function removeViewerLoadingScreen() {
     caseMeshRequested = true;
     const ownsLoadingScreen = !document.getElementById("viewer-loading-screen");
     if (ownsLoadingScreen) createViewerLoadingScreen();
-    window.updateViewerLoading?.("Loading 3D scan…");
+    window.updateViewerLoading?.("Loading Original 3D Scan…");
 
     try {
       // Heatmaps first: renderCaseMeshes colours the jaws from undercut_values.

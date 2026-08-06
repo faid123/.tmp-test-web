@@ -39,8 +39,7 @@ import {
   WORK_CATEGORY_OPTIONS,
   STATUS_2D_DESIGN_APPROVED,
   confirmCaseNoteApproval,
-  prepareApprovalReport,
-  sendCaseApprovalEmail,
+  sendCaseEmails,
   sendCaseApprovalAlerts,
   workCategoryForJawMaterial,
   loadCaseNote,
@@ -641,20 +640,24 @@ export function createCaseNoteForm() {
   status.setAttribute("aria-live", "polite");
 
   approveBtn.addEventListener("click", async () => {
-    // The confirmation is a full dialog (report preview + the case's users + a
-    // notification message), but it still resolves to a plain boolean, so the
-    // commit chain below is unchanged. It waits on the report PDF before opening
-    // so the preview is there on arrival, hence the button-side progress: the
-    // wait is usually nil (warmed above) but is real after a fresh design edit.
+    // The confirmation is a full dialog: the two arches as they look right now,
+    // an upload tile for anything else worth sending, and the case's users as
+    // email recipients. It hands back who to mail and what to attach, which is
+    // sent below — but only once the approval itself has landed.
+    //
+    // Rasterizing the arches takes a moment (the tooth art is fetched and
+    // inlined), hence the button-side progress. annotationLocks is imported
+    // dynamically: it imports this module back, so a static import here would
+    // close a cycle.
     approveBtn.disabled = true;
-    status.textContent = "Preparing report…";
+    status.textContent = "Preparing preview…";
     status.classList.remove("is-error");
-    const confirmed = await confirmCaseNoteApproval({
+    const { captureArchThumbnails } = await import("./annotationLocks.js");
+    const { confirmed, recipients, images } = await confirmCaseNoteApproval({
       caseIntID: state.caseIntID,
       caseNumber,
-      caseOwner: ownerName,
       statusLabel: STATUS_2D_DESIGN_APPROVED,
-      signature: getHistoryStateSignature(),
+      shots: await captureArchThumbnails(),
     });
     if (!confirmed) {
       approveBtn.disabled = false;
@@ -710,18 +713,36 @@ export function createCaseNoteForm() {
       // Fired only after the status actually flipped — telling everyone about an
       // approval that didn't land would be worse than staying quiet. Independent
       // endpoints, so they go out together. Not awaited: neither is allowed to
-      // hold up the approval, and only a failure is worth another toast.
+      // hold up the approval, and only the outcome is worth another toast.
+      //
+      // The mail goes to whoever was left ticked in the dialog (anyone already
+      // mailed from its Send Email button is filtered out there, so nobody gets
+      // two copies). The in-app alerts are keyed by username, so they still
+      // reach everyone on the case whether or not an address resolved.
+      //
+      // Only the email is reported on: it is the channel the user chose
+      // recipients for, and an empty pick is a deliberate "don't mail anyone",
+      // not a failure. The alerts can't tell "nobody to alert" from "the write
+      // failed" — both come back 0 — so they say nothing either way.
       Promise.all([
-        sendCaseApprovalEmail(state.caseIntID, {
-          caseName: state.caseName,
-          caseOwner: ownerName,
+        sendCaseEmails(state.caseIntID, recipients, {
+          link: window.location.href,
+          images,
         }),
         sendCaseApprovalAlerts(state.caseIntID, {
           statusLabel: STATUS_2D_DESIGN_APPROVED,
-          alertMessage: "The 2D design report is ready for review.",
+          alertMessage: "The 2D design is ready for review.",
         }),
-      ]).then(([emailOk, alertCount]) => {
-        if (!emailOk && !alertCount) toast.warning("Couldn't notify the case's users.");
+      ]).then(([sent]) => {
+        if (!recipients.length) return;
+        if (sent === recipients.length) {
+          toast.success(`Email sent to ${recipients.map((r) => r.email).join(", ")}.`);
+        } else if (sent) {
+          toast.warning(`Email failed for ${recipients.length - sent} recipient(s).`);
+        } else {
+          // The approval itself stands; only the notification failed.
+          toast.error("Approved, but the email couldn't be sent.");
+        }
       });
     } else if (remoteOk) {
       status.textContent = "Status not updated.";
@@ -741,15 +762,6 @@ export function createCaseNoteForm() {
   actions.appendChild(approveBtn);
   actions.appendChild(status);
   form.appendChild(actions);
-
-  // Start the approval report as soon as the Case Note is on screen, so pressing
-  // Approve opens straight onto a finished PDF. Fire-and-forget: the click path
-  // awaits the same cached build, and re-runs it there if the design has changed
-  // since (the signature is part of the cache key).
-  prepareApprovalReport(state.caseIntID, {
-    caseOwner: ownerName,
-    signature: getHistoryStateSignature(),
-  });
 
   return form;
 }

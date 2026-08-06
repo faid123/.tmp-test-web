@@ -135,10 +135,14 @@ function buildConfirmOverlay() {
 }
 
 // `content` lets a caller mount its own DOM between the message and the
-// action row (the 2D case-note approval dialog puts a report preview, the
-// case's user list and a message box there). Passing it also switches Enter
-// off as a confirm shortcut — a rich dialog contains text fields, and Enter
-// inside one must not commit the action. `size: "lg"` widens the box.
+// action row (the 2D case-note approval dialog puts its renders, the case's user
+// list and a message box there). Passing it also switches Enter off as a confirm
+// shortcut — a rich dialog contains text fields, and Enter inside one must not
+// commit the action. `size: "lg"` widens the box.
+//
+// `title` is plain text, or a Node when part of it needs its own styling (the 3D
+// approval marks "[For Lab Only]" red that way). Text stays the common case, so
+// it is still set as textContent rather than markup.
 export function confirmModal({
   title = "Are you sure?",
   message = "",
@@ -168,7 +172,8 @@ export function confirmModal({
     box.classList.add(`app-confirm-${variant}`);
     if (size) box.classList.add(`app-confirm-box--${size}`);
     iconEl.classList.add(CONFIRM_ICONS[variant] || CONFIRM_ICONS.info);
-    titleEl.textContent = title;
+    if (title instanceof Node) titleEl.appendChild(title);
+    else titleEl.textContent = title;
     // Support a multi-line message via plain text (escape for safety).
     msgEl.innerHTML = escapeHtml(message).replace(/\n/g, "<br>");
     // An empty <p> would still contribute its bottom margin, which looks like a

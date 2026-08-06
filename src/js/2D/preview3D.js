@@ -995,8 +995,10 @@ function createDisplayGeometry(geometry, label = "mesh") {
 
 // Reuse the shared /case/get round-trip from 2D init instead of duplicating it.
 // Only used to preserve the other jaw's survey angles, so a null result is harmless.
-export function fetchCaseData() {
-  return fetchCaseDetail();
+// Pass { force: true } to bypass the memoized copy (the survey save does, since it
+// re-sends the whole case row).
+export function fetchCaseData(options) {
+  return fetchCaseDetail(options);
 }
 
 async function fetchJawFilesForCase() {
@@ -2554,8 +2556,18 @@ const EXTRA_STL_SLOT_ICONS = {
   4: { src: "../../assets/lower.svg" },
 };
 
-// Same flat tan as the upper-jaw material so extras match the original jaws.
-const EXTRA_STL_COLOR = 0xb0875a;
+// The jaw slots (1 & 3) in the case's own jaw tan, built exactly the way the
+// primary jaw meshes build theirs: float components straight into THREE.Color,
+// which go in UNCONVERTED (see srgbToLinear's note above DEFAULT_TOOTH_COLOR).
+//
+// That is what makes it the light cream the real jaws show. The 0xb0875a hex it
+// replaced took the other path — a hex is read as sRGB and converted to linear —
+// and landed a much darker brown, so a slot-1 jaw read as a different material
+// sitting next to the jaw it is a copy of.
+//
+// A function, not a constant: THREE is loaded on demand, so there is nothing to
+// construct at module scope.
+const extraJawColor = () => new THREE.Color(...DEFAULT_TOOTH_COLOR);
 
 // Metal-RPD slots (Upper/Lower metal RPD) render with a metallic finish instead
 // of the tan jaw colour.
@@ -2649,7 +2661,7 @@ async function renderExtraStl({ slotNumber, filename, data }) {
 
   const isMetal = METAL_RPD_SLOTS.has(slotNumber);
   const material = new THREE.MeshStandardMaterial({
-    color: isMetal ? METAL_RPD_COLOR : EXTRA_STL_COLOR,
+    color: isMetal ? METAL_RPD_COLOR : extraJawColor(),
     metalness: isMetal ? 0.85 : 0.05,
     roughness: isMetal ? 0.32 : 0.6,
     side: THREE.DoubleSide,
@@ -2981,12 +2993,10 @@ async function openPreview3DApproval(btn) {
   }
   if (btn) btn.disabled = true;
   try {
-    // Captured once: the dialog shows these, and the ones left ticked there come
-    // back as `sendShots` to ride along on the email.
-    const { confirmed, recipients, shots: sendShots } = await confirmPreview3DApproval({
+    // Captured once: the dialog shows these, and comes back with what to attach —
+    // the renders left ticked there, plus anything uploaded in the dialog.
+    const { confirmed, recipients, images } = await confirmPreview3DApproval({
       caseIntID: state.caseIntID,
-      caseNumber: preview3DState.caseData?.case_id ?? state.caseIntID,
-      statusLabel: STATUS_3D_DESIGN_APPROVED,
       shots: captureExtraSlotShots(),
     });
     if (!confirmed) return;
@@ -3001,7 +3011,7 @@ async function openPreview3DApproval(btn) {
     setMessage?.("3D design approved.", false);
 
     if (!recipients.length) return;
-    const sent = await sendApprovalEmails(state.caseIntID, recipients, sendShots);
+    const sent = await sendApprovalEmails(state.caseIntID, recipients, images);
     if (sent === recipients.length) {
       toast.success(`Email sent to ${recipients.map((r) => r.email).join(", ")}.`);
     } else if (sent) {
