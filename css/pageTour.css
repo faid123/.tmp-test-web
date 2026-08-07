@@ -19,7 +19,7 @@
      assistant (1300), sidebar (1100) and chat (1200) — a tour that the page it
      is describing can paint over is a tour whose card cannot be clicked. */
   z-index: 10050;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
   opacity: 0;
   transition: opacity 0.2s ease;
 }

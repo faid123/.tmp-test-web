@@ -22,7 +22,7 @@
   inset: 0;
   z-index: 1300; /* above the app sidebar (1100) and case chat (1200) */
   pointer-events: none;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
 #help-bot.is-hidden {
   display: none;
@@ -55,7 +55,7 @@
   padding: 12px;
   pointer-events: auto;
   color: var(--hb-ink);
-  font-family: Arial, sans-serif;
+  font-family: var(--font-sans);
 }
 #help-bot.is-open .hb-panel {
   transform: translateX(0);
@@ -275,6 +275,29 @@
 
 /* --------------------------------------------------------------- highlight */
 
+/* Dims the rest of the page around the "Show me" target. A box-shadow with a
+   huge spread paints everywhere OUTSIDE this element's own rect, so the rect
+   itself stays transparent and the real control (positioned under it, same
+   spot) shows through — sized and moved by helpBot.js to track the target.
+   pointer-events: none — this is a look-here hint, not a modal, so clicks
+   still reach the page (and the highlighted control itself) underneath. */
+.hb-spotlight {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  z-index: 1240;
+  border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(11, 18, 28, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease, top 0.3s ease, left 0.3s ease, width 0.3s ease, height 0.3s ease;
+}
+.hb-spotlight.is-visible {
+  opacity: 1;
+}
+
 /* Applied by "Show me" to the control being described. Ringed with box-shadow
    rather than outline/border so it never shifts the page's layout. */
 .hb-highlight {
@@ -298,6 +321,9 @@
   .hb-highlight {
     animation: none;
     box-shadow: 0 0 0 3px var(--hb-primary, #3bae95);
+  }
+  .hb-spotlight {
+    transition: opacity 0.4s ease;
   }
   .hb-panel,
   .hb-backdrop {

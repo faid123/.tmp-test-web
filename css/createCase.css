@@ -87,6 +87,105 @@
   gap: 8px;
 }
 .cc-invite-row .modal-input { flex: 1; min-width: 0; }
+
+/* Search-styled invite box, matching the User Access modal's. The magnifier is
+   decorative, so the input keeps the full width and just pads past it. */
+.cc-invite-search {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+.cc-invite-search .modal-input { padding-left: 34px; }
+.cc-invite-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: var(--muted, #94a3b8);
+  pointer-events: none;
+}
+.cc-invite-search.has-error .modal-input {
+  border-color: var(--danger, #ef4444);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14);
+}
+
+/* Suggested users. A custom listbox rather than a <datalist>, which cannot be
+   styled — the shared-case count is what justifies the ordering, so it has to
+   be legible. */
+.cc-invite-suggest {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 264px;
+  overflow-y: auto;
+  background: var(--panel, #fff);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+}
+.cc-invite-suggest.hidden { display: none; }
+
+.cc-suggest-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+/* One highlight state for both hover and keyboard, so arrowing through the list
+   looks the same as pointing at it. */
+.cc-suggest-item.is-active { background: var(--line-soft, #f1f5f9); }
+
+.cc-suggest-avatar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(59, 174, 149, 0.14);
+  color: var(--primary-dark, #2f9078);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+/* min-width:0 so a long username ellipsises instead of widening the panel. */
+.cc-suggest-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cc-suggest-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, #0f172a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cc-suggest-name mark {
+  background: rgba(59, 174, 149, 0.22);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+.cc-suggest-meta { font-size: 11px; color: var(--muted, #64748b); }
+
+/* Why an invite was refused, sitting under the box it refers to. Empty until
+   there is something to say, so it takes no space in the normal case. */
+.cc-invite-msg {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.cc-invite-msg:empty { display: none; }
+.cc-invite-msg.is-error { color: var(--danger, #ef4444); }
+.cc-invite-msg.is-info { color: var(--muted, #64748b); }
 /* Keep the Add button hugging its label; the phone-wide `.cm-btn { width:100% }`
    rule would otherwise stretch it across the row and crush the input. */
 .cc-invite-row .cm-btn {
@@ -584,7 +683,7 @@
   padding: 30px;
   box-shadow: 0 6px 30px rgba(0, 0, 0, 0.15);
   position: relative;
-  font-family: "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
 }
 
 .close-btn {

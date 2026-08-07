@@ -3,6 +3,7 @@ import { lol } from "../shared/crypt.js";
 import { toast, flashToast, confirmModal, attachThemedCalendar } from "../shared/toast.js";
 import { logApi } from "../shared/apiLog.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
+import { getCollaborators } from "../shared/collaborators.js";
 
 // Resolve an asset path relative to the app root (everything before "/src/") so
 // it loads whether this shared module runs from src/pages/ (case_list) or the
@@ -72,6 +73,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const inviteInput = document.getElementById("ccInviteInput");
   const inviteAddBtn = document.getElementById("ccInviteAdd");
   const inviteListEl = document.getElementById("ccInviteList");
+  const suggestEl = document.getElementById("ccInviteSuggest");
+  const inviteMsgEl = document.getElementById("ccInviteMsg");
+  const inviteSearchEl = document.querySelector(".cc-invite-search");
 
   const cancelBtn = uploadPane?.querySelector(".cancel-btn");
   const saveBtn = uploadPane?.querySelector(".save-btn");
@@ -151,19 +155,201 @@ document.addEventListener("DOMContentLoaded", async () => {
       li.appendChild(x);
       inviteListEl.appendChild(li);
     });
+    // Queued names drop out of the suggestions.
+    refreshInviteOptions();
   };
 
-  const addInvite = () => {
+  // Suggestions for the invite box. user/getall is admin-only, so the roster is
+  // the people this account already shares cases with (see
+  // shared/collaborators.js) — minus whoever is already queued or the owner.
+  //
+  // A custom listbox rather than a native <datalist>: a datalist can't be
+  // styled, so the shared-case count that justifies the ordering had to ride in
+  // an option label that only some browsers render.
+  const SUGGEST_LIMIT = 6;
+  let suggestItems = [];
+  let suggestIndex = -1;
+
+  const closeSuggest = () => {
+    suggestIndex = -1;
+    suggestEl?.classList.add("hidden");
+    inviteInput?.setAttribute("aria-expanded", "false");
+    inviteInput?.removeAttribute("aria-activedescendant");
+  };
+
+  const setSuggestActive = (index) => {
+    suggestIndex = index;
+    const nodes = suggestEl?.querySelectorAll(".cc-suggest-item") || [];
+    nodes.forEach((el, i) => {
+      el.classList.toggle("is-active", i === index);
+      el.setAttribute("aria-selected", String(i === index));
+    });
+    if (index >= 0 && nodes[index]) {
+      inviteInput.setAttribute("aria-activedescendant", nodes[index].id);
+      nodes[index].scrollIntoView({ block: "nearest" });
+    } else {
+      inviteInput?.removeAttribute("aria-activedescendant");
+    }
+  };
+
+  // Selecting a suggestion queues that person straight away — they are a known
+  // collaborator, so making the user press Add as well is a wasted step.
+  const pickSuggestion = (index) => {
+    const choice = suggestItems[index];
+    if (!choice || !inviteInput) return;
+    inviteInput.value = choice.name;
+    closeSuggest();
+    addInvite();
+  };
+
+  // Name with the typed part marked, so it is obvious why a row matched.
+  const highlightMatch = (name, query) => {
+    const frag = document.createDocumentFragment();
+    const at = query ? name.toLowerCase().indexOf(query) : -1;
+    if (at < 0) {
+      frag.append(name);
+      return frag;
+    }
+    const mark = document.createElement("mark");
+    mark.textContent = name.slice(at, at + query.length);
+    frag.append(name.slice(0, at), mark, name.slice(at + query.length));
+    return frag;
+  };
+
+  const renderSuggest = () => {
+    if (!suggestEl || !inviteInput) return;
+    const query = inviteInput.value.trim().toLowerCase();
+    const me = (getLoggedInUser()?.username || "").toLowerCase();
+    const queued = new Set(pendingInvites.map((n) => n.toLowerCase()));
+
+    suggestItems = getCollaborators()
+      .filter(({ name }) => {
+        const key = name.toLowerCase();
+        return key !== me && !queued.has(key) && (!query || key.includes(query));
+      })
+      .slice(0, SUGGEST_LIMIT);
+
+    if (!suggestItems.length) {
+      closeSuggest();
+      return;
+    }
+
+    suggestEl.textContent = "";
+    suggestItems.forEach(({ name, shared }, i) => {
+      const li = document.createElement("li");
+      li.className = "cc-suggest-item";
+      li.id = `ccSuggest-${i}`;
+      li.dataset.index = String(i);
+      li.setAttribute("role", "option");
+      li.setAttribute("aria-selected", "false");
+
+      const avatar = document.createElement("span");
+      avatar.className = "cc-suggest-avatar";
+      avatar.textContent = initialsFor(name);
+
+      const body = document.createElement("span");
+      body.className = "cc-suggest-body";
+      const nameEl = document.createElement("span");
+      nameEl.className = "cc-suggest-name";
+      nameEl.appendChild(highlightMatch(name, query));
+      const metaEl = document.createElement("span");
+      metaEl.className = "cc-suggest-meta";
+      metaEl.textContent = shared
+        ? `${shared} shared case${shared === 1 ? "" : "s"}`
+        : "Worked with before";
+      body.append(nameEl, metaEl);
+
+      li.append(avatar, body);
+      suggestEl.appendChild(li);
+    });
+
+    suggestEl.classList.remove("hidden");
+    inviteInput.setAttribute("aria-expanded", "true");
+    setSuggestActive(-1);
+  };
+
+  // Re-run after the queue changes. Also re-opens when the box still has focus
+  // after a pick, since inviting two or three people in a row is the norm.
+  const refreshInviteOptions = () => {
+    if (!suggestEl) return;
+    const open = !suggestEl.classList.contains("hidden");
+    if (open || document.activeElement === inviteInput) renderSuggest();
+  };
+
+  // Resolve a username to its uuid, the way the User Access modal's Add does.
+  // The endpoint answers with the account's uuid; a non-2xx, an empty body or a
+  // body without a uuid all mean "no such user". Throws only when the request
+  // itself never completed, which the caller reports as a different failure —
+  // an unconfirmed name is never queued either way.
+  const resolveInviteUuid = async (username) => {
+    const res = await fetch(`${API_BASE}/user/checkifusernameexists/get`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([{ machine_id: MACHINE_ID }, { username }]),
+    });
+    logApi(res, "POST /user/checkifusernameexists/get");
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => null);
+    const row = Array.isArray(data) ? data[0] : data;
+    return row?.uuid || null;
+  };
+
+  // Why an invite was refused, shown under the box rather than as a toast: the
+  // message is about the field the user is still standing in, so it belongs
+  // next to it (and stays put while they fix the name).
+  const setInviteMsg = (text, tone = "error") => {
+    if (!inviteMsgEl) return;
+    inviteMsgEl.textContent = text || "";
+    inviteMsgEl.classList.toggle("is-error", Boolean(text) && tone === "error");
+    inviteMsgEl.classList.toggle("is-info", Boolean(text) && tone === "info");
+    inviteSearchEl?.classList.toggle("has-error", Boolean(text) && tone === "error");
+    if (inviteInput) inviteInput.setAttribute("aria-invalid", String(Boolean(text) && tone === "error"));
+  };
+
+  const addInvite = async () => {
     if (!inviteInput) return;
     const name = inviteInput.value.trim();
     if (!name) return;
-    if (pendingInvites.includes(name)) {
+    setInviteMsg("");
+
+    const key = name.toLowerCase();
+    if (key === (getLoggedInUser()?.username || "").toLowerCase()) {
+      setInviteMsg("You own this case already.", "info");
       inviteInput.value = "";
       return;
     }
-    pendingInvites.push(name);
-    inviteInput.value = "";
-    renderInviteList();
+    // Case-insensitively: usernames resolve that way server-side, so "Alice"
+    // and "alice" would otherwise queue as two invites for one person.
+    if (pendingInvites.some((u) => u.toLowerCase() === key)) {
+      setInviteMsg(`"${name}" is already on the list.`, "info");
+      inviteInput.value = "";
+      return;
+    }
+
+    // Nothing is queued until the server confirms the account exists. The invite
+    // loop that runs after the case is created skips unknown usernames silently,
+    // so an unchecked typo would vanish with no sign the person was never
+    // invited — and it is what the User Access modal already does on Add.
+    if (inviteAddBtn) inviteAddBtn.disabled = true;
+    try {
+      const uuid = await resolveInviteUuid(name);
+      if (!uuid) {
+        setInviteMsg(`No user named "${name}".`);
+        inviteInput.focus();
+        inviteInput.select();
+        return;
+      }
+      pendingInvites.push(name);
+      inviteInput.value = "";
+      renderInviteList();
+    } catch (err) {
+      // Couldn't reach the server — still refuse, but say why, since "no such
+      // user" would be a lie.
+      console.warn("Username check failed:", err);
+      setInviteMsg("Couldn't verify that username. Check your connection and try again.");
+    } finally {
+      if (inviteAddBtn) inviteAddBtn.disabled = false;
+    }
   };
 
   // === Image preview lightbox (click an uploaded thumbnail to enlarge) ===
@@ -261,6 +447,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       instructionsInput.style.height = "";
     }
     if (inviteInput) inviteInput.value = "";
+    setInviteMsg("");
     pendingInvites = [];
     renderInviteList();
     document.querySelectorAll(".uploaded-model").forEach((el) => {
@@ -526,10 +713,57 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   if (inviteInput) {
     inviteInput.addEventListener("keydown", (e) => {
+      const open = suggestEl && !suggestEl.classList.contains("hidden");
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!open) {
+          renderSuggest();
+          return;
+        }
+        const count = suggestItems.length;
+        const down = e.key === "ArrowDown";
+        // From "nothing highlighted", Down opens at the top and Up at the bottom.
+        if (suggestIndex < 0) setSuggestActive(down ? 0 : count - 1);
+        else setSuggestActive((suggestIndex + (down ? 1 : -1) + count) % count);
+        return;
+      }
+      if (e.key === "Escape" && open) {
+        e.preventDefault();
+        closeSuggest();
+        return;
+      }
       if (e.key === "Enter") {
         e.preventDefault();
-        addInvite();
+        // A highlighted suggestion wins; otherwise commit what was typed.
+        if (open && suggestIndex >= 0) pickSuggestion(suggestIndex);
+        else addInvite();
       }
+    });
+    // The case list keeps discovering collaborators as rows enrich, so the list
+    // is rebuilt whenever the box is about to be used, not once at startup.
+    inviteInput.addEventListener("focus", renderSuggest);
+    inviteInput.addEventListener("input", () => {
+      // The complaint is about what was typed — it goes as soon as that changes.
+      setInviteMsg("");
+      renderSuggest();
+    });
+    // Late enough for a click on a suggestion to land first (that handler runs
+    // on mousedown and keeps focus, so this only fires on a real focus loss).
+    inviteInput.addEventListener("blur", () => setTimeout(closeSuggest, 120));
+  }
+
+  if (suggestEl) {
+    // mousedown, not click: clicking must not blur the input out from under the
+    // list before the pick is read.
+    suggestEl.addEventListener("mousedown", (e) => {
+      const item = e.target.closest(".cc-suggest-item");
+      if (!item) return;
+      e.preventDefault();
+      pickSuggestion(Number(item.dataset.index));
+    });
+    suggestEl.addEventListener("mousemove", (e) => {
+      const item = e.target.closest(".cc-suggest-item");
+      if (item) setSuggestActive(Number(item.dataset.index));
     });
   }
 
