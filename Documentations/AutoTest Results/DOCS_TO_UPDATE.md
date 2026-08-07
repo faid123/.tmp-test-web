@@ -1,27 +1,16 @@
-# Weekly Documentation Review -- 2026-08-07
+# Docs to update — current status
 
-Branch: `dev-deploy-documentation` @ `27799c1`
+_Always-current snapshot, overwritten every run -- not a dated history file like
+`weekly-review-<date>.md`. For full test/audit deltas and commit history, see this run's dated
+copy: `weekly-review-2026-08-07.md`._
+
+Last checked: 2026-08-07 — branch `dev-deploy-documentation` @ `27799c1`
 
 ## Live-branch alignment
 
 ⚠️ **This branch has diverged from `nyunt/dev-W7.1`.** The deployed commit `4f034f6` is not an ancestor of HEAD. Everything below reflects this branch's code, which is not what's currently live -- find and review from whichever branch actually contains that commit before trusting this report, or treat this as the signal to re-run the branch-retargeting pass done on 2026-07-31.
 
 ✅ `nyunt/dev-deploy` matches what's live -- no deploy pending.
-
-## Test suite
-
-13 suites / 221 tests -> 13 suites / 221 tests
-
-## Dependency audit (npm audit)
-
-{"info":0,"low":0,"moderate":3,"high":5,"critical":1,"total":9} -> {"info":0,"low":0,"moderate":3,"high":5,"critical":1,"total":9}
-
-## Commits since the last review
-
-```
-27799c1 Refine doc review flow and reporting outputs
-3e3d5c5 Doc refresh triggered by deploy a81abed9f31e6a77b2b095c6ee8fc70ec0d8f247 (run 24)
-```
 
 ## Docs likely needing a manual/AI-assisted update
 
@@ -34,12 +23,4 @@ Branch: `dev-deploy-documentation` @ `27799c1`
   - Documentations/setup/04-troubleshooting.md (How to Setup.docx is regenerated from Documentations/setup/*.md and mirrors deploy.yml's pipeline steps -- keep it in sync with whichever changed)
   - Documentations/setup/README.md (How to Setup.docx is regenerated from Documentations/setup/*.md and mirrors deploy.yml's pipeline steps -- keep it in sync with whichever changed)
 
-## Raw data this run produced
-
-- `Documentations/AutoTest Results/automated-test-run.json`
-- `Documentations/AutoTest Results/automated-test-run-log.txt`
-- `Documentations/AutoTest Results/npm-audit-run.json`
-- `Documentations/AutoTest Results/npm-audit-run.txt`
-- `Documentations/AutoTest Results/DOCS_TO_UPDATE.md` (same alignment status + checklist as this report, at a fixed filename)
-
-See [Documentations/WEEKLY_DOC_REVIEW.md](../WEEKLY_DOC_REVIEW.md) for what to do with this report.
+See [Documentations/WEEKLY_DOC_REVIEW.md](../WEEKLY_DOC_REVIEW.md) for the full process.

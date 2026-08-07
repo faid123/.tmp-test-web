@@ -1,5 +1,5 @@
 {
-  "headSha": "49437513c8f3478f78b643ec4585dc1346fe0d73",
+  "headSha": "27799c11966b4ecf5bb995b45c201e0ce40557a7",
   "branch": "dev-deploy-documentation",
   "date": "2026-08-07",
   "tests": {
@@ -14,7 +14,7 @@
     "critical": 1,
     "total": 9
   },
-  "liveSha": "a81abed9f31e6a77b2b095c6ee8fc70ec0d8f247",
+  "liveSha": "4f034f6aa72bb4cd093b0c8e306cf04defd6be27",
   "aligned": false,
   "deployPending": false
 }
