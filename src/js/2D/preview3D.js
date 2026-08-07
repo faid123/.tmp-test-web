@@ -67,14 +67,6 @@ export const preview3DState = {
   camera: null,
   controls: null,
   frameId: 0,
-  // Render-on-demand bookkeeping (see requestPreviewRender). renderAwakeUntil is the
-  // timestamp the loop keeps drawing to; onScreen/visibility gate it off entirely.
-  renderAwakeUntil: 0,
-  renderInFrame: false,
-  renderOnScreen: true,
-  renderHeartbeatId: 0,
-  renderVisibilityCleanup: null,
-  intersectionObserver: null,
   resizeObserver: null,
   mount: null,
   modelRoot: null,
@@ -84,11 +76,6 @@ export const preview3DState = {
   extraGroups: {},
   extraFileNames: {},
   occupiedSlots: null,
-  // Extras are fetched+parsed on first open of the "Other 3D files" panel, never at page
-  // load (see ensureExtraStlsLoaded). "idle" | "loading" | "loaded"; the promise latches
-  // the work so concurrent openers share one pass.
-  extrasLoadState: "idle",
-  extrasLoadPromise: null,
   // Extras are hidden on page entry; opening the "Other 3D files" panel stages them
   // (maximize + jaws hidden) and that stage OUTLIVES the panel — closing it changes
   // nothing. extrasPrevStage = jaw visibility + camera to restore if the extras all go
@@ -178,11 +165,7 @@ export async function loadInteractiveJawPreview(area) {
       try {
         await populateJawPreviewFromOFF(meshFiles, normalizedUndercut, meshQuality);
         await finishMeshQualityProgress();
-        preview3DState.qualitySource = {
-          kind: "off",
-          files: stripQualitySourcePayloads(meshFiles),
-          undercut: normalizedUndercut,
-        };
+        preview3DState.qualitySource = { kind: "off", files: meshFiles, undercut: normalizedUndercut };
         updateQualityToggle();
         autoApplySavedSurveyAngles().catch((err) =>
           console.warn("[preview3D] saved survey auto-apply failed", err)
@@ -191,8 +174,11 @@ export async function loadInteractiveJawPreview(area) {
         clearMeshQualityProgress();
         throw err;
       }
-      // Extra STLs are NOT loaded here — the jaws are on screen, and every extra mesh is
-      // created hidden anyway. They load on first open of the "Other 3D files" panel.
+      // Extra STLs are secondary — load them in the background so the spinner
+      // clears as soon as the jaws are painted.
+      loadExtraStlsIntoPreview().catch((err) =>
+        console.warn("[preview3D] extra STL background load failed", err)
+      );
       return true;
     }
 
@@ -207,11 +193,7 @@ export async function loadInteractiveJawPreview(area) {
       try {
         await populateJawPreview(jawFiles, normalizedUndercut, meshQuality);
         await finishMeshQualityProgress();
-        preview3DState.qualitySource = {
-          kind: "stl",
-          files: stripQualitySourcePayloads(jawFiles),
-          undercut: normalizedUndercut,
-        };
+        preview3DState.qualitySource = { kind: "stl", files: jawFiles, undercut: normalizedUndercut };
         updateQualityToggle();
         autoApplySavedSurveyAngles().catch((err) =>
           console.warn("[preview3D] saved survey auto-apply failed", err)
@@ -226,12 +208,11 @@ export async function loadInteractiveJawPreview(area) {
       // their empty/upload state so the user can still add 3D files.
       showEmptyJawPanel();
     }
-    // Extras stay off the load path (see ensureExtraStlsLoaded) with ONE exception: when
-    // the case has no jaw mesh at all, the extras are the only thing that could fill the
-    // viewport, so there is no point deferring them.
-    if (!preview3DState.groups?.upper && !preview3DState.groups?.lower) {
-      ensureExtraStlsLoaded();
-    }
+    // Don't block first paint on the extra-slot fetches (usually empty 404s);
+    // they pop into the scene and re-center when they arrive.
+    loadExtraStlsIntoPreview().catch((err) =>
+      console.warn("[preview3D] extra STL background load failed", err)
+    );
     return true;
   } finally {
     hidePreviewLoading(area);
@@ -246,8 +227,6 @@ function init3DPreview(area) {
   preview3DState.extraGroups = {};
   preview3DState.extraFileNames = {};
   preview3DState.occupiedSlots = new Set();
-  preview3DState.extrasLoadState = "idle";
-  preview3DState.extrasLoadPromise = null;
   preview3DState.extrasVisible = false;
   preview3DState.extrasPrevStage = null;
   preview3DState.stageHiddenJaws = new Set();
@@ -423,15 +402,16 @@ function init3DPreview(area) {
   controls.panSpeed = 0.8;
   controls.noRotate = false;
   controls.noZoom = false;
-  // Lock the jaw at the centre: disable panning so no button can drag the model
-  // off-centre. Rotation (see applyPreviewMouseButtons) and zoom (wheel) stay active.
+  // Lock the jaw at the centre: disable panning so the right mouse button can't
+  // drag the model off-centre. Rotation (left) and zoom (wheel) stay active.
   controls.noPan = true;
   controls.staticMoving = true;
   controls.dynamicDampingFactor = 0;
   controls.minDistance = 35;
   controls.maxDistance = 700;
   controls.target.set(0, 0, 0);
-  applyPreviewMouseButtons(controls);
+  controls.mouseButtons.LEFT = 2;
+  controls.mouseButtons.RIGHT = 0;
 
   rowUpper.surveyBtn.addEventListener("click", () =>
     handleSurveyButtonClick("upper", rowUpper.surveyBtn)
@@ -478,7 +458,6 @@ function init3DPreview(area) {
     if (group.visible) preview3DState.stageHiddenJaws.delete(jaw);
     const row = jaw === "upper" ? rowUpper.row : rowLower.row;
     row.classList.toggle("is-hidden-jaw", !group.visible);
-    requestPreviewRender();
   };
   const onJawIconKeydown = (jaw) => (e) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -526,178 +505,25 @@ function init3DPreview(area) {
     // TrackballControls maps screen coords to arcball math, so it must be re-anchored on
     // canvas resize — otherwise rotation feels off after a layout change.
     controls.handleResize?.();
-    requestPreviewRender();
   };
 
   preview3DState.resizeObserver = new ResizeObserver(resize);
   preview3DState.resizeObserver.observe(mount);
   resize();
 
-  // Any pointer/wheel activity anywhere in the preview keeps frames coming. Two reasons
-  // to bind on the shell rather than the canvas: TrackballControls only applies queued
-  // input from controls.update() (which runs per drawn frame), and the toolbar rows —
-  // jaw visibility, trash, SET SURVEY ANGLE, HD/SD — sit OUTSIDE the canvas mount, so a
-  // mount-only listener would miss every one of them.
-  const wake = () => requestPreviewRender(PREVIEW_INTERACTION_AWAKE_MS);
-  for (const type of ["pointerdown", "pointermove", "pointerup", "wheel", "touchstart", "touchmove"]) {
-    shell.addEventListener(type, wake, { capture: true, passive: true });
-  }
-  controls.addEventListener("change", wake);
-
-  // Stop drawing entirely when the preview scrolls off screen or the tab is hidden. The
-  // stacked mobile layout puts this canvas above the arch editor, so it is off screen for
-  // most of a 2D design session.
-  preview3DState.intersectionObserver = new IntersectionObserver(
-    (entries) => {
-      const onScreen = entries.some((e) => e.isIntersecting);
-      preview3DState.renderOnScreen = onScreen;
-      if (onScreen) requestPreviewRender();
-      else stopPreviewLoop();
-    },
-    { threshold: 0 }
-  );
-  preview3DState.intersectionObserver.observe(mount);
-
-  const onVisibility = () => {
-    if (document.hidden) stopPreviewLoop();
-    else requestPreviewRender();
-  };
-  document.addEventListener("visibilitychange", onVisibility);
-
-  // The canvas keeps showing its last frame only for as long as the browser keeps the
-  // layer's backing store. iOS Safari drops it on its own — memory pressure, bfcache
-  // restore, layer recycling — and `preserveDrawingBuffer: false` means there is nothing
-  // to re-composite from, so the preview goes dark and STAYS dark. The old always-on loop
-  // hid this by redrawing 60x a second; render-on-demand does not, so every path that can
-  // invalidate the buffer has to ask for a frame back.
-  const canvas = renderer.domElement;
-  // Without preventDefault the context is never eligible for restoration at all. But asking
-  // for it back re-uploads every jaw mesh to the GPU, so if the loss was memory pressure in
-  // the first place, an unbounded retry is a crash loop. Give up after a few and leave the
-  // canvas dark rather than take the tab down with it.
-  let contextLosses = 0;
-  const onContextLost = (event) => {
-    if (++contextLosses <= 3) event.preventDefault();
-    else console.warn("[preview3D] WebGL context lost repeatedly — not requesting another restore");
-    stopPreviewLoop();
-  };
-  const onContextRestored = () => requestPreviewRender();
-  canvas.addEventListener("webglcontextlost", onContextLost);
-  canvas.addEventListener("webglcontextrestored", onContextRestored);
-  // bfcache restore fires pageshow; visibilitychange is not guaranteed on that path.
-  const onPageShow = () => requestPreviewRender();
-  window.addEventListener("pageshow", onPageShow);
-
-  // Backstop for the silent case: WebKit discarding a promoted layer's backing store
-  // raises no event, so no listener can catch it. requestPreviewRender is self-gating
-  // (it returns early when off screen or hidden), so this costs one draw per second
-  // while the preview is actually on screen — ~1.6% of the loop it replaced — and caps
-  // how long a dropped buffer can stay dark at one second.
-  preview3DState.renderHeartbeatId = setInterval(requestPreviewRender, PREVIEW_HEARTBEAT_MS);
-
-  preview3DState.renderVisibilityCleanup = () => {
-    document.removeEventListener("visibilitychange", onVisibility);
-    canvas.removeEventListener("webglcontextlost", onContextLost);
-    canvas.removeEventListener("webglcontextrestored", onContextRestored);
-    window.removeEventListener("pageshow", onPageShow);
-  };
-
-  requestPreviewRender();
-}
-
-// How long frames keep being drawn after the last interaction. Covers the gaps between
-// pointermove events during a drag without pinning the GPU once the user stops.
-const PREVIEW_INTERACTION_AWAKE_MS = 400;
-
-// Idle re-draw cadence. Recovers a backing store the browser dropped without telling us.
-const PREVIEW_HEARTBEAT_MS = 1000;
-
-// The preview's mouse-button map, in ONE place because two call sites set it.
-//
-// TrackballControls matches the raw `event.button` against these slot VALUES, so
-// `LEFT: 2` reads as "button 2 (the physical right button) drives the LEFT slot's
-// action, rotate". The physical left button is parked on PAN, which noPan disables,
-// leaving it free for the survey tool to drag the placement arrow.
-//
-// exitSurveyAiming MUST restore this rather than three.js's stock map: doing the
-// latter silently moved rotation onto the left button for the rest of the session,
-// so the jaw span differently before and after a survey.
-export function applyPreviewMouseButtons(controls) {
-  if (!controls || !THREE) return;
-  controls.mouseButtons = { LEFT: 2, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: 0 };
-}
-
-// Draw frames only while something is actually changing.
-//
-// The preview is static between interactions, but an unconditional redraw loop costs a
-// full scene pass every frame. On a weak GPU that pass owns the entire frame budget and
-// starves the 2D arch editor sharing this page. Measured on a phone-class (software) GPU:
-// 384 ms/frame with the old loop vs 16.7 ms idle here, and tooth-tap-to-paint 411 ms -> 15 ms.
-//
-// Call this after ANY scene mutation (mesh swap, visibility, heatmap, camera move).
-// `ms` keeps the loop awake that long; 0 draws a single frame.
-export function requestPreviewRender(ms = 0) {
-  const previewState = preview3DState;
-  if (!previewState.renderer || !previewState.scene || !previewState.camera) return;
-  if (!previewState.renderOnScreen || document.hidden) return;
-  previewState.renderAwakeUntil = Math.max(previewState.renderAwakeUntil, performance.now() + ms);
-  // renderInFrame: a frame is running right now, and it re-schedules itself on the way
-  // out. Without this guard, controls.update() dispatching 'change' from inside the
-  // frame lands here while frameId is still 0 and queues a SECOND callback for the next
-  // tick — which then does the same, compounding. Measured 24 full scene renders per
-  // animation frame while rotating (≈14 fps on a 1M-triangle case) before the guard.
-  if (previewState.frameId || previewState.renderInFrame) return;
-  previewState.frameId = requestAnimationFrame(runPreviewFrame);
-}
-
-function runPreviewFrame() {
-  const previewState = preview3DState;
-  previewState.frameId = 0;
-  const { renderer, scene, camera, controls } = previewState;
-  if (!renderer || !scene || !camera) return;
-  previewState.renderInFrame = true;
-  try {
-    controls?.update();
+  const animate = () => {
+    preview3DState.frameId = requestAnimationFrame(animate);
+    controls.update();
     updateSurveyPlacementArrow();
     renderer.render(scene, camera);
-  } finally {
-    previewState.renderInFrame = false;
-  }
-  // Keep going only while inside the awake window; otherwise fall idle until the next
-  // interaction or requestPreviewRender() call.
-  if (
-    previewState.renderOnScreen &&
-    !document.hidden &&
-    performance.now() < previewState.renderAwakeUntil
-  ) {
-    previewState.frameId = requestAnimationFrame(runPreviewFrame);
-  }
-}
-
-function stopPreviewLoop() {
-  if (preview3DState.frameId) {
-    cancelAnimationFrame(preview3DState.frameId);
-    preview3DState.frameId = 0;
-  }
-  preview3DState.renderAwakeUntil = 0;
+  };
+  animate();
 }
 
 export function teardown3DPreview() {
-  stopPreviewLoop();
-  if (preview3DState.renderHeartbeatId) {
-    clearInterval(preview3DState.renderHeartbeatId);
-    preview3DState.renderHeartbeatId = 0;
-  }
-  // Re-armed by the next init3DPreview(); leaving it false would keep the new
-  // renderer asleep until the observer happens to fire.
-  preview3DState.renderOnScreen = true;
-  if (preview3DState.intersectionObserver) {
-    preview3DState.intersectionObserver.disconnect();
-    preview3DState.intersectionObserver = null;
-  }
-  if (preview3DState.renderVisibilityCleanup) {
-    preview3DState.renderVisibilityCleanup();
-    preview3DState.renderVisibilityCleanup = null;
+  if (preview3DState.frameId) {
+    cancelAnimationFrame(preview3DState.frameId);
+    preview3DState.frameId = 0;
   }
   if (preview3DState.resizeObserver) {
     preview3DState.resizeObserver.disconnect();
@@ -730,8 +556,6 @@ export function teardown3DPreview() {
   preview3DState.extraGroups = {};
   preview3DState.extraFileNames = {};
   preview3DState.occupiedSlots = null;
-  preview3DState.extrasLoadState = "idle";
-  preview3DState.extrasLoadPromise = null;
   preview3DState.extrasVisible = false;
   preview3DState.extrasPrevStage = null;
   preview3DState.stageHiddenJaws = new Set();
@@ -946,38 +770,6 @@ function updateQualityToggle() {
 }
 
 // HD/SD toggle click: re-render the jaws from the kept source files at the
-// Strip the base64 payloads out of a qualitySource file list, keeping the entries (and so
-// the per-jaw session state that upload/remove maintain on them).
-//
-// A pair of jaw scans is ~70MB of base64, and qualitySource used to hold it for the WHOLE
-// session purely so the HD/SD toggle and the survey heatmap could re-parse without another
-// fetch. That sits on top of the parsed Float32 geometry, and on an iPhone it is the kind of
-// resident footprint that takes the WebKit content process past its ceiling — the tab then
-// dies with "A problem repeatedly occurred". Re-fetch instead; both callers are already
-// multi-second operations behind a progress overlay.
-function stripQualitySourcePayloads(files) {
-  return (files || []).map((f) => (f?.data ? { ...f, data: null } : f));
-}
-
-// Put the payloads back for a rebuild. Entries uploaded this session still carry their own
-// `data` and are kept as-is; server-backed entries are re-fetched. Entries the user removed
-// this session are NOT resurrected — the fetch is filtered down to what `source.files` lists.
-async function resolveQualitySourceFiles(source) {
-  const entries = source?.files || [];
-  if (!entries.length) return [];
-  if (entries.every((f) => f?.data)) return entries;
-  const fetched =
-    source.kind === "off" ? await fetchParameterisedMeshForCase() : await fetchJawFilesForCase();
-  const byJaw = new Map();
-  for (const f of fetched || []) {
-    const jaw = getJawKeyFromFile(f);
-    if (jaw) byJaw.set(jaw, f);
-  }
-  return entries
-    .map((entry) => (entry?.data ? entry : byJaw.get(getJawKeyFromFile(entry)) || null))
-    .filter(Boolean);
-}
-
 // requested quality, reusing the same progress overlay as the initial load.
 async function switchMeshQuality(quality) {
   const normalized = quality === "high" ? "high" : "low";
@@ -999,13 +791,10 @@ async function switchMeshQuality(quality) {
   await waitForPreviewPaint();
 
   try {
-    // qualitySource holds entry metadata, not the scan bytes — pull those back for the rebuild.
-    const files = await resolveQualitySourceFiles(source);
-    if (!files.length) throw new Error("no mesh source available for quality switch");
     if (source.kind === "off") {
-      await populateJawPreviewFromOFF(files, source.undercut, normalized);
+      await populateJawPreviewFromOFF(source.files, source.undercut, normalized);
     } else {
-      await populateJawPreview(files, source.undercut, normalized);
+      await populateJawPreview(source.files, source.undercut, normalized);
     }
     // populate* clears the model root, which also drops the extra-slot meshes —
     // re-attach the still-alive groups (root.clear() detaches, never disposes).
@@ -1168,11 +957,7 @@ function createDisplayGeometry(geometry, label = "mesh") {
   if (!Number.isFinite(longest) || longest <= 0) return geometry;
 
   const targetVertices = Math.max(5000, Math.floor(PREVIEW_MAX_DISPLAY_TRIANGLES * 0.7));
-  // A jaw scan is a SURFACE, so the number of occupied grid cells grows with
-  // divisions^2, not divisions^3 — a cube root here sized the grid for a solid and
-  // overshot the reduction by ~15x (514k tris collapsed to 8k against a 120k budget).
-  // The factor sweep below only ever goes coarser, so it could never recover from it.
-  const baseDivisions = Math.max(8, Math.round(Math.sqrt(targetVertices)));
+  const baseDivisions = Math.max(8, Math.round(Math.cbrt(targetVertices)));
   const baseCellSize = longest / baseDivisions;
   let best = null;
   let bestTriangles = sourceTriangles;
@@ -2094,7 +1879,6 @@ export function setHeatmapEnabled(enabled) {
   if (btn) btn.setAttribute("aria-pressed", enabled ? "true" : "false");
   // .is-off both dims the corner icon and hides the legend dropdown.
   preview3DState.heatmapBoard?.classList.toggle("is-off", !enabled);
-  requestPreviewRender();
 }
 
 function reapplyHeatmap(undercut) {
@@ -2109,7 +1893,6 @@ function reapplyHeatmap(undercut) {
   };
   repaint(preview3DState.groups.upper, undercut?.upper);
   repaint(preview3DState.groups.lower, undercut?.lower);
-  requestPreviewRender();
 }
 
 // Paints the undercut colours into the meshes but does NOT switch the display to
@@ -2127,13 +1910,10 @@ export async function applySurveyUndercutToPreview(nextUndercut) {
       kind: source.kind,
       quality,
     });
-    const files = await resolveQualitySourceFiles(source);
-    if (files.length) {
-      if (source.kind === "off") {
-        await populateJawPreviewFromOFF(files, nextUndercut, quality);
-      } else {
-        await populateJawPreview(files, nextUndercut, quality);
-      }
+    if (source.kind === "off") {
+      await populateJawPreviewFromOFF(source.files, nextUndercut, quality);
+    } else {
+      await populateJawPreview(source.files, nextUndercut, quality);
     }
     applyJawVisibility();
     updateQualityToggle();
@@ -2273,7 +2053,6 @@ function centerRootOnCombinedBounds(root) {
   if (box.isEmpty()) return;
   const center = box.getCenter(new THREE.Vector3());
   root.position.set(-center.x, -center.y, -center.z);
-  requestPreviewRender();
 }
 
 function applyJawVisibility() {
@@ -2288,7 +2067,6 @@ function applyJawVisibility() {
     const group = preview3DState.groups[jaw];
     if (group) group.visible = false;
   }
-  requestPreviewRender();
 }
 
 // World bounds of only the VISIBLE meshes under `root`. Box3.setFromObject ignores
@@ -2340,7 +2118,6 @@ function fitPreviewCamera({ visibleOnly = false, worldView = null } = {}) {
   controls.update();
   // Call only if present (TrackballControls has no saveState).
   controls.saveState?.();
-  requestPreviewRender();
 }
 
 // Camera offset + up per snap, in the MODEL's local frame (Z-up: +Z = occlusal); modelRoot is
@@ -2839,38 +2616,6 @@ async function fetchExtraStlsForCase() {
   return results.filter(Boolean);
 }
 
-// Fetch + parse the extra slots exactly once, on demand.
-//
-// This used to run on every page entry. It is the single most expensive thing on the load
-// path and none of it is visible: each slot is up to ~26MB of base64, and every mesh it
-// builds is created `visible = false`. Deferring it to the first panel open takes the whole
-// download, the base64 decode, the STL parse and the decimation off page load.
-//
-// Idempotent, and the promise is the latch — loadExtraStlsIntoPreview RESETS the slot maps,
-// so a second concurrent pass would wipe a just-uploaded slot.
-function ensureExtraStlsLoaded() {
-  if (preview3DState.extrasLoadPromise) return preview3DState.extrasLoadPromise;
-  preview3DState.extrasLoadState = "loading";
-  renderUpload3dList();
-  const run = loadExtraStlsIntoPreview().then(
-    () => {
-      preview3DState.extrasLoadState = "loaded";
-      // loadExtraStlsIntoPreview draws the list itself, but it does so while the state is
-      // still "loading" — without this the rows stay stuck on the placeholder.
-      renderUpload3dList();
-    },
-    (err) => {
-      console.warn("[preview3D] extra STL load failed", err);
-      // Drop the latch so the next open retries rather than showing four empty slots forever.
-      preview3DState.extrasLoadState = "idle";
-      preview3DState.extrasLoadPromise = null;
-      renderUpload3dList();
-    }
-  );
-  preview3DState.extrasLoadPromise = run;
-  return run;
-}
-
 async function loadExtraStlsIntoPreview() {
   preview3DState.extraGroups = {};
   preview3DState.extraFileNames = {};
@@ -2879,13 +2624,6 @@ async function loadExtraStlsIntoPreview() {
   for (const extra of extras) {
     preview3DState.occupiedSlots.add(extra.slotNumber);
     preview3DState.extraFileNames[extra.slotNumber] = extra.filename;
-    // Hand the browser a real frame between slots. renderExtraStl is `async` but its
-    // body — base64 decode, STL parse, vertex merge, decimation — runs start to finish
-    // synchronously, and `await` alone only yields a microtask, so back-to-back slots
-    // merged into one unbroken block (measured: a single 7.8s main-thread stall at 4x
-    // CPU on a case whose four slots each hold a ~26MB scan). These meshes are created
-    // hidden, so nothing here is worth blocking input for.
-    await waitForPreviewPaint();
     // Isolate per-slot failures: a single corrupt/undecodable extra STL must not
     // abort the whole interactive preview (the jaws are already loaded by now).
     try {
@@ -2988,10 +2726,6 @@ async function uploadExtraStl(file, targetSlot = null) {
     setMessage?.("Open a case before uploading a 3D file.");
     return;
   }
-  // Never pick a "free" slot from a map that hasn't been filled in yet — uploading into a
-  // slot the server already holds would overwrite it. Normally already resolved, since the
-  // only way to reach an upload control is through the panel that triggers this load.
-  await ensureExtraStlsLoaded();
   if (!preview3DState.occupiedSlots) preview3DState.occupiedSlots = new Set();
   let freeSlot;
   if (targetSlot != null) {
@@ -3081,7 +2815,6 @@ function toggleExtraStlVisibility(slot, iconEl) {
   }
   entry.group.visible = !entry.group.visible;
   iconEl?.classList.toggle("is-hidden-extra", !entry.group.visible);
-  requestPreviewRender();
 }
 
 // Show/hide every loaded extra STL at once; the panel rows re-render so their icons
@@ -3092,7 +2825,6 @@ function setExtraStlsVisible(visible) {
     if (entry?.group) entry.group.visible = visible;
   }
   renderUpload3dList();
-  requestPreviewRender();
 }
 
 // Set one jaw's mesh visibility and keep its toolbar row in sync (same as the row icon).
@@ -3102,7 +2834,6 @@ function setJawVisible(jaw, visible) {
   group.visible = visible;
   const rowKey = jaw === "upper" ? "rowUpper" : "rowLower";
   preview3DState.topControls?.[rowKey]?.row?.classList.toggle("is-hidden-jaw", !visible);
-  requestPreviewRender();
 }
 
 // Opening the "Other 3D files" panel focuses the stage on the extras: maximize the preview,
@@ -3399,15 +3130,9 @@ function openUpload3dModal() {
   renderUpload3dList();
   modal.overlay.classList.remove("is-hidden");
   modal.overlay.setAttribute("aria-hidden", "false");
-  // This open is what pulls the extras in (they are not loaded at page entry). Stage them
-  // only once they are actually in the scene, only if there is something to show — with all
-  // four slots empty, hiding the jaws would just leave a blank viewport behind the panel —
-  // and only if the panel is still open by the time the parse finishes.
-  ensureExtraStlsLoaded().then(() => {
-    if (!isUpload3dModalOpen()) return;
-    if (Object.keys(preview3DState.extraGroups || {}).length) enterExtraStlStage();
-    positionUpload3dPanel();
-  });
+  // Stage the extras only once there is something to show — with all four slots empty,
+  // hiding the jaws would just leave a blank viewport behind the panel.
+  if (Object.keys(preview3DState.extraGroups || {}).length) enterExtraStlStage();
   positionUpload3dPanel();
   if (!preview3DState.upload3dKeyHandler) {
     preview3DState.upload3dKeyHandler = (e) => {
@@ -3479,14 +3204,6 @@ function renderUpload3dList() {
   if (!modal) return;
   const list = modal.list;
   list.innerHTML = "";
-
-  // Until the slots come back we don't know which are occupied, and drawing them as empty
-  // would read as "my files are gone" — and would offer an upload button that could target
-  // a slot the server already holds.
-  if (preview3DState.extrasLoadState === "loading") {
-    EXTRA_STL_SLOTS.forEach((slot) => list.appendChild(buildUpload3dLoadingRow(slot)));
-    return;
-  }
 
   const occupied = preview3DState.occupiedSlots || new Set();
   EXTRA_STL_SLOTS.forEach((slot) => {
@@ -3593,32 +3310,6 @@ function buildUpload3dSlotRow(slot) {
   row.appendChild(icon);
   row.appendChild(text);
   enableSlotDropZone(row, slot);
-  return row;
-}
-
-// A slot whose contents are still being fetched/parsed. No upload affordance and no drop
-// zone: the slot may already be occupied, we just don't know it yet.
-function buildUpload3dLoadingRow(slot) {
-  const row = document.createElement("div");
-  row.className = "upload3d-row upload3d-slot-row";
-
-  const icon = document.createElement("span");
-  icon.className = "upload3d-file-icon is-empty";
-  icon.innerHTML = '<i class="fa fa-spinner fa-spin" aria-hidden="true"></i>';
-
-  const text = document.createElement("div");
-  text.className = "upload3d-row-text";
-  const slotName = document.createElement("span");
-  slotName.className = "upload3d-slot-name";
-  slotName.textContent = slotLabel(slot);
-  const status = document.createElement("span");
-  status.className = "upload3d-row-name is-muted";
-  status.textContent = "Loading…";
-  text.appendChild(slotName);
-  text.appendChild(status);
-
-  row.appendChild(icon);
-  row.appendChild(text);
   return row;
 }
 

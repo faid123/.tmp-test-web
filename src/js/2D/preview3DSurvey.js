@@ -12,8 +12,6 @@ import {
   buildDllUndercutSurface,
   applySurveyUndercutToPreview,
   setHeatmapEnabled,
-  requestPreviewRender,
-  applyPreviewMouseButtons,
   fetchCaseData,
   getLoggedInUser,
   PREVIEW_MACHINE_ID,
@@ -197,9 +195,6 @@ function createSurveyRayLight(metrics, root) {
   cam.left = -r; cam.right = r; cam.top = r; cam.bottom = -r;
   cam.near = 0.1; cam.far = r * 6;
   cam.updateProjectionMatrix();
-  // Kept at 1024 on every device: dropping it to 512 on mobile measured as pure noise
-  // (the aim drag is vertex-bound, not fill-bound) while coarsening the undercut tint
-  // boundary, which is the clinically meaningful part of the render.
   light.shadow.mapSize.set(1024, 1024);
   // Keeps gentle slopes from self-shadowing into acne.
   light.shadow.bias = -0.0004;
@@ -729,7 +724,6 @@ function enterSurveyAiming(jaw, btn) {
   window.addEventListener("keydown", preview3DState.surveyKeyHandler);
 
   updateSurveyPlacementArrow();
-  requestPreviewRender();
 }
 
 export function exitSurveyAiming({ preserveStage = false } = {}) {
@@ -754,12 +748,14 @@ export function exitSurveyAiming({ preserveStage = false } = {}) {
   preview3DState.surveyRayLight = null;
   setSurveyShadowsEnabled(false);
 
-  // Restore the PREVIEW's button map (not three.js's stock one) and drop the aim
-  // listeners — otherwise rotation moves to the left button once a survey has been
-  // opened, so the jaw spins differently before and after.
+  // Restore the default button map and drop the aim listeners.
   if (preview3DState.controls) {
     preview3DState.controls.noRotate = false;
-    applyPreviewMouseButtons(preview3DState.controls);
+    preview3DState.controls.mouseButtons = {
+      LEFT: THREE.MOUSE.ROTATE,
+      MIDDLE: THREE.MOUSE.DOLLY,
+      RIGHT: THREE.MOUSE.PAN,
+    };
   }
   preview3DState.surveyDragCleanup?.();
   preview3DState.surveyDragCleanup = null;
@@ -802,7 +798,6 @@ export function exitSurveyAiming({ preserveStage = false } = {}) {
     preview3DState.surveyKeyHandler = null;
   }
   preview3DState.surveyAiming = null;
-  requestPreviewRender();
 }
 
 // Two-step control: first click arms the jaw, second (labelled SET) commits.
@@ -822,7 +817,6 @@ function setSurveyJawVisible(jaw, visible) {
   group.visible = visible;
   const rowKey = jaw === "upper" ? "rowUpper" : "rowLower";
   preview3DState.topControls?.[rowKey]?.row?.classList.toggle("is-hidden-jaw", !visible);
-  requestPreviewRender();
 }
 
 // Show/hide + enable/disable the per-jaw CANCEL buttons beside SET.
