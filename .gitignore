@@ -3,6 +3,7 @@ node_modules/
 
 # Test output
 coverage/
+eslint-report.json
 
 # Webpack build output
 
