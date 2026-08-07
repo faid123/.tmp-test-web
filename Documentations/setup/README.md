@@ -44,6 +44,6 @@ covers the codebase itself — architecture and feature deep-dives, starting wit
 (the RPD framework design workspace).
 
 The `.docx` documents in `Documentations/` (UAT reports, security protocol, traceability, etc.)
-are kept current by a weekly automated check rather than by memory — see
-[Weekly Documentation Review](../WEEKLY_DOC_REVIEW.md) for how that works and what to do with its
-reports.
+are kept current by an automated check — refreshed on every deploy, plus available on demand —
+rather than by memory. See [Weekly Documentation Review](../WEEKLY_DOC_REVIEW.md) for how that
+works and what to do with its reports.

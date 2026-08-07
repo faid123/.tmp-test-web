@@ -21,7 +21,7 @@
 // produces — see the "How to act on a report" section in WEEKLY_DOC_REVIEW.md.
 
 import { execSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -318,6 +318,15 @@ const DOC_FLAG_RULES = [
     why: "changes the deploy pipeline these documents describe step-by-step",
   },
   {
+    // How to Setup.docx states its own policy: "consolidated from Documentations/
+    // setup/*.md -- edit those files, then regenerate this docx". It also mirrors
+    // deploy.yml's pipeline steps in its own §6, so a deploy.yml change needs the
+    // same check even though nothing under Documentations/setup/ moved.
+    test: (f) => f.startsWith("Documentations/setup/") || f === ".github/workflows/deploy.yml",
+    docs: ["How to Setup.docx"],
+    why: "How to Setup.docx is regenerated from Documentations/setup/*.md and mirrors deploy.yml's pipeline steps -- keep it in sync with whichever changed",
+  },
+  {
     // Self-referential on purpose: WEEKLY_DOC_REVIEW.md describes this script's
     // schedule, its DOC_FLAG_RULES/SUITE_META mapping, and (since the deploy.yml
     // change) the deploy-triggered path -- so changes to any of those three should
@@ -449,11 +458,42 @@ ${flaggedSection}
 - \`Documentations/AutoTest Results/automated-test-run-log.txt\`
 - \`Documentations/AutoTest Results/npm-audit-run.json\`
 - \`Documentations/AutoTest Results/npm-audit-run.txt\`
+- \`Documentations/AutoTest Results/DOCS_TO_UPDATE.md\` (same alignment status + checklist as this report, at a fixed filename)
 
 See [Documentations/WEEKLY_DOC_REVIEW.md](../WEEKLY_DOC_REVIEW.md) for what to do with this report.
 `;
 
   writeFileSync(path.join(AUTOTEST_DIR, `weekly-review-${date}.md`), report);
+
+  // A second, non-dated copy of just the actionable bits -- overwritten every run,
+  // unlike weekly-review-<date>.md which is kept as history (see WEEKLY_DOC_REVIEW.md).
+  // The dated file requires knowing "which date is latest"; this one has a fixed name,
+  // so it's the thing to open when browsing the repo and wondering "does anything need
+  // updating right now" without digging through a list of dated reports first.
+  const docsToUpdate = `# Docs to update — current status
+
+_Always-current snapshot, overwritten every run -- not a dated history file like
+\`weekly-review-<date>.md\`. For full test/audit deltas and commit history, see this run's dated
+copy: \`weekly-review-${date}.md\`._
+
+Last checked: ${date} — branch \`${branch}\` @ \`${headSha.slice(0, 7)}\`
+
+## Live-branch alignment
+
+${alignmentNote}${deployPendingNote}
+${flaggedSection || "\n## Docs likely needing a manual/AI-assisted update\n\n_No prior review state to diff against yet -- this is the first recorded run._\n"}
+See [Documentations/WEEKLY_DOC_REVIEW.md](../WEEKLY_DOC_REVIEW.md) for the full process.
+`;
+  writeFileSync(path.join(AUTOTEST_DIR, "DOCS_TO_UPDATE.md"), docsToUpdate);
+
+  // Surface the same report directly on the GitHub Actions run page -- whichever
+  // workflow called this (the deploy-triggered step in deploy.yml, or a manual run
+  // of weekly-doc-review.yml), $GITHUB_STEP_SUMMARY is already set by the runner, so
+  // this needs no per-workflow YAML wiring to stay in sync. Without this, the only
+  // way to learn a doc needs updating was to go find and open the dated report file.
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    appendFileSync(process.env.GITHUB_STEP_SUMMARY, report + "\n");
+  }
 
   writeFileSync(
     STATE_PATH,
@@ -475,6 +515,7 @@ See [Documentations/WEEKLY_DOC_REVIEW.md](../WEEKLY_DOC_REVIEW.md) for what to d
 
   console.log(`\n== Done ==`);
   console.log(`Report: Documentations/AutoTest Results/weekly-review-${date}.md`);
+  console.log(`Current status: Documentations/AutoTest Results/DOCS_TO_UPDATE.md`);
   console.log(`Tests: ${testDelta}`);
   console.log(`Audit: ${JSON.stringify(audit.totals)}`);
 }

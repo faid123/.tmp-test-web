@@ -17,8 +17,8 @@ confirms it, loudly:
 > ⚠️ **This branch has diverged from `nyunt/dev-W7.1`.** The deployed commit `d5d5121` is not an
 > ancestor of HEAD.
 
-This is the same class of drift that caused the 2026-07-31 documentation re-audit (see git log /
-`Documentations/WEEKLY_DOC_REVIEW.md`). It was deliberately **not** auto-fixed by merging branches —
+This is the same class of drift `Documentations/WEEKLY_DOC_REVIEW.md`'s automated checks exist to
+catch. It was deliberately **not** auto-fixed by merging branches —
 that's a judgment call for a human, not something to do silently while writing docs. If you're
 reading this later and want to confirm it's still accurate, re-run the alignment check or diff
 `dev-deploy-documentation` against `nyunt/dev-deploy`.

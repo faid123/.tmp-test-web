@@ -1,15 +1,16 @@
 name: Weekly Documentation Review
 
-# IMPORTANT: GitHub Actions only reads `schedule:` triggers from workflow files that
-# exist on the repository's *default* branch (main), regardless of which branch this
-# file lives on. Until this file (or an equivalent) is present on main, the cron below
-# will not fire on its own — see Documentations/WEEKLY_DOC_REVIEW.md "Making the
-# schedule actually fire" for what to do about that. The manual `workflow_dispatch`
-# trigger works from this branch immediately, no matter where the default branch is.
+# Manual/on-demand only. The automatic path is the deploy-triggered step at the end of
+# .github/workflows/deploy.yml, which reruns this same review after every successful
+# deploy — see Documentations/WEEKLY_DOC_REVIEW.md. This workflow stays around as the
+# "Run workflow" button for triggering a review without waiting on a deploy (e.g. to
+# pick up an npm-audit-only change with no code change behind it).
+#
+# There used to be a `schedule:` trigger here (Friday 01:00 UTC). It was removed because
+# it never actually fired: GitHub Actions only reads `schedule:` from workflow files on
+# the repository's default branch (main), and this file has only ever lived on
+# dev-deploy-documentation.
 on:
-  schedule:
-    # 01:00 UTC every Friday (09:00 SGT). Adjust if the team wants a different time.
-    - cron: "0 1 * * 5"
   workflow_dispatch:
 
 # Serialize runs so two reviews never race and commit conflicting artifacts.
@@ -64,12 +65,15 @@ jobs:
             git push origin "HEAD:${REVIEW_BRANCH}"
           fi
 
-      - name: Summary
+      # tools/weekly-doc-review.mjs already appends the full report -- including the
+      # "Docs likely needing a manual/AI-assisted update" checklist -- straight into
+      # $GITHUB_STEP_SUMMARY during the "Run weekly doc review" step above, so it's
+      # visible on this run's Summary tab with no extra wiring here. This step only
+      # exists as a fallback for when that step never got that far (e.g. Jest crashed
+      # before the report was built) -- if: always() means it still shows something.
+      - name: Fallback note if the report above is missing
         if: always()
         run: |
-          echo "### Weekly Documentation Review" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "This job only refreshes the automated data in \`Documentations/AutoTest Results/\`." >> "$GITHUB_STEP_SUMMARY"
-          echo "The narrative \`.docx\` documents are **not** edited automatically — see the" >> "$GITHUB_STEP_SUMMARY"
-          echo "generated \`weekly-review-*.md\` report for what changed and which docs to review." >> "$GITHUB_STEP_SUMMARY"
-          echo "See Documentations/WEEKLY_DOC_REVIEW.md for the full process." >> "$GITHUB_STEP_SUMMARY"
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "_If no report appears above, \`node tools/weekly-doc-review.mjs\` didn't complete -- check the \"Run weekly doc review\" step's log. See \`Documentations/WEEKLY_DOC_REVIEW.md\` for the full process._" >> "$GITHUB_STEP_SUMMARY"

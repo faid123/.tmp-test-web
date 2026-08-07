@@ -43,3 +43,9 @@ someone with admin on `faid123/.tmp-test-web`.
 **You're not sure which branch has "the real" current code**
 `main` is stale/diverged — see [02 — Branching and collaboration](02-branching-and-collaboration.md).
 Check the latest `nyunt/integration_N` branch instead.
+
+**`Documentations/AutoTest Results/` on `dev-deploy-documentation` looks stale after a deploy**
+Either the deploy-triggered refresh step (in `deploy.yml`) hasn't been merged yet — check whether
+`ci/deploy-doc-refresh` has landed on `nyunt/dev-deploy` — or it ran but found nothing changed
+(`npm audit`/test output can be identical between two deploys). Run it manually to force a check:
+`node tools/weekly-doc-review.mjs`. See [Weekly Documentation Review](../WEEKLY_DOC_REVIEW.md).
