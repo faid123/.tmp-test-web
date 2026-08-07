@@ -178,7 +178,11 @@ export async function loadInteractiveJawPreview(area) {
       try {
         await populateJawPreviewFromOFF(meshFiles, normalizedUndercut, meshQuality);
         await finishMeshQualityProgress();
-        preview3DState.qualitySource = { kind: "off", files: meshFiles, undercut: normalizedUndercut };
+        preview3DState.qualitySource = {
+          kind: "off",
+          files: stripQualitySourcePayloads(meshFiles),
+          undercut: normalizedUndercut,
+        };
         updateQualityToggle();
         autoApplySavedSurveyAngles().catch((err) =>
           console.warn("[preview3D] saved survey auto-apply failed", err)
@@ -203,7 +207,11 @@ export async function loadInteractiveJawPreview(area) {
       try {
         await populateJawPreview(jawFiles, normalizedUndercut, meshQuality);
         await finishMeshQualityProgress();
-        preview3DState.qualitySource = { kind: "stl", files: jawFiles, undercut: normalizedUndercut };
+        preview3DState.qualitySource = {
+          kind: "stl",
+          files: stripQualitySourcePayloads(jawFiles),
+          undercut: normalizedUndercut,
+        };
         updateQualityToggle();
         autoApplySavedSurveyAngles().catch((err) =>
           console.warn("[preview3D] saved survey auto-apply failed", err)
@@ -563,9 +571,14 @@ function init3DPreview(area) {
   // hid this by redrawing 60x a second; render-on-demand does not, so every path that can
   // invalidate the buffer has to ask for a frame back.
   const canvas = renderer.domElement;
-  // Without preventDefault the context is never eligible for restoration at all.
+  // Without preventDefault the context is never eligible for restoration at all. But asking
+  // for it back re-uploads every jaw mesh to the GPU, so if the loss was memory pressure in
+  // the first place, an unbounded retry is a crash loop. Give up after a few and leave the
+  // canvas dark rather than take the tab down with it.
+  let contextLosses = 0;
   const onContextLost = (event) => {
-    event.preventDefault();
+    if (++contextLosses <= 3) event.preventDefault();
+    else console.warn("[preview3D] WebGL context lost repeatedly — not requesting another restore");
     stopPreviewLoop();
   };
   const onContextRestored = () => requestPreviewRender();
@@ -933,6 +946,38 @@ function updateQualityToggle() {
 }
 
 // HD/SD toggle click: re-render the jaws from the kept source files at the
+// Strip the base64 payloads out of a qualitySource file list, keeping the entries (and so
+// the per-jaw session state that upload/remove maintain on them).
+//
+// A pair of jaw scans is ~70MB of base64, and qualitySource used to hold it for the WHOLE
+// session purely so the HD/SD toggle and the survey heatmap could re-parse without another
+// fetch. That sits on top of the parsed Float32 geometry, and on an iPhone it is the kind of
+// resident footprint that takes the WebKit content process past its ceiling — the tab then
+// dies with "A problem repeatedly occurred". Re-fetch instead; both callers are already
+// multi-second operations behind a progress overlay.
+function stripQualitySourcePayloads(files) {
+  return (files || []).map((f) => (f?.data ? { ...f, data: null } : f));
+}
+
+// Put the payloads back for a rebuild. Entries uploaded this session still carry their own
+// `data` and are kept as-is; server-backed entries are re-fetched. Entries the user removed
+// this session are NOT resurrected — the fetch is filtered down to what `source.files` lists.
+async function resolveQualitySourceFiles(source) {
+  const entries = source?.files || [];
+  if (!entries.length) return [];
+  if (entries.every((f) => f?.data)) return entries;
+  const fetched =
+    source.kind === "off" ? await fetchParameterisedMeshForCase() : await fetchJawFilesForCase();
+  const byJaw = new Map();
+  for (const f of fetched || []) {
+    const jaw = getJawKeyFromFile(f);
+    if (jaw) byJaw.set(jaw, f);
+  }
+  return entries
+    .map((entry) => (entry?.data ? entry : byJaw.get(getJawKeyFromFile(entry)) || null))
+    .filter(Boolean);
+}
+
 // requested quality, reusing the same progress overlay as the initial load.
 async function switchMeshQuality(quality) {
   const normalized = quality === "high" ? "high" : "low";
@@ -954,10 +999,13 @@ async function switchMeshQuality(quality) {
   await waitForPreviewPaint();
 
   try {
+    // qualitySource holds entry metadata, not the scan bytes — pull those back for the rebuild.
+    const files = await resolveQualitySourceFiles(source);
+    if (!files.length) throw new Error("no mesh source available for quality switch");
     if (source.kind === "off") {
-      await populateJawPreviewFromOFF(source.files, source.undercut, normalized);
+      await populateJawPreviewFromOFF(files, source.undercut, normalized);
     } else {
-      await populateJawPreview(source.files, source.undercut, normalized);
+      await populateJawPreview(files, source.undercut, normalized);
     }
     // populate* clears the model root, which also drops the extra-slot meshes —
     // re-attach the still-alive groups (root.clear() detaches, never disposes).
@@ -2079,10 +2127,13 @@ export async function applySurveyUndercutToPreview(nextUndercut) {
       kind: source.kind,
       quality,
     });
-    if (source.kind === "off") {
-      await populateJawPreviewFromOFF(source.files, nextUndercut, quality);
-    } else {
-      await populateJawPreview(source.files, nextUndercut, quality);
+    const files = await resolveQualitySourceFiles(source);
+    if (files.length) {
+      if (source.kind === "off") {
+        await populateJawPreviewFromOFF(files, nextUndercut, quality);
+      } else {
+        await populateJawPreview(files, nextUndercut, quality);
+      }
     }
     applyJawVisibility();
     updateQualityToggle();
