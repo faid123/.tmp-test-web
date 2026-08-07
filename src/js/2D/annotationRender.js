@@ -121,11 +121,13 @@ function appendSvgTintFilters(defs) {
       id,
       "color-interpolation-filters": "sRGB",
       x: "-20%",
-      // The dilate pass must not clip against the filter region or the erode pass
-      // shaves that much off the silhouette, so a filled body needs deeper padding.
-      y: spec.fillBody ? "-60%" : "-20%",
+      // The grow pass must not clip against the filter region or the shrink pass shaves
+      // that much off the silhouette, so a filled body needs deeper padding. Every extra
+      // percent here is filter pixels on a x3 DPR phone, so it is only as deep as the
+      // blur actually reaches.
+      y: spec.fillBody ? "-35%" : "-20%",
       width: "140%",
-      height: spec.fillBody ? "220%" : "140%",
+      height: spec.fillBody ? "170%" : "140%",
     });
     filterEl.appendChild(
       svgEl("feColorMatrix", {
@@ -148,22 +150,28 @@ function appendSvgTintFilters(defs) {
       const boost = svgEl("feComponentTransfer", { in: "softLine", result: "solidLine" });
       boost.appendChild(svgEl("feFuncA", { type: "linear", slope: "8", intercept: "-0.4" }));
       filterEl.appendChild(boost);
+      // Close the outline with blur+threshold rather than feMorphology dilate/erode.
+      // WebKit implements feMorphology as a per-pixel kernel scan, so radius 40 is an
+      // 81x81 sample window for every pixel of a filter region 1.4x wide and 2.2x tall:
+      // measured at ~1.45s per lock/unlock on Safari, against ~20ms on Chromium (Skia's
+      // path is O(1) in the radius, which is why this never showed up in Chrome).
+      // Gaussian blur is separable and fast in both engines. Blur then keep everything
+      // above a LOW alpha to grow the strokes together; blur again and keep only what is
+      // above a HIGH alpha to shrink back to the original silhouette.
+      const closeSigma = (TOOTH_BODY_FILL_RADIUS * 0.55).toFixed(2);
       filterEl.appendChild(
-        svgEl("feMorphology", {
-          in: "solidLine",
-          operator: "dilate",
-          radius: String(TOOTH_BODY_FILL_RADIUS),
-          result: "grown",
-        })
+        svgEl("feGaussianBlur", { in: "solidLine", stdDeviation: closeSigma, result: "grownBlur" })
       );
+      // slope/intercept pairs are a hard alpha threshold: a' = 50a - 50t, clamped to 0..1.
+      const grow = svgEl("feComponentTransfer", { in: "grownBlur", result: "grown" });
+      grow.appendChild(svgEl("feFuncA", { type: "linear", slope: "50", intercept: "-3" }));
+      filterEl.appendChild(grow);
       filterEl.appendChild(
-        svgEl("feMorphology", {
-          in: "grown",
-          operator: "erode",
-          radius: String(TOOTH_BODY_FILL_RADIUS),
-          result: "bodyAlpha",
-        })
+        svgEl("feGaussianBlur", { in: "grown", stdDeviation: closeSigma, result: "shrunkBlur" })
       );
+      const shrink = svgEl("feComponentTransfer", { in: "shrunkBlur", result: "bodyAlpha" });
+      shrink.appendChild(svgEl("feFuncA", { type: "linear", slope: "50", intercept: "-47" }));
+      filterEl.appendChild(shrink);
       filterEl.appendChild(svgEl("feFlood", { "flood-color": spec.fillBody, result: "bodyColor" }));
       filterEl.appendChild(
         svgEl("feComposite", { in: "bodyColor", in2: "bodyAlpha", operator: "in", result: "body" })
