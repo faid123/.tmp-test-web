@@ -1,5 +1,5 @@
 {
-  "runAt": "2026-08-07T07:58:52.108Z",
+  "runAt": "2026-08-07T08:27:58.546Z",
   "command": "npx jest --ci --coverage --coverageReporters=json-summary --verbose --testLocationInResults --json",
   "commandFailed": false,
   "numTotalTestSuites": 13,
@@ -16,7 +16,7 @@
       "pass": 94,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2240,
+      "durationMs": 2612,
       "uat": [],
       "category": "real",
       "crossCutting": false,
@@ -30,7 +30,7 @@
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2385,
+      "durationMs": 2592,
       "uat": [
         "UAT-06"
       ],
@@ -46,7 +46,7 @@
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 453,
+      "durationMs": 495,
       "uat": [
         "UAT-02"
       ],
@@ -62,7 +62,7 @@
       "pass": 22,
       "fail": 0,
       "skip": 0,
-      "durationMs": 477,
+      "durationMs": 470,
       "uat": [
         "UAT-01"
       ],
@@ -78,7 +78,7 @@
       "pass": 21,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1285,
+      "durationMs": 1258,
       "uat": [
         "UAT-04"
       ],
@@ -94,7 +94,7 @@
       "pass": 28,
       "fail": 0,
       "skip": 0,
-      "durationMs": 5924,
+      "durationMs": 6773,
       "uat": [
         "UAT-07",
         "UAT-08"
@@ -111,7 +111,7 @@
       "pass": 4,
       "fail": 0,
       "skip": 0,
-      "durationMs": 3201,
+      "durationMs": 3493,
       "uat": [
         "UAT-06"
       ],
@@ -127,7 +127,7 @@
       "pass": 2,
       "fail": 0,
       "skip": 0,
-      "durationMs": 626,
+      "durationMs": 331,
       "uat": [
         "UAT-06"
       ],
@@ -143,7 +143,7 @@
       "pass": 4,
       "fail": 0,
       "skip": 0,
-      "durationMs": 3028,
+      "durationMs": 3168,
       "uat": [
         "UAT-06"
       ],
@@ -159,25 +159,11 @@
       "pass": 3,
       "fail": 0,
       "skip": 0,
-      "durationMs": 113,
+      "durationMs": 174,
       "uat": [],
       "category": "real",
       "crossCutting": true,
       "note": "Walks src/, __tests__/ and the HTML pages checking every relative import/script-src resolves. Repo-wide build-integrity check, not tied to one workflow.",
-      "failureMessages": []
-    },
-    {
-      "file": "crypt.test.mjs",
-      "status": "passed",
-      "tests": 3,
-      "pass": 3,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 57,
-      "uat": [],
-      "category": "real",
-      "crossCutting": true,
-      "note": "Imports real src/js/shared/crypt.js. Case-ID URL obfuscation used across case list, chat, viewer, version history, annotation and create-case links -- cross-cutting, not tied to one workflow.",
       "failureMessages": []
     },
     {
@@ -187,7 +173,7 @@
       "pass": 5,
       "fail": 0,
       "skip": 0,
-      "durationMs": 106,
+      "durationMs": 146,
       "uat": [
         "UAT-06"
       ],
@@ -197,13 +183,27 @@
       "failureMessages": []
     },
     {
+      "file": "crypt.test.mjs",
+      "status": "passed",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 86,
+      "uat": [],
+      "category": "real",
+      "crossCutting": true,
+      "note": "Imports real src/js/shared/crypt.js. Case-ID URL obfuscation used across case list, chat, viewer, version history, annotation and create-case links -- cross-cutting, not tied to one workflow.",
+      "failureMessages": []
+    },
+    {
       "file": "reciprocatingExclusivity.test.mjs",
       "status": "passed",
       "tests": 9,
       "pass": 9,
       "fail": 0,
       "skip": 0,
-      "durationMs": 186,
+      "durationMs": 234,
       "uat": [
         "UAT-06"
       ],

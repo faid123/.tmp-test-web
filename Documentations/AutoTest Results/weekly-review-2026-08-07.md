@@ -1,10 +1,10 @@
 # Weekly Documentation Review -- 2026-08-07
 
-Branch: `dev-deploy-documentation` @ `d8129ec`
+Branch: `dev-deploy-documentation` @ `43f611a`
 
 ## Live-branch alignment
 
-⚠️ **This branch has diverged from `nyunt/dev-W7.1`.** The deployed commit `218ab45` is not an ancestor of HEAD. Everything below reflects this branch's code, which is not what's currently live -- find and review from whichever branch actually contains that commit before trusting this report, or treat this as the signal to re-run the branch-retargeting pass done on 2026-07-31.
+⚠️ **This branch has diverged from `nyunt/dev-W7.1`.** The deployed commit `4b622f3` is not an ancestor of HEAD. Everything below reflects this branch's code, which is not what's currently live -- find and review from whichever branch actually contains that commit before trusting this report, or treat this as the signal to re-run the branch-retargeting pass done on 2026-07-31.
 
 ✅ `nyunt/dev-deploy` matches what's live -- no deploy pending.
 
@@ -19,7 +19,7 @@ Branch: `dev-deploy-documentation` @ `d8129ec`
 ## Commits since the last review
 
 ```
-d8129ec Doc refresh triggered by deploy 4f034f6aa72bb4cd093b0c8e306cf04defd6be27 (run 25)
+43f611a Doc refresh triggered by deploy 218ab45275d153d0769b6f8f960513d1d4192468 (run 26)
 ```
 
 ## Docs likely needing a manual/AI-assisted update
