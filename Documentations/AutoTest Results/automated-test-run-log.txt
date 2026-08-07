@@ -1,37 +1,42 @@
 PASS __tests__/crypt.test.mjs
   lol function (encrypt/decrypt)
-    √ should encrypt and decrypt numeric case ID correctly (20 ms)
+    √ should encrypt and decrypt numeric case ID correctly (16 ms)
     √ should return different encryption for different IDs (1 ms)
     √ should handle invalid encrypted input gracefully and return NaN (1 ms)
 
 PASS __tests__/mergeInstructions.test.mjs
   mergeInstructions()
-    √ merges a server item onto the local item sharing the same title key (20 ms)
+    √ merges a server item onto the local item sharing the same title key (14 ms)
     √ keeps items with distinct keys separate (1 ms)
-    √ falls back from title to id to preview when building the key (2 ms)
-    √ title takes precedence over id when both are present (2 ms)
-    √ tolerates null / undefined inputs (2 ms)
+    √ falls back from title to id to preview when building the key (1 ms)
+    √ title takes precedence over id when both are present (1 ms)
+    √ tolerates null / undefined inputs (1 ms)
 
 PASS __tests__/caseEnrichment.test.mjs
   enrichment constants
-    √ concurrency cap stays at 3 (backend 403-throttles bursts — bump only with backend coordination) (18 ms)
+    √ concurrency cap stays at 3 (backend 403-throttles bursts — bump only with backend coordination) (15 ms)
   caseIntIdOf()
     √ prefers case_int_id, falls back to id, tolerates junk (1 ms)
   buildEnrichRequests()
     √ detail request: POST /additionalcasedetails/getall with the single-element auth body (2 ms)
     √ roles request: POST /role/all/get with the two-element body shape (1 ms)
   applyEnrichmentResponses() — detail fold
-    √ folds the last element of the [{…}] response into the case fields (4 ms)
-    √ ignores a last element without case_int_id; tolerates malformed / non-array bodies (2 ms)
+    √ folds the last element of the [{…}] response into the case fields (7 ms)
+    √ ignores a last element without case_int_id; tolerates malformed / non-array bodies (3 ms)
     √ a real !ok answer is terminal: returns true (no park/retry) and keeps base fields (1 ms)
   applyEnrichmentResponses() — roles fold
     √ keeps only coowner rows with a username (1 ms)
-    √ the owner role row overrides a placeholder assigned_to
+    √ the owner role row overrides a placeholder assigned_to (1 ms)
     √ without an owner row, a raw-uuid assigned_to remaps to that row's username (1 ms)
   applyEnrichmentResponses() — refusal contract
     √ both responses null (throttle/outage) → false so the caller parks and retries (1 ms)
     √ one refused + one ok → true, and the available response still folds (1 ms)
-    √ logs each answered request through logApi with its endpoint label (1 ms)
+    √ logs each answered request through logApi with its endpoint label (2 ms)
+
+PASS __tests__/importResolution.test.mjs
+  √ every relative import in src/ resolves to an existing file (79 ms)
+  √ every relative import and jest.mock in __tests__/ resolves (8 ms)
+  √ every relative <script src> in the HTML pages resolves (8 ms)
 
   console.log
     [API] ✓ POST /user/reqpwreset status=200
@@ -42,11 +47,6 @@ PASS __tests__/caseEnrichment.test.mjs
     [API] ✓ POST /user/resetpw status=200
 
       at log (src/js/shared/apiLog.js:10:11)
-
-PASS __tests__/importResolution.test.mjs
-  √ every relative import in src/ resolves to an existing file (166 ms)
-  √ every relative import and jest.mock in __tests__/ resolves (6 ms)
-  √ every relative <script src> in the HTML pages resolves (19 ms)
 
   console.warn
     [API] ✗ POST /user/reqpwreset status=404
@@ -133,41 +133,41 @@ PASS __tests__/importResolution.test.mjs
 
 PASS __tests__/passwordReset.test.mjs
   computePasswordStrength()
-    √ an empty password has no score and no label (22 ms)
+    √ an empty password has no score and no label (16 ms)
     √ anything under the minimum length is Weak however varied (1 ms)
-    √ length alone, with one character class, is still Weak (1 ms)
-    √ two character classes at length is Fair (1 ms)
-    √ three classes is Good until it is also long (1 ms)
-    √ 12+ characters with three classes is Strong (1 ms)
+    √ length alone, with one character class, is still Weak
+    √ two character classes at length is Fair
+    √ three classes is Good until it is also long
+    √ 12+ characters with three classes is Strong
     √ score and label always agree (1 ms)
   validateNewPassword()
-    √ accepts a long enough, matching pair
+    √ accepts a long enough, matching pair (1 ms)
     √ rejects an empty password (1 ms)
     √ rejects a password under the minimum length
-    √ rejects a mismatched confirmation (1 ms)
-    √ length is checked before the match, so a short pair says so (1 ms)
+    √ rejects a mismatched confirmation
+    √ length is checked before the match, so a short pair says so
   error messages
-    √ an unknown email on stage 1 says so (1 ms)
-    √ any other stage 1 failure falls back to a retry message
+    √ an unknown email on stage 1 says so
+    √ any other stage 1 failure falls back to a retry message (1 ms)
     √ an expired key is distinguished from an invalid one (1 ms)
     √ a missing email is reported as such
     √ an unrecognised kind falls back rather than leaking it
   endpoint calls
-    √ requestResetKey posts the machine-id envelope the backend expects (77 ms)
+    √ requestResetKey posts the machine-id envelope the backend expects (65 ms)
     √ resetPassword sends the key and the new password together (3 ms)
-    √ a 200 carrying successful:false is not treated as success (2 ms)
-    √ a non-2xx response reports its status for the caller to describe (10 ms)
-    √ a network failure resolves as a failure rather than throwing (33 ms)
+    √ a 200 carrying successful:false is not treated as success (1 ms)
+    √ a non-2xx response reports its status for the caller to describe (7 ms)
+    √ a network failure resolves as a failure rather than throwing (23 ms)
 
 PASS __tests__/reciprocatingExclusivity.test.mjs
   reciprocating element is mutually exclusive (clasp XOR plate)
     √ placing plate-prox when tooth already has ... conflicts (15 ms)
-    √ placing plate-crossmesh when tooth already has ... conflicts (1 ms)
+    √ placing plate-crossmesh when tooth already has ... conflicts
     √ placing reciprocating-clasp when tooth already has ... conflicts (1 ms)
     √ placing reciprocating-clasp when tooth already has ... conflicts (1 ms)
     √ placing plate-prox when tooth already has ... conflicts (1 ms)
     √ placing plate-crossmesh when tooth already has ... conflicts
-    √ a retainer clasp may coexist with a reciprocal plate (valid clasp assembly)
+    √ a retainer clasp may coexist with a reciprocal plate (valid clasp assembly) (1 ms)
   addPlacement enforces the single reciprocating slot
     √ placing a reciprocating clasp drops a pre-existing plate (and vice versa) (1 ms)
     √ a retainer clasp + reciprocal plate both survive (different slot)
@@ -180,88 +180,88 @@ PASS __tests__/helpBot.test.mjs
     √ canonicalize replaces rather than adds, so one word can only score once (1 ms)
     √ canonicalize dedupes words that fold onto the same form (1 ms)
   findMatches()
-    √ plain phrasing finds the create-case topic (10 ms)
+    √ plain phrasing finds the create-case topic (8 ms)
     √ synonyms route an unseen phrasing to the same topic (2 ms)
-    √ finds the undercut topic from the colour question a user would actually ask (6 ms)
-    √ returns nothing for a question made only of stopwords
+    √ finds the undercut topic from the colour question a user would actually ask (1 ms)
+    √ returns nothing for a question made only of stopwords (1 ms)
     √ respects the limit (2 ms)
-    √ ranking is stable across identical calls (4 ms)
+    √ ranking is stable across identical calls (3 ms)
   page context
-    √ an ambiguous question answers with the notes box on the page you're on (7 ms)
-    √ a question whose answer lives elsewhere still resolves across pages (2 ms)
-    √ a partial phrase earns less than the whole phrase it came from
+    √ an ambiguous question answers with the notes box on the page you're on (6 ms)
+    √ a question whose answer lives elsewhere still resolves across pages (1 ms)
+    √ a partial phrase earns less than the whole phrase it came from (1 ms)
     √ the same-page boost only applies to topics that already scored
-    √ an exact phrase outranks scattered keyword hits (1 ms)
+    √ an exact phrase outranks scattered keyword hits
   localProvider()
-    √ a confident answer carries a topic and alternates (3 ms)
-    √ gibberish is not answered confidently but still offers somewhere to go (3 ms)
-    √ a single weak keyword falls below the confidence floor (2 ms)
-    √ MIN_SCORE is the floor a confident answer must clear (4 ms)
+    √ a confident answer carries a topic and alternates (1 ms)
+    √ gibberish is not answered confidently but still offers somewhere to go (1 ms)
+    √ a single weak keyword falls below the confidence floor
+    √ MIN_SCORE is the floor a confident answer must clear (1 ms)
   suggestionsFor()
     √ puts topics from the current page first
     √ falls back to global topics on a page with none of its own
   knowledge base integrity
     √ topic ids are unique
-    √ every topic has a title, an answer and keywords (20 ms)
+    √ every topic has a title, an answer and keywords (18 ms)
     √ every related id resolves to a real topic (5 ms)
     √ no topic lists itself as related (4 ms)
-    √ every page a topic claims has a label and a path (8 ms)
-    √ every topic is reachable by at least one of its own phrases (156 ms)
+    √ every page a topic claims has a label and a path (5 ms)
+    √ every topic is reachable by at least one of its own phrases (134 ms)
     √ TOPIC_BY_ID covers every topic
   3D surfaces are not conflated
-    √ surveying belongs to the 2D design, where the jaw preview lives (1 ms)
+    √ surveying belongs to the 2D design, where the jaw preview lives
     √ asking about the survey angle never routes to the 3D Viewer (2 ms)
     √ no topic on the 3D Viewer claims the viewer can survey
-    √ each screen answers the heatmap question with its own heatmap (2 ms)
+    √ each screen answers the heatmap question with its own heatmap (1 ms)
   Show me points at the control, not at what opens it
-    √ no topic targets an opener unless that opener is its subject (1 ms)
+    √ no topic targets an opener unless that opener is its subject
     √ a reveal always differs from the target it uncovers (1 ms)
-    √ uploading a jaw scan points into the create-case form (1 ms)
-    √ rename-case points at its own item in the case-actions menu
+    √ uploading a jaw scan points into the create-case form
+    √ rename-case points at its own item in the case-actions menu (1 ms)
     √ duplicate-case points at its own item in the case-actions menu (1 ms)
     √ delete-case points at its own item in the case-actions menu
     √ download-2d points at its own item in the case-actions menu (1 ms)
     √ user-access points at its own item in the case-actions menu
-    √ dashboard points at its own item in the case-actions menu
-    √ every field inside the create-case view knows how to open it (1 ms)
-    √ every sidebar item opens the footer menu first (1 ms)
+    √ dashboard points at its own item in the case-actions menu (1 ms)
+    √ every field inside the create-case view knows how to open it
+    √ every sidebar item opens the footer menu first
   highlight selectors still exist in the source
-    √ there are selectors to check
+    √ there are selectors to check (1 ms)
     √ #sidebarLogoutBtn is defined somewhere in the app (1 ms)
     √ #footerMenuBtn is defined somewhere in the app
     √ #sidebarChangePasswordBtn is defined somewhere in the app
-    √ #createCaseBtn is defined somewhere in the app
+    √ #createCaseBtn is defined somewhere in the app (1 ms)
     √ #ccInviteInput is defined somewhere in the app
     √ #uploadedJawModels is defined somewhere in the app
     √ #addRefImageBtn is defined somewhere in the app
     √ #searchCaseInput is defined somewhere in the app
-    √ .cm-stat-filters is defined somewhere in the app (1 ms)
-    √ .cm-table thead is defined somewhere in the app
-    √ .cm-status-edit is defined somewhere in the app (1 ms)
-    √ #caseInstructions is defined somewhere in the app (1 ms)
-    √ .start-case-button is defined somewhere in the app
+    √ .cm-stat-filters is defined somewhere in the app
+    √ .cm-table thead is defined somewhere in the app (1 ms)
+    √ .cm-status-edit is defined somewhere in the app
+    √ #caseInstructions is defined somewhere in the app
+    √ .start-case-button is defined somewhere in the app (1 ms)
     √ #renameBtn is defined somewhere in the app
-    √ .cm-detail .dropdown-toggle is defined somewhere in the app (1 ms)
+    √ .cm-detail .dropdown-toggle is defined somewhere in the app
     √ #duplicateBtn is defined somewhere in the app
     √ #deleteBtn is defined somewhere in the app
     √ #retrieveCaseBtn is defined somewhere in the app
     √ #download2dDesignBtn is defined somewhere in the app
-    √ #editUserAccessBtn is defined somewhere in the app (1 ms)
+    √ #editUserAccessBtn is defined somewhere in the app
     √ #view3dLinkRow is defined somewhere in the app
     √ #generateQrBtn is defined somewhere in the app
     √ #notificationBtn is defined somewhere in the app
     √ #viewDashboardBtn is defined somewhere in the app
     √ #refreshListBtn is defined somewhere in the app
-    √ #selectTeethPanel is defined somewhere in the app (2 ms)
-    √ #jawLockToggleBtn is defined somewhere in the app
+    √ #selectTeethPanel is defined somewhere in the app
+    √ #jawLockToggleBtn is defined somewhere in the app (1 ms)
     √ #componentTabs is defined somewhere in the app
     √ #clearTopBtn is defined somewhere in the app
     √ #loadProposalBtn is defined somewhere in the app
     √ #openClinicalInfoBtn is defined somewhere in the app
-    √ #footerCaseNoteBtn is defined somewhere in the app (1 ms)
+    √ #footerCaseNoteBtn is defined somewhere in the app
     √ #openNoticeboardBtn is defined somewhere in the app
     √ #sidebarSaveBtn is defined somewhere in the app
-    √ #sidebarReturnBtn is defined somewhere in the app (1 ms)
+    √ #sidebarReturnBtn is defined somewhere in the app
     √ #container3D is defined somewhere in the app
     √ .legend-toggle-btn is defined somewhere in the app
     √ .jaw-preview-undercut-icon is defined somewhere in the app
@@ -279,56 +279,56 @@ PASS __tests__/helpBot.test.mjs
 
 PASS __tests__/artificialTeethDecode.test.mjs
   toUint8Array()
-    √ passes Uint8Array through and wraps ArrayBuffer / integer arrays (17 ms)
+    √ passes Uint8Array through and wraps ArrayBuffer / integer arrays (18 ms)
     √ decodes base64 strings, including data-URI payloads after the comma (1 ms)
-    √ falls back to UTF-8 bytes for non-base64 text and null for junk (1 ms)
+    √ falls back to UTF-8 bytes for non-base64 text and null for junk
   decodeMessagePack() — scalar types
-    √ positive and negative fixint (2 ms)
+    √ positive and negative fixint (1 ms)
     √ nil / true / false (1 ms)
     √ uint8/16/32 and int8/16/32 (1 ms)
-    √ uint32 above 2^31 stays positive (no sign-bit bleed) (1 ms)
+    √ uint32 above 2^31 stays positive (no sign-bit bleed)
     √ 64-bit ints: safe integers come back as numbers, oversized as strings (2 ms)
     √ float32 and float64 are read big-endian per the spec (1 ms)
     √ fixstr and str8 (1 ms)
   decodeMessagePack() — containers and structure
     √ fixarray / fixmap with mixed values
-    √ array16 and map16 headers (6 ms)
-    √ bin8 payloads decode to plain number arrays (1 ms)
-    √ ext types are preserved as tagged blobs, not dropped
-    √ rejects truncated payloads, trailing bytes, and the reserved 0xc1 prefix (310 ms)
-    √ accepts a base64 string as input (API fields arrive base64-encoded)
+    √ array16 and map16 headers
+    √ bin8 payloads decode to plain number arrays
+    √ ext types are preserved as tagged blobs, not dropped (1 ms)
+    √ rejects truncated payloads, trailing bytes, and the reserved 0xc1 prefix (255 ms)
+    √ accepts a base64 string as input (API fields arrive base64-encoded) (1 ms)
   expandSerializedBuffers()
-    √ decodes a byte-array field in place AND into a sibling <key>_decoded field (2 ms)
+    √ decodes a byte-array field in place AND into a sibling <key>_decoded field (1 ms)
     √ replaces an array that is itself a MessagePack buffer (1 ms)
     √ a nested buffer of 4 bytes or fewer is below the isByteArray threshold and stays raw (1 ms)
-    √ leaves ordinary values and non-decodable fields untouched (1 ms)
+    √ leaves ordinary values and non-decodable fields untouched
   normalizeJawKey()
     √ maps desktop jaw spellings and the numeric enum to upper/lower (1 ms)
   toPointObject() / toQuaternionObject()
     √ accepts arrays, x/y/z objects, desktop X/Y/Z and pos_x casings, JSON strings (1 ms)
     √ refuses byte arrays (raw buffers must not masquerade as coordinates)
     √ refuses incomplete or non-numeric input (1 ms)
-    √ quaternions accept [x,y,z,w] arrays and X/Y/Z/W objects (1 ms)
+    √ quaternions accept [x,y,z,w] arrays and X/Y/Z/W objects
   little-endian binary readers
-    √ readFloat64LE / readFloat32LE read little-endian and NaN out of bounds (1 ms)
+    √ readFloat64LE / readFloat32LE read little-endian and NaN out of bounds
     √ readVector3Float64LE reads 24 bytes into a point (1 ms)
     √ rejects implausible magnitudes (>=10000) and truncated buffers
 
 PASS __tests__/dashboard.test.mjs
   statusRank()
-    √ returns 0 for absent / empty / default-0 statuses (18 ms)
-    √ returns 0 for an unrecognised status with no known keyword (1 ms)
+    √ returns 0 for absent / empty / default-0 statuses (13 ms)
+    √ returns 0 for an unrecognised status with no known keyword
     √ matches confirmed exact value jaw_prepared -> 1
-    √ ranks the real case-1723 value 'polylines' -> 4 (1 ms)
+    √ ranks the real case-1723 value 'polylines' -> 4
     √ infers rank from a keyword regardless of exact wording (1 ms)
-    √ is case- and whitespace-insensitive (1 ms)
+    √ is case- and whitespace-insensitive
     √ a later-stage keyword takes precedence (checked high -> low)
   computeSteps()
     √ always returns the 5 stages, each with an Upper and a Lower line (2 ms)
     √ nothing done when both jaws have the default status (1 ms)
     √ case 1723 ('polylines'/'polylines'): steps 1-4 done, step 5 pending (1 ms)
     √ per-jaw independence: upper prepared, lower still at default
-    √ a fully-surfaced case marks every stage done
+    √ a fully-surfaced case marks every stage done (1 ms)
   countCompletedStages()
     √ counts only stages where BOTH jaws are done
     √ a stage with only one jaw done does not count as complete
@@ -337,27 +337,38 @@ PASS __tests__/dashboard.test.mjs
   resolveCaptureSlots()
     √ maps rows to their slot (0=2D, 1=upper, 2=lower) regardless of order
     √ tolerates slot_index / slot_id field-name variants
-    √ skips rows without data and keeps the first row for a duplicate slot (1 ms)
+    √ skips rows without data and keeps the first row for a duplicate slot
     √ falls back to positional order when no rows carry a slot tag
     √ returns an empty map for empty / nullish input
 
 PASS __tests__/clinicalInfoCodec.test.mjs
   clinical-info .NET envelope codec
-    √ encode emits a valid .NET BinaryFormatter single-String envelope (18 ms)
-    √ the 7-bit length prefix matches the byte length of the embedded JSON (1 ms)
-    √ encode is deterministic (5 ms)
-    √ decode reads a desktop-authored blob (not produced by our encoder) (3 ms)
-    √ decode walks the envelope even when a length byte equals "[" (0x5B) (12 ms)
+    √ encode emits a valid .NET BinaryFormatter single-String envelope (14 ms)
+    √ the 7-bit length prefix matches the byte length of the embedded JSON (5 ms)
+    √ encode is deterministic (4 ms)
+    √ decode reads a desktop-authored blob (not produced by our encoder) (2 ms)
+    √ decode walks the envelope even when a length byte equals "[" (0x5B) (11 ms)
     √ decode tolerates junk / non-array payloads (1 ms)
   desktop <-> UI field mapping
     √ decodes desktop int-enums and bools into UI values (1 ms)
-    √ "none" sentinels (mobility 0, restoration 4, tilt 6) decode to null; presence 1 = missing
+    √ "none" sentinels (mobility 0, restoration 4, tilt 6) decode to null; presence 1 = missing (1 ms)
     √ write emits all 32 teeth in desktop arch order with desktop field names (1 ms)
-    √ UI "none" values write back to the desktop sentinels, not 0 (1 ms)
+    √ UI "none" values write back to the desktop sentinels, not 0
     √ absent notes default to present (0); explicit present:false writes ToothPresence 1 (1 ms)
   full round-trip
-    √ notes -> rows -> encode -> decode -> notes is lossless across every marker (2 ms)
-    √ decode∘encode is idempotent on a full default 32-tooth chart (7 ms)
+    √ notes -> rows -> encode -> decode -> notes is lossless across every marker (3 ms)
+    √ decode∘encode is idempotent on a full default 32-tooth chart (5 ms)
+
+  console.log
+    [jawStructApply] upper: resolved {
+      present: 11,
+      placements: 17,
+      bars: 0,
+      meshSpans: 1,
+      major: 'major-upper-horseshoe'
+    } -> placed on teeth { rest: 3, clasp: 3, bar: 0, mesh: 3, plate: 11, major: 16 } | major placedOn=[11,12,13,14,15,16,17,18,21,22,23,24,25,26,27,28]
+
+      at log (src/js/2D/jawStructApply.js:123:11)
 
   console.log
     [jawStructApply] upper: resolved {
@@ -389,17 +400,6 @@ PASS __tests__/clinicalInfoCodec.test.mjs
       meshSpans: 1,
       major: 'major-lower-lingual-plate'
     } -> placed on teeth { rest: 2, clasp: 1, bar: 1, mesh: 2, plate: 12, major: 16 } | major placedOn=[31,32,33,34,35,36,37,38,41,42,43,44,45,46,47,48]
-
-      at log (src/js/2D/jawStructApply.js:123:11)
-
-  console.log
-    [jawStructApply] upper: resolved {
-      present: 11,
-      placements: 17,
-      bars: 0,
-      meshSpans: 1,
-      major: 'major-upper-horseshoe'
-    } -> placed on teeth { rest: 3, clasp: 3, bar: 0, mesh: 3, plate: 11, major: 16 } | major placedOn=[11,12,13,14,15,16,17,18,21,22,23,24,25,26,27,28]
 
       at log (src/js/2D/jawStructApply.js:123:11)
 
@@ -457,27 +457,27 @@ PASS __tests__/clinicalInfoCodec.test.mjs
 
       at log (src/js/2D/jawStructApply.js:123:11)
 
-PASS __tests__/jawStructRoundTrip.test.mjs
-  jaw-struct load -> save round-trip (no edits)
-    √ upper_jaw: saved text equals loaded text (22 ms)
-    √ lower_jaw: saved text equals loaded text (6 ms)
-
 PASS __tests__/jawStructLingualPlate.test.mjs
   lower lingual plate: web reproduces desktop geometry
-    √ loaded BAR round-trips to the desktop bar file (71 ms)
-    √ BAR -> switch to PLATE encodes the desktop plate file (13 ms)
-    √ loading a lingual PLATE creates one plate-prox per present tooth (5 ms)
-    √ PLATE -> switch to BAR -> reopen stays a clean bar (no leftover plate-prox) (13 ms)
+    √ loaded BAR round-trips to the desktop bar file (68 ms)
+    √ BAR -> switch to PLATE encodes the desktop plate file (6 ms)
+    √ loading a lingual PLATE creates one plate-prox per present tooth (2 ms)
+    √ PLATE -> switch to BAR -> reopen stays a clean bar (no leftover plate-prox) (5 ms)
+
+PASS __tests__/jawStructRoundTrip.test.mjs
+  jaw-struct load -> save round-trip (no edits)
+    √ upper_jaw: saved text equals loaded text (14 ms)
+    √ lower_jaw: saved text equals loaded text (2 ms)
 
 PASS __tests__/jawStructMajorSwitch.test.mjs
   lower major connector bar <-> plate switch
-    √ loaded design encodes lingual plate (7) (18 ms)
-    √ switch to lingual bar encodes 6 (11 ms)
+    √ loaded design encodes lingual plate (7) (15 ms)
+    √ switch to lingual bar encodes 6 (6 ms)
     √ switch back to lingual plate encodes 7 (4 ms)
-    √ bar->plate now changes the type label AND the connector geometry grid (12 ms)
+    √ bar->plate now changes the type label AND the connector geometry grid (9 ms)
 
 Test Suites: 13 passed, 13 total
 Tests:       221 passed, 221 total
 Snapshots:   0 total
-Time:        4.391 s
+Time:        4.462 s
 Ran all test suites.

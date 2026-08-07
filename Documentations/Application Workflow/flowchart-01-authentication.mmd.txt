@@ -1,0 +1,37 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#eaf6f3', 'primaryBorderColor': '#0d7d6c', 'primaryTextColor': '#16212b', 'lineColor': '#56626d', 'tertiaryColor': '#ffffff', 'fontFamily': 'Segoe UI, Helvetica, Arial, sans-serif', 'fontSize': '17px' }, 'flowchart': { 'curve': 'basis', 'nodeSpacing': 45, 'rankSpacing': 70, 'htmlLabels': true } } }%%
+%% SmartRPD — Detailed Application Flowchart, section 1 of 4: Authentication
+%% Source: live deployed commit d5d5121f12287c45b91d7a0d62acf017d6d98c64 (see README.md)
+%% Colour key: teal = screen/page, amber diamond = decision point, red = destructive action, dashed blue = network/API call
+%% Paste into https://mermaid.live to view/edit.
+
+flowchart TD
+    classDef screen fill:#eaf6f3,stroke:#0d7d6c,stroke-width:1.5px,color:#16212b;
+    classDef decision fill:#fff4e0,stroke:#d69b3f,stroke-width:1.5px,color:#16212b;
+    classDef api fill:#eef2ff,stroke:#6b8fd6,stroke-width:1px,color:#16212b,stroke-dasharray:3 2;
+    classDef queue fill:#f3f0ff,stroke:#8b6fd6,stroke-width:1px,color:#16212b;
+
+    Start(["Visitor opens the app"]) --> Login["Login page — index.html"]
+    Login --> LoginChoice{"Existing account?"}
+    LoginChoice -->|"Sign in"| LoginSubmit["Enter username + password, Sign In"]
+    LoginChoice -->|"No account"| Signup["Sign Up view: username + email"]
+    LoginChoice -->|"Forgot password"| ForgotStage1["Forgot Password — Stage 1: enter registered email"]
+
+    Signup -->|"POST /user/register/request"| PendingApproval[["Request queued — awaiting admin approval (Admin > Users)"]]
+    PendingApproval -.->|"Admin approves"| EmailedPassword["User emailed a link to set their password"]
+    EmailedPassword --> LoginChoice
+
+    ForgotStage1 -->|"POST /user/reqpwreset"| ForgotStage2["Stage 2: enter emailed key + new password"]
+    ForgotStage2 -->|"POST /user/resetpw"| LoginChoice
+
+    LoginSubmit --> LoginCheck{"Credentials valid?"}
+    LoginCheck -->|"No"| LoginError["Show inline error"]
+    LoginError --> LoginChoice
+    LoginCheck -->|"Yes"| OTPNote["OTP screen exists in the DOM but is currently bypassed — TEMP flag in login.js falls straight through"]
+    OTPNote --> RoleRoute{"loggedInUser.isAdmin === 1 ?"}
+    RoleRoute -->|"No — regular user"| CaseList["→ Case List (see section 2)"]
+    RoleRoute -->|"Yes — admin"| AdminCaseList["→ Admin Case List (see section 4)"]
+
+    class Login,CaseList,AdminCaseList screen;
+    class LoginChoice,LoginCheck,RoleRoute decision;
+    class Signup,ForgotStage1 api;
+    class PendingApproval queue;

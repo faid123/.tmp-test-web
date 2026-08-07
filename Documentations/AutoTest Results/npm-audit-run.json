@@ -1,161 +1,13 @@
 {
   "auditReportVersion": 2,
   "vulnerabilities": {
-    "@jest/core": {
-      "name": "@jest/core",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "@jest/reporters",
-        "@jest/transform",
-        "jest-config",
-        "jest-resolve-dependencies",
-        "jest-runner",
-        "jest-runtime",
-        "jest-snapshot"
-      ],
-      "effects": [
-        "jest",
-        "jest-cli"
-      ],
-      "range": "*",
-      "nodes": [
-        "node_modules/@jest/core"
-      ],
-      "fixAvailable": {
-        "name": "jest",
-        "version": "25.0.0",
-        "isSemVerMajor": true
-      }
-    },
-    "@jest/expect": {
-      "name": "@jest/expect",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "jest-snapshot"
-      ],
-      "effects": [
-        "@jest/globals",
-        "jest-circus"
-      ],
-      "range": "*",
-      "nodes": [
-        "node_modules/@jest/expect"
-      ],
-      "fixAvailable": {
-        "name": "jest",
-        "version": "25.0.0",
-        "isSemVerMajor": true
-      }
-    },
-    "@jest/globals": {
-      "name": "@jest/globals",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "@jest/expect"
-      ],
-      "effects": [
-        "jest-runtime"
-      ],
-      "range": ">=28.0.0-alpha.0",
-      "nodes": [
-        "node_modules/@jest/globals"
-      ],
-      "fixAvailable": {
-        "name": "jest",
-        "version": "25.0.0",
-        "isSemVerMajor": true
-      }
-    },
-    "@jest/reporters": {
-      "name": "@jest/reporters",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "@jest/transform",
-        "glob"
-      ],
-      "effects": [],
-      "range": "*",
-      "nodes": [
-        "node_modules/@jest/reporters"
-      ],
-      "fixAvailable": true
-    },
-    "@jest/transform": {
-      "name": "@jest/transform",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "babel-plugin-istanbul"
-      ],
-      "effects": [
-        "babel-jest",
-        "jest-runner",
-        "jest-runtime",
-        "jest-snapshot"
-      ],
-      "range": "*",
-      "nodes": [
-        "node_modules/@jest/transform"
-      ],
-      "fixAvailable": {
-        "name": "babel-jest",
-        "version": "23.6.0",
-        "isSemVerMajor": true
-      }
-    },
-    "babel-jest": {
-      "name": "babel-jest",
-      "severity": "high",
-      "isDirect": true,
-      "via": [
-        "@jest/transform",
-        "babel-plugin-istanbul"
-      ],
-      "effects": [
-        "jest-config"
-      ],
-      "range": ">=24.0.0-alpha.0",
-      "nodes": [
-        "node_modules/babel-jest"
-      ],
-      "fixAvailable": {
-        "name": "babel-jest",
-        "version": "23.6.0",
-        "isSemVerMajor": true
-      }
-    },
-    "babel-plugin-istanbul": {
-      "name": "babel-plugin-istanbul",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "test-exclude"
-      ],
-      "effects": [
-        "@jest/transform",
-        "babel-jest"
-      ],
-      "range": "5.0.1 - 7.0.1",
-      "nodes": [
-        "node_modules/babel-plugin-istanbul"
-      ],
-      "fixAvailable": {
-        "name": "babel-jest",
-        "version": "23.6.0",
-        "isSemVerMajor": true
-      }
-    },
     "brace-expansion": {
       "name": "brace-expansion",
       "severity": "high",
       "isDirect": false,
       "via": [
         {
-          "source": 1124334,
+          "source": 1130588,
           "name": "brace-expansion",
           "dependency": "brace-expansion",
           "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
@@ -169,41 +21,32 @@
             "score": 7.5,
             "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
           },
-          "range": "<=5.0.7"
+          "range": "<1.1.17"
+        },
+        {
+          "source": 1130737,
+          "name": "brace-expansion",
+          "dependency": "brace-expansion",
+          "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+          "url": "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
+          "severity": "high",
+          "cwe": [
+            "CWE-400",
+            "CWE-770"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": "<1.1.18"
         }
       ],
-      "effects": [
-        "minimatch"
-      ],
-      "range": "<=5.0.7",
+      "effects": [],
+      "range": "<=1.1.17",
       "nodes": [
         "node_modules/brace-expansion"
       ],
-      "fixAvailable": {
-        "name": "babel-jest",
-        "version": "23.6.0",
-        "isSemVerMajor": true
-      }
-    },
-    "create-jest": {
-      "name": "create-jest",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "jest-config"
-      ],
-      "effects": [
-        "jest-cli"
-      ],
-      "range": ">=29.7.0",
-      "nodes": [
-        "node_modules/create-jest"
-      ],
-      "fixAvailable": {
-        "name": "jest",
-        "version": "25.0.0",
-        "isSemVerMajor": true
-      }
+      "fixAvailable": true
     },
     "fast-uri": {
       "name": "fast-uri",
@@ -225,229 +68,30 @@
             "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N"
           },
           "range": ">=3.0.0 <=3.1.3"
+        },
+        {
+          "source": 1130720,
+          "name": "fast-uri",
+          "dependency": "fast-uri",
+          "title": "fast-uri vulnerable to host confusion via backslash authority introducer",
+          "url": "https://github.com/advisories/GHSA-7p8r-x3mc-p8w7",
+          "severity": "high",
+          "cwe": [
+            "CWE-436"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N"
+          },
+          "range": ">=3.0.0 <3.1.5"
         }
       ],
       "effects": [],
-      "range": "3.0.0 - 3.1.3",
+      "range": "3.0.0 - 3.1.4",
       "nodes": [
         "node_modules/fast-uri"
       ],
       "fixAvailable": true
-    },
-    "glob": {
-      "name": "glob",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "minimatch"
-      ],
-      "effects": [
-        "@jest/reporters",
-        "jest-config",
-        "jest-runtime",
-        "test-exclude"
-      ],
-      "range": "4.3.0 - 10.5.0",
-      "nodes": [
-        "node_modules/glob"
-      ],
-      "fixAvailable": {
-        "name": "babel-jest",
-        "version": "23.6.0",
-        "isSemVerMajor": true
-      }
-    },
-    "jest": {
-      "name": "jest",
-      "severity": "high",
-      "isDirect": true,
-      "via": [
-        "@jest/core",
-        "jest-cli"
-      ],
-      "effects": [],
-      "range": ">=19.1.0-alpha.eed82034",
-      "nodes": [
-        "node_modules/jest"
-      ],
-      "fixAvailable": {
-        "name": "jest",
-        "version": "25.0.0",
-        "isSemVerMajor": true
-      }
-    },
-    "jest-circus": {
-      "name": "jest-circus",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "@jest/expect",
-        "jest-runtime",
-        "jest-snapshot"
-      ],
-      "effects": [
-        "jest-config"
-      ],
-      "range": ">=25.2.4",
-      "nodes": [
-        "node_modules/jest-circus"
-      ],
-      "fixAvailable": {
-        "name": "jest",
-        "version": "25.0.0",
-        "isSemVerMajor": true
-      }
-    },
-    "jest-cli": {
-      "name": "jest-cli",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "@jest/core",
-        "create-jest",
-        "jest-config"
-      ],
-      "effects": [
-        "jest"
-      ],
-      "range": ">=19.1.0-alpha.eed82034",
-      "nodes": [
-        "node_modules/jest-cli"
-      ],
-      "fixAvailable": {
-        "name": "jest",
-        "version": "25.0.0",
-        "isSemVerMajor": true
-      }
-    },
-    "jest-config": {
-      "name": "jest-config",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "babel-jest",
-        "glob",
-        "jest-circus",
-        "jest-runner"
-      ],
-      "effects": [
-        "create-jest",
-        "jest-cli"
-      ],
-      "range": ">=19.1.0-alpha.eed82034",
-      "nodes": [
-        "node_modules/jest-config"
-      ],
-      "fixAvailable": {
-        "name": "jest",
-        "version": "25.0.0",
-        "isSemVerMajor": true
-      }
-    },
-    "jest-resolve-dependencies": {
-      "name": "jest-resolve-dependencies",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "jest-snapshot"
-      ],
-      "effects": [],
-      "range": ">=27.0.0-next.0",
-      "nodes": [
-        "node_modules/jest-resolve-dependencies"
-      ],
-      "fixAvailable": true
-    },
-    "jest-runner": {
-      "name": "jest-runner",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "@jest/transform",
-        "jest-runtime"
-      ],
-      "effects": [
-        "jest-config"
-      ],
-      "range": ">=24.0.0-alpha.0",
-      "nodes": [
-        "node_modules/jest-runner"
-      ],
-      "fixAvailable": {
-        "name": "jest",
-        "version": "25.0.0",
-        "isSemVerMajor": true
-      }
-    },
-    "jest-runtime": {
-      "name": "jest-runtime",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "@jest/globals",
-        "@jest/transform",
-        "glob",
-        "jest-snapshot"
-      ],
-      "effects": [
-        "@jest/core",
-        "jest-circus",
-        "jest-runner"
-      ],
-      "range": ">=24.0.0-alpha.0",
-      "nodes": [
-        "node_modules/jest-runtime"
-      ],
-      "fixAvailable": {
-        "name": "jest",
-        "version": "25.0.0",
-        "isSemVerMajor": true
-      }
-    },
-    "jest-snapshot": {
-      "name": "jest-snapshot",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "@jest/transform"
-      ],
-      "effects": [
-        "@jest/core",
-        "@jest/expect",
-        "jest-circus",
-        "jest-resolve-dependencies",
-        "jest-runtime"
-      ],
-      "range": ">=27.0.0-next.0",
-      "nodes": [
-        "node_modules/jest-snapshot"
-      ],
-      "fixAvailable": {
-        "name": "jest",
-        "version": "25.0.0",
-        "isSemVerMajor": true
-      }
-    },
-    "minimatch": {
-      "name": "minimatch",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "brace-expansion"
-      ],
-      "effects": [
-        "glob",
-        "test-exclude"
-      ],
-      "range": "2.0.0 - 10.0.2",
-      "nodes": [
-        "node_modules/minimatch"
-      ],
-      "fixAvailable": {
-        "name": "babel-jest",
-        "version": "23.6.0",
-        "isSemVerMajor": true
-      }
     },
     "postcss": {
       "name": "postcss",
@@ -469,10 +113,27 @@
             "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
           },
           "range": "<=8.5.17"
+        },
+        {
+          "source": 1130709,
+          "name": "postcss",
+          "dependency": "postcss",
+          "title": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+          "url": "https://github.com/advisories/GHSA-fxqj-rqcc-2cmp",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-22",
+            "CWE-200"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<=8.5.22"
         }
       ],
       "effects": [],
-      "range": "<=8.5.17",
+      "range": "<=8.5.22",
       "nodes": [
         "node_modules/postcss"
       ],
@@ -513,27 +174,6 @@
       "fixAvailable": {
         "name": "webpack-dev-server",
         "version": "6.0.0",
-        "isSemVerMajor": true
-      }
-    },
-    "test-exclude": {
-      "name": "test-exclude",
-      "severity": "high",
-      "isDirect": false,
-      "via": [
-        "glob",
-        "minimatch"
-      ],
-      "effects": [
-        "babel-plugin-istanbul"
-      ],
-      "range": "4.2.2 || 5.0.0 - 7.0.2",
-      "nodes": [
-        "node_modules/test-exclude"
-      ],
-      "fixAvailable": {
-        "name": "babel-jest",
-        "version": "23.6.0",
         "isSemVerMajor": true
       }
     },
@@ -649,9 +289,9 @@
       "info": 0,
       "low": 0,
       "moderate": 3,
-      "high": 23,
+      "high": 4,
       "critical": 1,
-      "total": 27
+      "total": 8
     },
     "dependencies": {
       "prod": 19,

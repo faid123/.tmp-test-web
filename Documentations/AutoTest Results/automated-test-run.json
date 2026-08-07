@@ -1,5 +1,5 @@
 {
-  "runAt": "2026-07-31T01:30:46.259Z",
+  "runAt": "2026-08-06T09:20:03.224Z",
   "command": "npx jest --ci --coverage --coverageReporters=json-summary --verbose --testLocationInResults --json",
   "commandFailed": false,
   "numTotalTestSuites": 13,
@@ -16,7 +16,7 @@
       "pass": 3,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2222,
+      "durationMs": 2800,
       "uat": [],
       "category": "real",
       "crossCutting": true,
@@ -30,7 +30,7 @@
       "pass": 5,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2216,
+      "durationMs": 2808,
       "uat": [
         "UAT-06"
       ],
@@ -46,7 +46,7 @@
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2272,
+      "durationMs": 2838,
       "uat": [
         "UAT-02"
       ],
@@ -62,7 +62,7 @@
       "pass": 3,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2377,
+      "durationMs": 2868,
       "uat": [],
       "category": "real",
       "crossCutting": true,
@@ -76,7 +76,7 @@
       "pass": 22,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2406,
+      "durationMs": 2952,
       "uat": [
         "UAT-01"
       ],
@@ -92,7 +92,7 @@
       "pass": 9,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2450,
+      "durationMs": 2978,
       "uat": [
         "UAT-06"
       ],
@@ -108,7 +108,7 @@
       "pass": 94,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2600,
+      "durationMs": 3102,
       "uat": [],
       "category": "real",
       "crossCutting": false,
@@ -122,7 +122,7 @@
       "pass": 28,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2795,
+      "durationMs": 3256,
       "uat": [
         "UAT-07",
         "UAT-08"
@@ -139,7 +139,7 @@
       "pass": 21,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1666,
+      "durationMs": 1386,
       "uat": [
         "UAT-04"
       ],
@@ -155,7 +155,7 @@
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1683,
+      "durationMs": 1417,
       "uat": [
         "UAT-06"
       ],
@@ -165,13 +165,13 @@
       "failureMessages": []
     },
     {
-      "file": "jawStructRoundTrip.test.mjs",
+      "file": "jawStructLingualPlate.test.mjs",
       "status": "passed",
-      "tests": 2,
-      "pass": 2,
+      "tests": 4,
+      "pass": 4,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1848,
+      "durationMs": 1549,
       "uat": [
         "UAT-06"
       ],
@@ -181,13 +181,13 @@
       "failureMessages": []
     },
     {
-      "file": "jawStructLingualPlate.test.mjs",
+      "file": "jawStructRoundTrip.test.mjs",
       "status": "passed",
-      "tests": 4,
-      "pass": 4,
+      "tests": 2,
+      "pass": 2,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1855,
+      "durationMs": 1561,
       "uat": [
         "UAT-06"
       ],
@@ -203,7 +203,7 @@
       "pass": 4,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1872,
+      "durationMs": 1582,
       "uat": [
         "UAT-06"
       ],
@@ -272,8 +272,8 @@
         "mergeInstructions.test.mjs",
         "reciprocatingExclusivity.test.mjs",
         "clinicalInfoCodec.test.mjs",
-        "jawStructRoundTrip.test.mjs",
         "jawStructLingualPlate.test.mjs",
+        "jawStructRoundTrip.test.mjs",
         "jawStructMajorSwitch.test.mjs"
       ],
       "tests": 37,

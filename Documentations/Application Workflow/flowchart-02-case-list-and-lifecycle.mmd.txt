@@ -1,0 +1,64 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#eaf6f3', 'primaryBorderColor': '#0d7d6c', 'primaryTextColor': '#16212b', 'lineColor': '#56626d', 'tertiaryColor': '#ffffff', 'fontFamily': 'Segoe UI, Helvetica, Arial, sans-serif', 'fontSize': '17px' }, 'flowchart': { 'curve': 'basis', 'nodeSpacing': 40, 'rankSpacing': 65, 'htmlLabels': true } } }%%
+%% SmartRPD — Detailed Application Flowchart, section 2 of 4: Case List & Case Lifecycle (case_list.html)
+%% Source: live deployed commit d5d5121f12287c45b91d7a0d62acf017d6d98c64 (see README.md)
+%% Colour key: teal = screen/page, amber diamond = decision point, red = destructive action, dashed blue = network/API call
+%% Paste into https://mermaid.live to view/edit.
+
+flowchart TD
+    classDef screen fill:#eaf6f3,stroke:#0d7d6c,stroke-width:1.5px,color:#16212b;
+    classDef decision fill:#fff4e0,stroke:#d69b3f,stroke-width:1.5px,color:#16212b;
+    classDef danger fill:#fdeceb,stroke:#c94f3d,stroke-width:1px,color:#7a2418;
+    classDef api fill:#eef2ff,stroke:#6b8fd6,stroke-width:1px,color:#16212b,stroke-dasharray:3 2;
+
+    CaseList["Case List — case_list.html"] --> StatCards["Stage filter cards: All / Preparation / Delivery / Completed"]
+    CaseList --> SearchFilter["Search by name or date, status filter, sort"]
+    CaseList --> Notif["Notifications popup (unread badge, mark all read)"]
+    CaseList -->|"Create Case button"| CreateCase
+
+    subgraph CREATE["Create Case — inline pane, not a separate page"]
+        direction TB
+        CreateCase["Case name, request date, instructions"] --> InviteCollab["Invite collaborators (search + add)"]
+        InviteCollab --> UploadSTL["Upload jaw STL files (upper / lower)"]
+        UploadSTL --> UploadRef["Upload reference images"]
+        UploadRef --> SaveCase["Save → case created"]
+    end
+    SaveCase --> CaseList
+
+    CaseList -->|"Click a case row"| CaseDetail["Case Detail pane (image gallery + status pill)"]
+
+    subgraph DETAIL["Case Detail actions (⋮ dropdown)"]
+        direction TB
+        CaseDetail --> DDMenu{"⋮ menu"}
+        DDMenu --> ViewDash["View Dashboard"]
+        DDMenu --> Rename["Rename"]
+        DDMenu --> EditAccess["Edit User Access"]
+        DDMenu --> ViewVersions["View Version History"]
+        DDMenu --> DownloadRefs["Download References"]
+        DDMenu --> Duplicate["Duplicate case"]
+        DDMenu --> Delete["Delete case (confirm dialog)"]
+        CaseDetail --> StatusSelect["Change status — 11-step pipeline, draft → completed"]
+        CaseDetail --> Open2D["Open case for design → 2D Annotation (section 3)"]
+        CaseDetail --> View3DLink["View 3D → standalone viewer (section 4)"]
+    end
+
+    ViewDash --> Dashboard
+    ViewVersions --> VersionHistoryPanel["Version History panel (saved jawstruct versions, restore)"]
+    VersionHistoryPanel --> CaseDetail
+    Delete --> CaseList
+    Duplicate --> CaseList
+    Rename --> CaseDetail
+    EditAccess --> CaseDetail
+    DownloadRefs --> CaseDetail
+
+    subgraph DASH["Case Dashboard overlay"]
+        direction TB
+        Dashboard["Per-jaw pipeline steps (read-only, written by desktop app): jaw_prepared → six_points → segmentation → polylines → surface"] --> Captures["View Captures: 2D/3D upper+lower thumbnails"]
+        Dashboard -->|"GET /thumbnails/get"| Captures
+        Dashboard --> CaseAccess["Case Access panel (roles)"]
+        Dashboard -->|"GET /noticeboard/view/get"| ViewcapturesGallery["Viewcaptures gallery"]
+    end
+    Dashboard --> CaseDetail
+
+    class CaseList,CaseDetail,Dashboard screen;
+    class DDMenu decision;
+    class Delete danger;

@@ -1,0 +1,35 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#eaf6f3', 'primaryBorderColor': '#0d7d6c', 'primaryTextColor': '#16212b', 'lineColor': '#56626d', 'tertiaryColor': '#ffffff', 'fontFamily': 'Segoe UI, Helvetica, Arial, sans-serif', 'fontSize': '17px' }, 'flowchart': { 'curve': 'basis', 'nodeSpacing': 40, 'rankSpacing': 65, 'htmlLabels': true } } }%%
+%% SmartRPD — Detailed Application Flowchart, section 3 of 4: 2D Annotation (RPD design workspace)
+%% Source: live deployed commit d5d5121f12287c45b91d7a0d62acf017d6d98c64 (see README.md)
+%% Colour key: teal = screen/page, dashed blue = network/API call
+%% Paste into https://mermaid.live to view/edit.
+
+flowchart TD
+    classDef screen fill:#eaf6f3,stroke:#0d7d6c,stroke-width:1.5px,color:#16212b;
+    classDef api fill:#eef2ff,stroke:#6b8fd6,stroke-width:1px,color:#16212b,stroke-dasharray:3 2;
+
+    Open2D["Open case for design (from section 2)"] -->|"navigate: 2DAnnotation.html?id=&lt;encrypted case id&gt;"| TwoD
+
+    TwoD["2D Annotation — RPD design workspace"] --> Components["Tooth chart: mark present / missing / abutment / compromised, then place framework components (mesh, clasp, bar, plate, rest, connectors)"]
+    Components -->|"Save → POST /jawstruct/l2"| Components
+
+    TwoD --> InstrEditor["Instruction Editor — freehand annotate a screenshot (crop / sticker / text / pencil)"]
+    TwoD --> Noticeboard["Noticeboard — gallery of instruction shots + 3D view captures, synced with desktop app"]
+    InstrEditor --> Noticeboard
+
+    TwoD --> ClinicalInfo["Clinical Info — separate per-tooth clinical chart (mobility, decay, crowns)"]
+    TwoD --> CaseNote["Case Note — owner / due date / shade / category (mostly localStorage)"]
+
+    TwoD --> EmbeddedPreview["Embedded 3D Preview — live Three.js view of jaw STL"]
+    EmbeddedPreview --> SurveyAngle["Survey-angle targeting for undercuts (gesture controls)"]
+    EmbeddedPreview --> UploadExtraSTL["Upload other 3D files (extra STL slots 1-4)"]
+    EmbeddedPreview -->|"Approve for lab"| ApprovalOverlay["Preview approval overlay [For Lab Only]"]
+    ApprovalOverlay -->|"Send"| ApprovalEmail["Email captured images to recipients"]
+
+    TwoD --> ChatPanel["Chat panel — case comments, image attachments (polls while open)"]
+    TwoD --> VersionHistoryEmbedded["Version History side panel"]
+
+    TwoD -->|"Back"| CaseList["← Case List (section 2)"]
+
+    class TwoD,Noticeboard,CaseList screen;
+    class Components api;
