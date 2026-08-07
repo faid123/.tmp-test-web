@@ -1,5 +1,5 @@
 {
-  "runAt": "2026-08-07T01:23:48.598Z",
+  "runAt": "2026-08-07T03:04:46.370Z",
   "command": "npx jest --ci --coverage --coverageReporters=json-summary --verbose --testLocationInResults --json",
   "commandFailed": false,
   "numTotalTestSuites": 13,
@@ -10,125 +10,17 @@
   "numFailedTests": 0,
   "suites": [
     {
-      "file": "crypt.test.mjs",
-      "status": "passed",
-      "tests": 3,
-      "pass": 3,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 3070,
-      "uat": [],
-      "category": "real",
-      "crossCutting": true,
-      "note": "Imports real src/js/shared/crypt.js. Case-ID URL obfuscation used across case list, chat, viewer, version history, annotation and create-case links -- cross-cutting, not tied to one workflow.",
-      "failureMessages": []
-    },
-    {
-      "file": "mergeInstructions.test.mjs",
-      "status": "passed",
-      "tests": 5,
-      "pass": 5,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 3078,
-      "uat": [
-        "UAT-06"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real src/js/2D/mergeInstructions.js.",
-      "failureMessages": []
-    },
-    {
-      "file": "caseEnrichment.test.mjs",
-      "status": "passed",
-      "tests": 13,
-      "pass": 13,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 3115,
-      "uat": [
-        "UAT-02"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real src/js/shared/caseEnrichment.js. Case-detail and co-owner request/fold layer behind the case list.",
-      "failureMessages": []
-    },
-    {
-      "file": "importResolution.test.mjs",
-      "status": "passed",
-      "tests": 3,
-      "pass": 3,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 3202,
-      "uat": [],
-      "category": "real",
-      "crossCutting": true,
-      "note": "Walks src/, __tests__/ and the HTML pages checking every relative import/script-src resolves. Repo-wide build-integrity check, not tied to one workflow.",
-      "failureMessages": []
-    },
-    {
-      "file": "passwordReset.test.mjs",
-      "status": "passed",
-      "tests": 22,
-      "pass": 22,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 3231,
-      "uat": [
-        "UAT-01"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real src/js/shared/passwordReset.js. Change-password/reset-password feature -- an extension of the Login & Authentication workflow.",
-      "failureMessages": []
-    },
-    {
-      "file": "reciprocatingExclusivity.test.mjs",
-      "status": "passed",
-      "tests": 9,
-      "pass": 9,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 3271,
-      "uat": [
-        "UAT-06"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real src/js/2D/criteria.js, components.js and annotationTeethModel.js.",
-      "failureMessages": []
-    },
-    {
       "file": "helpBot.test.mjs",
       "status": "passed",
       "tests": 94,
       "pass": 94,
       "fail": 0,
       "skip": 0,
-      "durationMs": 3412,
+      "durationMs": 2420,
       "uat": [],
       "category": "real",
       "crossCutting": false,
       "note": "Imports real src/js/shared/helpMatcher.js and helpTopics.js (AI-powered help assistant). No standing UAT-xx case yet -- see Traceability_Document.docx.",
-      "failureMessages": []
-    },
-    {
-      "file": "dashboard.test.mjs",
-      "status": "passed",
-      "tests": 21,
-      "pass": 21,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 1350,
-      "uat": [
-        "UAT-04"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real dashboard.js pipeline functions.",
       "failureMessages": []
     },
     {
@@ -138,7 +30,7 @@
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1379,
+      "durationMs": 2750,
       "uat": [
         "UAT-06"
       ],
@@ -148,35 +40,51 @@
       "failureMessages": []
     },
     {
-      "file": "jawStructRoundTrip.test.mjs",
+      "file": "caseEnrichment.test.mjs",
       "status": "passed",
-      "tests": 2,
-      "pass": 2,
+      "tests": 13,
+      "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1523,
+      "durationMs": 358,
       "uat": [
-        "UAT-06"
+        "UAT-02"
       ],
       "category": "real",
       "crossCutting": false,
-      "note": "Imports real src/js/2D/jawStructApply.js against fixture desktop files.",
+      "note": "Imports real src/js/shared/caseEnrichment.js. Case-detail and co-owner request/fold layer behind the case list.",
       "failureMessages": []
     },
     {
-      "file": "jawStructLingualPlate.test.mjs",
+      "file": "passwordReset.test.mjs",
       "status": "passed",
-      "tests": 4,
-      "pass": 4,
+      "tests": 22,
+      "pass": 22,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1533,
+      "durationMs": 404,
       "uat": [
-        "UAT-06"
+        "UAT-01"
       ],
       "category": "real",
       "crossCutting": false,
-      "note": "Imports real src/js/2D/jawStructApply.js against fixture desktop files.",
+      "note": "Imports real src/js/shared/passwordReset.js. Change-password/reset-password feature -- an extension of the Login & Authentication workflow.",
+      "failureMessages": []
+    },
+    {
+      "file": "dashboard.test.mjs",
+      "status": "passed",
+      "tests": 21,
+      "pass": 21,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 1113,
+      "uat": [
+        "UAT-04"
+      ],
+      "category": "real",
+      "crossCutting": false,
+      "note": "Imports real dashboard.js pipeline functions.",
       "failureMessages": []
     },
     {
@@ -186,7 +94,7 @@
       "pass": 28,
       "fail": 0,
       "skip": 0,
-      "durationMs": 3568,
+      "durationMs": 5939,
       "uat": [
         "UAT-07",
         "UAT-08"
@@ -197,19 +105,111 @@
       "failureMessages": []
     },
     {
+      "file": "jawStructLingualPlate.test.mjs",
+      "status": "passed",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 3034,
+      "uat": [
+        "UAT-06"
+      ],
+      "category": "real",
+      "crossCutting": false,
+      "note": "Imports real src/js/2D/jawStructApply.js against fixture desktop files.",
+      "failureMessages": []
+    },
+    {
+      "file": "jawStructRoundTrip.test.mjs",
+      "status": "passed",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 632,
+      "uat": [
+        "UAT-06"
+      ],
+      "category": "real",
+      "crossCutting": false,
+      "note": "Imports real src/js/2D/jawStructApply.js against fixture desktop files.",
+      "failureMessages": []
+    },
+    {
+      "file": "importResolution.test.mjs",
+      "status": "passed",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 105,
+      "uat": [],
+      "category": "real",
+      "crossCutting": true,
+      "note": "Walks src/, __tests__/ and the HTML pages checking every relative import/script-src resolves. Repo-wide build-integrity check, not tied to one workflow.",
+      "failureMessages": []
+    },
+    {
       "file": "jawStructMajorSwitch.test.mjs",
       "status": "passed",
       "tests": 4,
       "pass": 4,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1545,
+      "durationMs": 3069,
       "uat": [
         "UAT-06"
       ],
       "category": "real",
       "crossCutting": false,
       "note": "Imports real src/js/2D/jawStructApply.js.",
+      "failureMessages": []
+    },
+    {
+      "file": "mergeInstructions.test.mjs",
+      "status": "passed",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 101,
+      "uat": [
+        "UAT-06"
+      ],
+      "category": "real",
+      "crossCutting": false,
+      "note": "Imports real src/js/2D/mergeInstructions.js.",
+      "failureMessages": []
+    },
+    {
+      "file": "crypt.test.mjs",
+      "status": "passed",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 85,
+      "uat": [],
+      "category": "real",
+      "crossCutting": true,
+      "note": "Imports real src/js/shared/crypt.js. Case-ID URL obfuscation used across case list, chat, viewer, version history, annotation and create-case links -- cross-cutting, not tied to one workflow.",
+      "failureMessages": []
+    },
+    {
+      "file": "reciprocatingExclusivity.test.mjs",
+      "status": "passed",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 159,
+      "uat": [
+        "UAT-06"
+      ],
+      "category": "real",
+      "crossCutting": false,
+      "note": "Imports real src/js/2D/criteria.js, components.js and annotationTeethModel.js.",
       "failureMessages": []
     }
   ],
@@ -269,12 +269,12 @@
       "id": "UAT-06",
       "name": "2D Annotation",
       "suites": [
-        "mergeInstructions.test.mjs",
-        "reciprocatingExclusivity.test.mjs",
         "clinicalInfoCodec.test.mjs",
-        "jawStructRoundTrip.test.mjs",
         "jawStructLingualPlate.test.mjs",
-        "jawStructMajorSwitch.test.mjs"
+        "jawStructRoundTrip.test.mjs",
+        "jawStructMajorSwitch.test.mjs",
+        "mergeInstructions.test.mjs",
+        "reciprocatingExclusivity.test.mjs"
       ],
       "tests": 37,
       "pass": 37,
