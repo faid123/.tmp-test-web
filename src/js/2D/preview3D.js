@@ -67,6 +67,13 @@ export const preview3DState = {
   camera: null,
   controls: null,
   frameId: 0,
+  // Render-on-demand bookkeeping (see requestPreviewRender). renderAwakeUntil is the
+  // timestamp the loop keeps drawing to; onScreen/visibility gate it off entirely.
+  renderAwakeUntil: 0,
+  renderInFrame: false,
+  renderOnScreen: true,
+  renderVisibilityCleanup: null,
+  intersectionObserver: null,
   resizeObserver: null,
   mount: null,
   modelRoot: null,
@@ -402,16 +409,15 @@ function init3DPreview(area) {
   controls.panSpeed = 0.8;
   controls.noRotate = false;
   controls.noZoom = false;
-  // Lock the jaw at the centre: disable panning so the right mouse button can't
-  // drag the model off-centre. Rotation (left) and zoom (wheel) stay active.
+  // Lock the jaw at the centre: disable panning so no button can drag the model
+  // off-centre. Rotation (see applyPreviewMouseButtons) and zoom (wheel) stay active.
   controls.noPan = true;
   controls.staticMoving = true;
   controls.dynamicDampingFactor = 0;
   controls.minDistance = 35;
   controls.maxDistance = 700;
   controls.target.set(0, 0, 0);
-  controls.mouseButtons.LEFT = 2;
-  controls.mouseButtons.RIGHT = 0;
+  applyPreviewMouseButtons(controls);
 
   rowUpper.surveyBtn.addEventListener("click", () =>
     handleSurveyButtonClick("upper", rowUpper.surveyBtn)
@@ -458,6 +464,7 @@ function init3DPreview(area) {
     if (group.visible) preview3DState.stageHiddenJaws.delete(jaw);
     const row = jaw === "upper" ? rowUpper.row : rowLower.row;
     row.classList.toggle("is-hidden-jaw", !group.visible);
+    requestPreviewRender();
   };
   const onJawIconKeydown = (jaw) => (e) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -505,25 +512,135 @@ function init3DPreview(area) {
     // TrackballControls maps screen coords to arcball math, so it must be re-anchored on
     // canvas resize — otherwise rotation feels off after a layout change.
     controls.handleResize?.();
+    requestPreviewRender();
   };
 
   preview3DState.resizeObserver = new ResizeObserver(resize);
   preview3DState.resizeObserver.observe(mount);
   resize();
 
-  const animate = () => {
-    preview3DState.frameId = requestAnimationFrame(animate);
-    controls.update();
-    updateSurveyPlacementArrow();
-    renderer.render(scene, camera);
+  // Any pointer/wheel activity anywhere in the preview keeps frames coming. Two reasons
+  // to bind on the shell rather than the canvas: TrackballControls only applies queued
+  // input from controls.update() (which runs per drawn frame), and the toolbar rows —
+  // jaw visibility, trash, SET SURVEY ANGLE, HD/SD — sit OUTSIDE the canvas mount, so a
+  // mount-only listener would miss every one of them.
+  const wake = () => requestPreviewRender(PREVIEW_INTERACTION_AWAKE_MS);
+  for (const type of ["pointerdown", "pointermove", "pointerup", "wheel", "touchstart", "touchmove"]) {
+    shell.addEventListener(type, wake, { capture: true, passive: true });
+  }
+  controls.addEventListener("change", wake);
+
+  // Stop drawing entirely when the preview scrolls off screen or the tab is hidden. The
+  // stacked mobile layout puts this canvas above the arch editor, so it is off screen for
+  // most of a 2D design session.
+  preview3DState.intersectionObserver = new IntersectionObserver(
+    (entries) => {
+      const onScreen = entries.some((e) => e.isIntersecting);
+      preview3DState.renderOnScreen = onScreen;
+      if (onScreen) requestPreviewRender();
+      else stopPreviewLoop();
+    },
+    { threshold: 0 }
+  );
+  preview3DState.intersectionObserver.observe(mount);
+
+  const onVisibility = () => {
+    if (document.hidden) stopPreviewLoop();
+    else requestPreviewRender();
   };
-  animate();
+  document.addEventListener("visibilitychange", onVisibility);
+  preview3DState.renderVisibilityCleanup = () =>
+    document.removeEventListener("visibilitychange", onVisibility);
+
+  requestPreviewRender();
 }
 
-export function teardown3DPreview() {
+// How long frames keep being drawn after the last interaction. Covers the gaps between
+// pointermove events during a drag without pinning the GPU once the user stops.
+const PREVIEW_INTERACTION_AWAKE_MS = 400;
+
+// The preview's mouse-button map, in ONE place because two call sites set it.
+//
+// TrackballControls matches the raw `event.button` against these slot VALUES, so
+// `LEFT: 2` reads as "button 2 (the physical right button) drives the LEFT slot's
+// action, rotate". The physical left button is parked on PAN, which noPan disables,
+// leaving it free for the survey tool to drag the placement arrow.
+//
+// exitSurveyAiming MUST restore this rather than three.js's stock map: doing the
+// latter silently moved rotation onto the left button for the rest of the session,
+// so the jaw span differently before and after a survey.
+export function applyPreviewMouseButtons(controls) {
+  if (!controls || !THREE) return;
+  controls.mouseButtons = { LEFT: 2, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: 0 };
+}
+
+// Draw frames only while something is actually changing.
+//
+// The preview is static between interactions, but an unconditional redraw loop costs a
+// full scene pass every frame. On a weak GPU that pass owns the entire frame budget and
+// starves the 2D arch editor sharing this page. Measured on a phone-class (software) GPU:
+// 384 ms/frame with the old loop vs 16.7 ms idle here, and tooth-tap-to-paint 411 ms -> 15 ms.
+//
+// Call this after ANY scene mutation (mesh swap, visibility, heatmap, camera move).
+// `ms` keeps the loop awake that long; 0 draws a single frame.
+export function requestPreviewRender(ms = 0) {
+  const previewState = preview3DState;
+  if (!previewState.renderer || !previewState.scene || !previewState.camera) return;
+  if (!previewState.renderOnScreen || document.hidden) return;
+  previewState.renderAwakeUntil = Math.max(previewState.renderAwakeUntil, performance.now() + ms);
+  // renderInFrame: a frame is running right now, and it re-schedules itself on the way
+  // out. Without this guard, controls.update() dispatching 'change' from inside the
+  // frame lands here while frameId is still 0 and queues a SECOND callback for the next
+  // tick — which then does the same, compounding. Measured 24 full scene renders per
+  // animation frame while rotating (≈14 fps on a 1M-triangle case) before the guard.
+  if (previewState.frameId || previewState.renderInFrame) return;
+  previewState.frameId = requestAnimationFrame(runPreviewFrame);
+}
+
+function runPreviewFrame() {
+  const previewState = preview3DState;
+  previewState.frameId = 0;
+  const { renderer, scene, camera, controls } = previewState;
+  if (!renderer || !scene || !camera) return;
+  previewState.renderInFrame = true;
+  try {
+    controls?.update();
+    updateSurveyPlacementArrow();
+    renderer.render(scene, camera);
+  } finally {
+    previewState.renderInFrame = false;
+  }
+  // Keep going only while inside the awake window; otherwise fall idle until the next
+  // interaction or requestPreviewRender() call.
+  if (
+    previewState.renderOnScreen &&
+    !document.hidden &&
+    performance.now() < previewState.renderAwakeUntil
+  ) {
+    previewState.frameId = requestAnimationFrame(runPreviewFrame);
+  }
+}
+
+function stopPreviewLoop() {
   if (preview3DState.frameId) {
     cancelAnimationFrame(preview3DState.frameId);
     preview3DState.frameId = 0;
+  }
+  preview3DState.renderAwakeUntil = 0;
+}
+
+export function teardown3DPreview() {
+  stopPreviewLoop();
+  // Re-armed by the next init3DPreview(); leaving it false would keep the new
+  // renderer asleep until the observer happens to fire.
+  preview3DState.renderOnScreen = true;
+  if (preview3DState.intersectionObserver) {
+    preview3DState.intersectionObserver.disconnect();
+    preview3DState.intersectionObserver = null;
+  }
+  if (preview3DState.renderVisibilityCleanup) {
+    preview3DState.renderVisibilityCleanup();
+    preview3DState.renderVisibilityCleanup = null;
   }
   if (preview3DState.resizeObserver) {
     preview3DState.resizeObserver.disconnect();
@@ -957,7 +1074,11 @@ function createDisplayGeometry(geometry, label = "mesh") {
   if (!Number.isFinite(longest) || longest <= 0) return geometry;
 
   const targetVertices = Math.max(5000, Math.floor(PREVIEW_MAX_DISPLAY_TRIANGLES * 0.7));
-  const baseDivisions = Math.max(8, Math.round(Math.cbrt(targetVertices)));
+  // A jaw scan is a SURFACE, so the number of occupied grid cells grows with
+  // divisions^2, not divisions^3 — a cube root here sized the grid for a solid and
+  // overshot the reduction by ~15x (514k tris collapsed to 8k against a 120k budget).
+  // The factor sweep below only ever goes coarser, so it could never recover from it.
+  const baseDivisions = Math.max(8, Math.round(Math.sqrt(targetVertices)));
   const baseCellSize = longest / baseDivisions;
   let best = null;
   let bestTriangles = sourceTriangles;
@@ -1879,6 +2000,7 @@ export function setHeatmapEnabled(enabled) {
   if (btn) btn.setAttribute("aria-pressed", enabled ? "true" : "false");
   // .is-off both dims the corner icon and hides the legend dropdown.
   preview3DState.heatmapBoard?.classList.toggle("is-off", !enabled);
+  requestPreviewRender();
 }
 
 function reapplyHeatmap(undercut) {
@@ -1893,6 +2015,7 @@ function reapplyHeatmap(undercut) {
   };
   repaint(preview3DState.groups.upper, undercut?.upper);
   repaint(preview3DState.groups.lower, undercut?.lower);
+  requestPreviewRender();
 }
 
 // Paints the undercut colours into the meshes but does NOT switch the display to
@@ -2053,6 +2176,7 @@ function centerRootOnCombinedBounds(root) {
   if (box.isEmpty()) return;
   const center = box.getCenter(new THREE.Vector3());
   root.position.set(-center.x, -center.y, -center.z);
+  requestPreviewRender();
 }
 
 function applyJawVisibility() {
@@ -2067,6 +2191,7 @@ function applyJawVisibility() {
     const group = preview3DState.groups[jaw];
     if (group) group.visible = false;
   }
+  requestPreviewRender();
 }
 
 // World bounds of only the VISIBLE meshes under `root`. Box3.setFromObject ignores
@@ -2118,6 +2243,7 @@ function fitPreviewCamera({ visibleOnly = false, worldView = null } = {}) {
   controls.update();
   // Call only if present (TrackballControls has no saveState).
   controls.saveState?.();
+  requestPreviewRender();
 }
 
 // Camera offset + up per snap, in the MODEL's local frame (Z-up: +Z = occlusal); modelRoot is
@@ -2624,6 +2750,13 @@ async function loadExtraStlsIntoPreview() {
   for (const extra of extras) {
     preview3DState.occupiedSlots.add(extra.slotNumber);
     preview3DState.extraFileNames[extra.slotNumber] = extra.filename;
+    // Hand the browser a real frame between slots. renderExtraStl is `async` but its
+    // body — base64 decode, STL parse, vertex merge, decimation — runs start to finish
+    // synchronously, and `await` alone only yields a microtask, so back-to-back slots
+    // merged into one unbroken block (measured: a single 7.8s main-thread stall at 4x
+    // CPU on a case whose four slots each hold a ~26MB scan). These meshes are created
+    // hidden, so nothing here is worth blocking input for.
+    await waitForPreviewPaint();
     // Isolate per-slot failures: a single corrupt/undecodable extra STL must not
     // abort the whole interactive preview (the jaws are already loaded by now).
     try {
@@ -2815,6 +2948,7 @@ function toggleExtraStlVisibility(slot, iconEl) {
   }
   entry.group.visible = !entry.group.visible;
   iconEl?.classList.toggle("is-hidden-extra", !entry.group.visible);
+  requestPreviewRender();
 }
 
 // Show/hide every loaded extra STL at once; the panel rows re-render so their icons
@@ -2825,6 +2959,7 @@ function setExtraStlsVisible(visible) {
     if (entry?.group) entry.group.visible = visible;
   }
   renderUpload3dList();
+  requestPreviewRender();
 }
 
 // Set one jaw's mesh visibility and keep its toolbar row in sync (same as the row icon).
@@ -2834,6 +2969,7 @@ function setJawVisible(jaw, visible) {
   group.visible = visible;
   const rowKey = jaw === "upper" ? "rowUpper" : "rowLower";
   preview3DState.topControls?.[rowKey]?.row?.classList.toggle("is-hidden-jaw", !visible);
+  requestPreviewRender();
 }
 
 // Opening the "Other 3D files" panel focuses the stage on the extras: maximize the preview,
