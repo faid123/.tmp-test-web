@@ -59,14 +59,14 @@ function checkLiveBranchAlignment() {
     console.log(`  (could not fetch origin/${LIVE_BRANCH} — running offline / no remote access; skipping alignment check)`);
   }
 
-  if (!fetchOk) return { checked: false, aligned: null, liveSha: null };
+  if (!fetchOk) return { checked: false, aligned: null, liveSha: null, deployPending: null };
 
   const lastPagesCommitMsg = tryRun(`git log -1 --format=%s origin/${LIVE_BRANCH}`).trim();
   const match = lastPagesCommitMsg.match(/Deploy ([0-9a-f]{40})/);
   if (!match) {
     console.log(`  Could not parse a deployed SHA out of origin/${LIVE_BRANCH}'s last commit message`);
     console.log(`  ("${lastPagesCommitMsg}") — skipping alignment check.`);
-    return { checked: false, aligned: null, liveSha: null };
+    return { checked: false, aligned: null, liveSha: null, deployPending: null };
   }
   const liveSha = match[1];
   let aligned = false;
@@ -89,7 +89,35 @@ function checkLiveBranchAlignment() {
     console.log(`  this run, find which branch actually contains ${liveSha.slice(0, 7)} and either`);
     console.log(`  review from there, or treat this as a signal to re-target the docs again.`);
   }
-  return { checked: true, aligned, liveSha };
+
+  // Second, independent signal from the branch that actually triggers a deploy
+  // (fetched above alongside LIVE_BRANCH): is nyunt/dev-deploy itself ahead of what's
+  // currently live? A "yes" here doesn't mean docs are wrong -- it means a deploy is
+  // overdue, which is exactly the kind of drift-in-progress worth surfacing early
+  // rather than discovering only after the next `Deploy <sha>` commit lands.
+  let deployPending = null;
+  const deployBranchSha = tryRun(`git rev-parse origin/${PAGES_TRIGGER_BRANCH}`).trim();
+  if (deployBranchSha && /^[0-9a-f]{40}$/.test(deployBranchSha)) {
+    if (deployBranchSha === liveSha) {
+      deployPending = false;
+      console.log(`  OK: ${PAGES_TRIGGER_BRANCH} (${deployBranchSha.slice(0, 7)}) matches what's live -- no deploy pending.`);
+    } else {
+      try {
+        run(`git merge-base --is-ancestor ${liveSha} ${deployBranchSha}`);
+        deployPending = true;
+        console.log(`  ℹ️  ${PAGES_TRIGGER_BRANCH} (${deployBranchSha.slice(0, 7)}) has commits beyond the deployed`);
+        console.log(`  SHA -- a deploy is pending/overdue, separate from this branch's own alignment.`);
+      } catch {
+        deployPending = null;
+        console.log(`  Could not relate ${PAGES_TRIGGER_BRANCH}'s tip to the deployed SHA (unusual --`);
+        console.log(`  possibly a force-push/rebase on ${PAGES_TRIGGER_BRANCH}). Skipping this signal.`);
+      }
+    }
+  } else {
+    console.log(`  Could not resolve origin/${PAGES_TRIGGER_BRANCH} -- skipping the deploy-pending signal.`);
+  }
+
+  return { checked: true, aligned, liveSha, deployPending };
 }
 
 // -- Step 2: run Jest and rebuild the UAT-mapped rollup -----------------------------
@@ -257,9 +285,25 @@ function loadState() {
   }
 }
 
+// Exact filenames (not prefixes) that touch an auth/credential/dependency/CDN-script
+// surface. Deliberately literal rather than a fuzzy prefix regex: a prefix like
+// "src/js/shared/config" would also match a hypothetical config-adjacent file
+// (e.g. configValidator.js) that has nothing to do with this doc's audit surface.
+const AUTH_SURFACE_FILES = new Set([
+  "src/js/shared/config.js",
+  "src/viewer3d/ApiClient.js",
+  "src/js/pages/login.js",
+  "src/js/shared/passwordReset.js",
+  "webpack.config.js",
+  "nginx.conf",
+  "package-lock.json",
+  "src/pages/case_list.html",
+  "src/js/shared/crypt.js",
+]);
+
 const DOC_FLAG_RULES = [
   {
-    test: (f) => /^(src\/js\/shared\/config|src\/viewer3d\/ApiClient|src\/js\/pages\/login|src\/js\/shared\/passwordReset|src\/js\/admin\/|webpack\.config|nginx\.conf|package-lock\.json|src\/pages\/case_list\.html|src\/js\/shared\/crypt)\.?/.test(f) || f === "package-lock.json",
+    test: (f) => AUTH_SURFACE_FILES.has(f) || f.startsWith("src/js/admin/"),
     docs: ["Cybersecurity_Protocol_Document.docx"],
     why: "touches an authentication, credential, dependency, or CDN-script surface this document audits",
   },
@@ -274,22 +318,44 @@ const DOC_FLAG_RULES = [
     why: "changes the deploy pipeline these documents describe step-by-step",
   },
   {
+    // Self-referential on purpose: WEEKLY_DOC_REVIEW.md describes this script's
+    // schedule, its DOC_FLAG_RULES/SUITE_META mapping, and (since the deploy.yml
+    // change) the deploy-triggered path -- so changes to any of those three should
+    // prompt someone to re-read whether that description is still accurate, the
+    // same way any other logic change here flags a doc that describes it.
+    test: (f) => f === "tools/weekly-doc-review.mjs" || f === ".github/workflows/weekly-doc-review.yml" || f === ".github/workflows/deploy.yml",
+    docs: ["Documentations/WEEKLY_DOC_REVIEW.md"],
+    why: "changes the weekly-doc-review process itself -- re-read WEEKLY_DOC_REVIEW.md to keep its description of the process in sync",
+  },
+  {
+    // Catch-all: only meant to fire when none of the more specific rules above
+    // already claimed this file (see flagDocsForCommit) -- otherwise its "not
+    // already covered above" reasoning would be false for whatever they matched.
     test: (f) => f.startsWith("src/") || f.startsWith("css/"),
     docs: ["Feedback_Triage_Report.docx (new TSK candidate?)", "Traceability_Document.docx", "SmartRPD_Documentation.docx"],
     why: "is a feature-code change not already covered above -- check whether it needs a new TSK row",
+    fallbackOnly: true,
   },
 ];
 
 function flagDocsForCommit(changedFiles) {
   const flagged = new Map();
+  const specificRules = DOC_FLAG_RULES.filter((r) => !r.fallbackOnly);
+  const fallbackRules = DOC_FLAG_RULES.filter((r) => r.fallbackOnly);
+
+  const applyRule = (f, rule) => {
+    for (const doc of rule.docs) {
+      if (!flagged.has(doc)) flagged.set(doc, new Set());
+      flagged.get(doc).add(`${f} (${rule.why})`);
+    }
+  };
+
   for (const f of changedFiles) {
-    for (const rule of DOC_FLAG_RULES) {
-      if (rule.test(f)) {
-        for (const doc of rule.docs) {
-          if (!flagged.has(doc)) flagged.set(doc, new Set());
-          flagged.get(doc).add(`${f} (${rule.why})`);
-        }
-      }
+    const matched = specificRules.filter((rule) => rule.test(f));
+    if (matched.length) {
+      matched.forEach((rule) => applyRule(f, rule));
+    } else {
+      fallbackRules.filter((rule) => rule.test(f)).forEach((rule) => applyRule(f, rule));
     }
   }
   return flagged;
@@ -351,13 +417,19 @@ function main() {
     ? `✅ This branch's HEAD contains the commit deployed to \`${LIVE_BRANCH}\` (\`${alignment.liveSha.slice(0, 7)}\`). Safe to treat this run as reviewing the live branch.`
     : `⚠️ **This branch has diverged from \`${LIVE_BRANCH}\`.** The deployed commit \`${alignment.liveSha.slice(0, 7)}\` is not an ancestor of HEAD. Everything below reflects this branch's code, which is not what's currently live -- find and review from whichever branch actually contains that commit before trusting this report, or treat this as the signal to re-run the branch-retargeting pass done on 2026-07-31.`;
 
+  const deployPendingNote = alignment.deployPending === null
+    ? ""
+    : alignment.deployPending
+    ? `\n\nℹ️ **A deploy is pending:** \`${PAGES_TRIGGER_BRANCH}\` has commits beyond what's currently live on \`${LIVE_BRANCH}\`. Independent of the alignment check above -- this just means the next deploy hasn't happened yet, not that anything is wrong.`
+    : `\n\n✅ \`${PAGES_TRIGGER_BRANCH}\` matches what's live -- no deploy pending.`;
+
   const report = `# Weekly Documentation Review -- ${date}
 
 Branch: \`${branch}\` @ \`${headSha.slice(0, 7)}\`
 
 ## Live-branch alignment
 
-${alignmentNote}
+${alignmentNote}${deployPendingNote}
 
 ## Test suite
 
@@ -394,6 +466,7 @@ See [Documentations/WEEKLY_DOC_REVIEW.md](../WEEKLY_DOC_REVIEW.md) for what to d
         audit: audit.totals,
         liveSha: alignment.liveSha,
         aligned: alignment.aligned,
+        deployPending: alignment.deployPending,
       },
       null,
       2,

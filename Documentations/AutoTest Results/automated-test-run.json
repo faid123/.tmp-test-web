@@ -1,5 +1,5 @@
 {
-  "runAt": "2026-08-06T09:20:03.224Z",
+  "runAt": "2026-08-07T01:23:48.598Z",
   "command": "npx jest --ci --coverage --coverageReporters=json-summary --verbose --testLocationInResults --json",
   "commandFailed": false,
   "numTotalTestSuites": 13,
@@ -16,7 +16,7 @@
       "pass": 3,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2800,
+      "durationMs": 3070,
       "uat": [],
       "category": "real",
       "crossCutting": true,
@@ -30,7 +30,7 @@
       "pass": 5,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2808,
+      "durationMs": 3078,
       "uat": [
         "UAT-06"
       ],
@@ -46,7 +46,7 @@
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2838,
+      "durationMs": 3115,
       "uat": [
         "UAT-02"
       ],
@@ -62,7 +62,7 @@
       "pass": 3,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2868,
+      "durationMs": 3202,
       "uat": [],
       "category": "real",
       "crossCutting": true,
@@ -76,7 +76,7 @@
       "pass": 22,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2952,
+      "durationMs": 3231,
       "uat": [
         "UAT-01"
       ],
@@ -92,7 +92,7 @@
       "pass": 9,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2978,
+      "durationMs": 3271,
       "uat": [
         "UAT-06"
       ],
@@ -108,28 +108,11 @@
       "pass": 94,
       "fail": 0,
       "skip": 0,
-      "durationMs": 3102,
+      "durationMs": 3412,
       "uat": [],
       "category": "real",
       "crossCutting": false,
       "note": "Imports real src/js/shared/helpMatcher.js and helpTopics.js (AI-powered help assistant). No standing UAT-xx case yet -- see Traceability_Document.docx.",
-      "failureMessages": []
-    },
-    {
-      "file": "artificialTeethDecode.test.mjs",
-      "status": "passed",
-      "tests": 28,
-      "pass": 28,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 3256,
-      "uat": [
-        "UAT-07",
-        "UAT-08"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real src/viewer3d/artificialTeeth.js MessagePack/coordinate decode layer used by both the embedded 3D preview and the standalone 3D viewer.",
       "failureMessages": []
     },
     {
@@ -139,7 +122,7 @@
       "pass": 21,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1386,
+      "durationMs": 1350,
       "uat": [
         "UAT-04"
       ],
@@ -155,7 +138,7 @@
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1417,
+      "durationMs": 1379,
       "uat": [
         "UAT-06"
       ],
@@ -165,13 +148,13 @@
       "failureMessages": []
     },
     {
-      "file": "jawStructLingualPlate.test.mjs",
+      "file": "jawStructRoundTrip.test.mjs",
       "status": "passed",
-      "tests": 4,
-      "pass": 4,
+      "tests": 2,
+      "pass": 2,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1549,
+      "durationMs": 1523,
       "uat": [
         "UAT-06"
       ],
@@ -181,19 +164,36 @@
       "failureMessages": []
     },
     {
-      "file": "jawStructRoundTrip.test.mjs",
+      "file": "jawStructLingualPlate.test.mjs",
       "status": "passed",
-      "tests": 2,
-      "pass": 2,
+      "tests": 4,
+      "pass": 4,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1561,
+      "durationMs": 1533,
       "uat": [
         "UAT-06"
       ],
       "category": "real",
       "crossCutting": false,
       "note": "Imports real src/js/2D/jawStructApply.js against fixture desktop files.",
+      "failureMessages": []
+    },
+    {
+      "file": "artificialTeethDecode.test.mjs",
+      "status": "passed",
+      "tests": 28,
+      "pass": 28,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 3568,
+      "uat": [
+        "UAT-07",
+        "UAT-08"
+      ],
+      "category": "real",
+      "crossCutting": false,
+      "note": "Imports real src/viewer3d/artificialTeeth.js MessagePack/coordinate decode layer used by both the embedded 3D preview and the standalone 3D viewer.",
       "failureMessages": []
     },
     {
@@ -203,7 +203,7 @@
       "pass": 4,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1582,
+      "durationMs": 1545,
       "uat": [
         "UAT-06"
       ],
@@ -272,8 +272,8 @@
         "mergeInstructions.test.mjs",
         "reciprocatingExclusivity.test.mjs",
         "clinicalInfoCodec.test.mjs",
-        "jawStructLingualPlate.test.mjs",
         "jawStructRoundTrip.test.mjs",
+        "jawStructLingualPlate.test.mjs",
         "jawStructMajorSwitch.test.mjs"
       ],
       "tests": 37,

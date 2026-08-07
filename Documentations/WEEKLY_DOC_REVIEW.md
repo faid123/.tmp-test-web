@@ -6,21 +6,36 @@ on `nyunt/dev-W7.1` days earlier. Test counts, security findings, and TSK triage
 drifted from reality without anyone noticing, because nothing was checking. This process exists so
 that doesn't happen silently again.
 
-## What runs weekly
+## What runs it
 
-- **Script:** [`tools/weekly-doc-review.mjs`](../tools/weekly-doc-review.mjs)
-- **Schedule:** [`​.github/workflows/weekly-doc-review.yml`](../.github/workflows/weekly-doc-review.yml)
-  — every Friday, 01:00 UTC (09:00 SGT), plus on-demand via **Actions → Weekly Documentation
-  Review → Run workflow**.
+This runs via **two independent triggers** now — neither depends on the other:
+
+- **Deploy-triggered (primary):** a step at the end of [`.github/workflows/deploy.yml`]
+  (../.github/workflows/deploy.yml) on `nyunt/dev-deploy`, added because the schedule below can
+  never fire on its own. After every successful deploy it checks out `dev-deploy-documentation`,
+  runs the script, and pushes back whatever changed. More accurate than a fixed weekly clock too:
+  it checks alignment at the moment code actually goes live, not up to 6 days later. *(As of
+  2026-08-07 this is on the `ci/deploy-doc-refresh` branch, not yet merged into `nyunt/dev-deploy`
+  — until it merges, this trigger doesn't fire either; see "Making the schedule actually fire"
+  below for the interim.)*
+- **Schedule (secondary/backstop):** [`​.github/workflows/weekly-doc-review.yml`]
+  (../.github/workflows/weekly-doc-review.yml) — every Friday, 01:00 UTC (09:00 SGT), plus
+  on-demand via **Actions → Weekly Documentation Review → Run workflow**. Still useful even once
+  the deploy trigger is live: `npm audit` output can change with zero code changes (the advisory
+  database updates on its own), so a review can be worth re-running in a quiet week with no
+  deploys at all.
 - **Branch it runs on:** checks out and pushes back to `dev-deploy-documentation` (this branch) —
-  set via `REVIEW_BRANCH` in the workflow file.
+  set via `REVIEW_BRANCH` in the schedule workflow, or `DOCS_BRANCH` in `deploy.yml`.
 
 Each run:
 
-1. **Checks live-branch alignment.** Parses the commit SHA out of `nyunt/dev-W7.1`'s latest
-   `Deploy <sha> (run N)` commit message and confirms that SHA is still an ancestor of this
-   branch's `HEAD`. If it isn't, the report says so loudly at the top — that's the exact signal
-   that would have caught the `dev-deploy-shafik-2` drift a week earlier instead of a week late.
+1. **Checks live-branch alignment — two signals.** First, parses the commit SHA out of
+   `nyunt/dev-W7.1`'s latest `Deploy <sha> (run N)` commit message and confirms that SHA is still
+   an ancestor of this branch's `HEAD`. If it isn't, the report says so loudly at the top — that's
+   the exact signal that would have caught the `dev-deploy-shafik-2` drift a week earlier instead
+   of a week late. Second, and independently, checks whether `nyunt/dev-deploy` (the branch that
+   triggers a deploy) has moved past that deployed SHA — if so, a deploy is pending/overdue, which
+   is informational rather than alarming on its own.
 2. **Re-runs the real test suite** (`npx jest --ci --coverage --coverageReporters=json-summary
    --verbose --testLocationInResults --json`) and rebuilds
    `Documentations/AutoTest Results/automated-test-run.json` and `-log.txt` from the actual
@@ -68,7 +83,13 @@ file only exists on `dev-deploy-documentation`, so the Friday cron will **not** 
 - an equivalent copy of the workflow file is added to `main` directly, pointing `REVIEW_BRANCH` at
   `dev-deploy-documentation`.
 
-Until then, run it on demand: **Actions → Weekly Documentation Review → Run workflow**, or locally:
+This is exactly why the deploy-triggered path in `deploy.yml` (see "What runs it" above) exists —
+`push` triggers don't have this default-branch restriction, so it sidesteps the problem instead of
+needing `main` at all. It's the recommended fix once `ci/deploy-doc-refresh` is merged; the schedule
+staying broken stops mattering much at that point, since every deploy already reruns this.
+
+Until either lands, run it on demand: **Actions → Weekly Documentation Review → Run workflow**, or
+locally:
 
 ```bash
 node tools/weekly-doc-review.mjs
@@ -91,6 +112,7 @@ offline for the test/audit refresh.
 |---|---|
 | `tools/weekly-doc-review.mjs` | The script itself. |
 | `.github/workflows/weekly-doc-review.yml` | The Friday schedule + manual trigger. |
+| `.github/workflows/deploy.yml` | Also runs this, from its last few steps, after every successful deploy (see "What runs it" above) — not owned by this process, but a change here can affect it. |
 | `Documentations/AutoTest Results/automated-test-run.json` | Structured Jest results, UAT-mapped. |
 | `Documentations/AutoTest Results/automated-test-run-log.txt` | Full Jest console output. |
 | `Documentations/AutoTest Results/npm-audit-run.json` / `.txt` | Raw `npm audit` output. |

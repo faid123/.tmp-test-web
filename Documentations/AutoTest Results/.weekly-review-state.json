@@ -1,7 +1,7 @@
 {
-  "headSha": "0f151f506d8bd22fe24619a587413b4320145758",
+  "headSha": "e43b196d92b74cbd06c9cfccd3e008f01a7e6619",
   "branch": "dev-deploy-documentation",
-  "date": "2026-08-06",
+  "date": "2026-08-07",
   "tests": {
     "suites": 13,
     "tests": 221
@@ -10,9 +10,9 @@
     "info": 0,
     "low": 0,
     "moderate": 3,
-    "high": 4,
+    "high": 5,
     "critical": 1,
-    "total": 8
+    "total": 9
   },
   "liveSha": "d5d5121f12287c45b91d7a0d62acf017d6d98c64",
   "aligned": false

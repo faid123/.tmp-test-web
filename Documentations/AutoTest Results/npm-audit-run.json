@@ -93,6 +93,35 @@
       ],
       "fixAvailable": true
     },
+    "js-yaml": {
+      "name": "js-yaml",
+      "severity": "high",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1138114,
+          "name": "js-yaml",
+          "dependency": "js-yaml",
+          "title": "JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) — CVE-2026-59870 fix not backported",
+          "url": "https://github.com/advisories/GHSA-5p4m-2wfm-xmqj",
+          "severity": "high",
+          "cwe": [
+            "CWE-407"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": ">=3.0.0 <3.15.1"
+        }
+      ],
+      "effects": [],
+      "range": "3.0.0 - 3.15.0",
+      "nodes": [
+        "node_modules/js-yaml"
+      ],
+      "fixAvailable": true
+    },
     "postcss": {
       "name": "postcss",
       "severity": "high",
@@ -289,9 +318,9 @@
       "info": 0,
       "low": 0,
       "moderate": 3,
-      "high": 4,
+      "high": 5,
       "critical": 1,
-      "total": 8
+      "total": 9
     },
     "dependencies": {
       "prod": 19,
