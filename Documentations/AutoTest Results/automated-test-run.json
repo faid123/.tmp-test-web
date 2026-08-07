@@ -1,5 +1,5 @@
 {
-  "runAt": "2026-08-07T07:29:56.287Z",
+  "runAt": "2026-08-07T07:58:52.108Z",
   "command": "npx jest --ci --coverage --coverageReporters=json-summary --verbose --testLocationInResults --json",
   "commandFailed": false,
   "numTotalTestSuites": 13,
@@ -16,7 +16,7 @@
       "pass": 94,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2548,
+      "durationMs": 2240,
       "uat": [],
       "category": "real",
       "crossCutting": false,
@@ -30,7 +30,7 @@
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2501,
+      "durationMs": 2385,
       "uat": [
         "UAT-06"
       ],
@@ -46,7 +46,7 @@
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 472,
+      "durationMs": 453,
       "uat": [
         "UAT-02"
       ],
@@ -62,7 +62,7 @@
       "pass": 22,
       "fail": 0,
       "skip": 0,
-      "durationMs": 523,
+      "durationMs": 477,
       "uat": [
         "UAT-01"
       ],
@@ -78,7 +78,7 @@
       "pass": 21,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1311,
+      "durationMs": 1285,
       "uat": [
         "UAT-04"
       ],
@@ -94,7 +94,7 @@
       "pass": 28,
       "fail": 0,
       "skip": 0,
-      "durationMs": 6451,
+      "durationMs": 5924,
       "uat": [
         "UAT-07",
         "UAT-08"
@@ -111,7 +111,23 @@
       "pass": 4,
       "fail": 0,
       "skip": 0,
-      "durationMs": 3593,
+      "durationMs": 3201,
+      "uat": [
+        "UAT-06"
+      ],
+      "category": "real",
+      "crossCutting": false,
+      "note": "Imports real src/js/2D/jawStructApply.js against fixture desktop files.",
+      "failureMessages": []
+    },
+    {
+      "file": "jawStructRoundTrip.test.mjs",
+      "status": "passed",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 626,
       "uat": [
         "UAT-06"
       ],
@@ -127,7 +143,7 @@
       "pass": 4,
       "fail": 0,
       "skip": 0,
-      "durationMs": 3248,
+      "durationMs": 3028,
       "uat": [
         "UAT-06"
       ],
@@ -143,27 +159,11 @@
       "pass": 3,
       "fail": 0,
       "skip": 0,
-      "durationMs": 105,
+      "durationMs": 113,
       "uat": [],
       "category": "real",
       "crossCutting": true,
       "note": "Walks src/, __tests__/ and the HTML pages checking every relative import/script-src resolves. Repo-wide build-integrity check, not tied to one workflow.",
-      "failureMessages": []
-    },
-    {
-      "file": "jawStructRoundTrip.test.mjs",
-      "status": "passed",
-      "tests": 2,
-      "pass": 2,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 596,
-      "uat": [
-        "UAT-06"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real src/js/2D/jawStructApply.js against fixture desktop files.",
       "failureMessages": []
     },
     {
@@ -173,7 +173,7 @@
       "pass": 3,
       "fail": 0,
       "skip": 0,
-      "durationMs": 70,
+      "durationMs": 57,
       "uat": [],
       "category": "real",
       "crossCutting": true,
@@ -187,7 +187,7 @@
       "pass": 5,
       "fail": 0,
       "skip": 0,
-      "durationMs": 141,
+      "durationMs": 106,
       "uat": [
         "UAT-06"
       ],
@@ -203,7 +203,7 @@
       "pass": 9,
       "fail": 0,
       "skip": 0,
-      "durationMs": 179,
+      "durationMs": 186,
       "uat": [
         "UAT-06"
       ],
@@ -271,8 +271,8 @@
       "suites": [
         "clinicalInfoCodec.test.mjs",
         "jawStructLingualPlate.test.mjs",
-        "jawStructMajorSwitch.test.mjs",
         "jawStructRoundTrip.test.mjs",
+        "jawStructMajorSwitch.test.mjs",
         "mergeInstructions.test.mjs",
         "reciprocatingExclusivity.test.mjs"
       ],
