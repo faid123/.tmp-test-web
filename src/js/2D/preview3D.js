@@ -67,6 +67,8 @@ export const preview3DState = {
   camera: null,
   controls: null,
   frameId: 0,
+  // Removes the webglcontextlost/restored listeners (see bindPreviewContextLossRecovery).
+  contextLossCleanup: null,
   resizeObserver: null,
   mount: null,
   modelRoot: null,
@@ -518,6 +520,84 @@ function init3DPreview(area) {
     renderer.render(scene, camera);
   };
   animate();
+
+  bindPreviewContextLossRecovery(renderer.domElement, area);
+}
+
+// A lost WebGL context is why the preview "suddenly goes dark" on iOS.
+//
+// Safari drops the context under memory pressure — a pair of jaw scans is ~50MB of geometry
+// on the GPU — and once it is gone THREE.WebGLRenderer.render() returns immediately, so this
+// loop keeps running at 60fps drawing nothing at all and the canvas just stays black. three.js
+// already calls preventDefault() on the loss (so the browser MAY restore) and re-initialises
+// GL state if a restore ever arrives, but Safari frequently never fires webglcontextrestored,
+// and nothing here noticed or told the user.
+//
+// So: stop burning frames on a dead context, say what happened, and offer a rebuild — that is
+// the only reliable recovery, since it creates a brand new context.
+function bindPreviewContextLossRecovery(canvas, area) {
+  if (!canvas) return;
+
+  const onLost = () => {
+    console.warn("[preview3D] WebGL context lost — pausing the render loop");
+    if (preview3DState.frameId) {
+      cancelAnimationFrame(preview3DState.frameId);
+      preview3DState.frameId = 0;
+    }
+    showPreviewContextLostNotice(area);
+  };
+
+  const onRestored = () => {
+    console.log("[preview3D] WebGL context restored — resuming the render loop");
+    hidePreviewContextLostNotice(area);
+    // three.js has already rebuilt its GL state by the time this fires; just start drawing
+    // again. Guard against double-starting if a restore arrives more than once.
+    if (!preview3DState.frameId && preview3DState.renderer) {
+      const tick = () => {
+        preview3DState.frameId = requestAnimationFrame(tick);
+        preview3DState.controls?.update();
+        updateSurveyPlacementArrow();
+        preview3DState.renderer.render(preview3DState.scene, preview3DState.camera);
+      };
+      tick();
+    }
+  };
+
+  canvas.addEventListener("webglcontextlost", onLost);
+  canvas.addEventListener("webglcontextrestored", onRestored);
+  preview3DState.contextLossCleanup = () => {
+    canvas.removeEventListener("webglcontextlost", onLost);
+    canvas.removeEventListener("webglcontextrestored", onRestored);
+  };
+}
+
+function showPreviewContextLostNotice(area) {
+  const host = area || preview3DState.area;
+  if (!host || host.querySelector(".jaw-preview-context-lost")) return;
+  const overlay = document.createElement("div");
+  overlay.className = "jaw-preview-loading jaw-preview-context-lost";
+  overlay.innerHTML = `
+    <div class="jaw-preview-loading-card" role="alert">
+      <div class="jaw-preview-loading-label">3D view was interrupted — the device ran low on memory.</div>
+    </div>
+  `;
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.className = "action-btn";
+  retry.textContent = "Reload 3D view";
+  retry.addEventListener("click", () => {
+    hidePreviewContextLostNotice(host);
+    // Full rebuild: a dead context cannot be revived in place, only replaced.
+    teardown3DPreview();
+    loadInteractiveJawPreview(host);
+  });
+  overlay.querySelector(".jaw-preview-loading-card")?.appendChild(retry);
+  host.appendChild(overlay);
+}
+
+function hidePreviewContextLostNotice(area) {
+  const host = area || preview3DState.area;
+  host?.querySelectorAll(".jaw-preview-context-lost").forEach((node) => node.remove());
 }
 
 export function teardown3DPreview() {
@@ -533,8 +613,21 @@ export function teardown3DPreview() {
     preview3DState.controls.dispose();
     preview3DState.controls = null;
   }
+  if (preview3DState.contextLossCleanup) {
+    preview3DState.contextLossCleanup();
+    preview3DState.contextLossCleanup = null;
+  }
   disposeObject3D(preview3DState.scene);
   if (preview3DState.renderer) {
+    // dispose() frees three.js's own objects but NOT the WebGL context — that lives until
+    // the canvas is collected. On a device that is already short on GPU memory, holding a
+    // dead context while the rebuild creates a new one is what we are trying to avoid, so
+    // hand it back explicitly first.
+    // Skip when it is already gone — three.js looks WEBGL_lose_context up on a dead context
+    // and logs a misleading "extension not supported" warning.
+    if (preview3DState.renderer.getContext?.()?.isContextLost?.() === false) {
+      preview3DState.renderer.forceContextLoss?.();
+    }
     preview3DState.renderer.dispose();
     preview3DState.renderer.domElement.remove();
     preview3DState.renderer = null;
