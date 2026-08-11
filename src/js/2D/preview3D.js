@@ -61,6 +61,9 @@ const PREVIEW_MAX_DISPLAY_TRIANGLES = 120000;
 
 const PREVIEW_MIN_SIMPLIFY_TRIANGLES = 160000;
 
+// TrackballControls maps action -> button: rotate on right-drag, zoom on middle.
+export const PREVIEW3D_MOUSE_BUTTONS = Object.freeze({ LEFT: 2, MIDDLE: 1, RIGHT: 0 });
+
 export const preview3DState = {
   renderer: null,
   scene: null,
@@ -410,16 +413,15 @@ function init3DPreview(area) {
   controls.panSpeed = 0.8;
   controls.noRotate = false;
   controls.noZoom = false;
-  // Lock the jaw at the centre: disable panning so the right mouse button can't
-  // drag the model off-centre. Rotation (left) and zoom (wheel) stay active.
+  // Lock the jaw at the centre: disable panning so the model can't be dragged
+  // off-centre. Rotation (right-drag) and zoom (wheel) stay active.
   controls.noPan = true;
   controls.staticMoving = true;
   controls.dynamicDampingFactor = 0;
   controls.minDistance = 35;
   controls.maxDistance = 700;
   controls.target.set(0, 0, 0);
-  controls.mouseButtons.LEFT = 2;
-  controls.mouseButtons.RIGHT = 0;
+  controls.mouseButtons = { ...PREVIEW3D_MOUSE_BUTTONS };
 
   rowUpper.surveyBtn.addEventListener("click", () =>
     handleSurveyButtonClick("upper", rowUpper.surveyBtn)

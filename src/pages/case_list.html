@@ -327,7 +327,7 @@
                   />
                   <ul
                     id="ccInviteSuggest"
-                    class="cc-invite-suggest hidden"
+                    class="user-suggest hidden"
                     role="listbox"
                     aria-label="Suggested users"
                   ></ul>
@@ -652,7 +652,17 @@
               class="uam-search-input"
               placeholder="Search a user to invite"
               autocomplete="off"
+              role="combobox"
+              aria-expanded="false"
+              aria-autocomplete="list"
+              aria-controls="userAccessSuggest"
             />
+            <ul
+              id="userAccessSuggest"
+              class="user-suggest uam-suggest hidden"
+              role="listbox"
+              aria-label="Suggested users"
+            ></ul>
           </div>
           <button id="addUserBtn" type="button" class="cm-btn cm-btn-primary uam-add-btn">
             <i class="fa fa-plus" aria-hidden="true"></i>
