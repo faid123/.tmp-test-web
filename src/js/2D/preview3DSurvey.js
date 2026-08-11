@@ -7,6 +7,7 @@ import { toast } from "../shared/toast.js";
 import {
   THREE,
   preview3DState,
+  PREVIEW3D_MOUSE_BUTTONS,
   srgbToLinear,
   colorForSurveyingValue,
   buildDllUndercutSurface,
@@ -674,12 +675,11 @@ function enterSurveyAiming(jaw, btn) {
     aimDirty: true,
   };
 
-  // LEFT drags the arrow; jaw rotate moves to RIGHT. TrackballControls hard-wires
-  // its LEFT slot to rotate, so point that slot at button 2 and unmap RIGHT.
+  // Left-drag aims the arrow, so keep rotate on right-drag and unmap pan.
   const controls = preview3DState.controls;
   if (controls) {
     controls.noRotate = false;
-    controls.mouseButtons = { LEFT: 2, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: -1 };
+    controls.mouseButtons = { ...PREVIEW3D_MOUSE_BUTTONS, RIGHT: -1 };
   }
   preview3DState.surveyDragCleanup = attachSurveyAimDrag();
   mount.classList.add("is-aiming-survey");
@@ -748,14 +748,10 @@ export function exitSurveyAiming({ preserveStage = false } = {}) {
   preview3DState.surveyRayLight = null;
   setSurveyShadowsEnabled(false);
 
-  // Restore the default button map and drop the aim listeners.
+  // Restore the preview's own map — the library default rotates on left-drag.
   if (preview3DState.controls) {
     preview3DState.controls.noRotate = false;
-    preview3DState.controls.mouseButtons = {
-      LEFT: THREE.MOUSE.ROTATE,
-      MIDDLE: THREE.MOUSE.DOLLY,
-      RIGHT: THREE.MOUSE.PAN,
-    };
+    preview3DState.controls.mouseButtons = { ...PREVIEW3D_MOUSE_BUTTONS };
   }
   preview3DState.surveyDragCleanup?.();
   preview3DState.surveyDragCleanup = null;

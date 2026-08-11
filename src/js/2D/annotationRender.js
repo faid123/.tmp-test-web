@@ -240,6 +240,16 @@ function ensureArchTintDefs() {
   document.body.appendChild(host);
 }
 
+// A detached copy of every arch filter, for callers that serialize an arch <svg> on its
+// own (the 2D screenshot / case thumbnail path in annotationLocks). Without it the
+// standalone SVG has no filter definitions to resolve `url(#tint-…)` against, and the jaw
+// template plus every tooth render untinted — which reads as a blank jaw in the thumbnail.
+export function cloneArchTintDefs() {
+  ensureArchTintDefs();
+  const defs = document.getElementById(ARCH_TINT_DEFS_HOST_ID)?.querySelector("defs");
+  return defs ? defs.cloneNode(true) : null;
+}
+
 // Render jaw background templates for upper/lower arch SVG. `parent` is the arch <svg>
 // or the detached fragment renderJaw reconciles from, so append-only here.
 function renderArchBackground(parent, jaw) {
@@ -689,7 +699,7 @@ function handleRangeMissingToothClick(jaw, toothId) {
   recordHistoryIfChanged(historyBefore);
 }
 
-registerRender({ renderJaw, renderJaws });
+registerRender({ renderJaw, renderJaws, cloneArchTintDefs });
 
 registerMeshAnnotationEnv(() => ({
   designMode: state.designMode,

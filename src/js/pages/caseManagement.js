@@ -3394,6 +3394,9 @@ function renderSharedUserList() {
     const li = document.createElement("li");
     li.className = "shared-user-item";
     li.style.position = "relative"; // 用于定位小 ×
+    // Read back by the invite box (createCase.js) to keep people already on the
+    // case out of its suggestions.
+    li.dataset.username = user.username || "";
 
     const nameSpan = document.createElement("span");
     nameSpan.className = "user-name";

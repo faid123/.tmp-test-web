@@ -815,7 +815,17 @@ function createComponentPanel(groups) {
     opacitySlider.setAttribute("aria-label", `${group.label} opacity`);
 
     opacitySlider.addEventListener("input", () => {
+      // Only touch this row's own visuals while dragging — syncAllRows()
+      // walks every row and re-appends them all (reorderRows), which is
+      // expensive DOM work that made the slider feel stiff when it ran on
+      // every drag tick. Opacity doesn't affect row order/availability, so
+      // that full resync only needs to happen once the drag settles.
       group.setOpacity?.(Number(opacitySlider.value) / 100);
+      opacitySlider.style.setProperty("--fill", `${opacitySlider.value}%`);
+      rail.dataset.opacity = opacitySlider.value;
+    });
+
+    opacitySlider.addEventListener("change", () => {
       syncAllRows();
     });
 

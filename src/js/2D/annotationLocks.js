@@ -14,6 +14,7 @@ import {
   titleCase,
   setMessage,
   closePresentToothRadialQuickPick,
+  cloneArchTintDefs,
   renderJaw,
   renderJaws,
   updateJawMaterialBadge,
@@ -807,6 +808,13 @@ async function fetchPageCss() {
 
 async function inlineImagesInSvg(svg) {
   const clone = svg.cloneNode(true);
+
+  // The tint filters live in a shared <svg> on <body>, not inside the arch, so a cloned
+  // arch resolves every `filter: url(#tint-…)` / `url(#jawTint-…)` against nothing once it
+  // is serialized standalone — the jaw template and all the teeth come out untinted and
+  // the thumbnail looks empty. Paste a copy in alongside the CSS.
+  const tintDefs = cloneArchTintDefs();
+  if (tintDefs) clone.insertBefore(tintDefs, clone.firstChild);
 
   const cssText = await fetchPageCss();
   if (cssText) {

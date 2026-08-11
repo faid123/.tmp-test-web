@@ -218,7 +218,7 @@ const viewerRotationOrigin = new THREE.Vector3(0, 0, 0);
 let viewerRotationBoundsRadius = 40;
 let hasViewerRotationOrigin = false;
 const VIEWER_TARGET_MIN_DRIFT_LIMIT = 45;
-let isViewerLeftButtonRotating = false;
+let isViewerRotating = false;
 const viewerRotationTargetAnchor = new THREE.Vector3();
 
 const POLYLINE_COMPONENT_COLORS = [
@@ -623,7 +623,7 @@ function clampViewerControlTarget(control = controls) {
 }
 
 function anchorViewerRotationTarget(control = controls) {
-  if (!control?.target || !isViewerLeftButtonRotating) return false;
+  if (!control?.target || !isViewerRotating) return false;
   const drift = control.target.distanceTo(viewerRotationTargetAnchor);
   if (!Number.isFinite(drift) || drift < 0.0001) return false;
 
@@ -663,7 +663,7 @@ function bindViewerRotationTargetAnchor(domElement) {
   const maxTouchZoom = 50;
 
   const releaseRotationAnchor = () => {
-    isViewerLeftButtonRotating = false;
+    isViewerRotating = false;
   };
 
   const releaseManualPan = () => {
@@ -802,17 +802,16 @@ function bindViewerRotationTargetAnchor(domElement) {
         startTouchGesture(event);
         return;
       }
-    } else if (event.button === 2) {
+    } else if (event.button === 0 || event.button === 1) {
+      // Left-drag on a polyline handle edits it, so pan only off the handles.
+      if (event.button === 0 && pickPolylinePoint(event, domElement)) return;
       startManualPan(event);
       return;
-    } else if (event.button === 1 || (event.button === 0 && event.shiftKey)) {
-      startManualPan(event);
-      return;
-    } else if (event.button !== 0 || event.shiftKey) {
+    } else if (event.button !== 2) {
       return;
     }
 
-    isViewerLeftButtonRotating = true;
+    isViewerRotating = true;
     setViewerRotationAnchorToCurrentTarget(controls);
   }, true);
 
@@ -3143,6 +3142,8 @@ function attachPolylineDragHandlers(domElement) {
   domElement.dataset.polylineDragBound = "true";
 
   domElement.addEventListener("pointerdown", (event) => {
+    // Left button only — right-drag rotates the jaw, even over a handle.
+    if (event.pointerType !== "touch" && event.button !== 0) return;
     const hit = pickPolylinePoint(event, domElement);
     if (!hit) return;
 
@@ -6661,8 +6662,9 @@ function removeViewerLoadingScreen() {
     controls.panSpeed = 30;
     // Panning is handled manually so the rotation target can stay anchored
     // after the jaw has been moved around the screen.
+    // Action -> button: rotate on right-drag, matching the 2D page's 3D preview.
     controls.mouseButtons = {
-      LEFT: THREE.MOUSE.ROTATE,
+      LEFT: 2,
       MIDDLE: -1,
       RIGHT: 1,
     };

@@ -332,10 +332,20 @@ export function positionAnteriorRestPanel(panel, anchor) {
 // Render bridge (registerRender + mesh env) so render module can register implementations.
 let renderJawImpl = () => {};
 let renderJawsImpl = () => {};
+let cloneArchTintDefsImpl = () => null;
 
 export function registerRender(fns) {
   renderJawImpl = fns.renderJaw;
   renderJawsImpl = fns.renderJaws;
+  if (fns.cloneArchTintDefs) cloneArchTintDefsImpl = fns.cloneArchTintDefs;
+}
+
+// The arch tint filters live in a shared <svg> outside the arch (annotationRender's
+// ensureArchTintDefs), so an arch serialized on its own carries no filter definitions and
+// every `filter: url(#…)` silently resolves to nothing — the jaw template and teeth come
+// out untinted, i.e. invisible. The screenshot/thumbnail path pastes this copy back in.
+export function cloneArchTintDefs() {
+  return cloneArchTintDefsImpl();
 }
 
 export function renderJaw(jaw) {

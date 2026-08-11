@@ -3,7 +3,7 @@ import { lol } from "../shared/crypt.js";
 import { toast, flashToast, confirmModal, attachThemedCalendar } from "../shared/toast.js";
 import { logApi } from "../shared/apiLog.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
-import { getCollaborators } from "../shared/collaborators.js";
+import { attachUserSuggest, initialsFor } from "../shared/userSuggest.js";
 
 // Resolve an asset path relative to the app root (everything before "/src/") so
 // it loads whether this shared module runs from src/pages/ (case_list) or the
@@ -90,6 +90,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const closeUserAccessModal = document.getElementById("closeUserAccessModal");
   const cancelInviteBtn = document.getElementById("cancelInviteBtn");
   const userSearchInput = document.getElementById("userSearchInput");
+  const userSearchSuggestEl = document.getElementById("userAccessSuggest");
   const addUserBtn = document.getElementById("addUserBtn");
   const saveInviteBtn = document.getElementById("saveInviteBtn");
 
@@ -155,126 +156,21 @@ document.addEventListener("DOMContentLoaded", async () => {
       li.appendChild(x);
       inviteListEl.appendChild(li);
     });
-    // Queued names drop out of the suggestions.
-    refreshInviteOptions();
+    // Queued names drop out of the suggestions. Re-rendering also re-opens the
+    // list while the box still has focus, since inviting two or three people in
+    // a row is the norm.
+    inviteSuggest.refresh();
   };
 
-  // Suggestions for the invite box. user/getall is admin-only, so the roster is
-  // the people this account already shares cases with (see
-  // shared/collaborators.js) — minus whoever is already queued or the owner.
-  //
-  // A custom listbox rather than a native <datalist>: a datalist can't be
-  // styled, so the shared-case count that justifies the ordering had to ride in
-  // an option label that only some browsers render.
-  const SUGGEST_LIMIT = 6;
-  let suggestItems = [];
-  let suggestIndex = -1;
-
-  const closeSuggest = () => {
-    suggestIndex = -1;
-    suggestEl?.classList.add("hidden");
-    inviteInput?.setAttribute("aria-expanded", "false");
-    inviteInput?.removeAttribute("aria-activedescendant");
-  };
-
-  const setSuggestActive = (index) => {
-    suggestIndex = index;
-    const nodes = suggestEl?.querySelectorAll(".cc-suggest-item") || [];
-    nodes.forEach((el, i) => {
-      el.classList.toggle("is-active", i === index);
-      el.setAttribute("aria-selected", String(i === index));
-    });
-    if (index >= 0 && nodes[index]) {
-      inviteInput.setAttribute("aria-activedescendant", nodes[index].id);
-      nodes[index].scrollIntoView({ block: "nearest" });
-    } else {
-      inviteInput?.removeAttribute("aria-activedescendant");
-    }
-  };
-
-  // Selecting a suggestion queues that person straight away — they are a known
-  // collaborator, so making the user press Add as well is a wasted step.
-  const pickSuggestion = (index) => {
-    const choice = suggestItems[index];
-    if (!choice || !inviteInput) return;
-    inviteInput.value = choice.name;
-    closeSuggest();
-    addInvite();
-  };
-
-  // Name with the typed part marked, so it is obvious why a row matched.
-  const highlightMatch = (name, query) => {
-    const frag = document.createDocumentFragment();
-    const at = query ? name.toLowerCase().indexOf(query) : -1;
-    if (at < 0) {
-      frag.append(name);
-      return frag;
-    }
-    const mark = document.createElement("mark");
-    mark.textContent = name.slice(at, at + query.length);
-    frag.append(name.slice(0, at), mark, name.slice(at + query.length));
-    return frag;
-  };
-
-  const renderSuggest = () => {
-    if (!suggestEl || !inviteInput) return;
-    const query = inviteInput.value.trim().toLowerCase();
-    const me = (getLoggedInUser()?.username || "").toLowerCase();
-    const queued = new Set(pendingInvites.map((n) => n.toLowerCase()));
-
-    suggestItems = getCollaborators()
-      .filter(({ name }) => {
-        const key = name.toLowerCase();
-        return key !== me && !queued.has(key) && (!query || key.includes(query));
-      })
-      .slice(0, SUGGEST_LIMIT);
-
-    if (!suggestItems.length) {
-      closeSuggest();
-      return;
-    }
-
-    suggestEl.textContent = "";
-    suggestItems.forEach(({ name, shared }, i) => {
-      const li = document.createElement("li");
-      li.className = "cc-suggest-item";
-      li.id = `ccSuggest-${i}`;
-      li.dataset.index = String(i);
-      li.setAttribute("role", "option");
-      li.setAttribute("aria-selected", "false");
-
-      const avatar = document.createElement("span");
-      avatar.className = "cc-suggest-avatar";
-      avatar.textContent = initialsFor(name);
-
-      const body = document.createElement("span");
-      body.className = "cc-suggest-body";
-      const nameEl = document.createElement("span");
-      nameEl.className = "cc-suggest-name";
-      nameEl.appendChild(highlightMatch(name, query));
-      const metaEl = document.createElement("span");
-      metaEl.className = "cc-suggest-meta";
-      metaEl.textContent = shared
-        ? `${shared} shared case${shared === 1 ? "" : "s"}`
-        : "Worked with before";
-      body.append(nameEl, metaEl);
-
-      li.append(avatar, body);
-      suggestEl.appendChild(li);
-    });
-
-    suggestEl.classList.remove("hidden");
-    inviteInput.setAttribute("aria-expanded", "true");
-    setSuggestActive(-1);
-  };
-
-  // Re-run after the queue changes. Also re-opens when the box still has focus
-  // after a pick, since inviting two or three people in a row is the norm.
-  const refreshInviteOptions = () => {
-    if (!suggestEl) return;
-    const open = !suggestEl.classList.contains("hidden");
-    if (open || document.activeElement === inviteInput) renderSuggest();
-  };
+  // Suggestions for the invite box: whoever is already queued, and the owner,
+  // are the names that can't be invited again.
+  const inviteSuggest = attachUserSuggest(inviteInput, suggestEl, {
+    excluded: () => [...pendingInvites, getLoggedInUser()?.username || ""],
+    onPick: () => addInvite(),
+    onSubmit: () => addInvite(),
+    // The complaint is about what was typed — it goes as soon as that changes.
+    onInput: () => setInviteMsg(""),
+  });
 
   // Resolve a username to its uuid, the way the User Access modal's Add does.
   // The endpoint answers with the account's uuid; a non-2xx, an empty body or a
@@ -711,62 +607,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (inviteAddBtn) {
     inviteAddBtn.addEventListener("click", addInvite);
   }
-  if (inviteInput) {
-    inviteInput.addEventListener("keydown", (e) => {
-      const open = suggestEl && !suggestEl.classList.contains("hidden");
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        e.preventDefault();
-        if (!open) {
-          renderSuggest();
-          return;
-        }
-        const count = suggestItems.length;
-        const down = e.key === "ArrowDown";
-        // From "nothing highlighted", Down opens at the top and Up at the bottom.
-        if (suggestIndex < 0) setSuggestActive(down ? 0 : count - 1);
-        else setSuggestActive((suggestIndex + (down ? 1 : -1) + count) % count);
-        return;
-      }
-      if (e.key === "Escape" && open) {
-        e.preventDefault();
-        closeSuggest();
-        return;
-      }
-      if (e.key === "Enter") {
-        e.preventDefault();
-        // A highlighted suggestion wins; otherwise commit what was typed.
-        if (open && suggestIndex >= 0) pickSuggestion(suggestIndex);
-        else addInvite();
-      }
-    });
-    // The case list keeps discovering collaborators as rows enrich, so the list
-    // is rebuilt whenever the box is about to be used, not once at startup.
-    inviteInput.addEventListener("focus", renderSuggest);
-    inviteInput.addEventListener("input", () => {
-      // The complaint is about what was typed — it goes as soon as that changes.
-      setInviteMsg("");
-      renderSuggest();
-    });
-    // Late enough for a click on a suggestion to land first (that handler runs
-    // on mousedown and keeps focus, so this only fires on a real focus loss).
-    inviteInput.addEventListener("blur", () => setTimeout(closeSuggest, 120));
-  }
-
-  if (suggestEl) {
-    // mousedown, not click: clicking must not blur the input out from under the
-    // list before the pick is read.
-    suggestEl.addEventListener("mousedown", (e) => {
-      const item = e.target.closest(".cc-suggest-item");
-      if (!item) return;
-      e.preventDefault();
-      pickSuggestion(Number(item.dataset.index));
-    });
-    suggestEl.addEventListener("mousemove", (e) => {
-      const item = e.target.closest(".cc-suggest-item");
-      if (item) setSuggestActive(Number(item.dataset.index));
-    });
-  }
-
   /*** 👇 取消按钮：清空状态并关闭内联视图 ***/
   if (cancelBtn) {
     cancelBtn.addEventListener("click", () => {
@@ -1027,9 +867,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     saveStartBtn.addEventListener("click", () => submitCase("start", saveStartBtn));
   }
 
+  // Who already has access, read off the rendered list rather than a cached
+  // array: the modal is opened and repainted by whichever page module owns the
+  // page (caseManagement.js on open, this file after an add), so the DOM is the
+  // one copy of that state both of them keep current.
+  const sharedUsernames = () =>
+    [...document.querySelectorAll("#sharedUserList .shared-user-item")]
+      .map((li) => li.dataset.username || "")
+      .filter(Boolean);
+
   // Bind ADD button click in the userAccessModal (shared-user invite flow).
   if (addUserBtn && userSearchInput) {
-    addUserBtn.addEventListener("click", async () => {
+    let userSuggest = null; // assigned below, once addSharedUser exists to bind to
+    const addSharedUser = async () => {
       const username = userSearchInput.value.trim();
       if (!username) return;
 
@@ -1041,7 +891,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const { caseIntID, machine_id, uuid: ownerUUID } = ctx;
 
-      if (existingUsers.some((u) => u.username === username)) {
+      // Case-insensitively: usernames resolve that way server-side, so "Alice"
+      // and "alice" would otherwise both be posted as roles for one person.
+      const key = username.toLowerCase();
+      if (sharedUsernames().some((n) => n.toLowerCase() === key)) {
         toast.info(`User "${username}" is already added.`);
         return;
       }
@@ -1119,10 +972,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         renderSharedUserList();
 
         userSearchInput.value = "";
+        // The name just added drops out of the suggestions.
+        userSuggest?.refresh();
       } catch (err) {
         console.error("Failed to add user:", err);
         toast.error("Failed to add user: " + err.message);
       }
+    };
+
+    addUserBtn.addEventListener("click", addSharedUser);
+
+    // Same suggestion box as the create-case invite field, minus whoever is
+    // already on the case (the owner included — they hold a role row too).
+    userSuggest = attachUserSuggest(userSearchInput, userSearchSuggestEl, {
+      excluded: sharedUsernames,
+      onPick: () => addSharedUser(),
+      onSubmit: () => addSharedUser(),
     });
   }
 
@@ -1269,6 +1134,9 @@ function renderSharedUserList() {
   existingUsers.forEach((user) => {
     const li = document.createElement("li");
     li.className = "shared-user-item";
+    // Read back by the invite box to keep people already on the case out of its
+    // suggestions — exact, unlike scraping the decorated name text.
+    li.dataset.username = user.username || "";
 
     const avatar = document.createElement("span");
     avatar.className = "user-avatar";
@@ -1343,15 +1211,6 @@ function renderSharedUserList() {
     container.appendChild(li);
   });
 }
-
-function initialsFor(name) {
-  if (!name) return "?";
-  const parts = String(name).trim().split(/[\s._-]+/).filter(Boolean);
-  if (!parts.length) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
 
 async function uploadReferenceImage(
   wrapperEl,
