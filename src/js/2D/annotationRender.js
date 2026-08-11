@@ -190,11 +190,9 @@ function appendSvgTintFilters(defs) {
   }
 }
 
-function appendArchDefs(svg, jaw) {
-  const defs = svgEl("defs", {});
-  const filterId = `jawTint-${jaw}`;
+function buildJawTintFilter(jaw) {
   const filterEl = svgEl("filter", {
-    id: filterId,
+    id: `jawTint-${jaw}`,
     "color-interpolation-filters": "sRGB",
   });
   filterEl.appendChild(
@@ -207,14 +205,45 @@ function appendArchDefs(svg, jaw) {
         "0 0 0 1 0",
     })
   );
-  defs.appendChild(filterEl);
-  appendSvgTintFilters(defs);
-  svg.appendChild(defs);
+  return filterEl;
 }
 
-// Render jaw background templates for upper/lower arch SVG.
-function renderArchBackground(svg, jaw) {
-  appendArchDefs(svg, jaw);
+// Every arch filter lives in ONE hidden <svg> on <body>, published once — same idiom as
+// annotationCatalog's ensureMeshIconTintFilter. They used to be re-emitted into each
+// arch's own <defs> on every render, which had two costs: both arches published the SAME
+// 13 tint ids, so `url(#tint-…)` resolved document-wide to whichever came first and
+// re-rendering EITHER arch invalidated every tooth on the page; and renderJaw's
+// `svg.innerHTML = ""` threw the filters away on every component placement. In WebKit that
+// re-ran the feMorphology body-fill for all 32 teeth per tap (~83ms per
+// missing/abutment/compromised tooth — 1.4s on a 16-missing case, vs 34ms once cached).
+// Filter regions are objectBoundingBox-relative, so hosting them outside the arch <svg>
+// does not change how any of them paint.
+const ARCH_TINT_DEFS_HOST_ID = "annotationArchTintDefs";
+
+function ensureArchTintDefs() {
+  if (typeof document === "undefined" || document.getElementById(ARCH_TINT_DEFS_HOST_ID)) {
+    return;
+  }
+  const host = svgEl("svg", {
+    id: ARCH_TINT_DEFS_HOST_ID,
+    width: "0",
+    height: "0",
+    "aria-hidden": "true",
+  });
+  host.style.position = "absolute";
+  const defs = svgEl("defs", {});
+  for (const jaw of Object.keys(JAW_BACKGROUND_IMAGES)) {
+    defs.appendChild(buildJawTintFilter(jaw));
+  }
+  appendSvgTintFilters(defs);
+  host.appendChild(defs);
+  document.body.appendChild(host);
+}
+
+// Render jaw background templates for upper/lower arch SVG. `parent` is the arch <svg>
+// or the detached fragment renderJaw reconciles from, so append-only here.
+function renderArchBackground(parent, jaw) {
+  ensureArchTintDefs();
   const background = JAW_BACKGROUND_IMAGES[jaw];
   if (!background) return;
 
@@ -229,7 +258,7 @@ function renderArchBackground(svg, jaw) {
 
   const filterId = `jawTint-${jaw}`;
 
-  svg.appendChild(
+  parent.appendChild(
     svgEl("image", {
       href: `${TOOTH_ASSET_BASE}/${background.template}`,
       x: x.toFixed(2),
@@ -243,7 +272,7 @@ function renderArchBackground(svg, jaw) {
   );
 
   if (background.details) {
-    svg.appendChild(
+    parent.appendChild(
       svgEl("image", {
         href: `${TOOTH_ASSET_BASE}/${background.details}`,
         x: x.toFixed(2),
@@ -271,16 +300,50 @@ export function renderJaws() {
   renderJaw("lower");
 }
 
+// Swap in only the top-level children that actually changed, keeping every untouched
+// node — and therefore its cached filter result — in place.
+//
+// This used to be `svg.innerHTML = ""` + rebuild. Recreating an <image> that carries a
+// tint filter makes WebKit re-run that filter from scratch, and the four `fillBody` tints
+// (missing / abutment / compromised / bar-suggestible) run feMorphology dilate+erode at
+// radius 40 — ~83ms per tooth at 3x DPR. So a wholesale rebuild cost ~83ms x (teeth not
+// plainly present): ~1.5s per component placement on a 16-missing arch, ~2.9s on a fully
+// edentulous one, against a 34ms floor. Chromium is ~33ms flat either way, which is why
+// this never showed up in desktop testing. `isEqualNode` compares attributes and the whole
+// subtree, so a node is only kept when its markup is byte-identical — the arch paints
+// exactly as before.
+function reconcileArchChildren(parent, fragment) {
+  const next = [...fragment.childNodes];
+  const prev = [...parent.childNodes];
+  for (let i = 0; i < Math.max(next.length, prev.length); i += 1) {
+    const before = prev[i];
+    const after = next[i];
+    if (!after) {
+      before.remove();
+    } else if (!before) {
+      parent.appendChild(after);
+    } else if (!before.isEqualNode(after)) {
+      parent.replaceChild(after, before);
+    }
+  }
+}
+
 // Render one jaw: teeth, overlays, and click handlers.
 export function renderJaw(jaw) {
   const config = JAW_BACKGROUND_IMAGES[jaw];
   if (!config) return;
   const svg = document.getElementById(config.svgId);
   if (!svg) return;
-  svg.innerHTML = "";
-  svg.setAttribute("viewBox", config.viewBox);
+  // Only write when it actually changes: setAttribute dirties the SVG root even when the
+  // value is identical, which repaints the whole arch and re-runs every tooth filter —
+  // exactly what reconcileArchChildren exists to avoid.
+  if (svg.getAttribute("viewBox") !== config.viewBox) {
+    svg.setAttribute("viewBox", config.viewBox);
+  }
+  // Built detached, then reconciled into `svg` at the end — see reconcileArchChildren.
+  const arch = document.createDocumentFragment();
 
-  renderArchBackground(svg, jaw);
+  renderArchBackground(arch, jaw);
 
   const ids = TOOTH_ORDER[jaw];
   pruneInvalidMajorConnectorPlacementsInJaw(state.teeth, COMPONENT_BY_ID, jaw);
@@ -353,6 +416,13 @@ export function renderJaw(jaw) {
 
     const toothClickKey = `mesh-tooth:${jaw}:${toothId}`;
     group.addEventListener("click", (event) => {
+      // Read the tooth at click time instead of closing over the build-time object: a
+      // preserved node (see reconcileArchChildren) keeps the listener from an earlier
+      // render, and undo/redo and a fresh server load both replace every entry in
+      // state.teeth wholesale. toothId and jaw are stable for this node, so they stay
+      // captured.
+      const tooth = state.teeth[toothId];
+      if (!tooth) return;
       if (!state.designMode && state.rangeMissingMode && event.detail > 1) {
         return;
       }
@@ -517,17 +587,18 @@ export function renderJaw(jaw) {
       cancelMeshInteractionDefer(toothClickKey);
       handleMeshToolDoubleClick(meshAnnotationEnv(), jaw, toothId);
     });
-    svg.appendChild(group);
+    arch.appendChild(group);
   });
 
   if (jaw === "upper") {
-    appendPalatalHoleArchOverlay(svg);
-    appendPalatalBarArchOverlay(svg);
-    appendPalatalPlateArchOverlay(svg);
-    appendPalatalStrapArchOverlay(svg);
+    appendPalatalHoleArchOverlay(arch);
+    appendPalatalBarArchOverlay(arch);
+    appendPalatalPlateArchOverlay(arch);
+    appendPalatalStrapArchOverlay(arch);
   }
 
-  svg.appendChild(suggestionLayer);
+  arch.appendChild(suggestionLayer);
+  reconcileArchChildren(svg, arch);
 }
 
 // Handle tooth click in selected mode (status/range) and block in design mode.
