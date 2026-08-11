@@ -20,6 +20,13 @@ JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) — CVE-20
 fix available via `npm audit fix`
 node_modules/js-yaml
 
+nanoid  <=3.3.16
+Severity: high
+nanoid: non-secure generators can loop indefinitely with negative size - https://github.com/advisories/GHSA-28wg-ghj8-5hjv
+nanoid: custom generators can loop indefinitely when size is zero - https://github.com/advisories/GHSA-2v37-7h3g-55p8
+fix available via `npm audit fix`
+node_modules/nanoid
+
 postcss  <=8.5.22
 Severity: high
 PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure - https://github.com/advisories/GHSA-r28c-9q8g-f849
@@ -51,7 +58,7 @@ node_modules/uuid
     Depends on vulnerable versions of sockjs
     node_modules/webpack-dev-server
 
-9 vulnerabilities (3 moderate, 5 high, 1 critical)
+10 vulnerabilities (3 moderate, 6 high, 1 critical)
 
 To address issues that do not require attention, run:
   npm audit fix
