@@ -85,6 +85,13 @@ export const preview3DState = {
   extrasVisible: false,
   extrasPrevStage: null,
   stageHiddenJaws: new Set(),
+  // On-demand extras load (see ensureExtraStlsLoaded): the in-flight promise doubles as
+  // the once-only latch · extrasLoading drives the panel's progress row · extrasLoadProgress
+  // caches the current phase so a re-rendered row can replay it into fresh element refs.
+  extrasLoadPromise: null,
+  extrasLoading: false,
+  extrasLoadProgress: null,
+  extrasProgressRefs: null,
   // Slot currently uploading (drives that row's inline progress bar), plus the
   // live progress-bar element refs for that row so setUpload3dBusy can update it.
   uploadingSlot: null,
@@ -176,11 +183,8 @@ export async function loadInteractiveJawPreview(area) {
         clearMeshQualityProgress();
         throw err;
       }
-      // Extra STLs are secondary — load them in the background so the spinner
-      // clears as soon as the jaws are painted.
-      loadExtraStlsIntoPreview().catch((err) =>
-        console.warn("[preview3D] extra STL background load failed", err)
-      );
+      // Extras are NOT fetched here — see ensureExtraStlsLoaded. The jaws are on screen,
+      // and every extra would be created hidden, so the panel's first open pays for them.
       return true;
     }
 
@@ -204,17 +208,19 @@ export async function loadInteractiveJawPreview(area) {
         clearMeshQualityProgress();
         throw err;
       }
+      // Extras stay unfetched while the jaws hold the stage — see ensureExtraStlsLoaded.
     } else {
       clearMeshQualityProgress();
       // No jaw STLs yet (or all removed): keep the panel up with both rows in
       // their empty/upload state so the user can still add 3D files.
       showEmptyJawPanel();
+      // The one case that still loads eagerly: with no jaw mesh the extras are the only
+      // thing that could fill the viewport, so waiting for the panel would strand the
+      // user in front of an empty stage.
+      ensureExtraStlsLoaded().catch((err) =>
+        console.warn("[preview3D] extra STL background load failed", err)
+      );
     }
-    // Don't block first paint on the extra-slot fetches (usually empty 404s);
-    // they pop into the scene and re-center when they arrive.
-    loadExtraStlsIntoPreview().catch((err) =>
-      console.warn("[preview3D] extra STL background load failed", err)
-    );
     return true;
   } finally {
     hidePreviewLoading(area);
@@ -649,6 +655,12 @@ export function teardown3DPreview() {
   preview3DState.extraGroups = {};
   preview3DState.extraFileNames = {};
   preview3DState.occupiedSlots = null;
+  // Drop the load latch with the scene it populated, so the next case fetches its own
+  // slots instead of inheriting this one's.
+  preview3DState.extrasLoadPromise = null;
+  preview3DState.extrasLoading = false;
+  preview3DState.extrasLoadProgress = null;
+  preview3DState.extrasProgressRefs = null;
   preview3DState.extrasVisible = false;
   preview3DState.extrasPrevStage = null;
   preview3DState.stageHiddenJaws = new Set();
@@ -2709,12 +2721,43 @@ async function fetchExtraStlsForCase() {
   return results.filter(Boolean);
 }
 
+// Fetch + parse the extra slots at most once, and only when something actually needs
+// them. They are NOT loaded on page entry: each slot is its own full-size scan (~33MB of
+// base64 apiece, ~133MB for all four on a case like 3008, on top of the ~66MB jaw pair),
+// and renderExtraStl creates every one of them `visible = false` — nothing is on screen
+// until the "Other 3D files" panel is opened. Downloading and STL-parsing all of that
+// invisibly is what pushes an iPhone's content process over its memory ceiling, which
+// Safari reports as the tab reloading itself.
+//
+// The in-flight promise IS the latch, and it is never cleared on success: a second pass
+// would re-run the resets below and wipe a file uploaded during this session. It is
+// cleared on failure so the next open can retry.
+function ensureExtraStlsLoaded() {
+  if (!preview3DState.extrasLoadPromise) {
+    preview3DState.extrasLoading = true;
+    preview3DState.extrasLoadPromise = loadExtraStlsIntoPreview()
+      .then(() => {
+        preview3DState.extrasLoading = false;
+      })
+      .catch((err) => {
+        preview3DState.extrasLoading = false;
+        preview3DState.extrasLoadPromise = null;
+        throw err;
+      });
+  }
+  return preview3DState.extrasLoadPromise;
+}
+
 async function loadExtraStlsIntoPreview() {
   preview3DState.extraGroups = {};
   preview3DState.extraFileNames = {};
   preview3DState.occupiedSlots = new Set();
+  setExtrasLoadProgress(0.05, "Fetching…");
   const extras = await fetchExtraStlsForCase();
+  let done = 0;
   for (const extra of extras) {
+    setExtrasLoadProgress(0.25 + (done / extras.length) * 0.75, `Loading ${done + 1} of ${extras.length}…`);
+    done += 1;
     preview3DState.occupiedSlots.add(extra.slotNumber);
     preview3DState.extraFileNames[extra.slotNumber] = extra.filename;
     // Isolate per-slot failures: a single corrupt/undecodable extra STL must not
@@ -2728,6 +2771,7 @@ async function loadExtraStlsIntoPreview() {
       );
     }
   }
+  setExtrasLoadProgress(1, "Ready");
   // Extras stay off the stage on page entry — they are only shown while the "Other 3D
   // files" panel is open. Exception: with no jaw meshes at all, hiding them too would
   // leave an empty viewport, so show them right away.
@@ -2737,6 +2781,17 @@ async function loadExtraStlsIntoPreview() {
     fitPreviewCamera();
   }
   renderUpload3dList();
+}
+
+// Drive the panel's load progress bar. The refs are rebuilt whenever the list re-renders,
+// so the latest phase is cached here and replayed into a fresh row.
+function setExtrasLoadProgress(frac, labelText) {
+  if (frac != null) preview3DState.extrasLoadProgress = { frac, labelText };
+  const phase = preview3DState.extrasLoadProgress;
+  const refs = preview3DState.extrasProgressRefs;
+  if (!refs || !phase) return;
+  refs.fill.style.width = `${Math.round(phase.frac * 100)}%`;
+  refs.label.textContent = phase.labelText;
 }
 
 // Parse a base64 STL and add it to the model root. Jaw slots use the jaw tan; metal-RPD slots
@@ -2818,6 +2873,13 @@ async function uploadExtraStl(file, targetSlot = null) {
   if (!state.caseIntID) {
     setMessage?.("Open a case before uploading a 3D file.");
     return;
+  }
+  // Never pick a slot before the server's occupancy is known, or a drop that lands while
+  // the extras are still downloading would claim a slot the backend already holds.
+  try {
+    await ensureExtraStlsLoaded();
+  } catch {
+    /* slot occupancy unknown — fall through and let the backend reject a taken slot */
   }
   if (!preview3DState.occupiedSlots) preview3DState.occupiedSlots = new Set();
   let freeSlot;
@@ -3220,12 +3282,21 @@ function isUpload3dModalOpen() {
 
 function openUpload3dModal() {
   const modal = ensureUpload3dModal();
+  // First open is what actually fetches the extras — they are deliberately not loaded on
+  // page entry (see ensureExtraStlsLoaded). Resolves immediately once they're in.
+  const loaded = ensureExtraStlsLoaded().catch(() => {});
   renderUpload3dList();
   modal.overlay.classList.remove("is-hidden");
   modal.overlay.setAttribute("aria-hidden", "false");
-  // Stage the extras only once there is something to show — with all four slots empty,
-  // hiding the jaws would just leave a blank viewport behind the panel.
-  if (Object.keys(preview3DState.extraGroups || {}).length) enterExtraStlStage();
+  loaded.then(() => {
+    // The panel may have been closed again while the slots were downloading.
+    if (!isUpload3dModalOpen()) return;
+    renderUpload3dList();
+    // Stage the extras only once there is something to show — with all four slots empty,
+    // hiding the jaws would just leave a blank viewport behind the panel.
+    if (Object.keys(preview3DState.extraGroups || {}).length) enterExtraStlStage();
+    positionUpload3dPanel();
+  });
   positionUpload3dPanel();
   if (!preview3DState.upload3dKeyHandler) {
     preview3DState.upload3dKeyHandler = (e) => {
@@ -3297,6 +3368,13 @@ function renderUpload3dList() {
   if (!modal) return;
   const list = modal.list;
   list.innerHTML = "";
+
+  // Slot contents aren't known until the on-demand load finishes, so show the progress
+  // row rather than four "empty" slots the user could upload into.
+  if (preview3DState.extrasLoading) {
+    list.appendChild(buildUpload3dLoadingRow());
+    return;
+  }
 
   const occupied = preview3DState.occupiedSlots || new Set();
   EXTRA_STL_SLOTS.forEach((slot) => {
@@ -3403,6 +3481,43 @@ function buildUpload3dSlotRow(slot) {
   row.appendChild(icon);
   row.appendChild(text);
   enableSlotDropZone(row, slot);
+  return row;
+}
+
+// Shown in place of the slot list while the on-demand extras load runs (see
+// ensureExtraStlsLoaded). Same progress markup as the uploading row.
+function buildUpload3dLoadingRow() {
+  const row = document.createElement("div");
+  row.className = "upload3d-row upload3d-slot-row upload3d-uploading-row";
+
+  const icon = document.createElement("span");
+  icon.className = "upload3d-file-icon";
+  icon.innerHTML = '<i class="fa fa-cloud-arrow-down" aria-hidden="true"></i>';
+
+  const text = document.createElement("div");
+  text.className = "upload3d-row-text";
+  const name = document.createElement("span");
+  name.className = "upload3d-slot-name";
+  name.textContent = "Other 3D files";
+
+  const progress = document.createElement("div");
+  progress.className = "upload3d-progress";
+  const fill = document.createElement("div");
+  fill.className = "upload3d-progress-fill";
+  const label = document.createElement("span");
+  label.className = "upload3d-progress-label";
+  label.textContent = "Loading…";
+  progress.appendChild(fill);
+  progress.appendChild(label);
+
+  text.appendChild(name);
+  text.appendChild(progress);
+  row.appendChild(icon);
+  row.appendChild(text);
+
+  preview3DState.extrasProgressRefs = { fill, label };
+  // Replay whatever phase the load is already at into this freshly built bar.
+  setExtrasLoadProgress();
   return row;
 }
 
