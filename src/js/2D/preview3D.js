@@ -2818,7 +2818,7 @@ async function loadExtraStlsIntoPreview() {
   preview3DState.extraGroups = {};
   preview3DState.extraFileNames = {};
   preview3DState.occupiedSlots = new Set();
-  setExtrasLoadProgress(0.05, "Fetching…");
+  setExtrasLoadProgress(0.05, "Loading…");
   const extras = await fetchExtraStlsForCase();
   let done = 0;
   for (const extra of extras) {

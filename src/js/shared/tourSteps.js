@@ -231,7 +231,7 @@ export const PAGE_TOURS = {
     },
     {
       title: "Or scan it on a phone",
-      text: "The QR button turns that same link into a code, so a phone or tablet can open the 3D Viewer by scanning it. About in the footer replays this tour whenever you want it.",
+      text: "The QR button turns that same link into a code, so a phone or tablet can open the 3D Viewer by scanning it. About in the menu replays this tour whenever you want it.",
       selector: "#generateQrBtn",
       optional: true,
       topic: "qr-code",
