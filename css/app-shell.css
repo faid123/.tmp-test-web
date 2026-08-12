@@ -13,6 +13,8 @@
 
    Self-contained: all colours come from --shell-* tokens defined here, so it
    renders identically regardless of which page-level variables happen to exist.
+   They mirror css/tokens.css by value rather than by var() reference to keep
+   that guarantee; change both together.
    ========================================================================== */
 
 :root {
@@ -20,15 +22,19 @@
   --shell-teal-600: #2f9e83;
   --shell-teal-700: #25735f;
   --shell-teal-800: #1c5a4a;
+  /* Lightest teal on the brand hue that still clears 4.5:1 against white text
+     (4.64:1). The gradients below carry white labels, so every stop must pass —
+     the previous light ends (#45b89e, #43b79c) sat at 2.4:1. */
+  --shell-teal-safe: #2c826f;
   --shell-ink: #0f172a;
   --shell-ink-soft: #475569;
-  --shell-muted: #94a3b8;
+  --shell-muted: #64748b;
   --shell-line: #e2e8f0;
   --shell-danger: #ef4444;
 
   --shell-footer-h: 40px;
-  --shell-footer-grad: linear-gradient(180deg, #45b89e 0%, var(--shell-teal) 46%, var(--shell-teal-600) 100%);
-  --shell-header-grad: linear-gradient(135deg, #43b79c 0%, var(--shell-teal) 40%, var(--shell-teal-700) 100%);
+  --shell-footer-grad: linear-gradient(180deg, var(--shell-teal-safe) 0%, var(--shell-teal-700) 46%, var(--shell-teal-800) 100%);
+  --shell-header-grad: linear-gradient(135deg, var(--shell-teal-safe) 0%, var(--shell-teal-700) 40%, var(--shell-teal-800) 100%);
   --shell-radius: 12px;
 }
 

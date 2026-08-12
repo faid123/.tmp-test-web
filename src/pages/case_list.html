@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Case Management</title>
+    <link rel="stylesheet" href="../../vendor/manrope/manrope.css" />
+    <link rel="stylesheet" href="../../css/tokens.css" />
     <link rel="stylesheet" href="../../css/case_list.css" />
     <link rel="stylesheet" href="../../css/createCase.css" />
     <link rel="stylesheet" href="../../css/notification.css" />
@@ -310,9 +312,29 @@
             <div class="cc-field cc-field-full">
               <label class="input-label" for="ccInviteInput">Invite Users</label>
               <div class="cc-invite-row">
-                <input type="text" id="ccInviteInput" class="modal-input" placeholder="Type username and press Enter" />
+                <div class="cc-invite-search">
+                  <i class="fa fa-magnifying-glass cc-invite-icon" aria-hidden="true"></i>
+                  <input
+                    type="text"
+                    id="ccInviteInput"
+                    class="modal-input"
+                    placeholder="Search a user to invite"
+                    autocomplete="off"
+                    role="combobox"
+                    aria-expanded="false"
+                    aria-autocomplete="list"
+                    aria-controls="ccInviteSuggest"
+                  />
+                  <ul
+                    id="ccInviteSuggest"
+                    class="user-suggest hidden"
+                    role="listbox"
+                    aria-label="Suggested users"
+                  ></ul>
+                </div>
                 <button id="ccInviteAdd" type="button" class="cm-btn cm-btn-secondary">Add</button>
               </div>
+              <p class="cc-invite-msg" id="ccInviteMsg" role="status" aria-live="polite"></p>
               <ul id="ccInviteList" class="cc-invite-list"></ul>
             </div>
             <div class="cc-field cc-field-full">
@@ -508,8 +530,8 @@
               type="button"
               id="upload3dFileBtn"
               class="cm-3d-copy-btn"
-              aria-label="Upload 3D file"
-              data-tooltip="Upload 3D file"
+              aria-label="Upload to case"
+              data-tooltip="Upload reference image or 3D file"
             >
               <i class="fa fa-file-arrow-up" aria-hidden="true"></i>
             </button>
@@ -630,7 +652,17 @@
               class="uam-search-input"
               placeholder="Search a user to invite"
               autocomplete="off"
+              role="combobox"
+              aria-expanded="false"
+              aria-autocomplete="list"
+              aria-controls="userAccessSuggest"
             />
+            <ul
+              id="userAccessSuggest"
+              class="user-suggest uam-suggest hidden"
+              role="listbox"
+              aria-label="Suggested users"
+            ></ul>
           </div>
           <button id="addUserBtn" type="button" class="cm-btn cm-btn-primary uam-add-btn">
             <i class="fa fa-plus" aria-hidden="true"></i>

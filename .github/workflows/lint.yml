@@ -1,0 +1,63 @@
+name: Lint
+
+# The deploy workflow already lints, but only on pushes to nyunt/dev-deploy —
+# by then the code is on its way to the test site. This gates every branch and
+# PR so a no-undef (typo'd global / missing import) is caught at push time.
+on:
+  push:
+    # nyunt/dev-W7.1 and dev-deploy-documentation are written by the deploy
+    # workflow, not by hand — linting CI's own output is noise.
+    branches-ignore: [nyunt/dev-W7.1, dev-deploy-documentation]
+  pull_request:
+  workflow_dispatch:
+
+# One run per ref: a rapid re-push supersedes the run it interrupted.
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  eslint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install (deterministic, from lockfile)
+        run: npm ci
+
+      # Errors gate; warnings pass. Same contract as eslint.config.mjs:
+      # correctness rules are the gate, style-adjacent rules stay advisory.
+      - name: ESLint
+        id: eslint
+        run: npm run lint
+
+      # Warnings never block, so surface the count where it stays visible
+      # instead of scrolling past in the log.
+      - name: Summarize warnings
+        if: always() && steps.eslint.outcome != 'skipped'
+        run: |
+          npx eslint . -f json -o eslint-report.json || true
+          test -f eslint-report.json || exit 0
+          node -e '
+            const r = require("./eslint-report.json");
+            const e = r.reduce((n, f) => n + f.errorCount, 0);
+            const w = r.reduce((n, f) => n + f.warningCount, 0);
+            console.log(`- **${e}** error(s), **${w}** warning(s)`);
+          ' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Archive ESLint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eslint-report
+          path: eslint-report.json
+          if-no-files-found: ignore

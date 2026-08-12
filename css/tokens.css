@@ -1,0 +1,110 @@
+/* Single source of truth for design tokens. Link this FIRST on every page so
+   page stylesheets can intentionally override (e.g. 2Dannotation's green theme). */
+
+:root {
+  /* ---- typography ---- */
+  /* Manrope is vendored at vendor/manrope/ and must be linked per page.
+     Segoe UI / system-ui carry Windows and Linux until it loads. */
+  --font-sans: "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* rem-based so browser zoom works; px equivalents assume a 16px root */
+  --text-xs: 0.75rem;      /* 12px */
+  --text-sm: 0.8125rem;    /* 13px */
+  --text-base: 0.9375rem;  /* 15px - body */
+  --text-md: 1rem;         /* 16px */
+  --text-lg: 1.125rem;     /* 18px */
+  --text-xl: 1.375rem;     /* 22px */
+  --text-2xl: 1.75rem;     /* 28px */
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ---- spacing (4px base) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 48px;
+
+  /* ---- surface + ink ---- */
+  --bg: #f5f6fa;
+  --panel: #ffffff;
+  --ink: #0f172a;
+  --ink-soft: #475569;
+  /* was #94a3b8 - 2.56:1 on --panel, failed WCAG AA */
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --line-soft: #f1f5f9;
+
+  /* ---- brand ---- */
+  --primary: #3BAE95;
+  --primary-soft: #d4f0e8;
+  --primary-dark: #25735f;
+  /* Any surface carrying white text or a white glyph must use --primary-strong:
+     white on --primary is 2.74:1 and fails AA, white on --primary-strong is
+     5.68:1 and passes. Reserve --primary itself for fills, borders and accents. */
+  --primary-strong: #25735f;
+  --primary-stronger: #1c5a4a; /* hover/active for --primary-strong surfaces */
+
+  --danger: #ef4444;
+  --warning: #f59e0b;
+
+  /* ---- status pills ---- */
+  --status-pending-bg: #fef3c7;
+  --status-pending-fg: #92400e;
+  --status-progress-bg: #dbeafe;
+  --status-progress-fg: #1e40af;
+  --status-completed-bg: #d1fae5;
+  --status-completed-fg: #047857;
+  --status-na-bg: #e2e8f0;
+  --status-na-fg: #475569;
+  --status-danger-bg: #fee2e2;
+  --status-danger-fg: #b91c1c;
+
+  /* ---- radius ---- */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-full: 999px;
+
+  /* ---- elevation ---- */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.12);
+  --shadow-xl: 0 24px 56px rgba(15, 23, 42, 0.16);
+  --ring: 0 0 0 3px rgba(59, 174, 149, 0.18);
+
+  /* ---- stacking ----
+     Every z-index in the app should reference one of these. Bare numeric
+     z-index values reintroduce the ordering bugs these replace. */
+  --z-base: 1;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tour: 600;
+
+  /* ---- motion ---- */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration: 200ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration: 0ms;
+  }
+}

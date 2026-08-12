@@ -23,7 +23,7 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.5;
   color: #0f172a;
@@ -105,7 +105,7 @@
   border-radius: 14px;
   padding: 22px 22px 18px;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
-  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-sans);
   color: #0f172a;
   transform: translateY(8px) scale(0.98);
   transition: transform 0.18s ease;
@@ -192,11 +192,11 @@
 }
 
 .app-confirm-ok {
-  background: #3BAE95;
+  background: var(--primary-strong);
   color: #fff;
 }
 .app-confirm-ok:hover {
-  background: #2f947e;
+  background: var(--primary-stronger);
 }
 
 /* Variants tint the icon badge + confirm button. */

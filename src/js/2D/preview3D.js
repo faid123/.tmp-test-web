@@ -61,12 +61,17 @@ const PREVIEW_MAX_DISPLAY_TRIANGLES = 120000;
 
 const PREVIEW_MIN_SIMPLIFY_TRIANGLES = 160000;
 
+// TrackballControls maps action -> button: rotate on right-drag, zoom on middle.
+export const PREVIEW3D_MOUSE_BUTTONS = Object.freeze({ LEFT: 2, MIDDLE: 1, RIGHT: 0 });
+
 export const preview3DState = {
   renderer: null,
   scene: null,
   camera: null,
   controls: null,
   frameId: 0,
+  // Removes the webglcontextlost/restored listeners (see bindPreviewContextLossRecovery).
+  contextLossCleanup: null,
   resizeObserver: null,
   mount: null,
   modelRoot: null,
@@ -83,6 +88,13 @@ export const preview3DState = {
   extrasVisible: false,
   extrasPrevStage: null,
   stageHiddenJaws: new Set(),
+  // On-demand extras load (see ensureExtraStlsLoaded): the in-flight promise doubles as
+  // the once-only latch · extrasLoading drives the panel's progress row · extrasLoadProgress
+  // caches the current phase so a re-rendered row can replay it into fresh element refs.
+  extrasLoadPromise: null,
+  extrasLoading: false,
+  extrasLoadProgress: null,
+  extrasProgressRefs: null,
   // Slot currently uploading (drives that row's inline progress bar), plus the
   // live progress-bar element refs for that row so setUpload3dBusy can update it.
   uploadingSlot: null,
@@ -174,11 +186,8 @@ export async function loadInteractiveJawPreview(area) {
         clearMeshQualityProgress();
         throw err;
       }
-      // Extra STLs are secondary — load them in the background so the spinner
-      // clears as soon as the jaws are painted.
-      loadExtraStlsIntoPreview().catch((err) =>
-        console.warn("[preview3D] extra STL background load failed", err)
-      );
+      // Extras are NOT fetched here — see ensureExtraStlsLoaded. The jaws are on screen,
+      // and every extra would be created hidden, so the panel's first open pays for them.
       return true;
     }
 
@@ -202,17 +211,19 @@ export async function loadInteractiveJawPreview(area) {
         clearMeshQualityProgress();
         throw err;
       }
+      // Extras stay unfetched while the jaws hold the stage — see ensureExtraStlsLoaded.
     } else {
       clearMeshQualityProgress();
       // No jaw STLs yet (or all removed): keep the panel up with both rows in
       // their empty/upload state so the user can still add 3D files.
       showEmptyJawPanel();
+      // The one case that still loads eagerly: with no jaw mesh the extras are the only
+      // thing that could fill the viewport, so waiting for the panel would strand the
+      // user in front of an empty stage.
+      ensureExtraStlsLoaded().catch((err) =>
+        console.warn("[preview3D] extra STL background load failed", err)
+      );
     }
-    // Don't block first paint on the extra-slot fetches (usually empty 404s);
-    // they pop into the scene and re-center when they arrive.
-    loadExtraStlsIntoPreview().catch((err) =>
-      console.warn("[preview3D] extra STL background load failed", err)
-    );
     return true;
   } finally {
     hidePreviewLoading(area);
@@ -402,16 +413,15 @@ function init3DPreview(area) {
   controls.panSpeed = 0.8;
   controls.noRotate = false;
   controls.noZoom = false;
-  // Lock the jaw at the centre: disable panning so the right mouse button can't
-  // drag the model off-centre. Rotation (left) and zoom (wheel) stay active.
+  // Lock the jaw at the centre: disable panning so the model can't be dragged
+  // off-centre. Rotation (right-drag) and zoom (wheel) stay active.
   controls.noPan = true;
   controls.staticMoving = true;
   controls.dynamicDampingFactor = 0;
   controls.minDistance = 35;
   controls.maxDistance = 700;
   controls.target.set(0, 0, 0);
-  controls.mouseButtons.LEFT = 2;
-  controls.mouseButtons.RIGHT = 0;
+  controls.mouseButtons = { ...PREVIEW3D_MOUSE_BUTTONS };
 
   rowUpper.surveyBtn.addEventListener("click", () =>
     handleSurveyButtonClick("upper", rowUpper.surveyBtn)
@@ -518,6 +528,84 @@ function init3DPreview(area) {
     renderer.render(scene, camera);
   };
   animate();
+
+  bindPreviewContextLossRecovery(renderer.domElement, area);
+}
+
+// A lost WebGL context is why the preview "suddenly goes dark" on iOS.
+//
+// Safari drops the context under memory pressure — a pair of jaw scans is ~50MB of geometry
+// on the GPU — and once it is gone THREE.WebGLRenderer.render() returns immediately, so this
+// loop keeps running at 60fps drawing nothing at all and the canvas just stays black. three.js
+// already calls preventDefault() on the loss (so the browser MAY restore) and re-initialises
+// GL state if a restore ever arrives, but Safari frequently never fires webglcontextrestored,
+// and nothing here noticed or told the user.
+//
+// So: stop burning frames on a dead context, say what happened, and offer a rebuild — that is
+// the only reliable recovery, since it creates a brand new context.
+function bindPreviewContextLossRecovery(canvas, area) {
+  if (!canvas) return;
+
+  const onLost = () => {
+    console.warn("[preview3D] WebGL context lost — pausing the render loop");
+    if (preview3DState.frameId) {
+      cancelAnimationFrame(preview3DState.frameId);
+      preview3DState.frameId = 0;
+    }
+    showPreviewContextLostNotice(area);
+  };
+
+  const onRestored = () => {
+    console.log("[preview3D] WebGL context restored — resuming the render loop");
+    hidePreviewContextLostNotice(area);
+    // three.js has already rebuilt its GL state by the time this fires; just start drawing
+    // again. Guard against double-starting if a restore arrives more than once.
+    if (!preview3DState.frameId && preview3DState.renderer) {
+      const tick = () => {
+        preview3DState.frameId = requestAnimationFrame(tick);
+        preview3DState.controls?.update();
+        updateSurveyPlacementArrow();
+        preview3DState.renderer.render(preview3DState.scene, preview3DState.camera);
+      };
+      tick();
+    }
+  };
+
+  canvas.addEventListener("webglcontextlost", onLost);
+  canvas.addEventListener("webglcontextrestored", onRestored);
+  preview3DState.contextLossCleanup = () => {
+    canvas.removeEventListener("webglcontextlost", onLost);
+    canvas.removeEventListener("webglcontextrestored", onRestored);
+  };
+}
+
+function showPreviewContextLostNotice(area) {
+  const host = area || preview3DState.area;
+  if (!host || host.querySelector(".jaw-preview-context-lost")) return;
+  const overlay = document.createElement("div");
+  overlay.className = "jaw-preview-loading jaw-preview-context-lost";
+  overlay.innerHTML = `
+    <div class="jaw-preview-loading-card" role="alert">
+      <div class="jaw-preview-loading-label">3D view was interrupted — the device ran low on memory.</div>
+    </div>
+  `;
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.className = "action-btn";
+  retry.textContent = "Reload 3D view";
+  retry.addEventListener("click", () => {
+    hidePreviewContextLostNotice(host);
+    // Full rebuild: a dead context cannot be revived in place, only replaced.
+    teardown3DPreview();
+    loadInteractiveJawPreview(host);
+  });
+  overlay.querySelector(".jaw-preview-loading-card")?.appendChild(retry);
+  host.appendChild(overlay);
+}
+
+function hidePreviewContextLostNotice(area) {
+  const host = area || preview3DState.area;
+  host?.querySelectorAll(".jaw-preview-context-lost").forEach((node) => node.remove());
 }
 
 export function teardown3DPreview() {
@@ -533,8 +621,21 @@ export function teardown3DPreview() {
     preview3DState.controls.dispose();
     preview3DState.controls = null;
   }
+  if (preview3DState.contextLossCleanup) {
+    preview3DState.contextLossCleanup();
+    preview3DState.contextLossCleanup = null;
+  }
   disposeObject3D(preview3DState.scene);
   if (preview3DState.renderer) {
+    // dispose() frees three.js's own objects but NOT the WebGL context — that lives until
+    // the canvas is collected. On a device that is already short on GPU memory, holding a
+    // dead context while the rebuild creates a new one is what we are trying to avoid, so
+    // hand it back explicitly first.
+    // Skip when it is already gone — three.js looks WEBGL_lose_context up on a dead context
+    // and logs a misleading "extension not supported" warning.
+    if (preview3DState.renderer.getContext?.()?.isContextLost?.() === false) {
+      preview3DState.renderer.forceContextLoss?.();
+    }
     preview3DState.renderer.dispose();
     preview3DState.renderer.domElement.remove();
     preview3DState.renderer = null;
@@ -556,6 +657,12 @@ export function teardown3DPreview() {
   preview3DState.extraGroups = {};
   preview3DState.extraFileNames = {};
   preview3DState.occupiedSlots = null;
+  // Drop the load latch with the scene it populated, so the next case fetches its own
+  // slots instead of inheriting this one's.
+  preview3DState.extrasLoadPromise = null;
+  preview3DState.extrasLoading = false;
+  preview3DState.extrasLoadProgress = null;
+  preview3DState.extrasProgressRefs = null;
   preview3DState.extrasVisible = false;
   preview3DState.extrasPrevStage = null;
   preview3DState.stageHiddenJaws = new Set();
@@ -995,8 +1102,10 @@ function createDisplayGeometry(geometry, label = "mesh") {
 
 // Reuse the shared /case/get round-trip from 2D init instead of duplicating it.
 // Only used to preserve the other jaw's survey angles, so a null result is harmless.
-export function fetchCaseData() {
-  return fetchCaseDetail();
+// Pass { force: true } to bypass the memoized copy (the survey save does, since it
+// re-sends the whole case row).
+export function fetchCaseData(options) {
+  return fetchCaseDetail(options);
 }
 
 async function fetchJawFilesForCase() {
@@ -2554,8 +2663,18 @@ const EXTRA_STL_SLOT_ICONS = {
   4: { src: "../../assets/lower.svg" },
 };
 
-// Same flat tan as the upper-jaw material so extras match the original jaws.
-const EXTRA_STL_COLOR = 0xb0875a;
+// The jaw slots (1 & 3) in the case's own jaw tan, built exactly the way the
+// primary jaw meshes build theirs: float components straight into THREE.Color,
+// which go in UNCONVERTED (see srgbToLinear's note above DEFAULT_TOOTH_COLOR).
+//
+// That is what makes it the light cream the real jaws show. The 0xb0875a hex it
+// replaced took the other path — a hex is read as sRGB and converted to linear —
+// and landed a much darker brown, so a slot-1 jaw read as a different material
+// sitting next to the jaw it is a copy of.
+//
+// A function, not a constant: THREE is loaded on demand, so there is nothing to
+// construct at module scope.
+const extraJawColor = () => new THREE.Color(...DEFAULT_TOOTH_COLOR);
 
 // Metal-RPD slots (Upper/Lower metal RPD) render with a metallic finish instead
 // of the tan jaw colour.
@@ -2604,12 +2723,43 @@ async function fetchExtraStlsForCase() {
   return results.filter(Boolean);
 }
 
+// Fetch + parse the extra slots at most once, and only when something actually needs
+// them. They are NOT loaded on page entry: each slot is its own full-size scan (~33MB of
+// base64 apiece, ~133MB for all four on a case like 3008, on top of the ~66MB jaw pair),
+// and renderExtraStl creates every one of them `visible = false` — nothing is on screen
+// until the "Other 3D files" panel is opened. Downloading and STL-parsing all of that
+// invisibly is what pushes an iPhone's content process over its memory ceiling, which
+// Safari reports as the tab reloading itself.
+//
+// The in-flight promise IS the latch, and it is never cleared on success: a second pass
+// would re-run the resets below and wipe a file uploaded during this session. It is
+// cleared on failure so the next open can retry.
+function ensureExtraStlsLoaded() {
+  if (!preview3DState.extrasLoadPromise) {
+    preview3DState.extrasLoading = true;
+    preview3DState.extrasLoadPromise = loadExtraStlsIntoPreview()
+      .then(() => {
+        preview3DState.extrasLoading = false;
+      })
+      .catch((err) => {
+        preview3DState.extrasLoading = false;
+        preview3DState.extrasLoadPromise = null;
+        throw err;
+      });
+  }
+  return preview3DState.extrasLoadPromise;
+}
+
 async function loadExtraStlsIntoPreview() {
   preview3DState.extraGroups = {};
   preview3DState.extraFileNames = {};
   preview3DState.occupiedSlots = new Set();
+  setExtrasLoadProgress(0.05, "Fetching…");
   const extras = await fetchExtraStlsForCase();
+  let done = 0;
   for (const extra of extras) {
+    setExtrasLoadProgress(0.25 + (done / extras.length) * 0.75, `Loading ${done + 1} of ${extras.length}…`);
+    done += 1;
     preview3DState.occupiedSlots.add(extra.slotNumber);
     preview3DState.extraFileNames[extra.slotNumber] = extra.filename;
     // Isolate per-slot failures: a single corrupt/undecodable extra STL must not
@@ -2623,6 +2773,7 @@ async function loadExtraStlsIntoPreview() {
       );
     }
   }
+  setExtrasLoadProgress(1, "Ready");
   // Extras stay off the stage on page entry — they are only shown while the "Other 3D
   // files" panel is open. Exception: with no jaw meshes at all, hiding them too would
   // leave an empty viewport, so show them right away.
@@ -2632,6 +2783,17 @@ async function loadExtraStlsIntoPreview() {
     fitPreviewCamera();
   }
   renderUpload3dList();
+}
+
+// Drive the panel's load progress bar. The refs are rebuilt whenever the list re-renders,
+// so the latest phase is cached here and replayed into a fresh row.
+function setExtrasLoadProgress(frac, labelText) {
+  if (frac != null) preview3DState.extrasLoadProgress = { frac, labelText };
+  const phase = preview3DState.extrasLoadProgress;
+  const refs = preview3DState.extrasProgressRefs;
+  if (!refs || !phase) return;
+  refs.fill.style.width = `${Math.round(phase.frac * 100)}%`;
+  refs.label.textContent = phase.labelText;
 }
 
 // Parse a base64 STL and add it to the model root. Jaw slots use the jaw tan; metal-RPD slots
@@ -2649,7 +2811,7 @@ async function renderExtraStl({ slotNumber, filename, data }) {
 
   const isMetal = METAL_RPD_SLOTS.has(slotNumber);
   const material = new THREE.MeshStandardMaterial({
-    color: isMetal ? METAL_RPD_COLOR : EXTRA_STL_COLOR,
+    color: isMetal ? METAL_RPD_COLOR : extraJawColor(),
     metalness: isMetal ? 0.85 : 0.05,
     roughness: isMetal ? 0.32 : 0.6,
     side: THREE.DoubleSide,
@@ -2713,6 +2875,13 @@ async function uploadExtraStl(file, targetSlot = null) {
   if (!state.caseIntID) {
     setMessage?.("Open a case before uploading a 3D file.");
     return;
+  }
+  // Never pick a slot before the server's occupancy is known, or a drop that lands while
+  // the extras are still downloading would claim a slot the backend already holds.
+  try {
+    await ensureExtraStlsLoaded();
+  } catch {
+    /* slot occupancy unknown — fall through and let the backend reject a taken slot */
   }
   if (!preview3DState.occupiedSlots) preview3DState.occupiedSlots = new Set();
   let freeSlot;
@@ -2981,12 +3150,10 @@ async function openPreview3DApproval(btn) {
   }
   if (btn) btn.disabled = true;
   try {
-    // Captured once: the dialog shows these, and the ones left ticked there come
-    // back as `sendShots` to ride along on the email.
-    const { confirmed, recipients, shots: sendShots } = await confirmPreview3DApproval({
+    // Captured once: the dialog shows these, and comes back with what to attach —
+    // the renders left ticked there, plus anything uploaded in the dialog.
+    const { confirmed, recipients, images } = await confirmPreview3DApproval({
       caseIntID: state.caseIntID,
-      caseNumber: preview3DState.caseData?.case_id ?? state.caseIntID,
-      statusLabel: STATUS_3D_DESIGN_APPROVED,
       shots: captureExtraSlotShots(),
     });
     if (!confirmed) return;
@@ -3001,7 +3168,7 @@ async function openPreview3DApproval(btn) {
     setMessage?.("3D design approved.", false);
 
     if (!recipients.length) return;
-    const sent = await sendApprovalEmails(state.caseIntID, recipients, sendShots);
+    const sent = await sendApprovalEmails(state.caseIntID, recipients, images);
     if (sent === recipients.length) {
       toast.success(`Email sent to ${recipients.map((r) => r.email).join(", ")}.`);
     } else if (sent) {
@@ -3117,12 +3284,21 @@ function isUpload3dModalOpen() {
 
 function openUpload3dModal() {
   const modal = ensureUpload3dModal();
+  // First open is what actually fetches the extras — they are deliberately not loaded on
+  // page entry (see ensureExtraStlsLoaded). Resolves immediately once they're in.
+  const loaded = ensureExtraStlsLoaded().catch(() => {});
   renderUpload3dList();
   modal.overlay.classList.remove("is-hidden");
   modal.overlay.setAttribute("aria-hidden", "false");
-  // Stage the extras only once there is something to show — with all four slots empty,
-  // hiding the jaws would just leave a blank viewport behind the panel.
-  if (Object.keys(preview3DState.extraGroups || {}).length) enterExtraStlStage();
+  loaded.then(() => {
+    // The panel may have been closed again while the slots were downloading.
+    if (!isUpload3dModalOpen()) return;
+    renderUpload3dList();
+    // Stage the extras only once there is something to show — with all four slots empty,
+    // hiding the jaws would just leave a blank viewport behind the panel.
+    if (Object.keys(preview3DState.extraGroups || {}).length) enterExtraStlStage();
+    positionUpload3dPanel();
+  });
   positionUpload3dPanel();
   if (!preview3DState.upload3dKeyHandler) {
     preview3DState.upload3dKeyHandler = (e) => {
@@ -3194,6 +3370,13 @@ function renderUpload3dList() {
   if (!modal) return;
   const list = modal.list;
   list.innerHTML = "";
+
+  // Slot contents aren't known until the on-demand load finishes, so show the progress
+  // row rather than four "empty" slots the user could upload into.
+  if (preview3DState.extrasLoading) {
+    list.appendChild(buildUpload3dLoadingRow());
+    return;
+  }
 
   const occupied = preview3DState.occupiedSlots || new Set();
   EXTRA_STL_SLOTS.forEach((slot) => {
@@ -3300,6 +3483,43 @@ function buildUpload3dSlotRow(slot) {
   row.appendChild(icon);
   row.appendChild(text);
   enableSlotDropZone(row, slot);
+  return row;
+}
+
+// Shown in place of the slot list while the on-demand extras load runs (see
+// ensureExtraStlsLoaded). Same progress markup as the uploading row.
+function buildUpload3dLoadingRow() {
+  const row = document.createElement("div");
+  row.className = "upload3d-row upload3d-slot-row upload3d-uploading-row";
+
+  const icon = document.createElement("span");
+  icon.className = "upload3d-file-icon";
+  icon.innerHTML = '<i class="fa fa-cloud-arrow-down" aria-hidden="true"></i>';
+
+  const text = document.createElement("div");
+  text.className = "upload3d-row-text";
+  const name = document.createElement("span");
+  name.className = "upload3d-slot-name";
+  name.textContent = "Other 3D files";
+
+  const progress = document.createElement("div");
+  progress.className = "upload3d-progress";
+  const fill = document.createElement("div");
+  fill.className = "upload3d-progress-fill";
+  const label = document.createElement("span");
+  label.className = "upload3d-progress-label";
+  label.textContent = "Loading…";
+  progress.appendChild(fill);
+  progress.appendChild(label);
+
+  text.appendChild(name);
+  text.appendChild(progress);
+  row.appendChild(icon);
+  row.appendChild(text);
+
+  preview3DState.extrasProgressRefs = { fill, label };
+  // Replay whatever phase the load is already at into this freshly built bar.
+  setExtrasLoadProgress();
   return row;
 }
 

@@ -332,10 +332,20 @@ export function positionAnteriorRestPanel(panel, anchor) {
 // Render bridge (registerRender + mesh env) so render module can register implementations.
 let renderJawImpl = () => {};
 let renderJawsImpl = () => {};
+let cloneArchTintDefsImpl = () => null;
 
 export function registerRender(fns) {
   renderJawImpl = fns.renderJaw;
   renderJawsImpl = fns.renderJaws;
+  if (fns.cloneArchTintDefs) cloneArchTintDefsImpl = fns.cloneArchTintDefs;
+}
+
+// The arch tint filters live in a shared <svg> outside the arch (annotationRender's
+// ensureArchTintDefs), so an arch serialized on its own carries no filter definitions and
+// every `filter: url(#…)` silently resolves to nothing — the jaw template and teeth come
+// out untinted, i.e. invisible. The screenshot/thumbnail path pastes this copy back in.
+export function cloneArchTintDefs() {
+  return cloneArchTintDefsImpl();
 }
 
 export function renderJaw(jaw) {
@@ -887,8 +897,10 @@ function initializeCaseIds() {
 // Shared, memoized POST /case/get/:id. Reused by fetchCaseOwner and preview3D's
 // SET-SURVEY-ANGLE path (one request, not two). Started early in init() to overlap
 // module downloads. Resolves the detail object, or null on any failure.
-export function fetchCaseDetail() {
-  if (state.__caseDetailPromise) return state.__caseDetailPromise;
+// `force` re-reads instead of returning the memoized copy — required before any
+// full-row PUT /case/:id write, which must not send stale/partial fields.
+export function fetchCaseDetail({ force = false } = {}) {
+  if (!force && state.__caseDetailPromise) return state.__caseDetailPromise;
   if (!state.caseIntID) return Promise.resolve(null);
   const loggedInUser = getLoggedInUser();
   if (!loggedInUser?.uuid) return Promise.resolve(null);

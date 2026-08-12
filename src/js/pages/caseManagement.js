@@ -13,6 +13,7 @@ import {
   applyEnrichmentResponses,
 } from "../shared/caseEnrichment.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
+import { recordCollaborators } from "../shared/collaborators.js";
 
 // Per-user cache of the last case list so the table can paint instantly on load
 // instead of waiting on /case/user/findall/get — which can lag when the API host
@@ -954,6 +955,20 @@ function populateTable(cases) {
     return cmp * dir;
   });
 
+  // Everyone visible on the list is someone this account works with — the only
+  // roster a non-admin can build, and what the create-case invite box suggests.
+  // Paired with the case id so the box can rank by who is shared with most; a
+  // case only counts once per person however often the table repaints.
+  recordCollaborators(
+    cases.flatMap((c) => {
+      const caseId = c.id ?? c.case_int_id;
+      return [c.assigned_to || c.username, ...(c.co_owners || [])].map((name) => ({
+        name,
+        caseId,
+      }));
+    })
+  );
+
   const body = document.getElementById("caseTableBody");
   const countBadge = document.getElementById("caseCountBadge");
   if (countBadge) countBadge.textContent = String(cases?.length || 0);
@@ -1018,7 +1033,10 @@ function populateTable(cases) {
 
     row.innerHTML = `
       <td class="cm-td-name">
-        <span class="cm-row-name" title="${escapeAttr(caseItem.case_id || "")}">${escapeAttr(caseDisplayName)}</span>${pinned ? '<i class="fa-solid fa-flag cm-row-pin" title="Pinned"></i>' : ""}${dueBarHtml}
+        <div class="cm-name-line">
+          <span class="cm-row-name" title="${escapeAttr(caseItem.case_id || "")}">${escapeAttr(caseDisplayName)}</span>
+          <button class="cm-inline-edit cm-name-edit" type="button" title="Rename case" aria-label="Rename case" data-action="rename"><i class="fa-regular fa-pen-to-square"></i></button>${pinned ? '<i class="fa-solid fa-flag cm-row-pin" title="Pinned"></i>' : ""}
+        </div>${dueBarHtml}
       </td>
       <td class="cm-td-status">
         <span class="cm-pill ${statusPillClass(caseItem.new_status)}" data-action="edit-status" role="button" tabindex="0" title="Change status">${statusPillInner(caseItem.new_status)}</span>
@@ -1035,9 +1053,9 @@ function populateTable(cases) {
         ${caseItem.co_owners?.length
           ? `<span class="cm-shared-names" title="${escapeAttr(caseItem.co_owners.join(", "))}">${escapeAttr(caseItem.co_owners.join(", "))}</span>`
           : '<span class="cm-shared-empty">—</span>'}
+        <button class="cm-inline-edit cm-shared-edit" type="button" title="Manage shared users" aria-label="Manage shared users" data-action="edit-shared"><i class="fa-regular fa-pen-to-square"></i></button>
       </td>
       <td class="cm-td-actions">
-        <button class="cm-row-icon" type="button" title="Rename" aria-label="Rename" data-action="rename"><i class="fa-regular fa-pen-to-square"></i></button>
         <button class="cm-row-icon" type="button" title="Download files" aria-label="Download files" data-action="download"><i class="fa-regular fa-circle-down"></i></button>
         <button class="cm-row-icon ${pinned ? "is-pinned" : ""}" type="button" title="${pinned ? "Unpin" : "Pin to top"}" aria-label="${pinned ? "Unpin" : "Pin to top"}" aria-pressed="${pinned}" data-action="flag"><i class="${pinned ? "fa-solid" : "fa-regular"} fa-star"></i></button>
         <button class="cm-row-icon cm-row-icon-danger" type="button" title="Delete" aria-label="Delete" data-action="delete"><i class="fa-regular fa-trash-can"></i></button>
@@ -1066,10 +1084,18 @@ function populateTable(cases) {
       await downloadCaseFiles(resolvedCaseId, caseItem.case_id, caseItem.new_status ?? null);
     });
 
-    row.querySelector('[data-action="rename"]').addEventListener("click", (e) => {
+    // Rename and share both reuse the detail-pane menu actions, which read
+    // window.selectedCaseId — so select the row first, then trigger the item.
+    row.querySelector('[data-action="rename"]')?.addEventListener("click", (e) => {
       e.stopPropagation();
       selectRow();
       document.getElementById("renameBtn")?.click();
+    });
+
+    row.querySelector('[data-action="edit-shared"]')?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      selectRow();
+      document.getElementById("editUserAccessBtn")?.click();
     });
 
     row.querySelector('[data-action="flag"]').addEventListener("click", (e) => {
@@ -1176,6 +1202,9 @@ async function handleRowClick(caseId) {
     // Stash the merged row so the dashboard ("View Dashboard", opened later) can
     // read the real new_status / expected_date — /case/get/:id omits them, which
     // is why those fields are merged from the cached list row (`extra`) here.
+    // Stamp the UID so later readers can tell whose row this is (the stub outlives
+    // the selection, and a full-row PUT must never write another case's fields).
+    detail.case_int_id = detail.case_int_id ?? detail.id ?? caseId;
     window.selectedCaseStub = detail;
 
     // Persist this case's Due Date (same value/fallback as the list "Due" column)
@@ -1225,25 +1254,64 @@ function bumpLocalLastUpdated(caseId) {
   applyClientFilters();
 }
 
+// Read one case's row straight from the server. Returns null when the request
+// fails — a caller building a full-row PUT must then NOT write.
+async function fetchCaseRow(caseId, user) {
+  try {
+    const res = await fetch(`${API_BASE}/case/get/${caseId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID: caseId },
+      ]),
+    });
+    logApi(res, "POST /case/get/:id");
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.warn("[caseManagement] case row read failed:", err);
+    return null;
+  }
+}
+
 // Fire a no-op PUT to /case/{id} re-sending the case's current fields. The
 // payload doesn't change any meaningful data, but the backend bumps the row's
 // last_updated as a side effect of the write — which is what the sort keys on.
+//
+// PUT /case/:id is a FULL-ROW write and its `case_id` is the case's *name*, so
+// `detail` must be this case's real row: a missing one would blank the name (the
+// list then shows "N/A") and a stale one would rename the case to another's.
+// The caller passes window.selectedCaseStub, which is unset until the row's
+// detail fetch lands and keeps the previous case's row if that fetch failed — so
+// verify it belongs to this case, re-read when it doesn't, and skip the bump
+// (cosmetic sort order only) rather than write a default.
 async function fireLastOpenedBump(caseId, detail, user) {
   const auth = {
     machine_id: MACHINE_ID,
     uuid: user.uuid,
     caseIntID: caseId,
   };
+  const isThisCase =
+    detail != null && String(caseIntIdOf(detail) ?? "") === String(caseId);
+  const row = isThisCase ? detail : await fetchCaseRow(caseId, user);
+  if (!row?.case_id) {
+    console.warn(
+      `[caseManagement] last-opened bump skipped for case ${caseId}: case row unavailable`
+    );
+    return;
+  }
   const caseBody = {
-    case_id: detail?.case_id || "",
-    upper_insertion_angle_x: Number(detail?.upper_insertion_angle_x) || 0,
-    upper_insertion_angle_y: Number(detail?.upper_insertion_angle_y) || 0,
-    upper_insertion_angle_z: Number(detail?.upper_insertion_angle_z) || 0,
-    lower_insertion_angle_x: Number(detail?.lower_insertion_angle_x) || 0,
-    lower_insertion_angle_y: Number(detail?.lower_insertion_angle_y) || 0,
-    lower_insertion_angle_z: Number(detail?.lower_insertion_angle_z) || 0,
-    process_upper: Number(detail?.process_upper) || 0,
-    process_lower: Number(detail?.process_lower) || 0,
+    case_id: row.case_id,
+    // Same row as the name: sending these from a stale copy would zero the
+    // case's saved survey angles / jaw process flags.
+    upper_insertion_angle_x: Number(row.upper_insertion_angle_x) || 0,
+    upper_insertion_angle_y: Number(row.upper_insertion_angle_y) || 0,
+    upper_insertion_angle_z: Number(row.upper_insertion_angle_z) || 0,
+    lower_insertion_angle_x: Number(row.lower_insertion_angle_x) || 0,
+    lower_insertion_angle_y: Number(row.lower_insertion_angle_y) || 0,
+    lower_insertion_angle_z: Number(row.lower_insertion_angle_z) || 0,
+    process_upper: Number(row.process_upper) || 0,
+    process_lower: Number(row.process_lower) || 0,
   };
   const res = await fetch(
     `${API_BASE}/case/${caseId}`,
@@ -1956,10 +2024,12 @@ async function orderThumbnailsBySlot(rows) {
     .map((r) => r.data);
 }
 
-// 获取缩略图
-async function fetchThumbnails(caseId) {
+// Raw /thumbnails/get rows ({ slot, data }) for a case, or null when the lookup
+// fails. Split out of fetchThumbnails so the reference-image uploader can read
+// which slots are occupied without also repainting the carousel.
+async function fetchThumbnailRows(caseId) {
   const loggedInUser = getLoggedInUser();
-  if (!loggedInUser) return;
+  if (!loggedInUser) return null;
 
   // Identify the case NUMERICALLY (case_int_id), never by the case-name
   // string: the backend's non-admin lookup resolves from element-0's
@@ -1995,23 +2065,25 @@ async function fetchThumbnails(caseId) {
     );
     if (!res || !res.ok) {
       console.warn("⚠️ No images found or request failed:", res ? res.status : "no response");
-      currentThumbnails = [];
-      currentImageIndex = 0;
-      updateThumbnail();
-      return;
+      return null;
     }
     logApi(res, 'POST /thumbnails/get');
 
     const data = await res.json();
-    currentThumbnails = await orderThumbnailsBySlot(Array.isArray(data) ? data : []);
-    currentImageIndex = 0;
-    updateThumbnail();
+    return Array.isArray(data) ? data : [];
   } catch (err) {
     console.error("❌ Failed to fetch thumbnails:", err);
-    currentThumbnails = [];
-    currentImageIndex = 0;
-    updateThumbnail();
+    return null;
   }
+}
+
+// 获取缩略图 — load the case's images into the detail pane's carousel.
+async function fetchThumbnails(caseId) {
+  if (!getLoggedInUser()) return;
+  const rows = await fetchThumbnailRows(caseId);
+  currentThumbnails = rows ? await orderThumbnailsBySlot(rows) : [];
+  currentImageIndex = 0;
+  updateThumbnail();
 }
 
 // ---------------------------------------------------------------------------
@@ -2836,7 +2908,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
 
     document
       .getElementById("upload3dFileBtn")
-      ?.addEventListener("click", () => pickAndUploadStl());
+      ?.addEventListener("click", () => openUploadChooser());
 
     // Case instructions autosave: no Save button, so the note commits when focus
     // leaves the box or on Enter. The box expands to fit while it's being edited
@@ -3322,6 +3394,9 @@ function renderSharedUserList() {
     const li = document.createElement("li");
     li.className = "shared-user-item";
     li.style.position = "relative"; // 用于定位小 ×
+    // Read back by the invite box (createCase.js) to keep people already on the
+    // case out of its suggestions.
+    li.dataset.username = user.username || "";
 
     const nameSpan = document.createElement("span");
     nameSpan.className = "user-name";
@@ -3659,15 +3734,21 @@ function patchRowInPlace(caseObj) {
   }
 
   const owner = caseObj.assigned_to || caseObj.username || "N/A";
+  // Enrichment is where co-owners usually arrive, so this is the main feed.
+  recordCollaborators(
+    [owner, ...(caseObj.co_owners || [])].map((name) => ({ name, caseId: id }))
+  );
   const ownerEl = row.querySelector(".cm-owner-name");
   if (ownerEl) {
     ownerEl.textContent = owner;
     ownerEl.title = owner;
   }
 
+  // Replace only the names/em-dash span — the cell's inline "manage shared
+  // users" button carries a click handler and must survive the patch.
   const sharedCell = row.querySelector(".cm-td-shared");
   if (sharedCell) {
-    sharedCell.textContent = "";
+    sharedCell.querySelector(".cm-shared-names, .cm-shared-empty")?.remove();
     const span = document.createElement("span");
     if (caseObj.co_owners?.length) {
       span.className = "cm-shared-names";
@@ -3677,7 +3758,7 @@ function patchRowInPlace(caseObj) {
       span.className = "cm-shared-empty";
       span.textContent = "—";
     }
-    sharedCell.appendChild(span);
+    sharedCell.prepend(span);
   }
 
   // Status may have just resolved from enrichment — refresh the admin counters.
@@ -3706,13 +3787,19 @@ function scheduleEnrichCacheSave() {
   enrichCacheSaveTimer = setTimeout(() => saveCachedCases(currentCases), 1500);
 }
 
-// --- Upload 3D file --------------------------------------------------------
-// Same "extra STL slot" mechanism the 2D annotation page's 3D preview uses
-// (POST /stl/slot/), surfaced here so a clinic can attach an STL without opening
-// the case first. Slots 1–4 sit alongside the case's real upper/lower jaws.
+// --- Case uploads ----------------------------------------------------------
+// The detail pane's upload button covers both kinds of file a case can take, so
+// it asks which one first:
+//   • reference images — stored the way the create-case form stores them (a
+//     /referenceimages row, mirrored into a free thumbnail slot so they join the
+//     detail pane's image carousel);
+//   • an extra 3D file — the same "extra STL slot" mechanism the 2D annotation
+//     page's 3D preview uses (POST /stl/slot/), so a clinic can attach an STL
+//     without opening the case first. Slots 1–4 sit alongside the real jaws.
 const EXTRA_STL_SLOTS = [1, 2, 3, 4];
 
-function extraSlotAuth(caseIntId) {
+// The auth object every per-case endpoint takes as payload element 0.
+function caseAuth(caseIntId) {
   const user = getLoggedInUser();
   return {
     machine_id: MACHINE_ID,
@@ -3721,31 +3808,334 @@ function extraSlotAuth(caseIntId) {
   };
 }
 
-// Find the lowest unoccupied extra slot, or null when all four are taken.
+// The selected case's name (case_id IS the name), from the list row or the stub
+// the detail pane keeps for it.
+function selectedCaseName() {
+  const caseObj = currentCases.find(
+    (c) => String(c.id ?? c.case_int_id) === String(window.selectedCaseId)
+  );
+  return caseObj?.case_id || window.selectedCaseStub?.case_id || "";
+}
+
+// What each upload kind accepts, and where its files end up. `matches` is the
+// single place a picked file is judged — the uploaders below take an
+// already-filtered list.
+const UPLOAD_KINDS = {
+  reference: {
+    accept: "image/*",
+    label: "reference images",
+    rejected: "images only",
+    thumbnails: true,
+    matches: (f) => /^image\//i.test(f.type || "") || IMAGE_FILE_RE.test(f.name),
+    upload: (files) => uploadCaseReferenceImages(files),
+  },
+  stl: {
+    accept: ".stl",
+    label: "3D files",
+    rejected: ".stl only",
+    thumbnails: false,
+    matches: (f) => /\.stl$/i.test(f.name),
+    upload: (files) => uploadCaseStlFiles(files),
+  },
+};
+
+let uploadChooserEl = null;
+// The staged files awaiting the Upload button: { kind, files, urls }. `urls` are
+// object URLs for the image previews and have to be revoked when they go.
+let pendingUpload = null;
+
+// Built on demand rather than sitting in the page markup: caseManagement.js
+// drives both case_list.html and admin_case_list.html, and one injected dialog
+// keeps the two from drifting (same approach as the shared confirm modal).
+function getUploadChooser() {
+  if (uploadChooserEl) return uploadChooserEl;
+
+  const modal = document.createElement("div");
+  modal.id = "uploadChoiceModal";
+  modal.className = "modal hidden";
+  modal.innerHTML = `
+    <div class="modal-content upload-choice-modal" role="dialog" aria-modal="true" aria-labelledby="uploadChoiceTitle">
+      <span class="close-btn" data-upload-action="cancel" role="button" tabindex="0" aria-label="Close">&times;</span>
+      <h3 class="modal-title" id="uploadChoiceTitle">Upload to Case</h3>
+
+      <div class="upload-stage" data-stage="choose">
+        <p class="upload-choice-sub">
+          What would you like to attach to <strong id="uploadChoiceCaseName"></strong>?
+        </p>
+        <div class="upload-choice-grid">
+          <button type="button" class="upload-choice-card" data-upload-choice="reference">
+            <i class="fa-regular fa-images" aria-hidden="true"></i>
+            <span class="upload-choice-title">Reference images</span>
+            <span class="upload-choice-desc">
+              Photos or scans, added to this case's image carousel. Select as many as you like.
+            </span>
+          </button>
+          <button type="button" class="upload-choice-card" data-upload-choice="stl">
+            <i class="fa fa-cube" aria-hidden="true"></i>
+            <span class="upload-choice-title">Extra 3D files</span>
+            <span class="upload-choice-desc">
+              .stl files, into the case's four extra 3D slots. Select up to 4 at once.
+            </span>
+          </button>
+        </div>
+        <div class="modal-actions upload-choice-actions">
+          <button type="button" class="cm-btn cm-btn-secondary" data-upload-action="cancel">Cancel</button>
+        </div>
+      </div>
+
+      <div class="upload-stage hidden" data-stage="preview">
+        <p class="upload-choice-sub" id="uploadPreviewSub"></p>
+        <ul class="upload-preview-list" id="uploadPreviewList"></ul>
+        <div class="modal-actions upload-preview-actions">
+          <button type="button" class="cm-btn cm-btn-secondary upload-add-more" data-upload-action="add-more">
+            <i class="fa fa-plus" aria-hidden="true"></i><span>Add more</span>
+          </button>
+          <button type="button" class="cm-btn cm-btn-secondary" data-upload-action="back">Back</button>
+          <button type="button" class="cm-btn cm-btn-primary" data-upload-action="upload" id="uploadConfirmBtn">
+            Upload
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.addEventListener("click", (e) => {
+    // An upload in flight owns the dialog until it settles — dismissing it
+    // mid-batch would leave the user with no idea what did or didn't land.
+    if (modal.classList.contains("is-uploading")) return;
+
+    const kind = e.target.closest("[data-upload-choice]")?.dataset.uploadChoice;
+    if (kind) {
+      stagePickedFiles(kind);
+      return;
+    }
+    const removeAt = e.target.closest("[data-remove-index]")?.dataset.removeIndex;
+    if (removeAt != null) {
+      removePendingFile(Number(removeAt));
+      return;
+    }
+    const action =
+      e.target === modal // backdrop
+        ? "cancel"
+        : e.target.closest("[data-upload-action]")?.dataset.uploadAction;
+    if (action === "cancel") closeUploadChooser();
+    else if (action === "back") showUploadStage("choose");
+    else if (action === "add-more") stagePickedFiles(pendingUpload?.kind);
+    else if (action === "upload") startPendingUpload();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!modal.classList.contains("show") || modal.classList.contains("is-uploading")) return;
+    closeUploadChooser();
+  });
+
+  uploadChooserEl = modal;
+  return modal;
+}
+
+function showUploadStage(stage) {
+  const modal = getUploadChooser();
+  modal.querySelectorAll("[data-stage]").forEach((el) => {
+    el.classList.toggle("hidden", el.dataset.stage !== stage);
+  });
+  if (stage === "choose") clearPendingUpload();
+}
+
+// Drop the staged files and the object URLs their previews were using.
+function clearPendingUpload() {
+  pendingUpload?.urls.forEach((url) => URL.revokeObjectURL(url));
+  pendingUpload = null;
+}
+
+function closeUploadChooser() {
+  clearPendingUpload();
+  if (!uploadChooserEl) return;
+  uploadChooserEl.classList.add("hidden");
+  uploadChooserEl.classList.remove("show");
+}
+
+function openUploadChooser() {
+  if (window.selectedCaseId == null) {
+    toast.warning("Please select a case first.");
+    return;
+  }
+  const modal = getUploadChooser();
+  const nameEl = modal.querySelector("#uploadChoiceCaseName");
+  if (nameEl) nameEl.textContent = selectedCaseName() || "this case";
+  showUploadStage("choose");
+  modal.classList.remove("hidden");
+  modal.classList.add("show");
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  return kb < 1024 ? `${Math.round(kb)} KB` : `${(kb / 1024).toFixed(1)} MB`;
+}
+
+// Open the picker for `kind` and stage what comes back for review. Nothing is
+// sent yet — the preview's Upload button is what commits.
+function stagePickedFiles(kind) {
+  const spec = UPLOAD_KINDS[kind];
+  if (!spec) return;
+  pickFiles(spec.accept, (picked) => {
+    const accepted = picked.filter(spec.matches);
+    const skipped = picked.length - accepted.length;
+    if (skipped) {
+      toast.warning(`${skipped} file${skipped > 1 ? "s" : ""} skipped — ${spec.rejected}.`);
+    }
+    if (!accepted.length && pendingUpload?.kind !== kind) return;
+
+    if (pendingUpload?.kind !== kind) {
+      clearPendingUpload();
+      pendingUpload = { kind, files: [], urls: [] };
+    }
+    // Re-picking the same file (easy to do via "Add more") would otherwise
+    // upload it twice, into two slots.
+    for (const file of accepted) {
+      const dup = pendingUpload.files.some(
+        (f) => f.name === file.name && f.size === file.size && f.lastModified === file.lastModified
+      );
+      if (!dup) pendingUpload.files.push(file);
+    }
+    renderUploadPreview();
+    showUploadStage("preview");
+  });
+}
+
+function removePendingFile(index) {
+  if (!pendingUpload) return;
+  pendingUpload.files.splice(index, 1);
+  if (!pendingUpload.files.length) {
+    showUploadStage("choose");
+    return;
+  }
+  renderUploadPreview();
+}
+
+function renderUploadPreview() {
+  const modal = getUploadChooser();
+  const list = modal.querySelector("#uploadPreviewList");
+  const sub = modal.querySelector("#uploadPreviewSub");
+  const confirm = modal.querySelector("#uploadConfirmBtn");
+  if (!pendingUpload || !list) return;
+
+  const spec = UPLOAD_KINDS[pendingUpload.kind];
+  const { files } = pendingUpload;
+
+  // Previews are re-made from scratch on every render, so the previous batch's
+  // object URLs are dead the moment the nodes go.
+  pendingUpload.urls.forEach((url) => URL.revokeObjectURL(url));
+  pendingUpload.urls = [];
+
+  list.innerHTML = "";
+  files.forEach((file, i) => {
+    const li = document.createElement("li");
+    li.className = "upload-preview-item";
+
+    const thumb = document.createElement("span");
+    thumb.className = "upload-preview-thumb";
+    if (spec.thumbnails) {
+      const url = URL.createObjectURL(file);
+      pendingUpload.urls.push(url);
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = "";
+      thumb.appendChild(img);
+    } else {
+      // An STL has no cheap preview — parsing one to render it would cost more
+      // than the upload itself.
+      thumb.innerHTML = '<i class="fa fa-cube" aria-hidden="true"></i>';
+    }
+
+    const meta = document.createElement("span");
+    meta.className = "upload-preview-meta";
+    const name = document.createElement("span");
+    name.className = "upload-preview-name";
+    name.textContent = file.name;
+    name.title = file.name;
+    const size = document.createElement("span");
+    size.className = "upload-preview-size";
+    size.textContent = formatFileSize(file.size);
+    meta.append(name, size);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "upload-preview-remove";
+    remove.dataset.removeIndex = String(i);
+    remove.title = `Remove ${file.name}`;
+    remove.setAttribute("aria-label", `Remove ${file.name}`);
+    remove.innerHTML = '<i class="fa fa-xmark" aria-hidden="true"></i>';
+
+    li.append(thumb, meta, remove);
+    list.appendChild(li);
+  });
+
+  if (sub) {
+    sub.textContent = `${files.length} ${spec.label} ready to upload to ${
+      selectedCaseName() || "this case"
+    }.`;
+  }
+  if (confirm) {
+    confirm.disabled = !files.length;
+    confirm.textContent = `Upload ${files.length} file${files.length === 1 ? "" : "s"}`;
+  }
+}
+
+// Commit the staged batch. The dialog stays open (with its buttons locked) for
+// the duration so the user can see what is being sent, and closes once the
+// uploader is done — per-file progress goes to the toasts.
+async function startPendingUpload() {
+  if (!pendingUpload?.files.length) return;
+  const modal = getUploadChooser();
+  const spec = UPLOAD_KINDS[pendingUpload.kind];
+  const files = pendingUpload.files.slice();
+
+  const buttons = modal.querySelectorAll(".upload-preview-actions button");
+  buttons.forEach((b) => (b.disabled = true));
+  modal.querySelector("#uploadConfirmBtn").textContent = "Uploading…";
+  modal.classList.add("is-uploading");
+  try {
+    await spec.upload(files);
+  } finally {
+    buttons.forEach((b) => (b.disabled = false));
+    modal.classList.remove("is-uploading");
+    closeUploadChooser();
+  }
+}
+
+// The lowest unoccupied extra slots, up to `count` of them — fewer (or none)
+// when the case doesn't have that many free.
 //
-// Probed one at a time and stopped at the first miss on purpose: /stl/slot/get
-// has no "is it empty" mode — an occupied slot returns the whole base64 STL — so
-// checking all four in parallel would pull tens of MB just to pick a slot. In the
-// common case (slot 1 free) this downloads nothing at all.
-async function findFreeStlSlot(caseIntId) {
-  const auth = extraSlotAuth(caseIntId);
+// Probed one at a time, and only until enough free slots are found, on purpose:
+// /stl/slot/get has no "is it empty" mode — an occupied slot returns the whole
+// base64 STL — so checking all four in parallel would pull tens of MB just to
+// pick a slot. In the common case (one file, slot 1 free) nothing is downloaded.
+async function findFreeStlSlots(caseIntId, count) {
+  const auth = caseAuth(caseIntId);
+  const free = [];
   for (const slotNumber of EXTRA_STL_SLOTS) {
+    if (free.length >= count) break;
     try {
       const res = await fetch(`${API_BASE}/stl/slot/get`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify([auth, { slotNumber }]),
       });
-      if (!res.ok) return slotNumber; // 404 = empty slot
+      if (!res.ok) {
+        free.push(slotNumber); // 404 = empty slot
+        continue;
+      }
       const data = await res.json();
       const item = Array.isArray(data) ? data[0] : data;
-      if (!item?.data) return slotNumber;
+      if (!item?.data) free.push(slotNumber);
     } catch (err) {
       console.warn(`⚠️ /stl/slot/get probe failed for slot ${slotNumber}`, err);
-      return slotNumber; // treat an unreachable probe as free and let the POST decide
+      free.push(slotNumber); // treat an unreachable probe as free and let the POST decide
     }
   }
-  return null;
+  return free;
 }
 
 // Read a File as base64, chunked so a large STL doesn't blow the call stack.
@@ -3778,58 +4168,218 @@ function uploadStlSlotXHR(payload, onProgress) {
   });
 }
 
-async function uploadCaseStlFile(file) {
+// `files` arrives already filtered to .stl by the preview stage.
+async function uploadCaseStlFiles(files) {
   const caseIntId = window.selectedCaseId;
   if (caseIntId == null) {
     toast.warning("Please select a case first.");
     return;
   }
-  if (!/\.stl$/i.test(file.name)) {
-    toast.warning("Only .stl files are supported.");
-    return;
-  }
+
+  const stls = files.slice();
+  if (!stls.length) return;
+
   const btn = document.getElementById("upload3dFileBtn");
   if (btn) btn.disabled = true;
+  let done = 0;
   try {
-    const slotNumber = await findFreeStlSlot(caseIntId);
-    if (slotNumber == null) {
+    const slots = await findFreeStlSlots(caseIntId, stls.length);
+    if (!slots.length) {
       toast.warning("All 4 extra 3D file slots are in use. Delete one first.");
       return;
     }
-    toast.info(`Uploading ${file.name}…`);
-    const data = await stlFileToBase64(file);
-    // case_id has to ride in this object, not the auth one — the writer reads it
-    // from here (same as POST /stl). Without it the insert runs `case_id = NULL`
-    // and 500s, with no CORS header on the error, so the browser reports only
-    // "Failed to fetch".
-    await uploadStlSlotXHR(
-      JSON.stringify([
-        extraSlotAuth(caseIntId),
-        { case_id: caseIntId, slotNumber, filename: file.name, data },
-      ])
+    // Partial fit: take what the free slots allow rather than failing outright,
+    // and say which files were left behind.
+    if (slots.length < stls.length) {
+      toast.warning(
+        `Only ${slots.length} of the 4 extra 3D slots ${slots.length === 1 ? "is" : "are"} free — ` +
+          `uploading the first ${slots.length} of ${stls.length} files.`
+      );
+      stls.length = slots.length;
+    }
+
+    // Sequential: an STL is a multi-MB base64 POST, and the backend
+    // burst-throttles (see the enrichment breaker).
+    for (let i = 0; i < stls.length; i++) {
+      const file = stls[i];
+      toast.info(
+        stls.length > 1
+          ? `Uploading ${file.name} (${i + 1} of ${stls.length})…`
+          : `Uploading ${file.name}…`
+      );
+      const data = await stlFileToBase64(file);
+      // case_id has to ride in this object, not the auth one — the writer reads it
+      // from here (same as POST /stl). Without it the insert runs `case_id = NULL`
+      // and 500s, with no CORS header on the error, so the browser reports only
+      // "Failed to fetch".
+      await uploadStlSlotXHR(
+        JSON.stringify([
+          caseAuth(caseIntId),
+          { case_id: caseIntId, slotNumber: slots[i], filename: file.name, data },
+        ])
+      );
+      done++;
+    }
+    toast.success(
+      done > 1 ? `${done} 3D files uploaded.` : `${stls[0].name} uploaded.`
     );
-    toast.success(`${file.name} uploaded.`);
   } catch (err) {
     console.error("❌ 3D file upload failed", err);
-    toast.error("Upload failed. Please try again.");
+    toast.error(
+      done
+        ? `Uploaded ${done} of ${stls.length}; the rest failed.`
+        : "Upload failed. Please try again."
+    );
   } finally {
     if (btn) btn.disabled = false;
   }
 }
 
-// One-shot file picker, removed after the pick.
-function pickAndUploadStl() {
+// One-shot multi-select file picker, removed after the pick.
+function pickFiles(accept, onPick) {
   const input = document.createElement("input");
   input.type = "file";
-  input.accept = ".stl";
+  input.accept = accept;
+  input.multiple = true;
   input.hidden = true;
   document.body.appendChild(input);
   input.addEventListener("change", () => {
-    const file = input.files?.[0];
+    const files = Array.from(input.files || []);
     input.remove();
-    if (file) uploadCaseStlFile(file);
+    if (files.length) onPick(files);
   });
   input.click();
+}
+
+// --- Reference images ------------------------------------------------------
+// Thumbnail slots 0-2 are reserved (0 = composite 2D design, 1 = upper jaw
+// render, 2 = lower jaw render), so reference images take the slots after them.
+const REFERENCE_SLOT_START = 3;
+
+const IMAGE_FILE_RE = /\.(png|jpe?g|gif|bmp|webp)$/i;
+
+// Pick `count` free thumbnail slots at or above REFERENCE_SLOT_START, or null
+// when the case's existing slots can't be read. Rows that predate slot tagging
+// carry no slot to compare against, so each reserves one of its own:
+// over-reserving only leaves a gap in the sequence, whereas under-reserving
+// would overwrite an image that is already there.
+//
+// Nothing is written on a failed lookup for the same reason — a POST to an
+// occupied slot replaces what is in it, so guessing would risk a jaw render or
+// an earlier reference image.
+async function nextFreeThumbnailSlots(caseIntId, count) {
+  const rows = await fetchThumbnailRows(caseIntId);
+  if (!rows) return null;
+
+  const used = new Set();
+  let untagged = 0;
+  for (const row of rows) {
+    if (!row?.data) continue;
+    const slot = thumbnailSlot(row);
+    if (slot == null) untagged++;
+    else used.add(slot);
+  }
+
+  const slots = [];
+  let next = REFERENCE_SLOT_START + untagged;
+  while (slots.length < count) {
+    while (used.has(next)) next++;
+    slots.push(next++);
+  }
+  return slots;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error("read failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+// Store one reference image the way the create-case form does: the
+// /referenceimages row is the record, and the mirrored thumbnail slot is what
+// the detail pane's carousel (and the download bundle's fallback) actually reads.
+async function uploadReferenceImage(caseIntId, caseName, file, slot) {
+  const dataUrl = await readFileAsDataUrl(file);
+  const auth = caseAuth(caseIntId);
+
+  // case_id here is the case NAME — the referenceImages writer keys off the name
+  // string, unlike /thumbnails below, which wants the numeric id.
+  const refRes = await fetch(`${API_BASE}/referenceimages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([
+      auth,
+      { case_id: caseName, image_name: file.name, image_data: dataUrl },
+    ]),
+  });
+  logApi(refRes, "POST /referenceimages");
+  if (!refRes.ok) throw new Error(`HTTP ${refRes.status}`);
+
+  // The thumbnail payload takes bare base64, not the data URL.
+  const comma = dataUrl.indexOf(",");
+  const thumbRes = await fetch(`${API_BASE}/thumbnails`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([
+      auth,
+      { case_id: caseIntId, slot, data: comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl },
+    ]),
+  });
+  logApi(thumbRes, "POST /thumbnails");
+  if (!thumbRes.ok) throw new Error(`HTTP ${thumbRes.status}`);
+}
+
+async function uploadCaseReferenceImages(files) {
+  const caseIntId = window.selectedCaseId;
+  if (caseIntId == null) {
+    toast.warning("Please select a case first.");
+    return;
+  }
+  // The referenceImages row is keyed by the case name, so without one the write
+  // would land on no case at all.
+  const caseName = selectedCaseName();
+  if (!caseName) {
+    toast.warning("Case name unavailable — reopen the case and try again.");
+    return;
+  }
+
+  const images = files.slice();
+  if (!images.length) return;
+
+  const btn = document.getElementById("upload3dFileBtn");
+  if (btn) btn.disabled = true;
+  let done = 0;
+  try {
+    const slots = await nextFreeThumbnailSlots(caseIntId, images.length);
+    if (!slots) {
+      toast.error("Could not read the case's existing images. Please try again.");
+      return;
+    }
+    // Sequential on purpose: each image is a multi-MB base64 POST, and the
+    // backend burst-throttles (see the enrichment breaker).
+    for (let i = 0; i < images.length; i++) {
+      toast.info(`Uploading ${images[i].name} (${i + 1} of ${images.length})…`);
+      await uploadReferenceImage(caseIntId, caseName, images[i], slots[i]);
+      done++;
+    }
+    toast.success(`${done} reference image${done > 1 ? "s" : ""} uploaded.`);
+  } catch (err) {
+    console.error("❌ Reference image upload failed", err);
+    toast.error(
+      done
+        ? `Uploaded ${done} of ${images.length}; the rest failed.`
+        : "Upload failed. Please try again."
+    );
+  } finally {
+    if (btn) btn.disabled = false;
+    // Repaint the carousel so the new images appear without reselecting the case.
+    if (done && String(window.selectedCaseId) === String(caseIntId)) {
+      await fetchThumbnails(caseIntId);
+    }
+  }
 }
 
 // --- Case instructions -----------------------------------------------------

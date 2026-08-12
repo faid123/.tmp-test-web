@@ -7,6 +7,7 @@ import { toast } from "../shared/toast.js";
 import {
   THREE,
   preview3DState,
+  PREVIEW3D_MOUSE_BUTTONS,
   srgbToLinear,
   colorForSurveyingValue,
   buildDllUndercutSurface,
@@ -404,9 +405,7 @@ export function updateSurveyPlacementArrow() {
   }
 }
 
-// Touch long-press: hold this long within the tolerance to switch from arrow to jaw rotate.
-const SURVEY_TOUCH_HOLD_MS = 350;
-const SURVEY_TOUCH_HOLD_TOLERANCE_PX = 8;
+// (Hold-to-rotate removed: jaw rotation is now always two-finger drag.)
 
 // Aim input: mouse left-drag swings the arrow (right-drag rotates the jaw); touch is
 // intercepted at the mount in the capture phase so TrackballControls' one-finger
@@ -497,37 +496,22 @@ function attachSurveyAimDrag() {
     canvas.classList.remove("is-aiming-drag");
   };
 
-  // ---- touch: 1-finger drag = arrow · hold then drag = jaw · 2 fingers = zoom ----
+  // ---- touch: 1-finger drag = arrow · 2-finger drag = jaw rotate · 2-finger pinch = zoom ----
+  // Gesture map:
+  //   1 finger  → immediately drags the placement arrow
+  //   2 fingers → rotates the jaw (centroid delta) AND zooms (pinch delta) simultaneously
+  //   3+ fingers → ignored until all lifted
   const touchPoints = new Map(); // pointerId -> {x, y}
-  let touchMode = null; // "pending" | "arrow" | "jaw" | "pinch" | "dead"
-  let holdTimer = null;
-  let tStartX = 0;
-  let tStartY = 0;
+  let touchMode = null; // "arrow" | "jaw" | "dead"
   let tLastX = 0;
   let tLastY = 0;
   let pinchDist = 0;
 
-  const clearHoldTimer = () => {
-    if (holdTimer) {
-      clearTimeout(holdTimer);
-      holdTimer = null;
-    }
-  };
-
-  const resetTouch = () => {
-    clearHoldTimer();
-    touchPoints.clear();
-    touchMode = null;
-    canvas.classList.remove("is-aiming-drag");
-    mount.classList.remove("is-jaw-rotating");
-  };
-
-  const engageJawRotate = () => {
-    holdTimer = null;
-    if (touchMode !== "pending") return;
-    touchMode = "jaw";
-    mount.classList.add("is-jaw-rotating");
-    navigator.vibrate?.(25); // Android nudge; iOS silently ignores
+  // Centroid of all active touch points.
+  const centroid = () => {
+    let sx = 0, sy = 0;
+    for (const p of touchPoints.values()) { sx += p.x; sy += p.y; }
+    return { x: sx / touchPoints.size, y: sy / touchPoints.size };
   };
 
   const pinchDistance = () => {
@@ -535,62 +519,66 @@ function attachSurveyAimDrag() {
     return Math.hypot(a.x - b.x, a.y - b.y) || 1;
   };
 
+  const resetTouch = () => {
+    touchPoints.clear();
+    touchMode = null;
+    canvas.classList.remove("is-aiming-drag");
+    mount.classList.remove("is-jaw-rotating");
+  };
+
   const onTouchDown = (e) => {
     if (e.pointerType !== "touch" || !preview3DState.surveyAiming) return;
     e.stopPropagation();
-    e.preventDefault(); // no long-press callout / selection on the hold gesture
+    e.preventDefault();
     mount.setPointerCapture?.(e.pointerId);
     touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (touchPoints.size === 1) {
-      touchMode = "pending";
-      tStartX = tLastX = e.clientX;
-      tStartY = tLastY = e.clientY;
-      clearHoldTimer();
-      holdTimer = setTimeout(engageJawRotate, SURVEY_TOUCH_HOLD_MS);
-    } else if (touchPoints.size === 2 && touchMode !== "dead") {
-      clearHoldTimer();
-      touchMode = "pinch";
-      canvas.classList.remove("is-aiming-drag");
+      // Single finger: arrow drag.
+      touchMode = "arrow";
+      tLastX = e.clientX;
+      tLastY = e.clientY;
+      canvas.classList.add("is-aiming-drag");
       mount.classList.remove("is-jaw-rotating");
+    } else if (touchPoints.size === 2 && touchMode !== "dead") {
+      // Second finger added: switch to jaw rotate + pinch zoom.
+      touchMode = "jaw";
+      canvas.classList.remove("is-aiming-drag");
+      mount.classList.add("is-jaw-rotating");
+      navigator.vibrate?.(18); // light haptic nudge on Android; no-op on iOS
+      const c = centroid();
+      tLastX = c.x;
+      tLastY = c.y;
       pinchDist = pinchDistance();
     } else {
-      // 3+ fingers: end the gesture and wait for a clean start.
-      clearHoldTimer();
+      // 3+ fingers: kill the gesture.
       touchMode = "dead";
+      canvas.classList.remove("is-aiming-drag");
+      mount.classList.remove("is-jaw-rotating");
     }
   };
 
   const onTouchMove = (e) => {
     if (!touchPoints.has(e.pointerId)) return;
-    if (!preview3DState.surveyAiming) {
-      resetTouch();
-      return;
-    }
+    if (!preview3DState.surveyAiming) { resetTouch(); return; }
     e.stopPropagation();
     touchPoints.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    if (touchMode === "pending") {
-      const fromStart = Math.hypot(e.clientX - tStartX, e.clientY - tStartY);
-      if (fromStart > SURVEY_TOUCH_HOLD_TOLERANCE_PX) {
-        // Moved before the hold elapsed — it's an arrow drag.
-        clearHoldTimer();
-        touchMode = "arrow";
-        canvas.classList.add("is-aiming-drag");
-      }
-    }
-
-    if (touchMode === "arrow") {
+    if (touchMode === "arrow" && touchPoints.size === 1) {
       spinAim(e.clientX - tLastX, e.clientY - tLastY);
-    } else if (touchMode === "jaw") {
-      orbitCamera(e.clientX - tLastX, e.clientY - tLastY);
-    } else if (touchMode === "pinch" && touchPoints.size === 2) {
+      tLastX = e.clientX;
+      tLastY = e.clientY;
+    } else if (touchMode === "jaw" && touchPoints.size === 2) {
+      // Rotate by centroid delta and zoom by pinch ratio in the same move event.
+      const c = centroid();
+      orbitCamera(c.x - tLastX, c.y - tLastY);
+      tLastX = c.x;
+      tLastY = c.y;
+
       const next = pinchDistance();
-      zoomCamera(pinchDist / next); // fingers spread -> distance shrinks -> zoom in
+      zoomCamera(pinchDist / next); // spread fingers → zoom in
       pinchDist = next;
     }
-    tLastX = e.clientX;
-    tLastY = e.clientY;
   };
 
   const onTouchUp = (e) => {
@@ -598,11 +586,19 @@ function attachSurveyAimDrag() {
     e.stopPropagation();
     mount.releasePointerCapture?.(e.pointerId);
     touchPoints.delete(e.pointerId);
+
     if (touchPoints.size === 0) {
       resetTouch();
+    } else if (touchPoints.size === 1 && touchMode === "jaw") {
+      // One finger lifted from a two-finger gesture: go back to arrow mode.
+      touchMode = "arrow";
+      canvas.classList.add("is-aiming-drag");
+      mount.classList.remove("is-jaw-rotating");
+      const [remaining] = touchPoints.values();
+      tLastX = remaining.x;
+      tLastY = remaining.y;
     } else {
-      // Finger lifted mid-gesture: ignore leftovers until all are up.
-      clearHoldTimer();
+      // Dropped from 3+ into 2 or 1: safer to kill until all are up.
       touchMode = "dead";
       canvas.classList.remove("is-aiming-drag");
       mount.classList.remove("is-jaw-rotating");
@@ -679,12 +675,11 @@ function enterSurveyAiming(jaw, btn) {
     aimDirty: true,
   };
 
-  // LEFT drags the arrow; jaw rotate moves to RIGHT. TrackballControls hard-wires
-  // its LEFT slot to rotate, so point that slot at button 2 and unmap RIGHT.
+  // Left-drag aims the arrow, so keep rotate on right-drag and unmap pan.
   const controls = preview3DState.controls;
   if (controls) {
     controls.noRotate = false;
-    controls.mouseButtons = { LEFT: 2, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: -1 };
+    controls.mouseButtons = { ...PREVIEW3D_MOUSE_BUTTONS, RIGHT: -1 };
   }
   preview3DState.surveyDragCleanup = attachSurveyAimDrag();
   mount.classList.add("is-aiming-survey");
@@ -753,14 +748,10 @@ export function exitSurveyAiming({ preserveStage = false } = {}) {
   preview3DState.surveyRayLight = null;
   setSurveyShadowsEnabled(false);
 
-  // Restore the default button map and drop the aim listeners.
+  // Restore the preview's own map — the library default rotates on left-drag.
   if (preview3DState.controls) {
     preview3DState.controls.noRotate = false;
-    preview3DState.controls.mouseButtons = {
-      LEFT: THREE.MOUSE.ROTATE,
-      MIDDLE: THREE.MOUSE.DOLLY,
-      RIGHT: THREE.MOUSE.PAN,
-    };
+    preview3DState.controls.mouseButtons = { ...PREVIEW3D_MOUSE_BUTTONS };
   }
   preview3DState.surveyDragCleanup?.();
   preview3DState.surveyDragCleanup = null;
@@ -840,14 +831,7 @@ async function saveSurveyAngle(jaw, btn) {
   const controls = preview3DState.controls;
   if (!camera || !controls || !state.caseIntID) return;
 
-  if (!preview3DState.caseData) {
-    preview3DState.caseData = await fetchCaseData();
-  }
-  if (!preview3DState.caseData) {
-    console.warn("[preview3D] cannot save survey angle: case data unavailable");
-    return;
-  }
-
+  // Capture the aim before any awaits so a slow read can't pick up a moved arrow.
   // Survey what the arrow points at; fall back to the camera direction.
   const aimWorld = surveyAimWorldDirection() || getWorldSurveyDirection();
   const worldVec = aimWorld ? aimWorld.clone().normalize() : new THREE.Vector3(0, 1, 0);
@@ -855,7 +839,31 @@ async function saveSurveyAngle(jaw, btn) {
   const surveyDirection = worldToLocalSurveyDirection(worldVec) || getCameraSurveyDirection();
   // Store desktop's encoding: un-apply the per-jaw flip.
   const [x, y, z] = desktopSurveyFlip(jaw, surveyDirection);
+
+  // btn may currently read "SET" (aiming mode).
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "SAVING…";
+  }
+
+  // PUT /case/:id below replaces the whole row, so read it fresh (the cached copy
+  // can be stale or from a failed request) and abort rather than write defaults:
+  // a payload without the real case_id renames the case to "" — the case list then
+  // shows "N/A" — and stale values would clobber the other jaw's saved angles.
+  const fresh = await fetchCaseData({ force: true });
+  if (fresh?.case_id) preview3DState.caseData = fresh;
   const current = preview3DState.caseData;
+  if (!current?.case_id) {
+    console.warn("[preview3D] survey angle not saved: case row unavailable", current);
+    toast?.error?.("Couldn't read this case's details — survey angle not saved.");
+    // Stay armed so the aim isn't lost; re-enable the cancel the click disabled.
+    setSurveyCancelState(jaw, { disabled: false });
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "SET";
+    }
+    return;
+  }
   const updated = { ...current };
   if (jaw === "upper") {
     updated.upper_insertion_angle_x = x;
@@ -875,7 +883,8 @@ async function saveSurveyAngle(jaw, btn) {
     caseIntID: state.caseIntID,
   };
   const caseBody = {
-    case_id: updated.case_id || "",
+    // The case's name. Never defaulted — an empty string here wipes it (guarded above).
+    case_id: updated.case_id,
     upper_insertion_angle_x: Number(updated.upper_insertion_angle_x) || 0,
     upper_insertion_angle_y: Number(updated.upper_insertion_angle_y) || 0,
     upper_insertion_angle_z: Number(updated.upper_insertion_angle_z) || 0,
@@ -885,12 +894,6 @@ async function saveSurveyAngle(jaw, btn) {
     process_upper: Number(updated.process_upper) || 0,
     process_lower: Number(updated.process_lower) || 0,
   };
-
-  // btn may currently read "SET" (aiming mode).
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = "SAVING…";
-  }
 
   const path = `/case/${state.caseIntID}`;
   if (btn) btn.textContent = "SURVEYING...";
@@ -904,7 +907,11 @@ async function saveSurveyAngle(jaw, btn) {
     const dt = Math.round(performance.now() - t0);
     const tag = res.ok ? "✓" : "✕";
     console.log(`[preview3D] ${tag} PUT ${path} status=${res.status} ${dt}ms`);
-    if (!res.ok) return;
+    if (!res.ok) {
+      // A rejected write (an expired session 401s here) must not look like a save.
+      toast?.error?.(`Survey angle not saved (HTTP ${res.status}).`);
+      return;
+    }
     preview3DState.caseData = updated;
 
     if (btn) btn.textContent = "COMPUTING...";

@@ -14,6 +14,7 @@ import {
   titleCase,
   setMessage,
   closePresentToothRadialQuickPick,
+  cloneArchTintDefs,
   renderJaw,
   renderJaws,
   updateJawMaterialBadge,
@@ -808,6 +809,13 @@ async function fetchPageCss() {
 async function inlineImagesInSvg(svg) {
   const clone = svg.cloneNode(true);
 
+  // The tint filters live in a shared <svg> on <body>, not inside the arch, so a cloned
+  // arch resolves every `filter: url(#tint-…)` / `url(#jawTint-…)` against nothing once it
+  // is serialized standalone — the jaw template and all the teeth come out untinted and
+  // the thumbnail looks empty. Paste a copy in alongside the CSS.
+  const tintDefs = cloneArchTintDefs();
+  if (tintDefs) clone.insertBefore(tintDefs, clone.firstChild);
+
   const cssText = await fetchPageCss();
   if (cssText) {
     const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
@@ -1054,6 +1062,44 @@ export async function captureJawPngDataUrl(scale = 3) {
   const canvas = await composeJawCanvas(scale);
   if (!canvas) return null;
   return canvas.toDataURL("image/png");
+}
+
+// Width each arch thumbnail is rendered at. Matches the 3D approval dialog's
+// APPROVAL_SHOT_MAX_WIDTH: these are shown in the same ~360px panel and attached
+// to the same email, where a full-scale arch PNG would be megabytes on the wire.
+const ARCH_THUMB_WIDTH = 900;
+
+// One PNG per arch, on its own white ground — the 2D counterpart to the 3D
+// preview's captureExtraSlotShots. The case-note approval dialog shows these and
+// attaches the ticked ones to its email, so each arch is framed alone rather
+// than as the side-by-side composite the case thumbnail uses.
+// A `null` for an arch means its SVG isn't on the page.
+export async function captureArchThumbnails() {
+  const shoot = async (svgId) => {
+    const svg = document.getElementById(svgId);
+    if (!svg) return null;
+    const dims = parseJawViewBox(svg);
+    // renderJawImage already pads the viewBox by JAW_VIEWBOX_PAD on every side,
+    // so the rendered box — not the arch — is what gets fitted to the width.
+    const scale = ARCH_THUMB_WIDTH / (dims.w + JAW_VIEWBOX_PAD * 2);
+    const { img, renderW, renderH } = await renderJawImage(svg, dims, scale);
+    const { canvas, ctx } = newJawCanvas(
+      Math.round(renderW * scale),
+      Math.round(renderH * scale)
+    );
+    ctx.drawImage(img, 0, 0, renderW * scale, renderH * scale);
+    return canvas.toDataURL("image/png");
+  };
+
+  try {
+    return {
+      upper: await shoot("upperArchSvg"),
+      lower: await shoot("lowerArchSvg"),
+    };
+  } catch (err) {
+    console.warn("[annotation] arch thumbnail capture failed", err);
+    return { upper: null, lower: null };
+  }
 }
 
 // Thumbnail slot for the 2D arch render. The case-detail panel (and legacy 2D

@@ -3,6 +3,7 @@ import { lol } from "../shared/crypt.js";
 import { toast, flashToast, confirmModal, attachThemedCalendar } from "../shared/toast.js";
 import { logApi } from "../shared/apiLog.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
+import { attachUserSuggest, initialsFor } from "../shared/userSuggest.js";
 
 // Resolve an asset path relative to the app root (everything before "/src/") so
 // it loads whether this shared module runs from src/pages/ (case_list) or the
@@ -72,6 +73,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   const inviteInput = document.getElementById("ccInviteInput");
   const inviteAddBtn = document.getElementById("ccInviteAdd");
   const inviteListEl = document.getElementById("ccInviteList");
+  const suggestEl = document.getElementById("ccInviteSuggest");
+  const inviteMsgEl = document.getElementById("ccInviteMsg");
+  const inviteSearchEl = document.querySelector(".cc-invite-search");
 
   const cancelBtn = uploadPane?.querySelector(".cancel-btn");
   const saveBtn = uploadPane?.querySelector(".save-btn");
@@ -86,6 +90,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const closeUserAccessModal = document.getElementById("closeUserAccessModal");
   const cancelInviteBtn = document.getElementById("cancelInviteBtn");
   const userSearchInput = document.getElementById("userSearchInput");
+  const userSearchSuggestEl = document.getElementById("userAccessSuggest");
   const addUserBtn = document.getElementById("addUserBtn");
   const saveInviteBtn = document.getElementById("saveInviteBtn");
 
@@ -151,19 +156,96 @@ document.addEventListener("DOMContentLoaded", async () => {
       li.appendChild(x);
       inviteListEl.appendChild(li);
     });
+    // Queued names drop out of the suggestions. Re-rendering also re-opens the
+    // list while the box still has focus, since inviting two or three people in
+    // a row is the norm.
+    inviteSuggest.refresh();
   };
 
-  const addInvite = () => {
+  // Suggestions for the invite box: whoever is already queued, and the owner,
+  // are the names that can't be invited again.
+  const inviteSuggest = attachUserSuggest(inviteInput, suggestEl, {
+    excluded: () => [...pendingInvites, getLoggedInUser()?.username || ""],
+    onPick: () => addInvite(),
+    onSubmit: () => addInvite(),
+    // The complaint is about what was typed — it goes as soon as that changes.
+    onInput: () => setInviteMsg(""),
+  });
+
+  // Resolve a username to its uuid, the way the User Access modal's Add does.
+  // The endpoint answers with the account's uuid; a non-2xx, an empty body or a
+  // body without a uuid all mean "no such user". Throws only when the request
+  // itself never completed, which the caller reports as a different failure —
+  // an unconfirmed name is never queued either way.
+  const resolveInviteUuid = async (username) => {
+    const res = await fetch(`${API_BASE}/user/checkifusernameexists/get`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([{ machine_id: MACHINE_ID }, { username }]),
+    });
+    logApi(res, "POST /user/checkifusernameexists/get");
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => null);
+    const row = Array.isArray(data) ? data[0] : data;
+    return row?.uuid || null;
+  };
+
+  // Why an invite was refused, shown under the box rather than as a toast: the
+  // message is about the field the user is still standing in, so it belongs
+  // next to it (and stays put while they fix the name).
+  const setInviteMsg = (text, tone = "error") => {
+    if (!inviteMsgEl) return;
+    inviteMsgEl.textContent = text || "";
+    inviteMsgEl.classList.toggle("is-error", Boolean(text) && tone === "error");
+    inviteMsgEl.classList.toggle("is-info", Boolean(text) && tone === "info");
+    inviteSearchEl?.classList.toggle("has-error", Boolean(text) && tone === "error");
+    if (inviteInput) inviteInput.setAttribute("aria-invalid", String(Boolean(text) && tone === "error"));
+  };
+
+  const addInvite = async () => {
     if (!inviteInput) return;
     const name = inviteInput.value.trim();
     if (!name) return;
-    if (pendingInvites.includes(name)) {
+    setInviteMsg("");
+
+    const key = name.toLowerCase();
+    if (key === (getLoggedInUser()?.username || "").toLowerCase()) {
+      setInviteMsg("You own this case already.", "info");
       inviteInput.value = "";
       return;
     }
-    pendingInvites.push(name);
-    inviteInput.value = "";
-    renderInviteList();
+    // Case-insensitively: usernames resolve that way server-side, so "Alice"
+    // and "alice" would otherwise queue as two invites for one person.
+    if (pendingInvites.some((u) => u.toLowerCase() === key)) {
+      setInviteMsg(`"${name}" is already on the list.`, "info");
+      inviteInput.value = "";
+      return;
+    }
+
+    // Nothing is queued until the server confirms the account exists. The invite
+    // loop that runs after the case is created skips unknown usernames silently,
+    // so an unchecked typo would vanish with no sign the person was never
+    // invited — and it is what the User Access modal already does on Add.
+    if (inviteAddBtn) inviteAddBtn.disabled = true;
+    try {
+      const uuid = await resolveInviteUuid(name);
+      if (!uuid) {
+        setInviteMsg(`No user named "${name}".`);
+        inviteInput.focus();
+        inviteInput.select();
+        return;
+      }
+      pendingInvites.push(name);
+      inviteInput.value = "";
+      renderInviteList();
+    } catch (err) {
+      // Couldn't reach the server — still refuse, but say why, since "no such
+      // user" would be a lie.
+      console.warn("Username check failed:", err);
+      setInviteMsg("Couldn't verify that username. Check your connection and try again.");
+    } finally {
+      if (inviteAddBtn) inviteAddBtn.disabled = false;
+    }
   };
 
   // === Image preview lightbox (click an uploaded thumbnail to enlarge) ===
@@ -261,6 +343,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       instructionsInput.style.height = "";
     }
     if (inviteInput) inviteInput.value = "";
+    setInviteMsg("");
     pendingInvites = [];
     renderInviteList();
     document.querySelectorAll(".uploaded-model").forEach((el) => {
@@ -524,15 +607,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (inviteAddBtn) {
     inviteAddBtn.addEventListener("click", addInvite);
   }
-  if (inviteInput) {
-    inviteInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        addInvite();
-      }
-    });
-  }
-
   /*** 👇 取消按钮：清空状态并关闭内联视图 ***/
   if (cancelBtn) {
     cancelBtn.addEventListener("click", () => {
@@ -793,9 +867,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     saveStartBtn.addEventListener("click", () => submitCase("start", saveStartBtn));
   }
 
+  // Who already has access, read off the rendered list rather than a cached
+  // array: the modal is opened and repainted by whichever page module owns the
+  // page (caseManagement.js on open, this file after an add), so the DOM is the
+  // one copy of that state both of them keep current.
+  const sharedUsernames = () =>
+    [...document.querySelectorAll("#sharedUserList .shared-user-item")]
+      .map((li) => li.dataset.username || "")
+      .filter(Boolean);
+
   // Bind ADD button click in the userAccessModal (shared-user invite flow).
   if (addUserBtn && userSearchInput) {
-    addUserBtn.addEventListener("click", async () => {
+    let userSuggest = null; // assigned below, once addSharedUser exists to bind to
+    const addSharedUser = async () => {
       const username = userSearchInput.value.trim();
       if (!username) return;
 
@@ -807,7 +891,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const { caseIntID, machine_id, uuid: ownerUUID } = ctx;
 
-      if (existingUsers.some((u) => u.username === username)) {
+      // Case-insensitively: usernames resolve that way server-side, so "Alice"
+      // and "alice" would otherwise both be posted as roles for one person.
+      const key = username.toLowerCase();
+      if (sharedUsernames().some((n) => n.toLowerCase() === key)) {
         toast.info(`User "${username}" is already added.`);
         return;
       }
@@ -885,10 +972,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         renderSharedUserList();
 
         userSearchInput.value = "";
+        // The name just added drops out of the suggestions.
+        userSuggest?.refresh();
       } catch (err) {
         console.error("Failed to add user:", err);
         toast.error("Failed to add user: " + err.message);
       }
+    };
+
+    addUserBtn.addEventListener("click", addSharedUser);
+
+    // Same suggestion box as the create-case invite field, minus whoever is
+    // already on the case (the owner included — they hold a role row too).
+    userSuggest = attachUserSuggest(userSearchInput, userSearchSuggestEl, {
+      excluded: sharedUsernames,
+      onPick: () => addSharedUser(),
+      onSubmit: () => addSharedUser(),
     });
   }
 
@@ -1035,6 +1134,9 @@ function renderSharedUserList() {
   existingUsers.forEach((user) => {
     const li = document.createElement("li");
     li.className = "shared-user-item";
+    // Read back by the invite box to keep people already on the case out of its
+    // suggestions — exact, unlike scraping the decorated name text.
+    li.dataset.username = user.username || "";
 
     const avatar = document.createElement("span");
     avatar.className = "user-avatar";
@@ -1109,15 +1211,6 @@ function renderSharedUserList() {
     container.appendChild(li);
   });
 }
-
-function initialsFor(name) {
-  if (!name) return "?";
-  const parts = String(name).trim().split(/[\s._-]+/).filter(Boolean);
-  if (!parts.length) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
 
 async function uploadReferenceImage(
   wrapperEl,
