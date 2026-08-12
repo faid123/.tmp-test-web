@@ -2,13 +2,13 @@
 
 _Always-current snapshot, overwritten every run -- not a dated history file like
 `weekly-review-<date>.md`. For full test/audit deltas and commit history, see this run's dated
-copy: `weekly-review-2026-08-11.md`._
+copy: `weekly-review-2026-08-12.md`._
 
-Last checked: 2026-08-11 — branch `dev-deploy-documentation` @ `62ee756`
+Last checked: 2026-08-12 — branch `dev-deploy-documentation` @ `10fb0e7`
 
 ## Live-branch alignment
 
-⚠️ **This branch has diverged from `nyunt/dev-W7.1`.** The deployed commit `ae36fb5` is not an ancestor of HEAD. Everything below reflects this branch's code, which is not what's currently live -- find and review from whichever branch actually contains that commit before trusting this report, or treat this as the signal to re-run the branch-retargeting pass done on 2026-07-31.
+⚠️ **This branch has diverged from `nyunt/dev-W7.1`.** The deployed commit `f5076ef` is not an ancestor of HEAD. Everything below reflects this branch's code, which is not what's currently live -- find and review from whichever branch actually contains that commit before trusting this report, or treat this as the signal to re-run the branch-retargeting pass done on 2026-07-31.
 
 ✅ `nyunt/dev-deploy` matches what's live -- no deploy pending.
 
