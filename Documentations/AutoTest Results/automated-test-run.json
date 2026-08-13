@@ -1,5 +1,5 @@
 {
-  "runAt": "2026-08-12T08:24:34.811Z",
+  "runAt": "2026-08-13T11:46:55.362Z",
   "command": "npx jest --ci --coverage --coverageReporters=json-summary --verbose --testLocationInResults --json",
   "commandFailed": false,
   "numTotalTestSuites": 13,
@@ -16,7 +16,7 @@
       "pass": 94,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2415,
+      "durationMs": 1880,
       "uat": [],
       "category": "real",
       "crossCutting": false,
@@ -30,7 +30,7 @@
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2795,
+      "durationMs": 2130,
       "uat": [
         "UAT-06"
       ],
@@ -46,7 +46,7 @@
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 467,
+      "durationMs": 328,
       "uat": [
         "UAT-02"
       ],
@@ -56,29 +56,13 @@
       "failureMessages": []
     },
     {
-      "file": "dashboard.test.mjs",
-      "status": "passed",
-      "tests": 21,
-      "pass": 21,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 1270,
-      "uat": [
-        "UAT-04"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real dashboard.js pipeline functions.",
-      "failureMessages": []
-    },
-    {
       "file": "passwordReset.test.mjs",
       "status": "passed",
       "tests": 22,
       "pass": 22,
       "fail": 0,
       "skip": 0,
-      "durationMs": 510,
+      "durationMs": 324,
       "uat": [
         "UAT-01"
       ],
@@ -88,13 +72,29 @@
       "failureMessages": []
     },
     {
+      "file": "dashboard.test.mjs",
+      "status": "passed",
+      "tests": 21,
+      "pass": 21,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 947,
+      "uat": [
+        "UAT-04"
+      ],
+      "category": "real",
+      "crossCutting": false,
+      "note": "Imports real dashboard.js pipeline functions.",
+      "failureMessages": []
+    },
+    {
       "file": "artificialTeethDecode.test.mjs",
       "status": "passed",
       "tests": 28,
       "pass": 28,
       "fail": 0,
       "skip": 0,
-      "durationMs": 6370,
+      "durationMs": 5092,
       "uat": [
         "UAT-07",
         "UAT-08"
@@ -111,23 +111,7 @@
       "pass": 4,
       "fail": 0,
       "skip": 0,
-      "durationMs": 3446,
-      "uat": [
-        "UAT-06"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real src/js/2D/jawStructApply.js against fixture desktop files.",
-      "failureMessages": []
-    },
-    {
-      "file": "jawStructRoundTrip.test.mjs",
-      "status": "passed",
-      "tests": 2,
-      "pass": 2,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 766,
+      "durationMs": 2524,
       "uat": [
         "UAT-06"
       ],
@@ -143,13 +127,29 @@
       "pass": 4,
       "fail": 0,
       "skip": 0,
-      "durationMs": 3411,
+      "durationMs": 2515,
       "uat": [
         "UAT-06"
       ],
       "category": "real",
       "crossCutting": false,
       "note": "Imports real src/js/2D/jawStructApply.js.",
+      "failureMessages": []
+    },
+    {
+      "file": "jawStructRoundTrip.test.mjs",
+      "status": "passed",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 280,
+      "uat": [
+        "UAT-06"
+      ],
+      "category": "real",
+      "crossCutting": false,
+      "note": "Imports real src/js/2D/jawStructApply.js against fixture desktop files.",
       "failureMessages": []
     },
     {
@@ -173,7 +173,7 @@
       "pass": 3,
       "fail": 0,
       "skip": 0,
-      "durationMs": 93,
+      "durationMs": 72,
       "uat": [],
       "category": "real",
       "crossCutting": true,
@@ -187,7 +187,7 @@
       "pass": 5,
       "fail": 0,
       "skip": 0,
-      "durationMs": 131,
+      "durationMs": 100,
       "uat": [
         "UAT-06"
       ],
@@ -203,7 +203,7 @@
       "pass": 9,
       "fail": 0,
       "skip": 0,
-      "durationMs": 175,
+      "durationMs": 143,
       "uat": [
         "UAT-06"
       ],
@@ -271,8 +271,8 @@
       "suites": [
         "clinicalInfoCodec.test.mjs",
         "jawStructLingualPlate.test.mjs",
-        "jawStructRoundTrip.test.mjs",
         "jawStructMajorSwitch.test.mjs",
+        "jawStructRoundTrip.test.mjs",
         "mergeInstructions.test.mjs",
         "reciprocatingExclusivity.test.mjs"
       ],
