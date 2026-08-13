@@ -9,6 +9,9 @@
 //
 // caseManagement.js itself (queue, observer, breaker, DOM row patching) is
 // deliberately NOT imported — it boots the whole case-list page.
+//
+// Also covers the module's reference-image half, read by the case-list download
+// bundle and the 2D page's Reference Images tab.
 
 import { jest } from '@jest/globals';
 import {
@@ -16,6 +19,10 @@ import {
   caseIntIdOf,
   buildEnrichRequests,
   applyEnrichmentResponses,
+  fetchReferenceImageRows,
+  referenceImageMime,
+  referenceImageSrc,
+  referenceImageTitle,
 } from '../src/js/shared/caseEnrichment.js';
 
 const API = 'https://live.api.smartrpdai.com/api/smartrpd';
@@ -164,5 +171,133 @@ describe('applyEnrichmentResponses() — refusal contract', () => {
     await applyEnrichmentResponses({ case_int_id: 7 }, detailRes, rolesRes, logApi);
     expect(logApi).toHaveBeenCalledWith(detailRes, 'POST /additionalcasedetails/getall');
     expect(logApi).toHaveBeenCalledWith(rolesRes, 'POST /role/all/get');
+  });
+});
+
+// --- reference images -----------------------------------------------------
+
+const jsonResponse = (body, status = 200) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  json: async () => body,
+});
+
+// Answers each endpoint from a map; anything unlisted 404s.
+function stubFetch(routes) {
+  const calls = [];
+  global.fetch = jest.fn(async (url) => {
+    calls.push(String(url));
+    const hit = Object.entries(routes).find(([path]) => String(url).includes(path));
+    return hit ? hit[1] : jsonResponse({}, 404);
+  });
+  return calls;
+}
+
+afterEach(() => {
+  delete global.fetch;
+});
+
+describe("fetchReferenceImageRows", () => {
+  test("returns the referenceImages rows and never asks for thumbnails", async () => {
+    const calls = stubFetch({
+      "/referenceImages/getall": jsonResponse([
+        { image_name: "a.png", image_data: "iVBORw0KGgo=" },
+        { image_name: "b.png", image_data: "iVBORw0KGgo=" },
+      ]),
+    });
+
+    const rows = await fetchReferenceImageRows(3008, "uuid-1");
+
+    expect(rows.map((r) => r.image_name)).toEqual(["a.png", "b.png"]);
+    expect(calls.some((u) => u.includes("/thumbnails/get"))).toBe(false);
+  });
+
+  test("drops rows that carry no image payload", async () => {
+    stubFetch({
+      "/referenceImages/getall": jsonResponse([
+        { image_name: "a.png", image_data: "iVBORw0KGgo=" },
+        { image_name: "empty.png" },
+      ]),
+    });
+
+    expect(await fetchReferenceImageRows(3008, "uuid-1")).toHaveLength(1);
+  });
+
+  test("falls back to thumbnail slots 3+ when the table has no rows", async () => {
+    stubFetch({
+      "/referenceImages/getall": jsonResponse([]),
+      "/thumbnails/get": jsonResponse([
+        { slot: 0, data: "2d-composite" },
+        { slot: 1, data: "upper-render" },
+        { slot: 2, data: "lower-render" },
+        { slot: 3, data: "first-reference" },
+        { slot: 4, data: "second-reference" },
+      ]),
+    });
+
+    const rows = await fetchReferenceImageRows(3008, "uuid-1");
+
+    expect(rows.map((r) => r.data)).toEqual(["first-reference", "second-reference"]);
+  });
+
+  test("a broken primary lookup still resolves when the fallback finds images", async () => {
+    stubFetch({
+      "/referenceImages/getall": jsonResponse({}, 500),
+      "/thumbnails/get": jsonResponse([{ slot: 3, data: "first-reference" }]),
+    });
+
+    expect(await fetchReferenceImageRows(3008, "uuid-1")).toHaveLength(1);
+  });
+
+  test("a broken primary lookup throws when the fallback is empty too — 'no images' is not 'lookup broke'", async () => {
+    stubFetch({
+      "/referenceImages/getall": jsonResponse({}, 500),
+      "/thumbnails/get": jsonResponse([]),
+    });
+
+    await expect(fetchReferenceImageRows(3008, "uuid-1")).rejects.toThrow("HTTP 500");
+  });
+
+  test("no images anywhere resolves empty rather than throwing", async () => {
+    stubFetch({
+      "/referenceImages/getall": jsonResponse([]),
+      "/thumbnails/get": jsonResponse([]),
+    });
+
+    expect(await fetchReferenceImageRows(3008, "uuid-1")).toEqual([]);
+  });
+});
+
+describe("decoding a row for display", () => {
+  test("media type comes from the base64 signature — stored rows carry none", () => {
+    expect(referenceImageMime("iVBORw0KGgoAAAA")).toBe("image/png");
+    expect(referenceImageMime("/9j/4AAQSkZJRg")).toBe("image/jpeg");
+    expect(referenceImageMime("R0lGODlhAQABAI")).toBe("image/gif");
+    expect(referenceImageMime("Qk32AAAAAAAAAD")).toBe("image/bmp");
+    expect(referenceImageMime("UklGRiQAAABXRU")).toBe("image/webp");
+  });
+
+  test("bare base64 becomes a data URL, an existing data URL passes through", () => {
+    expect(referenceImageSrc({ image_data: "/9j/4AAQSkZJRg" })).toBe(
+      "data:image/jpeg;base64,/9j/4AAQSkZJRg"
+    );
+    expect(referenceImageSrc({ data: "data:image/gif;base64,R0lGOD" })).toBe(
+      "data:image/gif;base64,R0lGOD"
+    );
+  });
+
+  test("payload whitespace is stripped — a wrapped base64 blob breaks <img> otherwise", () => {
+    expect(referenceImageSrc({ image_data: "iVBORw0K\nGgoA AAA" })).toBe(
+      "data:image/png;base64,iVBORw0KGgoAAAA"
+    );
+  });
+
+  test("a row with no payload yields no src", () => {
+    expect(referenceImageSrc({ image_name: "a.png" })).toBe("");
+  });
+
+  test("nameless rows (every thumbnail-slot row) fall back to their position", () => {
+    expect(referenceImageTitle({ image_name: "intraoral.png" }, 0)).toBe("intraoral.png");
+    expect(referenceImageTitle({ slot: 3, data: "x" }, 2)).toBe("Reference 3");
   });
 });

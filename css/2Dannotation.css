@@ -85,6 +85,326 @@ body.is-panel-resizing {
   flex-direction: column;
 }
 
+/* ---- Preview panel folder tabs (3D Preview | Reference Images) ---- */
+/* The tab strip sits directly on the panel body: the active tab paints the same
+   white as the pane below it and covers the pane's top border with a -1px
+   margin, so the two read as one folder. */
+.preview-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 0 2px;
+  margin-bottom: -1px;
+  position: relative;
+  z-index: 6;
+  flex: 0 0 auto;
+}
+
+.preview-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border: 1px solid rgba(59, 174, 149, 0.35);
+  border-bottom-color: transparent;
+  border-radius: 9px 9px 0 0;
+  background: var(--rose-050);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.preview-tab:hover {
+  background: var(--rose-100);
+  color: var(--rose-700);
+}
+
+.preview-tab.is-active {
+  background: #ffffff;
+  color: var(--rose-700);
+  /* Paints over the pane border directly below, joining tab to pane. */
+  border-bottom: 1px solid #ffffff;
+  margin-bottom: -1px;
+  padding-bottom: 8px;
+}
+
+.preview-tab:focus-visible {
+  outline: 2px solid var(--rose-500);
+  outline-offset: -2px;
+}
+
+/* Reference-image count, filled once the gallery has loaded. */
+.preview-tab-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--rose-100);
+  color: var(--rose-700);
+  font-size: 0.7rem;
+  line-height: 16px;
+  text-align: center;
+}
+
+.preview-tab.is-active .preview-tab-count {
+  background: var(--rose-500);
+  color: #ffffff;
+}
+
+/* ---- Reference Images pane ---- */
+/* Same box as .preview-frame — it is the other face of one panel. */
+.preview-refs {
+  flex: 1 1 0;
+  min-height: 0;
+  border: 1px solid rgba(59, 174, 149, 0.35);
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.preview-refs-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+}
+
+.preview-refs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.preview-refs-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid rgba(59, 174, 149, 0.35);
+  border-radius: 10px;
+  background: #ffffff;
+  cursor: zoom-in;
+  text-align: left;
+  font: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+.preview-refs-card:hover {
+  border-color: var(--rose-500);
+  box-shadow: var(--pp-shadow-md, 0 6px 18px rgba(26, 77, 63, 0.12));
+  transform: translateY(-1px);
+}
+
+.preview-refs-thumb {
+  width: 100%;
+  height: 118px;
+  object-fit: cover;
+  border-radius: 7px;
+  background: var(--rose-050);
+  display: block;
+}
+
+.preview-refs-caption {
+  font-size: 0.74rem;
+  color: var(--muted);
+  /* Stored names can be long and extension-less; keep cards on one grid row. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-refs-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.preview-refs-empty p { margin: 0; }
+
+.preview-refs-retry {
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--rose-700);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.preview-refs-retry:hover {
+  background: var(--rose-050);
+  border-color: var(--rose-500);
+}
+
+/* ---- Full-pane image view ---- */
+/* Opening an image fills the pane rather than covering the page: same border,
+   same box, the grid just steps aside. */
+.preview-refs-viewer {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-refs-viewer-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(59, 174, 149, 0.35);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.preview-refs-back {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--rose-700);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.preview-refs-back:hover {
+  background: var(--rose-050);
+  border-color: var(--rose-500);
+}
+
+.preview-refs-viewer-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.preview-refs-viewer-count { flex: 0 0 auto; }
+
+/* Zoom cluster: − | level | +, the level doubling as "reset to fit". */
+.preview-refs-zoom {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid rgba(59, 174, 149, 0.35);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.preview-refs-zoom-btn,
+.preview-refs-zoom-level {
+  border: 0;
+  background: #ffffff;
+  color: var(--rose-700);
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 5px 0;
+}
+
+.preview-refs-zoom-btn { width: 26px; font-size: 0.95rem; }
+
+.preview-refs-zoom-level {
+  min-width: 48px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.preview-refs-zoom-btn:hover:not(:disabled),
+.preview-refs-zoom-level:hover {
+  background: var(--rose-050);
+}
+
+.preview-refs-zoom-btn:disabled {
+  color: var(--rose-100);
+  cursor: default;
+}
+
+.preview-refs-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: var(--rose-050);
+  /* Clips the magnified image so a zoom stays inside the panel border. */
+  overflow: hidden;
+}
+
+/* Only while zoomed: the gestures are ours, so the browser must not treat a
+   drag over the image as a page scroll. */
+.preview-refs-stage.is-zoomed { touch-action: none; cursor: grab; }
+.preview-refs-stage.is-panning { cursor: grabbing; }
+
+.preview-refs-full {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #ffffff;
+  /* Zoom/pan is a transform about the centre (see applyZoom). */
+  transform-origin: center center;
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Inside the stage, over the image — the pane has no room for outside gutters.
+   The z-index is load-bearing: the image's zoom transform makes it paint like a
+   positioned element, which would otherwise cover the button before it. */
+.preview-refs-nav {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(59, 174, 149, 0.35);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.preview-refs-nav:hover {
+  border-color: var(--rose-500);
+  color: var(--rose-700);
+}
+
+.preview-refs-prev { left: 10px; }
+.preview-refs-next { right: 10px; }
+
+@media (max-width: 720px) {
+  .preview-refs-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+}
+
 /* Insets are measured from the frame's border box now that .is-3d-ready
    removed its padding; they line up with .jaw-preview-toolbar's own padding. */
 .preview-3d-max-btn {
@@ -948,17 +1268,21 @@ button.upload3d-row {
   cursor: grabbing;
 }
 
-/* Banner shown over the 3D view while a jaw is armed for surveying. */
+/* Banner shown over the 3D view while a jaw is armed for surveying.
+   Centred by insetting both sides, not by left:50% + translateX: a shrink-to-fit
+   box positioned from the midpoint can only use half the panel, which wrapped
+   the touch hint onto three lines on a phone. */
 .jaw-preview-survey-hint {
   position: absolute;
-  left: 50%;
+  left: 16px;
+  right: 16px;
   bottom: 18px;
-  transform: translateX(-50%);
+  width: fit-content;
+  margin-inline: auto;
   display: none;
   align-items: center;
   gap: 8px;
   z-index: 6;
-  max-width: calc(100% - 32px);
   padding: 7px 14px;
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.86);
@@ -966,8 +1290,13 @@ button.upload3d-row {
   font-size: 0.68rem;
   line-height: 1.35;
   letter-spacing: 0.01em;
+  text-align: center;
   pointer-events: none;
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.28);
+}
+/* Even lines when it does wrap, rather than one long line and one short. */
+.jaw-preview-survey-hint > span {
+  text-wrap: balance;
 }
 .jaw-preview-survey-hint.is-on {
   display: flex;
@@ -3139,7 +3468,10 @@ button.upload3d-row {
     grid-template-columns: 1fr;
   }
 
-  .preview-frame { min-height: 500px; }
+  /* Stacked layout: the panel is content-sized, so both faces of it need a
+     height of their own — flex:1 of nothing collapses to zero. */
+  .preview-frame,
+  .preview-refs { min-height: 500px; }
 
   .center-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3209,7 +3541,8 @@ button.upload3d-row {
   display: inline-flex;
   }
 
-    .preview-frame {
+    .preview-frame,
+  .preview-refs {
     min-height: min(480px, 82vh);
   }
 

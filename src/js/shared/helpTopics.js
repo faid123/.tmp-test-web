@@ -572,7 +572,7 @@ export const HELP_TOPICS = [
     keywords: ["component", "tab", "mesh", "assembly", "rests", "clasps", "bars", "plate", "major", "connector", "catalog", "palette"],
     phrases: ["what are the component tabs", "where do i find clasps", "what is in the components panel"],
     answer:
-      "In design mode the Components panel groups everything into tabs: MESH, ASSEMBLY, RESTS, CLASPS, BARS, PLATE, MAJOR CONNECTOR and CASE NOTE. Pick a tab, pick an item, then select the tooth to place it on.",
+      "In design mode the Components panel groups everything into tabs: MESH, RESTS, CLASPS, BARS, MAJOR CONNECTOR, PLATE, ASSEMBLY and CASE NOTE. Pick a tab, pick an item, then select the tooth to place it on.",
     steps: [
       "Select a tab in the Components panel.",
       "Select the component you want from the list below it.",

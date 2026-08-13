@@ -1592,8 +1592,9 @@ function init() {
     import("./annotationCatalog.js"),
     import("./noticeboard.js"),
     import("./clinicalInfo.js"),
+    import("./referenceImages.js"),
   ])
-    .then(([, teethModel, locks, catalog, noticeboard, clinicalInfo]) => {
+    .then(([, teethModel, locks, catalog, noticeboard, clinicalInfo, referenceImages]) => {
       teethModel.initializeTeethState();
       locks.restoreAnnotationFromStorage();
       // Always enter the 2D editor in select (unlocked) mode, even if a locked
@@ -1622,6 +1623,7 @@ function init() {
       renderJaws();
       locks.updateEditModeUI();
       bindBackNavigationDialog(locks);
+      referenceImages.initReferenceImages();
       noticeboard.initNoticeboard();
       // Deep-link: ?view=noticeboard (from the 3D viewer's Annotate button) opens
       // the noticeboard directly instead of just the editor.

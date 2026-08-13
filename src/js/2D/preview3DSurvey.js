@@ -635,10 +635,9 @@ function isCoarsePointer() {
 function createSurveyHint(mount) {
   const hint = document.createElement("div");
   hint.className = "jaw-preview-survey-hint";
-  // Touch gets the gesture wording (and no Esc, which it has no key for); the pill sits
-  // over the jaw on a phone, so keep that line short.
+  // Touch gets the gesture wording (and no Esc, which it has no key for).
   const body = isCoarsePointer()
-    ? "<span>One finger for the arrow, two fingers for jaw movement &middot; press <b>SET</b>.</span>"
+    ? "<span>One finger to swing the placement arrow. Two fingers to rotate the jaw.</span>"
     : "<span>Drag to swing the placement arrow &middot; right-drag to rotate the jaw &middot; press <b>SET</b>." +
       " <span class='jaw-preview-survey-hint-esc'>Esc to cancel</span></span>";
   hint.innerHTML = '<span class="jaw-preview-survey-hint-jaw"></span>' + body;
