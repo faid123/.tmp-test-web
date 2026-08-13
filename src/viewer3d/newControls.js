@@ -338,6 +338,17 @@ style.textContent = `
     cursor: not-allowed;
   }
 
+  /* A slot's first undercut switch waits on the case scan download — pulse until it lands. */
+  .component-analysis-button.is-busy {
+    opacity: 0.6;
+    cursor: progress;
+    animation: component-analysis-busy 1s ease-in-out infinite;
+  }
+
+  @keyframes component-analysis-busy {
+    50% { opacity: 1; }
+  }
+
   .component-web-button::before {
     content: "";
     position: absolute;
@@ -715,17 +726,34 @@ function createComponentPanel(groups) {
 
     let undercutButton = null;
     let occlusionButton = null;
-    if (group.supportsAnalysis) {
+    // Slot rows offer undercut only (borrowed from the case jaw); the case's own jaws
+    // offer both analyses.
+    if (group.supportsAnalysis || group.supportsUndercut) {
       undercutButton = document.createElement("button");
       undercutButton.type = "button";
       undercutButton.className = "component-analysis-button";
       undercutButton.style.backgroundImage = `url(${basePath}/assets/Undercut.png)`;
       undercutButton.title = `${group.label} undercut`;
       undercutButton.addEventListener("click", () => {
-        group.setMode?.(group.getMode?.() === "undercut" ? "normal" : "undercut");
+        const next = group.getMode?.() === "undercut" ? "normal" : "undercut";
+        // A slot's first switch fetches the case scan, so setMode may be async — mark the
+        // button busy until it settles, then resync from whatever mode was really applied.
+        const result = group.setMode?.(next);
+        if (result && typeof result.then === "function") {
+          undercutButton.disabled = true;
+          undercutButton.classList.add("is-busy");
+          result
+            .catch((error) => console.warn("Undercut switch failed:", error))
+            .finally(() => {
+              undercutButton.disabled = false;
+              undercutButton.classList.remove("is-busy");
+              syncAllRows();
+            });
+        }
         syncAllRows();
       });
-
+    }
+    if (group.supportsAnalysis) {
       occlusionButton = document.createElement("button");
       occlusionButton.type = "button";
       occlusionButton.className = "component-analysis-button";
@@ -735,10 +763,10 @@ function createComponentPanel(groups) {
         group.setMode?.(group.getMode?.() === "occlusion" ? "normal" : "occlusion");
         syncAllRows();
       });
-
-      buttonsRow.appendChild(undercutButton);
-      buttonsRow.appendChild(occlusionButton);
     }
+
+    if (undercutButton) buttonsRow.appendChild(undercutButton);
+    if (occlusionButton) buttonsRow.appendChild(occlusionButton);
 
     // The polyline rows carry the opener for the polyline panel — it has no
     // button of its own in the nav.
@@ -936,7 +964,19 @@ function buildDesignSlotGroups(designSlots) {
       type: "overlay",
       iconPath: entry.iconPath,
       meshes,
-      supportsAnalysis: false, // uploads carry no surveying/occlusion data
+      supportsAnalysis: false, // uploads carry no occlusion data of their own
+      // A jaw slot borrows the case jaw's undercut heatmap, so it gets that button alone.
+      // Read the mode off the mesh rather than caching it: the panel is rebuilt on every
+      // view switch, and a cached mode would come back "normal" over a heatmapped slot.
+      supportsUndercut: Boolean(entry.supportsUndercut) && meshes.length > 0,
+      getMode: () => (entry.getUndercut?.() ? "undercut" : "normal"),
+      // Async: the first switch pulls in the case's scan and heatmaps. Resolves to the mode
+      // actually applied, so a slot that can't be matched to the jaw stays plain.
+      setMode: async (mode) => {
+        if (mode === "occlusion") return "normal";
+        const applied = await entry.setUndercut?.(mode === "undercut");
+        return applied ? "undercut" : "normal";
+      },
       hasContent: () => meshes.length > 0,
       getVisible: () => areAnyVisible(meshes),
       setVisible: (isVisible) => setMeshGroupVisible(meshes, isVisible),

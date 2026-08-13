@@ -628,14 +628,20 @@ function attachSurveyAimDrag() {
   };
 }
 
+function isCoarsePointer() {
+  return Boolean(window.matchMedia?.("(pointer: coarse)")?.matches);
+}
+
 function createSurveyHint(mount) {
   const hint = document.createElement("div");
   hint.className = "jaw-preview-survey-hint";
-  // Desktop-only, so the wording can assume a mouse and keyboard.
-  hint.innerHTML =
-    '<span class="jaw-preview-survey-hint-jaw"></span>' +
-    "<span>Drag to swing the placement arrow &middot; right-drag to rotate the jaw &middot; press <b>SET</b>." +
-    " <span class='jaw-preview-survey-hint-esc'>Esc to cancel</span></span>";
+  // Touch gets the gesture wording (and no Esc, which it has no key for); the pill sits
+  // over the jaw on a phone, so keep that line short.
+  const body = isCoarsePointer()
+    ? "<span>One finger for the arrow, two fingers for jaw movement &middot; press <b>SET</b>.</span>"
+    : "<span>Drag to swing the placement arrow &middot; right-drag to rotate the jaw &middot; press <b>SET</b>." +
+      " <span class='jaw-preview-survey-hint-esc'>Esc to cancel</span></span>";
+  hint.innerHTML = '<span class="jaw-preview-survey-hint-jaw"></span>' + body;
   mount.appendChild(hint);
   return hint;
 }
@@ -709,14 +715,11 @@ function enterSurveyAiming(jaw, btn) {
   const otherRow = jaw === "upper" ? "rowLower" : "rowUpper";
   preview3DState.topControls?.[otherRow]?.surveyBtn?.setAttribute("disabled", "true");
 
-  // The instruction bubble is desktop-only (on a phone it covers a third of the viewport).
-  if (!window.matchMedia?.("(pointer: coarse)")?.matches) {
-    const hint = preview3DState.surveyHint || createSurveyHint(mount);
-    hint.querySelector(".jaw-preview-survey-hint-jaw").textContent =
-      jaw === "upper" ? "UPPER" : "LOWER";
-    hint.classList.add("is-on");
-    preview3DState.surveyHint = hint;
-  }
+  const hint = preview3DState.surveyHint || createSurveyHint(mount);
+  hint.querySelector(".jaw-preview-survey-hint-jaw").textContent =
+    jaw === "upper" ? "UPPER" : "LOWER";
+  hint.classList.add("is-on");
+  preview3DState.surveyHint = hint;
 
   preview3DState.surveyKeyHandler = (e) => {
     if (e.key === "Escape") exitSurveyAiming();

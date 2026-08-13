@@ -171,9 +171,9 @@ export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../.
     }
   };
 
-  // Help and About are reachable from two places: the sidebar row and the
-  // footer status-bar button. Same action either way, so they share a handler
-  // (close() is a harmless no-op when the click came from the footer).
+  // Help is reachable from two places: the sidebar row and the footer status-bar
+  // button. Same action either way, so they share a handler (close() is a
+  // harmless no-op when the click came from the footer). About is sidebar-only.
   ["sidebarHelpBtn", "footerHelpBtn"].forEach((id) => {
     document.getElementById(id)?.addEventListener("click", openHelp);
   });
@@ -189,9 +189,7 @@ export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../.
       "noopener,noreferrer"
     );
   });
-  ["sidebarAboutBtn", "footerAboutBtn"].forEach((id) => {
-    document.getElementById(id)?.addEventListener("click", showAbout);
-  });
+  document.getElementById("sidebarAboutBtn")?.addEventListener("click", showAbout);
 
   languageMenu = setupLanguageMenu();
 

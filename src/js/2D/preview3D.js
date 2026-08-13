@@ -9,6 +9,7 @@ import {
   autoApplySavedSurveyAngles,
 } from "./preview3DSurvey.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
+import { buildVertexGrid, mapNearestVertices, NO_VERTEX_MATCH } from "../shared/vertexMatch.js";
 import { updateCaseStatus, STATUS_3D_DESIGN_APPROVED } from "./caseNote.js";
 import { confirmPreview3DApproval, sendApprovalEmails } from "./preview3DApproval.js";
 
@@ -76,7 +77,10 @@ export const preview3DState = {
   mount: null,
   modelRoot: null,
   groups: { upper: null, lower: null },
-  // Uploaded "other 3D files" (jaw_stls_extra_slot_1..4): occupiedSlots = backend-held, extraFileNames = slot→name, extraGroups = slot→{group,row}.
+  // Per-jaw sampled vertex fingerprint (see recordJawVertexKey), used to tell a real jaw copy
+  // from a same-sized but differently ordered mesh before an extra slot borrows the heatmap.
+  jawVertexKeys: {},
+  // Uploaded "other 3D files" (jaw_stls_extra_slot_1..4): occupiedSlots = backend-held, extraFileNames = slot→name, extraGroups = slot→{group,jaw}.
   // A slot can be backend-occupied but removed from the panel (row trash = session-only; modal X = permanent delete).
   extraGroups: {},
   extraFileNames: {},
@@ -496,6 +500,7 @@ function init3DPreview(area) {
   preview3DState.mount = mount;
   preview3DState.modelRoot = modelRoot;
   preview3DState.groups = { upper: null, lower: null };
+  preview3DState.jawVertexKeys = {};
   preview3DState.activeView = "both";
   preview3DState.topControls = { rowUpper, rowLower };
   preview3DState.heatmapEnabled = false;
@@ -652,6 +657,7 @@ export function teardown3DPreview() {
   preview3DState.mount = null;
   preview3DState.modelRoot = null;
   preview3DState.groups = { upper: null, lower: null };
+  preview3DState.jawVertexKeys = {};
   preview3DState.jawFiles = {};
   preview3DState.undercut = { upper: null, lower: null };
   preview3DState.extraGroups = {};
@@ -905,11 +911,8 @@ async function switchMeshQuality(quality) {
     }
     // populate* clears the model root, which also drops the extra-slot meshes —
     // re-attach the still-alive groups (root.clear() detaches, never disposes).
-    const root = preview3DState.modelRoot;
-    const extras = Object.values(preview3DState.extraGroups || {});
-    if (root && extras.length) {
-      extras.forEach((entry) => entry?.group && root.add(entry.group));
-      centerRootOnCombinedBounds(root);
+    if (reattachExtraGroups()) {
+      centerRootOnCombinedBounds(preview3DState.modelRoot);
       fitPreviewCamera();
     }
     await finishMeshQualityProgress();
@@ -1051,6 +1054,9 @@ function buildClusteredGeometry(geometry, cellSize) {
   out.setIndex(outputVertexCount > 65535
     ? new THREE.Uint32BufferAttribute(outputIndices, 1)
     : new THREE.Uint16BufferAttribute(outputIndices, 1));
+  // Kept so a later heatmap can be repainted onto the decimated mesh without the
+  // source vertices (see repaintJawCopyHeatmap).
+  out.userData.clusterSourceMap = sourceToCluster;
   return out;
 }
 
@@ -1308,12 +1314,6 @@ async function populateJawPreview(jawFiles, undercut, meshQuality = "low") {
     const primarySurface = upper ? undercut?.upper : undercut?.lower;
     const secondarySurface = upper ? undercut?.lower : undercut?.upper;
 
-    const surveyingVerts = (surface) => {
-      const bytes = surface?.surveying_values?.data;
-      if (!bytes?.length) return 0;
-      return Math.floor(new Float32Array(new Uint8Array(bytes).buffer).length / 4);
-    };
-
     const stlBuffer = base64ToArrayBuffer(file.data);
     const payloadInfo = file.__payloadInfo || inspectMeshPayload(stlBuffer);
     const sourcePath = file.__sourcePath || "selected STL source";
@@ -1349,8 +1349,8 @@ async function populateJawPreview(jawFiles, undercut, meshQuality = "low") {
 
     // Pick the heatmap surface, then dedup the mesh to match its vertex count so the backend's
     // vertex indices align with ours. Prefer same-jaw; fall back to the opposite only if empty.
-    const primaryVerts = surveyingVerts(primarySurface);
-    const secondaryVerts = surveyingVerts(secondarySurface);
+    const primaryVerts = surveyingVertexCount(primarySurface);
+    const secondaryVerts = surveyingVertexCount(secondarySurface);
 
     let target = null;
     if (primaryVerts > 0) {
@@ -1383,6 +1383,9 @@ async function populateJawPreview(jawFiles, undercut, meshQuality = "low") {
       geometry = mergeStlVertices(geometry);
     }
     }
+    // Fingerprint the welded mesh before decimation: an extra jaw-copy slot checks itself
+    // against it before borrowing this jaw's heatmap.
+    recordJawVertexKey(upper ? "upper" : "lower", geometry);
     await updateJawMeshProgress(i, totalFiles, 0.7, upper, meshQuality === "high" ? "Keeping original mesh" : "Building low quality display mesh");
     geometry = getDisplayGeometryForQuality(
       geometry,
@@ -1463,6 +1466,7 @@ async function populateJawPreviewFromOFF(meshFiles, undercut, meshQuality = "low
     const surface = upper ? undercut?.upper : undercut?.lower;
     await updateJawMeshProgress(i, totalFiles, 0.35, upper, "Applying undercut heatmap");
     applyUndercutVertexColors(geometry, surface);
+    recordJawVertexKey(upper ? "upper" : "lower", geometry);
     await updateJawMeshProgress(i, totalFiles, 0.68, upper, meshQuality === "high" ? "Keeping original mesh" : "Building low quality display mesh");
     geometry = getDisplayGeometryForQuality(
       geometry,
@@ -1977,11 +1981,15 @@ export function setHeatmapEnabled(enabled) {
       const heat = obj.userData?.heatmapMaterial;
       const flat = obj.userData?.flatMaterial;
       if (!heat || !flat) return;
+      // Extras carry both materials but only switch once a jaw heatmap is actually painted in.
+      if (obj.userData.surveyJaw === null) return;
       obj.material = enabled ? heat : flat;
     });
   };
   swap(preview3DState.groups.upper);
   swap(preview3DState.groups.lower);
+  // Jaw-copy slots (1 & 3) follow the same toggle — they wear the jaw's own heatmap.
+  for (const entry of Object.values(preview3DState.extraGroups || {})) swap(entry?.group);
   const btn = preview3DState.heatmapToggleBtn;
   if (btn) btn.setAttribute("aria-pressed", enabled ? "true" : "false");
   // .is-off both dims the corner icon and hides the legend dropdown.
@@ -2022,12 +2030,27 @@ export async function applySurveyUndercutToPreview(nextUndercut) {
     } else {
       await populateJawPreview(source.files, nextUndercut, quality);
     }
+    // populate* clears the model root, taking the extra-slot meshes with it (they are
+    // detached, never disposed) — put them back or the "Other 3D files" stage goes empty.
+    reattachExtraGroups();
     applyJawVisibility();
     updateQualityToggle();
+    repaintExtraJawHeatmaps();
     return;
   }
 
   reapplyHeatmap(nextUndercut);
+  repaintExtraJawHeatmaps();
+}
+
+// Re-add the still-alive extra-slot groups to the model root after a jaw rebuild.
+function reattachExtraGroups() {
+  const root = preview3DState.modelRoot;
+  if (!root) return false;
+  const extras = Object.values(preview3DState.extraGroups || {});
+  if (!extras.length) return false;
+  extras.forEach((entry) => entry?.group && root.add(entry.group));
+  return true;
 }
 
 function applyUndercutVertexColors(geometry, surface, options = {}) {
@@ -2143,6 +2166,41 @@ function bufferDataToFloatArray(data) {
 
 function surfaceFloatArray(surface, field) {
   return bufferDataToFloatArray(surface?.[field]?.data);
+}
+
+// Vertices the backend surveyed for this jaw (the heatmap is RGBA float per vertex).
+function surveyingVertexCount(surface) {
+  return Math.floor((surfaceFloatArray(surface, "surveying_values")?.length || 0) / 4);
+}
+
+// A jaw's welded vertex positions, kept before decimation so an extra slot holding the same jaw
+// can look its undercut values up BY POSITION. Vertex order and count are deliberately not
+// required to agree: the exported slot file is usually a different tessellation/ordering of the
+// same scan (case 2270 ships an OFF jaw and an STL slot), and matching by index there lands the
+// heatmap on unrelated vertices, which paints as red speckle.
+function recordJawVertexKey(jaw, geometry) {
+  const position = geometry?.getAttribute?.("position");
+  if (!position?.count) return;
+  preview3DState.jawVertexKeys[jaw] = {
+    count: position.count,
+    positions: Float32Array.from(position.array.subarray(0, position.count * 3)),
+    grid: null, // built on first use, see jawVertexGrid
+  };
+}
+
+// Slot vertex -> nearest jaw vertex, or NO_VERTEX_MATCH when nothing is within the match
+// radius. Cached on the geometry so a survey landing later repaints without redoing the search.
+function buildJawVertexMap(geometry, jaw) {
+  const key = preview3DState.jawVertexKeys?.[jaw];
+  const position = geometry?.getAttribute?.("position");
+  if (!key?.count || !position?.count) return null;
+
+  key.grid = key.grid || buildVertexGrid(key.positions);
+  const result = mapNearestVertices(position.array.subarray(0, position.count * 3), key.grid);
+  if (!result) return null;
+
+  geometry.userData.jawVertexMap = result.map;
+  return result;
 }
 
 function hasUndercutSurface(surface) {
@@ -2680,6 +2738,12 @@ const extraJawColor = () => new THREE.Color(...DEFAULT_TOOTH_COLOR);
 // of the tan jaw colour.
 const METAL_RPD_SLOTS = new Set([2, 4]);
 
+// Jaw-scan slots borrow the matching jaw's undercut heatmap instead of being surveyed
+// themselves: the file is a copy of that jaw scan, so the DLL's per-vertex values already
+// describe it. Only applied when the vertex counts match exactly (see paintJawCopyHeatmap);
+// the metal-RPD slots are a different mesh and never borrow one.
+const EXTRA_SLOT_JAW = { 1: "upper", 3: "lower" };
+
 const METAL_RPD_COLOR = 0xd6dadf; // brushed cobalt-chrome / stainless
 
 // Display label for a slot, e.g. "Slot 1: Upper jaw".
@@ -2754,7 +2818,7 @@ async function loadExtraStlsIntoPreview() {
   preview3DState.extraGroups = {};
   preview3DState.extraFileNames = {};
   preview3DState.occupiedSlots = new Set();
-  setExtrasLoadProgress(0.05, "Fetching…");
+  setExtrasLoadProgress(0.05, "Loading…");
   const extras = await fetchExtraStlsForCase();
   let done = 0;
   for (const extra of extras) {
@@ -2796,27 +2860,116 @@ function setExtrasLoadProgress(frac, labelText) {
   refs.label.textContent = phase.labelText;
 }
 
+// Colour a jaw-copy slot from the jaw's heatmap, looked up through the slot's nearest-jaw-vertex
+// map. Works whatever the slot file's vertex count or ordering is. A missing surface paints plain
+// tan, which keeps the colour attribute present so the heatmap toggle stays safe until a survey
+// lands. Handles the decimated display mesh via clusterSourceMap (most severe band per cluster),
+// which is how the SD build keeps thin undercut bands visible.
+function paintJawCopyHeatmap(geometry, surface) {
+  const jawMap = geometry.userData?.jawVertexMap;
+  if (!jawMap) return;
+
+  const heatmap = surfaceFloatArray(surface, "surveying_values");
+  const heatmapVerts = heatmap ? Math.floor(heatmap.length / 4) : 0;
+  const clusterOf = geometry.userData?.clusterSourceMap;
+  const displayCount = geometry.attributes.position.count;
+
+  const colors = new Float32Array(displayCount * 3);
+  for (let i = 0; i < displayCount; i += 1) {
+    colors[i * 3] = DEFAULT_TOOTH_COLOR[0];
+    colors[i * 3 + 1] = DEFAULT_TOOTH_COLOR[1];
+    colors[i * 3 + 2] = DEFAULT_TOOTH_COLOR[2];
+  }
+
+  if (heatmapVerts) {
+    const severity = new Float32Array(displayCount).fill(-1);
+    for (let src = 0; src < jawMap.length; src += 1) {
+      const jawVertex = jawMap[src];
+      if (jawVertex === NO_VERTEX_MATCH || jawVertex >= heatmapVerts) continue;
+      const [r, g, b] = normalizeUndercutColor(
+        heatmap[jawVertex * 4],
+        heatmap[jawVertex * 4 + 1],
+        heatmap[jawVertex * 4 + 2]
+      );
+      const display = clusterOf ? clusterOf[src] : src;
+      if (display >= displayCount) continue;
+      const bandSeverity = getUndercutColorSeverity(r, g, b);
+      if (bandSeverity > severity[display]) {
+        severity[display] = bandSeverity;
+        colors[display * 3] = r;
+        colors[display * 3 + 1] = g;
+        colors[display * 3 + 2] = b;
+      }
+    }
+  }
+
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  // Only meaningful on the full-resolution mesh; the decimated one already took a max per cluster.
+  if (heatmapVerts && !clusterOf) snapVertexColorBands(geometry, 2);
+}
+
 // Parse a base64 STL and add it to the model root. Jaw slots use the jaw tan; metal-RPD slots
-// (2 & 4) use a metallic finish. Extras have no surveying data so they never use the heatmap.
+// (2 & 4) use a metallic finish. A jaw-copy slot also gets the matching jaw's undercut heatmap
+// when one is already loaded — a survey that lands later repaints it (repaintExtraJawHeatmaps).
 async function renderExtraStl({ slotNumber, filename, data }) {
   if (!(await ensureThreeDeps())) return;
   const root = preview3DState.modelRoot;
   if (!root) return;
 
+  const label = filename || `slot ${slotNumber}`;
   const loader = new STLLoader();
   let geometry = loader.parse(base64ToArrayBuffer(data));
   geometry = mergeStlVertices(geometry);
-  geometry = getDisplayGeometryForQuality(geometry, filename || `slot ${slotNumber}`);
+
+  // Match the slot's vertices to the jaw's by position while the mesh is still full resolution;
+  // the map is indexed by welded source vertex, the same basis clusterSourceMap uses, so it
+  // survives decimation unchanged.
+  const slotJaw = EXTRA_SLOT_JAW[slotNumber];
+  const matchedJaw = slotJaw && preview3DState.jawVertexKeys?.[slotJaw] ? slotJaw : null;
+  const matchStart = performance.now();
+  const match = matchedJaw ? buildJawVertexMap(geometry, matchedJaw) : null;
+  if (match) {
+    console.log(`[preview3D] ${label}: matched to the ${matchedJaw} jaw by position`, {
+      slotVerts: geometry.attributes.position.count,
+      jawVerts: preview3DState.jawVertexKeys[matchedJaw].count,
+      matched: match.matched,
+      ms: Math.round(performance.now() - matchStart),
+    });
+  }
+  const jaw = match?.matched ? matchedJaw : null;
+
+  geometry = getDisplayGeometryForQuality(geometry, label);
+  if (jaw) {
+    geometry.userData.jawVertexMap = match.map;
+    paintJawCopyHeatmap(geometry, preview3DState.undercut?.[jaw]);
+  }
   geometry.computeVertexNormals();
 
   const isMetal = METAL_RPD_SLOTS.has(slotNumber);
-  const material = new THREE.MeshStandardMaterial({
+  const flatMaterial = new THREE.MeshStandardMaterial({
     color: isMetal ? METAL_RPD_COLOR : extraJawColor(),
     metalness: isMetal ? 0.85 : 0.05,
     roughness: isMetal ? 0.32 : 0.6,
     side: THREE.DoubleSide,
   });
-  const mesh = new THREE.Mesh(geometry, material);
+  // Jaw-copy slots carry both materials so the heatmap toggle can flip them like the jaws do.
+  const heatmapMaterial = jaw
+    ? new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        ...HEATMAP_SURFACE_SHADING,
+        side: THREE.DoubleSide,
+      })
+    : null;
+
+  const mesh = new THREE.Mesh(
+    geometry,
+    heatmapMaterial && preview3DState.heatmapEnabled ? heatmapMaterial : flatMaterial
+  );
+  mesh.userData.flatMaterial = flatMaterial;
+  mesh.userData.heatmapMaterial = heatmapMaterial;
+  // The jaw this slot borrows its heatmap from — null on anything with no jaw to match against,
+  // which is what keeps the heatmap toggle off those meshes.
+  mesh.userData.surveyJaw = jaw;
   const group = new THREE.Group();
   group.add(mesh);
   // Follow the current stage: hidden unless the "Other 3D files" panel is showing extras.
@@ -2824,7 +2977,22 @@ async function renderExtraStl({ slotNumber, filename, data }) {
   root.add(group);
 
   preview3DState.extraFileNames[slotNumber] = filename;
-  preview3DState.extraGroups[slotNumber] = { group };
+  preview3DState.extraGroups[slotNumber] = { group, jaw };
+}
+
+// Push the current undercut onto the jaw-copy slots already on screen: they are built with
+// whatever heatmap existed at load time, and the DLL survey usually finishes after that.
+function repaintExtraJawHeatmaps() {
+  for (const entry of Object.values(preview3DState.extraGroups || {})) {
+    const jaw = entry?.jaw;
+    const surface = jaw ? preview3DState.undercut?.[jaw] : null;
+    if (!entry?.group || !surface) continue;
+    entry.group.traverse((obj) => {
+      if (!obj.isMesh || !obj.geometry?.userData?.jawVertexMap || !obj.userData?.heatmapMaterial) return;
+      paintJawCopyHeatmap(obj.geometry, surface);
+      if (preview3DState.heatmapEnabled) obj.material = obj.userData.heatmapMaterial;
+    });
+  }
 }
 
 // Dispose an extra STL's mesh and drop it from the model root.

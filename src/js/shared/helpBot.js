@@ -18,10 +18,6 @@ import { localProvider, relatedTopics, suggestionsFor } from "./helpMatcher.js";
 
 const TRANSCRIPT_MAX = 30;
 const HIGHLIGHT_MS = 6000;
-// The dimming fades on its own well before the ring does — it's there to catch
-// the eye onto the right control, not to keep the rest of the page darkened for
-// the whole highlight.
-const SPOTLIGHT_MS = 4000;
 const CLOSE_MS = 220;
 const REVEAL_TIMEOUT_MS = 1500;
 
@@ -152,10 +148,9 @@ function positionSpotlight(el) {
   spotlightEl.style.height = `${r.height + pad * 2}px`;
 }
 
-// Follows `el` through the smooth scroll that just brought it into view (and
-// any resize), then fades itself out after SPOTLIGHT_MS — shorter than the
-// ring's HIGHLIGHT_MS, since the dimming only needs to catch the eye, not stay
-// dark for the whole highlight.
+// Follows `el` through the smooth scroll that just brought it into view (and any
+// resize). It stays lit for the whole highlight and is taken down with the ring —
+// the dimming IS the pointer here, so it must not leave the ring standing alone.
 function showSpotlight(el) {
   hideSpotlight();
   ensureSpotlight();
@@ -163,11 +158,9 @@ function showSpotlight(el) {
   reposition();
   window.addEventListener("scroll", reposition, true);
   window.addEventListener("resize", reposition);
-  const fadeTimer = setTimeout(() => spotlightEl.classList.remove("is-visible"), SPOTLIGHT_MS);
   spotlightCleanup = () => {
     window.removeEventListener("scroll", reposition, true);
     window.removeEventListener("resize", reposition);
-    clearTimeout(fadeTimer);
   };
   requestAnimationFrame(() => spotlightEl.classList.add("is-visible"));
 }
@@ -178,8 +171,10 @@ function hideSpotlight() {
   spotlightCleanup = null;
 }
 
-// Scroll the topic's control into view and ring it briefly. Returns false when
-// it isn't reachable on this page, so the caller can offer a deep link instead.
+// Scroll the topic's control into view and stage-light it briefly: the page dims
+// around it and a steady ring marks it, the same look a tour step gives its
+// target. Returns false when the control isn't reachable on this page, so the
+// caller can offer a deep link instead.
 async function showControl(topic) {
   // Resolved before the panel closes: a reveal that fails must not leave the
   // user with a dismissed panel and nothing highlighted.

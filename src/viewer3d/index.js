@@ -5563,6 +5563,320 @@ function removeViewerLoadingScreen() {
     return mesh;
   }
 
+  // ---- Undercut heatmap on the uploaded jaw slots -------------------------
+  //
+  // The jaw slots (1 upper, 3 lower) can show the same undercut heatmap the 2D preview does.
+  // The case's own scan is NOT the source: the viewer serves it as the parameterisation mesh,
+  // which is the scan re-oriented and smoothed, so neither its coordinates (17% of an upload's
+  // vertices land within 1mm of it on case 2270) nor its vertex ordering line up well enough
+  // to copy per-vertex values — doing either scatters the heatmap over the mesh as speckle.
+  //
+  // The upload is surveyed on its own instead: /dll/compute-surveying-no-pd accepts the STL in
+  // the request body (`stl_data`) and returns one value per welded vertex, in exactly the order
+  // STLMeshLoader.mergeVertices produces — both weld coincident corners at 1e-4 in first-seen
+  // order, which is why this is a straight index lookup with nothing to match.
+  //
+  // Nothing runs on landing: slots start with undercut off, and the survey happens the first
+  // time a slot's undercut button is pressed (the slot download plus ~10s in the DLL).
+
+  const UNDERCUT_TAN = [208 / 255, 190 / 255, 141 / 255];
+
+  // Desktop's undercutColourMap, in the same raw-float convention the loaders use for the
+  // API's own heatmap RGBA.
+  function slotUndercutColour(value) {
+    if (!(value > 0)) return UNDERCUT_TAN;
+    if (value < 0.25) return [1, 210 / 255, 0]; // #FFD200
+    if (value < 0.5) return [253 / 255, 140 / 255, 0]; // #FD8C00
+    if (value < 0.75) return [254 / 255, 70 / 255, 0]; // #FE4600
+    return [170 / 255, 0, 3 / 255]; // #AA0003
+  }
+
+  // The case stores each jaw's insertion vector already in the DLL/mesh frame; the only step
+  // between it and the DLL's `dir` is desktop's per-jaw flip (see preview3DSurvey.js). Null
+  // when the jaw was never surveyed — (0,0,0) is how an unset case reads.
+  function slotSurveyDirection(jawKey) {
+    const raw = ["x", "y", "z"].map((axis) =>
+      Number(positionData?.[`${jawKey}_insertion_angle_${axis}`])
+    );
+    if (raw.some((value) => !Number.isFinite(value))) return null;
+    const [x, y, z] = jawKey === "upper" ? [-raw[0], -raw[1], raw[2]] : [raw[0], raw[1], -raw[2]];
+    const length = Math.hypot(x, y, z);
+    if (length < 1e-4) return null;
+    return [x / length, y / length, z / length];
+  }
+
+  function base64ToFloat32Array(base64) {
+    const binary = atob(String(base64).replace(/\s+/g, ""));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return new Float32Array(bytes.buffer);
+  }
+
+  // Roughly how long the DLL takes on a jaw-sized mesh, used to pace the survey phase of the
+  // progress bar. Measured 5-17s on case 2270 — the bar eases toward the end of its phase over
+  // this long and waits there if the call runs over, rather than claiming to be finished.
+  const SLOT_SURVEY_EXPECTED_MS = 15000;
+
+  // The viewer's loading screen, driven across the two phases a slot survey has: downloading
+  // the upload (real bytes, reported by ApiClient) and the DLL call (no server-side progress).
+  function beginSlotSurveyProgress(slotLabel) {
+    const ownsScreen = !document.getElementById("viewer-loading-screen");
+    if (ownsScreen) createViewerLoadingScreen();
+    // Captured before any stand-in is swapped in below, so painting always reaches the real bar.
+    const els = window.viewerLoadingEls;
+    const bar = els?.progressBar;
+    const percentEl = els?.percentage;
+    const displayEl = els?.displayBox;
+    let creepTimer = null;
+
+    const paint = (fraction, label) => {
+      const percent = Math.round(Math.min(Math.max(fraction, 0), 1) * 100);
+      if (bar) {
+        bar.max = 100;
+        bar.value = percent;
+        // The card ships with the bar hidden — ApiClient reveals it when a download reports a
+        // content-length, and that write goes into the stand-in here, so do it ourselves.
+        bar.style.display = "block";
+      }
+      if (percentEl) percentEl.textContent = `${percent}%`;
+      if (displayEl) displayEl.textContent = slotLabel;
+      if (label) window.updateViewerLoading?.(label);
+    };
+
+    const stopCreep = () => {
+      if (creepTimer) clearInterval(creepTimer);
+      creepTimer = null;
+    };
+
+    paint(0.02, `Reading ${slotLabel}…`);
+
+    return {
+      // ApiClient writes download bytes into window.viewerLoadingEls.progressBar. Swap in a
+      // stand-in that folds them into this slice of our bar instead — the same trick
+      // routeSlotDownloadProgress uses to send bytes to a slot tile. Returns the restore.
+      // Every response has to be wrapped, or ApiClient's own percentage and "Downloading…"
+      // readout land in the card mid-survey. Without a label the bar is left alone until the
+      // first byte arrives, so a running estimate can hand over rather than jump.
+      trackDownload(from, to, label) {
+        if (label) paint(from, label);
+        const previous = window.viewerLoadingEls;
+        let max = 1;
+        let value = 0;
+        window.viewerLoadingEls = {
+          progressBar: {
+            style: {},
+            get max() {
+              return max;
+            },
+            set max(bytes) {
+              max = Number(bytes) || 1;
+            },
+            get value() {
+              return value;
+            },
+            set value(bytes) {
+              value = Number(bytes) || 0;
+              // Real bytes have taken over from any running estimate.
+              stopCreep();
+              paint(from + (to - from) * Math.min(value / max, 1));
+            },
+          },
+          // ApiClient also writes a percentage and a speed readout; ours are already painted.
+          percentage: { textContent: "" },
+          displayBox: { textContent: "" },
+        };
+        return () => {
+          window.viewerLoadingEls = previous;
+        };
+      },
+      // The DLL answers in one go, so ease across its phase on a timer instead.
+      startSurveyPhase(from, to, label) {
+        paint(from, label);
+        const startedAt = performance.now();
+        creepTimer = setInterval(() => {
+          const elapsed = (performance.now() - startedAt) / SLOT_SURVEY_EXPECTED_MS;
+          paint(from + (to - from) * Math.min(elapsed, 1));
+        }, 250);
+      },
+      set(fraction, label) {
+        stopCreep();
+        paint(fraction, label);
+      },
+      end() {
+        stopCreep();
+        if (ownsScreen) removeViewerLoadingScreen();
+      },
+    };
+  }
+
+  // Survey this slot's own STL. Returns one undercut value per welded vertex, or null.
+  async function fetchSlotSurveyValues(slot, jawKey, progress) {
+    const dir = slotSurveyDirection(jawKey);
+    if (!dir) {
+      console.warn(
+        `[viewer3D] slot ${slot}: the case has no ${jawKey} insertion angle, so there is nothing to survey`
+      );
+      return null;
+    }
+
+    const authPayload = {
+      machine_id: MACHINE_ID,
+      uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
+      caseIntID: paramValue,
+    };
+    // Re-fetched rather than retained: a slot scan is tens of MB, and holding all four for a
+    // toggle that may never be pressed is what pushes a phone's renderer over its memory limit.
+    const restoreProgress = progress?.trackDownload?.(0.05, 0.55, "Reading the uploaded scan…");
+    let slotResponse;
+    try {
+      slotResponse = await apiClient.post(
+        "/stl/slot/get",
+        [authPayload, { slotNumber: slot }],
+        false,
+        `Slot ${slot} scan`
+      );
+    } finally {
+      restoreProgress?.();
+    }
+    const item = Array.isArray(slotResponse) ? slotResponse[0] : slotResponse;
+    if (!item?.data) {
+      console.warn(`[viewer3D] slot ${slot}: could not re-read the upload for surveying`);
+      return null;
+    }
+
+    const startedAt = performance.now();
+    // Paced estimate while the DLL works, handed over to real bytes when it answers.
+    progress?.startSurveyPhase?.(0.55, 0.85, "Surveying undercut…");
+    const restoreSurveyProgress = progress?.trackDownload?.(0.85, 0.98);
+    let response;
+    try {
+      response = await apiClient.post(
+        "/dll/compute-surveying-no-pd",
+        [
+          authPayload,
+          {
+            case_id: paramValue,
+            type: jawKey === "upper" ? 1 : 2,
+            // The mesh to survey travels with the request, so this is the upload's own
+            // undercut rather than the case scan's.
+            stl_data: item.data,
+            dir,
+            printFullSurveying: true,
+            returnSurveyingBase64: true,
+          },
+        ],
+        false,
+        `Slot ${slot} undercut`
+      );
+    } finally {
+      restoreSurveyProgress?.();
+    }
+    const base64 = response?.surveying_values_base64;
+    if (!base64) {
+      console.warn(`[viewer3D] slot ${slot}: the surveying call returned no values`, response);
+      return null;
+    }
+    const values = base64ToFloat32Array(base64);
+    console.log(
+      `[viewer3D] slot ${slot}: surveyed ${values.length} vertices in ${Math.round(
+        performance.now() - startedAt
+      )}ms`
+    );
+    return values;
+  }
+
+  // The slot's undercut geometry variant: its own mesh, coloured by its own survey.
+  function buildSlotUndercutGeometry(slotMesh, values) {
+    const base = all_mesh_mat[slotMesh.name]?.[0];
+    if (!base || !values?.length) return null;
+
+    const geometry = base.clone();
+    const count = geometry.attributes.position.count;
+    if (values.length !== count) {
+      // The DLL welds the STL the way the loader does, so this should be exact. A mismatch
+      // means the two disagree about the mesh, and colouring by index would misplace bands.
+      console.warn(
+        `[viewer3D] ${slotMesh.name}: survey returned ${values.length} values for ${count} vertices — undercut not applied`
+      );
+      return null;
+    }
+
+    const colors = new Float32Array(count * 3);
+    for (let v = 0; v < count; v += 1) {
+      const [r, g, b] = slotUndercutColour(values[v]);
+      colors[v * 3] = r;
+      colors[v * 3 + 1] = g;
+      colors[v * 3 + 2] = b;
+    }
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    return geometry;
+  }
+
+  function isDesignSlotUndercutOn(slot) {
+    return Boolean(
+      designSlotMeshes.find((mesh) => mesh.userData?.designSlot === slot)?.userData
+        ?.undercutOn
+    );
+  }
+
+  // Driven by the slot's undercut button in the objects panel. Async because the first switch
+  // surveys the upload; the result is kept for the session, so later toggles are instant.
+  // Returns whether undercut is on afterwards, so a slot that can't be surveyed falls back.
+  async function setDesignSlotUndercut(slot, enabled) {
+    const mesh = designSlotMeshes.find((m) => m.userData?.designSlot === slot);
+    if (!mesh) return false;
+
+    if (!enabled) {
+      const base = all_mesh_mat[mesh.name]?.[0];
+      if (base) mesh.geometry = base;
+      if (mesh.userData.slotPlainMaterial) mesh.material = mesh.userData.slotPlainMaterial;
+      mesh.userData.undercutOn = false;
+      return false;
+    }
+
+    if (!mesh.userData.undercutGeometry) {
+      const jawKey = mesh.userData?.jaw_type === "lower" ? "lower" : "upper";
+      const progress = beginSlotSurveyProgress(
+        `Slot ${slot}: ${EXTRA_STL_SLOT_NAMES[slot] || "3D file"}`
+      );
+      try {
+        const values = await fetchSlotSurveyValues(slot, jawKey, progress);
+        progress.set(0.97, "Applying undercut…");
+        mesh.userData.undercutGeometry = values
+          ? buildSlotUndercutGeometry(mesh, values)
+          : null;
+        progress.set(1, "Done");
+      } finally {
+        progress.end();
+      }
+    }
+    const geometry = mesh.userData.undercutGeometry;
+    if (!geometry) {
+      mesh.userData.undercutOn = false;
+      return false;
+    }
+
+    // The slot's own material paints a flat colour; the heatmap needs the vertex colours, so
+    // each slot keeps a second material and swaps between the two.
+    mesh.userData.slotPlainMaterial = mesh.userData.slotPlainMaterial || mesh.material;
+    mesh.userData.undercutMaterial =
+      mesh.userData.undercutMaterial ||
+      new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        metalness: 0,
+        roughness: 0.5,
+        side: THREE.DoubleSide,
+        transparent: false,
+        opacity: 1,
+        depthTest: true,
+        depthWrite: true,
+      });
+    mesh.geometry = geometry;
+    mesh.material = mesh.userData.undercutMaterial;
+    mesh.userData.undercutOn = true;
+    return true;
+  }
+
   function isDesignViewActive() {
     return designViewActive;
   }
@@ -5578,6 +5892,11 @@ function removeViewerLoadingScreen() {
       label: `Slot ${slot}: ${EXTRA_STL_SLOT_NAMES[slot]}`,
       iconPath: `${basePath}/assets/${EXTRA_STL_SLOT_ICONS[slot]}`,
       mesh: designSlotMeshes.find((m) => m.userData?.designSlot === slot) || null,
+      // Only the jaw slots can borrow a jaw's heatmap — the metal-RPD slots are a
+      // different mesh. Undercut starts off; the first press loads the case assets.
+      supportsUndercut: !METAL_RPD_SLOTS.has(slot),
+      getUndercut: () => isDesignSlotUndercutOn(slot),
+      setUndercut: (enabled) => setDesignSlotUndercut(slot, enabled),
     }));
   }
 
