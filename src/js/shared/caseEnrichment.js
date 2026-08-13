@@ -1,13 +1,14 @@
-// Pure request/fold layer for the case-list lazy enrichment (details +
-// co-owner roles for ONE visible case). Extracted from caseManagement.js's
-// enrichOneCase so the wire contract is importable by both the app and
-// __tests__/caseEnrichment.test.mjs — the queue/observer/breaker machinery and
-// all DOM row-patching stay in caseManagement.js, which feeds the responses of
-// resilientFetch(...) into applyEnrichmentResponses().
+// Per-case data the case-list row doesn't carry: the lazy-enrichment wire
+// contract (details + co-owner roles), and the case's reference images.
+// The queue/observer/breaker machinery and all DOM row-patching stay in
+// caseManagement.js, which feeds resilientFetch(...) into
+// applyEnrichmentResponses(). Both halves are covered by
+// __tests__/caseEnrichment.test.mjs.
 
 // uuid is passed in by the caller (the enrich queue already has the session
 // user), so this module takes the constants only — not callerIdentity().
 import { API_BASE, MACHINE_ID } from "./api.js";
+import { logApi } from "./apiLog.js";
 
 // Deliberately small: the backend 403-throttles request bursts (that's why the
 // eager all-cases fan-out was removed). Bump only with backend coordination.
@@ -103,4 +104,93 @@ export async function applyEnrichmentResponses(caseObj, detailRes, rolesRes, log
   }
 
   return true;
+}
+
+// --- Reference images -----------------------------------------------------
+// The referenceImages table first, mirrored thumbnail slots as fallback (0-2
+// are the 2D composite and the jaw renders, so 3+ are the references).
+
+function refImagesCaller(caseIntID, uuid) {
+  return { machine_id: MACHINE_ID, uuid, caseIntID };
+}
+
+// Rows are { image_name, image_data }, the data a data URL or bare base64.
+export async function fetchCaseReferenceImages(caseIntID, uuid) {
+  const res = await fetch(`${API_BASE}/referenceImages/getall`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([refImagesCaller(caseIntID, uuid), { case_id: caseIntID }]),
+  });
+  logApi(res, "POST /referenceImages/getall");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return (Array.isArray(data) ? data : [data]).filter((row) => row?.image_data || row?.data);
+}
+
+function thumbnailSlot(row) {
+  const v = row?.slot ?? row?.slot_index ?? row?.slot_id;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Fallback source, used only when the table has no rows for the case — which is
+// every desktop-created case.
+export async function fetchReferenceThumbnails(caseIntID, uuid) {
+  try {
+    const res = await fetch(`${API_BASE}/thumbnails/get`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([refImagesCaller(caseIntID, uuid), { case_int_id: caseIntID }]),
+    });
+    logApi(res, "POST /thumbnails/get");
+    if (!res.ok) return [];
+    const rows = await res.json();
+    if (!Array.isArray(rows)) return [];
+    return rows.filter((r) => r?.data && (thumbnailSlot(r) ?? -1) >= 3);
+  } catch (err) {
+    console.warn("[referenceImages] thumbnail fallback failed", err);
+    return [];
+  }
+}
+
+// Both sources merged. Rethrows a failed primary fetch only when the fallback
+// found nothing either, so callers can tell "no images" from "lookup broke".
+export async function fetchReferenceImageRows(caseIntID, uuid) {
+  let rows = [];
+  let primaryErr = null;
+  try {
+    rows = await fetchCaseReferenceImages(caseIntID, uuid);
+  } catch (err) {
+    primaryErr = err;
+  }
+  if (!rows.length) rows = await fetchReferenceThumbnails(caseIntID, uuid);
+  if (!rows.length && primaryErr) throw primaryErr;
+  return rows;
+}
+
+// Stored payloads carry no content type, so it comes from the base64 signature.
+// PNG is the last resort — every image the web app writes back is one.
+export function referenceImageMime(base64) {
+  const head = String(base64 || "").slice(0, 12);
+  if (head.startsWith("/9j/")) return "image/jpeg";
+  if (head.startsWith("R0lGOD")) return "image/gif";
+  if (head.startsWith("Qk")) return "image/bmp";
+  if (head.startsWith("UklGR")) return "image/webp";
+  return "image/png";
+}
+
+// A row as something an <img> can show; an existing data URL passes through.
+export function referenceImageSrc(row) {
+  const raw = String(row?.image_data ?? row?.data ?? "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("data:")) return raw;
+  const base64 = raw.replace(/\s+/g, "");
+  return `data:${referenceImageMime(base64)};base64,${base64}`;
+}
+
+// Display name, falling back to a 1-based position — every thumbnail-slot row
+// is stored without a name.
+export function referenceImageTitle(row, index) {
+  const raw = String(row?.image_name || row?.filename || row?.name || "").trim();
+  return raw || `Reference ${index + 1}`;
 }
