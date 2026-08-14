@@ -11,9 +11,10 @@ import {
   caseIntIdOf,
   buildEnrichRequests,
   applyEnrichmentResponses,
+  fetchReferenceImageRows,
 } from "../shared/caseEnrichment.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
-import { recordCollaborators } from "../shared/collaborators.js";
+import { recordCollaborators, reconcileCollaborators } from "../shared/userSuggest.js";
 
 // Per-user cache of the last case list so the table can paint instantly on load
 // instead of waiting on /case/user/findall/get — which can lag when the API host
@@ -527,48 +528,6 @@ async function fetchCaseStls(caseIntId, uuid) {
   return [];
 }
 
-// The reference images attached to the case (create-case upload). Rows come back
-// as { image_name, image_data }, image_data being a data URL or bare base64.
-async function fetchCaseReferenceImages(caseIntId, uuid) {
-  const res = await fetch(`${API_BASE}/referenceImages/getall`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify([
-      { machine_id: MACHINE_ID, uuid, caseIntID: caseIntId },
-      { case_id: caseIntId },
-    ]),
-  });
-  logApi(res, "POST /referenceImages/getall");
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  return (Array.isArray(data) ? data : [data]).filter((row) => row?.image_data || row?.data);
-}
-
-// Fallback source: every reference image uploaded through the web is also
-// mirrored into a thumbnail slot, where slots 0-2 are the 2D composite and the
-// upper/lower jaw renders and 3+ are the references. Used only when the
-// referenceImages table has no rows for the case (e.g. desktop-created cases).
-async function fetchReferenceThumbnails(caseIntId, uuid) {
-  try {
-    const res = await fetch(`${API_BASE}/thumbnails/get`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([
-        { machine_id: MACHINE_ID, uuid, caseIntID: caseIntId },
-        { case_int_id: caseIntId },
-      ]),
-    });
-    logApi(res, "POST /thumbnails/get");
-    if (!res.ok) return [];
-    const rows = await res.json();
-    if (!Array.isArray(rows)) return [];
-    return rows.filter((r) => r?.data && (thumbnailSlot(r) ?? -1) >= 3);
-  } catch (err) {
-    console.warn("[case/download] reference thumbnail fetch failed", err);
-    return [];
-  }
-}
-
 function sniffImageExt(bytes) {
   if (!bytes || bytes.length < 4) return "";
   if (bytes[0] === 0x89 && bytes[1] === 0x50) return "png";
@@ -614,21 +573,12 @@ function uniqueDownloadName(name, used) {
   return candidate;
 }
 
-// The case's reference images as ready-to-write { name, bytes } files: the
-// referenceImages table first, the mirrored thumbnail slots as fallback. Rethrows
-// a failed primary fetch only when the fallback found nothing either, so callers
-// can tell "no images" apart from "the lookup broke". Shared by the menu action
-// and the bundle download so both ship the same files under the same names.
+// The case's reference images as ready-to-write { name, bytes } files. Shared by
+// the menu action and the bundle download so both ship the same files under the
+// same names; the rows themselves come from shared/referenceImages.js, which the
+// 2D page's Reference Images tab reads too.
 async function collectReferenceImageFiles(caseIntId, uuid, base) {
-  let rows = [];
-  let primaryErr = null;
-  try {
-    rows = await fetchCaseReferenceImages(caseIntId, uuid);
-  } catch (err) {
-    primaryErr = err;
-  }
-  if (!rows.length) rows = await fetchReferenceThumbnails(caseIntId, uuid);
-  if (!rows.length && primaryErr) throw primaryErr;
+  const rows = await fetchReferenceImageRows(caseIntId, uuid);
 
   const used = new Set();
   const files = [];
@@ -2664,6 +2614,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     // requests in flight), instead of the old eager 2×N burst that tripped the
     // backend's rate limiter into a wall of 403s on large lists.
     currentCases = cases;
+    // Prune the invite roster against the full list — populateTable() below only
+    // adds, and sees a filtered subset.
+    reconcileCollaborators(cases.map((c) => c.id ?? c.case_int_id));
     populateTable(currentCases);
     applyClientFilters();
 

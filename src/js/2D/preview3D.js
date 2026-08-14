@@ -71,6 +71,8 @@ export const preview3DState = {
   camera: null,
   controls: null,
   frameId: 0,
+  // Set while the panel shows the Reference Images tab — see setPreview3DRenderPaused.
+  renderPaused: false,
   // Removes the webglcontextlost/restored listeners (see bindPreviewContextLossRecovery).
   contextLossCleanup: null,
   resizeObserver: null,
@@ -526,15 +528,40 @@ function init3DPreview(area) {
   preview3DState.resizeObserver.observe(mount);
   resize();
 
-  const animate = () => {
-    preview3DState.frameId = requestAnimationFrame(animate);
-    controls.update();
-    updateSurveyPlacementArrow();
-    renderer.render(scene, camera);
-  };
-  animate();
+  // A rebuild while the panel sits on the Reference Images tab stays paused.
+  if (!preview3DState.renderPaused) startPreviewRenderLoop();
 
   bindPreviewContextLossRecovery(renderer.domElement, area);
+}
+
+// The one render loop, driven off preview3DState so every caller (first start,
+// context restore, tab resume) runs the same frame. Never double-starts.
+function startPreviewRenderLoop() {
+  if (preview3DState.frameId || !preview3DState.renderer) return;
+  const tick = () => {
+    preview3DState.frameId = requestAnimationFrame(tick);
+    preview3DState.controls?.update();
+    updateSurveyPlacementArrow();
+    preview3DState.renderer.render(preview3DState.scene, preview3DState.camera);
+  };
+  tick();
+}
+
+// Stop drawing while the panel is showing another tab: the canvas is hidden but
+// the loop would still run at 60fps, which on mobile is pure battery and heat.
+export function setPreview3DRenderPaused(paused) {
+  preview3DState.renderPaused = !!paused;
+  if (paused) {
+    if (preview3DState.frameId) {
+      cancelAnimationFrame(preview3DState.frameId);
+      preview3DState.frameId = 0;
+    }
+    return;
+  }
+  // A dead context draws nothing and the "Reload 3D view" notice already owns
+  // that state — don't resurrect the loop on top of it.
+  if (preview3DState.renderer?.getContext?.()?.isContextLost?.()) return;
+  startPreviewRenderLoop();
 }
 
 // A lost WebGL context is why the preview "suddenly goes dark" on iOS.
@@ -564,16 +591,8 @@ function bindPreviewContextLossRecovery(canvas, area) {
     console.log("[preview3D] WebGL context restored — resuming the render loop");
     hidePreviewContextLostNotice(area);
     // three.js has already rebuilt its GL state by the time this fires; just start drawing
-    // again. Guard against double-starting if a restore arrives more than once.
-    if (!preview3DState.frameId && preview3DState.renderer) {
-      const tick = () => {
-        preview3DState.frameId = requestAnimationFrame(tick);
-        preview3DState.controls?.update();
-        updateSurveyPlacementArrow();
-        preview3DState.renderer.render(preview3DState.scene, preview3DState.camera);
-      };
-      tick();
-    }
+    // again — unless the panel is on another tab, where the resume is the tab's job.
+    if (!preview3DState.renderPaused) startPreviewRenderLoop();
   };
 
   canvas.addEventListener("webglcontextlost", onLost);

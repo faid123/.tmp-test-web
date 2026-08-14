@@ -2,12 +2,12 @@ import { TOOTH_ORDER } from "./constants.js";
 
 export const COMPONENT_TABS = [
   { id: "mesh", label: "MESH" },
-  { id: "assembly", label: "ASSEMBLY" },
   { id: "rests", label: "RESTS" },
   { id: "clasps", label: "CLASPS" },
   { id: "bars", label: "BARS" },
-  { id: "plate", label: "PLATE" },
   { id: "major", label: "MAJOR CONNECTOR" },
+  { id: "plate", label: "PLATE" },
+  { id: "assembly", label: "ASSEMBLY" },
   { id: "case-note", label: "CASE NOTE", kind: "form" }
 ];
 

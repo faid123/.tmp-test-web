@@ -39,7 +39,31 @@
 <body>
   <main class="annotation-shell">
     <aside class="panel preview-panel">
-      <div class="preview-frame" id="imagePreviewArea">
+      <!-- Folder tabs over the whole preview panel: the 3D preview and the
+           case's reference images share the panel body. referenceImages.js
+           binds them and swaps the two panes. -->
+      <div class="preview-tabs" role="tablist" aria-label="Preview panel">
+        <button
+          type="button"
+          class="preview-tab is-active"
+          role="tab"
+          id="previewTab3d"
+          data-preview-tab="3d"
+          aria-selected="true"
+          aria-controls="imagePreviewArea"
+        >3D Preview</button>
+        <button
+          type="button"
+          class="preview-tab"
+          role="tab"
+          id="previewTabRefs"
+          data-preview-tab="refs"
+          aria-selected="false"
+          aria-controls="referenceImagesPane"
+          tabindex="-1"
+        >Reference Images<span class="preview-tab-count is-hidden"></span></button>
+      </div>
+      <div class="preview-frame" id="imagePreviewArea" role="tabpanel" aria-labelledby="previewTab3d">
         <button
           type="button"
           id="preview3dMaximizeBtn"
@@ -66,6 +90,16 @@
         </button>
         <img id="previewImage" alt="Composed dental preview" />
         <p id="previewFallback" class="preview-fallback"></p>
+      </div>
+
+      <!-- Second pane of the same panel; filled on first visit to the tab. -->
+      <div
+        class="preview-refs is-hidden"
+        id="referenceImagesPane"
+        role="tabpanel"
+        aria-labelledby="previewTabRefs"
+      >
+        <div class="preview-refs-body" id="referenceImagesBody"></div>
       </div>
     </aside>
 

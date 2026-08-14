@@ -290,17 +290,14 @@ export function emailBodyHtml(lines) {
 // and no uuid, matching the 3D viewer's existing call. The endpoint sends to a
 // single address, so a multi-recipient send is one request per person.
 //
-// `images` are [{ src, alt }] with src a data URL; the mailer renders them under
-// the message. Omitted from the payload when empty, so a text-only send stays the
-// exact request it has always been.
-// Returns true on success.
-export async function sendCustomEmail({ email, subject, message, images }) {
+// `message` is rendered as HTML, images included — the `images` payload field is
+// deliberately unused, since the mailer appends it below the text.
+export async function sendCustomEmail({ email, subject, message }) {
   if (!email || !EMAIL_RE.test(email)) return false;
   const res = await postJson("sendCustomEmail", {
     customEmail: email,
     subject: subject || "SmartRPD notification",
     message: message || "",
-    ...(images?.length ? { images } : {}),
   });
   return res?.ok ?? false;
 }
@@ -764,23 +761,47 @@ export function buildRecipientsSection(caseIntID) {
 
 // ── custom email + send ─────────────────────────────────────────────────────
 
+// The mail's title block, above everything else in the body.
+function emailTitleHtml(text) {
+  return (
+    `<h2 style="margin:0 0 16px;font-family:Arial,sans-serif;font-size:18px;` +
+    `font-weight:600;">${emailBodyHtml([text])}</h2>`
+  );
+}
+
+function escapeAttr(value) {
+  return String(value ?? "").replace(
+    /[&<>"]/g,
+    (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch])
+  );
+}
+
+// The renders, labelled by alt, for the middle of the body. Same data: URIs the
+// mailer's own `images` block uses — inlined here only so they sit above the text.
+export function emailImagesHtml(images) {
+  return (images || [])
+    .filter((image) => image?.src)
+    .map(
+      (image) =>
+        `<b>${emailBodyHtml([image.alt || "Attachment"])}:</b><br>` +
+        `<img src="${escapeAttr(image.src)}" alt="${escapeAttr(image.alt)}"` +
+        ` style="max-width:100%;height:auto;display:block;margin:4px 0 16px;">`
+    )
+    .join("\n");
+}
+
 // THE email this app sends — both approval dialogs use this one body, so the
-// wording is edited here and nowhere else. Composed rather than typed because
-// /sendCustomEmail carries no case context of its own: everything the recipient
-// needs has to be in the text.
+// wording is edited here and nowhere else. `recipient` supplies the greeting (a
+// hand-typed address has no user behind it), `link` where to go.
 //
-//   recipient — a case user, so the mail can open with their name. The one
-//               hand-typed address in each dialog has no user behind it, and is
-//               sent the same body without the greeting.
-//   link      — where to go: the 2D dialog sends this page's own URL, the 3D one
-//               the viewer's.
-export function caseEmailBody(caseIntID, { recipient, link } = {}) {
+// Three blocks in order: title, images, body text. The images are inlined rather
+// than sent as /sendCustomEmail's `images` payload, which the mailer appends
+// after the message — the payload is the only thing that decides their position.
+export function caseEmailBody(caseIntID, { recipient, link, images } = {}) {
   const sender = getLoggedInUser()?.username || "";
   const lines = [];
   if (recipient?.username) lines.push(`Hi ${recipient.username}`, "");
   lines.push(
-    `Case: ${resolveCaseLabel(caseIntID)}`,
-    "",
     "Here is the:",
     `${link}`,
     "",
@@ -789,7 +810,13 @@ export function caseEmailBody(caseIntID, { recipient, link } = {}) {
     "Thanks"
   );
   if (sender) lines.push("", `Sent by ${sender}.`);
-  return emailBodyHtml(lines);
+  return [
+    emailTitleHtml(resolveCaseLabel(caseIntID)),
+    emailImagesHtml(images),
+    emailBodyHtml(lines),
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 // Custom-email send, used by both dialogs' Send Email button and by the approval
@@ -808,13 +835,17 @@ export async function sendCaseEmails(
   if (!recipients?.length) return 0;
 
   const sendOne = async (recipient) => {
-    const message = caseEmailBody(caseIntID, { recipient, link });
     const email = recipient.email;
-    if (await sendCustomEmail({ email, subject, message, images })) return true;
+    const message = caseEmailBody(caseIntID, { recipient, link, images });
+    if (await sendCustomEmail({ email, subject, message })) return true;
     // The images make the request many times larger, so a failure is retried
-    // without them: a notification that arrives without the renders beats no
-    // notification.
-    return images.length ? sendCustomEmail({ email, subject, message }) : false;
+    // text-only: a notification without the renders beats no notification.
+    if (!images.length) return false;
+    return sendCustomEmail({
+      email,
+      subject,
+      message: caseEmailBody(caseIntID, { recipient, link }),
+    });
   };
 
   const results = await Promise.all(recipients.map(sendOne));
