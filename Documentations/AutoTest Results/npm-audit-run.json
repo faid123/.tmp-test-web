@@ -144,7 +144,7 @@
           "range": "<3.3.16"
         },
         {
-          "source": 1138813,
+          "source": 1139427,
           "name": "nanoid",
           "dependency": "nanoid",
           "title": "nanoid: custom generators can loop indefinitely when size is zero",
@@ -157,11 +157,11 @@
             "score": 5.9,
             "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H"
           },
-          "range": "<3.3.17"
+          "range": "<3.3.18"
         }
       ],
       "effects": [],
-      "range": "<=3.3.16",
+      "range": "<=3.3.17",
       "nodes": [
         "node_modules/nanoid"
       ],
@@ -172,22 +172,6 @@
       "severity": "high",
       "isDirect": false,
       "via": [
-        {
-          "source": 1124288,
-          "name": "postcss",
-          "dependency": "postcss",
-          "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
-          "url": "https://github.com/advisories/GHSA-r28c-9q8g-f849",
-          "severity": "high",
-          "cwe": [
-            "CWE-22"
-          ],
-          "cvss": {
-            "score": 7.5,
-            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
-          },
-          "range": "<=8.5.17"
-        },
         {
           "source": 1130709,
           "name": "postcss",
@@ -204,6 +188,22 @@
             "vectorString": null
           },
           "range": "<=8.5.22"
+        },
+        {
+          "source": 1139510,
+          "name": "postcss",
+          "dependency": "postcss",
+          "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+          "url": "https://github.com/advisories/GHSA-r28c-9q8g-f849",
+          "severity": "high",
+          "cwe": [
+            "CWE-22"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+          },
+          "range": "<=8.5.17"
         }
       ],
       "effects": [],

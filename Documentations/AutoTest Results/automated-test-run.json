@@ -1,5 +1,5 @@
 {
-  "runAt": "2026-08-13T11:46:55.362Z",
+  "runAt": "2026-08-14T11:16:55.112Z",
   "command": "npx jest --ci --coverage --coverageReporters=json-summary --verbose --testLocationInResults --json",
   "commandFailed": false,
   "numTotalTestSuites": 13,
@@ -16,7 +16,7 @@
       "pass": 94,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1880,
+      "durationMs": 2373,
       "uat": [],
       "category": "real",
       "crossCutting": false,
@@ -30,7 +30,7 @@
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2130,
+      "durationMs": 2462,
       "uat": [
         "UAT-06"
       ],
@@ -46,7 +46,7 @@
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 328,
+      "durationMs": 417,
       "uat": [
         "UAT-02"
       ],
@@ -62,7 +62,7 @@
       "pass": 22,
       "fail": 0,
       "skip": 0,
-      "durationMs": 324,
+      "durationMs": 512,
       "uat": [
         "UAT-01"
       ],
@@ -78,7 +78,7 @@
       "pass": 21,
       "fail": 0,
       "skip": 0,
-      "durationMs": 947,
+      "durationMs": 1206,
       "uat": [
         "UAT-04"
       ],
@@ -94,7 +94,7 @@
       "pass": 28,
       "fail": 0,
       "skip": 0,
-      "durationMs": 5092,
+      "durationMs": 6395,
       "uat": [
         "UAT-07",
         "UAT-08"
@@ -105,29 +105,13 @@
       "failureMessages": []
     },
     {
-      "file": "jawStructLingualPlate.test.mjs",
-      "status": "passed",
-      "tests": 4,
-      "pass": 4,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 2524,
-      "uat": [
-        "UAT-06"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real src/js/2D/jawStructApply.js against fixture desktop files.",
-      "failureMessages": []
-    },
-    {
       "file": "jawStructMajorSwitch.test.mjs",
       "status": "passed",
       "tests": 4,
       "pass": 4,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2515,
+      "durationMs": 3029,
       "uat": [
         "UAT-06"
       ],
@@ -137,13 +121,13 @@
       "failureMessages": []
     },
     {
-      "file": "jawStructRoundTrip.test.mjs",
+      "file": "jawStructLingualPlate.test.mjs",
       "status": "passed",
-      "tests": 2,
-      "pass": 2,
+      "tests": 4,
+      "pass": 4,
       "fail": 0,
       "skip": 0,
-      "durationMs": 280,
+      "durationMs": 3289,
       "uat": [
         "UAT-06"
       ],
@@ -159,25 +143,11 @@
       "pass": 3,
       "fail": 0,
       "skip": 0,
-      "durationMs": 124,
+      "durationMs": 106,
       "uat": [],
       "category": "real",
       "crossCutting": true,
       "note": "Walks src/, __tests__/ and the HTML pages checking every relative import/script-src resolves. Repo-wide build-integrity check, not tied to one workflow.",
-      "failureMessages": []
-    },
-    {
-      "file": "crypt.test.mjs",
-      "status": "passed",
-      "tests": 3,
-      "pass": 3,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 72,
-      "uat": [],
-      "category": "real",
-      "crossCutting": true,
-      "note": "Imports real src/js/shared/crypt.js. Case-ID URL obfuscation used across case list, chat, viewer, version history, annotation and create-case links -- cross-cutting, not tied to one workflow.",
       "failureMessages": []
     },
     {
@@ -187,7 +157,7 @@
       "pass": 5,
       "fail": 0,
       "skip": 0,
-      "durationMs": 100,
+      "durationMs": 116,
       "uat": [
         "UAT-06"
       ],
@@ -197,19 +167,49 @@
       "failureMessages": []
     },
     {
+      "file": "jawStructRoundTrip.test.mjs",
+      "status": "passed",
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 356,
+      "uat": [
+        "UAT-06"
+      ],
+      "category": "real",
+      "crossCutting": false,
+      "note": "Imports real src/js/2D/jawStructApply.js against fixture desktop files.",
+      "failureMessages": []
+    },
+    {
       "file": "reciprocatingExclusivity.test.mjs",
       "status": "passed",
       "tests": 9,
       "pass": 9,
       "fail": 0,
       "skip": 0,
-      "durationMs": 143,
+      "durationMs": 184,
       "uat": [
         "UAT-06"
       ],
       "category": "real",
       "crossCutting": false,
       "note": "Imports real src/js/2D/criteria.js, components.js and annotationTeethModel.js.",
+      "failureMessages": []
+    },
+    {
+      "file": "crypt.test.mjs",
+      "status": "passed",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 73,
+      "uat": [],
+      "category": "real",
+      "crossCutting": true,
+      "note": "Imports real src/js/shared/crypt.js. Case-ID URL obfuscation used across case list, chat, viewer, version history, annotation and create-case links -- cross-cutting, not tied to one workflow.",
       "failureMessages": []
     }
   ],
@@ -270,10 +270,10 @@
       "name": "2D Annotation",
       "suites": [
         "clinicalInfoCodec.test.mjs",
-        "jawStructLingualPlate.test.mjs",
         "jawStructMajorSwitch.test.mjs",
-        "jawStructRoundTrip.test.mjs",
+        "jawStructLingualPlate.test.mjs",
         "mergeInstructions.test.mjs",
+        "jawStructRoundTrip.test.mjs",
         "reciprocatingExclusivity.test.mjs"
       ],
       "tests": 37,
