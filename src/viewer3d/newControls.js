@@ -63,6 +63,19 @@ style.textContent = `
     display: none;
   }
 
+  /* Dims the canvas behind the panel once it becomes a full-height sidebar
+     (see the max-width: 1024px block at the bottom) — desktop never shows it. */
+  .component-panel-backdrop {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 1001;
+    background: rgba(0, 0, 0, 0.45);
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+  }
+
   /* "Show / Hide" bar: a chevron that folds the list away, plus the close X. */
   .component-panel-header {
     flex: 0 0 auto;
@@ -392,6 +405,84 @@ style.textContent = `
     display: none;
   }
 
+  /* Undercut colour key — shown only while a jaw/slot's undercut view is on
+     (see syncUndercutLegend). Palette matches preview3D.js's
+     colorForSurveyingValue byte-for-byte, so the two heatmaps read the same. */
+  .viewer-undercut-legend {
+    position: absolute;
+    left: 16px;
+    bottom: 16px;
+    z-index: 1002;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 12px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 14px;
+    background: rgba(56, 58, 64, 0.55);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+    color: #ffffff;
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.34);
+    font-family: "Montserrat", Arial, sans-serif;
+    pointer-events: none;
+  }
+
+  .viewer-undercut-legend.hidden {
+    display: none;
+  }
+
+  .viewer-undercut-legend-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+
+  .viewer-undercut-legend-scale {
+    display: flex;
+    gap: 2px;
+  }
+
+  .viewer-undercut-legend-scale span {
+    width: 30px;
+    height: 10px;
+    border-radius: 2px;
+  }
+
+  .viewer-undercut-legend-labels {
+    display: flex;
+    gap: 2px;
+  }
+
+  .viewer-undercut-legend-labels span {
+    width: 30px;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 9px;
+    text-align: center;
+  }
+
+  /* #viewer-right-nav (index.js) becomes a full-width bar across the bottom
+     at both breakpoints below, so the legend has to clear its height instead
+     of sitting flush at bottom:0 like the desktop rule above. */
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .viewer-undercut-legend {
+      bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+    }
+  }
+
+  @media (max-width: 768px) {
+    .viewer-undercut-legend {
+      left: 12px;
+      bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+      padding: 6px 8px 8px;
+    }
+
+    .viewer-undercut-legend-scale span,
+    .viewer-undercut-legend-labels span {
+      width: 24px;
+    }
+  }
+
   @media (max-width: 640px), (max-height: 720px) {
     .component-panel-toggle {
       width: 48px;
@@ -450,6 +541,51 @@ style.textContent = `
       bottom: auto;
       width: min(280px, calc(100vw - 24px));
       max-height: min(280px, calc(100% - 24px));
+    }
+  }
+
+  /* Objects panel as a full-height right sidebar on tablet/phone, opened by
+     the footer hamburger (#footerObjectsBtn, wired in viewerShell.js) instead
+     of the floating top-left toggle above, which was eating too much of the
+     small screen and is hidden here. Both drive the same viewerPanelManager
+     entry (see createComponentPanel), so either trigger opens/closes it.
+     !important beats both this file's own narrower rules above and
+     style.css's older top-sheet rules, and — being appended to <head> at
+     runtime, after style.css's <link> — this block also wins any tie against
+     them for free; !important just makes that not depend on load order. */
+  @media (max-width: 1024px) {
+    .component-panel-toggle {
+      display: none !important;
+    }
+
+    .component-panel {
+      display: flex !important;
+      top: 0 !important;
+      left: auto !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      /* ~60% of the screen, not the near-total-width overlay min(300px, 84vw)
+         gave on most phones — floor/ceiling just keep it usable at the
+         extremes (a tiny phone, or this same breakpoint on a wide tablet). */
+      width: clamp(220px, 60vw, 420px) !important;
+      max-width: none !important;
+      height: 100% !important;
+      max-height: none !important;
+      border-radius: 0 !important;
+      border-top: 0 !important;
+      border-right: 0 !important;
+      border-bottom: 0 !important;
+      box-shadow: -14px 0 34px rgba(0, 0, 0, 0.4) !important;
+      transform: translateX(100%) !important;
+      transition: transform 0.25s ease !important;
+    }
+
+    .component-panel:not(.hidden) {
+      transform: translateX(0) !important;
+    }
+
+    .component-panel-backdrop:not(.hidden) {
+      display: block;
     }
   }
 `;
@@ -630,6 +766,9 @@ function createComponentPanel(groups) {
 
   const rowControllers = [];
   let polylinePanelRegistered = false;
+  // Set once the legend is mounted, below — read fresh each sync so the
+  // panel-construction order above doesn't matter.
+  let undercutLegend = null;
 
   const areAllGroupsVisible = () =>
     groups.every((g) => g.hasContent?.() === false || (g.getVisible?.() ?? true));
@@ -655,10 +794,19 @@ function createComponentPanel(groups) {
       .forEach(({ row }) => body.appendChild(row));
   };
 
+  // The legend is one shared key for the whole panel — it shows once ANY row's
+  // undercut view is on, and hides again once none are, rather than per-row.
+  const syncUndercutLegend = () => {
+    if (!undercutLegend) return;
+    const anyUndercutOn = groups.some((group) => group.getMode?.() === "undercut");
+    undercutLegend.classList.toggle("hidden", !anyUndercutOn);
+  };
+
   const syncAllRows = () => {
     rowControllers.forEach((controller) => controller.sync());
     reorderRows();
     syncShowHideButton();
+    syncUndercutLegend();
   };
 
   showHideAllButton.addEventListener("click", () => {
@@ -914,17 +1062,33 @@ function createComponentPanel(groups) {
     }
   });
 
-  // The panel occupies the toggle's corner, so only one of the two is on
-  // screen at a time.
+  // Only exists to be dimmed/clicked-through on the mobile/tablet sidebar
+  // (display:none at desktop widths — see the max-width: 1024px block above).
+  const backdrop = document.createElement("div");
+  backdrop.id = "component-panel-backdrop";
+  backdrop.className = "component-panel-backdrop hidden";
+  backdrop.setAttribute("aria-hidden", "true");
+  backdrop.addEventListener("click", () => {
+    if (window.viewerPanelManager) window.viewerPanelManager.close("objects-panel");
+    else closePanel();
+  });
+
+  // The panel occupies the toggle's corner (desktop) or slides in as a
+  // sidebar over the backdrop (tablet/phone — see #footerObjectsBtn in
+  // viewerShell.js), so only one of the two triggers is on screen at a time.
   const openPanel = () => {
     panel.classList.remove("hidden");
+    backdrop.classList.remove("hidden");
     toggle.classList.add("is-hidden");
     toggle.setAttribute("aria-expanded", "true");
+    window.dispatchEvent(new CustomEvent("viewerobjectspanelchange", { detail: { open: true } }));
   };
   const closePanel = () => {
     panel.classList.add("hidden");
+    backdrop.classList.add("hidden");
     toggle.classList.remove("is-hidden");
     toggle.setAttribute("aria-expanded", "false");
+    window.dispatchEvent(new CustomEvent("viewerobjectspanelchange", { detail: { open: false } }));
   };
 
   panel.appendChild(header);
@@ -935,22 +1099,75 @@ function createComponentPanel(groups) {
     document.getElementById("container3D") ||
     window.getViewerRightNav?.()?.parentElement ||
     document.body;
+  panelHost.appendChild(backdrop);
   panelHost.appendChild(toggle);
   panelHost.appendChild(panel);
+  // Bottom-left of the same host, so it never fights the (top-left) objects
+  // panel or the (right-side) polyline panel for space.
+  undercutLegend = createUndercutLegend(panelHost);
   window.viewerPanelManager?.register("objects-panel", toggle, openPanel, closePanel);
   window.syncComponentPanelRows = syncAllRows;
   syncAllRows();
   syncShowHideButton();
 
-  // Open on load — the objects list is the viewer's primary control.
-  if (window.viewerPanelManager) window.viewerPanelManager.open("objects-panel");
-  else openPanel();
+  // Open on load — the objects list is the viewer's primary control. Except
+  // on tablet/phone, where it's now a full-height sidebar over a backdrop:
+  // auto-opening it there would cover the model on every load, the exact
+  // screen-space problem the footer hamburger trigger exists to fix.
+  const opensOnLoad = !window.matchMedia("(max-width: 1024px)").matches;
+  if (opensOnLoad) {
+    if (window.viewerPanelManager) window.viewerPanelManager.open("objects-panel");
+    else openPanel();
+  }
 }
 
 function removeVisibilityAndTransparencyControls() {
   clearAllWireframeOverlays();
+  document.getElementById("component-panel-backdrop")?.remove();
   document.getElementById("component-panel")?.remove();
   document.getElementById("component-panel-toggle")?.remove();
+  document.getElementById("viewer-undercut-legend")?.remove();
+}
+
+// Undercut colour key, byte-for-byte the same palette as preview3D.js's
+// colorForSurveyingValue/undercutBandHex — keep the two in sync.
+const UNDERCUT_LEGEND_BANDS = [
+  { hex: "#AA0003", label: ">0.75" },
+  { hex: "#FE4600", label: "0.5-0.75" },
+  { hex: "#FD8C00", label: "0.25-0.5" },
+  { hex: "#FFD200", label: "<0.25" },
+];
+
+// Built once per panel (case view or design view); syncUndercutLegend below
+// shows/hides it depending on whether any row's undercut view is on.
+function createUndercutLegend(panelHost) {
+  const legend = document.createElement("div");
+  legend.id = "viewer-undercut-legend";
+  legend.className = "viewer-undercut-legend hidden";
+
+  const title = document.createElement("div");
+  title.className = "viewer-undercut-legend-title";
+  title.textContent = "Undercut (mm)";
+  legend.appendChild(title);
+
+  const scale = document.createElement("div");
+  scale.className = "viewer-undercut-legend-scale";
+  const labels = document.createElement("div");
+  labels.className = "viewer-undercut-legend-labels";
+  UNDERCUT_LEGEND_BANDS.forEach(({ hex, label }) => {
+    const swatch = document.createElement("span");
+    swatch.style.background = hex;
+    scale.appendChild(swatch);
+
+    const labelEl = document.createElement("span");
+    labelEl.textContent = label;
+    labels.appendChild(labelEl);
+  });
+  legend.appendChild(scale);
+  legend.appendChild(labels);
+
+  panelHost.appendChild(legend);
+  return legend;
 }
 
 // One row per design slot: icon, "Slot N: <name>", eye toggle and opacity.

@@ -98,6 +98,39 @@ function wireRightNavButton() {
   });
 }
 
+// Mobile/tablet only (see #footerObjectsBtn's display:none in style.css) —
+// the Objects (Show/Hide) panel becomes a right-side sidebar at those widths
+// (see newControls.js's max-width: 1024px block), so this footer icon takes
+// over from the floating top-left toggle that opened it as a top sheet,
+// which was eating too much of a small screen and is hidden there too.
+function wireObjectsPanelButton() {
+  const btn = document.getElementById("footerObjectsBtn");
+  if (!btn) return;
+
+  const syncButton = (open) => {
+    const label = open ? "Close objects panel" : "Objects";
+    btn.setAttribute("aria-label", label);
+    btn.dataset.tooltip = label;
+    btn.setAttribute("aria-pressed", String(Boolean(open)));
+  };
+  syncButton(false);
+
+  btn.addEventListener("click", () => {
+    if (window.viewerPanelManager) {
+      window.viewerPanelManager.toggle("objects-panel");
+      return;
+    }
+    // Fallback while the WebGL workspace is still loading: the floating
+    // toggle is hidden (not removed) at these widths, so its own click
+    // handler still opens/closes the same panel.
+    document.getElementById("component-panel-toggle")?.click();
+  });
+
+  window.addEventListener("viewerobjectspanelchange", (event) => {
+    syncButton(Boolean(event.detail?.open));
+  });
+}
+
 function wireChatButton() {
   const footerChatBtn = document.getElementById("footerChatBtn");
   if (!footerChatBtn) return;
@@ -259,6 +292,7 @@ document.addEventListener("DOMContentLoaded", () => {
   populateCaseName();
   wireChatButton();
   wireRightNavButton();
+  wireObjectsPanelButton();
   wireSidebarVersionHistory();
   wireSidebarReturn();
   setupAppSidebar({
