@@ -283,9 +283,9 @@ export const PAGE_TOURS = {
       topic: "preview-capture",
     },
     {
-      title: "Other 3D files",
-      text: "Beyond the two jaw scans, a case has four named STL slots — Upper jaw, Upper metal RPD, Lower jaw and Lower metal RPD. Upload one here and it loads into the preview alongside the jaws; in the list, a file's icon hides it in the 3D view and the × removes it.",
-      selector: "#footerUpload3dBtn",
+      title: "Extra 3D files",
+      text: "Beyond the two jaw scans, a case has four named STL slots — an Upper jaw and Lower jaw, each with a Metal RPD beside it. This tab lists them over the 3D view: upload one and it takes the stage, a file's icon hides it in the view and the trash button removes it.",
+      selector: "#previewTabExtras",
       topic: "extra-reference-stl",
     },
     {
@@ -460,8 +460,8 @@ export const PAGE_TOURS = {
       topic: "case-note",
     },
     {
-      title: "Comment",
-      text: "Free text for anything the technician needs to know. This is the same note as the Quick Text Box on the case list, so what you write here shows up there too.",
+      title: "Special Instruction",
+      text: "Free text for anything the technician needs to know. This is the same note as CASE INSTRUCTIONS on the case list — what you write here shows up there, and what was written there shows up here.",
       selector: "#case-note-comment",
       reveal: CASE_NOTE_WAYS_IN,
       dismiss: "#caseNoteSheet .cn-sheet-close",

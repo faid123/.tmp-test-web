@@ -50,6 +50,9 @@ import {
   fetchAdditionalCaseDetails,
   updateCaseDueDate,
   updateCaseStatus,
+  updateCaseComment,
+  publishCaseComment,
+  watchCaseComments,
 } from "./caseNote.js";
 import { toast, attachThemedCalendar } from "../shared/toast.js";
 
@@ -563,8 +566,29 @@ export function ensureMajorCatalogPickForTooth(toothId) {
   }
 }
 
+// Special Instruction is the case list's CASE INSTRUCTIONS box, edited in another
+// tab; and this form can exist twice at once (Components tab + footer sheet).
+// Keep every copy on screen in step, skipping any that is focused or holds
+// unsaved edits. Wired on first use, not at import — this module is imported by
+// tests that run without a DOM.
+let commentWatchWired = false;
+function watchCommentAcrossTabs() {
+  if (commentWatchWired) return;
+  commentWatchWired = true;
+  watchCaseComments((caseIntID, text) => {
+    if (String(caseIntID) !== String(state.caseIntID)) return;
+    for (const box of document.querySelectorAll("#case-note-comment")) {
+      if (box === document.activeElement) continue;
+      if (box.value.trim() !== (box.dataset.savedComment ?? "").trim()) continue;
+      box.value = text;
+      box.dataset.savedComment = text;
+    }
+  });
+}
+
 // Build the Case Note form (renders inside the catalog area when the case-note tab is active).
 export function createCaseNoteForm() {
+  watchCommentAcrossTabs();
   const saved = loadCaseNote(state.caseIntID);
 
   const form = document.createElement("form");
@@ -595,14 +619,6 @@ export function createCaseNoteForm() {
   dateInput.input.addEventListener("input", () => {
     userTouchedDate = true;
   });
-  fetchAdditionalCaseDetails(state.caseIntID).then(({ ok, detail }) => {
-    if (!ok || userTouchedDate) return;
-    const live = toDateInputValue(detail?.due_date);
-    if (live && live !== dateInput.input.value) {
-      dateInput.input.value = live;
-      saveCaseDueDate(state.caseIntID, live);
-    }
-  });
 
   const shadeInput = buildInputRow("Tooth Shade", "text", "case-note-shade", saved.toothShade || "", {
     placeholder: "e.g. A2",
@@ -623,8 +639,37 @@ export function createCaseNoteForm() {
   let userTouchedCategory = Boolean(saved.workCategoryTouched);
   categorySelect.input.addEventListener("change",()=> {userTouchedCategory=true;});
 
-  const commentField = buildTextareaRow("Comment", "case-note-comment", saved.comment || "");
+  const commentField = buildTextareaRow(
+    "Special Instruction",
+    "case-note-comment",
+    saved.comment || ""
+  );
   form.appendChild(commentField.row);
+
+  let userTouchedComment = false;
+  // Last value known to be on the server. On the element (not a closure) so the
+  // cross-tab watcher below can tell a stale copy from one with unsaved edits.
+  commentField.input.dataset.savedComment = commentField.input.value;
+  commentField.input.addEventListener("input", () => {
+    userTouchedComment = true;
+  });
+
+  // One read for both server-backed fields (same additionalcasedetails row).
+  // Neither overwrites what the user already typed; an empty server comment
+  // leaves the local draft alone.
+  fetchAdditionalCaseDetails(state.caseIntID).then(({ ok, detail }) => {
+    if (!ok) return;
+    const live = toDateInputValue(detail?.due_date);
+    if (!userTouchedDate && live && live !== dateInput.input.value) {
+      dateInput.input.value = live;
+      saveCaseDueDate(state.caseIntID, live);
+    }
+    const liveComment = detail?.comments ?? "";
+    if (!userTouchedComment && liveComment && liveComment !== commentField.input.value) {
+      commentField.input.value = liveComment;
+      commentField.input.dataset.savedComment = liveComment;
+    }
+  });
 
   const actions = document.createElement("div");
   actions.className = "case-note-actions";
@@ -638,6 +683,33 @@ export function createCaseNoteForm() {
   const status = document.createElement("span");
   status.className = "case-note-status";
   status.setAttribute("aria-live", "polite");
+
+  // Special Instruction commits on its own when focus leaves, like the case
+  // list's box — no need to approve the design to get the note to the technician.
+  let pendingCommentSave = null;
+  commentField.input.addEventListener("blur", () => {
+    const text = commentField.input.value;
+    const savedText = commentField.input.dataset.savedComment ?? "";
+    if (state.caseIntID == null || text.trim() === savedText.trim()) return;
+    status.textContent = "Saving…";
+    status.classList.remove("is-error");
+    pendingCommentSave = updateCaseComment(state.caseIntID, text).then((ok) => {
+      if (ok) {
+        commentField.input.dataset.savedComment = text;
+        publishCaseComment(state.caseIntID, text);
+        const note = loadCaseNote(state.caseIntID);
+        saveCaseNote(state.caseIntID, { ...note, comment: text, updatedAt: new Date().toISOString() });
+        status.textContent = "Saved.";
+        setTimeout(() => {
+          if (status.textContent === "Saved.") status.textContent = "";
+        }, 2000);
+      } else {
+        status.textContent = "Couldn't save — try again.";
+        status.classList.add("is-error");
+      }
+      pendingCommentSave = null;
+    });
+  });
 
   approveBtn.addEventListener("click", async () => {
     // The confirmation is a full dialog: the two arches as they look right now,
@@ -684,6 +756,10 @@ export function createCaseNoteForm() {
     // Button is already disabled from the report wait above.
     status.textContent = "Approving…";
 
+    // Clicking Approve blurs the comment box first, so let that write land —
+    // all three are full upserts of one row and must not overlap.
+    await pendingCommentSave;
+
     // Both writes are full upserts of the same additionalcasedetails row, so they
     // must stay sequential: the status write re-reads and carries forward the date
     // and comment just written. The status write is skipped when the first fails,
@@ -693,7 +769,11 @@ export function createCaseNoteForm() {
       dateRequired,
       commentField.input.value
     );
-    if (remoteOk) saveCaseDueDate(state.caseIntID, dateRequired);
+    if (remoteOk) {
+      saveCaseDueDate(state.caseIntID, dateRequired);
+      commentField.input.dataset.savedComment = commentField.input.value;
+      publishCaseComment(state.caseIntID, commentField.input.value);
+    }
     const statusOk =
       remoteOk && (await updateCaseStatus(state.caseIntID, STATUS_2D_DESIGN_APPROVED));
 

@@ -603,7 +603,7 @@ describe("the walk through the Case Note", () => {
     const titles = await walkTitles("annotation_2d");
 
     expect(titles).toEqual(expect.arrayContaining([
-      "The Case Note", "Date Required", "Tooth Shade", "Work Category", "Comment", "Approving the design",
+      "The Case Note", "Date Required", "Tooth Shade", "Work Category", "Special Instruction", "Approving the design",
     ]));
     // Re-opening the sheet rebuilds the form, which would throw away anything already
     // typed into it — so the tour must press that button only once.

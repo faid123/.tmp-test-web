@@ -956,18 +956,18 @@ export const HELP_TOPICS = [
     id: "extra-reference-stl",
     title: "Upload extra reference 3D files",
     page: "annotation_2d",
-    selector: "#footerUpload3dBtn",
-    keywords: ["extra", "reference", "3d", "file", "stl", "slot", "upload", "other", "additional"],
+    selector: "#previewTabExtras",
+    keywords: ["extra", "reference", "3d", "file", "stl", "slot", "upload", "other", "additional", "tab"],
     phrases: [
       "how do i upload extra 3d files",
       "how do i add more stl files",
-      "what is upload other 3d files",
+      "what is the extra 3d tab",
       "how many extra 3d files can i add",
     ],
     answer:
-      "Upload other 3D files in the footer bar adds STL files beyond the main upper and lower jaw — up to four extra slots per case. They load into the 3D preview alongside the jaws and can be removed from there when no longer needed.",
+      "The Extra 3D tab above the preview panel adds STL files beyond the main upper and lower jaw — up to four slots per case. Opening the tab puts those files on the 3D stage, and each row's icon shows or hides its file.",
     steps: [
-      "Select Upload other 3D files in the footer bar.",
+      "Open the Extra 3D tab above the preview panel.",
       "Choose a file for an open slot (up to 4 per case).",
       "Delete a slot's file first if all four are already in use.",
     ],

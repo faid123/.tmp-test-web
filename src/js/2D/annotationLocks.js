@@ -1069,10 +1069,9 @@ export async function captureJawPngDataUrl(scale = 3) {
 // to the same email, where a full-scale arch PNG would be megabytes on the wire.
 const ARCH_THUMB_WIDTH = 900;
 
-// One PNG per arch, on its own white ground — the 2D counterpart to the 3D
-// preview's captureExtraSlotShots. The case-note approval dialog shows these and
-// attaches the ticked ones to its email, so each arch is framed alone rather
-// than as the side-by-side composite the case thumbnail uses.
+// One PNG per arch, on its own white ground. The case-note approval dialog shows
+// these and attaches the ticked ones to its email, so each arch is framed alone
+// rather than as the side-by-side composite the case thumbnail uses.
 // A `null` for an arch means its SVG isn't on the page.
 export async function captureArchThumbnails() {
   const shoot = async (svgId) => {

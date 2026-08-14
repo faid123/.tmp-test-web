@@ -1,9 +1,7 @@
-// Reference Images tab of the preview panel: the folder tabs, the gallery and
-// its full-pane image view. The 3D pane is hidden and its render loop paused
-// while the gallery is up — never torn down, a rebuild costs a WebGL context.
+// The Reference Images pane: the gallery of the case's reference images and its
+// full-pane image view. The tab strip that shows it lives in previewTabs.js.
 
 import { state } from "./2DAnnotation.js";
-import { setPreview3DRenderPaused } from "./preview3D.js";
 import { VIEWER_UUID } from "../shared/config.js";
 import { getLoggedInUser } from "../shared/api.js";
 import {
@@ -19,50 +17,12 @@ let viewer = null;
 
 function paneEls() {
   return {
-    shell: document.querySelector(".annotation-shell"),
-    tabs: document.querySelectorAll(".preview-tab"),
-    frame: document.getElementById("imagePreviewArea"),
     pane: document.getElementById("referenceImagesPane"),
     body: document.getElementById("referenceImagesBody"),
-    maximizeBtn: document.getElementById("preview3dMaximizeBtn"),
-    countEl: document.querySelector(".preview-tab-count"),
   };
 }
 
-export function initReferenceImages() {
-  const { tabs } = paneEls();
-  if (!tabs.length) return;
-  tabs.forEach((tab) => {
-    tab.addEventListener("click", () => showPreviewTab(tab.dataset.previewTab));
-  });
-  showPreviewTab("3d");
-}
-
-export function showPreviewTab(name) {
-  const { shell, tabs, frame, pane, maximizeBtn } = paneEls();
-  if (!frame || !pane) return;
-  const refs = name === "refs";
-
-  // The maximize/restore control lives inside the 3D frame, so leaving the tab
-  // while maximized would strand the user with no way back to the split view.
-  if (refs && shell?.classList.contains("preview-maximized")) maximizeBtn?.click();
-
-  tabs.forEach((tab) => {
-    const active = tab.dataset.previewTab === name;
-    tab.classList.toggle("is-active", active);
-    tab.setAttribute("aria-selected", active ? "true" : "false");
-    tab.tabIndex = active ? 0 : -1;
-  });
-  frame.classList.toggle("is-hidden", refs);
-  pane.classList.toggle("is-hidden", !refs);
-  setPreview3DRenderPaused(refs);
-  if (refs) loadReferenceImages();
-  // Leaving the tab returns the pane to the grid, so its arrow-key handler never
-  // outlives the view it drives.
-  else closeViewer();
-}
-
-function loadReferenceImages({ force = false } = {}) {
+export function loadReferenceImages({ force = false } = {}) {
   const { body } = paneEls();
   if (!body) return Promise.resolve();
   if (force) {
@@ -90,7 +50,6 @@ function loadReferenceImages({ force = false } = {}) {
         .map((row, i) => ({ src: referenceImageSrc(row), title: referenceImageTitle(row, i) }))
         .filter((img) => img.src);
       renderGallery(images);
-      updateTabCount(images.length);
     })
     .catch((err) => {
       console.warn("[referenceImages] load failed", err);
@@ -153,13 +112,6 @@ function renderGallery(list) {
     grid.appendChild(card);
   });
   body.appendChild(grid);
-}
-
-function updateTabCount(n) {
-  const { countEl } = paneEls();
-  if (!countEl) return;
-  countEl.textContent = n ? String(n) : "";
-  countEl.classList.toggle("is-hidden", !n);
 }
 
 // ---- in-pane viewer ------------------------------------------------------
@@ -374,7 +326,9 @@ function paintViewer() {
   el.querySelector(".preview-refs-next").style.visibility = nav;
 }
 
-function closeViewer() {
+// Also called when the tab is left, so the arrow-key handler never outlives the
+// view it drives.
+export function closeViewer() {
   const { body } = paneEls();
   viewer?.el.classList.add("is-hidden");
   body?.classList.remove("is-hidden");
