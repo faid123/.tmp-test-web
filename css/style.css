@@ -230,6 +230,19 @@ html, body {
   outline-offset: 1px;
 }
 
+/* Desktop already has the floating Objects toggle top-left of the canvas —
+   this footer twin only takes over once that toggle hides (see the
+   #component-panel-toggle rule in newControls.js's injected styles). */
+#footerObjectsBtn {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  #footerObjectsBtn {
+    display: inline-flex;
+  }
+}
+
 .cm-footer [data-tooltip] {
   position: relative;
 }

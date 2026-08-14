@@ -1,4 +1,4 @@
-// The confirmation step behind the "Other 3D files" panel's Request button.
+// The confirmation step behind the Extra 3D panel's Request button.
 //
 // Almost all of it is the 2D Case Note's approval dialog (confirmCaseNoteApproval
 // in caseNote.js), imported from there so the two read as one flow: the renders
@@ -6,14 +6,14 @@
 //
 // What differs is only what is being reviewed and where the mail points:
 //
-//   • left: the uploaded 3D files, one render per arch, captured from the live
-//     preview by the caller, with the same upload tile under them for anything
-//     else worth sending.
+//   • left: the captures taken with the Extra 3D tab's camera button, one panel
+//     per arch, with the same upload tile under them for anything else worth
+//     sending. Nothing is captured automatically.
 //   • the email links to the 3D viewer rather than the 2D page.
 //   • the email section has no Send button of its own — this dialog confirms with
 //     "Send", which mails the same people, so the two would be one action twice.
 
-import { confirmModal } from "../shared/toast.js";
+import { confirmModal, toast } from "../shared/toast.js";
 import { buildThreeDViewerUrl } from "../shared/caseLinks.js";
 import {
   buildAttachmentsSection,
@@ -35,12 +35,172 @@ function el(tag, className, text) {
   return node;
 }
 
-// The dialog's two renders as mail attachments. An arch with no 3D file has no
-// capture, and is simply left out rather than sent as an empty image.
+// Puts the picture on the clipboard. Pasting it into a chat that already has the
+// message typed turns that message into the picture's caption.
+async function copyImageToClipboard(dataUrl) {
+  if (!dataUrl || !navigator.clipboard?.write || typeof ClipboardItem === "undefined") return false;
+  try {
+    const blob = await (await fetch(dataUrl)).blob();
+    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+    return true;
+  } catch (err) {
+    console.warn("[preview3DApproval] image clipboard copy failed", err);
+    return false;
+  }
+}
+
+// Share panel: pick one capture and how much text goes with it, then copy each to
+// the clipboard for pasting into the chat. Share sheets are not used — WhatsApp
+// Desktop prints the shared file's temp path into the caption.
+function buildSharePanel(caseIntID, shots, { caseName = "", ownerName = "" } = {}) {
+  const section = el("section", "cn-approve-section cn-share is-hidden");
+  section.appendChild(el("h4", "cn-approve-section-title", "Share"));
+
+  const link = () => buildThreeDViewerUrl(caseIntID, { forShare: true });
+  let pickedArch = shots?.upper ? "upper" : shots?.lower ? "lower" : null;
+  let format = "message";
+
+  // One capture only: what is shared is a single picture, not an album.
+  const thumbs = el("div", "cn-share-thumbs");
+  for (const [arch, label] of [["upper", "Upper"], ["lower", "Lower"]]) {
+    const tile = el("label", "cn-share-thumb");
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "cn-share-thumb";
+    radio.checked = pickedArch === arch;
+    radio.disabled = !shots?.[arch];
+    radio.addEventListener("change", () => {
+      if (radio.checked) pickedArch = arch;
+    });
+    tile.appendChild(radio);
+    if (shots?.[arch]) {
+      const img = document.createElement("img");
+      img.src = shots[arch];
+      img.alt = `${label} 3D capture`;
+      tile.appendChild(img);
+    } else {
+      tile.appendChild(el("span", "cn-share-thumb-empty", "None"));
+    }
+    tile.appendChild(el("span", "cn-share-thumb-label", label));
+    thumbs.appendChild(tile);
+  }
+  section.appendChild(thumbs);
+
+  // Who the message greets. Free text, because the person it goes to on WhatsApp
+  // is not necessarily one of the case's registered users.
+  const toRow = el("label", "cn-share-to");
+  toRow.appendChild(el("span", null, "To"));
+  const toInput = document.createElement("input");
+  toInput.type = "text";
+  toInput.className = "cn-share-to-input";
+  toInput.placeholder = "Dr name";
+  toInput.value = ownerName || "";
+  toRow.appendChild(toInput);
+  section.appendChild(toRow);
+
+  const formats = el("div", "cn-share-formats");
+  for (const [value, label] of [["message", "Full message"], ["link", "Link only"]]) {
+    const choice = el("label", "cn-share-format");
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "cn-share-format";
+    radio.checked = format === value;
+    radio.addEventListener("change", () => {
+      if (radio.checked) format = value;
+    });
+    choice.appendChild(radio);
+    choice.appendChild(el("span", null, label));
+    formats.appendChild(choice);
+  }
+  section.appendChild(formats);
+
+  const hint = el("p", "cn-share-hint");
+  hint.setAttribute("aria-live", "polite");
+
+  const caseLabel = () => (caseName ? `UID ${caseIntID} : ${caseName}` : resolveCaseLabel(caseIntID));
+
+  // The wording the lab sends by hand today.
+  const messageLines = () => {
+    const who = toInput.value.trim();
+    return [
+      who ? `Hi Dr ${who},` : "Hi,",
+      `Case: ${caseLabel()}`,
+      "",
+      "Here's the link to your case:",
+      link(),
+      "",
+      "Ok to proceed?",
+      "",
+      "Thank you.",
+      "-TRI Dental",
+    ];
+  };
+
+  const messageText = () => (format === "link" ? link() : messageLines().join("\n"));
+
+  const apps = el("div", "cn-share-apps");
+
+  // Paste order matters: the picture goes in last, so paste the message first and
+  // WhatsApp carries it into the media preview's caption box.
+  const imageBtn = el("button", "cn-share-app cn-share-app--image");
+  imageBtn.type = "button";
+  imageBtn.innerHTML = '<i class="fa fa-image" aria-hidden="true"></i><span>Copy image</span>';
+  imageBtn.addEventListener("click", async () => {
+    if (!pickedArch || !shots?.[pickedArch]) {
+      toast.error("No capture to copy — take one on the Extra 3D tab.");
+      return;
+    }
+    if (await copyImageToClipboard(shots[pickedArch])) {
+      toast.success("Image copied.");
+      hint.textContent = "Paste the message into the chat first, then the image — it becomes the caption.";
+    } else {
+      toast.error("Couldn't copy the image.");
+    }
+  });
+  apps.appendChild(imageBtn);
+
+  const copyBtn = el("button", "cn-share-app cn-share-app--copy");
+  copyBtn.type = "button";
+  copyBtn.innerHTML = '<i class="fa fa-copy" aria-hidden="true"></i><span>Copy message</span>';
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(messageText());
+      toast.success("Message copied.");
+      hint.textContent = "Paste it into the chat, then paste the image to caption it.";
+    } catch (err) {
+      console.warn("[preview3DApproval] copy failed", err);
+      toast.error("Couldn't copy the message.");
+    }
+  });
+  apps.appendChild(copyBtn);
+
+  section.appendChild(apps);
+  section.appendChild(hint);
+  return section;
+}
+
+// Share sits beside Cancel and opens the panel above, rather than sharing on the
+// spot: the user picks the capture and the wording first.
+function buildShareButton(panel) {
+  const btn = el("button", "app-confirm-btn cn-approve-share");
+  btn.type = "button";
+  btn.title = "Share the 3D viewer link";
+  btn.innerHTML = '<i class="fa fa-share-nodes" aria-hidden="true"></i><span>Share</span>';
+  btn.addEventListener("click", () => {
+    const open = panel.classList.toggle("is-hidden");
+    btn.setAttribute("aria-expanded", open ? "false" : "true");
+    if (!open) panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  });
+  btn.setAttribute("aria-expanded", "false");
+  return btn;
+}
+
+// The dialog's two captures as mail attachments. An arch that was never captured
+// is simply left out rather than sent as an empty image.
 function shotAttachments(shots) {
   return [
-    { src: shots?.upper, alt: "Upper jaw thumbnail" },
-    { src: shots?.lower, alt: "Lower jaw thumbnail" },
+    { src: shots?.upper, alt: "Upper 3D capture" },
+    { src: shots?.lower, alt: "Lower 3D capture" },
   ].filter((image) => !!image.src);
 }
 
@@ -61,13 +221,20 @@ export async function sendApprovalEmails(caseIntID, recipients, images) {
 // addresses, `images` the ticked renders plus whatever was uploaded. NOT a
 // boolean like confirmModal — the caller sends to those addresses, but only once
 // the status write has actually landed, so a request that failed is never sent.
-export async function confirmPreview3DApproval({ caseIntID, shots = null } = {}) {
+export async function confirmPreview3DApproval({
+  caseIntID,
+  shots = null,
+  // Only the share message uses these: the case's own name and the owner the
+  // greeting is prefilled with.
+  caseName = "",
+  ownerName = "",
+} = {}) {
   const content = el("div", "cn-approve");
 
   // Files reviewed on the left, who to tell on the right — the same split the 2D
   // dialog uses, so the render stays in view while the notification is written.
   const cols = el("div", "cn-approve-cols");
-  const renders = buildShotsSection(shots, { title: "3D files", noun: "3D file" });
+  const renders = buildShotsSection(shots, { title: "3D captures", noun: "capture" });
   const uploads = buildAttachmentsSection();
   const main = el("div", "cn-approve-main");
   main.appendChild(renders.section);
@@ -96,6 +263,11 @@ export async function confirmPreview3DApproval({ caseIntID, shots = null } = {})
 
   content.appendChild(cols);
 
+  // Folded away under the Share button until asked for, so the dialog still opens
+  // on the request itself.
+  const sharePanel = buildSharePanel(caseIntID, shots, { caseName, ownerName });
+  content.appendChild(sharePanel);
+
   // The qualifier is red and reads as an aside, because it is who the dialog is
   // for rather than part of what it does — a lab user requests the approval, the
   // clinician gives it.
@@ -109,6 +281,7 @@ export async function confirmPreview3DApproval({ caseIntID, shots = null } = {})
     variant: "warning",
     size: "lg",
     content,
+    actionsExtra: buildShareButton(sharePanel),
   });
 
   // Read the ticks and uploads before the dialog's DOM goes away, and only when

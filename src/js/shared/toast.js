@@ -151,6 +151,9 @@ export function confirmModal({
   variant = "info", // "info" | "warning" | "danger"
   content = null, // HTMLElement mounted above the buttons
   size = "", // "" | "lg"
+  // Element mounted in the action row before Cancel, for a side action that
+  // neither confirms nor dismisses (the 3D request dialog's Share).
+  actionsExtra = null,
 } = {}) {
   return new Promise((resolve) => {
     // If a previous prompt is still open, dismiss it so the new one isn't
@@ -183,6 +186,7 @@ export function confirmModal({
     else contentEl.remove();
     okBtn.textContent = confirmText;
     cancelBtn.textContent = cancelText;
+    if (actionsExtra) cancelBtn.parentElement.insertBefore(actionsExtra, cancelBtn);
 
     document.body.appendChild(overlay);
     activeConfirmOverlay = overlay;

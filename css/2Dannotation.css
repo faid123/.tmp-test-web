@@ -103,15 +103,14 @@ body.is-panel-resizing {
 .preview-tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 16px;
+  padding: 4px 11px;
   border: 1px solid rgba(59, 174, 149, 0.35);
   border-bottom-color: transparent;
-  border-radius: 9px 9px 0 0;
+  border-radius: 7px 7px 0 0;
   background: var(--rose-050);
   color: var(--muted);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   cursor: pointer;
@@ -129,29 +128,12 @@ body.is-panel-resizing {
   /* Paints over the pane border directly below, joining tab to pane. */
   border-bottom: 1px solid #ffffff;
   margin-bottom: -1px;
-  padding-bottom: 8px;
+  padding-bottom: 5px;
 }
 
 .preview-tab:focus-visible {
   outline: 2px solid var(--rose-500);
   outline-offset: -2px;
-}
-
-/* Reference-image count, filled once the gallery has loaded. */
-.preview-tab-count {
-  min-width: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
-  background: var(--rose-100);
-  color: var(--rose-700);
-  font-size: 0.7rem;
-  line-height: 16px;
-  text-align: center;
-}
-
-.preview-tab.is-active .preview-tab-count {
-  background: var(--rose-500);
-  color: #ffffff;
 }
 
 /* ---- Reference Images pane ---- */
@@ -682,65 +664,57 @@ body.is-panel-resizing {
   display: none;
 }
 
-/* ===== Upload other 3D files modal ===== */
-/* Drop-up popover that emerges from the footer "Upload other 3D files" icon.
-   The overlay is a positioning layer only — pointer-events stay off it so clicks
-   around the panel reach the 3D view instead of closing the popover; the panel is
-   placed next to the icon by positionUpload3dPanel() in preview3D.js. */
+/* ===== Extra 3D files panel ===== */
+/* On the Extra 3D tab this panel IS the toolbar: the jaw rows step aside, and so
+   does the HD/SD badge — mesh quality belongs to the jaws, which are off this
+   stage. The undercut toggle keeps its usual upper-left corner. */
+.preview-frame.is-extras-tab .jaw-preview-toolbar,
+.preview-frame.is-extras-tab .jaw-preview-quality-toggle { display: none; }
+
+/* Request is a stage control on this tab, in the corner the HD/SD badge
+   vacates, and has no business on the others. */
+.upload3d-approve-btn {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  z-index: 8;
+}
+
+.preview-frame:not(.is-extras-tab) .upload3d-approve-btn { display: none; }
+
+/* First row of the shell's grid, in the toolbar's place — the two are never
+   displayed together, so the mount always lands in the 1fr row below. */
 .upload3d-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 4200;
-  pointer-events: none;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .upload3d-modal.is-hidden {
   display: none;
 }
 
+/* Slot cards and Request on one line. Matches .jaw-preview-toolbar: same white
+   band, same 3px divider, and a right gutter that clears the maximize button. */
 .upload3d-modal-panel {
-  position: absolute;
-  z-index: 1;
-  width: min(560px, calc(100vw - 24px));
-  max-height: min(60vh, 460px);
   display: flex;
-  flex-direction: column;
-  background: transparent;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.22);
-  padding: 10px;
-  pointer-events: auto;
-  transform-origin: bottom left;
+  align-items: center;
+  min-height: 0;
+  gap: 10px;
+  padding: 9px 52px 11px 14px;
+  background: #ffffff;
+  border-bottom: 3px solid var(--rose-500);
   animation: upload3d-emerge 0.14s ease-out;
 }
 
-@keyframes upload3d-emerge {
-  from { opacity: 0; transform: translateY(6px) scale(0.97); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.upload3d-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-/* Title + Approve travel together on the left; the close X stays right. */
-.upload3d-modal-heading {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.upload3d-modal-panel > .upload3d-card {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
-.upload3d-modal-title {
-  margin: 0;
-  font-size: 0.85rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: var(--ink, #2b3440);
+@keyframes upload3d-emerge {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .upload3d-approve-btn {
@@ -753,8 +727,7 @@ body.is-panel-resizing {
   color: #fff;
   background: var(--rose-500, #3bae95);
   border: 1px solid var(--rose-500, #3bae95);
-  /* Squared off like the rest of the panel's controls (the close button beside
-     it, the Upload button below) rather than the pill it used to be. */
+  /* Squared off like the slot cards' own controls rather than a pill. */
   border-radius: 8px;
   cursor: pointer;
   white-space: nowrap;
@@ -767,24 +740,6 @@ body.is-panel-resizing {
 .upload3d-approve-btn:disabled {
   opacity: 0.6;
   cursor: default;
-}
-
-.upload3d-modal-close {
-  border: none;
-  background: none;
-  cursor: pointer;
-  font-size: 1.05rem;
-  color: var(--muted, #6b7280);
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-}
-
-.upload3d-modal-close:hover {
-  background: #f1f3f5;
-  color: var(--ink, #2b3440);
 }
 
 /* ---- Download Jaw Profile menu (STL zip / JPEG) ------------------------- */
@@ -901,11 +856,9 @@ body.is-panel-resizing {
 }
 
 /* The grey card that holds the file rows + upload button. */
+/* No surround of its own: the slot rows sit straight on the toolbar band, the
+   way the jaw rows do. */
 .upload3d-card {
-  background: #e6e9ee;
-  border: 1px solid #d2d7df;
-  border-radius: 14px;
-  padding: 8px;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -915,20 +868,20 @@ body.is-panel-resizing {
 .upload3d-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 9px;
 }
 
 .upload3d-row {
   display: grid;
-  grid-template-columns: 34px 28px 1fr;
+  grid-template-columns: 29px 27px 1fr;
   align-items: center;
-  column-gap: 10px;
+  column-gap: 9px;
   width: 100%;
   text-align: left;
   background: #fff;
   border: 1px solid #c3cad4;
-  border-radius: 10px;
-  padding: 9px 12px;
+  border-radius: 9px;
+  padding: 8px 11px;
   font-family: inherit;
   transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
 }
@@ -949,7 +902,7 @@ button.upload3d-row {
   position: relative;
   display: grid;
   place-items: center;
-  font-size: 1.6rem;
+  font-size: 1.45rem;
   color: #3f5168;
 }
 
@@ -957,10 +910,10 @@ button.upload3d-row {
   color: #8b95a3;
 }
 
-/* Custom per-slot image icon shown on populated rows in "Other 3D files". */
+/* Custom per-slot image icon shown on populated Extra 3D slot rows. */
 .upload3d-slot-img {
-  width: 1.9rem;
-  height: 1.9rem;
+  width: 1.7rem;
+  height: 1.7rem;
   object-fit: contain;
   display: block;
 }
@@ -1001,7 +954,7 @@ button.upload3d-row {
   display: grid;
   place-items: center;
   color: #8b95a3;
-  font-size: 1.6rem;
+  font-size: 1.45rem;
 }
 
 .upload3d-folder {
@@ -1011,18 +964,11 @@ button.upload3d-row {
   color: #3f5168;
 }
 
+/* The shared trash button (jaw-preview-delete-btn), trimmed to the row's column. */
 .upload3d-row-delete {
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: #3f5168;
-  font-size: 1.4rem;
-  font-weight: 700;
-  line-height: 1;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  transition: color 120ms ease;
+  width: 27px;
+  height: 27px;
+  border-radius: 7px;
 }
 
 .upload3d-row-delete:hover {
@@ -1031,10 +977,13 @@ button.upload3d-row {
 
 .upload3d-row-name {
   color: #3f5168;
-  font-size: 0.72rem;
+  font-size: 0.71rem;
   font-weight: 600;
-  word-break: break-all;
   line-height: 1.3;
+  /* One line: a long filename ellipses instead of growing the card. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .upload3d-row-name.is-muted {
@@ -1047,22 +996,32 @@ button.upload3d-row {
 }
 
 /* Named-slot rows: icon | text (name + status/filename) | upload button. */
+/* Same three columns as a populated row, with the delete column left empty, so
+   every slot's label starts on the same line. */
 .upload3d-slot-row {
-  grid-template-columns: 34px 1fr auto;
+  grid-template-columns: 29px 27px 1fr;
+}
+
+.upload3d-slot-row .upload3d-row-text {
+  grid-column: 3;
 }
 
 .upload3d-row-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
 .upload3d-slot-name {
   color: #2b3440;
-  font-size: 0.74rem;
+  font-size: 0.73rem;
   font-weight: 700;
   line-height: 1.25;
+  /* Two-word slot labels stay on one line so a card is two lines tall, never three. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* "Upload" hyperlink shown inline in the empty-slot sentence. */
@@ -1071,7 +1030,10 @@ button.upload3d-row {
   font-weight: 700;
   text-decoration: underline;
   cursor: pointer;
+  /* Narrow slot column: the word must not break across two lines. */
+  white-space: nowrap;
 }
+
 
 .upload3d-upload-link:hover {
   color: var(--rose-700, #c2255c);
@@ -1110,11 +1072,6 @@ button.upload3d-row {
 .upload3d-upload-btn.is-disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.upload3d-modal.is-busy .upload3d-list {
-  opacity: 0.7;
-  pointer-events: none;
 }
 
 /* Upload progress bar (track + fill + centered label). */
@@ -3562,6 +3519,11 @@ button.upload3d-row {
     padding: 10px 50px 10px 10px;
   }
 
+  /* Tighter inset on the phone, same right gutter for the maximize button. */
+  .upload3d-modal-panel {
+    padding: 10px 50px 10px 10px;
+  }
+
   .jaw-preview-row {
     /* Icon a step down from the desktop 34px so the label keeps room here. */
     grid-template-columns: 30px minmax(0, 1fr) 32px auto;
@@ -4641,6 +4603,164 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   display: grid;
   gap: 16px;
   text-align: left;
+}
+
+/* Share sits just left of Cancel in the request dialog's action row: outlined,
+   so Send stays the only filled button. The compound selector outranks
+   .app-confirm-btn's transparent border, which toast.css sets later. */
+.app-confirm-btn.cn-approve-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-color: var(--rose-500, #3bae95);
+  background: #ffffff;
+  color: var(--rose-700, #25735f);
+}
+
+.app-confirm-btn.cn-approve-share:hover:not(:disabled) {
+  background: var(--rose-050, #eaf7f4);
+}
+
+.app-confirm-btn.cn-approve-share:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---- Share panel inside the request dialog ---- */
+.cn-share {
+  margin-top: 12px;
+  border-top: 1px solid var(--rose-100, #cfeae3);
+  padding-top: 12px;
+}
+
+.cn-share.is-hidden { display: none; }
+
+.cn-share-thumbs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+/* One capture only, so these are radios: the tile is the label. */
+.cn-share-thumb {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 1px solid var(--rose-100, #cfeae3);
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--ink, #1a4d3f);
+}
+
+.cn-share-thumb:has(input:checked) {
+  border-color: var(--rose-500, #3bae95);
+  background: var(--rose-050, #eaf7f4);
+}
+
+.cn-share-thumb:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.cn-share-thumb img {
+  width: 54px;
+  height: 38px;
+  object-fit: cover;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.cn-share-thumb-empty {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 38px;
+  border-radius: 5px;
+  background: #f1f5f9;
+  color: #94a3b8;
+  font-size: 0.7rem;
+}
+
+.cn-share-to {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 0.78rem;
+  color: var(--muted, #528d7f);
+}
+
+.cn-share-to-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 260px;
+  padding: 6px 10px;
+  border: 1px solid var(--rose-100, #cfeae3);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--ink, #1a4d3f);
+}
+
+.cn-share-to-input:focus {
+  outline: none;
+  border-color: var(--rose-500, #3bae95);
+}
+
+.cn-share-formats {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 10px;
+  font-size: 0.78rem;
+  color: var(--muted, #528d7f);
+}
+
+.cn-share-format {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.cn-share-apps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cn-share-app {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.cn-share-app i { font-size: 1rem; }
+
+.cn-share-app--image i,
+.cn-share-app--copy i { color: var(--rose-600, #2f9079); }
+
+.cn-share-app:hover {
+  border-color: var(--rose-500, #3bae95);
+  background: var(--rose-050, #eaf7f4);
+}
+
+.cn-share-hint {
+  margin: 8px 0 0;
+  font-size: 0.74rem;
+  color: var(--muted, #528d7f);
+  min-height: 1em;
 }
 
 /* The "[For Lab Only]" qualifier in the 3D dialog's title: red and a size down,

@@ -39,9 +39,9 @@
 <body>
   <main class="annotation-shell">
     <aside class="panel preview-panel">
-      <!-- Folder tabs over the whole preview panel: the 3D preview and the
-           case's reference images share the panel body. referenceImages.js
-           binds them and swaps the two panes. -->
+      <!-- Folder tabs over the whole preview panel; previewTabs.js binds them.
+           3D Preview and Extra 3D share the frame below (Extra 3D stages the
+           uploaded slot files in it); Reference Images swaps in its own pane. -->
       <div class="preview-tabs" role="tablist" aria-label="Preview panel">
         <button
           type="button"
@@ -52,6 +52,18 @@
           aria-selected="true"
           aria-controls="imagePreviewArea"
         >3D Preview</button>
+        <!-- Extra 3D files: jaw_stls_extra_slot_1..4 via POST /stl/slot/ (up to
+             4 per case). preview3D.js docks the slot panel over the frame. -->
+        <button
+          type="button"
+          class="preview-tab"
+          role="tab"
+          id="previewTabExtras"
+          data-preview-tab="extras"
+          aria-selected="false"
+          aria-controls="imagePreviewArea"
+          tabindex="-1"
+        >Extra 3D</button>
         <button
           type="button"
           class="preview-tab"
@@ -61,7 +73,7 @@
           aria-selected="false"
           aria-controls="referenceImagesPane"
           tabindex="-1"
-        >Reference Images<span class="preview-tab-count is-hidden"></span></button>
+        >Reference Images</button>
       </div>
       <div class="preview-frame" id="imagePreviewArea" role="tabpanel" aria-labelledby="previewTab3d">
         <button
@@ -284,12 +296,8 @@
       </button>
       <!-- Screen capture moved to the lower-left of the 3D preview panel
            (#preview3dCaptureBtn); it still dispatches `request-3d-capture`. -->
-      <!-- Upload other 3D files: stored in jaw_stls_extra_slot_1..4 via
-           POST /stl/slot/ (up to 4 extra STLs per case). The handler in
-           2DAnnotation.js opens the picker and hands the file to preview3D.js. -->
-      <button type="button" class="ann-footer-btn" id="footerUpload3dBtn" aria-label="Upload other 3D files" data-tooltip="Upload other 3D files">
-        <i class="fa fa-cloud-arrow-up" aria-hidden="true"></i>
-      </button>
+      <!-- Extra 3D file upload moved to the preview panel's "Extra 3D" tab
+           (#previewTabExtras), which docks the 4 slot rows over the 3D view. -->
       <button type="button" class="ann-footer-btn" id="footerDownloadJawProfileBtn" aria-label="Download jaw profile" data-tooltip="Download jaw profile">
         <i class="fa fa-file-arrow-down" aria-hidden="true"></i>
       </button>
