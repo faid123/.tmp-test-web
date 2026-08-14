@@ -1,6 +1,12 @@
 import { STLLoader } from '../../node_modules/three/examples/jsm/loaders/STLLoader.js';
 import * as THREE from 'three';
 
+// Vertex-colour attributes are read as LINEAR by three.js, so the backend's sRGB
+// undercut heatmap has to be converted here or it renders washed out. Matches
+// preview3D.js's srgbToLinear byte-for-byte — keep the two in sync.
+function srgbToLinear(c) {
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
 
 class STLMeshLoader {
     constructor(material) {
@@ -92,18 +98,18 @@ class STLMeshLoader {
                         r = rgbaColorsArray[i * 4];
                         g = rgbaColorsArray[i * 4 + 1];
                         b = rgbaColorsArray[i * 4 + 2];
-                        if(r==1)
-                          {
-                            r= 208/255;
-                          }
-                          if(g==1)
-                          {
-                            g = 190/255;
-                          }
-                          if(b==1)
-                          {
-                            b = 141/255;
-                          }
+                        // (1,1,1) is the backend's "no undercut" sentinel — only the full-white
+                        // triple maps to the base tooth colour (kept unconverted, see preview3D.js).
+                        // Real heatmap bands (e.g. yellow #FFD200 has r=1) must NOT be caught here.
+                        if (r === 1 && g === 1 && b === 1) {
+                          r = 208 / 255;
+                          g = 190 / 255;
+                          b = 141 / 255;
+                        } else {
+                          r = srgbToLinear(r);
+                          g = srgbToLinear(g);
+                          b = srgbToLinear(b);
+                        }
                         colors[i * 3] = r;
                         colors[i * 3 + 1] = g;
                         colors[i * 3 + 2] = b;
