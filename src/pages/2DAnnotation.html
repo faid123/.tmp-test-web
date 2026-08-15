@@ -546,26 +546,25 @@
       aria-modal="true"
       aria-labelledby="loadTemplateTitle"
     >
-      <h3 id="loadTemplateTitle">Load Template Jaw</h3>
+      <h3 id="loadTemplateTitle">Kennedy Classification</h3>
       <p class="load-template-hint">
-        Upload a Jaw Struct (<code>.txt</code>) file to load its design onto the arch.
-        You can select the upper and lower files together.
+        Read from this case's jaw struct, as the arches stand now.
       </p>
-      <label id="loadTemplateDropzone" class="load-template-dropzone" for="loadTemplateFileInput">
-        <span class="load-template-dropzone-icon" aria-hidden="true">&#8682;</span>
-        <span class="load-template-dropzone-text">Choose Jaw Struct file(s) or drop them here</span>
-        <input
-          id="loadTemplateFileInput"
-          type="file"
-          accept=".txt,text/plain"
-          multiple
-          hidden
-        />
-      </label>
-      <ul id="loadTemplateFileList" class="load-template-file-list"></ul>
+      <!-- Rows filled by renderKennedyClassPanel from the live presence map. -->
+      <ul id="kennedyClassPanel" class="kennedy-class-panel">
+        <li class="kennedy-class-row" data-jaw="upper">
+          <span class="kennedy-class-jaw">Upper</span>
+          <span class="kennedy-class-label"></span>
+          <span class="kennedy-class-detail"></span>
+        </li>
+        <li class="kennedy-class-row" data-jaw="lower">
+          <span class="kennedy-class-jaw">Lower</span>
+          <span class="kennedy-class-label"></span>
+          <span class="kennedy-class-detail"></span>
+        </li>
+      </ul>
       <div class="load-template-actions">
-        <button id="loadTemplateCancelBtn" type="button">Cancel</button>
-        <button id="loadTemplateLoadBtn" type="button" class="is-primary" disabled>Load</button>
+        <button id="loadTemplateCancelBtn" type="button" class="is-primary">Close</button>
       </div>
     </div>
   </div>
