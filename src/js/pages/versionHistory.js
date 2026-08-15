@@ -1,11 +1,5 @@
-// Case version history — one module for both use cases:
-//   • the in-app modal widget on case_list / 2DAnnotation / ThreeDViewer
-//     (pages that carry the #versionHistoryModal markup), and
-//   • the standalone VersionHistory.html page (a bare #versionList, no modal).
-// The mode is auto-detected on DOMContentLoaded. openVersionHistory() is exported
-// for the viewer shells that open the modal programmatically (viewerShell.js,
-// 2DAnnotation.js). Distinguishing marker: #versionHistoryModal present = widget;
-// otherwise a lone #versionList = standalone page.
+// Case version history as both a modal widget and the standalone page, detected
+// on DOMContentLoaded: #versionHistoryModal = widget, lone #versionList = page.
 
 import { lol } from "../shared/crypt.js";
 import { toast } from "../shared/toast.js";
@@ -173,9 +167,8 @@ function renderVersionList(items, userIndex) {
   }).join("");
 }
 
-// Fetch history + the actor index for a case, then render the list. Renders an
-// error message into #versionList on failure. Callers set their own "Loading…"
-// state first (the widget shows it before opening the modal).
+// Fetches history + the actor index, then renders (or an error) into #versionList.
+// Callers set their own "Loading…" state first.
 async function loadAndRenderHistory(caseId, uuid) {
   try {
     const [hist, userIndex] = await Promise.all([

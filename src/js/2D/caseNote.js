@@ -1,16 +1,9 @@
-// Shared helpers for per-case "Case Note" data (owner, date required, shade, work
-// category, comment). Most fields live in localStorage under `caseNote:<caseIntID>`
-// (no API yet). Exception: "Date Required" is the case's due date, whose source of
-// truth is the backend (additionalcasedetails.due_date, same as the case-list "Due"
-// column), written through via updateCaseDueDate below.
-//
-// The Approve button's confirmation dialog lives at the bottom of this file
-// (confirmCaseNoteApproval) along with the case-users/email calls it needs. Most
-// of that dialog is shared with the 3D one, which imports its pieces from here
-// (see preview3DApproval.js).
+// Per-case "Case Note" helpers: mostly localStorage `caseNote:<caseIntID>`, except "Date
+// Required", which IS the backend additionalcasedetails.due_date.
 
 import { confirmModal, toast } from "../shared/toast.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
+import { toDateInputValue } from "../shared/timestamps.js";
 
 // getLoggedInUser rather than ApiClient.js's shared VIEWER_UUID: these case
 // endpoints authenticate as the signed-in user.
@@ -75,30 +68,10 @@ function lsSet(key, value) {
   }
 }
 
-// Convert a case Due Date (Unix sec/ms or date string) to the `YYYY-MM-DD` an
-// <input type="date"> expects. Returns "" for missing/invalid/pre-2000 (the API
-// sometimes returns "0").
-export function toDateInputValue(ts) {
-  if (ts == null || ts === "" || ts === 0 || ts === "0") return "";
-  const n = Number(ts);
-  let ms;
-  if (Number.isFinite(n)) {
-    if (n <= 0) return "";
-    ms = String(n).length >= 13 ? n : n * 1000;
-  } else {
-    const d = new Date(ts);
-    if (Number.isNaN(d.getTime())) return "";
-    ms = d.getTime();
-  }
-  if (ms < 946684800000) return "";
-  const d = new Date(ms);
-  const p = (x) => String(x).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+export { toDateInputValue };
 
-// Persist the case Due Date so the 2D Case Note can default "Date Required" to it.
-// The 2D tab can't read window.selectedCaseStub, but localStorage is shared
-// same-origin. Stored already-normalized to `YYYY-MM-DD`.
+// Persists the due date so the 2D Case Note can default to it: the 2D tab can't read
+// window.selectedCaseStub, but localStorage is shared same-origin.
 export function saveCaseDueDate(caseIntID, isoDate) {
   return lsSet(storageKey(DUE_DATE_PREFIX, caseIntID), isoDate);
 }
@@ -109,10 +82,8 @@ export function loadCaseDueDate(caseIntID) {
 
 const COMMENT_PREFIX = "caseComment:";
 
-// Announce a saved comment to the other open tabs. The case list and the 2D page
-// are separate documents, so same-origin localStorage is the only channel: a
-// `storage` event fires in every OTHER tab when this key changes. The timestamp
-// keeps a repeat save of identical text firing the event.
+// Announces a saved comment to other tabs — `storage` fires in every OTHER document, the
+// only same-origin channel. The timestamp keeps a repeat save of identical text firing.
 export function publishCaseComment(caseIntID, text) {
   return lsSet(
     storageKey(COMMENT_PREFIX, caseIntID),
@@ -136,19 +107,16 @@ export function watchCaseComments(cb) {
   return () => window.removeEventListener("storage", onStorage);
 }
 
-// Convert an <input type="date"> value (`YYYY-MM-DD`) to the Unix *seconds*
-// timestamp the additionalcasedetails `due_date` field uses (parsed in local
-// time so the displayed day round-trips). Returns null for empty/invalid.
+// `YYYY-MM-DD` to the Unix SECONDS additionalcasedetails.due_date uses, parsed in local
+// time so the displayed day round-trips. Returns null for empty/invalid.
 function dateInputToEpochSeconds(isoDate) {
   if (!isoDate) return null;
   const ms = Date.parse(`${isoDate}T00:00:00`);
   return Number.isNaN(ms) ? null : Math.floor(ms / 1000);
 }
 
-// Read the case's "additional details" row (status/assignee/comments/due date).
-// POST /additionalcasedetails is a full upsert, so an update must read first to
-// avoid clobbering unchanged fields. Returns { ok, detail }: ok=false = request
-// failed (don't write); detail=null with ok=true = no row yet.
+// Reads the additional-details row. POST is a full upsert, so an update MUST read first.
+// { ok:false } = request failed, don't write; { ok:true, detail:null } = no row yet.
 export async function fetchAdditionalCaseDetails(caseIntID) {
   const user = getLoggedInUser();
   if (!user?.uuid || caseIntID == null) return { ok: false, detail: null };
@@ -165,58 +133,9 @@ export async function fetchAdditionalCaseDetails(caseIntID) {
   }
 }
 
-// Update the case's due date (and optionally its comment) on the backend.
-// additional_case_details is append-only and the latest row is current, so read
-// that row and re-post with changed fields, carrying assigned_to/new_status
-// forward. Bails if the read fails (rather than null the other fields). `comment`:
-// string writes it through; undefined preserves the existing one. Returns true on success.
-export async function updateCaseDueDate(caseIntID, isoDate, comment) {
-  const user = getLoggedInUser();
-  if (!user?.uuid || caseIntID == null) return false;
-  const { ok, detail } = await fetchAdditionalCaseDetails(caseIntID);
-  if (!ok) return false;
-  const comments =
-    comment !== undefined ? (comment?.trim() ? comment : null) : detail?.comments ?? null;
-  const res = await postJson("additionalcasedetails", [
-    { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID },
-    {
-      assigned_to: detail?.assigned_to ?? null,
-      due_date: dateInputToEpochSeconds(isoDate),
-      comments,
-      new_status: detail?.new_status ?? null,
-    },
-  ]);
-  return res?.ok ?? false;
-}
-
-// Write just the comment (case list's CASE INSTRUCTIONS). Same full-upsert rule:
-// read first, carry the rest forward. Leaves due_date alone — Approve owns that.
-export async function updateCaseComment(caseIntID, comment) {
-  const user = getLoggedInUser();
-  if (!user?.uuid || caseIntID == null) return false;
-  const { ok, detail } = await fetchAdditionalCaseDetails(caseIntID);
-  if (!ok) return false;
-  const res = await postJson("additionalcasedetails", [
-    { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID },
-    {
-      assigned_to: detail?.assigned_to ?? null,
-      due_date: detail?.due_date ?? null,
-      comments: comment?.trim() ? comment : null,
-      new_status: detail?.new_status ?? null,
-    },
-  ]);
-  return res?.ok ?? false;
-}
-
-// The status strings the backend stores for an approved design. Both are values
-// the case list already filters on (see its status <select>) — not new labels.
-export const STATUS_2D_DESIGN_APPROVED = "2D design approved";
-export const STATUS_3D_DESIGN_APPROVED = "3D design approved";
-
-// Set the case's status. Same full-upsert rule as updateCaseDueDate: read the
-// current row and carry assigned_to/due_date/comments forward, or they come back
-// null. Bails without writing if the read fails. Returns true on success.
-export async function updateCaseStatus(caseIntID, newStatus) {
+// A post REPLACES the whole additionalcasedetails row, so read it first and carry every
+// field forward except `changes`. Bails without writing if the read fails.
+async function patchAdditionalCaseDetails(caseIntID, changes) {
   const user = getLoggedInUser();
   if (!user?.uuid || caseIntID == null) return false;
   const { ok, detail } = await fetchAdditionalCaseDetails(caseIntID);
@@ -227,10 +146,32 @@ export async function updateCaseStatus(caseIntID, newStatus) {
       assigned_to: detail?.assigned_to ?? null,
       due_date: detail?.due_date ?? null,
       comments: detail?.comments ?? null,
-      new_status: newStatus,
+      new_status: detail?.new_status ?? null,
+      ...changes,
     },
   ]);
   return res?.ok ?? false;
+}
+
+// `comment`: a string writes it through; undefined preserves the existing one.
+export async function updateCaseDueDate(caseIntID, isoDate, comment) {
+  const changes = { due_date: dateInputToEpochSeconds(isoDate) };
+  if (comment !== undefined) changes.comments = comment?.trim() ? comment : null;
+  return patchAdditionalCaseDetails(caseIntID, changes);
+}
+
+// The case list's CASE INSTRUCTIONS box. Leaves due_date alone — Approve owns it.
+export async function updateCaseComment(caseIntID, comment) {
+  return patchAdditionalCaseDetails(caseIntID, { comments: comment?.trim() ? comment : null });
+}
+
+// The status strings the backend stores for an approved design. Both are values
+// the case list already filters on (see its status <select>) — not new labels.
+export const STATUS_2D_DESIGN_APPROVED = "2D design approved";
+export const STATUS_3D_DESIGN_APPROVED = "3D design approved";
+
+export async function updateCaseStatus(caseIntID, newStatus) {
+  return patchAdditionalCaseDetails(caseIntID, { new_status: newStatus });
 }
 
 export function loadCaseNote(caseIntID) {
@@ -249,25 +190,15 @@ export function saveCaseNote(caseIntID, note) {
 }
 
 // ---------------------------------------------------------------------------
-// Case users + email. Used by the Approve confirmation dialog below to show who
-// is on the case and notify them.
+// Case users + email — who is on the case, and how the Approve dialog notifies them.
 // ---------------------------------------------------------------------------
 
 // Loose on purpose: the backend is the real validator. This only catches the
 // obvious typo before spending a request.
 export const EMAIL_RE = /^\S+@\S+\.\S+$/;
 
-// The people attached to a case, from the role table — the same source the
-// dashboard's Access panel and the case list's co-owner column use.
-//
-// Returns { ok, users } where users is [{ username, role, uuid, email }].
-// ok=false means the request failed (offline / refused), which the caller shows
-// differently from a case that genuinely has no rows.
-//
-// `email` is mostly absent here — role rows generally don't carry one. Sharing a
-// case never captures an address either: it resolves a typed username to a uuid
-// and writes a role row, and the invite is an in-app /alerts row, not mail. Use
-// fetchCaseUsersWithEmails when addresses are wanted; it fills the gaps.
+// The case's people from the role table as { ok, users }; ok=false is a failed request, not
+// an empty case. `email` is mostly absent — fetchCaseUsersWithEmails fills the gaps.
 export async function fetchCaseUsers(caseIntID) {
   const user = getLoggedInUser();
   if (!user?.uuid || caseIntID == null) return { ok: false, users: [] };
@@ -320,12 +251,8 @@ export function roleLabel(role) {
   return role || "—";
 }
 
-// Join an email's lines into its wire form. The mailer renders /sendCustomEmail's
-// message as HTML, where a "\n" is just whitespace — a body joined with newlines
-// arrives as one long run-on line — so the breaks have to be <br>. Text is escaped
-// first or a case name carrying & or < would break the markup, and the trailing
-// "\n" keeps the raw source readable. Every custom email this app sends goes
-// through here; pass "" for a blank line.
+// Joins email lines for the wire: the mailer renders the message as HTML, so breaks MUST
+// be <br> and text must be escaped first. Every custom email goes through here.
 export function emailBodyHtml(lines) {
   return lines
     .map((line) =>
@@ -334,13 +261,8 @@ export function emailBodyHtml(lines) {
     .join("<br>\n");
 }
 
-// Send one message to one address via POST /sendCustomEmail. Unlike the
-// case endpoints above this takes a FLAT body — no [{auth}, {payload}] wrapper —
-// and no uuid, matching the 3D viewer's existing call. The endpoint sends to a
-// single address, so a multi-recipient send is one request per person.
-//
-// `message` is rendered as HTML, images included — the `images` payload field is
-// deliberately unused, since the mailer appends it below the text.
+// /sendCustomEmail takes a FLAT body (no [{auth},{payload}], no uuid) and ONE address, so
+// multi-recipient is a request each. `images` is unused — they inline into `message`.
 export async function sendCustomEmail({ email, subject, message }) {
   if (!email || !EMAIL_RE.test(email)) return false;
   const res = await postJson("sendCustomEmail", {
@@ -351,12 +273,8 @@ export async function sendCustomEmail({ email, subject, message }) {
   return res?.ok ?? false;
 }
 
-// Address lookup by username — the same call the case-share box makes to turn a
-// typed name into a user before writing its role row. It answers with the user's
-// email, and takes only a machine_id, so it is NOT is_admin-gated: admins and
-// non-admins resolve addresses through the identical path. (This replaced a first
-// pass through the admin-only user/getall, which bought one batched request for
-// admins and a 401 for everyone else.) "" means no usable address came back.
+// Address lookup by username, the same call the case-share box makes. Takes only a
+// machine_id, so it is NOT is_admin-gated — unlike user/getall, which 401s non-admins.
 async function lookupUserEmail(username) {
   if (!username) return "";
   const res = await postJson("user/checkifusernameexists/get", [
@@ -373,12 +291,8 @@ async function lookupUserEmail(username) {
   }
 }
 
-// fetchCaseUsers plus each user's address. Role rows rarely carry an email, so
-// whoever is missing one is looked up by username — bounded by the case's user
-// count (a handful), and skipped entirely when the roster already had them, so it
-// never becomes a burst against the throttler. `email` is "" for anyone the
-// lookup couldn't place. Used by the notification below and by the 3D approval
-// dialog's recipient checkboxes.
+// fetchCaseUsers plus addresses: anyone missing one is looked up by username, bounded by
+// the case's handful of users so it never bursts the throttler. "" if unresolvable.
 export async function fetchCaseUsersWithEmails(caseIntID) {
   const { ok, users } = await fetchCaseUsers(caseIntID);
   if (!ok || !users.length) return { ok, users };
@@ -400,20 +314,8 @@ export async function fetchCaseUsersWithEmails(caseIntID) {
   };
 }
 
-// In-app notifications for everyone else on the case — the bell on the
-// notifications page — mirroring the case list's status-change alerts
-// (caseManagement.js createStatusAlerts).
-//
-// Unlike email this IS per-individual and needs no address: /alerts is keyed by
-// `to_user`, a username, which role rows do reliably carry. So it reaches people
-// the mail can't, and is the channel that actually guarantees delivery.
-//
-// notifications.js renders "<from_user> has updated the status of <case> to
-// <new_status>, with message “<alert_message>”" — so the message should add to
-// the status line, not repeat it.
-//
-// Returns how many alerts were written; 0 on any failure. Never throws: a
-// notification problem must not read as an approval problem.
+// In-app bell alerts, keyed by username not address, so they reach people mail can't.
+// notifications.js already renders the status line — add to it, don't repeat it.
 export async function sendCaseApprovalAlerts(
   caseIntID,
   { statusLabel = "", alertMessage = "" } = {}
@@ -453,31 +355,9 @@ export async function sendCaseApprovalAlerts(
 }
 
 // ---------------------------------------------------------------------------
-// The confirmation step behind the Case Note's "Approve" button.
-//
-// Approving is case-level and visible to everyone on the case, so instead of a
-// bare "are you sure?" this shows what is about to be approved and who it
-// affects, in one dialog:
-//
-//   • left: the case's two arches as they currently look, captured by the
-//     caller. Each carries a checkbox — the ticked ones ride along on the email.
-//   • left, below: an upload tile, for any other image the recipients should see
-//     (a photo, a scan, a marked-up screenshot). Those are attached too.
-//   • right: the case's owner / co-owners, each with a checkbox. These ARE the
-//     recipients: fetchCaseUsersWithEmails resolves an address for each of them,
-//     and a user it can't place is still listed, with the box disabled.
-//   • right, below: a typed address + Send Email, so a recipient who isn't on
-//     the case (or whose address didn't resolve) can still be notified.
-//   • Approve / Cancel, which resolve the returned promise.
-//
-// The three right-hand pieces and the shots panel are SHARED with the 3D
-// approval dialog (preview3DApproval.js imports them from here), so the two read
-// as one flow. They differ only in what is being reviewed and where the email's
-// link points — this one at the 2D page itself, that one at the 3D viewer.
-//
-// Sending email is deliberately independent of the Approve/Cancel result: the
-// notification is its own action with its own feedback, and cancelling after
-// sending must not pretend the mail was unsent.
+// The Case Note "Approve" confirmation: arch renders + upload tile left, roster and typed
+// address right. Everything but the arches is SHARED with preview3DApproval.js. Sending is
+// deliberately independent of Approve/Cancel, so cancelling can't unsend mail.
 // ---------------------------------------------------------------------------
 
 // The topbar label ("Case: UID 12 : name") is what the user sees on screen, so
@@ -498,17 +378,8 @@ function el(tag, className, text) {
 
 // ── what is being approved ──────────────────────────────────────────────────
 
-// One panel per arch, upper above lower. `shots` holds PNG data URLs captured by
-// the caller — the 2D dialog's arch renders, the 3D dialog's model renders; a
-// null means that arch has nothing to show, which is said in place of the image
-// rather than left as an empty frame.
-//
-// Each render carries a checkbox: ticked ones are attached to the email. Returns
-// { section, selectedShots() } — the same { upper, lower } shape as `shots`, with
-// an unticked arch nulled out, so the send path needs no other change.
-//
-// `noun` names what the panels hold ("2D design", "3D file"), and is what the
-// empty state and the images' alt text are written from.
+// One panel per arch from caller-captured PNGs; a null arch says so rather than showing an
+// empty frame. selectedShots() returns the same shape with unticked arches nulled.
 export function buildShotsSection(shots, { title = "Files", noun = "file" } = {}) {
   const section = el("section", "cn-approve-section");
   section.appendChild(el("h4", "cn-approve-section-title", title));
@@ -561,14 +432,12 @@ export function buildShotsSection(shots, { title = "Files", noun = "file" } = {}
 
 // ── uploaded attachments ────────────────────────────────────────────────────
 
-// Anything wider than this is re-encoded before being attached. A photo off a
-// phone is several thousand pixels across and travels as base64 in the request
-// body, where one of them alone outweighs the whole rest of the message.
+// Anything wider is re-encoded first: a phone photo is thousands of pixels and travels as
+// base64, where one alone outweighs the rest of the message.
 const ATTACHMENT_MAX_WIDTH = 1200;
 
-// /sendCustomEmail's `images` is the only slot in the payload that takes a file,
-// and the mailer renders each one under the message — so an attachment has to be
-// an image. Anything else is refused with a reason rather than dropped.
+// `images` is the only payload slot taking a file, so an attachment must BE an image.
+// Anything else is refused with a reason rather than silently dropped.
 const ATTACHMENT_ACCEPT = "image/*";
 
 function readFileDataUrl(file) {
@@ -589,9 +458,8 @@ function loadImage(src) {
   });
 }
 
-// One picked file as an { src, alt } attachment. Wide images are redrawn at
-// ATTACHMENT_MAX_WIDTH as JPEG on a white ground — white because a transparent
-// PNG renders black in some mail clients.
+// One picked file as an { src, alt } attachment. Wide ones are redrawn as JPEG on a WHITE
+// ground — a transparent PNG renders black in some mail clients.
 async function fileToAttachment(file) {
   const src = await readFileDataUrl(file);
   const img = await loadImage(src);
@@ -609,12 +477,8 @@ async function fileToAttachment(file) {
   return { src: canvas.toDataURL("image/jpeg", 0.9), alt: file.name };
 }
 
-// The upload tile under the renders, plus a strip of what has been added. Files
-// arrive by click or by drop, and each tile can be removed again before sending.
-//
-// Returns { section, attachments() } — [{ src, alt }], ready for
-// sendCustomEmail's `images`, read at send time so a file can be added or pulled
-// without reopening the dialog.
+// The upload tile plus a strip of what has been added (click or drop, removable).
+// attachments() is read at SEND time, so files can change without reopening the dialog.
 export function buildAttachmentsSection() {
   const section = el("section", "cn-approve-section");
   section.appendChild(el("h4", "cn-approve-section-title", "Attach files"));
@@ -684,14 +548,12 @@ export function buildAttachmentsSection() {
     );
     items.push(...read.filter(Boolean));
     renderList();
-    // The dialog body scrolls, and in the two-column layout the strip sits below
-    // the fold — so a file added from the tile above would otherwise land out of
-    // sight and read as nothing having happened.
+    // The strip sits below the fold in the two-column layout, so a file added above would
+    // otherwise land out of sight and read as nothing having happened.
     status.scrollIntoView({ block: "nearest" });
 
-    // Says what was left out and why, rather than silently attaching fewer files
-    // than were picked. The two reasons are counted apart: one is the file being
-    // the wrong kind, the other the image not decoding.
+    // Says what was left out and why, rather than silently attaching fewer than picked.
+    // Wrong-kind and failed-to-decode are counted apart.
     const notes = [];
     const rejected = files.length - images.length;
     const failed = images.length - read.filter(Boolean).length;
@@ -732,10 +594,8 @@ export function buildAttachmentsSection() {
 
 // ── who is on the case ──────────────────────────────────────────────────────
 
-// The roster as checkboxes — this IS the recipient picker, since
-// fetchCaseUsersWithEmails resolves an address for each user. Returns
-// { section, selectedRecipients() }; the getter is what the email section reads
-// at send time, so the two stay decoupled.
+// The roster as checkboxes — this IS the recipient picker. selectedRecipients() is read by
+// the email section at send time, so the two stay decoupled.
 export function buildRecipientsSection(caseIntID) {
   const section = el("section", "cn-approve-section");
   section.appendChild(el("h4", "cn-approve-section-title", "Users on this case"));
@@ -839,13 +699,8 @@ export function emailImagesHtml(images) {
     .join("\n");
 }
 
-// THE email this app sends — both approval dialogs use this one body, so the
-// wording is edited here and nowhere else. `recipient` supplies the greeting (a
-// hand-typed address has no user behind it), `link` where to go.
-//
-// Three blocks in order: title, images, body text. The images are inlined rather
-// than sent as /sendCustomEmail's `images` payload, which the mailer appends
-// after the message — the payload is the only thing that decides their position.
+// THE email body, shared by both approval dialogs — edit the wording here only. Images are
+// INLINED, not passed as `images`: that payload is what forces them below the text.
 export function caseEmailBody(caseIntID, { recipient, link, images } = {}) {
   const sender = getLoggedInUser()?.username || "";
   const lines = [];
@@ -868,14 +723,8 @@ export function caseEmailBody(caseIntID, { recipient, link, images } = {}) {
     .join("\n");
 }
 
-// Custom-email send, used by both dialogs' Send Email button and by the approval
-// itself. `recipients` are { email, username } — one request per address
-// (/sendCustomEmail takes a single recipient), each greeted by name and carrying
-// the same images. A failed address doesn't sink the rest. Returns the sent count.
-//
-// `link` is what the body points at; `images` are [{ src, alt }] data URLs.
-// `subject` defaults to the case on its own — nothing else, which is what the 2D
-// approval sends. The 3D dialog passes its own.
+// One request per { email, username } since /sendCustomEmail takes a single recipient; a
+// failed address doesn't sink the rest. `subject` defaults to the case alone.
 export async function sendCaseEmails(
   caseIntID,
   recipients,
@@ -901,20 +750,8 @@ export async function sendCaseEmails(
   return results.filter(Boolean).length;
 }
 
-// Send goes to the checked users AND the typed address, so a one-off recipient
-// doesn't mean giving up the roster selection.
-//
-// Returns { section, pendingRecipients }: the addresses that have NOT already
-// been sent to from here. Approving mails those, so ticking a user is enough —
-// pressing Send Email first is optional, and doesn't cause a second copy.
-//
-// `images()` and `link()` are read at send time, so a render can be ticked or an
-// attachment added without reopening the dialog. `subject` is passed through to
-// sendCaseEmails, whose default (the case on its own) is what the 2D dialog uses.
-//
-// `sendButton` false leaves the section as just the address field: the 3D dialog
-// confirms with "Send", which mails the same people, so a Send Email button
-// beside it would be the same action twice.
+// Send reaches the checked users AND the typed address; pendingRecipients is those not yet
+// mailed, so pressing Send first can't double-send. `sendButton` false drops the button.
 export function buildEmailSection({
   caseIntID,
   selectedRecipients,
@@ -941,9 +778,8 @@ export function buildEmailSection({
   // send the same person a second copy. Stays empty without the Send button.
   const alreadySent = new Set();
 
-  // Deduped BY ADDRESS: the typed address is often someone already ticked in the
-  // list, and the ticked copy is the one to keep — it carries the username the
-  // mail greets, where the typed one is just an address.
+  // Deduped BY ADDRESS, keeping the ticked copy: it carries the username the mail greets,
+  // where a typed address is just an address.
   const chosen = () => {
     const typed = input.value.trim();
     const byEmail = new Map(selectedRecipients().map((r) => [r.email, r]));
@@ -1032,15 +868,8 @@ export function buildEmailSection({
 
 // ── entry point ─────────────────────────────────────────────────────────────
 
-// Show the 2D approval dialog. Resolves { confirmed, recipients, images }:
-// `confirmed` is the Approve/Cancel answer, `recipients` the ticked (and typed)
-// addresses still waiting to be mailed, `images` the ticked arch renders plus
-// whatever was uploaded. NOT a boolean like confirmModal — the caller sends to
-// those addresses, but only once the note and status writes have actually
-// landed, so an approval that failed is never announced.
-//
-// `shots` are the two arch captures ({ upper, lower } PNG data URLs), taken by
-// the caller from the live page — see captureArchThumbnails in annotationLocks.js.
+// Resolves { confirmed, recipients, images }, not a boolean: the caller mails those only
+// after the note and status writes land, so a failed approval is never announced.
 export async function confirmCaseNoteApproval({
   caseIntID,
   caseNumber,
@@ -1057,9 +886,8 @@ export async function confirmCaseNoteApproval({
     )
   );
 
-  // Design reviewed on the left, who to tell on the right — so the arches stay
-  // in view while the notification is written. The grid collapses back to one
-  // column when the dialog is too narrow to split.
+  // Design left, recipients right, so the arches stay in view while the message is
+  // written. Collapses to one column when the dialog is too narrow to split.
   const cols = el("div", "cn-approve-cols");
   const renders = buildShotsSection(shots, { title: "2D design", noun: "arch design" });
   const uploads = buildAttachmentsSection();

@@ -1,6 +1,7 @@
 import { lol } from "../shared/crypt.js";
 import { setupAppSidebar } from "../shared/appSidebar.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
+import { returnToCaseList as goToCaseList } from "../shared/caseLinks.js";
 
 const NOTES_STORAGE_KEY = "smartrpd_clinical_notes";
 
@@ -98,11 +99,8 @@ function wireRightNavButton() {
   });
 }
 
-// Mobile/tablet only (see #footerObjectsBtn's display:none in style.css) —
-// the Objects (Show/Hide) panel becomes a right-side sidebar at those widths
-// (see newControls.js's max-width: 1024px block), so this footer icon takes
-// over from the floating top-left toggle that opened it as a top sheet,
-// which was eating too much of a small screen and is hidden there too.
+// Mobile/tablet only (#footerObjectsBtn is display:none above 1024px), where the
+// Objects panel becomes a right-side sidebar and this replaces the top sheet.
 function wireObjectsPanelButton() {
   const btn = document.getElementById("footerObjectsBtn");
   if (!btn) return;
@@ -120,9 +118,8 @@ function wireObjectsPanelButton() {
       window.viewerPanelManager.toggle("objects-panel");
       return;
     }
-    // Fallback while the WebGL workspace is still loading: the floating
-    // toggle is hidden (not removed) at these widths, so its own click
-    // handler still opens/closes the same panel.
+    // Fallback while the WebGL workspace loads: the floating toggle is hidden, not
+    // removed, so its own handler still drives the same panel.
     document.getElementById("component-panel-toggle")?.click();
   });
 
@@ -191,9 +188,8 @@ function mountViewerPopupsIntoScene() {
     viewerMain.appendChild(appSidebar);
   }
 
-  // Chat stays at viewer-shell level so position:fixed (from chat.css) covers
-  // the full viewport — same as 2D annotation. Moving it into viewer-main would
-  // clip it to the viewer-main area and push it below any top inset.
+  // Kept at viewer-shell level so chat.css's position:fixed covers the viewport —
+  // inside viewer-main it would be clipped to that area.
 }
 
 function wireSidebarVersionHistory() {
@@ -205,11 +201,8 @@ function wireSidebarVersionHistory() {
   });
 }
 
-// Gate shown when a guest (not logged in) tries to return to the case list,
-// which is auth-gated (authGuard bounces guests straight to login). Rather than
-// that abrupt redirect, prompt them: Login -> case list after signing in;
-// Cancel -> stay in the viewer. Styled inline since the viewer doesn't load the
-// noticeboard/case-list CSS. Mirrors openAnnotateGate in index.js.
+// Prompts a guest returning to the auth-gated case list instead of letting
+// authGuard bounce them. Styled inline — the viewer loads neither page's CSS.
 function openReturnGate({ onLogin }) {
   const gate = document.createElement("div");
   gate.style.cssText =
@@ -242,27 +235,7 @@ function wireSidebarReturn() {
   const basePath = isGitHubPages ? "/.tmp-test-web" : "";
   const caseListUrl = `${basePath}/src/pages/case_list.html`;
 
-  const returnToCaseList = () => {
-    // Return should always land on the MAIN case list. If this viewer was opened
-    // directly from the case-list tab, hop back to it and close this one (so
-    // viewer tabs don't pile up). Otherwise — a deeper chain of opened tabs, or a
-    // direct load — navigate straight to the case list instead of focusing
-    // whatever opened this tab.
-    try {
-      if (
-        window.opener &&
-        !window.opener.closed &&
-        window.opener.location?.pathname?.includes("case_list")
-      ) {
-        window.opener.focus();
-        window.close();
-        return;
-      }
-    } catch (err) {
-      // Cross-context access to opener.location can throw; fall through to nav.
-    }
-    window.location.href = caseListUrl;
-  };
+  const returnToCaseList = () => goToCaseList(caseListUrl);
 
   btn.addEventListener("click", () => {
     // Guests can't open the auth-gated case list — gate them to login instead of

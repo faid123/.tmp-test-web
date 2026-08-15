@@ -1,5 +1,3 @@
-import { TOOTH_ORDER } from "./constants.js";
-
 export const COMPONENT_TABS = [
   { id: "mesh", label: "MESH" },
   { id: "rests", label: "RESTS" },
@@ -83,9 +81,8 @@ export const COMPONENT_CATALOG = [
     conflictsWith: [],
     actionUponFailure: ACTION_UPON_FAILURE.PREVENT_PLACEMENT,
   },
-  // RPI = mesial Rest + Proximal plate + I-bar; RPA swaps the I-bar for an Akers
-  // (circumferential) clasp. Both are distal-extension designs: offered only on an
-  // abutment whose distal neighbour is missing.
+  // RPI = mesial Rest + Proximal plate + I-bar; RPA swaps the I-bar for an Akers clasp.
+  // Both are distal-extension only — the abutment's distal neighbour must be missing.
   {
     id: "assembly-rpi",
     label: "RPI",
@@ -224,9 +221,8 @@ export const COMPONENT_CATALOG = [
     tab: "clasps",
     requiresPresence: true,
     requiresMissing: false,
-    // A tooth's reciprocating element is a single slot (Reciprocating.Tooth Type):
-    // a reciprocating clasp OR a proximal/mesh plate, never both. Mutually exclusive
-    // with the plates so placing one removes the other (no overlapping clasp+plate).
+    // Reciprocating.Tooth Type is ONE slot: a reciprocating clasp OR a plate, never both,
+    // so placing either removes the other.
     conflictsWith: ["plate-prox", "plate-crossmesh"],
     actionUponFailure: ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
   },
@@ -420,26 +416,13 @@ export const COMPONENT_CATALOG = [
     conflictsWith: [],
     actionUponFailure: ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
   },
-  // {
-  //   id: "major-lower-cingulum-bar",
-  //   label: "Cingulum Bar",
-  //   shortLabel: "CB",
-  //   icon: "../../assets/menu-icon/Connectors/Lower/MC_cingulum_bar.png",
-  //   section: "lower",
-  //   tab: "major",
-  //   requiresPresence: true,
-  //   requiresMissing: false,
-  //   conflictsWith: [],
-  //   actionUponFailure: ACTION_UPON_FAILURE.REMOVE_THEN_PLACE,
-  // },
 ];
 
 export const COMPONENT_BY_ID = new Map(COMPONENT_CATALOG.map((entry) => [entry.id, entry]));
 
 /**
- * Assemblies place by clicking a rest-seat suggestion dot. Derived from the tab rather
- * than hand-listed: an assembly id is not an isRestComponent, so one missing from this
- * set silently draws no suggestions at all and cannot be placed.
+ * Assemblies place from a rest-seat suggestion dot. Derived from the tab, not hand-listed:
+ * an id missing from this set silently draws no suggestions and cannot be placed.
  */
 export const ASSEMBLY_REST_SUGGESTION_IDS = new Set(
   COMPONENT_CATALOG.filter((entry) => entry.tab === "assembly").map((entry) => entry.id)

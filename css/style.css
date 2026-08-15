@@ -158,9 +158,8 @@ html, body {
   align-items: center;
   gap: 6px;
   flex: 1;
-  /* Without this the groups refuse to shrink below their content width, so on a
-     phone the right-hand icons were pushed off the edge instead of the case
-     label ellipsising. */
+  /* Lets the groups shrink below content width; without it the phone's
+     right-hand icons get pushed off-edge instead of the case label ellipsising. */
   min-width: 0;
 }
 
@@ -230,9 +229,8 @@ html, body {
   outline-offset: 1px;
 }
 
-/* Desktop already has the floating Objects toggle top-left of the canvas —
-   this footer twin only takes over once that toggle hides (see the
-   #component-panel-toggle rule in newControls.js's injected styles). */
+/* Footer twin of the canvas's floating Objects toggle; only takes over once
+   that one hides (see #component-panel-toggle in newControls.js). */
 #footerObjectsBtn {
   display: none;
 }
@@ -668,9 +666,8 @@ html, body {
 .app-sidebar-item-icon {
   width: 34px;
   height: 34px;
-  /* Font Awesome loads after this file and forces .fa back to inline-block via
-     --fa-display; set it to inline-flex so the glyph centers in the chip.
-     line-height/text-align are a fallback if FA isn't the display source. */
+  /* Font Awesome loads later and forces .fa to inline-block via --fa-display;
+     override it so the glyph centers. line-height/text-align are the fallback. */
   --fa-display: inline-flex;
   display: inline-flex;
   align-items: center;
@@ -1246,9 +1243,8 @@ html, body {
     font-size: 10px !important;
   }
 
-  /* Objects panel as a top sheet, in the corner the toggle occupies — same
-     placement as desktop. Height stays capped so the rows scroll inside rather
-     than the panel covering the model. */
+  /* Objects panel as a top sheet in the toggle's corner, matching desktop.
+     Height stays capped so rows scroll inside rather than covering the model. */
   .component-panel {
     top: 12px !important;
     bottom: auto !important;
@@ -1267,16 +1263,12 @@ html, body {
     flex: 0 0 auto;
   }
 
+  /* Bounded height makes the grid's auto rows shrink and overlap, so size rows
+     to their content and scroll the overflow instead. */
   .component-panel .component-panel-body {
     flex: 1 1 auto;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-  }
-
-  /* The body is a grid; once its height is bounded, auto rows shrink to share
-     the space and the rows collapse into each other (18px tall, content
-     overlapping). Size rows to their content and scroll the overflow. */
-  .component-panel .component-panel-body {
     grid-auto-rows: max-content;
     align-content: start;
   }

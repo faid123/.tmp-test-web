@@ -108,16 +108,14 @@ import { API_BASE, MACHINE_ID } from "../shared/api.js";
     if (!notifPopup.classList.contains("hidden")) loadNotifications();
   });
   document.addEventListener("click", e => {
-    // contains(), not identity: the bell glyph and its badge are children of the
-    // button, so a click landing on either used to read as "outside" and shut the
-    // popup in the same tick the button had just opened it.
+    // contains(), not identity: the glyph and badge are children of the button, so
+    // an identity check reads a click on them as "outside" and shuts the popup.
     if (!notifPopup.contains(e.target) && !notifBtn.contains(e.target))
       notifPopup.classList.add("hidden");
   });
 
-  // Delay the first dot refresh + start polling by ~2s so we don't pile
-  // the notifications burst on top of the case list's initial load — the
-  // backend rate-limiter trips when both fire in the same instant.
+  // Delayed ~2s so the notifications burst doesn't land on the case list's initial
+  // load — the backend rate-limiter trips when both fire at once.
   setTimeout(() => {
     startNotificationDotPolling(15000);
   }, 2000);
@@ -333,10 +331,8 @@ import { API_BASE, MACHINE_ID } from "../shared/api.js";
     }
   }
 
-  // One click marks read, two marks unread again. The single-click action waits
-  // out the double-click window first: firing it straight away would send every
-  // "mark unread" through the read state, costing a wasted request and blinking
-  // the row on its way back to where it started.
+  // One click marks read, two marks unread. The single-click action waits out the
+  // double-click window, or every "mark unread" round-trips through read first.
   const DOUBLE_CLICK_MS = 250;
   let pendingRead = null;
 

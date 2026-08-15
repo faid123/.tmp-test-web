@@ -125,10 +125,8 @@ body {
   color: var(--gray-700);
 }
 
-/* The forgot-view stages wrap their fields in a div, so those fields aren't
-   direct children of .auth-form and miss its row gap. Give the stage wrappers
-   the same flex column + gap. :not([hidden]) so this display rule doesn't
-   defeat the hidden attribute used to switch stages. */
+/* Stage wrappers re-create .auth-form's column gap, which their nested fields
+   miss. :not([hidden]) so this display rule can't defeat the stage switching. */
 #forgot-stage-request:not([hidden]),
 #forgot-stage-reset:not([hidden]) {
   display: flex;
@@ -441,8 +439,7 @@ body {
 }
 
 /* ===== Decorative dot patterns =====
-   A 3x3 grid of teal dots rendered with a tiled radial-gradient
-   (matches the four corner clusters in the Sort case list design). */
+   3x3 grid of teal dots rendered with a tiled radial-gradient. */
 .dot-pattern {
   position: absolute;
   width: 3.5rem; /* 3 columns of 1.25rem-spaced dots */

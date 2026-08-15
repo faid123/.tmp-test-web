@@ -1,12 +1,10 @@
 /**
- * Integer code <-> web componentId maps for the jaw-struct text format.
- * Values from the Unity enums in StructData.cs, validated against samples
- * 03_jawstruct_upper/lower_jaw.txt. Enums are 0-based; "inferred" rows follow
- * enum order with no confirming sample.
+ * Integer code <-> componentId maps for the jaw-struct text format, from the Unity enums in
+ * StructData.cs and validated against the 03_jawstruct samples. 0-based; "inferred" rows
+ * follow enum order with no confirming sample.
  *
- * NOT all flat one-field→one-component: Retainer is composite (Retainer Type +
- * Retainer Bar Category for bar shape), Mesh is stored as spans, Major connector
- * is jaw-level. All resolved in jawStructCodec.js (resolveJawStructDesign).
+ * Not all one-field-to-one-component: Retainer is composite, Mesh is spans, Major is
+ * jaw-level. All resolved by jawStructCodec.resolveJawStructDesign.
  */
 
 // Posterior_Rest_Type { no_pr=0, pr_full=1, pr_non_full=2 }
@@ -22,9 +20,8 @@ export const RETAINER_TYPE = new Map([
   [2, "ring-clasp"],     // inferred (no sample instance)
 ]);
 
-// Retainer_Bar_Category { rb_I=0, rb_S=1, rb_U=2, rb_Y=3, rb_T=4, rb_R=5 } -- bar SHAPE.
-// NB: "Retainer Bar Type" (rb_mesial=0/rb_distal=1) is LOCATION, not shape, and is
-// left unmapped — the placement surface is derived from arch geometry instead.
+// Retainer_Bar_Category { rb_I=0, rb_S=1, rb_U=2, rb_Y=3, rb_T=4, rb_R=5 } is bar SHAPE.
+// "Retainer Bar Type" (rb_mesial=0/rb_distal=1) is LOCATION and stays unmapped.
 export const RETAINER_BAR_CATEGORY = new Map([
   [0, "bar-i"], // confirmed: lower 45 (distal I-bar)
   [1, "bar-s"], // inferred
@@ -45,27 +42,23 @@ export const MESH_TYPE = new Map([
   // so it does not persist through the L2 jawstruct (encodes as no_mesh / 0).
 ]);
 
-// Reciprocating_Type { no_reciprocating=0, reciprocating_clasp=1, reciprocating_plate=2, reciprocating_crossmesh=3 }
-// Only applied to teeth that also carry a retainer (reciprocation pairs with
-// retention) — that guard also neutralises the desktop's "2 on every present
-// tooth" default seen in case 03. See jawStructCodec.resolveJawStructDesign.
+// Reciprocating_Type { no_reciprocating=0, clasp=1, plate=2, crossmesh=3 }. Applied only to
+// teeth also carrying a retainer, which neutralises the desktop's "2 on every tooth".
 export const RECIPROCATING_TYPE = new Map([
   [1, "reciprocating-clasp"],
   [2, "plate-prox"],       // reciprocating_plate -> proximal plate
   [3, "plate-crossmesh"],  // reciprocating_crossmesh -> mesh plate
 ]);
 
-// Tooth_Condition { normal=0, abutment=1, compromised=2 } -- the Select Teeth status.
-// The desktop leaves clasped abutments at 0, so a desktop-authored case (sample 03:
-// 0 on every tooth) loads as plain presence.
+// Tooth_Condition { normal=0, abutment=1, compromised=2 }. The desktop leaves clasped
+// abutments at 0, so a desktop-authored case loads as plain presence.
 export const TOOTH_CONDITION = new Map([
   [1, "abutment"],
   [2, "compromised"],
 ]);
 
-// Major_Connector_Type { mc_none=0, mc_palatal_strap=1, mc_horseshoe=2, mc_hole=3,
-//   mc_palatal_bar=4, mc_palatal_full_plate=5, mc_lingual_bar=6, mc_lingual_plate=7,
-//   mc_lingual_kennedy=8, mc_cingulum_bar=9 }
+// Major_Connector_Type { none=0, palatal_strap=1, horseshoe=2, hole=3, palatal_bar=4,
+// palatal_full_plate=5, lingual_bar=6, lingual_plate=7, lingual_kennedy=8, cingulum_bar=9 }
 export const MAJOR_CONNECTOR_TYPE = new Map([
   [1, "major-upper-palatal-strap"],
   [2, "major-upper-horseshoe"],      // confirmed (upper sample)

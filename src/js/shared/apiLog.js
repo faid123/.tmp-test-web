@@ -11,12 +11,8 @@ export function logApi(res, label) {
 }
 
 // --- Case-status display titles ------------------------------------------
-// Single source of truth for case-status display titles, mirroring the status
-// dropdown in the case detail panel. Imported by the case list, the dashboard,
-// and the generated report so changing a label here updates all of them.
-//
-// These exports import nothing, so they're safe to use from anywhere without
-// creating a cycle (caseManagement.js <-> dashboard.js <-> noticeboard.js).
+// Mirrors the status dropdown in the case detail panel. Imports nothing, so the
+// case list / dashboard / report can all use it without an import cycle.
 
 export const STATUS_LABELS = {
   na: "N/A",

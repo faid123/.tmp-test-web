@@ -1,6 +1,5 @@
-// The invite box: a roster of the usernames this account shares cases with,
-// ranked by how many, and the combobox that suggests from it. Used by the
-// create-case Invite Users field and the User Access modal.
+// The invite box: a roster of usernames this account shares cases with, ranked
+// by count, plus the combobox that suggests from it.
 
 import { getLoggedInUser } from "./api.js";
 
@@ -150,9 +149,8 @@ function highlightMatch(name, query) {
   return frag;
 }
 
-// Wire `input` (role="combobox") to `listEl` (an empty role="listbox" <ul> in a
-// positioned wrapper), with { excluded, onPick, onSubmit, onInput, limit }.
-// Returns { refresh, close } — `refresh` re-renders when the exclusions change.
+// Wires `input` (role="combobox") to `listEl` (role="listbox" <ul>) with
+// { excluded, onPick, onSubmit, onInput, limit }. Returns { refresh, close }.
 export function attachUserSuggest(input, listEl, options = {}) {
   const {
     excluded = () => [],

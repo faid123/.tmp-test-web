@@ -1,10 +1,5 @@
-// Question → topic matching for the help assistant.
-//
-// Pure functions only (no DOM, no network) so the whole ranking path is unit
-// testable. helpBot.js owns the panel; this module owns "what does this
-// question mean". The default answer provider lives here too — it has the same
-// async shape a server-backed provider would, so swapping one in later is a
-// registration, not a rewrite.
+// Question → topic matching for the help assistant. Pure functions only, so the
+// whole ranking path is unit testable; helpBot.js owns the panel.
 
 import { HELP_TOPICS, TOPIC_BY_ID } from "./helpTopics.js";
 
@@ -19,9 +14,8 @@ const STOPWORDS = new Set([
   "your",
 ]);
 
-// Word → canonical word, applied to BOTH the question and every topic's index
-// so the two always meet at the same form. Lets "make a new patient" reach the
-// create-case topic, and folds plurals onto their singular.
+// Applied to BOTH the question and every topic's index so the two meet at the
+// same form. Lets "make a new patient" reach the create-case topic.
 const SYNONYMS = new Map(Object.entries({
   make: "create", new: "create", begin: "create", setup: "create",
   patient: "case", job: "case", cases: "case",
@@ -64,8 +58,7 @@ export function tokenize(text) {
     .filter((w) => w && !STOPWORDS.has(w));
 }
 
-// Fold words onto their canonical form. Applied to both sides of the match, so
-// replacing the word (rather than keeping both forms) is what stops one query
+// Replacing the word rather than keeping both forms is what stops one query
 // word from scoring twice against the same topic.
 export function canonicalize(tokens) {
   return [...new Set(tokens.map((token) => SYNONYMS.get(token) || token))];
@@ -90,9 +83,8 @@ function topicIndex(topic) {
   return topic.__index;
 }
 
-// Weighted token overlap, plus two contextual boosts: an exact phrase the topic
-// claims, and being about the page the user is already on (which is how
-// "how do I save" resolves differently in the 2D design and the case list).
+// Weighted token overlap plus two boosts: an exact phrase the topic claims, and
+// the page the user is on — how "how do I save" resolves per-page.
 export function scoreTopic(tokens, topic, { pageId = null } = {}, rawQuery = "") {
   const index = topicIndex(topic);
   let score = 0;
@@ -103,14 +95,8 @@ export function scoreTopic(tokens, topic, { pageId = null } = {}, rawQuery = "")
     else if (index.body.has(token)) score += 1;
   }
 
-  // Phrase bonus, awarded for the best phrase the topic claims.
-  //
-  // Both sides are padded so containment only matches whole words — otherwise
-  // "thing" claims the bonus from "nothing is loading". A query that contains a
-  // whole phrase earns it in full; a query that is only PART of a phrase earns
-  // it in proportion to how much of that phrase it covers, because the words it
-  // left out are usually the ones that discriminate ("where do i write notes"
-  // against "where do i write notes in the 3d viewer").
+  // Padded so containment matches whole words ("thing" must not claim it from
+  // "nothing is loading"); a partial match earns a proportional share.
   const normalizedQuery = normalize(rawQuery);
   if (normalizedQuery) {
     const queryWords = normalizedQuery.split(" ");
@@ -162,11 +148,8 @@ export function suggestionsFor(pageId, topics = HELP_TOPICS, limit = 4) {
   return [...onPage, ...global].slice(0, limit);
 }
 
-// Default answer provider. Async on purpose: a backend- or model-backed
-// provider registered via setAnswerProvider() has the same contract.
-//
-// Returns { confident, topic, alternates } — `topic` is null when nothing
-// scored above MIN_SCORE, in which case `alternates` carries the near misses.
+// Async on purpose: a provider registered via setAnswerProvider() has the same
+// contract. `topic` is null below MIN_SCORE, leaving `alternates` the near misses.
 export async function localProvider(question, { pageId = null, topics = HELP_TOPICS } = {}) {
   const matches = findMatches(question, topics, { pageId, limit: 4 });
   if (!matches.length) {

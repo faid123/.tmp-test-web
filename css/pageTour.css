@@ -1,7 +1,5 @@
-/* Guided start-up journey — the spotlight overlay opened from About.
-   Injected by pageTour.js on first run. Tokens are re-declared locally for the
-   same reason helpBot.css re-declares them: the overlay is appended to <body>
-   on every page, including ones that never load case_list.css. */
+/* Guided start-up journey — spotlight overlay opened from About, injected by
+   pageTour.js. Tokens re-declared locally: it lands on pages without case_list.css. */
 
 #page-tour {
   --pt-card: #ffffff;
@@ -15,9 +13,8 @@
 
   position: fixed;
   inset: 0;
-  /* Above the 2D design's own dialogs (4000-10000) as well as the help
-     assistant (1300), sidebar (1100) and chat (1200) — a tour that the page it
-     is describing can paint over is a tour whose card cannot be clicked. */
+  /* Above the 2D design dialogs (4000-10000), help (1300), chat (1200) and
+     sidebar (1100) — anything painting over the tour makes its card unclickable. */
   z-index: 10050;
   font-family: var(--font-sans);
   opacity: 0;
@@ -30,9 +27,8 @@
   display: none;
 }
 
-/* The spotlight: a hole punched in a page-sized shadow. Sized onto the target
-   by pageTour.js; collapsed to a point (.is-empty) for steps with no control,
-   where the shadow alone dims the page. */
+/* Spotlight: a hole punched in a page-sized shadow, sized onto the target by
+   pageTour.js; collapsed to a point (.is-empty) for steps with no control. */
 .pt-mask {
   position: absolute;
   top: 50%;
@@ -49,13 +45,8 @@
   border-radius: 0;
 }
 
-/* Ring on the control itself, so the spotlight reads as deliberate rather than
-   as a gap in the dimming.
-
-   Deliberately does NOT raise the target's z-index: the control is already
-   visible through the hole in the mask, and lifting it above the overlay put
-   tall targets — the Components panel, the 3D preview — on top of the card,
-   swallowing the clicks on Next. */
+/* Ring on the control so the spotlight reads as deliberate, not as a gap.
+   Never raise the target's z-index: tall targets then cover the card's Next. */
 .pt-target {
   border-radius: 8px;
   box-shadow: 0 0 0 3px var(--pt-primary);
@@ -65,9 +56,8 @@
   position: absolute;
   box-sizing: border-box;
   width: min(360px, calc(100vw - 24px));
-  /* A card taller than the window has to scroll, not run off the top of it: the
-     3D viewer is used on phones held sideways, where the whole viewport is
-     around 390px high. */
+  /* Must scroll rather than run off the top: the 3D viewer is used on phones
+     held sideways, where the viewport is only ~390px high. */
   max-height: calc(100vh - 24px);
   max-height: calc(100dvh - 24px);
   overflow-y: auto;
@@ -206,13 +196,8 @@
   text-decoration: underline;
 }
 
-/* On a phone the card is a full-width sheet against one edge — a floating card
-   next to a spotlight has nowhere to go on a narrow (or short) screen.
-
-   Which edge, and how tall, is pageTour.js's call: it puts the sheet on the side
-   of the target with the most room. A media query can't do that, and one that
-   pinned the sheet to the bottom unconditionally sat straight on top of the
-   3D viewer's footer buttons — the very controls those steps point at. */
+/* On a phone the card becomes a full-width sheet. pageTour.js picks the edge
+   with the most room — pinning it to the bottom covers the 3D footer buttons. */
 .pt-card.is-sheet {
   left: 0;
   width: 100%;

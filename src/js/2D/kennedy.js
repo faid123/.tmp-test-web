@@ -1,14 +1,10 @@
 /**
- * Kennedy classification of an arch, derived from tooth presence alone. Pure: no DOM,
- * no annotation-state mutation. Takes any `{ [fdi]: { isPresent } }` map, so it reads
- * state.teeth today and a decoded jaw-struct design just as well.
+ * Kennedy classification from tooth presence alone. Pure, and takes any
+ * `{ [fdi]: { isPresent } }` map, so state.teeth and a decoded design both work.
  *
- * Applegate's rules applied: a missing third molar is not counted (rule 2) while a
- * present one is (rule 3); the most posterior edentulous area sets the class (rule 5);
- * every other area is a modification, counted not measured (rules 6-7); Class IV takes
- * no modifications (rule 8). Rule 4 — a missing second molar that will not be replaced
- * is not counted — needs a per-tooth "replace?" flag the tooth model doesn't carry, so
- * every missing non-third-molar counts.
+ * Applegate rules 2/3 (third molars), 5 (most posterior area sets the class), 6-7
+ * (others are counted modifications) and 8 (Class IV takes none) are applied. Rule 4
+ * needs a per-tooth "will replace?" flag the model lacks, so every missing tooth counts.
  */
 import { getNeighborToothIds, TOOTH_ORDER } from "./constants.js";
 
@@ -142,9 +138,8 @@ export function classifyArch(teeth, jaw) {
 }
 
 function describeSpan(span) {
-  // Within one quadrant a range reads low-to-high (36-37), but arch order runs distal
-  // to mesial in the left/right-first quadrants; a span across the midline (12-22) is
-  // only readable in arch order, so leave that one alone.
+  // Within a quadrant a range reads low-to-high (36-37), but arch order runs distal to
+  // mesial — so a span across the midline (12-22) is left in arch order.
   const fdis = span.crossesMidline ? span.fdis : [...span.fdis].sort();
   const range = fdis.length > 1 ? `${fdis[0]}-${fdis[fdis.length - 1]}` : fdis[0];
   return `${range} ${span.isDistalExtension ? "distal extension" : "bounded"}`;

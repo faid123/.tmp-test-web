@@ -1,14 +1,10 @@
 /**
- * Apply a normalized jaw-struct design (from jawStructCodec.resolveJawStructDesign)
- * onto the 2D annotation state. Browser-side half of the load path — reuses the
- * real placement primitives so loaded designs behave like hand-placed ones.
- * Kept separate from jawStructCodec.js so the codec stays DOM-free.
+ * Applies a resolved jaw-struct design onto the 2D state, reusing the real placement
+ * primitives so loaded designs behave like hand-placed ones. Separate from the codec so
+ * that stays DOM-free.
  *
- * Apply order matters:
- *   1. presence + reset  (clears each tooth's placements)
- *   2. mesh spans        (must exist before 3 and 4)
- *   3. rests/clasps, then bars (bar surface is geometry-derived from mesh teeth)
- *   4. major connector   (auto-places on mesh/plate-bearing supported teeth)
+ * Order matters: 1. presence + reset, 2. mesh spans, 3. rests/clasps then bars (bar
+ * surface is geometry-derived from the mesh teeth), 4. major connector.
  */
 import {
   COMPONENT_BY_ID,
@@ -42,9 +38,8 @@ export function applyJawStructDesign(design, state) {
     if (design.rawByFdi[fdi]) rec.rawJawStructFields = design.rawByFdi[fdi];
     if (t.present) {
       rec.isPresent = true;
-      // Backend is authoritative on load, so Tooth Condition overwrites the local
-      // status outright — keeping a stale local "abutment" here would survive a
-      // desktop edit that cleared it.
+      // The backend is authoritative on load, so Tooth Condition overwrites outright —
+      // a stale local "abutment" would otherwise survive a desktop edit clearing it.
       rec.status = t.condition || "presence";
     } else {
       rec.isPresent = false;
@@ -62,9 +57,8 @@ export function applyJawStructDesign(design, state) {
     }
   }
 
-  // 3. Present-tooth rests/clasps (anchor surface from the data), then bars
-  //    (surface derived from arch geometry). Surfaces are required — the visual
-  //    renderer skips null-surface rest/clasp markers.
+  // 3. Rests/clasps (surface from the data), then bars (surface from arch geometry).
+  //    Surfaces are REQUIRED — the renderer skips null-surface markers.
   for (const [fdi, t] of Object.entries(design.teeth)) {
     const rec = state.teeth[fdi];
     if (!rec || !t.present) continue;
@@ -80,10 +74,8 @@ export function applyJawStructDesign(design, state) {
     }
   }
 
-  // 4. Major connector. Midline-reaching majors (plate/horseshoe/hole/kennedy/
-  //    strap) could over-cover if the web re-derives the span, so when the data
-  //    carries an explicit span (design.majorSpanFdis) place on EXACTLY those
-  //    teeth. Bars/straps and from-scratch designs keep the arch-fill rule.
+  // 4. Major connector: an explicit design.majorSpanFdis places on EXACTLY those teeth,
+  //    since re-deriving a midline-reaching span could over-cover.
   if (design.major && jawSide) {
     if (
       majorConnectorRunsToMidline(design.major) &&

@@ -274,17 +274,12 @@ function hasAnyComponentPlacement() {
   );
 }
 
-// Once-per-page-load guard so re-locking an empty case doesn't re-ask. Module
-// scope resets on navigation (each case opens ThreeDViewer/2DAnnotation.html
-// fresh), so it's effectively per-case.
+// Once-per-page-load guard so re-locking an empty case doesn't re-ask. Module scope
+// resets on navigation, so it is effectively per-case.
 let jawMaterialPromptResolved = false;
 
-// Denture-base material prompt. Shown when locking a design that has NO
-// components placed on either jaw and the material hasn't been chosen yet this
-// session (i.e. a fresh/empty design — a new case, or an emptied one). A case
-// that already carries components keeps its loaded material and isn't asked.
-// Choice writes state.jawMaterial (0 = metal, 2 = full acrylic), which the
-// encoder emits as each jaw's "Jaw Material" field.
+// Asked only when locking a design with NO components on either jaw and no material picked
+// this session. Writes state.jawMaterial (0 = metal, 2 = full acrylic) for the encoder.
 export function maybePromptJawMaterial() {
   if (jawMaterialPromptResolved) return;
   if (hasAnyComponentPlacement()) return;
@@ -390,10 +385,8 @@ function clearJawTeethBaseline(jaw) {
   recordHistoryIfChanged(historyBefore);
 }
 
-// Design-mode action: remove every placed component from one jaw while leaving
-// tooth presence/status alone (unlike clearJawTeethBaseline, which marks teeth
-// missing). Clears both the placements and the derived component list; the
-// palatal-plate overlay is an upper component, so drop it too.
+// Removes every placed component from one jaw, leaving tooth presence/status alone
+// (unlike clearJawTeethBaseline). Drops the palatal-plate overlay too — it's a component.
 function clearJawComponents(jaw) {
   const historyBefore = getHistoryStateSignature();
   for (const toothId of TOOTH_ORDER[jaw]) {
@@ -412,9 +405,8 @@ function clearJawComponents(jaw) {
 
 function drawFromScratch() {
   const historyBefore = getHistoryStateSignature();
-  // Remove only the components from BOTH jaws (like Clear Top + Clear Bottom) —
-  // keep tooth presence/status, the locks and design mode. Then re-open the
-  // material prompt so the user re-picks the denture base for the fresh design.
+  // Clear components from BOTH jaws, keeping presence, locks and design mode, then
+  // re-open the material prompt so the fresh design gets a denture base.
   for (const jaw of Object.keys(TOOTH_ORDER)) {
     for (const toothId of TOOTH_ORDER[jaw]) {
       const tooth = state.teeth[toothId];
@@ -521,9 +513,8 @@ export function syncDesignModeWithLocks(notify) {
   state.designMode = next;
 
   if (next && !prev) {
-    // No components are auto-placed on lock — the user adds mesh, plate and the
-    // major connector manually. We only mark missing teeth so the arch renders
-    // correctly in design mode.
+    // Nothing is auto-placed on lock; the user adds mesh, plate and the major connector.
+    // This only marks missing teeth so the arch renders correctly in design mode.
     forEachTooth((toothId) => {
       const t = state.teeth[toothId];
       if (t && !t.isPresent) {
@@ -562,9 +553,8 @@ export function syncDesignModeWithLocks(notify) {
   }
 }
 
-// Design-mode hint anchored beneath the lock/unlock icon (between the arches)
-// rather than the shared top-right toast. Auto-dismisses after ~5s; a repeat
-// lock replaces any tip still on screen.
+// Design-mode hint anchored under the lock icon rather than the shared top-right toast.
+// Auto-dismisses after ~5s; a repeat lock replaces any tip still up.
 let lockDesignTipTimer = null;
 function showLockDesignTip(message) {
   const anchor = document.getElementById("jawLockToggleBtn");
@@ -809,10 +799,8 @@ async function fetchPageCss() {
 async function inlineImagesInSvg(svg) {
   const clone = svg.cloneNode(true);
 
-  // The tint filters live in a shared <svg> on <body>, not inside the arch, so a cloned
-  // arch resolves every `filter: url(#tint-…)` / `url(#jawTint-…)` against nothing once it
-  // is serialized standalone — the jaw template and all the teeth come out untinted and
-  // the thumbnail looks empty. Paste a copy in alongside the CSS.
+  // Tint filters live in a shared <svg> on <body>, so a standalone serialized arch resolves
+  // every `filter: url(#…)` against nothing and comes out untinted. Paste a copy in.
   const tintDefs = cloneArchTintDefs();
   if (tintDefs) clone.insertBefore(tintDefs, clone.firstChild);
 
@@ -867,10 +855,8 @@ const JAW_PAD_Y = 20;
 // ViewBox expansion: edge teeth extend past the original viewBox and get clipped,
 // so expand the cloned SVG's viewBox to render them in full.
 const JAW_VIEWBOX_PAD = 80;
-// Space between the two arches in the side-by-side thumbnail, measured between
-// the arches themselves rather than their padded image boxes. Keep it below
-// JAW_VIEWBOX_PAD * 2 (160) — past that the padding bands stop overlapping and
-// the layout goes back to leaving a wide dead strip down the middle.
+// Gap between the ARCHES themselves, not their padded boxes. Keep below JAW_VIEWBOX_PAD * 2
+// (160), or the padding bands stop overlapping and leave a dead strip down the middle.
 const JAW_SIDE_BY_SIDE_GAP = 40;
 
 function parseJawViewBox(svg) {
@@ -925,12 +911,8 @@ function newJawCanvas(canvasW, canvasH) {
   return { canvas, ctx };
 }
 
-// Render both arches onto one canvas SIDE BY SIDE (upper left, lower right).
-// This is the case-detail carousel thumbnail: clinicians asked to see the two
-// jaws next to each other rather than stacked, matching how the 3D upper/lower
-// renders already read as a pair. The stacked composeJawCanvas layout stays as
-// it is — the JPEG export and the noticeboard / instruction-editor base image
-// depend on its proportions (annotations are drawn over that geometry).
+// Both arches on one canvas SIDE BY SIDE for the case-detail thumbnail. The stacked
+// composeJawCanvas layout must stay — the JPEG export and editor base depend on it.
 async function composeJawCanvasSideBySide(scale = 1) {
   const upperSvg = document.getElementById("upperArchSvg");
   const lowerSvg = document.getElementById("lowerArchSvg");
@@ -939,12 +921,8 @@ async function composeJawCanvasSideBySide(scale = 1) {
   const upperDims = parseJawViewBox(upperSvg);
   const lowerDims = parseJawViewBox(lowerSvg);
 
-  // Each rendered jaw carries JAW_VIEWBOX_PAD of transparent padding on every
-  // side (the viewBox expansion that stops edge teeth being clipped), so two
-  // images placed flush already sit 2 * JAW_VIEWBOX_PAD apart on screen. Space
-  // them by the gap we actually want between the ARCHES and let the padding
-  // bands overlap to absorb the difference — they're transparent, and the
-  // arches themselves stay JAW_SIDE_BY_SIDE_GAP apart.
+  // Each jaw carries JAW_VIEWBOX_PAD of transparent padding, so two flush images already
+  // sit twice that apart. Space by the wanted ARCH gap and let the padding overlap.
   const gap = JAW_SIDE_BY_SIDE_GAP - JAW_VIEWBOX_PAD * 2;
 
   const [upper, lower] = await Promise.all([
@@ -1034,22 +1012,16 @@ function getCaseLabelTextForExport() {
   return "";
 }
 
-// The instruction editor frame is landscape on tablet/desktop and portrait on
-// phones — the same 600px breakpoint drives .ie-frame in noticeboard.css. Match
-// the base image to whichever frame will show it: side-by-side arches for the
-// landscape frame, stacked (upper top / lower bottom) for the portrait one, so
-// the jaws fill the frame either way instead of shrinking to fit the wrong
-// orientation.
+// The editor frame is landscape above 600px and portrait below, so match the base image
+// to it or the jaws shrink to fit the wrong orientation.
 function isInstructionEditorPortrait() {
   return typeof window !== "undefined" && window.matchMedia
     ? window.matchMedia("(max-width: 599.98px)").matches
     : false;
 }
 
-// Base image for the instruction editor flow — the editor background, the
-// noticeboard "add instruction" preview, and the baked base of a new
-// instruction. Layout follows the frame orientation (see above). The stacked
-// composeJawCanvas layout is also what the JPEG download (saveAsJpeg) uses.
+// Base image for the editor background, the noticeboard preview and a new instruction's
+// baked base. Layout follows the frame orientation; saveAsJpeg uses the stacked one.
 export async function captureJawJpegDataUrl(quality = 0.92, scale = 3) {
   const canvas = isInstructionEditorPortrait()
     ? await composeJawCanvas(scale)
@@ -1064,15 +1036,12 @@ export async function captureJawPngDataUrl(scale = 3) {
   return canvas.toDataURL("image/png");
 }
 
-// Width each arch thumbnail is rendered at. Matches the 3D approval dialog's
-// APPROVAL_SHOT_MAX_WIDTH: these are shown in the same ~360px panel and attached
-// to the same email, where a full-scale arch PNG would be megabytes on the wire.
+// Matches the 3D dialog's APPROVAL_SHOT_MAX_WIDTH — same ~360px panel, same email, where
+// a full-scale arch PNG would be megabytes on the wire.
 const ARCH_THUMB_WIDTH = 900;
 
-// One PNG per arch, on its own white ground. The case-note approval dialog shows
-// these and attaches the ticked ones to its email, so each arch is framed alone
-// rather than as the side-by-side composite the case thumbnail uses.
-// A `null` for an arch means its SVG isn't on the page.
+// One PNG per arch on its own white ground — the approval dialog frames each alone rather
+// than as the thumbnail's side-by-side composite. null means that SVG isn't on the page.
 export async function captureArchThumbnails() {
   const shoot = async (svgId) => {
     const svg = document.getElementById(svgId);
@@ -1105,9 +1074,8 @@ export async function captureArchThumbnails() {
 // viewer) treats slot 0 as the primary 2D thumbnail.
 const THUMBNAIL_SLOT_2D = 0;
 
-// Capture both jaws side by side as a PNG and upload to the case's 2D thumbnail
-// slot. Returns true on success. Uses scale=2 to keep the payload under server
-// body limits (scale=3 two-arch PNGs often exceed 5 MB).
+// Captures both jaws side by side and uploads to the case's 2D thumbnail slot. scale=2
+// keeps the payload under the server body limit — scale=3 often exceeds 5MB.
 export async function uploadJawPngThumbnail() {
   const canvas = await composeJawCanvasSideBySide(2);
   if (!canvas) return false;
@@ -1132,9 +1100,8 @@ export async function saveAsJpeg() {
     a.click();
     a.remove();
 
-    // Upload PNG (not JPEG) to the 2D thumbnail slot so the case-detail panel
-    // gets a lossless render of the arches. The downloaded JPEG keeps the
-    // stacked layout; only the thumbnail puts the jaws side by side.
+    // PNG, not JPEG, so the case-detail panel gets a lossless render. Only the thumbnail
+    // puts the jaws side by side; the downloaded JPEG stays stacked.
     const uploaded = await uploadJawPngThumbnail();
     if (uploaded) {
       setMessage("Arch annotation saved as JPEG and uploaded to case.", false);
@@ -1271,33 +1238,31 @@ export function loadPreviewImage() {
     return;
   }
 
+  // Used whenever the 3D preview isn't showing: the stored 2D capture if we have
+  // one, otherwise the placeholder.
+  const showStoredCaptureOrFallback = () => {
+    const localImage = localStorage.getItem(`annotateBackground_${state.encryptedCaseId}`);
+    if (localImage) {
+      img.src = localImage;
+      img.style.display = "block";
+      fallback.style.display = "none";
+      return;
+    }
+    fallback.style.display = "block";
+    img.style.display = "none";
+  };
+
   loadInteractiveJawPreview(area).then((loaded3D) => {
     if (loaded3D) {
       img.style.display = "none";
       fallback.style.display = "none";
       return;
     }
-    const localImage = localStorage.getItem(`annotateBackground_${state.encryptedCaseId}`);
-    if (localImage) {
-      img.src = localImage;
-      img.style.display = "block";
-      fallback.style.display = "none";
-      return;
-    }
-    fallback.style.display = "block";
-    img.style.display = "none";
+    showStoredCaptureOrFallback();
   }).catch((err) => {
     console.error("3D preview load failed", err);
     teardown3DPreview();
-    const localImage = localStorage.getItem(`annotateBackground_${state.encryptedCaseId}`);
-    if (localImage) {
-      img.src = localImage;
-      img.style.display = "block";
-      fallback.style.display = "none";
-      return;
-    }
-    fallback.style.display = "block";
-    img.style.display = "none";
+    showStoredCaptureOrFallback();
   });
 }
 

@@ -1,11 +1,5 @@
-// Single source of truth for the backend origin, the caller identity every
-// endpoint expects in element 0 of its request body, and the shared POST/error
-// plumbing. Before this module the base URL was pasted into 12 files and
-// getLoggedInUser was reimplemented 13 times, so a staging switch was a
-// find-and-replace and error handling drifted per file.
-//
-// Import-safe without a DOM: caseEnrichment.test.mjs runs in Jest's default
-// node environment, so every browser global here sits behind a typeof guard.
+// The backend origin, the caller identity endpoints expect in element 0 of the
+// body, and the shared POST/error plumbing. Import-safe without a DOM.
 
 import { MACHINE_ID } from "./config.js";
 import { logApi } from "./apiLog.js";
@@ -14,11 +8,8 @@ export { MACHINE_ID };
 
 const DEFAULT_API_BASE = "https://live.api.smartrpdai.com/api/smartrpd";
 
-// Point a deploy at another backend by setting window.SMARTRPD_API_BASE in an
-// inline <script> before the page's module scripts run. Most pages load raw ES
-// modules straight from source with no build step, so a build-time constant
-// (import.meta.env / DefinePlugin) would only reach the webpack'd viewer bundle
-// — and import.meta breaks that bundle's UMD output outright.
+// Set window.SMARTRPD_API_BASE inline before the page's modules run. Most pages
+// have no build step, so a build-time constant would only reach the viewer bundle.
 export const API_BASE =
   (typeof window !== "undefined" && window.SMARTRPD_API_BASE) || DEFAULT_API_BASE;
 
@@ -31,9 +22,8 @@ export function getLoggedInUser() {
   }
 }
 
-// Element 0 of nearly every request body: the caller the backend authenticates,
-// and checks is_admin on for the admin-only endpoints. Pass `extra` for the
-// endpoints that also want caseIntID etc. alongside the identity.
+// Element 0 of nearly every request body: the caller the backend authenticates
+// and checks is_admin on. Pass `extra` for endpoints that also want caseIntID.
 export function callerIdentity(extra) {
   const caller = { machine_id: MACHINE_ID, uuid: getLoggedInUser()?.uuid };
   return extra ? { ...caller, ...extra } : caller;
@@ -53,10 +43,8 @@ export function apiUrl(path) {
   return `${API_BASE}/${String(path).replace(/^\/+/, "")}`;
 }
 
-// The codebase-wide POST convention: body is [caller] or [caller, payload], the
-// response is JSON, and a non-2xx throws ApiError carrying the parsed body.
-// Endpoints whose body is NOT that two-element shape (multi-element jawstruct
-// posts, file uploads) still build their own fetch — use apiUrl() for those.
+// Body is [caller] or [caller, payload]; a non-2xx throws ApiError with the
+// parsed body. Endpoints not of that shape build their own fetch via apiUrl().
 export async function apiPost(path, payload, label) {
   const body = payload === undefined ? [callerIdentity()] : [callerIdentity(), payload];
 
@@ -82,4 +70,34 @@ export async function apiPost(path, payload, label) {
     throw new ApiError(message, res.status, data);
   }
   return data;
+}
+
+// Read a File as base64, chunked so a large STL doesn't blow the call stack.
+export async function fileToBase64(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+// XHR rather than fetch so upload progress is reportable — STLs are large enough
+// that a silent multi-second wait reads as a hang. `onProgress` gets a 0..1 fraction.
+export function uploadWithProgress(path, payload, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", apiUrl(path));
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
+    };
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300
+        ? resolve(xhr.responseText)
+        : reject(new Error(`HTTP ${xhr.status}`));
+    xhr.onerror = () => reject(new Error("network error"));
+    xhr.send(payload);
+  });
 }

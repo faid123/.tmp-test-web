@@ -86,9 +86,8 @@ body.is-panel-resizing {
 }
 
 /* ---- Preview panel folder tabs (3D Preview | Reference Images) ---- */
-/* The tab strip sits directly on the panel body: the active tab paints the same
-   white as the pane below it and covers the pane's top border with a -1px
-   margin, so the two read as one folder. */
+/* The active tab paints the same white as the pane and covers its top border
+   with a -1px margin, so strip and pane read as one folder. */
 .preview-tabs {
   display: flex;
   align-items: flex-end;
@@ -351,9 +350,8 @@ body.is-panel-resizing {
   -webkit-user-drag: none;
 }
 
-/* Inside the stage, over the image — the pane has no room for outside gutters.
-   The z-index is load-bearing: the image's zoom transform makes it paint like a
-   positioned element, which would otherwise cover the button before it. */
+/* Inside the stage, over the image. The z-index is load-bearing: the image's
+   zoom transform makes it paint like a positioned element and cover the button. */
 .preview-refs-nav {
   position: absolute;
   z-index: 2;
@@ -456,7 +454,6 @@ body.is-panel-resizing {
   flex: 1 1 0;
   min-height: 0;
   border: 1px solid var(--line);
-  border-radius: 0;
   background: #ffffff;
   display: flex;
   flex-direction: column;
@@ -496,17 +493,14 @@ body.is-panel-resizing {
 }
 
 .preview-frame.is-3d-ready .jaw-preview-toolbar {
-  /* border-bottom spans the full frame width, so it divides the two halves of
-     one box instead of underlining an inset group. The 52px right gutter clears
-     the maximize button (30px wide at a 14px inset) so both rows share one
-     right edge — that clearance used to be a margin on each row's survey group. */
+  /* Full-width border-bottom divides the box rather than underlining a group.
+     The 52px right gutter clears the maximize button so both rows share an edge. */
   padding: 10px 52px 10px 14px;
 }
 
 .preview-frame.is-3d-ready .jaw-preview-3d-mount {
-  /* Border rather than a tinted surround: the renderer clears to white and the
-     frame is white, so this is what makes the inset read. Same softened teal as
-     the frame border and the tool-row buttons. */
+  /* Border, not a tinted surround: renderer and frame are both white, so only
+     this makes the inset read. Same softened teal as the frame border. */
   border: 1px solid rgba(59, 174, 149, 0.35);
   border-radius: 10px;
   /* auto rather than the base 100%: as a stretched grid item it fills the row
@@ -551,9 +545,8 @@ body.is-panel-resizing {
 
 .jaw-preview-row {
   display: grid;
-  /* Left group (jaw icon + ALLOW PROCESSING + delete) stays tight; the trailing
-     1fr spacer pushes SET SURVEY ANGLE to the far right so the delete button no
-     longer floats in the middle on wide (iPad) layouts. */
+  /* Left group stays tight; the trailing 1fr spacer pushes SET SURVEY ANGLE
+     right so delete can't float mid-row on wide (iPad) layouts. */
   grid-template-columns: 34px auto 32px 1fr;
   align-items: center;
   column-gap: 12px;
@@ -652,9 +645,8 @@ body.is-panel-resizing {
   opacity: 0.4;
 }
 
-/* State-driven control visibility. A loaded jaw shows trash + SET SURVEY ANGLE;
-   an empty jaw shows only the upload icon. Driven by the class (not the JS
-   `hidden` attribute, which these elements' `display` rules would override). */
+/* Loaded jaw shows trash + SET SURVEY ANGLE, empty jaw only upload. Driven by
+   the class, not `hidden` — these elements' display rules would override it. */
 .jaw-preview-row.is-empty-jaw .jaw-preview-delete-btn,
 .jaw-preview-row.is-empty-jaw .jaw-preview-survey-btn {
   display: none;
@@ -665,9 +657,8 @@ body.is-panel-resizing {
 }
 
 /* ===== Extra 3D files panel ===== */
-/* On the Extra 3D tab this panel IS the toolbar: the jaw rows step aside, and so
-   does the HD/SD badge — mesh quality belongs to the jaws, which are off this
-   stage. The undercut toggle keeps its usual upper-left corner. */
+/* On the Extra 3D tab this panel is the toolbar: jaw rows and the HD/SD badge
+   step aside (quality belongs to the jaws), the undercut toggle stays. */
 .preview-frame.is-extras-tab .jaw-preview-toolbar,
 .preview-frame.is-extras-tab .jaw-preview-quality-toggle { display: none; }
 
@@ -1154,8 +1145,7 @@ button.upload3d-row {
 }
 
 /* shadcn "outline" variant at size sm: h-8, rounded-md (8px), px-3, gap-1.5,
-   text weight 500-600 with minimal tracking. The old 0.7rem/700/0.05em was the
-   dated part — cramped, heavy and over-tracked. */
+   weight 500-600, minimal tracking. */
 .jaw-preview-survey-btn {
   border: 1px solid var(--rose-500);
   background: #fff;
@@ -1173,7 +1163,6 @@ button.upload3d-row {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
 .jaw-preview-survey-btn:hover {
@@ -1182,9 +1171,8 @@ button.upload3d-row {
   color: var(--rose-800);
 }
 
-/* Armed state: the button has become the SET confirm for the jaw whose
-   placement arrow is currently showing in the 3D view. Filled teal so it reads
-   as "commit", matching the arrow's colour. */
+/* Armed: the button is now the SET confirm for the jaw whose placement arrow
+   is showing. Filled teal to read as "commit", matching the arrow. */
 .jaw-preview-survey-btn.is-aiming {
   background: #0f766e;
   border-color: #0f766e;
@@ -1201,9 +1189,8 @@ button.upload3d-row {
   cursor: not-allowed;
 }
 
-/* Survey-aiming mode ring: a prominent border in the undercut colour (the
-   deepest heatmap band — keep in step with colorForSurveyingValue). Drawn as an
-   inset outline so the mount's size and radius are untouched. */
+/* Survey-aiming ring in the undercut colour — keep in step with
+   colorForSurveyingValue. Inset, so the mount's size and radius are untouched. */
 .jaw-preview-3d-mount.is-aiming-survey {
   outline: 3px solid #aa0003;
   outline-offset: -3px;
@@ -1225,10 +1212,8 @@ button.upload3d-row {
   cursor: grabbing;
 }
 
-/* Banner shown over the 3D view while a jaw is armed for surveying.
-   Centred by insetting both sides, not by left:50% + translateX: a shrink-to-fit
-   box positioned from the midpoint can only use half the panel, which wrapped
-   the touch hint onto three lines on a phone. */
+/* Banner over the 3D view while a jaw is armed. Centred by insetting both
+   sides — left:50% + translateX limits it to half the panel and wraps badly. */
 .jaw-preview-survey-hint {
   position: absolute;
   left: 16px;
@@ -1271,9 +1256,8 @@ button.upload3d-row {
   opacity: 0.65;
 }
 
-/* Inline upload progress shown in the SET SURVEY ANGLE slot while a freshly
-   picked jaw STL uploads. The `is-uploading-jaw` row class swaps the survey/
-   trash/upload controls for this bar until the upload settles. */
+/* Upload progress in the SET SURVEY ANGLE slot; the `is-uploading-jaw` row
+   class swaps the survey/trash/upload controls for it until the upload settles. */
 .jaw-preview-survey-loading {
   display: none;
   grid-column: 4;
@@ -1503,9 +1487,8 @@ button.upload3d-row {
   opacity: 0.55;
 }
 
-/* View-navigation gizmo (square pad, bottom-right): isometric cube ringed by
-   beveled arrows pointing inward. The arrows are standalone 3D SVG shapes on a
-   dark panel — no square button chrome. */
+/* View-navigation gizmo, bottom-right: isometric cube ringed by inward beveled
+   arrows. Standalone 3D SVG shapes on a dark panel, no button chrome. */
 .jaw-preview-nav {
   position: absolute;
   right: 14px;
@@ -1518,9 +1501,8 @@ button.upload3d-row {
 }
 
 .jpnav-grid {
-  /* Auto tracks (sized to the buttons) with no gap keep every button inside
-     the grid's box, so nothing spills past the nav corner and gets clipped by
-     the mount's overflow:hidden. Tight buttons put the arrows on the cube. */
+  /* Auto tracks with no gap keep every button inside the grid's box, so nothing
+     spills past the nav corner into the mount's overflow:hidden. */
   display: grid;
   grid-template-columns: repeat(3, auto);
   grid-template-rows: repeat(3, auto);
@@ -1614,9 +1596,8 @@ button.upload3d-row {
   align-items: center;
 }
 
-/* HD/SD mesh-quality toggle — top-right of the 3D mount (undercut legend is
-   top-left, nav gizmo bottom-right). Single badge-button labeled with the
-   CURRENT quality; clicking flips to the other. */
+/* HD/SD mesh-quality toggle, top-right of the 3D mount. One badge-button
+   labelled with the CURRENT quality; clicking flips it. */
 .jaw-preview-quality-toggle {
   position: absolute;
   top: 16px;
@@ -1663,9 +1644,7 @@ button.upload3d-row {
 .jaw-preview-quality-panel {
   width: min(360px, 100%);
   border: 1px solid var(--line);
-  border-radius: 8px;
   background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 10px 26px rgba(26, 77, 63, 0.16);
   padding: 14px;
 }
 
@@ -1696,7 +1675,6 @@ button.upload3d-row {
 .jaw-preview-quality-btn {
   min-height: 58px;
   border: 1px solid var(--line);
-  border-radius: 7px;
   background: #fff;
   color: var(--ink);
   cursor: pointer;
@@ -1945,71 +1923,57 @@ button.upload3d-row {
   line-height: 1.4;
 }
 
-.load-template-hint code {
-  background: #eef1f6;
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-size: 0.85em;
-}
-
-.load-template-dropzone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 22px 16px;
-  border: 2px dashed #c2ccd8;
-  border-radius: 10px;
-  background: #f7f9fc;
-  color: #4a5663;
-  text-align: center;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.load-template-dropzone:hover,
-.load-template-dropzone:focus-within,
-.load-template-dropzone.is-dragover {
-  border-color: var(--rose-500);
-  background: #fdf3f5;
-}
-
-.load-template-dropzone-icon {
-  font-size: 1.6rem;
-  line-height: 1;
-  color: var(--rose-500);
-}
-
-.load-template-dropzone-text {
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.load-template-file-list {
+.kennedy-class-panel {
   list-style: none;
-  margin: 12px 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 132px;
-  overflow-y: auto;
+  gap: 10px;
 }
 
-.load-template-file-item {
-  font-size: 0.86rem;
-  color: #1d2b38;
-  background: #eef1f6;
-  border-radius: 6px;
-  padding: 6px 10px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.kennedy-class-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  grid-template-areas:
+    "jaw label"
+    "jaw detail";
+  gap: 2px 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #dde3ec;
+  border-radius: 10px;
+  background: #f7f9fc;
 }
 
-.load-template-file-item::before {
-  content: "\1F4C4";
-  margin-right: 6px;
+.kennedy-class-jaw {
+  grid-area: jaw;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7787;
+}
+
+.kennedy-class-label {
+  grid-area: label;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #142434;
+}
+
+/* Dentate / edentulous arches: Kennedy gives them no class, so tone the label down. */
+.kennedy-class-row.is-unclassified .kennedy-class-label {
+  font-weight: 600;
+  color: #6b7787;
+}
+
+.kennedy-class-detail {
+  grid-area: detail;
+  font-size: 0.84rem;
+  color: #4a5663;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .load-template-actions {
@@ -2035,17 +1999,10 @@ button.upload3d-row {
   color: #fff;
 }
 
-.load-template-actions .is-primary:disabled {
-  background: #d7b5bd;
-  border-color: #c9d1dc;
-  cursor: not-allowed;
-}
-
 .case-label {
   min-width: 230px;
   text-align: center;
   font-size: 1rem;
-  color: var(--muted);
   background: white;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -2054,10 +2011,8 @@ button.upload3d-row {
   white-space: nowrap;
 }
 
-/* Case Note button relocated into the topbar's upper-left, mirroring the
-   clinical-info button pinned at the right (which uses an <img> logo too).
-   Visibility (mobile-only) is still governed by the
-   .ann-footer-btn.ann-footer-note-btn rules. */
+/* Case Note button in the topbar's upper-left, mirroring the clinical-info
+   button at the right. Mobile-only visibility stays with .ann-footer-note-btn. */
 .arch-topbar .arch-note-btn {
   position: absolute;
   left: 0;
@@ -2424,18 +2379,14 @@ button.upload3d-row {
 
 .action-btn {
   border: 1px solid var(--line);
-  border-radius: 5px;
   background: #fff;
   color: var(--rose-700);
   font-size: 0.7rem;
-  padding: 8px 6px;
   cursor: pointer;
 }
 
 .action-btn.primary {
-  background: var(--rose-500);
   color: #fff;
-  border-color: var(--rose-500);
 }
 
 .save-message {
@@ -2478,7 +2429,6 @@ button.upload3d-row {
   border: 1px solid var(--line);
   background: transparent;
   color: var(--rose-700);
-  border-radius: 8px;
   font-size: 0.8rem;
   font-weight: 600;
   width: 100%;
@@ -2533,9 +2483,6 @@ button.upload3d-row {
 .edit-mode-title {
   margin: 0 0 10px;
   text-align: center;
-  font-size: 1rem;
-  font-weight: 500;
-  color: var(--rose-700);
 }
 
 .catalog-wrap { display: grid; gap: 10px; }
@@ -2551,7 +2498,6 @@ button.upload3d-row {
 
 .component-tab {
   border: 1px solid var(--line);
-  border-radius: 5px;
   background: #fff;
   color: var(--muted);
   font-size: 0.7rem;
@@ -2735,7 +2681,6 @@ button.upload3d-row {
   justify-content: flex-start;
   gap: 10px;
   border: 1px solid transparent;
-  border-radius: 6px;
   background: transparent;
   color: var(--muted);
   padding: 8px 10px;
@@ -3350,12 +3295,8 @@ button.upload3d-row {
     grid-column: 1;
     grid-row: 1;
     min-height: 0;
-    /* Clip horizontally only: the scaled arch SVGs would otherwise bleed
-       into the tools-panel column and intercept clicks on the left edge
-       of buttons there (MAJOR CONNECTOR, Clear upper, etc.). The lower
-       arch is translateY(100px) + scale(1.36), so its content needs to
-       extend below the layout box — that's why we use clip-path with a
-       large negative bottom inset instead of plain `overflow: hidden`. */
+    /* Clip horizontally only, or the scaled arches steal clicks in the tools
+       column. clip-path, not overflow:hidden — the lower arch must spill down. */
     clip-path: inset(0 0 -9999px 0);
   }
 
@@ -3379,15 +3320,8 @@ button.upload3d-row {
     min-height: 200px;
   }
 
-  /* Visually enlarge the 2D jaws without changing layout sizes. Each SVG's
-     layout box stays the same; only the rendered content is scaled. Upper
-     grows downward, lower grows upward so the lock strip in the middle
-     isn't pushed off-screen.
-
-     Scale held at 1.32 (original) — pushing it higher clips bar-clasp
-     annotations off the top of the upper arch where the canvas top edge
-     sits. The topbar collapse on desktop already gives the jaws ~40px more
-     room than before, so the visual size is bigger even at the same scale. */
+  /* Enlarge the jaws without changing layout boxes; upper grows down, lower up.
+     Do not raise 1.32 — it clips bar-clasp annotations off the upper arch. */
   #upperArchSvg.arch-svg {
     transform: translateY(30px) scale(1.12);
     transform-origin: center;
@@ -3444,9 +3378,8 @@ button.upload3d-row {
 }
 
 
-/* iPad-range (above phone breakpoint, below desktop): place upper arch on the
-   left and lower arch on the right so each jaw fills half the row instead of
-   being letterboxed in a centered single column. */
+/* iPad range: upper arch left, lower arch right, so each jaw fills half the row
+   instead of being letterboxed in one centred column. */
 @media (min-width: 720px) and (max-width: 1200px) {
   .jaw-combined-canvas {
     display: grid;
@@ -3782,9 +3715,8 @@ button.upload3d-row {
 }
 
 /* ============ tooth quick-pick popup (touch / mobile) ============ */
-/* Replaces the radial wheel on touch devices — labels next to icons in a 2×2
-   grid, full-size tap targets, centered modal-style sheet. Triggered by
-   `(pointer: coarse)` in showPresentToothRadialQuickPick. */
+/* Replaces the radial wheel on touch: a 2x2 labelled grid with full-size tap
+   targets, triggered by `(pointer: coarse)` in showPresentToothRadialQuickPick. */
 .tooth-quickpick-backdrop {
   position: fixed;
   inset: 0;
@@ -3845,19 +3777,16 @@ button.upload3d-row {
 .tooth-quickpick-back:hover { background: rgba(15, 23, 42, 0.06); }
 .tooth-quickpick-close:focus-visible,
 .tooth-quickpick-back:focus-visible { outline: 2px solid rgba(82, 141, 127, 0.55); }
-/* Push the heading to be centered between the back/close buttons. The back
-   button only appears in the items view, so reserve space for it via the
-   flex order rather than collapsing the layout on each transition. */
+/* Centres the heading between the back and close buttons. Space for back is
+   reserved via flex order, so the layout doesn't shift on each transition. */
 .tooth-quickpick-header { gap: 8px; }
 .tooth-quickpick-id { flex: 1 1 auto; min-width: 0; }
 .tooth-quickpick-back.is-hidden { visibility: hidden; }
 
 .tooth-quickpick-grid {
   display: grid;
-  /* 3 columns lays the 7 categories out as 3-3-1; the trailing lone tile
-     spans the full row so it never looks orphaned. The items view (some
-     categories have 8+ entries) keeps the same column count for a
-     predictable scan pattern; the sheet body itself scrolls when needed. */
+  /* 3 columns lays the 7 categories out 3-3-1, the lone trailing tile spanning
+     the row. The items view keeps the count so the scan pattern is stable. */
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   padding: 14px;
@@ -3867,9 +3796,8 @@ button.upload3d-row {
 .tooth-quickpick-grid > .tooth-quickpick-tile:last-child:nth-child(3n - 2) {
   grid-column: 1 / -1;
 }
-/* In the items view (after drilling into a category), drop the
-   "lone-trailing-tile spans full row" rule — for variable-length item lists
-   we want every tile the same width so users can scan the catalog cleanly. */
+/* In the items view, drop the "lone trailing tile spans the row" rule — every
+   tile the same width scans better for variable-length lists. */
 .tooth-quickpick-grid.is-items-view > .tooth-quickpick-tile:last-child:nth-child(3n - 2) {
   grid-column: auto;
 }
@@ -3945,18 +3873,10 @@ button.upload3d-row {
   overflow-wrap: anywhere;
 }
 
-/* On touch devices the popup IS the category + item picker, so the entire
-   bottom Components panel (#editModePanel: heading, tab strip, catalog
-   list, plus the major-connector Upper/Lower columns) is redundant. Hide
-   it so users don't have to scroll past it to reach the canvas controls.
-   The DOM stays intact for renderComponentCatalog() to keep mutating
-   state-tracked nodes; only the visual is suppressed. */
-/* Hide the desktop Components tab strip on all touch devices up to the tablet
-   ceiling (≤1200px, the same width where the layout stacks to one column) in
-   BOTH orientations — phones and tablets alike. On touch, the mobile component
-   sheet (useMobileSheet, triggered by pointer:coarse) replaces it, so the strip
-   is redundant. We avoid `display: block` !important on purpose: that would show
-   the panel even when design mode is off. */
+/* On touch the popup is the picker, so #editModePanel is redundant and hidden
+   rather than scrolled past. The DOM stays intact for renderComponentCatalog(). */
+/* Hide the desktop tab strip on touch up to 1200px; the mobile sheet replaces
+   it. Never `display: block !important` — it shows even with design mode off. */
 @media (pointer: coarse) and (orientation: portrait) {
   #editModePanel { display: none !important; }
 }
@@ -4036,34 +3956,22 @@ button.upload3d-row {
 /* ============ bottom status footer ============ */
 body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
 
-/* Mobile/tablet stacked layout scrolls the body under the fixed 40px footer, so
-   reserve space at the bottom of the shell — otherwise the last controls (Draw
-   from Scratch / Select Teeth / catalog buttons) sit flush against (and get
-   clipped by) the footer. Desktop locks the shell to the viewport instead, so
-   it doesn't need this. env() adds the notch inset on phones that have one. */
+/* The stacked layout scrolls under the fixed 40px footer, so reserve bottom
+   space or the last controls are clipped by it. env() adds any notch inset. */
 @media (max-width: 1200px) {
   body.has-ann-footer .annotation-shell {
     padding-bottom: calc(40px + 20px + env(safe-area-inset-bottom, 0px));
   }
 }
 
-/* Desktop: lock the shell to the viewport (minus the fixed 40px footer) so the
-   page fits the screen without body scroll. `min-height` alone is just a floor
-   that lets the shell grow past 100vh — e.g. when the action list loses a row
-   and the `minmax(0,1fr)` jaw area expands — pushing the body into a scroll. A
-   fixed height makes that inner row shrink to fit instead. Declared after the
-   rule above so it wins the same-specificity tie on desktop; the mobile/tablet
-   stacked layout (≤1200px) keeps the growable `min-height` and scrolls. */
+/* Desktop locks the shell to the viewport minus the 40px footer. Fixed height,
+   not min-height — a floor lets the shell grow past 100vh into a body scroll. */
 @media (min-width: 1201px) {
   body.has-ann-footer .annotation-shell {
     min-height: 0;
     height: calc(100vh - 40px);
-    /* Clip at the shell. The lower arch is transformed down (translateY +
-       scale) and deliberately allowed to spill below its canvas box; in design
-       mode the jaw row grows (the Clear buttons hide, shrinking the action
-       row) and that spill reaches past the shell bottom. Transformed overflow
-       still extends the page's scroll area, so without this the body scrolls
-       even though the shell box is a fixed height. */
+    /* Clip at the shell: the lower arch spills below its canvas box, and
+       transformed overflow still extends the page's scroll area. */
     overflow: hidden;
   }
 }
@@ -4122,8 +4030,6 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   gap: 12px;
   height: 40px;
   padding: 0 14px;
-  background: var(--rose-500);
-  border-top: 1px solid var(--rose-700);
   font-size: 13px;
   color: #fff;
   z-index: 6;
@@ -4206,9 +4112,8 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   font-weight: 500;
 }
 
-/* Hide the in-canvas undo/redo on desktop — they live in the footer instead.
-   The 1200px breakpoint matches the existing mobile/tablet single-column
-   threshold, so below it the in-canvas controls stay where they were. */
+/* Hide the in-canvas undo/redo on desktop; they live in the footer. 1200px
+   matches the single-column threshold, so below it they stay put. */
 @media (min-width: 1201px) {
   #undoWorkflowBtn,
   #redoWorkflowBtn { display: none; }
@@ -4357,9 +4262,8 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
 .app-sidebar-item-icon {
   width: 34px;
   height: 34px;
-  /* Font Awesome loads after this file and forces .fa back to inline-block via
-     --fa-display; set it to inline-flex so the glyph centers in the chip.
-     line-height/text-align are a fallback if FA isn't the display source. */
+  /* Font Awesome loads later and forces .fa to inline-block via --fa-display;
+     override it so the glyph centers. line-height/text-align are the fallback. */
   --fa-display: inline-flex;
   display: inline-flex;
   align-items: center;
@@ -4418,9 +4322,8 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
 }
 
 /* ============================================================================
-   Premium polish layer (appended last so it wins via the cascade).
-   Purely visual: depth, radii, typography and interaction states. No layout
-   structure (grid/flex/positioning/sizes) is changed here.
+   Premium polish layer, appended last to win the cascade. Visual only: depth,
+   radii, typography and interaction states — no layout structure.
    ============================================================================ */
 :root {
   --pp-radius: 12px;
@@ -4433,10 +4336,8 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
 }
 
 /* ---- Recessed surfaces ---- */
-/* The preview reads as a well cut into the page rather than a card floating
-   above it: the outer drop shadow is gone and an inset ring is drawn instead.
-   The ring has to live on a pseudo-element — .jaw-preview-shell paints an
-   opaque white background that would cover a box-shadow:inset on the frame. */
+/* A well cut into the page, not a floating card: an inset ring, no drop shadow.
+   It needs a pseudo-element — .jaw-preview-shell's white bg would cover inset. */
 .preview-frame {
   border-color: rgba(59, 174, 149, 0.35);
   border-radius: 0;
@@ -4595,9 +4496,8 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
 }
 
 /* =========================================================================
-   Case Note approval dialog (caseNote.js). Mounted inside the shared
-   confirmModal's .app-confirm-content, so the overlay, box, title and the
-   Approve/Cancel row are styled by css/toast.css — only the innards live here.
+   Case Note approval dialog (caseNote.js), mounted in the shared confirmModal.
+   Overlay, box, title and the Approve/Cancel row come from css/toast.css.
    ========================================================================= */
 .cn-approve {
   display: grid;
@@ -4605,9 +4505,8 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   text-align: left;
 }
 
-/* Share sits just left of Cancel in the request dialog's action row: outlined,
-   so Send stays the only filled button. The compound selector outranks
-   .app-confirm-btn's transparent border, which toast.css sets later. */
+/* Share sits left of Cancel, outlined so Send stays the only filled button.
+   The compound selector outranks the transparent border toast.css sets later. */
 .app-confirm-btn.cn-approve-share {
   display: inline-flex;
   align-items: center;
@@ -4784,11 +4683,8 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   gap: 8px;
 }
 
-/* What is being approved on the left, recipients + message right. The right
-   column is a fixed 280px — a user list and a message box need a readable
-   column, not a share of whatever is left — so the renders take the remaining
-   width instead of the two fighting over it. minmax(0,…) keeps a wide capture
-   from pushing past its cell. */
+/* Approval subject left, recipients and message right at a fixed 280px so the
+   renders take the rest; minmax(0,…) stops a wide capture overflowing. */
 .cn-approve-cols {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;
@@ -4917,9 +4813,8 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   box-shadow: 0 0 0 2px rgba(59, 174, 149, 0.15);
 }
 
-/* Send sits on the row beneath the box, with its status beside it — never
-   wrapping onto its own line, which is what nowrap + the flex rules below
-   guarantee in a column this narrow. */
+/* Send sits under the box with its status beside it; nowrap plus the flex rules
+   below keep the status off its own line in a column this narrow. */
 .cn-approve-message-side {
   display: flex;
   flex-direction: row;
@@ -4969,10 +4864,8 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
 
 
 /* ---- what is being approved (caseNote.js buildShotsSection) ------------- */
-/* Shared by both approval dialogs: the 2D one shows the arch designs, the 3D one
-   the uploaded files. Upper above lower, each sized to the render's own aspect —
-   the captures come off a wide canvas, so a fixed frame height would letterbox
-   them. */
+/* Shared by both approval dialogs (2D arch designs, 3D uploaded files). Upper
+   above lower, each at the render's own aspect so nothing is letterboxed. */
 .cn-approve-shots {
   display: grid;
   gap: 12px;
@@ -5017,9 +4910,8 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   background: #eef2f6;
 }
 
-/* Height-capped rather than width-filled: the captures come off a wide canvas, so
-   at width:100% their aspect ratio alone made each panel ~190px tall. max-width
-   keeps them from overflowing a narrow dialog. */
+/* Height-capped, not width-filled: off a wide canvas, width:100% alone made each
+   panel ~190px tall. max-width stops them overflowing a narrow dialog. */
 .cn-approve-shot-img {
   display: block;
   max-width: 100%;

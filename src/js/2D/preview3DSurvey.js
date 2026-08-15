@@ -1,6 +1,5 @@
-// preview3DSurvey.js — SET SURVEY ANGLE: aim, save and apply jaw insertion angles.
-// Shares preview3D's state and helpers; preview3D imports the entry points back
-// (call-time-only circular import).
+// SET SURVEY ANGLE: aim, save and apply jaw insertion angles. Shares preview3D's state;
+// preview3D imports the entry points back (a call-time-only circular import).
 
 import { state } from "./2DAnnotation.js";
 import { toast } from "../shared/toast.js";
@@ -407,9 +406,8 @@ export function updateSurveyPlacementArrow() {
 
 // (Hold-to-rotate removed: jaw rotation is now always two-finger drag.)
 
-// Aim input: mouse left-drag swings the arrow (right-drag rotates the jaw); touch is
-// intercepted at the mount in the capture phase so TrackballControls' one-finger
-// rotate can't fight the arrow drag.
+// Left-drag swings the arrow, right-drag rotates the jaw. Touch is intercepted at the
+// mount in the CAPTURE phase, or TrackballControls' one-finger rotate fights it.
 function attachSurveyAimDrag() {
   const canvas = preview3DState.renderer?.domElement;
   const mount = preview3DState.mount;
@@ -496,11 +494,8 @@ function attachSurveyAimDrag() {
     canvas.classList.remove("is-aiming-drag");
   };
 
-  // ---- touch: 1-finger drag = arrow · 2-finger drag = jaw rotate · 2-finger pinch = zoom ----
-  // Gesture map:
-  //   1 finger  → immediately drags the placement arrow
-  //   2 fingers → rotates the jaw (centroid delta) AND zooms (pinch delta) simultaneously
-  //   3+ fingers → ignored until all lifted
+  // Touch gestures: 1 finger drags the placement arrow, 2 rotate (centroid) and zoom
+  // (pinch) at once, 3+ are ignored until all lift.
   const touchPoints = new Map(); // pointerId -> {x, y}
   let touchMode = null; // "arrow" | "jaw" | "dead"
   let tLastX = 0;
@@ -848,10 +843,8 @@ async function saveSurveyAngle(jaw, btn) {
     btn.textContent = "SAVING…";
   }
 
-  // PUT /case/:id below replaces the whole row, so read it fresh (the cached copy
-  // can be stale or from a failed request) and abort rather than write defaults:
-  // a payload without the real case_id renames the case to "" — the case list then
-  // shows "N/A" — and stale values would clobber the other jaw's saved angles.
+  // PUT /case/:id replaces the WHOLE row, so read fresh and abort rather than write
+  // defaults — no case_id renames the case to "", and stale values clobber saved angles.
   const fresh = await fetchCaseData({ force: true });
   if (fresh?.case_id) preview3DState.caseData = fresh;
   const current = preview3DState.caseData;

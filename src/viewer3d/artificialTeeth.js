@@ -1770,39 +1770,27 @@ export function createArtificialTeethRenderer({
     polygonOffsetFactor: 0,
     polygonOffsetUnits: 0,
   });
+  // Each arch gets its own instances: the two are configured alike but are
+  // mutated independently as guidelines are shown and hidden.
+  const makeGuidelineMaterials = () => ({
+    buccal: new THREE.MeshBasicMaterial({
+      color: 0xff9f1c,
+      transparent: true,
+      opacity: 0.72,
+      depthTest: true,
+      depthWrite: false,
+    }),
+    gingival: new THREE.MeshBasicMaterial({
+      color: 0x38d6ff,
+      transparent: true,
+      opacity: 0.78,
+      depthTest: true,
+      depthWrite: false,
+    }),
+  });
   const guidelineVisualMaterials = {
-    upper: {
-      buccal: new THREE.MeshBasicMaterial({
-        color: 0xff9f1c,
-        transparent: true,
-        opacity: 0.72,
-        depthTest: true,
-        depthWrite: false,
-      }),
-      gingival: new THREE.MeshBasicMaterial({
-        color: 0x38d6ff,
-        transparent: true,
-        opacity: 0.78,
-        depthTest: true,
-        depthWrite: false,
-      }),
-    },
-    lower: {
-      buccal: new THREE.MeshBasicMaterial({
-        color: 0xff9f1c,
-        transparent: true,
-        opacity: 0.72,
-        depthTest: true,
-        depthWrite: false,
-      }),
-      gingival: new THREE.MeshBasicMaterial({
-        color: 0x38d6ff,
-        transparent: true,
-        opacity: 0.78,
-        depthTest: true,
-        depthWrite: false,
-      }),
-    },
+    upper: makeGuidelineMaterials(),
+    lower: makeGuidelineMaterials(),
   };
   const setStatus = (label, progress = 0.1, autoHide = false) => {
     if (typeof onStatus === "function") {
@@ -1815,21 +1803,9 @@ export function createArtificialTeethRenderer({
     }
   };
 
-  // Uploaded slot STLs (the viewer's landing view) live in parentObject next to
-  // the case's jaws and carry the same jaw_type. They are not case jaws: seating
-  // teeth on one puts the whole arch in the wrong place, because the case's OFF
-  // upper jaw is flipped 180° on load and a raw slot upload is not.
+  // Slot STLs carry the same jaw_type but are NOT case jaws: the case's OFF upper
+  // is flipped 180° on load and a raw upload isn't, so the arch lands wrong.
   const isCaseJawMesh = (child) => !child.userData?.isDesignSlot;
-
-  const getLoadedJawKeys = () => {
-    const keys = new Set();
-    parentObject.children.forEach((child) => {
-      if (!isCaseJawMesh(child)) return;
-      const jawKey = normalizeJawKey(child.userData?.jaw_type ?? child.name);
-      if (jawKey) keys.add(jawKey);
-    });
-    return Array.from(keys);
-  };
 
   const getJawMesh = (jawType) => {
     const jawText = jawType.toLowerCase();

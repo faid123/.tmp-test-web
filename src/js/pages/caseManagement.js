@@ -19,15 +19,20 @@ import {
   applyEnrichmentResponses,
   fetchReferenceImageRows,
 } from "../shared/caseEnrichment.js";
-import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
+import {
+  API_BASE,
+  MACHINE_ID,
+  callerIdentity,
+  fileToBase64,
+  getLoggedInUser,
+  uploadWithProgress,
+} from "../shared/api.js";
+import { timestampToMs, toDayMidnight } from "../shared/timestamps.js";
 import { recordCollaborators, reconcileCollaborators } from "../shared/userSuggest.js";
+import { confirmRemoveUserFromCase } from "../shared/caseRoles.js";
 
-// Per-user cache of the last case list so the table can paint instantly on load
-// instead of waiting on /case/user/findall/get — which can lag when the API host
-// is briefly busy (right after the 2D page's request burst, or while the chat's
-// heavy notes query is still being served by the backend). The network result
-// replaces it as soon as it lands. Keyed by uuid so one account never sees
-// another's list on the instant paint.
+// Per-user cache of the last case list, painted instantly while
+// /case/user/findall/get is in flight. Keyed by uuid so lists never cross accounts.
 function caseListCacheKey() {
   const u = getLoggedInUser();
   return u?.uuid ? `caseList_cache_${u.uuid}` : null;
@@ -61,11 +66,8 @@ let currentSortOrder = "desc";
 let currentCases = [];
 let existingUsers = [];
 
-// Stat-card filters (replace the old "Filter by Status" dropdown). Each card
-// represents a *stage* — a group of raw statuses — so one click filters the
-// whole list to that stage. Keys are the canonical underscore values produced
-// by apiStatusToValue(). "na" (no status yet) is deliberately left out of every
-// stage, so N/A cases are excluded from the stage counts.
+// Each card is a *stage* — a group of raw statuses, keyed by apiStatusToValue().
+// "na" is deliberately in no stage, so N/A cases sit outside the stage counts.
 const STATUS_GROUPS = {
   // Draft → 3D design approved.
   preparation: new Set([
@@ -131,9 +133,8 @@ async function fetchCases() {
     return Array.isArray(data) ? dedupeCases(data) : data;
   } catch (err) {
     console.error("❌ Failed to fetch cases:", err);
-    // TypeError: Failed to fetch is what the browser throws when CORS blocks
-    // the response or the network call itself fails — surface it to the user
-    // instead of leaving the case list silently empty.
+    // "Failed to fetch" covers both a CORS block and a dead network — surface it
+    // rather than leaving the list silently empty.
     const isNetwork = err instanceof TypeError;
     if (typeof toast !== "undefined") {
       toast.error(
@@ -162,6 +163,12 @@ function dedupeCases(list) {
   return out;
 }
 
+// The case endpoints want the numeric id; a name string is passed through as-is.
+function toNumericCaseId(caseId) {
+  const n = typeof caseId === "number" ? caseId : Number(caseId);
+  return Number.isFinite(n) ? n : caseId;
+}
+
 // 通用：删除指定 case
 async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
   const user = getLoggedInUser();
@@ -181,16 +188,9 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
     if (!confirmed) return false;
   }
 
-  const numericCaseId =
-    typeof caseId === "number" ? caseId : Number(caseId);
-  const caseIdForApi = Number.isFinite(numericCaseId) ? numericCaseId : caseId;
-
+  const caseIdForApi = toNumericCaseId(caseId);
   const requestBody = JSON.stringify([
-    {
-      machine_id: MACHINE_ID,
-      uuid: user.uuid,
-      caseIntID: caseIdForApi,
-    },
+    callerIdentity({ caseIntID: caseIdForApi }),
     { case_int_id: caseIdForApi },
   ]);
 
@@ -254,11 +254,8 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
   }
 }
 
-// Pop-up progress bar for operations whose duration we can't measure precisely
-// (the duplicate runs server-side behind a single POST). Animates a percentage
-// that creeps toward 90% while the work is in flight, then snaps to 100% on
-// completion. Reuses the .cc-loading-* card/bar styles from createCase.css via a
-// fixed-viewport overlay built on the fly (no markup needed in case_list.html).
+// Progress bar for work we can't measure (a server-side duplicate behind one
+// POST): creeps to 90%, then snaps to 100%. Reuses createCase.css's .cc-loading-*.
 function createProgressOverlay(label = "Working…") {
   const overlay = document.createElement("div");
   overlay.className = "cc-loading-overlay cc-loading-overlay--fixed";
@@ -317,10 +314,8 @@ function createProgressOverlay(label = "Working…") {
   };
 }
 
-// Duplicate a case by id. Mirrors the C# RestAPI.DuplicateCase flow: POST
-// [authData, {case_id: caseIntID}] to /case/duplicate/{id}; the server creates
-// a new case and returns an InsertID payload. We reload the list so the new
-// case shows up with fresh thumbnails/details.
+// Mirrors the C# RestAPI.DuplicateCase flow; the server answers with an InsertID.
+// The list is reloaded so the new case arrives with full thumbnails/details.
 async function duplicateCaseById(caseId, { skipConfirm = false } = {}) {
   const user = getLoggedInUser();
   if (!caseId || !user?.uuid) {
@@ -339,16 +334,9 @@ async function duplicateCaseById(caseId, { skipConfirm = false } = {}) {
     if (!confirmed) return false;
   }
 
-  const numericCaseId =
-    typeof caseId === "number" ? caseId : Number(caseId);
-  const caseIdForApi = Number.isFinite(numericCaseId) ? numericCaseId : caseId;
-
+  const caseIdForApi = toNumericCaseId(caseId);
   const requestBody = JSON.stringify([
-    {
-      machine_id: MACHINE_ID,
-      uuid: user.uuid,
-      caseIntID: caseIdForApi,
-    },
+    callerIdentity({ caseIntID: caseIdForApi }),
     { case_id: String(caseIdForApi) },
   ]);
 
@@ -385,9 +373,8 @@ async function duplicateCaseById(caseId, { skipConfirm = false } = {}) {
         : "Case duplicated successfully."
     );
 
-    // Snap the bar to 100% and hold briefly so the user sees it complete, then
-    // mirror SessionManager.RefreshCaseList — reload so the new case appears
-    // with its full server-side detail/thumbnail set, same as refreshListBtn.
+    // Hold at 100% so the user sees it finish, then reload (as refreshListBtn
+    // does) to pick up the new case's server-side details.
     progress.setLabel("Finalizing…");
     await progress.finish();
     window.location.reload();
@@ -441,9 +428,8 @@ function isOffBytes(bytes) {
   return bytes && bytes[0] === 0x4f && bytes[1] === 0x46 && bytes[2] === 0x46;
 }
 
-// Convert an OFF mesh (text) to a binary STL byte array. Standalone (no THREE)
-// so the case list stays light. Polygons are fan-triangulated; degenerate faces
-// referencing missing vertices are dropped so the header count stays accurate.
+// OFF text to binary STL, standalone (no THREE) so the case list stays light.
+// Polygons are fan-triangulated; faces with missing vertices are dropped.
 function offTextToBinaryStl(text) {
   const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length);
   if (!lines.length || lines[0].toUpperCase() !== "OFF") return null;
@@ -604,10 +590,8 @@ function uniqueDownloadName(name, used) {
   return candidate;
 }
 
-// The case's reference images as ready-to-write { name, bytes } files. Shared by
-// the menu action and the bundle download so both ship the same files under the
-// same names; the rows themselves come from shared/referenceImages.js, which the
-// 2D page's Reference Images tab reads too.
+// Reference images as ready-to-write { name, bytes }, shared by the menu action
+// and the bundle download so both ship identical files.
 async function collectReferenceImageFiles(caseIntId, uuid, base) {
   const rows = await fetchReferenceImageRows(caseIntId, uuid);
 
@@ -717,9 +701,8 @@ async function fetchCase2dJpegBytes(caseIntId, uuid) {
   }
 }
 
-// Action-column "Download files": bundle the case's STL files, its extra 3D
-// uploads, the 2D design JPEG, the reference images and the design report
-// (.docx) into one zip. Each part is best-effort — only an empty result aborts.
+// Bundles STLs, extra 3D uploads, the 2D JPEG, reference images and the .docx
+// report into one zip. Each part is best-effort; only an empty result aborts.
 async function downloadCaseFiles(caseIntId, caseLabel, apiStatus) {
   const user = getLoggedInUser();
   if (!user?.uuid || caseIntId == null) {
@@ -846,9 +829,8 @@ async function downloadCaseFiles(caseIntId, caseLabel, apiStatus) {
   }
 }
 
-// Map an API status string to a CSS modifier so card/detail pills get the
-// right color (yellow/blue/green/grey). Keep the keys broad — anything we
-// don't recognise falls back to a neutral "na" pill.
+// API status to a CSS modifier for the pill colour. Keys stay broad — anything
+// unrecognised falls back to a neutral "na" pill.
 function statusPillClass(apiStatus) {
   const v = apiStatusToValue(apiStatus);
   if (!v || v === "na") return "cm-pill-na";
@@ -874,10 +856,8 @@ function statusDisplayText(apiStatus) {
   return statusLabel(apiStatus);
 }
 
-// Inner markup for a case-list status pill. The pill doubles as its own edit
-// control, so it carries a pencil beside the label. Built here rather than
-// inline because patchRowInPlace also repaints these — assigning textContent
-// there would silently drop the icon.
+// The pill doubles as its own edit control, so it carries a pencil. Built here
+// because patchRowInPlace repaints it too — a textContent assign drops the icon.
 function statusPillInner(apiStatus) {
   return (
     `<span class="cm-pill-label">${escapeAttr(statusDisplayText(apiStatus))}</span>` +
@@ -885,9 +865,8 @@ function statusPillInner(apiStatus) {
   );
 }
 
-// Paint the read-only STATUS pill (text + color) in the detail pane. The native
-// <select> is kept only as the (invisible) editing control, so the visible pill
-// is what reflects the current status.
+// Paints the detail pane's read-only STATUS pill. The native <select> survives
+// only as the invisible editing control.
 function applyStatusPillToSelect(apiStatus) {
   const pill = document.getElementById("statusPillText");
   if (!pill) return;
@@ -908,8 +887,7 @@ function escapeAttr(value) {
   ));
 }
 
-// Render the co-owner list into the detail pane's SHARED WITH field. Each
-// co-owner shows as a small name pill (no avatar); empty arrays render an
+// Co-owners as small name pills in SHARED WITH; an empty array renders an
 // em-dash so the field never sits blank.
 function renderSharedWith(coOwners) {
   const container = document.getElementById("shared-with-list");
@@ -946,9 +924,8 @@ function populateTable(cases) {
     // Pinned cases always group above unpinned, regardless of the active sort.
     const pinDiff = Number(pinnedSet.has(bId)) - Number(pinnedSet.has(aId));
     if (pinDiff !== 0) return pinDiff;
-    // Within each pin group, order by the user's chosen column. "recent"
-    // (the default) keeps the most recently edited case on top — so the case
-    // you just opened/edited bubbles up automatically, shared across devices.
+    // Within each pin group, order by the chosen column. "recent" (the default)
+    // floats the case you just opened, and follows you across devices.
     const av = sortValue(a, currentSortColumn);
     const bv = sortValue(b, currentSortColumn);
     const cmp =
@@ -956,10 +933,8 @@ function populateTable(cases) {
     return cmp * dir;
   });
 
-  // Everyone visible on the list is someone this account works with — the only
-  // roster a non-admin can build, and what the create-case invite box suggests.
-  // Paired with the case id so the box can rank by who is shared with most; a
-  // case only counts once per person however often the table repaints.
+  // The only collaborator roster a non-admin can build, and what the invite box
+  // suggests. Paired with the case id so one case counts once per person.
   recordCollaborators(
     cases.flatMap((c) => {
       const caseId = c.id ?? c.case_int_id;
@@ -1009,9 +984,8 @@ function populateTable(cases) {
     const row = document.createElement("tr");
     row.className = "cm-row";
     if (pinned) row.classList.add("is-pinned");
-    // Admins receive soft-deleted cases in the list (server sets
-    // hideDeleted = !is_admin); flag them so they read as struck-through and
-    // the "Retrieve the Case" action has an obvious target.
+    // Admins receive soft-deleted cases too (server sets hideDeleted = !is_admin),
+    // so flag them struck-through to give "Retrieve the Case" a target.
     if (isCaseDeleted(caseItem)) row.classList.add("cm-row-deleted");
     // Re-apply the selected highlight after a re-render (filter/refresh/sort/
     // pin), since the table body is rebuilt but window.selectedCaseId persists.
@@ -1079,9 +1053,8 @@ function populateTable(cases) {
 
     row.querySelector('[data-action="download"]').addEventListener("click", async (e) => {
       e.stopPropagation();
-      // Pass the case's authoritative status (from additionalcasedetails, merged
-      // into the list row) so the report's status badge matches the case list /
-      // dashboard — /case/get/:id, which the report would otherwise read, omits it.
+      // Pass the merged-in authoritative status: /case/get/:id, which the report
+      // would otherwise read, omits it.
       await downloadCaseFiles(resolvedCaseId, caseItem.case_id, caseItem.new_status ?? null);
     });
 
@@ -1157,9 +1130,8 @@ async function handleRowClick(caseId) {
   const loggedInUser = getLoggedInUser();
   if (!loggedInUser || !caseId) return;
 
-  // The detail pane reads enriched fields (status/due/co-owners) from the list
-  // row — jump this case to the front of the lazy queue so they land ASAP;
-  // syncDetailPaneIfSelected repaints the pane when they do.
+  // The detail pane reads enriched fields off the list row, so jump this case to
+  // the front of the lazy queue; syncDetailPaneIfSelected repaints on arrival.
   enqueueEnrichment(
     currentCases.find((c) => c.id === caseId || c.case_int_id === caseId),
     { front: true }
@@ -1200,18 +1172,13 @@ async function handleRowClick(caseId) {
       });
     }
 
-    // Stash the merged row so the dashboard ("View Dashboard", opened later) can
-    // read the real new_status / expected_date — /case/get/:id omits them, which
-    // is why those fields are merged from the cached list row (`extra`) here.
-    // Stamp the UID so later readers can tell whose row this is (the stub outlives
-    // the selection, and a full-row PUT must never write another case's fields).
+    // Carries the new_status/expected_date /case/get/:id omits. The UID stamp is
+    // load-bearing: the stub outlives the selection, and a PUT is a full-row write.
     detail.case_int_id = detail.case_int_id ?? detail.id ?? caseId;
     window.selectedCaseStub = detail;
 
-    // Persist this case's Due Date (same value/fallback as the list "Due" column)
-    // so the 2D design's Case Note can default "Date Required" to it. The 2D page
-    // is a separate tab that can't read window.selectedCaseStub; localStorage is
-    // shared same-origin. Keyed by caseId (= the 2D page's state.caseIntID).
+    // The 2D tab can't read window.selectedCaseStub, but localStorage is shared
+    // same-origin — this is how its Case Note defaults "Date Required".
     saveCaseDueDate(
       caseId,
       toDateInputValue(
@@ -1224,17 +1191,14 @@ async function handleRowClick(caseId) {
     displayCaseDetails(detail);
     await fetchThumbnails(caseId);
 
-    // NOTE: selecting a row only previews it — it must NOT reorder the list.
-    // The last-opened bump now fires from the Start Case action (see the
-    // ".start-case-button" handler), so a case only moves to the top once the
-    // user actually enters it.
+    // Selecting a row only previews it and must NOT reorder the list — the
+    // last-opened bump fires from Start Case instead.
   } catch (err) {
     console.error("❌ Failed to get case detail:", err);
   }
 
-  // Match the CSS breakpoint that switches the detail pane to its off-canvas
-  // slide-in (case_list.css @media max-width: 860px). At in-between widths the
-  // pane is hidden until .show-details is added; keep both numbers in sync.
+  // Must match case_list.css's @media max-width: 860px, where the detail pane
+  // goes off-canvas and stays hidden until .show-details is added.
   if (window.innerWidth <= 860) {
     document.querySelector(".cm-page")?.classList.add("show-details");
   }
@@ -1275,17 +1239,11 @@ async function fetchCaseRow(caseId, user) {
   }
 }
 
-// Fire a no-op PUT to /case/{id} re-sending the case's current fields. The
-// payload doesn't change any meaningful data, but the backend bumps the row's
-// last_updated as a side effect of the write — which is what the sort keys on.
+// A no-op PUT re-sending the case's own fields, purely so the backend bumps
+// last_updated — what the "recent" sort keys on.
 //
-// PUT /case/:id is a FULL-ROW write and its `case_id` is the case's *name*, so
-// `detail` must be this case's real row: a missing one would blank the name (the
-// list then shows "N/A") and a stale one would rename the case to another's.
-// The caller passes window.selectedCaseStub, which is unset until the row's
-// detail fetch lands and keeps the previous case's row if that fetch failed — so
-// verify it belongs to this case, re-read when it doesn't, and skip the bump
-// (cosmetic sort order only) rather than write a default.
+// PUT /case/:id is a FULL-ROW write whose `case_id` is the case NAME: a missing
+// `detail` blanks it, a stale one renames the case. Skip rather than write a default.
 async function fireLastOpenedBump(caseId, detail, user) {
   const auth = {
     machine_id: MACHINE_ID,
@@ -1328,10 +1286,8 @@ async function fireLastOpenedBump(caseId, detail, user) {
   }
 }
 
-// Base of the live (deployed) site, including the GitHub-Pages repo sub-path.
-// Show a QR code of the 3D viewer URL in a modal. Generated fully client-side
-// (qrcodejs, loaded from CDN in case_list.html), so the URL is never sent to a
-// third party. Offers a PNG download of the code.
+// QR code of the 3D viewer URL, generated fully client-side (qrcodejs) so the
+// URL never reaches a third party. Offers a PNG download.
 function showThreeDViewerQr(url) {
   if (typeof window.QRCode === "undefined") {
     toast.error("QR code library failed to load. Please try again.");
@@ -1354,7 +1310,6 @@ function showThreeDViewerQr(url) {
   document.body.appendChild(overlay);
 
   const codeEl = overlay.querySelector("#cmQrCode");
-  // eslint-disable-next-line no-new
   new window.QRCode(codeEl, {
     text: url,
     width: 220,
@@ -1436,10 +1391,8 @@ function displayCaseDetails(data) {
   const webUrlEl = document.getElementById("web-url");
   if (webUrlEl) webUrlEl.textContent = webUrl;
 
-  // Admin detail actions: show "Delete the Case" for active cases and
-  // "Retrieve the Case" for soft-deleted ones (mutually exclusive). The
-  // authoritative deleted flag lives on the cached list row, not on the
-  // /case/get payload merged into `data`, so look it up there.
+  // Delete/Retrieve are mutually exclusive. The authoritative deleted flag is on
+  // the cached list row, not the /case/get payload merged into `data`.
   if (isCurrentUserAdmin()) {
     const caseObj =
       currentCases.find(
@@ -1454,9 +1407,8 @@ function displayCaseDetails(data) {
 }
 
 function applyClientFilters() {
-  // Two possible search boxes: the toolbar one (desktop; admin page only) and
-  // the phone header's collapsible bar. Only one is ever visible, so take
-  // whichever actually has a query.
+  // Two search boxes (desktop toolbar, phone header bar) but only one visible at
+  // a time, so take whichever actually holds a query.
   const searchInput = document.getElementById("searchCaseInput");
   const mobileSearch = document.getElementById("mobileSearchInput");
   const dateInput = document.getElementById("dateFilterInput");
@@ -1507,9 +1459,8 @@ function applyClientFilters() {
   populateTable(base);
 }
 
-// Tally the non-deleted cases into the three stage buckets and paint the counts
-// on the stat cards. Counts represent the whole list (they don't shrink as you
-// filter), so the cards always read as a stable overview.
+// Counts cover the WHOLE list and don't shrink as you filter, so the cards stay
+// a stable overview.
 function updateStatFilterCounts() {
   const counts = { all: 0, preparation: 0, delivery: 0, completed: 0 };
   for (const item of currentCases) {
@@ -1540,9 +1491,8 @@ function syncStatFilterActiveState() {
   });
 }
 
-// Click handler for a stat card: select its stage, or toggle back to "all" when
-// the already-active card is clicked again. The "All Cases" card always clears
-// the filter.
+// Selects the card's stage, or toggles back to "all" when the active card is
+// clicked again. "All Cases" always clears.
 function applyStatFilter(group) {
   if (group === "all") {
     activeStatusFilter = "all";
@@ -1553,10 +1503,8 @@ function applyStatFilter(group) {
   applyClientFilters();
 }
 
-// Fade the date/status controls while they hold no real selection, so they read
-// like the Name field's greyed placeholder. Native date inputs and <select>s
-// have no ::placeholder, so we drive it with an .is-empty class instead: the
-// date field is "empty" with no value, the status <select> while it's on "all".
+// Date inputs and <select>s have no ::placeholder, so an .is-empty class fakes
+// the Name field's greyed look while they hold no real selection.
 function syncSearchPlaceholderState() {
   const dateInput = document.getElementById("dateFilterInput");
   if (dateInput) dateInput.classList.toggle("is-empty", !dateInput.value);
@@ -1564,10 +1512,8 @@ function syncSearchPlaceholderState() {
   if (statusSel) statusSel.classList.toggle("is-empty", statusSel.value === "all");
 }
 
-// Show a "N found" badge in the search bar while any search (name / date /
-// status) is active, so the user sees how many cases matched — handy for the
-// date and status searches where the match isn't obvious at a glance. Hidden
-// when no search is active. `count` is the number of rows actually rendered.
+// "N found" badge while any search is active — the date and status searches
+// especially, where the match isn't obvious at a glance.
 function updateSearchResultCount(count) {
   const el = document.getElementById("searchResultCount");
   if (!el) return;
@@ -1585,9 +1531,8 @@ function updateSearchResultCount(count) {
   );
 }
 
-// Show only the input that matches the chosen search mode (name / date /
-// status) and clear the other two so a stale value can't keep filtering after
-// the user switches modes.
+// Shows only the chosen mode's input and clears the other two, so a stale value
+// can't keep filtering after a mode switch.
 function updateSearchModeUI() {
   const mode = document.getElementById("searchMode")?.value || "name";
   const nameInput = document.getElementById("searchCaseInput");
@@ -1609,10 +1554,8 @@ function updateSearchModeUI() {
   applyClientFilters();
 }
 
-// Edit a case's due date from the list via the shared themed calendar. Commits
-// through updateCaseDueDate (writes the backend additionalcasedetails row the
-// list, dashboard and 2D "Date Required" field all read), mirrors it to
-// localStorage for the 2D page, then re-renders.
+// In-list due-date edit via the themed calendar. Commits through
+// updateCaseDueDate, mirrors to localStorage for the 2D page, then re-renders.
 function openDueDateEditor(anchorTd, caseItem, caseId, currentDue) {
   if (!anchorTd) return;
   openThemedCalendar(anchorTd, {
@@ -1640,13 +1583,8 @@ function openDueDateEditor(anchorTd, caseItem, caseId, currentDue) {
   });
 }
 
-// Swap a row's STATUS pill for a native <select> so the status can be changed
-// without selecting the case first. Built on demand, like the due-date calendar:
-// a permanent select per row would put twelve options in the DOM for every case
-// on the page.
-//
-// The options are cloned from the detail pane's #status rather than written out
-// again, so the two editors can never drift apart.
+// Swaps the row's STATUS pill for a <select>, built on demand (a permanent one
+// per row is 12 options per case). Cloned from #status so the two can't drift.
 function openStatusEditor(anchorTd, caseItem, caseId) {
   if (!anchorTd || anchorTd.querySelector(".cm-status-inline")) return;
   const template = document.getElementById("status");
@@ -1713,32 +1651,16 @@ function openStatusEditor(anchorTd, caseItem, caseId) {
   select.focus();
 }
 
-// Compute a default due-date timestamp (ms) that's 14 days after the
-// creation timestamp. Returns null when creation is missing/invalid.
+// Default due date: 14 days after creation.
 function computeDefaultDueDate(creationTs) {
-  if (creationTs == null || creationTs === "" || creationTs === 0 || creationTs === "0") return null;
-  const n = Number(creationTs);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  const ms = String(n).length >= 13 ? n : n * 1000;
-  return ms + 14 * 24 * 60 * 60 * 1000;
+  const ms = timestampToMs(creationTs);
+  return ms == null ? null : ms + 14 * 24 * 60 * 60 * 1000;
 }
 
-// Date-only formatter (no hh:mm:ss). Same parsing/guards as formatDateTime,
-// used by the Due Date column where the time of day is noise.
+// Used by the Due Date column, where the time of day is noise.
 function formatDateOnly(ts) {
-  if (ts == null || ts === "" || ts === 0 || ts === "0") return "N/A";
-  const n = Number(ts);
-  let ms;
-  if (Number.isFinite(n)) {
-    if (n <= 0) return "N/A";
-    ms = String(n).length >= 13 ? n : n * 1000;
-  } else {
-    const d = new Date(ts);
-    if (Number.isNaN(d.getTime())) return "N/A";
-    ms = d.getTime();
-  }
-  if (ms < 946684800000) return "N/A";
-  return new Date(ms).toLocaleDateString();
+  const ms = timestampToMs(ts);
+  return ms == null ? "N/A" : new Date(ms).toLocaleDateString();
 }
 
 // Truncate a string to at most `max` whole words, appending an ellipsis when
@@ -1749,52 +1671,13 @@ function truncateWords(str, max) {
   return words.slice(0, max).join(" ") + "…";
 }
 
-// 日期格式化
 function formatDateTime(ts) {
-  if (ts == null || ts === "" || ts === 0 || ts === "0") return "N/A";
-  const n = Number(ts);
-  let ms;
-  if (Number.isFinite(n)) {
-    if (n <= 0) return "N/A";
-    ms = String(n).length >= 13 ? n : n * 1000;
-  } else {
-    const d = new Date(ts);
-    if (Number.isNaN(d.getTime())) return "N/A";
-    ms = d.getTime();
-  }
-  // Anything before 2000-01-01 is almost certainly an unset/epoch value
-  // (e.g. API returning "0" for missing due_date).
-  if (ms < 946684800000) return "N/A";
-  return new Date(ms).toLocaleString();
+  const ms = timestampToMs(ts);
+  return ms == null ? "N/A" : new Date(ms).toLocaleString();
 }
 
-// Normalize a timestamp (Unix seconds/ms, or a date string) to the local
-// calendar-day midnight in ms, mirroring formatDateTime. Returns null for
-// missing / invalid / pre-2000 (unset) values.
-function toDayMidnight(ts) {
-  if (ts == null || ts === "" || ts === 0 || ts === "0") return null;
-  const n = Number(ts);
-  let ms;
-  if (Number.isFinite(n)) {
-    if (n <= 0) return null;
-    ms = String(n).length >= 13 ? n : n * 1000;
-  } else {
-    const d = new Date(ts);
-    if (Number.isNaN(d.getTime())) return null;
-    ms = d.getTime();
-  }
-  if (ms < 946684800000) return null;
-  const d = new Date(ms);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
-// Urgency classifier shared by the desktop left bar and the mobile DUE-date
-// text: buckets a case by how many whole calendar days remain until its due
-// date (gap = due - today, so "due today" is 0 regardless of time). Buckets:
-// gap < 0 = is-overdue, 0 = is-due, 1-5 = is-soon, 6-14 = is-ok, > 14 = none.
-// Returns { cls, label } or null (no due date / due > 14 days out). The actual
-// colors per cls are defined in CSS — the bar and the mobile text differ only
-// there (e.g. is-overdue: black vs grey).
+// Whole calendar days until due, so "due today" is 0 whatever the time:
+// <0 is-overdue, 0 is-due, 1-5 is-soon, 6-14 is-ok, >14 null. Colours in CSS.
 function dueDateIndicator(dueTs) {
   const dueMid = toDayMidnight(dueTs);
   if (dueMid == null) return null;
@@ -1812,10 +1695,8 @@ function dueDateIndicator(dueTs) {
   return null; // due more than 14 days out — no indicator
 }
 
-// Map a case + sort column to a comparable value. Numeric columns (dates,
-// recency) return a number for numeric ordering; text columns return a
-// lowercased string compared via localeCompare. The caller applies the
-// asc/desc direction. Keep these keyed off the same fields the card renders.
+// Numeric columns return a number, text columns a lowercased string for
+// localeCompare. Keep these keyed off the same fields the card renders.
 function sortValue(caseItem, column) {
   switch (column) {
     case "name":
@@ -1869,9 +1750,8 @@ function stepThumbnail(delta) {
   updateThumbnail();
 }
 
-// Attach left/right swipe navigation to an element for mobile photo browsing.
-// onSwipe(1) for a left swipe (next), onSwipe(-1) for a right swipe (previous).
-// Vertical drags and taps are ignored so scrolling and click-to-zoom still work.
+// onSwipe(1) for a left swipe, onSwipe(-1) for right. Vertical drags and taps
+// are ignored so scrolling and click-to-zoom still work.
 function attachSwipeNav(el, onSwipe) {
   if (!el || el.dataset.swipeBound) return;
   el.dataset.swipeBound = "1";
@@ -1908,10 +1788,8 @@ function attachSwipeNav(el, onSwipe) {
   );
 }
 
-// Lightbox preview for the case thumbnail carousel: clicking the thumbnail opens
-// the current image enlarged over a dark overlay, with prev/next + a counter that
-// stay in sync with the small carousel. Close via the × button, a click on the
-// backdrop, or Escape. The overlay is built once and reused.
+// Lightbox for the thumbnail carousel, with prev/next and a counter kept in sync
+// with the small one. Built once and reused; closes on ×, backdrop or Escape.
 function openThumbnailPreview() {
   if (currentThumbnails.length === 0) return;
   let overlay = document.getElementById("thumbPreviewOverlay");
@@ -2000,19 +1878,16 @@ function classifyThumbnails(images) {
   });
 }
 
-// Pull the storage slot off a /thumbnails/get row (0 = composite 2D, 1 = upper
-// jaw, 2 = lower jaw). Tolerates a couple of field-name variants; returns null
-// when the row carries no usable slot.
+// Storage slot of a /thumbnails/get row (0 = composite 2D, 1 = upper, 2 = lower).
+// Tolerates a few field-name variants; null when the row carries none.
 function thumbnailSlot(row) {
   const v = row?.slot ?? row?.slot_index ?? row?.slot_id;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
-// Order case thumbnails so the carousel is always 2D -> upper jaw -> lower jaw,
-// matching their stored slots, no matter what order the API returns them in.
-// Older cases whose rows predate slot tagging fall back to the legacy
-// aspect-ratio grouping (2D-shaped first, then 3D).
+// Forces the carousel order 2D -> upper -> lower whatever order the API returns.
+// Rows predating slot tagging fall back to the legacy aspect-ratio grouping.
 async function orderThumbnailsBySlot(rows) {
   const withData = rows.filter((r) => r && r.data);
   const haveSlots = withData.some((r) => thumbnailSlot(r) != null);
@@ -2025,19 +1900,14 @@ async function orderThumbnailsBySlot(rows) {
     .map((r) => r.data);
 }
 
-// Raw /thumbnails/get rows ({ slot, data }) for a case, or null when the lookup
-// fails. Split out of fetchThumbnails so the reference-image uploader can read
-// which slots are occupied without also repainting the carousel.
+// Raw /thumbnails/get rows, or null on failure. Split out of fetchThumbnails so
+// the uploader can read occupied slots without repainting the carousel.
 async function fetchThumbnailRows(caseId) {
   const loggedInUser = getLoggedInUser();
   if (!loggedInUser) return null;
 
-  // Identify the case NUMERICALLY (case_int_id), never by the case-name
-  // string: the backend's non-admin lookup resolves from element-0's
-  // caseIntID anyway, but its ADMIN lookup parses the payload identifier as
-  // a numeric caseIntID — a string name 404s every case for admin accounts
-  // ("No thumbnails found for case with caseIntID <name>"). case_int_id is
-  // live-verified to return rows for both roles (2026-07-10).
+  // NUMERICALLY, never by case-name string: the ADMIN lookup parses the payload
+  // identifier as a numeric caseIntID, so a name 404s every case for admins.
   const requestBody = JSON.stringify([
     {
       machine_id: MACHINE_ID,
@@ -2050,11 +1920,8 @@ async function fetchThumbnailRows(caseId) {
   ]);
 
   try {
-    // Go through resilientFetch so a momentary 403/5xx — e.g. this user-initiated
-    // request racing the lazy row-enrichment traffic against the backend's burst
-    // throttle — is retried with backoff instead of failing to a blank pane. A
-    // fresh per-call breaker means pure retry: it can't be tripped/held open by
-    // the shared enrichment breaker, and one click is at most a few requests.
+    // resilientFetch retries a momentary 403/5xx rather than failing to a blank
+    // pane; a fresh breaker keeps it pure retry, free of the shared one's state.
     const res = await resilientFetch(
       `${API_BASE}/thumbnails/get`,
       {
@@ -2088,11 +1955,8 @@ async function fetchThumbnails(caseId) {
 }
 
 // ---------------------------------------------------------------------------
-// Admin case-list extras (stat cards + Transfer Ownership / Retrieve actions).
-// The admin case_list follows the admin prototype: a row of overview stat cards
-// above the list, and admin-only detail actions replacing Start Case / 3D link
-// (those are hidden via body.is-admin — see case_list.css). The server stays
-// authoritative: every admin endpoint re-checks is_admin from the caller uuid.
+// Admin case-list extras: stat cards, and detail actions replacing Start Case /
+// 3D link. Cosmetic only — every admin endpoint re-checks is_admin server-side.
 // ---------------------------------------------------------------------------
 
 function isCurrentUserAdmin() {
@@ -2124,9 +1988,8 @@ function monthRangeMs(offset) {
   };
 }
 
-// Recompute the overview cards from the full loaded list (not the filtered
-// view). Completed/Ongoing depend on new_status, which fills in as rows enrich,
-// so this is called again on each enrichment via scheduleAdminStats().
+// Recomputed from the full loaded list, not the filtered view. Completed/Ongoing
+// depend on new_status, so scheduleAdminStats() re-runs it as rows enrich.
 function renderAdminStats(cases) {
   const bar = document.getElementById("adminStatsBar");
   if (!bar || bar.hidden) return; // non-admin / bar not shown
@@ -2212,10 +2075,8 @@ async function resolveUuidByUsername(username) {
   return data?.uuid ?? null;
 }
 
-// Rebuild the new-owner datalist for the selected case: only the case's
-// shared co-owners are suggested (the usual transfer target). Any other
-// username can still be typed — resolution happens server-side either way.
-// Skips the current owner (a no-op transfer) and dedupes case-insensitively.
+// Suggests only the case's co-owners (the usual transfer target); any other
+// username still types through. Skips the current owner and dedupes caselessly.
 function populateTransferOptions(caseObj) {
   const dl = document.getElementById("transferOwnerOptions");
   if (!dl) return;
@@ -2282,9 +2143,8 @@ async function submitOwnershipTransfer() {
     });
     logApi(res, "PUT /role/owner");
     if (!res.ok) {
-      // Surface the server's own message (changeOwner answers 404 when the
-      // case/owner pairing isn't found, 500 on SQL errors) instead of a
-      // generic failure — the admin needs to know which it was.
+      // Surface the server's own message: changeOwner answers 404 for an unknown
+      // case/owner pairing and 500 on SQL errors, and the admin needs to know which.
       const body = await res.json().catch(() => null);
       const detail =
         (body?.serverErrorMessage && body.serverErrorMessage !== "..." && body.serverErrorMessage) ||
@@ -2410,10 +2270,8 @@ async function retrieveSelectedCase() {
   }
 }
 
-// Soft-delete the selected case from the admin detail panel. Unlike the user
-// row action (deleteCaseById, which drops the case from the list), admins keep
-// the case in view — flagged deleted (struck-through, retrievable) — so the
-// Delete ⇄ Retrieve toggle stays coherent without a refetch.
+// Unlike deleteCaseById, admins keep the case in view — struck-through and
+// retrievable — so the Delete/Retrieve toggle stays coherent without a refetch.
 async function deleteSelectedCase() {
   const caseId = window.selectedCaseId;
   if (!caseId) {
@@ -2488,6 +2346,22 @@ function downloadSelectedCaseFiles() {
 }
 
 // Wire the admin-only UI once, from the init handler.
+// The selected case plus the signed-in user, or null after warning why not.
+function requireSelectedCase() {
+  const caseId = window.selectedCaseId;
+  const user = getLoggedInUser();
+  if (!caseId || !user?.uuid) {
+    toast.warning("Please select a case first.");
+    return null;
+  }
+  const caseObj = currentCases.find((c) => c.id === caseId || c.case_id === caseId);
+  if (!caseObj) {
+    toast.warning("Case not found in current list.");
+    return null;
+  }
+  return { caseObj, user };
+}
+
 function setupAdminCaseList() {
   if (!isCurrentUserAdmin()) return;
 
@@ -2585,30 +2459,22 @@ function setupAdminCaseList() {
 
 // 初始化页面
 document.addEventListener("DOMContentLoaded", async () => {
-  // Role-based routing: admins get the purpose-built admin_case_list.html
-  // (overview stats + Transfer Ownership / Retrieve Case); everyone else gets
-  // the normal case_list.html (Start Case + 3D viewer + Actions). Redirect when
-  // the page doesn't match the role so neither audience sees the other's UI.
+  // Role-based routing between admin_case_list.html and case_list.html, so
+  // neither audience is shown the other's UI.
   {
     const me = getLoggedInUser();
     if (me) {
       const onAdminPage = document.body.dataset.adminPage === "1";
       const admin = Number(me.isAdmin) === 1;
-      // Paths are relative to the CURRENT page. case_list.html lives in
-      // src/pages/, admin_case_list.html in src/pages/admin/ — so each branch
-      // (which only fires from its own page) targets the other across that
-      // one-directory gap.
+      // Relative to the CURRENT page: case_list.html is in src/pages/ and
+      // admin_case_list.html in src/pages/admin/, one directory apart.
       if (admin && !onAdminPage) { window.location.replace("admin/admin_case_list.html"); return; }
       if (!admin && onAdminPage) { window.location.replace("../case_list.html"); return; }
     }
   }
 
-  // Instant paint FIRST — before any other setup (connectivity / sidebar /
-  // thumbnail, any of which could be slow or throw) and before the network call —
-  // so the table shows the last-known list immediately instead of staying blank
-  // while /case/user/findall/get is in flight. That request can lag when the API
-  // host is busy (e.g. right after the chat's heavy notes query); the fetch below
-  // replaces this paint as soon as it lands.
+  // Instant paint FIRST, before any other setup or the network call, so the table
+  // is never blank while /case/user/findall/get is in flight.
   let cachedForPaint = null;
   try {
     cachedForPaint = loadCachedCases();
@@ -2627,10 +2493,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     footerUserName.textContent = u?.username || "—";
   }
 
-  // Admins get the prototype layout: overview stat cards + Transfer Ownership /
-  // Retrieve actions, with Start Case / 3D link / Actions column hidden via the
-  // `is-admin` body class (see case_list.css). setupAdminCaseList() is a no-op
-  // for non-admins.
+  // Admins get stat cards + Transfer/Retrieve, with Start Case / 3D link / Actions
+  // hidden via the `is-admin` body class. A no-op for non-admins.
   setupAdminCaseList();
   // index.html is at the web root; admin_case_list.html lives one level deeper
   // (src/pages/admin/) than the normal case_list.html (src/pages/).
@@ -2641,10 +2505,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const cases = await fetchCases();
 
   if (cases) {
-    // Stale-while-revalidate: the fresh base list has no details/co-owners
-    // yet (those now load lazily as rows scroll into view), so carry over the
-    // enrichment cached from the previous session. Rows show the last-known
-    // values immediately and still re-fetch when they become visible.
+    // Stale-while-revalidate: the fresh base list carries no details/co-owners, so
+    // reuse last session's enrichment until each row re-fetches on becoming visible.
     if (cachedForPaint?.length) {
       const cachedByKey = new Map(
         cachedForPaint.map((c) => [String(c.id ?? c.case_int_id), c])
@@ -2659,11 +2521,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     // Persist for the next load's instant paint.
     saveCachedCases(cases);
-    // Paint immediately — enrichment never gates the first render. Each row
-    // registers with the IntersectionObserver inside populateTable and pulls
-    // its own details + co-owners when scrolled into view (≤ ENRICH_CONCURRENCY
-    // requests in flight), instead of the old eager 2×N burst that tripped the
-    // backend's rate limiter into a wall of 403s on large lists.
+    // Enrichment never gates the first render: rows fetch their own details when
+    // scrolled into view, never as an eager 2xN burst (which the backend 403s).
     currentCases = cases;
     // Prune the invite roster against the full list — populateTable() below only
     // adds, and sees a filtered subset.
@@ -2679,9 +2538,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const searchBtn = document.getElementById("searchBtn");
 
     searchInput?.addEventListener("input", applyClientFilters);
-    // <input type="search"> clears itself on Escape in WebKit, which would wipe
-    // the active filter out from under the user. Swallow Escape so the query
-    // (and the filtered list) stay put.
+    // WebKit's <input type="search"> self-clears on Escape, wiping the active
+    // filter — swallow it so the query and the filtered list stay put.
     searchInput?.addEventListener("keydown", (e) => {
       if (e.key === "Escape" || e.key === "Esc") e.preventDefault();
     });
@@ -2690,9 +2548,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     // the visible control and re-applies filters.
     document.getElementById("searchMode")?.addEventListener("change", updateSearchModeUI);
 
-    // Stat-card stage filters (All / Preparation / Delivery / Completed).
-    // Clicking a stage card filters the list to it; clicking it again (or the
-    // "All Cases" card) clears the filter.
+    // Stage filters: clicking a card filters to it, clicking again (or "All
+    // Cases") clears.
     document.querySelectorAll("[data-status-group]").forEach((btn) => {
       btn.addEventListener("click", () =>
         applyStatFilter(btn.getAttribute("data-status-group"))
@@ -2700,10 +2557,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
     syncStatFilterActiveState();
 
-    // Phone header actions. The filter toolbar is hidden at this width, so the
-    // magnifier reveals the search bar and the "+" reuses the toolbar's own
-    // create button (kept in the DOM, just CSS-hidden) rather than duplicating
-    // createCase.js's open logic.
+    // The filter toolbar is CSS-hidden at this width, so "+" reuses its create
+    // button rather than duplicating createCase.js's open logic.
     const mobileSearchBtn = document.getElementById("mobileSearchBtn");
     const mobileSearchBar = document.getElementById("mobileSearchBar");
     const mobileSearchInput = document.getElementById("mobileSearchInput");
@@ -2745,12 +2600,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       dateInput.value = "";
       applyClientFilters();
     });
-    // Guard against rapid-fire refresh clicks: each reload kicks off ~30
-    // parallel API calls (cases + per-case roles/details/alerts), and the
-    // backend rate-limits aggressive bursts by responding 403 without CORS
-    // headers — which the browser then surfaces as a confusing CORS error.
-    // Disable the button while the reload is in flight so successive clicks
-    // are absorbed locally instead of hammering the API.
+    // Each reload fires ~30 parallel calls, and a burst earns a 403 with no CORS
+    // header (reported as a CORS error). Disabled in flight to absorb extra clicks.
     let refreshInFlight = false;
     refreshListBtn?.addEventListener("click", () => {
       if (refreshInFlight) return;
@@ -2761,13 +2612,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       window.location.reload();
     });
 
-    // Auto-refresh on return to the case list. Common flow: the user opens a
-    // case in a new tab (Start Case), edits it there, then switches back here —
-    // the list should pick up the new status/ordering (incl. the last-opened
-    // bump) without a manual refresh. Reload when the tab becomes visible again
-    // or is restored from the bfcache, mirroring the manual refresh button.
-    // Throttled so quick tab-switches don't reload repeatedly or hammer the
-    // rate-limited API; seeded at load so it never fires immediately.
+    // Reload on becoming visible (or bfcache restore) so edits from a Start Case
+    // tab appear unprompted. Throttled and seeded so tab-switching can't hammer it.
     let lastAutoRefreshAt = Date.now();
     const AUTO_REFRESH_MIN_INTERVAL_MS = 10000;
     const maybeAutoRefresh = () => {
@@ -2832,12 +2678,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
 
 
-    // Sortable column headers. Clicking a header sorts by that column; clicking
-    // the active header again flips direction. Re-renders go through
-    // applyClientFilters so the active search/date/status filters stay applied
-    // while only the ordering changes. populateTable reads the module sort
-    // state (currentSortColumn / currentSortOrder), with pinned cases always
-    // floating above their group.
+    // Clicking the active header flips direction. Re-renders go through
+    // applyClientFilters so the active filters survive a sort.
     const sortableHeaders = document.querySelectorAll(".cm-th-sort");
 
     // Default direction per column: names/owners/status read best A→Z, while
@@ -2914,9 +2756,8 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
       .getElementById("upload3dFileBtn")
       ?.addEventListener("click", () => openUploadChooser());
 
-    // Case instructions autosave: no Save button, so the note commits when focus
-    // leaves the box or on Enter. The box expands to fit while it's being edited
-    // and collapses back once committed.
+    // No Save button: the note commits on Enter or on losing focus. The box grows
+    // while edited and collapses once committed.
     const instructionsBox = document.getElementById("caseInstructions");
     if (instructionsBox) {
       instructionsBox.addEventListener("focus", () => autoGrowInstructions(instructionsBox));
@@ -2939,9 +2780,8 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         if (window.selectedCaseStub) window.selectedCaseStub.comments = text || null;
         renderCaseInstructions(caseIntId, text);
       });
-      // Enter commits; Shift+Enter still inserts a newline for multi-line notes.
-      // Blurring (rather than saving directly) keeps a single commit path and
-      // stops the blur that follows from firing a second save.
+      // Enter commits, Shift+Enter inserts a newline. Blurring rather than saving
+      // directly keeps one commit path, so the following blur can't save twice.
       instructionsBox.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
@@ -2973,10 +2813,8 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
       const targetURL = `${window.location.origin}${basePath}/src/pages/2DAnnotation.html${queryConnector}id=${encryptedId}`;
       window.open(targetURL, "_blank");
 
-      // Entering the case is what bumps it to the top of the list — not merely
-      // selecting the row. Optimistically update the local timestamp so the UI
-      // moves it immediately, then fire the PUT in the background so the order
-      // persists on the next load (and across devices).
+      // Entering the case bumps it to the top, not merely selecting the row. The
+      // local timestamp moves it now; the background PUT makes it stick.
       const loggedInUser = getLoggedInUser();
       if (loggedInUser) {
         bumpLocalLastUpdated(caseId);
@@ -3124,21 +2962,9 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
 
   if (editUserAccessBtn) {
     editUserAccessBtn.addEventListener("click", async () => {
-      const caseId = window.selectedCaseId;
-      const user = getLoggedInUser();
-
-      if (!caseId || !user?.uuid) {
-        toast.warning("Please select a case first.");
-        return;
-      }
-
-      const caseObj = currentCases.find(
-        (c) => c.id === caseId || c.case_id === caseId
-      );
-      if (!caseObj) {
-        toast.warning("Case not found in current list.");
-        return;
-      }
+      const selection = requireSelectedCase();
+      if (!selection) return;
+      const { caseObj, user } = selection;
 
       const caseName = caseObj.case_id;
       const caseIntID = caseObj.id;
@@ -3289,23 +3115,8 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
 
   if (renameBtn) {
     renameBtn.addEventListener("click", () => {
-      const caseId = window.selectedCaseId;
-      const user = getLoggedInUser();
-
-      if (!caseId || !user?.uuid) {
-        toast.warning("Please select a case first.");
-        return;
-      }
-
-      const caseObj = currentCases.find(
-        (c) => c.id === caseId || c.case_id === caseId
-      );
-      if (!caseObj) {
-        toast.warning("Case not found in current list.");
-        return;
-      }
-
-      openRenameModal(caseObj, user);
+      const selection = requireSelectedCase();
+      if (selection) openRenameModal(selection.caseObj, selection.user);
     });
   }
 
@@ -3436,40 +3247,13 @@ function renderSharedUserList() {
     }
 
     deleteBtn.addEventListener("click", async () => {
-      const confirmed = await confirmModal({
-        title: "Remove user?",
-        message: `Remove ${user.username} from this case? They'll lose access immediately.`,
-        confirmText: "Remove",
-        cancelText: "Cancel",
-        variant: "danger",
-      });
-      if (!confirmed) return;
-
-      try {
-        const { caseIntID, uuid, machine_id } = window._inviteContext;
-        const payload = [
-          { machine_id, uuid, caseIntID },
-          { case_int_id: caseIntID, uuid: user.uuid },
-        ];
-
-        const res = await fetch(
-          `${API_BASE}/role/delete`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          }
-        );
-        logApi(res, 'PUT /role/delete');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (await confirmRemoveUserFromCase(user)) {
         toast.success(`User ${user.username} removed.`);
-
         existingUsers = existingUsers.filter((u) => u.uuid !== user.uuid);
         renderSharedUserList();
 
-        // Keep the detail pane's SHARED WITH in sync: drop this user from the
-        // case's cached co_owners and re-render if it's the active case. Only
-        // co-owners appear there (owner shows in ASSIGNED TO).
+        // Keep SHARED WITH in sync by dropping the user from the cached co_owners.
+        // Only co-owners appear there — the owner shows in ASSIGNED TO.
         if (user.role === "coowner") {
           const caseObj = currentCases.find(
             (c) => (c.id ?? c.case_int_id) === window._inviteContext?.caseIntID
@@ -3483,9 +3267,6 @@ function renderSharedUserList() {
             }
           }
         }
-      } catch (err) {
-        console.error("Failed to remove user:", err);
-        toast.error("Failed to remove user.");
       }
     });
 
@@ -3497,33 +3278,24 @@ function renderSharedUserList() {
 }
 
 // --- resilience for the per-case enrichment --------------------------------
-// The detail/co-owner endpoints have no by-user batch variant, so enriching a
-// case means one request per case. When the backend throttles or fails, firing
-// requests anyway produces a wall of CORS/403/5xx console errors (each failed
-// fetch is logged natively by the browser — JS can't mute that). Two guards:
-//   • retry+backoff rides out an ISOLATED transient failure so the row recovers;
-//   • a shared circuit breaker STOPS firing further requests once the backend
-//     is clearly refusing, then half-opens after a cooldown so scrolling later
-//     (when the rate-limit window has passed) resumes enrichment by itself.
+// The detail/co-owner endpoints have no batch variant, so enrichment is one
+// request per case and a throttled backend produces a wall of console errors.
+//   • retry+backoff rides out an ISOLATED transient failure;
+//   • a shared circuit breaker stops firing once the backend is clearly
+//     refusing, then half-opens after a cooldown so scrolling resumes it.
 const BREAKER_FAILURE_THRESHOLD = 6; // consecutive failures before we stop
 const BREAKER_COOLDOWN_MS = 30000; // how long an open breaker stays closed to traffic
 const PER_CASE_FETCH_RETRIES = 2; // extra attempts for a transient failure
 const PER_CASE_FETCH_TIMEOUT_MS = 10000; // abort a hung request so the breaker can trip
 
-// Statuses that mean "the server is refusing this burst" rather than giving a
-// real per-case answer: 429 (rate limit) and 403 (this backend returns it when
-// a large fan-out trips its throttle — the first handful return 200, then it
-// starts 403ing). Treated like 5xx: retried with backoff, and counted toward
-// the breaker so a sustained refusal stops the flood. 401/404 are NOT here —
-// those are genuine answers that wouldn't recover on retry.
+// "Refusing this burst", not an answer: 429, and 403 (which this backend returns
+// once a fan-out trips its throttle). 401/404 are answers, so deliberately absent.
 const THROTTLE_STATUSES = new Set([403, 429]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Trips (opens) after `threshold` consecutive failures; any success resets it.
-// With `cooldownMs`, an open breaker "half-opens" once the cooldown elapses:
-// isOpen() flips back to false so the next attempt goes through — success
-// closes it for real, failure re-trips it after another `threshold` strikes.
+// Opens after `threshold` consecutive failures; any success resets it. After
+// `cooldownMs` it half-opens, letting one attempt through to close or re-trip it.
 function makeBreaker(threshold, cooldownMs = 0) {
   let consecutiveFailures = 0;
   let openedAt = 0;
@@ -3548,10 +3320,8 @@ function makeBreaker(threshold, cooldownMs = 0) {
   };
 }
 
-// Returns a Response (whatever status came back — callers handle 4xx), or null
-// if the request ultimately failed or was skipped because the breaker is open.
-// 5xx and throttle statuses (see THROTTLE_STATUSES) are retryable and count
-// toward the breaker; any other status is a real answer and is returned as-is.
+// A Response whatever its status (callers handle 4xx), or null when the request
+// failed outright or the breaker is open. Only 5xx and THROTTLE_STATUSES retry.
 async function resilientFetch(url, options, breaker) {
   for (let attempt = 0; attempt <= PER_CASE_FETCH_RETRIES; attempt += 1) {
     if (breaker.isOpen()) return null;
@@ -3577,32 +3347,25 @@ async function resilientFetch(url, options, breaker) {
 }
 
 // --- lazy per-case enrichment (visible rows only) ---------------------------
-// The old flow eagerly fetched details + co-owners for EVERY case on load —
-// ~2×N requests for one page view — which the backend answers with a 403 wall
-// once its burst throttle trips (see the reload-guard note near the refresh
-// button). Instead, rows now enrich themselves when they scroll into view:
-// populateTable registers each un-enriched row with an IntersectionObserver,
-// visible rows enter a small queue (≤ ENRICH_CONCURRENCY in flight), and the
-// fetched fields are patched into the row IN PLACE — no full re-render, so the
-// table never re-sorts and jumps under the user mid-scroll.
+// Rows enrich themselves when scrolled into view: an IntersectionObserver feeds
+// a small queue (<= ENRICH_CONCURRENCY in flight) and results are patched IN
+// PLACE, never re-rendered, so the table can't re-sort under the user. NEVER
+// fetch all cases eagerly — that 2xN burst trips the backend into a 403 wall.
 //
-// Per-case enrichment state lives on the case object as `__enrich`:
-//   undefined → not fetched (observer will queue it when its row is seen)
+// Per-case state on the case object as `__enrich`:
+//   undefined → not fetched (the observer queues it when its row is seen)
 //   "queued" / "inflight" → in the pipeline, don't double-queue
-//   "wait"   → last attempt was refused (throttle/outage); a timer re-observes
-//              the row after the breaker cooldown so it self-heals
+//   "wait"   → refused; a timer re-observes after the breaker cooldown
 //   "done"   → enriched; skipped by the observer on later re-renders
-// Keys starting with "__" are stripped from the localStorage cache.
-// (ENRICH_CONCURRENCY + the request/fold layer live in caseEnrichment.js.)
+// "__" keys are stripped from the localStorage cache.
 const enrichBreaker = makeBreaker(BREAKER_FAILURE_THRESHOLD, BREAKER_COOLDOWN_MS);
 const enrichQueue = [];
 let enrichWorkersActive = 0;
 let enrichWarnedAt = 0;
 let enrichCacheSaveTimer = null;
 
-// One shared observer; root = the table's own scroll container. rootMargin
-// prefetches rows slightly before they become visible so data usually lands
-// by the time the user's eyes do.
+// One shared observer, rooted on the table's scroll container. rootMargin
+// prefetches slightly early so data lands about when the user's eyes do.
 let rowObserver = null;
 function getRowObserver() {
   if (rowObserver !== null) return rowObserver;
@@ -3653,9 +3416,8 @@ function pumpEnrichQueue() {
   }
 }
 
-// Fetch details + co-owner roles for ONE case and fold them into the case
-// object + its rendered row. Refusals (throttle/outage → resilientFetch null)
-// park the case in "wait" and re-observe its row after the breaker cooldown.
+// Fetches one case's details + co-owner roles into the case object and its row.
+// A refusal parks the case in "wait" and re-observes after the breaker cooldown.
 async function enrichOneCase(caseObj) {
   const logged = getLoggedInUser();
   const caseIntID = caseIntIdOf(caseObj);
@@ -3700,19 +3462,14 @@ function scheduleEnrichRetry(caseObj) {
     caseObj.__enrich = undefined;
     const id = String(caseObj.id ?? caseObj.case_int_id);
     const row = document.querySelector(`#caseTableBody tr[data-case-id="${CSS.escape(id)}"]`);
-    // Re-observing an on-screen row fires the observer immediately, which
-    // re-queues it; an off-screen or re-rendered row is picked up by the next
-    // populateTable pass instead.
+    // Re-observing an on-screen row fires the observer at once and re-queues it;
+    // off-screen rows wait for the next populateTable pass.
     if (row) observeRowForEnrichment(row, caseObj);
   }, BREAKER_COOLDOWN_MS + Math.random() * 2000);
 }
 
-// Update just this case's rendered cells (status pill, due date + urgency bar,
-// owner, shared-with). Deliberately NOT a populateTable() re-render: that would
-// re-sort the table and yank rows around under the user mid-scroll. The one
-// case where in-place patching would be wrong is an active status filter (the
-// fresh new_status may add/remove the row from the filtered set), so that path
-// re-filters properly instead.
+// Patches just this row's cells — NOT populateTable(), which would re-sort under
+// the user. An active status filter is the exception and re-filters properly.
 function patchRowInPlace(caseObj) {
   const sel = document.getElementById("filter-status");
   if (sel && sel.value !== "all") {
@@ -3806,14 +3563,11 @@ function scheduleEnrichCacheSave() {
 }
 
 // --- Case uploads ----------------------------------------------------------
-// The detail pane's upload button covers both kinds of file a case can take, so
-// it asks which one first:
-//   • reference images — stored the way the create-case form stores them (a
-//     /referenceimages row, mirrored into a free thumbnail slot so they join the
-//     detail pane's image carousel);
-//   • an extra 3D file — the same "extra STL slot" mechanism the 2D annotation
-//     page's 3D preview uses (POST /stl/slot/), so a clinic can attach an STL
-//     without opening the case first. Slots 1–4 sit alongside the real jaws.
+// The upload button covers both kinds of file a case takes, so it asks which:
+//   • reference images — a /referenceimages row mirrored into a free thumbnail
+//     slot, exactly as the create-case form stores them;
+//   • an extra 3D file — the same POST /stl/slot/ mechanism the 2D page's 3D
+//     preview uses, so an STL can be attached without opening the case.
 const EXTRA_STL_SLOTS = [1, 2, 3, 4];
 
 // The auth object every per-case endpoint takes as payload element 0.
@@ -3835,9 +3589,8 @@ function selectedCaseName() {
   return caseObj?.case_id || window.selectedCaseStub?.case_id || "";
 }
 
-// What each upload kind accepts, and where its files end up. `matches` is the
-// single place a picked file is judged — the uploaders below take an
-// already-filtered list.
+// What each upload kind accepts and where it lands. `matches` is the ONLY place
+// a picked file is judged; the uploaders below take an already-filtered list.
 const UPLOAD_KINDS = {
   reference: {
     accept: "image/*",
@@ -3862,9 +3615,8 @@ let uploadChooserEl = null;
 // object URLs for the image previews and have to be revoked when they go.
 let pendingUpload = null;
 
-// Built on demand rather than sitting in the page markup: caseManagement.js
-// drives both case_list.html and admin_case_list.html, and one injected dialog
-// keeps the two from drifting (same approach as the shared confirm modal).
+// Injected rather than written into the markup: this module drives both
+// case_list.html and admin_case_list.html, and one dialog can't drift.
 function getUploadChooser() {
   if (uploadChooserEl) return uploadChooserEl;
 
@@ -4101,9 +3853,8 @@ function renderUploadPreview() {
   }
 }
 
-// Commit the staged batch. The dialog stays open (with its buttons locked) for
-// the duration so the user can see what is being sent, and closes once the
-// uploader is done — per-file progress goes to the toasts.
+// The dialog stays open with its buttons locked so the user can see what is
+// being sent, and closes when done; per-file progress goes to the toasts.
 async function startPendingUpload() {
   if (!pendingUpload?.files.length) return;
   const modal = getUploadChooser();
@@ -4123,13 +3874,8 @@ async function startPendingUpload() {
   }
 }
 
-// The lowest unoccupied extra slots, up to `count` of them — fewer (or none)
-// when the case doesn't have that many free.
-//
-// Probed one at a time, and only until enough free slots are found, on purpose:
-// /stl/slot/get has no "is it empty" mode — an occupied slot returns the whole
-// base64 STL — so checking all four in parallel would pull tens of MB just to
-// pick a slot. In the common case (one file, slot 1 free) nothing is downloaded.
+// The lowest free extra slots, probed one at a time and only until `count` are
+// found: an occupied slot returns its whole base64 STL, so probing all four is MBs.
 async function findFreeStlSlots(caseIntId, count) {
   const auth = caseAuth(caseIntId);
   const free = [];
@@ -4154,36 +3900,6 @@ async function findFreeStlSlots(caseIntId, count) {
     }
   }
   return free;
-}
-
-// Read a File as base64, chunked so a large STL doesn't blow the call stack.
-async function stlFileToBase64(file) {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let binary = "";
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
-}
-
-// POST via XHR rather than fetch so upload progress is reportable — STLs are
-// large enough that a silent multi-second wait reads as a hang.
-function uploadStlSlotXHR(payload, onProgress) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${API_BASE}/stl/slot/`);
-    xhr.setRequestHeader("Content-Type", "application/json");
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
-    };
-    xhr.onload = () =>
-      xhr.status >= 200 && xhr.status < 300
-        ? resolve(xhr.responseText)
-        : reject(new Error(`HTTP ${xhr.status}`));
-    xhr.onerror = () => reject(new Error("network error"));
-    xhr.send(payload);
-  });
 }
 
 // `files` arrives already filtered to .stl by the preview stage.
@@ -4225,12 +3941,10 @@ async function uploadCaseStlFiles(files) {
           ? `Uploading ${file.name} (${i + 1} of ${stls.length})…`
           : `Uploading ${file.name}…`
       );
-      const data = await stlFileToBase64(file);
-      // case_id has to ride in this object, not the auth one — the writer reads it
-      // from here (same as POST /stl). Without it the insert runs `case_id = NULL`
-      // and 500s, with no CORS header on the error, so the browser reports only
-      // "Failed to fetch".
-      await uploadStlSlotXHR(
+      const data = await fileToBase64(file);
+      // case_id must ride in THIS object, not the auth one (same as POST /stl).
+      // Without it the insert 500s with no CORS header, surfacing as "Failed to fetch".
+      await uploadWithProgress("stl/slot/", 
         JSON.stringify([
           caseAuth(caseIntId),
           { case_id: caseIntId, slotNumber: slots[i], filename: file.name, data },
@@ -4270,21 +3984,14 @@ function pickFiles(accept, onPick) {
 }
 
 // --- Reference images ------------------------------------------------------
-// Thumbnail slots 0-2 are reserved (0 = composite 2D design, 1 = upper jaw
-// render, 2 = lower jaw render), so reference images take the slots after them.
+// Slots 0-2 are reserved (composite 2D, upper jaw, lower jaw), so reference
+// images take everything after them.
 const REFERENCE_SLOT_START = 3;
 
 const IMAGE_FILE_RE = /\.(png|jpe?g|gif|bmp|webp)$/i;
 
-// Pick `count` free thumbnail slots at or above REFERENCE_SLOT_START, or null
-// when the case's existing slots can't be read. Rows that predate slot tagging
-// carry no slot to compare against, so each reserves one of its own:
-// over-reserving only leaves a gap in the sequence, whereas under-reserving
-// would overwrite an image that is already there.
-//
-// Nothing is written on a failed lookup for the same reason — a POST to an
-// occupied slot replaces what is in it, so guessing would risk a jaw render or
-// an earlier reference image.
+// `count` free slots at or above REFERENCE_SLOT_START, else null. A POST to an
+// occupied slot REPLACES it, so a failed lookup writes nothing rather than guess.
 async function nextFreeThumbnailSlots(caseIntId, count) {
   const rows = await fetchThumbnailRows(caseIntId);
   if (!rows) return null;
@@ -4316,9 +4023,8 @@ function readFileAsDataUrl(file) {
   });
 }
 
-// Store one reference image the way the create-case form does: the
-// /referenceimages row is the record, and the mirrored thumbnail slot is what
-// the detail pane's carousel (and the download bundle's fallback) actually reads.
+// Same as the create-case form: /referenceimages is the record, and the mirrored
+// thumbnail slot is what the carousel and the download fallback actually read.
 async function uploadReferenceImage(caseIntId, caseName, file, slot) {
   const dataUrl = await readFileAsDataUrl(file);
   const auth = caseAuth(caseIntId);
@@ -4401,30 +4107,25 @@ async function uploadCaseReferenceImages(files) {
 }
 
 // --- Case instructions -----------------------------------------------------
-// Free-text case note the clinic uses for anything the structured fields don't
-// cover. Stored in additionalcasedetails.comments — the same field the 2D Case
-// Note's comment box writes, so the two stay in sync by design.
+// Free text for whatever the structured fields don't cover, stored in
+// additionalcasedetails.comments — deliberately the 2D Case Note's field too.
 
-// Size the textarea to its content so it grows as the note gets longer (there is
-// no drag handle). Height is cleared first so the box can shrink again, and the
-// border is added back on top of scrollHeight, which measures content + padding
-// only — without it a border-box textarea clips its last line.
+// Grows the textarea to its content (no drag handle). Height is cleared so it can
+// shrink, and the border added back on top of scrollHeight, which omits it.
 function autoGrowInstructions(box) {
   if (!box) return;
   box.style.height = "auto";
   box.style.height = `${box.scrollHeight + box.offsetHeight - box.clientHeight}px`;
 }
 
-// Drop the inline height so the box falls back to its CSS resting size. Called
-// once a note is committed: it grows while being typed, then goes back to
-// compact so a long note doesn't permanently eat the detail panel.
+// Drops the inline height back to the CSS resting size once a note is committed,
+// so a long note doesn't permanently eat the detail panel.
 function collapseInstructions(box) {
   if (box) box.style.height = "";
 }
 
-// The case the textarea currently holds, and the value last known to be on the
-// server. Tracked so a slow save can't land on a case the user has since
-// switched away from, and so Save only enables on a real edit.
+// Tracked so a slow save can't land on a case the user has switched away from,
+// and so Save only enables on a real edit.
 let instructionsLoadedFor = null;
 let instructionsSavedValue = "";
 
@@ -4455,10 +4156,8 @@ function setInstructionsStatus(text, isError = false) {
   status.classList.toggle("is-error", !!isError);
 }
 
-// Read the case's current additionalcasedetails row. The table is append-only —
-// every POST inserts a new row and the newest is authoritative — so the latest
-// row is the one to merge onto. Returns { ok, detail }: ok=false means the read
-// failed and the caller must NOT write; detail=null with ok=true = no row yet.
+// The table is append-only, so the NEWEST row is the one to merge onto. ok=false
+// means the read failed and the caller must NOT write; detail=null means no row.
 async function fetchAdditionalCaseDetails(caseIntId) {
   const user = getLoggedInUser();
   if (!user?.uuid || caseIntId == null) return { ok: false, detail: null };
@@ -4489,12 +4188,8 @@ async function fetchAdditionalCaseDetails(caseIntId) {
   }
 }
 
-// Save the instructions box. POST /additionalcasedetails is a FULL upsert, so
-// read the current row first and carry assigned_to/due_date/new_status forward —
-// posting only `comments` would null the rest (that's how the case loses its due
-// date and status).
-// There is no Save button — this is called on Enter and on focus leaving the
-// box, so it fires often and must be cheap and idempotent when nothing changed.
+// POST /additionalcasedetails is a FULL upsert: read first and carry
+// assigned_to/due_date/new_status forward, or posting `comments` nulls the rest.
 async function saveCaseInstructions() {
   const box = document.getElementById("caseInstructions");
   const caseIntId = instructionsLoadedFor;
@@ -4577,9 +4272,8 @@ async function saveCaseInstructions() {
   }
 }
 
-// Read the stored additionalcasedetails row for one case, or null when the case
-// has no record yet. Throws if the backend refuses, so a caller about to
-// overwrite the record can abort rather than guess at its contents.
+// The stored additionalcasedetails row, or null when there is none. THROWS on a
+// refusal, so a caller about to overwrite can abort rather than guess.
 async function readCaseDetails(caseIntID, uuid) {
   const res = await fetch(
     `${API_BASE}/additionalcasedetails/getall`,
@@ -4601,12 +4295,8 @@ async function postNewStatus(caseObj, newStatus) {
   const uuid = getLoggedInUser().uuid;
   const caseIntID = caseObj.id || caseObj.case_int_id;
 
-  // POST /additionalcasedetails replaces the whole row — every field this body
-  // leaves out comes back null. So read the record and merge into it rather than
-  // trusting the in-memory case: lazy enrichment marks a case "done" as soon as
-  // EITHER of its two fetches succeeds, so a row whose roles call landed and
-  // whose details call was throttled still carries no due date or comments, and
-  // sending those would erase them.
+  // Replaces the WHOLE row, so read and merge rather than trust the in-memory
+  // case — enrichment marks it "done" once EITHER of its two fetches succeeds.
   const stored = await readCaseDetails(caseIntID, uuid);
 
   const body = [

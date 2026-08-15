@@ -229,9 +229,8 @@
   border: 1px solid var(--line);
   border-radius: 10px;
   overflow: hidden;
-  /* Match the captured jaw image's portrait aspect ratio so it fills the
-     card without grey letterbox on the sides. Landscape 3D screenshots will
-     get a slim top/bottom letterbox here, which we accept as the trade-off. */
+  /* Matches the captured jaw image's portrait ratio so it fills the card;
+     landscape 3D screenshots take a slim top/bottom letterbox instead. */
   aspect-ratio: 4 / 3;
   display: grid;
   place-items: center;
@@ -245,9 +244,8 @@
   object-fit: contain;
 }
 
-/* Mobile: single column → cards span the full panel width. Cap the height
-   so a single portrait card doesn't dominate the scroll, and keep the
-   aspect-ratio so taller content stays readable. */
+/* Mobile: one full-width column. Height is capped so a single portrait card
+   can't dominate the scroll, but the aspect-ratio stays for readability. */
 @media (max-width: 720px) {
   .noticeboard-grid {
     grid-template-columns: 1fr;
@@ -373,26 +371,16 @@
   background: rgba(26, 77, 63, 0.55);
 }
 
+/* Box/paint for both of these is set by the editor block at the end of the
+   file, which is loaded last and wins at every width. */
 .instruction-editor-panel {
   position: absolute;
-  inset: 2vh 2vw;
-  background: linear-gradient(180deg, #ffffff 0%, var(--rose-050) 100%);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  box-shadow: 0 18px 48px rgba(26, 77, 63, 0.3);
-  display: grid;
-  grid-template-columns: 1fr 240px;
-  gap: 0;
   overflow: hidden;
   color: var(--ink);
   font-family: inherit;
 }
 
 .instruction-editor-canvas-wrap {
-  position: relative;
-  background: #f1f7f4;
-  border-right: 1px solid var(--line);
-  overflow: hidden;
   min-height: 0;
 }
 
@@ -604,10 +592,8 @@
   touch-action: none;
 }
 
-/* No-mode selection overlay: a dashed outline around the picked element with a
-   trash button at its top-right. A DOM overlay (not drawn on canvas) so it
-   never bakes into the exported image. The box is click-through so the element
-   under it stays draggable; only the trash button captures clicks. */
+/* Selection outline + trash button. A DOM overlay, not canvas, so it never
+   bakes into the export; click-through so the element under it stays draggable. */
 .ie-select-box {
   position: absolute;
   border: 1.5px dashed var(--rose-500);
@@ -668,215 +654,12 @@
   .tooth.is-missing .tooth-image {
     opacity: 0.25;
   }
-
-  /* ---- Instruction editor: Instagram Stories–style overlay ---- */
-  .instruction-editor-panel {
-    inset: 0;
-    border: 0;
-    border-radius: 0;
-    background: #111;
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr;
-  }
-
-  .instruction-editor-canvas-wrap {
-    border-right: 0;
-    background: #fff;
-    grid-row: 1;
-    grid-column: 1;
-    width: 100%;
-    height: 100%;
-  }
-
-  /* Tools overlay covers the whole panel; only its actual controls catch input */
-  .instruction-editor-tools {
-    position: absolute;
-    inset: 0;
-    padding: 0;
-    gap: 0;
-    background: transparent;
-    overflow: visible;
-    pointer-events: none;
-    display: block;
-  }
-
-  /* Reset section / top-bar wrappers so they no longer drive layout */
-  .instruction-editor-tools-top,
-  .instruction-editor-section {
-    display: contents;
-  }
-
-  .instruction-editor-section-title { display: none; }
-
-  /* CANCEL — top-left circular pill (× glyph generated via ::before) */
-  #instructionEditorCancelBtn {
-    position: absolute;
-    top: max(12px, env(safe-area-inset-top, 12px));
-    left: 12px;
-    width: 44px;
-    height: 44px;
-    padding: 0;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.55);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    font-size: 0;
-    pointer-events: auto;
-  }
-  #instructionEditorCancelBtn::before {
-    content: "\00D7";
-    font-size: 1.6rem;
-    line-height: 1;
-    font-weight: 400;
-  }
-
-  /* SAVE — top-right rose pill */
-  #instructionEditorSaveBtn {
-    position: absolute;
-    top: max(12px, env(safe-area-inset-top, 12px));
-    right: 12px;
-    padding: 10px 18px;
-    border-radius: 22px;
-    font-size: 0.72rem;
-    background: var(--rose-500);
-    border: 1px solid var(--rose-500);
-    color: #fff;
-    pointer-events: auto;
-  }
-
-  /* Drawing-tool icons stack vertically on the right edge */
-  .instruction-editor-section:nth-of-type(1) > .instruction-editor-tool-row,
-  .instruction-editor-section:nth-of-type(2) > .instruction-editor-tool-row {
-    position: absolute;
-    right: 12px;
-    flex-direction: column;
-    gap: 10px;
-    pointer-events: auto;
-  }
-
-  /* Currently Drawing row (line, text) — upper part of right column */
-  .instruction-editor-section:nth-of-type(1) > .instruction-editor-tool-row {
-    top: 78px;
-  }
-
-  /* Undo/Redo — horizontal pair at top-left under Cancel */
-  .instruction-editor-section:nth-of-type(2) > .instruction-editor-tool-row:nth-of-type(1) {
-    top: 78px;
-    left: 12px;
-    right: auto;
-    flex-direction: row;
-  }
-
-  /* Brush/Pen/Eraser — lower part of right column, below the line/text pair */
-  .instruction-editor-section:nth-of-type(2) > .instruction-editor-tool-row:nth-of-type(2) {
-    /* line/text takes 2*(44+10) = 108; gap 16 → start at 78 + 124 ≈ 202 */
-    top: 202px;
-  }
-
-  /* CLEAR — bottom-left pill above the size slider */
-  #clearDrawingsBtn {
-    position: absolute;
-    left: 12px;
-    bottom: 168px;
-    width: auto;
-    padding: 8px 14px;
-    border-radius: 22px;
-    background: rgba(0, 0, 0, 0.55);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    font-size: 0.66rem;
-    pointer-events: auto;
-  }
-
-  /* SIZE slider — full-width translucent pill above the colour row */
-  .instruction-editor-size-row {
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    bottom: 108px;
-    background: rgba(0, 0, 0, 0.55);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-    border-radius: 22px;
-    padding: 8px 16px;
-    color: #fff;
-    grid-template-columns: auto 1fr auto;
-    pointer-events: auto;
-  }
-
-  /* COLOURS — full-width swatch row pinned to bottom */
-  .instruction-editor-color-grid {
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    bottom: max(20px, env(safe-area-inset-bottom, 20px));
-    grid-template-columns: repeat(4, 1fr);
-    gap: 14px;
-    padding: 10px 14px;
-    background: rgba(0, 0, 0, 0.55);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-    border-radius: 30px;
-    justify-items: center;
-    pointer-events: auto;
-  }
-
-  /* Icon buttons: translucent dark circles → solid white when active */
-  .instruction-editor-icon-btn {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.55);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-    pointer-events: auto;
-  }
-
-  .instruction-editor-icon-btn:hover,
-  .instruction-editor-icon-btn.is-active {
-    background: #fff;
-    color: var(--rose-700);
-    border-color: #fff;
-  }
-
-  .instruction-editor-icon-btn .instruction-editor-icon-img {
-    filter: brightness(0) invert(1);
-  }
-
-  .instruction-editor-icon-btn.is-active .instruction-editor-icon-img,
-  .instruction-editor-icon-btn:hover .instruction-editor-icon-img {
-    filter: none;
-  }
-
-  /* Color swatches: white-ringed circles */
-  .instruction-editor-color-swatch {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.85);
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
-  }
-
-  .instruction-editor-color-swatch.is-active {
-    box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--rose-500);
-    transform: scale(1.05);
-  }
 }
 
 /* ---- Instruction editor: floating circular toolbar ----------------------
-   Replaces the old tool sidebar/panel: a full-screen white editing surface
-   with a centered top toolbar of circular icon buttons (their actions are
-   wired up later), a close button top-left, and a green circular send/save
-   button bottom-right. This block is intentionally LAST in the file so it
-   overrides the legacy editor rules above (whose target elements no longer
-   exist) at every width — no media query needed. */
+   Full-screen editing surface: centered top toolbar of circular icon buttons,
+   close top-left, green send/save bottom-right. Intentionally LAST in the file
+   so it overrides the legacy editor rules at every width, without a media query. */
 .instruction-editor-panel {
   inset: 0;
   border: 0;
@@ -888,9 +671,8 @@
   display: block;
 }
 
-/* Frame holding the photo + tools + colour bar + save. Mobile-first: fills the
-   screen. Desktop turns it into a centred, bordered phone-shaped card (see the
-   min-width rule at the end of the file). */
+/* Frame holding the photo, tools, colour bar and save. Fills the screen on
+   mobile; the min-width rule at the end centres it as a card on desktop. */
 .ie-frame {
   position: absolute;
   inset: 0;
@@ -969,9 +751,8 @@
 }
 #instructionEditorCancelBtn:hover { background: rgba(0, 0, 0, 0.6); }
 
-/* Save — labelled green pill, OUTSIDE the frame at the screen's lower-right.
-   top/left forced to auto so the legacy mobile rule (which sets top:12px)
-   can't stretch it into a full-height bar. */
+/* Save — green pill outside the frame, lower-right. top/left forced to auto so
+   the legacy mobile rule's top:12px can't stretch it into a full-height bar. */
 #instructionEditorSaveBtn {
   position: absolute;
   top: auto;
@@ -1008,9 +789,8 @@
   display: none;
 }
 
-/* Shape / text / brush modes hide only the × / send chrome. The toolbar stays
-   live so another tool can be picked without going through Done — each mode's
-   UI keeps its own Cancel / Done at the bottom. */
+/* Shape/text/brush modes hide only the × / send chrome; the toolbar stays live
+   so another tool can be picked without going through Done. */
 .instruction-editor-modal.is-shaping #instructionEditorCancelBtn,
 .instruction-editor-modal.is-shaping #instructionEditorSaveBtn,
 .instruction-editor-modal.is-texting #instructionEditorCancelBtn,
@@ -1020,13 +800,8 @@
   display: none;
 }
 
-/* The toolbar (top-center) and a mode's cluster (top-right) only clear each
-   other while the frame is wider than 2×cluster + 288px — 1000px for the
-   356px-wide shapes row, 616px for the ~164px text / brush rows. The desktop
-   frame is sized above that (see the min-width: 600px block at the end of the
-   file); below it there's no room for both on one line, so the cluster drops
-   under the toolbar. Dropped, it sits level with the colour bar, so it also
-   gives up the right margin the bar occupies. */
+/* Below ~1000px the top-center toolbar and the top-right cluster no longer fit
+   on one line, so the cluster drops under it, level with the colour bar. */
 @media (max-width: 1064px) {
   .instruction-editor-modal.is-shaping .ie-shape-top {
     top: 76px;
@@ -1041,11 +816,9 @@
   }
 }
 
-/* ---- Shapes UI (opens from the square toolbar icon) ----------------------
-   Full-overlay container; only its controls catch input so the canvas stays
-   drawable underneath. Holds the shapes row (top-center), an undo button
-   (top-left, next to Close), and a vertical rainbow colour bar (right).
-   .ie-brushui (brush mode) reuses the same overlay + shape sub-classes. */
+/* ---- Shapes UI (opens from the square toolbar icon) ----
+   Full overlay; only its controls catch input so the canvas stays drawable.
+   .ie-brushui (brush mode) reuses this overlay and the shape sub-classes. */
 .ie-shapeui,
 .ie-brushui {
   position: absolute;
@@ -1056,9 +829,8 @@
 .ie-shapeui.is-hidden,
 .ie-brushui.is-hidden { display: none; }
 
-/* Shape controls cluster — parked in the top-right corner (undo sits beside
-   the shape row) so it stays clear of the jaw's anterior teeth. The editor's
-   × / send chrome is hidden in shape mode, so the corner is free. */
+/* Shape controls cluster, parked top-right to stay clear of the anterior
+   teeth. The × / send chrome is hidden in shape mode, so the corner is free. */
 .ie-shape-top {
   position: absolute;
   top: max(14px, env(safe-area-inset-top, 14px));
@@ -1163,11 +935,9 @@
 }
 .ie-shape-done { color: #1a9d4e; }
 
-/* ---- Text UI (opens from the text toolbar icon) --------------------------
-   Same overlay pattern as the shapes UI: a top-right pill with an alignment
-   toggle + a background toggle, the rainbow colour bar (right) and the bottom
-   Cancel / Done bar. The live text box is a contenteditable placed over the
-   canvas. */
+/* ---- Text UI (opens from the text toolbar icon) ----
+   Same overlay pattern as the shapes UI; the live text box is a contenteditable
+   placed over the canvas. */
 .ie-textui {
   position: absolute;
   inset: 0;
@@ -1224,9 +994,9 @@
   background-position: 0 0, 0 4px, 4px -4px, -4px 0;
 }
 
-/* ---- Brush mode -----------------------------------------------------------
+/* ---- Brush mode ----
    Top brush/eraser toggle uses PNG icons; the bottom-centre row holds the four
-   size/style presets (2px / 5px / 10px / spray), just above Cancel·Done. */
+   size/style presets, just above Cancel·Done. */
 .ie-brush-icon {
   width: 22px;
   height: 22px;
@@ -1642,15 +1412,9 @@
   }
 }
 
-/* ---- Instruction editor: tablet/desktop frame the photo like the 3D preview
-   On screens ≥600px (tablets incl. iPad Mini portrait at 768, and desktop) the
-   photo sits in a centred, LANDSCAPE card with a light border (matching
-   .preview-frame) and a black surround. Landscape rather than the old
-   phone-shaped column because the base image is now two arches side by side —
-   a portrait frame shrank that wide image to a sliver. The tools, colour bar and
-   presets live inside this frame so they stay aligned to the photo; only Close
-   (×) and Save sit outside. On phones (<600px) the frame fills the screen and
-   stays portrait (base rule). */
+/* ---- Instruction editor: tablet/desktop frame, like the 3D preview ----
+   ≥600px centres the photo in a LANDSCAPE card (the base image is two arches
+   side by side). Tools sit inside the frame; only Close and Save sit outside. */
 @media (min-width: 600px) {
   .ie-frame {
     top: 50%;
@@ -1658,9 +1422,8 @@
     left: 50%;
     right: auto;
     transform: translate(-50%, -50%);
-    /* Sized so the top-center toolbar and the mode clusters parked top-right
-       (widest: the 356px shapes row) sit on one line without overlapping —
-       that needs ≥1000px of frame. */
+    /* ≥1000px of frame, so the top-center toolbar and the widest top-right
+       cluster (the 356px shapes row) sit on one line without overlapping. */
     width: min(94vw, 1180px);
     height: min(86vh, 740px);
     border: 1px solid var(--line);

@@ -19,15 +19,11 @@ const state = {
   resolveSave: null,
   linePending: null,
   caseLabel: null, // { text, point: {x,y}, color, size } — draggable case-ID label
-  // Crop & rotate mode. rect is the crop frame in CSS px relative to the canvas
-  // wrap; rotation = base (0/90/180/270 from the rotate button) + fine (the
-  // ±45° dial). Total applied angle = base + fine.
+  // Crop & rotate. rect is the frame in CSS px relative to the canvas wrap; the applied
+  // angle is base (0/90/180/270 from the button) + fine (the ±45° dial).
   crop: { active: false, rect: null, base: 0, fine: 0, source: null },
-  // Applying a crop replaces the background and bakes the strokes into it, so
-  // the pixels outside the frame are otherwise gone. Each apply pushes a
-  // { bg, strokes } snapshot here; nothing is final until the editor is saved.
-  // Holds one background data URL per crop — a few MB each, so only as deep as
-  // the user actually crops.
+  // A crop replaces the background and bakes in the strokes, so pixels outside the frame
+  // are otherwise gone. Each apply pushes a { bg, strokes } snapshot — a few MB each.
   cropHistory: [],
 };
 
@@ -113,9 +109,8 @@ function redraw() {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
-  // Fill the whole canvas with white so the shrunken bg image
-  // blends seamlessly into a continuous white "page" — only the
-  // jaws appear smaller, not the whole panel.
+  // White-fill the whole canvas so a shrunken bg blends into a continuous "page" —
+  // only the jaws look smaller, not the panel.
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, cw, ch);
 
@@ -156,10 +151,8 @@ function cropAngleDeg() {
   return state.crop.base + state.crop.fine;
 }
 
-// Fit size (canvas px) for the bg image at the current crop angle, so the whole
-// rotated image stays visible within the canvas ("contain", rotation-aware).
-// The image the crop tool operates on: while cropping it's the flattened
-// composite (background + drawings) so edits ride along; otherwise the bg.
+// Rotation-aware "contain" fit, so the whole rotated image stays visible. While cropping
+// this is the flattened composite (bg + drawings) so edits ride along; otherwise the bg.
 function cropImage() {
   return state.crop.source || state.bgImage;
 }
@@ -222,9 +215,8 @@ function defaultCropRect() {
   return { x: (ws.w - cssW) / 2, y: (ws.h - cssH) / 2, w: cssW, h: cssH };
 }
 
-// Starting crop frame when entering crop mode: a touch smaller than the full
-// image and nudged upward, so the user begins from a tighter, slightly higher
-// selection (the full image is still reachable by dragging the handles).
+// Opening crop frame: slightly smaller than the image and nudged up, so the user starts
+// from a tighter selection. The full image is still reachable via the handles.
 function initialCropRect() {
   const full = defaultCropRect();
   const scale = 0.9;
@@ -346,9 +338,8 @@ function closeAspectMenu() {
   document.getElementById("ieCropAspectMenu")?.classList.add("is-hidden");
 }
 
-// Resize the crop frame to a fixed aspect ratio, centered within the fitted
-// image area. token: "fit" (whole area), "original" (image's native ratio), or
-// a numeric width/height ratio.
+// Resize the crop frame to a fixed ratio, centred in the fitted area. token: "fit",
+// "original" (the image's native ratio), or a numeric width/height.
 function setCropAspect(token) {
   const area = defaultCropRect();
   let ratio = null;
@@ -492,9 +483,8 @@ function exitCropMode() {
   redraw();
 }
 
-// Done: copy the framed region straight off the canvas (which shows the rotated
-// flattened composite — bg + baked-in drawings) into a new background image,
-// then leave crop mode. Strokes are cleared because they're now baked in.
+// Copies the framed region off the canvas (already the rotated, flattened composite) into
+// a new background, then leaves crop mode. Strokes clear — they are baked in now.
 function applyCrop() {
   if (!canvas || !state.crop.rect) {
     exitCropMode();
@@ -545,9 +535,8 @@ function undoCrop() {
     clearSelection();
     updateUndoRedoButtons();
     if (state.crop.active) {
-      // crop.source was flattened from the cropped image, so it's stale now.
-      // Clearing active first makes enterCropMode re-flatten the restored
-      // composite instead of the rotated crop-mode render.
+      // crop.source is stale (flattened from the cropped image). Clear active first so
+      // enterCropMode re-flattens the restored composite, not the crop-mode render.
       state.crop.active = false;
       enterCropMode();
     } else {
@@ -640,9 +629,8 @@ function textBoundsForStroke(stroke) {
 }
 
 function findTextAtPoint(point) {
-  // The case-ID watermark is intentionally non-interactive — skip it so the
-  // user can draw / drag in the area it occupies. Hit-test committed text
-  // strokes only (top-most first).
+  // The case-ID watermark is deliberately non-interactive, so the user can draw over it.
+  // Hit-tests committed text strokes only, top-most first.
   for (let i = state.strokes.length - 1; i >= 0; i--) {
     const s = state.strokes[i];
     if (s.tool !== "text") continue;
@@ -709,9 +697,8 @@ function pointInBounds(p, b, tol) {
   );
 }
 
-// Top-most element (text / shape / freehand / line) under the point. Used by
-// no-mode to pick something to drag or trash. The case-ID watermark lives in
-// state.caseLabel (not state.strokes), so it's naturally excluded.
+// Top-most element under the point, for no-mode drag/trash. The case-ID watermark lives
+// in state.caseLabel rather than state.strokes, so it is naturally excluded.
 function findStrokeAtPoint(point) {
   for (let i = state.strokes.length - 1; i >= 0; i--) {
     const s = state.strokes[i];
@@ -733,9 +720,8 @@ function translateStroke(s, dx, dy) {
   if (Array.isArray(s.points)) s.points = s.points.map((p) => ({ x: p.x + dx, y: p.y + dy }));
 }
 
-// Lazily build the no-mode selection overlay: a dashed outline + a trash button.
-// It's a DOM overlay in the canvas wrap (same coord space as the text boxes) so
-// it never bakes into the exported canvas image.
+// Lazily builds the no-mode selection overlay (dashed outline + trash). A DOM overlay in
+// the canvas wrap, so it never bakes into the exported image.
 function ensureSelectOverlay() {
   let box = document.getElementById("ieSelectBox");
   if (box) return box;
@@ -804,22 +790,6 @@ function drawLinePendingMarker(point) {
   ctx.strokeStyle = "#ffffff";
   ctx.stroke();
   ctx.restore();
-}
-
-// Draws the case-ID watermark centered between the jaws. Non-interactive —
-// just a visual stamp baked into the exported image.
-function drawWatermark(c, stroke, ratio) {
-  if (!stroke?.text || !stroke?.point) return;
-  c.save();
-  c.globalCompositeOperation = "source-over";
-  const fontSize = stroke.fontSize || Math.max(18, (stroke.size || 16) * 2);
-  c.font = `700 ${fontSize * ratio}px "Montserrat", "Segoe UI", sans-serif`;
-  c.fillStyle = "rgba(40, 60, 80, 0.55)";
-  c.textBaseline = "top";
-  c.shadowColor = "rgba(255, 255, 255, 0.85)";
-  c.shadowBlur = 4 * ratio;
-  c.fillText(stroke.text, stroke.point.x * ratio, stroke.point.y * ratio);
-  c.restore();
 }
 
 function drawStrokeOn(c, stroke, ratio) {
@@ -942,9 +912,8 @@ function mulberry32(seed) {
   };
 }
 
-// Airbrush: scatter dots in a disc around each path point. Spread is tied to
-// the stroke size; the per-point seed (derived from its coords + index) keeps
-// the pattern stable across redraws.
+// Airbrush: dots scattered in a disc around each path point, spread tied to stroke size.
+// The per-point seed (coords + index) keeps the pattern stable across redraws.
 function drawSpray(c, stroke, ratio) {
   const pts = stroke.points;
   if (!pts || !pts.length) return;
@@ -972,9 +941,8 @@ function drawSpray(c, stroke, ratio) {
   c.restore();
 }
 
-// Draw a vector shape (line / curve / square / rectangle / triangle / circle)
-// defined by its drag bounds (start → end). Stroke-only; width = size, colour
-// = stroke.color.
+// Draws a vector shape (line/curve/square/rectangle/triangle/circle) from its drag
+// bounds. Stroke-only: width = size, colour = stroke.color.
 function drawShape(c, stroke, ratio) {
   const { start, end, shape } = stroke;
   if (!start || !end) return;
@@ -1052,10 +1020,8 @@ function onPointerDown(event) {
   if (state.crop.active) return; // crop overlay handles its own input
   const point = pointFromEvent(event);
 
-  // Text tool: entering text mode spawns a box at the canvas center so the user
-  // can start typing right away. Clicking an existing saved text edits it in
-  // place; clicking an empty spot drops a fresh text box THERE, so a comment can
-  // be placed at a specific location instead of only the middle.
+  // Entering text mode spawns a centred box to type into immediately. Clicking existing
+  // text edits it in place; clicking empty space drops a new box THERE.
   if (state.tool === "text") {
     const hit = findTextAtPoint(point);
     if (hit) {
@@ -1063,9 +1029,8 @@ function onPointerDown(event) {
       event.preventDefault();
       return;
     }
-    // Place a new (empty) text box at the clicked point. spawnTextInput commits
-    // any current box first — an empty centered default is simply discarded, so
-    // this effectively moves the caret to where the user clicked.
+    // spawnTextInput commits any current box first, and an empty default is discarded —
+    // so this effectively moves the caret to where the user clicked.
     const available = (canvas.clientWidth || 320) - 24;
     // Clamp x so at least the minimum box width fits; the box starts small
     // there and auto-grows with the text up to the canvas's right edge.
@@ -1372,10 +1337,8 @@ function applyTextBoxBg(div, bg) {
   }
 }
 
-// Sync a text box's live font styling (bold / italic / underline).
-// Normal=500, bold=800: deliberately on opposite sides of the system fallback
-// font's faces so bold is visibly heavier even when Montserrat isn't loaded
-// (Helvetica Neue collapses 600–900 → 700, so a 600 "normal" looked bold).
+// Live bold/italic/underline. Normal=500, bold=800 straddle the fallback font's faces so
+// bold reads heavier without Montserrat — Helvetica Neue collapses 600-900 to 700.
 function applyTextBoxStyle(div, { bold, italic, underline }) {
   div.dataset.bold = bold ? "1" : "0";
   div.dataset.italic = italic ? "1" : "0";
@@ -1451,10 +1414,8 @@ function spawnTextInput(point, prefill = null, options = {}) {
 
   if (prefill?.text) div.textContent = prefill.text;
 
-  // Scale font-size proportionally with WIDTH (not height) — width is set by
-  // the corner-drag and isn't affected by typing line-wraps, so the font
-  // only changes when the user explicitly resizes the box. Only active for
-  // resizable (re-edit) boxes.
+  // Scales font-size with WIDTH, not height: width comes from the corner-drag and is
+  // untouched by line-wraps, so typing never resizes the text.
   if (resizable && typeof ResizeObserver !== "undefined") {
     let lastFontPx = initialFontPx;
     const ro = new ResizeObserver(() => {
@@ -1471,10 +1432,8 @@ function spawnTextInput(point, prefill = null, options = {}) {
     div._resizeObserver = ro;
   }
 
-  // Move by clicking and dragging the box itself. A small movement threshold
-  // distinguishes a plain click (place the caret / type) from a drag (move the
-  // box). Dragging updates textInputPoint so the committed stroke lands where
-  // it's dropped; text selection is suppressed while a drag is in progress.
+  // Drag the box to move it; a small threshold separates that from a click placing the
+  // caret. Dragging updates textInputPoint so the committed stroke lands where dropped.
   let dragging = false;
   let dragStart = null;
   const DRAG_THRESHOLD = 4; // CSS px before a press becomes a drag
@@ -1897,10 +1856,8 @@ function setShape(shape) {
   applyCanvasCursor();
 }
 
-// Shape mode mirrors crop mode: clicking the shapes icon takes over the editor
-// (its own × / send chrome is hidden) and the shapes UI shows its own
-// Cancel / Done at the bottom. Cancel reverts to the strokes as they were when
-// the mode was entered; Done keeps them.
+// Mirrors crop mode: the shapes icon takes over the editor (× / send chrome hidden) and
+// shows its own Cancel / Done. Cancel reverts to the strokes as they were on entry.
 function enterShapeMode() {
   const ui = ensureShapePanel();
   if (!ui) return;
@@ -1932,9 +1889,8 @@ function exitShapeMode(commit) {
 }
 
 // ===================== Text mode =====================
-// Mirrors shape mode: the text toolbar icon takes over the editor (× / send
-// chrome hidden) and shows its own controls — an alignment toggle + a text-
-// background toggle (top-right), a colour bar (right) and Cancel / Done.
+// Mirrors shape mode: takes over the editor and shows an alignment toggle, a text-
+// background toggle, the colour bar and Cancel / Done.
 const ALIGN_ICONS = {
   left: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="18" x2="18" y2="18"/></svg>',
   center:
@@ -2121,9 +2077,8 @@ function exitTextMode(commit) {
 }
 
 // ===================== Brush mode =====================
-// Opens from the pencil toolbar icon. Like the other modes it takes over the
-// editor and offers a brush/eraser toggle, the colour bar, undo and
-// Cancel/Done. Drawing uses the existing freehand stroke pipeline.
+// Takes over the editor with a brush/eraser toggle, colour bar, undo and Cancel/Done.
+// Drawing reuses the existing freehand stroke pipeline.
 const BRUSH_ICONS = {
   pen: '<img src="../../assets/instruction%20editor/pencil.png" alt="" class="ie-brush-icon" />',
   eraser: '<img src="../../assets/instruction%20editor/eraser.png" alt="" class="ie-brush-icon" />',
@@ -2275,9 +2230,8 @@ function exportComposedDataUrl() {
 }
 
 // ===================== Mode switching =====================
-// Which takeover mode is open ("crop" | "icon" | "text" | "pencil" | null).
-// Kept in sync by the enter*/exit* pair so the panels' own Cancel/Done stay
-// authoritative — this only tracks what's open, it never drives it.
+// Which takeover mode is open, kept in sync by the enter*/exit* pair. This only TRACKS
+// what's open — the panels' own Cancel/Done stay authoritative.
 let activeIeMode = null;
 
 const IE_MODE_ENTER = {
@@ -2313,9 +2267,8 @@ function bindOnce() {
   });
   document.getElementById("instructionEditorSaveBtn")?.addEventListener("click", () => {
     const dataUrl = exportComposedDataUrl();
-    // The watermark is auto-regenerated every time the editor opens, so we
-    // don't commit it into the saved strokes — otherwise it would render
-    // twice on re-open (once as the live watermark, once as a baked stroke).
+    // The watermark regenerates on every open, so never commit it into the saved strokes
+    // or it renders twice — once live, once baked.
     const strokes = JSON.parse(JSON.stringify(state.strokes));
     closeEditor({ dataUrl, strokes });
   });
@@ -2329,9 +2282,8 @@ function bindOnce() {
   document.querySelectorAll("[data-instruction-tool]").forEach((btn) => {
     btn.addEventListener("click", () => setTool(btn.dataset.instructionTool));
   });
-  // Toolbar icons — crop & rotate / shapes picker / text / brush. The dataset
-  // values double as the IE_MODE_* keys. Each click swaps out whatever mode is
-  // open; clicking the open one closes it.
+  // Toolbar icons (crop / shapes / text / brush); the dataset values double as IE_MODE_*
+  // keys. Each click swaps out the open mode; clicking the open one closes it.
   document.querySelectorAll("[data-ie-tool]").forEach((btn) => {
     btn.addEventListener("click", () => switchIeMode(btn.dataset.ieTool));
   });
@@ -2459,9 +2411,8 @@ export async function openInstructionEditor(options = {}) {
   await new Promise((r) => requestAnimationFrame(r));
   resizeCanvas();
 
-  // The case-ID watermark is now baked into the background image by
-  // captureJawJpegDataUrl (below the arches — side by side on desktop, stacked
-  // on phones), so we don't draw a second watermark on top.
+  // captureJawJpegDataUrl already bakes the case-ID watermark into the background, so
+  // don't draw a second one on top.
   if (typeof ResizeObserver !== "undefined") {
     resizeObserver = new ResizeObserver(() => resizeCanvas());
     resizeObserver.observe(canvas.parentElement);

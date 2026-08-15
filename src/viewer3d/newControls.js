@@ -153,10 +153,8 @@ style.textContent = `
     cursor: not-allowed;
   }
 
-  /* min-height:0 is what lets a flex child actually scroll instead of growing
-     the panel past its max-height. Column flex with non-shrinking rows, NOT
-     grid: once the list outgrows the cap, grid's align-content:stretch
-     compresses the rows and each one clips its own name band away. */
+  /* min-height:0 lets a flex child scroll instead of growing past max-height.
+     NOT grid: align-content:stretch compresses rows and clips their name band. */
   .component-panel-body {
     flex: 1 1 auto;
     min-height: 0;
@@ -184,9 +182,8 @@ style.textContent = `
     display: none;
   }
 
-  /* One tinted block per object: opacity rail on top, name + controls under it.
-     --row-tint comes from the object's own material colour, so a row reads as
-     the thing it drives. */
+  /* One tinted block per object. --row-tint comes from the object's own
+     material colour, so a row reads as the thing it drives. */
   .component-row {
     --row-tint: #5f6070;
     flex: 0 0 auto;
@@ -235,9 +232,8 @@ style.textContent = `
     align-items: center;
   }
 
-  /* Pill rail with a filled portion. The fill is painted by the track
-     background from --fill (set on input), so it reads at a glance without a
-     visible thumb. */
+  /* Pill rail whose fill is painted by the track background from --fill (set
+     on input), so it reads at a glance without a visible thumb. */
   .component-opacity-control {
     -webkit-appearance: none;
     appearance: none;
@@ -405,9 +401,8 @@ style.textContent = `
     display: none;
   }
 
-  /* Undercut colour key — shown only while a jaw/slot's undercut view is on
-     (see syncUndercutLegend). Palette matches preview3D.js's
-     colorForSurveyingValue byte-for-byte, so the two heatmaps read the same. */
+  /* Undercut colour key, shown only while an undercut view is on. Palette
+     matches preview3D.js's colorForSurveyingValue byte-for-byte. */
   .viewer-undercut-legend {
     position: absolute;
     left: 16px;
@@ -461,9 +456,8 @@ style.textContent = `
     text-align: center;
   }
 
-  /* #viewer-right-nav (index.js) becomes a full-width bar across the bottom
-     at both breakpoints below, so the legend has to clear its height instead
-     of sitting flush at bottom:0 like the desktop rule above. */
+  /* #viewer-right-nav becomes a full-width bottom bar at both breakpoints
+     below, so the legend must clear its height rather than sit at bottom:0. */
   @media (min-width: 769px) and (max-width: 1024px) {
     .viewer-undercut-legend {
       bottom: calc(86px + env(safe-area-inset-bottom, 0px));
@@ -544,15 +538,11 @@ style.textContent = `
     }
   }
 
-  /* Objects panel as a full-height right sidebar on tablet/phone, opened by
-     the footer hamburger (#footerObjectsBtn, wired in viewerShell.js) instead
-     of the floating top-left toggle above, which was eating too much of the
-     small screen and is hidden here. Both drive the same viewerPanelManager
-     entry (see createComponentPanel), so either trigger opens/closes it.
-     !important beats both this file's own narrower rules above and
-     style.css's older top-sheet rules, and — being appended to <head> at
-     runtime, after style.css's <link> — this block also wins any tie against
-     them for free; !important just makes that not depend on load order. */
+  /* Objects panel as a full-height right sidebar on tablet/phone, opened by the
+     footer hamburger instead of the floating toggle (hidden here). Both drive
+     the same viewerPanelManager entry, so either trigger works.
+     !important beats this file's narrower rules and style.css's older top-sheet
+     ones without depending on load order. */
   @media (max-width: 1024px) {
     .component-panel-toggle {
       display: none !important;
@@ -564,9 +554,8 @@ style.textContent = `
       left: auto !important;
       right: 0 !important;
       bottom: 0 !important;
-      /* ~60% of the screen, not the near-total-width overlay min(300px, 84vw)
-         gave on most phones — floor/ceiling just keep it usable at the
-         extremes (a tiny phone, or this same breakpoint on a wide tablet). */
+      /* ~60% of the screen rather than the near-full width min(300px, 84vw)
+         gave; the floor/ceiling only cover the extremes. */
       width: clamp(220px, 60vw, 420px) !important;
       max-width: none !important;
       height: 100% !important;
@@ -689,18 +678,15 @@ function applyJawMaterial(meshes, materialArray, index) {
   });
 }
 
-// A row is tinted with the colour of the thing it drives, so the list reads
-// against the model. Meshes give up their own material colour; overlay rows
-// (polylines, artificial teeth, empty slots) have no material to read, so they
-// fall back to a neutral lavender.
+// A row is tinted with the colour of the thing it drives. Overlay rows have no
+// material to read, so they fall back to a neutral lavender.
 const ROW_TINT_FALLBACK = "#5f6070";
 
 function getGroupTint(group) {
   const material = group.meshes
     ?.flatMap((mesh) => (Array.isArray(mesh.material) ? mesh.material : [mesh.material]))
-    // A vertexColors material paints from the geometry, and its own colour is a
-    // white multiplier — reading it tints the row white and swallows the white
-    // label and icon. That is what the case jaws use.
+    // A vertexColors material (what the case jaws use) has a white multiplier
+    // for its own colour, which would tint the row white and swallow its label.
     .find((entry) => entry?.color && !entry.vertexColors);
   if (!material) return ROW_TINT_FALLBACK;
   // Keep every tint dark enough for white content to read on it.
@@ -781,13 +767,8 @@ function createComponentPanel(groups) {
       : "Show all available objects";
   };
 
-  // Some cases don't have polylines/artificial teeth generated yet, so their
-  // rows render disabled (row.hasContent below). Left in their fixed
-  // jaw/mesh/polylines/teeth slots, an unavailable row can sit above
-  // components the user actually has, forcing a scroll past dead rows to
-  // reach them. Sinking unavailable rows to the bottom keeps everything
-  // usable within reach at the top. Array#sort is stable, so rows that share
-  // an availability state keep their original relative order.
+  // Unavailable rows sink to the bottom, so nobody scrolls past dead rows.
+  // Array#sort is stable, so rows sharing a state keep their relative order.
   const reorderRows = () => {
     [...rowControllers]
       .sort((a, b) => Number(b.hasContent()) - Number(a.hasContent()))
@@ -991,11 +972,8 @@ function createComponentPanel(groups) {
     opacitySlider.setAttribute("aria-label", `${group.label} opacity`);
 
     opacitySlider.addEventListener("input", () => {
-      // Only touch this row's own visuals while dragging — syncAllRows()
-      // walks every row and re-appends them all (reorderRows), which is
-      // expensive DOM work that made the slider feel stiff when it ran on
-      // every drag tick. Opacity doesn't affect row order/availability, so
-      // that full resync only needs to happen once the drag settles.
+      // Only this row while dragging: syncAllRows() re-appends every row and made
+      // the slider stiff. Opacity can't reorder, so the resync waits for drag end.
       group.setOpacity?.(Number(opacitySlider.value) / 100);
       opacitySlider.style.setProperty("--fill", `${opacitySlider.value}%`);
       rail.dataset.opacity = opacitySlider.value;
@@ -1013,10 +991,8 @@ function createComponentPanel(groups) {
 
     rowControllers.push({
       row,
-      // Not every case has polylines/artificial teeth generated yet, so a
-      // component can go from unavailable to available (or back) after the
-      // panel was built. Read fresh each reorder rather than cached at
-      // creation time.
+      // A component can become available (or not) after the panel was built,
+      // so read this fresh on each reorder rather than caching at creation.
       hasContent: () => group.hasContent?.() ?? true,
       sync: () => {
         const hasContent = group.hasContent?.() ?? true;
@@ -1073,9 +1049,8 @@ function createComponentPanel(groups) {
     else closePanel();
   });
 
-  // The panel occupies the toggle's corner (desktop) or slides in as a
-  // sidebar over the backdrop (tablet/phone — see #footerObjectsBtn in
-  // viewerShell.js), so only one of the two triggers is on screen at a time.
+  // The panel takes the toggle's corner on desktop and slides in over a backdrop
+  // on tablet/phone, so only one of the two triggers is ever on screen.
   const openPanel = () => {
     panel.classList.remove("hidden");
     backdrop.classList.remove("hidden");
@@ -1110,10 +1085,8 @@ function createComponentPanel(groups) {
   syncAllRows();
   syncShowHideButton();
 
-  // Open on load — the objects list is the viewer's primary control. Except
-  // on tablet/phone, where it's now a full-height sidebar over a backdrop:
-  // auto-opening it there would cover the model on every load, the exact
-  // screen-space problem the footer hamburger trigger exists to fix.
+  // Open on load, since the objects list is the viewer's primary control —
+  // except on tablet/phone, where the sidebar would cover the model every time.
   const opensOnLoad = !window.matchMedia("(max-width: 1024px)").matches;
   if (opensOnLoad) {
     if (window.viewerPanelManager) window.viewerPanelManager.open("objects-panel");
@@ -1182,9 +1155,8 @@ function buildDesignSlotGroups(designSlots) {
       iconPath: entry.iconPath,
       meshes,
       supportsAnalysis: false, // uploads carry no occlusion data of their own
-      // A jaw slot borrows the case jaw's undercut heatmap, so it gets that button alone.
-      // Read the mode off the mesh rather than caching it: the panel is rebuilt on every
-      // view switch, and a cached mode would come back "normal" over a heatmapped slot.
+      // Read the mode off the mesh, never cached: the panel is rebuilt on every view
+      // switch, and a cached mode comes back "normal" over a heatmapped slot.
       supportsUndercut: Boolean(entry.supportsUndercut) && meshes.length > 0,
       getMode: () => (entry.getUndercut?.() ? "undercut" : "normal"),
       // Async: the first switch pulls in the case's scan and heatmaps. Resolves to the mode
@@ -1231,10 +1203,8 @@ function addVisibilityAndTransparencyControls(
 
   parentObject.children.forEach((child) => {
     if (!child.isMesh) return;
-    // Slot STLs stay in the scene, parked hidden, while the case view is up.
-    // They carry a jaw_type, so they would land in the case's jaw groups and
-    // the jaw eye toggle would switch them back on over the case mesh. They get
-    // their own rows in design view (buildDesignSlotGroups).
+    // Slot STLs stay parked hidden during case view. They carry a jaw_type, so
+    // without this the jaw eye toggle would switch them back on over the case mesh.
     if (child.userData?.isDesignSlot) return;
     child.userData.baseGeometry = child.userData.baseGeometry || child.geometry;
     const jawKey = getJawKey(child);

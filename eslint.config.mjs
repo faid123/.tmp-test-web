@@ -51,16 +51,15 @@ export default [
         JSZip: "readonly",
         QRCode: "readonly",
         html2canvas: "readonly",
-        jspdf: "readonly",
         // Injected by webpack DefinePlugin into the viewer bundle.
         process: "readonly",
       },
     },
   },
 
-  // Dual-environment codec: atob in the browser, Buffer under Node-run tests.
+  // Dual-environment base64: atob/btoa in the browser, Buffer under Node-run tests.
   {
-    files: ["src/js/2D/jawStructCodec.js"],
+    files: ["src/js/2D/dotnetBinaryFormatter.js", "src/js/2D/jawStructCodec.js"],
     languageOptions: { globals: { Buffer: "readonly" } },
   },
 

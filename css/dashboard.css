@@ -1,7 +1,5 @@
-/* Case Dashboard overlay — full-screen "View Dashboard" view opened from the
-   case list detail pane. A white top bar, then three columns: Processing Steps
-   (left, with progress), View Captures (centre, click-to-preview), and Case
-   Access + Viewcaptures (right). Built/owned by src/js/dashboard.js. */
+/* Case Dashboard overlay — full-screen view from the case list detail pane:
+   top bar + 3 columns. Built and owned by src/js/dashboard.js. */
 
 .dash-overlay {
   position: fixed;
@@ -377,9 +375,8 @@
 /* ---------- mobile-only bits (hidden on desktop) ---------- */
 .dash-mobile-head { display: none; }
 
-/* Mobile-only "Case Details" panel. On desktop the topbar meta (created /
-   request / last edit), the status pill, and the Case Access column already
-   cover this, so it stays hidden; the mobile media query reveals it. */
+/* Mobile-only "Case Details" panel — the desktop topbar meta, status pill and
+   Case Access column already cover it, so only the mobile query reveals it. */
 .dash-details { display: none; }
 .dash-details-list { display: flex; flex-direction: column; }
 .dash-details-row {
@@ -450,15 +447,11 @@
 
 @media (max-width: 1080px) {
   .dash-topmeta { display: none; }
-  /* Status now lives in the Case Details panel; drop the topbar pill so it isn't
-     shown twice. The close (×) button stays. */
+  /* Status lives in the Case Details panel here; drop the duplicate topbar pill. */
   .dash-topright .dash-status-pill { display: none; }
 
-  /* Flatten the 3 desktop columns into one ordered column:
-     Case Details (with Case Access) -> Processing Steps -> Thumbnails -> View
-     Captures. The columns become display:contents so their children participate
-     directly in the body flexbox and can be reordered across column boundaries;
-     the Case Details panel is a separate non-column child shown only here. */
+  /* Flatten the 3 columns into one: display:contents lets their children join
+     the body flexbox directly so `order` can reorder across column boundaries. */
   .dash-body { display: flex; flex-direction: column; overflow-y: auto; padding: 8px 0 24px; }
   .dash-col { display: contents; }
   .dash-col > * { padding-left: 18px; padding-right: 18px; }

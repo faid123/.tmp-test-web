@@ -1,14 +1,5 @@
-// "Change Account Password" — the in-app half of the password reset flow,
-// opened from the sidebar on any page that carries #appSidebar.
-//
-// Same two stages as the login page's forgot-password view, backed by the same
-// endpoints in shared/passwordReset.js. The difference is the email: here it
-// comes from the signed-in session rather than being typed, so the user only
-// confirms, collects the emailed key and picks a new password.
-//
-// Note there is no "current password" field — the backend has no endpoint that
-// verifies one. The key emailed to the account holder is what authorises the
-// change, exactly as it does for a signed-out reset.
+// The in-app half of the reset flow: same stages and endpoints as login's forgot
+// view, on the session's email. No "current password" field — no endpoint verifies one.
 
 import {
   computePasswordStrength,
@@ -19,28 +10,11 @@ import {
   resetPassword,
 } from "./passwordReset.js";
 import { toast } from "./toast.js";
+import { ensureStylesheet } from "./pageContext.js";
 
 let root = null;
 let stage = "request"; // "request" | "reset"
 let email = "";
-
-// Path back to the repo root from whatever page we're on — same depth check as
-// appSidebar.js, so the stylesheet resolves from src/pages/ and admin/ alike.
-function appRoot() {
-  const path = window.location.pathname;
-  if (/\/src\/pages\/admin\//.test(path)) return "../../../";
-  if (/\/src\/pages\//.test(path)) return "../../";
-  return "./";
-}
-
-function ensureStylesheet() {
-  const href = new URL(`${appRoot()}css/changePassword.css`, window.location.href).href;
-  if (document.querySelector(`link[href="${href}"]`)) return;
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = href;
-  document.head.appendChild(link);
-}
 
 // The address the key gets sent to. Everything downstream needs it, so a
 // session without one can't run the flow at all.
@@ -148,7 +122,7 @@ async function handleSubmit(event) {
 }
 
 function build() {
-  ensureStylesheet();
+  ensureStylesheet("changePassword.css");
 
   root = document.createElement("div");
   root.id = "change-password";

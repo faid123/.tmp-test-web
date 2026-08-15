@@ -9,21 +9,19 @@
 }
 /* Footer spans both columns at the bottom (styling inherited from .cm-footer). */
 .au-page > .cm-footer { grid-column: 1 / -1; grid-row: 4; }
-/* Full-width rows span both columns. */
+/* Full-width rows span both columns. Top bar visuals live in case_list.css
+   (shared by both admin pages); here it gets a full-bleed square-cornered header. */
 .au-page > .au-topbar,
 .au-page > .au-stats {
   grid-column: 1 / -1;
 }
-.au-page > .au-topbar { grid-row: 1; }
-.au-page > .au-stats { grid-row: 2; }
-/* Branded top bar visuals live in case_list.css (shared by both admin pages),
-   scoped to .au-topbar. Here we handle this page's grid positioning + a
-   full-bleed teal header (square corners, taller). */
 .au-page > .au-topbar {
+  grid-row: 1;
   padding: 18px 24px;
   border-radius: 0;
   min-height: 68px;
 }
+.au-page > .au-stats { grid-row: 2; }
 /* Compact header on phones (matches the shared .au-topbar mobile revert). */
 @media (max-width: 640px) {
   .au-page > .au-topbar { padding: 12px 14px; min-height: 0; }
@@ -83,9 +81,8 @@
 }
 
 /* ---- overview cards (mirror the admin case list) ---- */
-/* The .cm-stat-* card styles come from case_list.css; this just lays them out.
-   Not gated behind body.is-admin (unlike .cm-admin-stats) because this page's
-   own admin gate already controls visibility. */
+/* .cm-stat-* card styles come from case_list.css; this only lays them out.
+   No body.is-admin gate needed — the page's own admin gate controls visibility. */
 .au-stats {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -101,7 +98,6 @@
 @media (max-width: 1100px) {
   .au-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .au-stats .cm-stat-card { min-height: 96px; padding: 14px 16px; }
-  .au-stats .cm-stat-value { font-size: 1.4rem; }
 }
 /* Tablet portrait: 2 per row. */
 @media (max-width: 780px) {
@@ -275,13 +271,6 @@
   margin-top: 18px;
 }
 
-
-
-/* ============================================================================
-   Premium polish — admin User & Machine pages (this file is loaded by both).
-   Appended last so it wins via the cascade. Visual only.
-   ============================================================================ */
-
 /* Branded app bar: teal gradient + soft elevation. Scoped to ≥641px so the
    existing mobile white-bar revert (in case_list.css) is left untouched. */
 @media (min-width: 641px) {
@@ -324,4 +313,10 @@
 /* Detail avatar: subtle brand ring for a more finished look. */
 .au-detail-avatar {
   box-shadow: 0 0 0 4px rgba(59, 174, 149, 0.14);
+}
+
+/* Re-asserted after the unconditional .au-stats .cm-stat-value rule above,
+   which was overriding the compact tablet size. */
+@media (max-width: 1100px) {
+  .au-stats .cm-stat-value { font-size: 1.4rem; }
 }

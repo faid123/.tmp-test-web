@@ -15,7 +15,6 @@ import {
   isPalatalBarMajorComponent,
   isPalatalStrapMajorComponent,
   isPlateComponentId,
-  ensureMajorConnectorPlacementsOnSupportedTeethInJaws,
   ensurePalatalBarPlacementsOnConnectorTeeth,
   removeMajorPlacementsFromPalatalBarExcludedUpperTeeth,
   switchMajorConnectorInJaws,
@@ -57,14 +56,8 @@ import {
 import { toast, attachThemedCalendar } from "../shared/toast.js";
 
 // ── Material restrictions ────────────────────────────────────────────────────
-// A full-acrylic case (state.jawMaterial === 2) is an all-acrylic denture, so it
-// can't carry metal-framework elements: the BARS tab is disabled wholesale, the
-// metal mesh types are disabled, and the three open/metal upper palatal major
-// connectors — Palatal Strap, A-P strap (aka "palatal hole",
-// major-upper-palatal-hole) and Palatal Bar — are disabled (Palatal Plate +
-// Horseshoe stay, being acrylic-capable). The denture flange (mesh-flange) is an
-// acrylic element, so it stays available and keeps the MESH tab reachable. Metal
-// (0) / unset has no restriction.
+// Full-acrylic (jawMaterial === 2) carries no metal framework: the BARS tab, metal mesh and
+// the open palatal majors are disabled. Plate, Horseshoe and the flange stay.
 const ACRYLIC_BLOCKED_TABS = new Set(["bars"]);
 
 /** Components that stay available in a full-acrylic case despite their tab/family. */
@@ -90,9 +83,8 @@ export function isComponentBlockedByMaterial(componentId) {
   );
 }
 
-// Never leave the user parked on a tab/component the current material forbids
-// (e.g. a loaded full-acrylic case defaulting to the mesh tab, or entering design
-// mode with mesh-hole selected). Called at the top of every catalog render.
+// Never leave the user parked on a tab or component the current material forbids.
+// Called at the top of every catalog render.
 function healSelectionForMaterial() {
   if (!isFullAcrylic()) return;
   if (isTabBlockedByMaterial(state.selectedTab)) {
@@ -215,9 +207,8 @@ export function createMajorColumn(title, items) {
 }
 
 
-// Publish a self-contained SVG filter that fills the (white) mesh catalog icons with
-// the placed-mesh purple (#5b21b6). Defined once on <body> so it does not depend on an
-// arch <svg> being rendered. Referenced from CSS via `filter: url(#icon-tint-mesh)`.
+// Fills the white mesh catalog icons with the placed-mesh purple. Published once on
+// <body> so it doesn't depend on an arch <svg>; CSS references url(#icon-tint-mesh).
 function ensureMeshIconTintFilter() {
   if (typeof document === "undefined" || document.getElementById("icon-tint-mesh")) {
     return;
@@ -412,10 +403,8 @@ export function handleDesignComponentSelect(componentId) {
       });
     }
 
-    // Keep per-tooth plate-prox in step with the new connector: plate/strap/horseshoe
-    // plates the teeth it covers, a bar plates none. Flips plating on a plate↔bar switch.
-    // Full-acrylic cases carry no metal plating — the 7-to-7 major span IS the base — so
-    // skip the plate stamping (otherwise the arch shows per-tooth mesh/plate instead).
+    // Keeps plate-prox in step: plate/strap/horseshoe plate what they cover, a bar plates
+    // none. Skipped for full-acrylic, where the 7-to-7 major span IS the base.
     if (!isFullAcrylic()) {
       syncReciprocatingPlatesToMajorConnector(state.teeth, componentId, jawKeys);
     }
@@ -566,11 +555,8 @@ export function ensureMajorCatalogPickForTooth(toothId) {
   }
 }
 
-// Special Instruction is the case list's CASE INSTRUCTIONS box, edited in another
-// tab; and this form can exist twice at once (Components tab + footer sheet).
-// Keep every copy on screen in step, skipping any that is focused or holds
-// unsaved edits. Wired on first use, not at import — this module is imported by
-// tests that run without a DOM.
+// Special Instruction is the case list's CASE INSTRUCTIONS box and can exist twice at once,
+// so keep every unfocused copy in step. Wired on first use — tests import without a DOM.
 let commentWatchWired = false;
 function watchCommentAcrossTabs() {
   if (commentWatchWired) return;
@@ -601,9 +587,8 @@ export function createCaseNoteForm() {
   form.appendChild(buildReadonlyRow("Case Owner", ownerName));
   form.appendChild(buildReadonlyRow("Case Number", String(caseNumber)));
 
-  // "Date Required" IS the case's due date (case-list "Due" column); source of truth is
-  // additionalcasedetails.due_date. Seed instantly from the localStorage stash, then
-  // replace with the live server value once loaded — unless the user is already editing.
+  // "Date Required" IS additionalcasedetails.due_date. Seeded instantly from the
+  // localStorage stash, then replaced by the server value unless the user is editing.
   const dueDateDefault = loadCaseDueDate(state.caseIntID);
   const dateInput = buildInputRow(
     "Date Required",
@@ -654,9 +639,8 @@ export function createCaseNoteForm() {
     userTouchedComment = true;
   });
 
-  // One read for both server-backed fields (same additionalcasedetails row).
-  // Neither overwrites what the user already typed; an empty server comment
-  // leaves the local draft alone.
+  // One read for both server-backed fields (same row). Neither overwrites what the user
+  // typed, and an empty server comment leaves the local draft alone.
   fetchAdditionalCaseDetails(state.caseIntID).then(({ ok, detail }) => {
     if (!ok) return;
     const live = toDateInputValue(detail?.due_date);
@@ -673,9 +657,8 @@ export function createCaseNoteForm() {
 
   const actions = document.createElement("div");
   actions.className = "case-note-actions";
-  // One button: it persists the note fields AND sets the case status in the same
-  // action, so a design can't be approved without its note being saved. Confirms
-  // first, since the status change is case-level and visible to everyone.
+  // One button saves the note AND sets the status, so a design can't be approved with its
+  // note unsaved. Confirms first — the status change is case-level and visible to all.
   const approveBtn = document.createElement("button");
   approveBtn.type = "button";
   approveBtn.className = "case-note-save-btn";
@@ -712,15 +695,8 @@ export function createCaseNoteForm() {
   });
 
   approveBtn.addEventListener("click", async () => {
-    // The confirmation is a full dialog: the two arches as they look right now,
-    // an upload tile for anything else worth sending, and the case's users as
-    // email recipients. It hands back who to mail and what to attach, which is
-    // sent below — but only once the approval itself has landed.
-    //
-    // Rasterizing the arches takes a moment (the tooth art is fetched and
-    // inlined), hence the button-side progress. annotationLocks is imported
-    // dynamically: it imports this module back, so a static import here would
-    // close a cycle.
+    // A full dialog returning who to mail and what to attach, sent only once the approval
+    // lands. annotationLocks is imported dynamically because it imports this module back.
     approveBtn.disabled = true;
     status.textContent = "Preparing preview…";
     status.classList.remove("is-error");
@@ -748,9 +724,8 @@ export function createCaseNoteForm() {
       comment: commentField.input.value,
       updatedAt: new Date().toISOString(),
     };
-    // Other fields have no API yet, so they stay in localStorage. The due date is
-    // written through to additionalcasedetails.due_date (shows in the case-list "Due"
-    // column, shared across devices).
+    // Other fields have no API yet and stay in localStorage. The due date writes through
+    // to additionalcasedetails.due_date, so it shares across devices.
     const localOk = saveCaseNote(state.caseIntID, note);
 
     // Button is already disabled from the report wait above.
@@ -760,10 +735,8 @@ export function createCaseNoteForm() {
     // all three are full upserts of one row and must not overlap.
     await pendingCommentSave;
 
-    // Both writes are full upserts of the same additionalcasedetails row, so they
-    // must stay sequential: the status write re-reads and carries forward the date
-    // and comment just written. The status write is skipped when the first fails,
-    // so a case is never marked approved with its note unsaved.
+    // Both are full upserts of the SAME row, so they must stay sequential — the status
+    // write re-reads what the first wrote. Skipped if the first fails.
     const remoteOk = await updateCaseDueDate(
       state.caseIntID,
       dateRequired,
@@ -780,9 +753,8 @@ export function createCaseNoteForm() {
     approveBtn.disabled = false;
 
     if (statusOk) {
-      // Confirm the moment the approval lands. The notifications below are
-      // several seconds of network on top, and making the user stare at a
-      // disabled button until they finish reads as nothing having happened.
+      // Confirm the moment the approval lands: the notifications below are seconds more
+      // network, and a disabled button until then reads as nothing happening.
       toast.success("Approved successfully");
       status.textContent = "Approved.";
       setMessage("2D design approved.", false);
@@ -790,20 +762,8 @@ export function createCaseNoteForm() {
         if (status.textContent === "Approved.") status.textContent = "";
       }, 2000);
 
-      // Fired only after the status actually flipped — telling everyone about an
-      // approval that didn't land would be worse than staying quiet. Independent
-      // endpoints, so they go out together. Not awaited: neither is allowed to
-      // hold up the approval, and only the outcome is worth another toast.
-      //
-      // The mail goes to whoever was left ticked in the dialog (anyone already
-      // mailed from its Send Email button is filtered out there, so nobody gets
-      // two copies). The in-app alerts are keyed by username, so they still
-      // reach everyone on the case whether or not an address resolved.
-      //
-      // Only the email is reported on: it is the channel the user chose
-      // recipients for, and an empty pick is a deliberate "don't mail anyone",
-      // not a failure. The alerts can't tell "nobody to alert" from "the write
-      // failed" — both come back 0 — so they say nothing either way.
+      // Fired only after the status flipped, never awaited. Only the email is reported on —
+      // the alerts can't tell "nobody to alert" from a failed write, both returning 0.
       Promise.all([
         sendCaseEmails(state.caseIntID, recipients, {
           link: window.location.href,

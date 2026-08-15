@@ -1,20 +1,6 @@
 /* ============================================================================
-   app-shell.css — shared application shell (sidebar + footer)
-   ----------------------------------------------------------------------------
-   Single source of truth for the slide-in navigation sidebar and the bottom
-   status footer that case_list, 2DAnnotation and ThreeDViewer all share.
-
-   Each of those pages historically shipped its own near-duplicate copy of the
-   sidebar/footer CSS (in case_list.css, 2Dannotation.css and style.css), and
-   the annotation footer diverged into a separate rose-coloured ".ann-footer".
-   This file is loaded LAST on every page, so its rules win the same-specificity
-   tie and normalise all three into one premium, consistent look — the teal
-   footer and the same sidebar everywhere.
-
-   Self-contained: all colours come from --shell-* tokens defined here, so it
-   renders identically regardless of which page-level variables happen to exist.
-   They mirror css/tokens.css by value rather than by var() reference to keep
-   that guarantee; change both together.
+   Shared sidebar + status footer. Must load LAST: it wins the same-specificity
+   tie over each page's own rules. --shell-* mirror tokens.css BY VALUE.
    ========================================================================== */
 
 :root {
@@ -22,9 +8,8 @@
   --shell-teal-600: #2f9e83;
   --shell-teal-700: #25735f;
   --shell-teal-800: #1c5a4a;
-  /* Lightest teal on the brand hue that still clears 4.5:1 against white text
-     (4.64:1). The gradients below carry white labels, so every stop must pass —
-     the previous light ends (#45b89e, #43b79c) sat at 2.4:1. */
+  /* Lightest brand teal still clearing 4.5:1 on white text (4.64:1). Every
+     gradient stop below carries white labels, so all must pass. */
   --shell-teal-safe: #2c826f;
   --shell-ink: #0f172a;
   --shell-ink-soft: #475569;
@@ -39,8 +24,7 @@
 }
 
 /* ==========================================================================
-   1. BOTTOM STATUS FOOTER — unified across .cm-footer and .ann-footer
-   Only appearance is set here; each page keeps its own layout mode
+   1. BOTTOM STATUS FOOTER — appearance only; each page keeps its layout mode
    (case_list = grid row, ThreeDViewer = flex item, 2DAnnotation = fixed).
    ========================================================================== */
 .cm-footer,
@@ -169,18 +153,14 @@
   transform: translate(-50%, 0);
 }
 
-/* Touch devices never show these, and their white-space:nowrap width still
-   counted towards the footer's scroll width — enough to scroll the page
-   sideways on a phone. */
+/* Touch devices never show these, but their nowrap width still counted towards
+   the footer's scroll width — enough to scroll the page sideways on a phone. */
 @media (hover: none) {
   .cm-footer [data-tooltip]::after,
   .ann-footer [data-tooltip]::after {
     content: none;
   }
 }
-
-/* The footer Wi‑Fi / connectivity indicator was removed; the status bar now
-   ends with the Help and About buttons, which reuse the footer button styles. */
 
 /* ==========================================================================
    2. SLIDE-IN SIDEBAR — unified premium look for all pages
@@ -367,12 +347,8 @@
   margin: 8px 14px;
 }
 
-/* ---- language picker (trigger + inline dropdown) ----
-   The trigger is a plain .app-sidebar-item like every other row; only the
-   disclosure caret and the expanding submenu are extra. The list is built by
-   src/js/shared/appSidebar.js so the language set lives in one place.
-   The menu expands inline (rather than floating) because .app-sidebar-list
-   scrolls — an absolutely positioned panel would be clipped by it. */
+/* ---- language picker ---- List built by src/js/shared/appSidebar.js; expands
+   inline because .app-sidebar-list scrolls and would clip an absolute panel. */
 .app-sidebar-item-caret {
   margin-left: auto;
   font-size: 10px;

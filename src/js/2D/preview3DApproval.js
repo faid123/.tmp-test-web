@@ -1,17 +1,9 @@
-// The confirmation step behind the Extra 3D panel's Request button.
+// The Extra 3D panel's Request confirmation. Almost all of it is caseNote.js's approval
+// dialog, imported so the two read as one flow.
 //
-// Almost all of it is the 2D Case Note's approval dialog (confirmCaseNoteApproval
-// in caseNote.js), imported from there so the two read as one flow: the renders
-// panel, the recipient checkboxes, the send box and the sender are the same code.
-//
-// What differs is only what is being reviewed and where the mail points:
-//
-//   • left: the captures taken with the Extra 3D tab's camera button, one panel
-//     per arch, with the same upload tile under them for anything else worth
-//     sending. Nothing is captured automatically.
-//   • the email links to the 3D viewer rather than the 2D page.
-//   • the email section has no Send button of its own — this dialog confirms with
-//     "Send", which mails the same people, so the two would be one action twice.
+// Only three things differ: the left panel holds captures taken with the tab's camera
+// button (nothing is automatic), the mail links to the 3D viewer, and there is no separate
+// Send button — this dialog confirms with "Send", which mails the same people.
 
 import { confirmModal, toast } from "../shared/toast.js";
 import { buildThreeDViewerUrl } from "../shared/caseLinks.js";
@@ -49,9 +41,8 @@ async function copyImageToClipboard(dataUrl) {
   }
 }
 
-// Share panel: pick one capture and how much text goes with it, then copy each to
-// the clipboard for pasting into the chat. Share sheets are not used — WhatsApp
-// Desktop prints the shared file's temp path into the caption.
+// Pick one capture and how much text goes with it, then copy both to the clipboard.
+// Share sheets are avoided — WhatsApp Desktop prints the temp file path into the caption.
 function buildSharePanel(caseIntID, shots, { caseName = "", ownerName = "" } = {}) {
   const section = el("section", "cn-approve-section cn-share is-hidden");
   section.appendChild(el("h4", "cn-approve-section-title", "Share"));
@@ -204,10 +195,8 @@ function shotAttachments(shots) {
   ].filter((image) => !!image.src);
 }
 
-// The 3D approval's send: caseNote's shared sender, pointed at the 3D viewer.
-// `forShare` so a localhost dev URL is rewritten to the live host. `images` are
-// what the dialog handed back — the ticked renders plus any uploads. Returns the
-// sent count.
+// caseNote's shared sender pointed at the 3D viewer. `forShare` rewrites a localhost dev
+// URL to the live host; `images` is what the dialog handed back. Returns the sent count.
 export async function sendApprovalEmails(caseIntID, recipients, images) {
   return sendCaseEmails(caseIntID, recipients, {
     link: buildThreeDViewerUrl(caseIntID, { forShare: true }),
@@ -216,11 +205,8 @@ export async function sendApprovalEmails(caseIntID, recipients, images) {
   });
 }
 
-// Show the 3D approval dialog. Resolves { confirmed, recipients, images }:
-// `confirmed` is the Send/Cancel answer, `recipients` the ticked (and typed)
-// addresses, `images` the ticked renders plus whatever was uploaded. NOT a
-// boolean like confirmModal — the caller sends to those addresses, but only once
-// the status write has actually landed, so a request that failed is never sent.
+// Resolves { confirmed, recipients, images }, not a boolean: the caller mails those
+// addresses only once the status write lands, so a failed request is never sent.
 export async function confirmPreview3DApproval({
   caseIntID,
   shots = null,
@@ -241,9 +227,8 @@ export async function confirmPreview3DApproval({
   main.appendChild(uploads.section);
   cols.appendChild(main);
 
-  // Everything that goes out with the mail: the ticked renders first, then the
-  // uploads, in the order they were added. Read at send time, so a render can be
-  // ticked or a file added without reopening the dialog.
+  // Ticked renders first, then uploads in the order added. Read at SEND time, so either
+  // can change without reopening the dialog.
   const images = () => [...shotAttachments(renders.selectedShots()), ...uploads.attachments()];
 
   const recipients = buildRecipientsSection(caseIntID);
@@ -268,9 +253,8 @@ export async function confirmPreview3DApproval({
   const sharePanel = buildSharePanel(caseIntID, shots, { caseName, ownerName });
   content.appendChild(sharePanel);
 
-  // The qualifier is red and reads as an aside, because it is who the dialog is
-  // for rather than part of what it does — a lab user requests the approval, the
-  // clinician gives it.
+  // Red, and reads as an aside: it says who the dialog is for, not what it does — a lab
+  // user requests the approval, the clinician gives it.
   const title = el("span", null, "Request 3D Approval ");
   title.appendChild(el("span", "cn-approve-title-note", "[For Lab Only]"));
 

@@ -1,7 +1,5 @@
-// The preview panel's folder tabs: 3D Preview | Reference Images | Extra 3D.
-// The 3D frame is shared by the two 3D tabs — Extra 3D just stages the uploaded
-// slot files in it and docks their panel over it, so the WebGL context is never
-// torn down. On Reference Images the frame is hidden and its render loop paused.
+// The preview panel's folder tabs. Both 3D tabs SHARE one frame — Extra 3D just stages the
+// slot files in it — so the WebGL context is never torn down; Reference Images pauses it.
 
 import {
   setPreview3DRenderPaused,

@@ -1,25 +1,17 @@
-// Admin machine-ID management (web counterpart of the desktop machine-ID admin
-// UI). Talks to the admin-only endpoints: machineid, machineid/comments,
-// machineid/delete, machineid/getall. Like the user-management page there is no
-// /admin URL prefix — the server checks is_admin (Auth.authIsAdmin) from the
-// caller uuid in element 0 of the request body and answers 401 for non-admins.
-// The local isAdmin flag only decides what UI to show; the server stays
-// authoritative.
+// Admin machine-ID management. There is no /admin URL prefix — the server checks
+// is_admin from the caller uuid, so the local flag only decides what UI to show.
 //
-// Backend shapes are CONFIRMED from the controller + model in `routes copy/`:
+// Shapes CONFIRMED from the controller + model in `routes copy/`:
 //   • machineid/getall  ← { search, sortByAscending, limitStartIndex, limitAmount }
-//                       → 200 [{ machine_id, comments }, …]  (SELECT DISTINCT)
-//                       → 404 { kind:"not_found" } when there are zero machines.
-//     limitStartIndex==0 && limitAmount==0 ⇒ the model omits LIMIT ⇒ all rows.
+//                       → 200 [{ machine_id, comments }], 404 when there are none.
+//     limitStartIndex==0 && limitAmount==0 ⇒ no LIMIT ⇒ all rows.
 //   • machineid         ← { machine_id, comments }  (register / INSERT)
-//   • machineid/comments← { machine_id, comments }  (UPDATE comments by id)
-//   • machineid/delete  ← { machine_id }            (hard DELETE by id)
-// machine_id is the primary key: comment-edits and deletes are keyed on it, and
-// there is no soft-delete/restore — delete removes the row.
+//   • machineid/comments← { machine_id, comments }  (UPDATE by id)
+//   • machineid/delete  ← { machine_id }            (hard DELETE — no restore)
 
 import { toast, confirmModal } from "../shared/toast.js";
-import { setupAppSidebar } from "../shared/appSidebar.js";
-import { apiPost, ApiError, getLoggedInUser } from "../shared/api.js";
+import { initAdminShell, setStatLinkState } from "./adminShell.js";
+import { apiPost, ApiError } from "../shared/api.js";
 
 // ---------------------------------------------------------------------------
 // API layer
@@ -45,9 +37,8 @@ const api = {
   deleteMachine: (machine_id) => apiPost("machineid/delete", { machine_id }),
 };
 
-// Map a server row to what the table needs. The getall query selects exactly
-// machine_id + comments. `comments` can arrive as false (the controller's
-// default when none is supplied at register time) — normalize to "".
+// getall selects exactly machine_id + comments. `comments` can arrive as false
+// (the controller's default at register time), so normalize it to "".
 function normalizeMachine(raw) {
   const comments = raw.comments;
   return {
@@ -347,70 +338,8 @@ async function handleRowAction(action, machine) {
 // ---------------------------------------------------------------------------
 
 document.addEventListener("DOMContentLoaded", () => {
-  const me = getLoggedInUser();
-  if (!me?.uuid) {
-    window.location.href = "../../../index.html";
-    return;
-  }
-
-  // Populate the header user chip from the logged-in account.
-  const uname = me.username || "User";
-  const nameEl = document.getElementById("adminUserName");
-  const avatarEl = document.getElementById("adminUserAvatar");
-  if (nameEl) nameEl.textContent = uname;
-  if (avatarEl) avatarEl.textContent = uname.charAt(0);
-  const footerUser = document.getElementById("footerUserName");
-  if (footerUser) footerUser.textContent = uname;
-
-  // User chip → dropdown with Logout.
-  const chip = document.getElementById("adminUserChip");
-  const chipMenu = document.getElementById("adminUserDropdown");
-  if (chip && chipMenu) {
-    const toggleChip = (e) => {
-      e.stopPropagation();
-      const open = chipMenu.classList.toggle("hidden") === false;
-      chip.setAttribute("aria-expanded", String(open));
-    };
-    chip.addEventListener("click", toggleChip);
-    chip.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") toggleChip(e);
-    });
-    document.addEventListener("click", (e) => {
-      if (chipMenu.classList.contains("hidden")) return;
-      if (!chipMenu.contains(e.target) && !chip.contains(e.target)) {
-        chipMenu.classList.add("hidden");
-        chip.setAttribute("aria-expanded", "false");
-      }
-    });
-  }
-  document.getElementById("userChipLogout")?.addEventListener("click", async () => {
-    const ok = await confirmModal({
-      title: "Log out?",
-      message: "You'll need to sign in again to access the admin tools.",
-      confirmText: "Log out",
-      cancelText: "Cancel",
-      variant: "info",
-    });
-    if (!ok) return;
-    try { localStorage.removeItem("loggedInUser"); } catch { /* ignore */ }
-    window.location.href = "../../../index.html";
-  });
-
-  // This page is admin-only, so return to the admin case list — a sibling in
-  // the same src/pages/admin/ folder.
-  const goBack = () => (window.location.href = "./admin_case_list.html");
-  document.getElementById("backToCasesBtn").addEventListener("click", goBack);
-  document.getElementById("gateBackBtn").addEventListener("click", goBack);
-
-  // Footer hamburger opens the shared slide-in sidebar (same as the case list).
-  // This page sits in src/pages/admin/, so index.html is three levels up.
-  setupAppSidebar({ indexHref: "../../../index.html" });
-
-  // UI-only pre-gate; the server re-checks on every call anyway.
-  if (Number(me.isAdmin) !== 1) {
-    showGate();
-    return;
-  }
+  const me = initAdminShell({ onDenied: showGate });
+  if (!me) return;
 
   document.getElementById("refreshMachinesBtn").addEventListener("click", loadMachines);
   document.getElementById("registerMachineBtn").addEventListener("click", () => openMachineModal());
@@ -419,19 +348,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Stat-card "View" links: focus the list on documented / undocumented machines
   // and sync the dropdown so the state reads consistently.
-  // Update a stat-card "View" link's label + icon (eye ↔ back arrow) in place.
-  // The links carry an <i> icon and a .cm-stat-link-text span, so we set the
-  // span rather than textContent (which would drop the icon).
-  const setStatLinkState = (link, text, active) => {
-    if (!link) return;
-    const label = link.querySelector(".cm-stat-link-text");
-    if (label) label.textContent = text;
-    else link.textContent = text;
-    const icon = link.querySelector("i");
-    if (icon) icon.className = active ? "fa fa-arrow-left" : "fa fa-eye";
-    link.classList.toggle("is-active", active);
-  };
-
   const wireDocLink = (linkId, group) => {
     const link = document.getElementById(linkId);
     link?.addEventListener("click", (e) => {

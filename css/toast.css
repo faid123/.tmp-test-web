@@ -253,10 +253,8 @@
 }
 
 /* ===== Shared themed calendar (teal, on-brand) =====
-   Merged into toast.css to keep the shared-utility file count low. Used by the
-   case list (due date + search-by-date), create case (request date) and the 2D
-   case note. Var fallbacks keep it correct on pages without the --primary*
-   tokens. JS: src/js/toast.js (openThemedCalendar / attachThemedCalendar). */
+   Used by case list, create case and the 2D case note. Var fallbacks keep it
+   correct on pages without --primary*. JS: src/js/toast.js. */
 
 /* Native <input type="date"> enhanced by attachThemedCalendar: hide the native
    picker indicator and show a pointer so it reads as a button. */

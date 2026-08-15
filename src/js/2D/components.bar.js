@@ -195,9 +195,8 @@ export const BAR_RENDER_SCALE_BY_TOOTH_SURFACE = Object.freeze({
 });
 
 /**
- * Optional per-tooth placement fine-tuning (tooth-local coords).
- * Format: { "11": { mesial: { x, y, rotation } } }; full surface keys also work
- * (e.g. { "11": { bar_d2_mesial: {...} } }).
+ * Optional per-tooth placement tuning in tooth-local coords, e.g.
+ * { "11": { mesial: { x, y, rotation } } }. Full surface keys also work.
  */
 export const BAR_PLACEMENT_OFFSET_BY_TOOTH_SURFACE = Object.freeze({
   "11": {
@@ -458,13 +457,9 @@ export function getBarSuggestibleToothIdSet(teethById, jaw) {
 }
 
 /**
- * Resolve bar surface from a nearby mesh-bearing tooth. A bar bases from the DISTAL
- * saddle by default: prefer a distal-side mesh over a mesial-side one, falling back to
- * mesial only when no distal mesh is within two positions; within a side pick the nearer
- * (distance 1 → d1, 2 → d2). The side label is matched to the per-tooth tuning in
- * BAR_PLACEMENT_OFFSET_BY_TOOTH_SURFACE — this changes WHICH mesh is chosen, not the
- * label→tuning mapping, so terminal molars (18/28/38/48, mesial saddle only, tuned only
- * for `distal`) are unaffected. Don't invert the label mapping without re-tuning them.
+ * Resolve a bar surface from a nearby mesh tooth: bars base from the DISTAL saddle, falling
+ * back to mesial only when none is within two positions. The side LABEL is keyed to
+ * BAR_PLACEMENT_OFFSET_BY_TOOTH_SURFACE tuning, NOT anatomy — never invert it.
  */
 export function getBarPlacementSurfaceForTooth(toothId, jaw, teethById) {
   const order = TOOTH_ORDER[jaw];
@@ -474,12 +469,8 @@ export function getBarPlacementSurfaceForTooth(toothId, jaw, teethById) {
   const rightHemisphereStartIndex = order.length / 2;
   const mesialDirection = toothIndex < rightHemisphereStartIndex ? 1 : -1;
 
-  // Strong default: a bar bases from the DISTAL saddle. Among mesh-bearing teeth within
-  // two positions, prefer one on the distal side; only fall back to a mesial-side mesh
-  // when no distal mesh is in range. Within a side, prefer the nearer tooth. (Terminal
-  // molars 18/28/38/48 only ever have a mesial saddle, so they keep their "distal" label
-  // + tuning — this preference never flips them. Users can still toggle to the mesial
-  // side by re-clicking when both sides are edentulous — see getOppositeBarSurface.)
+  // Prefer a distal-side mesh within two positions, nearer first, falling back to mesial
+  // only when none is in range. Terminal molars keep their "distal" label and tuning.
   let bestIndex = null;
   let bestDistance = null;
   let bestIsDistal = false;
@@ -528,9 +519,8 @@ export function hasMissingTeethOnBothSidesForBar(toothId, jaw, teethById) {
   return false;
 }
 
-// Is a bar placement still backed by a mesh-bearing tooth at the surface's implied
-// distance + direction? Mirrors getBarPlacementSurfaceForTooth: side "distal" ⇒ mesh
-// in the mesial direction, "mesial" ⇒ opposite.
+// Whether a bar placement is still backed by a mesh tooth at the surface's implied
+// distance and direction. Note "distal" means mesh in the MESIAL direction.
 function isBarPlacementBackedByMesh(toothId, jaw, surface, teethById) {
   const match = BAR_SURFACE_RE.exec(String(surface || "").toLowerCase());
   if (!match) return false;

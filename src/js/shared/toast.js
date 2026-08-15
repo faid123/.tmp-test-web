@@ -1,7 +1,5 @@
-// Lightweight in-page toast/popup notifications. Drop-in replacement for
-// browser alert() — non-blocking, auto-dismissing, and styled to match the
-// rest of the case-management UI. Use the variant helpers (toast.success,
-// toast.error, toast.warning, toast.info) at call sites for readability.
+// Lightweight in-page toasts: a non-blocking, auto-dismissing alert() stand-in.
+// Prefer the variant helpers (toast.success/error/warning/info) at call sites.
 
 const DEFAULT_DURATION = 3800;
 
@@ -98,10 +96,8 @@ if (typeof document !== "undefined") {
 }
 
 // ---------------------------------------------------------------------------
-// Confirmation modal (formerly src/js/confirmModal.js). Promise-based, drop-in
-// replacement for window.confirm(): non-blocking, styled to match the app, with
-// a "danger" variant for destructive actions. Lazily injects its own DOM.
-// Lives here so confirm-dialogs and toasts share one module (reusing escapeHtml).
+// Confirmation modal — a promise-based window.confirm() stand-in with a "danger"
+// variant. Lives here so it shares escapeHtml with the toasts.
 // ---------------------------------------------------------------------------
 
 const CONFIRM_ICONS = {
@@ -134,15 +130,9 @@ function buildConfirmOverlay() {
   return overlay;
 }
 
-// `content` lets a caller mount its own DOM between the message and the
-// action row (the 2D case-note approval dialog puts its renders, the case's user
-// list and a message box there). Passing it also switches Enter off as a confirm
-// shortcut — a rich dialog contains text fields, and Enter inside one must not
-// commit the action. `size: "lg"` widens the box.
-//
-// `title` is plain text, or a Node when part of it needs its own styling (the 3D
-// approval marks "[For Lab Only]" red that way). Text stays the common case, so
-// it is still set as textContent rather than markup.
+// `content` mounts caller DOM between the message and the action row, and
+// switches Enter off as a confirm shortcut (a rich dialog holds text fields).
+// `title` takes a Node when part of it needs its own styling, else plain text.
 export function confirmModal({
   title = "Are you sure?",
   message = "",
@@ -192,9 +182,8 @@ export function confirmModal({
     activeConfirmOverlay = overlay;
     requestAnimationFrame(() => overlay.classList.add("is-visible"));
 
-    // Confirm button gets focus so Enter/Space activates it for keyboard users.
-    // Not for a content dialog: focusing the commit button there invites an
-    // accidental Enter, and the content's own first field is the better target.
+    // Confirm gets focus for keyboard users — but never on a content dialog,
+    // where an accidental Enter would commit it.
     if (!content) setTimeout(() => okBtn.focus(), 0);
 
     const cleanup = (result) => {
@@ -231,9 +220,8 @@ export function confirmModal({
 }
 
 // ===========================================================================
-// Shared themed calendar (merged here to keep the shared-utility file count
-// low). On-brand date picker used by the case list (due date + search-by-date),
-// create case (request date) and the 2D case note. Styles live in toast.css.
+// Shared themed date picker: case list (due date + search), create case and the
+// 2D case note. Styles live in toast.css.
 // ===========================================================================
 
 let openCalPop = null;
@@ -385,9 +373,8 @@ export function openThemedCalendar(anchor, { value = "", onPick, allowClear = tr
   }, 0);
 }
 
-// Enhance a native <input type="date">: suppress the native picker and open the
-// themed calendar instead, writing the chosen value back and firing input/change
-// so existing listeners keep working. `onPick(iso|null)` is an optional extra.
+// Swaps a native <input type="date">'s picker for the themed calendar, firing
+// input/change so existing listeners keep working. `onPick(iso|null)` is extra.
 export function attachThemedCalendar(input, { allowClear = true, onPick } = {}) {
   if (!input || input.dataset.tcal === "1") return;
   input.dataset.tcal = "1";

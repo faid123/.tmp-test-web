@@ -1,11 +1,11 @@
 /**
- * 2D arch annotation — entry point. Also hosts shared 2D state + UI helpers.
- * Feature modules load via dynamic import during init to dodge circular-import
- * TDZ issues.
+ * 2D arch annotation entry point; also hosts shared 2D state and UI helpers.
+ * Feature modules load via dynamic import in init() to dodge circular-import TDZ.
  */
 
 import { lol } from "../shared/crypt.js";
 import { toggleChat } from "../shared/chat.js";
+import { returnToCaseList as goToCaseList } from "../shared/caseLinks.js";
 import { SVG_NS } from "./constants.js";
 import {
   COMPONENT_BY_ID,
@@ -57,10 +57,8 @@ export const state = {
   rangeMissingMode: false,
   rangeMissingStartToothId: null,
   /**
-   * Denture base material for the whole case, written to each jaw's
-   * "Jaw Material" field on encode. 0 = metal, 2 = full acrylic. null = not yet
-   * chosen (encodes as 0). Prompted when locking an empty design — see
-   * annotationLocks.maybePromptJawMaterial.
+   * Case-wide denture base, encoded as each jaw's "Jaw Material": 0 = metal,
+   * 2 = full acrylic, null = unchosen (encodes 0). Prompted on locking an empty design.
    */
   jawMaterial: null,
   /** Per-jaw Kennedy classification, recomputed each time the dialog opens.
@@ -186,7 +184,7 @@ async function refreshUiAfterHistoryRestore() {
     ]);
     catalog.renderComponentCatalog();
     locks.updateEditModeUI();
-  } catch (_) {}
+  } catch {}
   renderJaws();
 }
 
@@ -339,10 +337,8 @@ export function registerRender(fns) {
   if (fns.cloneArchTintDefs) cloneArchTintDefsImpl = fns.cloneArchTintDefs;
 }
 
-// The arch tint filters live in a shared <svg> outside the arch (annotationRender's
-// ensureArchTintDefs), so an arch serialized on its own carries no filter definitions and
-// every `filter: url(#…)` silently resolves to nothing — the jaw template and teeth come
-// out untinted, i.e. invisible. The screenshot/thumbnail path pastes this copy back in.
+// Tint filters live in a shared <svg> outside the arch, so a standalone serialized arch
+// resolves every `filter: url(#…)` to nothing and renders untinted. Paste this copy back.
 export function cloneArchTintDefs() {
   return cloneArchTintDefsImpl();
 }
@@ -356,9 +352,8 @@ export function renderJaws() {
   return renderJawsImpl();
 }
 
-// Reflect the case's denture-base material in the corner badge over the jaws.
-// Hidden until a material is chosen/loaded (null). Called from renderJaws, so it
-// stays fresh across placement, load, undo/redo and the material prompt.
+// Shows the denture-base material in the corner badge, hidden while null. Called from
+// renderJaws so it stays fresh across placement, load, undo/redo and the prompt.
 const JAW_MATERIAL_LABELS = { 0: "Metal", 2: "Full Acrylic" };
 export function updateJawMaterialBadge() {
   const badge = document.getElementById("jawMaterialBadge");
@@ -441,10 +436,8 @@ async function applyQuickPickSelection(tabId, componentId, options = {}) {
       }
     }
 
-    // Everything else defers to the catalog's click handler so each type gets its
-    // proper treatment (majors place parts on supported teeth, meshes join
-    // state.components, plates set up toggle suggestions). Selecting alone isn't
-    // enough — without a real placement the preview vanishes on the next click.
+    // Everything else defers to the catalog's click handler so each type is treated
+    // properly. Selecting alone isn't enough — the preview vanishes on the next click.
     const { handleDesignComponentSelect } = await import("./annotationCatalog.js");
     handleDesignComponentSelect(id);
   } catch (error) {
@@ -457,9 +450,8 @@ async function applyQuickPickSelection(tabId, componentId, options = {}) {
 }
 
 /**
- * Present-tooth quick picker: Rest / Bar / Recip / Clasp.
- * Touch → centered sheet with big tap targets; mouse → compact radial wheel at
- * the click point (the wheel's tiny labels are unusable with a finger).
+ * Present-tooth quick picker (Rest / Bar / Recip / Clasp). Touch gets a centred sheet;
+ * mouse gets the radial wheel, whose tiny labels are unusable with a finger.
  */
 export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
   closePresentToothRadialQuickPick();
@@ -483,9 +475,8 @@ export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
     { label: "BACK", menu: "main", pos: "bottom-right", icon: "../../back.png" },
   ];
 
-  // Mobile sheet: all COMPONENT_TABS categories (minus CASE NOTE form). Tap a
-  // category → its items → an item commits. Replaces the #componentTabs strip,
-  // hidden on touch (see 2Dannotation.css `@media (pointer: coarse)`).
+  // Mobile sheet: every COMPONENT_TABS category except the CASE NOTE form, drilling
+  // category -> items -> commit. Replaces the #componentTabs strip, hidden on touch.
   const sheetCategories = COMPONENT_TABS
     .filter((tab) => tab.kind !== "form")
     .map((tab) => ({
@@ -700,10 +691,8 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
       return;
     }
     for (const item of items) {
-      // Mesh icons are white silhouettes recolored with the violet mesh tint via CSS
-      // mask — except Mesh Flange, whose PNG is native full-color artwork (the pink
-      // acrylic flange). Masking it collapses the tile into a solid violet square, so
-      // render it as a plain <img>, matching the desktop catalog's `is-mesh-native`.
+      // Mesh icons are white silhouettes recoloured by CSS mask — except Mesh Flange, whose
+      // PNG is full-colour artwork that a mask collapses to a violet square.
       const tintMesh = isMeshComponent(item.id) && item.id !== "mesh-flange";
       grid.appendChild(
         buildTile(
@@ -893,11 +882,8 @@ function initializeCaseIds() {
   if (label) label.textContent = `Case: ${state.caseIntID ?? "Unknown"}`;
 }
 
-// Shared, memoized POST /case/get/:id. Reused by fetchCaseOwner and preview3D's
-// SET-SURVEY-ANGLE path (one request, not two). Started early in init() to overlap
-// module downloads. Resolves the detail object, or null on any failure.
-// `force` re-reads instead of returning the memoized copy — required before any
-// full-row PUT /case/:id write, which must not send stale/partial fields.
+// Shared memoized POST /case/get/:id, started early to overlap module downloads. `force`
+// re-reads, and is REQUIRED before any full-row PUT /case/:id.
 export function fetchCaseDetail({ force = false } = {}) {
   if (!force && state.__caseDetailPromise) return state.__caseDetailPromise;
   if (!state.caseIntID) return Promise.resolve(null);
@@ -987,10 +973,8 @@ async function fetchJawStruct(recordsPromise = null) {
     }
     setMessage("Loaded 2D design from server.", false);
   } else {
-    // Backend is authoritative. With no server design, don't keep the localStorage
-    // one — it lacks raw desktop fields (bar side, reciprocating flag, Pr Config,
-    // the 16x16 minor grid), so a Save would emit defaults for them. Reset to a
-    // clean arch, which encodes correctly from scratch.
+    // The backend is authoritative. A localStorage-only design lacks the raw desktop
+    // fields, so Save would emit defaults — reset to a clean arch instead.
     await resetJawStructDesignToBaseline();
     // Fresh case with no prior design — leave the material unset so locking the
     // empty arch prompts for it (annotationLocks.maybePromptJawMaterial).
@@ -1013,9 +997,8 @@ async function resetJawStructDesignToBaseline() {
   state.jawStructTail = {};
 }
 
-// Post the current 2D design (both jaws). Returns { upper, lower } per-jaw, or
-// { ok: false, reason } when it can't run (no case / not logged in). Endpoint
-// POST /jawstruct/l2 verified. Used by Save and the off-by-default autosave hook.
+// Posts both jaws to POST /jawstruct/l2, returning { upper, lower } or { ok:false, reason }
+// when there's no case or login. Used by Save and the off-by-default autosave hook.
 export async function postJawStructToServer() {
   if (!state.caseIntID) {
     console.warn("[2D-post] skipped — no caseIntID");
@@ -1047,9 +1030,8 @@ async function saveJawStructAutosave() {
 registerAutosaveHook(saveJawStructAutosave);
 
 // ---- Kennedy classification dialog ----------------------------------------
-// "Load Template Jaw" reports each jaw's Kennedy class, read from the case's jaw
-// struct as it stands on the arch — the design fetched on open plus any presence
-// edits since. Classification only: nothing is placed yet.
+// Reports each jaw's Kennedy class from the arch as it stands (design on open plus any
+// presence edits since). Classification only — nothing is placed.
 
 // Fill one row per jaw and cache the result on state for the session.
 function renderKennedyClassPanel(panel) {
@@ -1251,24 +1233,7 @@ function bindBackNavigationDialog(locks) {
     modal.setAttribute("aria-hidden", "true");
   };
 
-  // Always land on the MAIN case list. If opened from the case-list tab, refocus
-  // it and close this one (don't pile up editor tabs); otherwise navigate there.
-  const returnToCaseList = () => {
-    try {
-      if (
-        window.opener &&
-        !window.opener.closed &&
-        window.opener.location?.pathname?.includes("case_list")
-      ) {
-        window.opener.focus();
-        window.close();
-        return;
-      }
-    } catch {
-      // Cross-context opener.location access can throw; fall through to nav.
-    }
-    window.location.href = targetHref;
-  };
+  const returnToCaseList = () => goToCaseList(targetHref);
 
   const openModal = () => {
     modal.classList.remove("is-hidden");
@@ -1440,15 +1405,12 @@ function init() {
   bindPreviewPanelToggle();
   bindPanelSplitter();
 
-  // Start the network work now, before the feature modules download, so requests
-  // run concurrently with the imports (avoids a module-load → fetch waterfall).
-  // They only need state.caseIntID + the user. Apply/render still happen in the
-  // Promise.all .then() below — only the network start is hoisted.
+  // Start the network work before the feature modules download, so requests overlap the
+  // imports instead of waterfalling. Only the START is hoisted; apply/render still wait.
   fetchCaseDetail(); // shared /case/get — also reused by preview3D
   const loggedInUser = getLoggedInUser();
-  // Guests (shared-link, no login) still need the design loaded, else the arch
-  // renders empty. Fall back to VIEWER_UUID (the 3D viewer's read-only identity);
-  // Save stays gated on loggedInUser.uuid, so guests remain read-only.
+  // Guests still need the design or the arch renders empty, so fall back to VIEWER_UUID.
+  // Save stays gated on loggedInUser.uuid, keeping them read-only.
   const designUuid = loggedInUser?.uuid || VIEWER_UUID;
   const jawStructRecordsPromise =
     state.caseIntID && designUuid
@@ -1490,9 +1452,8 @@ function init() {
           catalog.renderComponentCatalog();
         }
       });
-      // Load the live 2D design (authoritative): replaces local state + re-baselines
-      // history, or resets to a clean arch if the backend has none. Fire-and-forget
-      // so first paint isn't blocked; consumes the request started up top in init().
+      // Authoritative load: replaces local state and re-baselines history, or resets to a
+      // clean arch. Fire-and-forget so first paint isn't blocked.
       fetchJawStruct(jawStructRecordsPromise);
       locks.loadPreviewImage();
       locks.syncDesignModeWithLocks(false);

@@ -1,24 +1,16 @@
-// Knowledge base for the in-app help assistant.
-//
-// Pure data — no DOM, no imports — so the matcher and its tests can load it in
-// any environment. Each topic answers one "how do I…" question about the app.
+// Knowledge base for the in-app help assistant. Pure data — no DOM, no imports —
+// so the matcher and its tests load it anywhere. One topic per "how do I…".
 //
 // Fields:
-//   id        stable slug, referenced by `related`
-//   title     short label, shown as the answer heading and on suggestion chips
-//   page      page the feature lives on (see PAGE_LABELS), or null when global
-//   selector  optional CSS selector for the "Show me" highlight. Point it at the
-//             control the topic is actually about, never at the button that
-//             opens the view containing it — that is what `reveal` is for
-//   reveal    optional selector for the control that opens the view `selector`
-//             lives in (the Create Case button, the ☰ case-actions toggle).
-//             "Show me" clicks it, waits for the target, then highlights the
-//             target. Only used when the target isn't already on screen
-//   keywords  words a user might type; weighted highest by the matcher
-//   phrases   whole-question forms; an exact containment match wins outright
-//   answer    one or two sentences of prose
-//   steps     optional ordered instructions
-//   related   ids offered as follow-up chips
+//   id/title/page  slug, answer heading, owning page (see PAGE_LABELS)
+//   selector       the control the topic is about, NEVER the button that opens
+//                  the view containing it — that is what `reveal` is for
+//   reveal         control that opens the view `selector` lives in; "Show me"
+//                  clicks it, waits, then highlights. Only when target is hidden
+//   keywords       words a user might type; weighted highest by the matcher
+//   phrases        whole-question forms; exact containment wins outright
+//   answer/steps   prose, plus optional ordered instructions
+//   related        ids offered as follow-up chips
 
 // Page ids → the label used in "Open <page>" buttons and greetings.
 export const PAGE_LABELS = {
@@ -47,9 +39,8 @@ export const PAGE_PATHS = {
   admin_case_list: "src/pages/admin/admin_case_list.html",
 };
 
-// The case-actions menu on the case list. Its items live in a dropdown that is
-// closed by default, so topics about them point at the item and name this as
-// their `reveal` — "Show me" opens the menu and rings the item itself.
+// The case-actions dropdown is closed by default, so topics about its items
+// point at the item and name this as their `reveal`.
 const CASE_MENU = ".cm-detail .dropdown-toggle";
 
 // The create-case view is a pair of panes hidden until Create Case is pressed,
