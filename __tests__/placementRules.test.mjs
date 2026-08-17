@@ -8,7 +8,7 @@
  */
 import { jest } from "@jest/globals";
 
-const state = { teeth: {}, selectedComponentId: null, designMode: false };
+const state = { teeth: {}, selectedComponentId: null, designMode: false, jawMaterial: null };
 jest.mock("../src/js/2D/2DAnnotation.js", () => ({
   state,
   setMessage: () => {},
@@ -32,6 +32,7 @@ import {
   COMPONENT_BY_ID,
   ensureMajorConnectorPlacementsOnSupportedTeethInJaws,
   isMajorConnectorComponent,
+  pruneInvalidMajorConnectorPlacementsInJaw,
 } from "../src/js/2D/components.js";
 import { TOOTH_ORDER } from "../src/js/2D/constants.js";
 import { switchMajorIn } from "./helpers/jawStructIO.mjs";
@@ -302,5 +303,163 @@ describe("a major connector is only offered where its span reaches", () => {
       syncToothComponentsFromPlacements(teeth["37"]);
       expect(toothSupportsMajorConnectorOverlay(teeth["37"], "37", "major-lower-lingual-bar", teeth)).toBe(true);
     });
+  });
+});
+
+/**
+ * Full acrylic (jawMaterial 2) changes which components the catalog offers and how they are
+ * tinted — NOT how a major connector is placed. It used to span 7-to-7 anchor-free, which
+ * put the horseshoe on 17/27 with no plate under them, and it skipped the plating sync so
+ * the anteriors it covered never got their plate-prox.
+ */
+describe("full acrylic places a major exactly as metal does", () => {
+  /** The reported case: plates on 16/26 only, 17/27 and the anteriors bare. */
+  function acrylicUpperArch() {
+    const teeth = {};
+    for (const id of TOOTH_ORDER.upper) teeth[id] = tooth([], { toothId: id });
+    for (const id of ["16", "26"]) teeth[id] = tooth(["plate-prox"], { toothId: id });
+    state.teeth = teeth;
+    state.jawMaterial = 2;
+    return teeth;
+  }
+
+  const upperWith = (teeth, componentId) =>
+    TOOTH_ORDER.upper.filter((id) => teeth[id].componentPlacements.some((e) => e.componentId === componentId));
+
+  afterEach(() => {
+    state.jawMaterial = null;
+  });
+
+  it("stops the span at the anchor: no connector on the plateless 17/27", () => {
+    const teeth = acrylicUpperArch();
+    switchMajorIn(teeth, "major-upper-horseshoe", "upper");
+    expect(upperWith(teeth, "major-upper-horseshoe").sort()).toEqual(
+      ["11", "12", "13", "14", "15", "16", "21", "22", "23", "24", "25", "26"]
+    );
+    for (const id of ["17", "18", "27", "28"]) {
+      expect(toothSupportsMajorConnectorOverlay(teeth[id], id, "major-upper-horseshoe", teeth)).toBe(false);
+    }
+  });
+
+  it("auto-fills plate-prox on the anteriors it covers", () => {
+    const teeth = acrylicUpperArch();
+    switchMajorIn(teeth, "major-upper-horseshoe", "upper");
+    expect(upperWith(teeth, "plate-prox").sort()).toEqual(
+      ["11", "12", "13", "14", "15", "16", "21", "22", "23", "24", "25", "26"]
+    );
+  });
+
+  it("the placed span survives the render prune", () => {
+    const teeth = acrylicUpperArch();
+    switchMajorIn(teeth, "major-upper-horseshoe", "upper");
+    const before = upperWith(teeth, "major-upper-horseshoe");
+    pruneInvalidMajorConnectorPlacementsInJaw(teeth, COMPONENT_BY_ID, "upper");
+    expect(upperWith(teeth, "major-upper-horseshoe")).toEqual(before);
+  });
+});
+
+/**
+ * A major connector is a continuous span, so reciprocation added beside a run END pulls
+ * that tooth in: a connector stopping at 16 reaches 17 the moment 17 is plated, instead of
+ * making the dentist re-pick the connector to redraw the span.
+ */
+describe("a run grows onto a tooth that gains reciprocation", () => {
+  /** Plates on 16/26, everything else bare — the connector stops at 16 and 26. */
+  function archEndingAtSixes() {
+    const teeth = {};
+    for (const id of TOOTH_ORDER.upper) teeth[id] = tooth([], { toothId: id });
+    for (const id of ["16", "26"]) teeth[id] = tooth(["plate-prox"], { toothId: id });
+    state.teeth = teeth;
+    switchMajorIn(teeth, "major-upper-horseshoe", "upper");
+    return teeth;
+  }
+
+  const hasMajorOn = (teeth, id) =>
+    teeth[id].componentPlacements.some((e) => e.componentId === "major-upper-horseshoe");
+
+  it("plating 17 next to a run ending at 16 extends the connector to 17", () => {
+    const teeth = archEndingAtSixes();
+    expect(hasMajorOn(teeth, "17")).toBe(false);
+
+    place("plate-prox", "17");
+    expect(hasMajorOn(teeth, "17")).toBe(true);
+  });
+
+  it("a reciprocating clasp does it too", () => {
+    const teeth = archEndingAtSixes();
+    place("reciprocating-clasp", "17", "distal_lingual");
+    expect(hasMajorOn(teeth, "17")).toBe(true);
+  });
+
+  it("a retainer clasp does it through the plate it auto-adds", () => {
+    const teeth = archEndingAtSixes();
+    place("retainer-clasp", "17", "distal_buccal");
+    expect(teeth["17"].components).toContain("plate-prox");
+    expect(hasMajorOn(teeth, "17")).toBe(true);
+  });
+
+  it("takes the anchored teeth beyond it in the same move", () => {
+    const teeth = archEndingAtSixes();
+    addPlacement(teeth["18"], "plate-prox", null);
+    syncToothComponentsFromPlacements(teeth["18"]);
+
+    place("plate-prox", "17");
+    expect([hasMajorOn(teeth, "17"), hasMajorOn(teeth, "18")]).toEqual([true, true]);
+  });
+
+  it("does not jump a bare tooth: plating 18 alone leaves 17 and 18 out", () => {
+    const teeth = archEndingAtSixes();
+    place("plate-prox", "18");
+    expect([hasMajorOn(teeth, "17"), hasMajorOn(teeth, "18")]).toEqual([false, false]);
+  });
+
+  it("leaves the other arch alone", () => {
+    const teeth = archEndingAtSixes();
+    for (const id of TOOTH_ORDER.lower) teeth[id] = tooth([], { toothId: id });
+    place("plate-prox", "17");
+    expect(TOOTH_ORDER.lower.some((id) => teeth[id].componentPlacements.length)).toBe(false);
+  });
+});
+
+/**
+ * Mesh is the missing tooth's anchor, so a meshed saddle beside a run pulls the connector
+ * over exactly as a plate does on a present tooth.
+ */
+describe("a run grows onto a meshed saddle too", () => {
+  /** Plates on 16/26 anchor the run; 17 is MISSING and bare, so the run stops at 16. */
+  function archWithMissingSeven() {
+    const teeth = {};
+    for (const id of TOOTH_ORDER.upper) teeth[id] = tooth([], { toothId: id });
+    for (const id of ["16", "26"]) teeth[id] = tooth(["plate-prox"], { toothId: id });
+    teeth["17"] = tooth([], { isPresent: false, toothId: "17" });
+    state.teeth = teeth;
+    switchMajorIn(teeth, "major-upper-horseshoe", "upper");
+    return teeth;
+  }
+
+  const hasMajorOn = (teeth, id) =>
+    teeth[id].componentPlacements.some((e) => e.componentId === "major-upper-horseshoe");
+
+  it("meshing the missing 17 extends the connector onto it", () => {
+    const teeth = archWithMissingSeven();
+    expect(hasMajorOn(teeth, "17")).toBe(false);
+
+    place("mesh-hole", "17");
+    expect(teeth["17"].components).toContain("mesh-hole");
+    expect(hasMajorOn(teeth, "17")).toBe(true);
+  });
+
+  it("a bare missing tooth still holds the run back", () => {
+    const teeth = archWithMissingSeven();
+    expect(hasMajorOn(teeth, "17")).toBe(false);
+    expect(hasMajorOn(teeth, "18")).toBe(false);
+  });
+
+  it("carries on to an already-meshed 18 in the same move", () => {
+    const teeth = archWithMissingSeven();
+    teeth["18"] = tooth(["mesh-hole"], { isPresent: false, toothId: "18" });
+
+    place("mesh-hole", "17");
+    expect([hasMajorOn(teeth, "17"), hasMajorOn(teeth, "18")]).toEqual([true, true]);
   });
 });

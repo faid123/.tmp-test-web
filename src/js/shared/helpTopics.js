@@ -667,15 +667,17 @@ export const HELP_TOPICS = [
   },
   {
     id: "template-jaw",
-    title: "Check the Kennedy class, or draw from scratch",
+    title: "Propose a design, or draw from scratch",
     page: "annotation_2d",
     selector: "#loadProposalBtn",
     keywords: [
       "kennedy",
       "class",
       "classification",
-      "template",
+      "connector",
       "proposal",
+      "propose",
+      "template",
       "load",
       "scratch",
       "draw",
@@ -683,9 +685,11 @@ export const HELP_TOPICS = [
     ],
     phrases: ["what kennedy class is this case", "how do i draw from scratch"],
     answer:
-      "Load Template Jaw reads the teeth you have marked missing and reports each jaw's Kennedy class; Draw from Scratch clears the arches so you build the case up yourself.",
+      "Load Template Jaw reads the teeth you have marked missing, works out each jaw's Kennedy class, and proposes the major connector that class calls for. You see a preview of both arches first and nothing is placed until you press Place Design. Draw from Scratch clears the arches so you build the case up yourself.",
     steps: [
-      "Select Load Template Jaw to see the Kennedy class of each jaw, or Draw from Scratch to start empty.",
+      "Select Load Template Jaw to preview the proposed design, then Place Design to accept it.",
+      "Undo reverses it if you change your mind.",
+      "Or pick Draw from Scratch to start empty.",
     ],
     related: ["select-teeth", "clear-arch"],
   },

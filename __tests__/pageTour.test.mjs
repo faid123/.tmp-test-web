@@ -462,7 +462,7 @@ describe("the 2D design's Components step", () => {
     const titles = await walkTitles("annotation_2d");
 
     expect(titles).toContain("Clear an arch");
-    expect(titles).toContain("Check the Kennedy class, or start from scratch");
+    expect(titles).toContain("Propose a design, or start from scratch");
     expect(titles.indexOf("Mark the teeth")).toBeLessThan(titles.indexOf("Lock the arches"));
     expect(titles.indexOf("Lock the arches")).toBeLessThan(titles.indexOf("The Components panel"));
   });

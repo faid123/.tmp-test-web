@@ -882,6 +882,70 @@ function placeMajorConnectorOnce(tooth, majorComponentId) {
   }
 }
 
+/** Whether `toothId` may carry this major at all: it needs connector art, must not be one
+ *  of the major's excluded teeth, and the palatal bar only ever sits on its own segments. */
+function canToothCarryMajorConnector(majorComponentId, toothId, jawKey) {
+  if (isMajorConnectorToothExcluded(majorComponentId, toothId)) {
+    return false;
+  }
+  if (
+    String(majorComponentId) === PALATAL_BAR_MAJOR_COMPONENT_ID &&
+    !PALATAL_BAR_CONNECTOR_TOOTH_IDS.has(String(toothId))
+  ) {
+    return false;
+  }
+  return Boolean(getMajorConnectorAssetReference(toothId, jawKey));
+}
+
+/**
+ * A tooth that gains an anchor beside a connector run joins it: a major ending at 16 reaches
+ * 17 once the dentist plates 17, and reaches a meshed saddle the same way — the tooth the
+ * span walk would have started from had the anchor been there first. Growth repeats until it
+ * stops, so a run also takes the anchored teeth beyond the one just placed.
+ *
+ * Placement-time only. The renderer must NEVER re-derive this, or removing a run's end
+ * tooth (the one removal the UI allows) would be undone on the next frame.
+ */
+export function extendMajorConnectorToAnchoredNeighboursInJaw(teeth, componentById, jawKey) {
+  const order = TOOTH_ORDER && Array.isArray(TOOTH_ORDER[jawKey]) ? TOOTH_ORDER[jawKey] : null;
+  if (!teeth || typeof teeth !== "object" || !order) {
+    return;
+  }
+
+  const majorIdOn = (toothId) => {
+    const entry = (teeth[toothId]?.componentPlacements || []).find((e) =>
+      isMajorConnectorComponent(e.componentId)
+    );
+    return entry ? String(entry.componentId) : null;
+  };
+  const majorByToothId = new Map(order.map((toothId) => [toothId, majorIdOn(toothId)]));
+
+  // Each pass can only place on a tooth next to the run as it stood, so a run that has to
+  // grow several teeth needs several passes. Every pass but the last places at least one.
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (let i = 0; i < order.length; i += 1) {
+      const toothId = order[i];
+      const tooth = teeth[toothId];
+      if (!tooth || majorByToothId.get(toothId)) {
+        continue;
+      }
+      // Present via plate/clasp, missing via mesh — the same anchor test the span walk uses.
+      if (!toothAnchorsMajorConnector(tooth, componentById)) {
+        continue;
+      }
+      const majorComponentId = majorByToothId.get(order[i - 1]) || majorByToothId.get(order[i + 1]);
+      if (!majorComponentId || !canToothCarryMajorConnector(majorComponentId, toothId, jawKey)) {
+        continue;
+      }
+      placeMajorConnectorOnce(tooth, majorComponentId);
+      majorByToothId.set(toothId, majorComponentId);
+      grew = true;
+    }
+  }
+}
+
 /** Per-tooth placement for posterior-only majors (bar/strap): place on every eligible
  *  tooth that already anchors it (mesh if missing, plate if present). */
 function placeMajorConnectorPerTooth(teeth, majorComponentId, componentById, jawKey) {
@@ -983,13 +1047,7 @@ export function placeMajorConnectorOnExactTeeth(
  * Switch jaws to `majorComponentId`, keeping the outgoing coverage. The span is snapshotted
  * BEFORE anything is cleared, or a plate -> bar -> plate round trip becomes unplaceable.
  */
-export function switchMajorConnectorInJaws(
-  teeth,
-  majorComponentId,
-  componentById,
-  jawKeys,
-  options = {}
-) {
+export function switchMajorConnectorInJaws(teeth, majorComponentId, componentById, jawKeys) {
   if (!teeth || !Array.isArray(jawKeys)) return;
 
   const previousSpanByJaw = {};
@@ -1017,8 +1075,7 @@ export function switchMajorConnectorInJaws(
     teeth,
     majorComponentId,
     componentById,
-    jawKeys,
-    options
+    jawKeys
   );
 
   // Re-cover whatever the outgoing connector reached but the anchor scan missed. The new
@@ -1047,35 +1104,15 @@ export function ensureMajorConnectorPlacementsOnSupportedTeeth(teeth, majorCompo
   );
 }
 
-// Terminal third molars — excluded so a full-acrylic span runs "7 to 7".
-const TERMINAL_THIRD_MOLAR_IDS = Object.freeze(new Set(["18", "28", "38", "48"]));
-
 /**
- * Full-acrylic span: the base runs 7-to-7 regardless of anchors and without the metal
- * framework's plate/mesh stamping. Third molars are excluded. Used when jawMaterial === 2.
- */
-function fillMajorConnectorFullArchSpan(teeth, majorComponentId, jawKey) {
-  const order = TOOTH_ORDER && Array.isArray(TOOTH_ORDER[jawKey]) ? TOOTH_ORDER[jawKey] : [];
-  for (const toothId of order) {
-    if (TERMINAL_THIRD_MOLAR_IDS.has(toothId)) continue; // keep the span 7-to-7
-    if (!getMajorConnectorAssetReference(toothId, jawKey)) continue;
-    if (isMajorConnectorToothExcluded(majorComponentId, toothId)) continue;
-    const tooth = teeth[toothId];
-    if (!tooth) continue;
-    placeMajorConnectorOnce(tooth, majorComponentId);
-  }
-}
-
-/**
- * Jaw-scoped major auto-placement. `options.fullAcrylic` makes midline-reaching majors
- * span the full 7-to-7 arch, anchor-independent, for an all-acrylic base.
+ * Jaw-scoped major auto-placement. The denture base material makes no difference here: a
+ * full-acrylic major is anchored and spans exactly like a metal one.
  */
 export function ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
   teeth,
   majorComponentId,
   componentById,
-  jawKeys,
-  options = {}
+  jawKeys
 ) {
   if (
     !majorComponentId ||
@@ -1086,18 +1123,14 @@ export function ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
     return;
   }
 
-  const fullAcrylic = options.fullAcrylic === true;
-
   // Midline-reaching majors fill one continuous run including bare anteriors, as the
-  // desktop does; bar/strap stay per-tooth, and full-acrylic spans 7-to-7 regardless.
+  // desktop does; bar/strap stay per-tooth.
   const runsToMidline = majorConnectorRunsToMidline(majorComponentId);
   for (const jawKey of jawKeys) {
     if (jawKey !== "upper" && jawKey !== "lower") {
       continue;
     }
-    if (fullAcrylic && runsToMidline) {
-      fillMajorConnectorFullArchSpan(teeth, majorComponentId, jawKey);
-    } else if (runsToMidline) {
+    if (runsToMidline) {
       fillMajorConnectorSpanInArch(teeth, majorComponentId, componentById, jawKey);
     } else {
       placeMajorConnectorPerTooth(teeth, majorComponentId, componentById, jawKey);

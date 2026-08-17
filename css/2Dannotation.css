@@ -1902,7 +1902,9 @@ button.upload3d-row {
 
 .load-template-panel {
   position: relative;
-  width: min(460px, calc(100vw - 32px));
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
   background: #fff;
   border-radius: 12px;
   border: 1px solid #d7dce4;
@@ -1927,53 +1929,62 @@ button.upload3d-row {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 10px;
 }
 
 .kennedy-class-row {
-  display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
-  grid-template-areas:
-    "jaw label"
-    "jaw detail";
-  gap: 2px 12px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   padding: 12px 14px;
   border: 1px solid #dde3ec;
   border-radius: 10px;
   background: #f7f9fc;
 }
 
-.kennedy-class-jaw {
-  grid-area: jaw;
-  font-size: 0.78rem;
+/* Per-jaw opt-in: Place Design only touches the arches left checked. */
+.kennedy-jaw-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #6b7787;
+  color: #1d2b38;
+  cursor: pointer;
 }
 
-.kennedy-class-label {
-  grid-area: label;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #142434;
+.kennedy-jaw-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--rose-500);
+  cursor: pointer;
 }
 
-/* Dentate / edentulous arches: Kennedy gives them no class, so tone the label down. */
-.kennedy-class-row.is-unclassified .kennedy-class-label {
-  font-weight: 600;
-  color: #6b7787;
+.kennedy-class-row.is-unclassified .kennedy-jaw-toggle {
+  color: #96a0ad;
+  cursor: not-allowed;
 }
 
-.kennedy-class-detail {
-  grid-area: detail;
-  font-size: 0.84rem;
-  color: #4a5663;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
+.kennedy-class-row.is-unclassified .kennedy-jaw-toggle input {
+  cursor: not-allowed;
+}
+
+/* Arch render of the proposal, captured before it is placed for real. */
+.kennedy-preview-img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border: 1px solid #e3e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.kennedy-preview-img:not([src]) {
+  display: none;
 }
 
 .load-template-actions {

@@ -28,7 +28,10 @@ import {
   openRemoveComponentPicker,
 } from "./2DAnnotation.js";
 import { renderComponentCatalog } from "./annotationCatalog.js";
-import { placeSelectedComponentOnTooth } from "./annotationPlacement.js";
+import {
+  extendMajorConnectorsInAllJaws,
+  placeSelectedComponentOnTooth,
+} from "./annotationPlacement.js";
 import {
   getToothPlacement,
   toggleToothPresence,
@@ -661,4 +664,7 @@ registerMeshAnnotationEnv(() => ({
   redrawJaws: renderJaws,
   redrawJaw: renderJaw,
   placeSelectedOnTooth: placeSelectedComponentOnTooth,
+  // Bulk mesh writes straight to the teeth, so it has to ask for the connector growth the
+  // placement engine does on its own.
+  extendMajorConnectors: extendMajorConnectorsInAllJaws,
 }));

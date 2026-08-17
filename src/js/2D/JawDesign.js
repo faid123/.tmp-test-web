@@ -15,7 +15,7 @@ const isThirdMolarToothId = (fdi) => Number(String(fdi).slice(1)) === THIRD_MOLA
 const isToothPresent = (teeth, fdi) => Boolean(teeth?.[fdi]?.isPresent);
 
 /** Patient's side, from the FDI quadrant (upper 1 / lower 4 are the right). */
-function sideOfToothId(fdi) {
+export function sideOfToothId(fdi) {
   const quadrant = Number(String(fdi).charAt(0));
   return quadrant === 1 || quadrant === 4 ? "right" : "left";
 }

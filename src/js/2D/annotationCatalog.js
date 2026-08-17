@@ -398,16 +398,12 @@ export function handleDesignComponentSelect(componentId) {
       ensurePalatalBarPlacementsOnConnectorTeeth(state.teeth, COMPONENT_BY_ID);
       removeMajorPlacementsFromPalatalBarExcludedUpperTeeth(state.teeth);
     } else {
-      switchMajorConnectorInJaws(state.teeth, componentId, COMPONENT_BY_ID, jawKeys, {
-        fullAcrylic: isFullAcrylic(),
-      });
+      switchMajorConnectorInJaws(state.teeth, componentId, COMPONENT_BY_ID, jawKeys);
     }
 
     // Keeps plate-prox in step: plate/strap/horseshoe plate what they cover, a bar plates
-    // none. Skipped for full-acrylic, where the 7-to-7 major span IS the base.
-    if (!isFullAcrylic()) {
-      syncReciprocatingPlatesToMajorConnector(state.teeth, componentId, jawKeys);
-    }
+    // none. Full acrylic plates the same way — the material changes the tint, not the rule.
+    syncReciprocatingPlatesToMajorConnector(state.teeth, componentId, jawKeys);
 
     forEachTooth((toothId) => {
       const tooth = state.teeth[toothId];

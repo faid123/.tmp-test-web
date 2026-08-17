@@ -519,6 +519,7 @@ export {
   ensureMajorConnectorPlacementsOnSupportedTeeth,
   ensureMajorConnectorPlacementsOnSupportedTeethInJaws,
   ensurePalatalBarPlacementsOnConnectorTeeth,
+  extendMajorConnectorToAnchoredNeighboursInJaw,
   pruneInvalidMajorConnectorPlacementsInJaw,
   removeMajorPlacementsFromPalatalBarExcludedUpperTeeth,
   replaceUpperPalatalBarPlacementsWithPalatalHole,

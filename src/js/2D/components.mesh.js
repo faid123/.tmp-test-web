@@ -556,6 +556,8 @@ export function handleMeshCatalogDoubleClickApplyAll(env, componentId) {
   // that has no mesh yet (18/28/38/48 are excluded by ensureMesh…MissingTeeth).
   migrateAllMeshPlacementsToMeshId(env.state.teeth, componentId, env.componentById);
   ensureMeshPlacementsOnMissingTeeth(env.state.teeth, componentId, env.componentById);
+  // Every saddle just became an anchor, so any connector run beside one grows onto it.
+  env.extendMajorConnectors?.();
   env.state.selectedComponentId = componentId;
   env.state.components = env.state.components.filter((id) => !isMeshComponent(id));
   if (!env.state.components.includes(componentId)) {

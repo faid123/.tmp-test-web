@@ -11,13 +11,15 @@ import {
   COMPONENT_BY_ID,
   COMPONENT_CATALOG,
   COMPONENT_TABS,
+  getDefaultMeshIdForDesignMode,
   isMeshComponent,
   isPlateComponentId,
+  meshSelectionContextFromState,
 } from "./components.js";
 import { fetchJawStruct as apiFetchJawStruct, saveJawStructFromState } from "./jawStructApi.js";
 import { decodeJawStructResponse, resolveJawStructDesign } from "./jawStructCodec.js";
 import { applyJawStructDesign } from "./jawStructApply.js";
-import { classifyArch, describeArchClassification } from "./kennedy.js";
+import { applyDesignProposal, buildDesignProposal } from "./JawDesignProposal.js";
 import { logApi } from "../shared/apiLog.js";
 import { toast, flashToast } from "../shared/toast.js";
 import { VIEWER_UUID } from "../shared/config.js";
@@ -1029,54 +1031,185 @@ async function saveJawStructAutosave() {
 }
 registerAutosaveHook(saveJawStructAutosave);
 
-// ---- Kennedy classification dialog ----------------------------------------
-// Reports each jaw's Kennedy class from the arch as it stands (design on open plus any
-// presence edits since). Classification only — nothing is placed.
+// ---- Kennedy design proposal ----------------------------------------------
+// Classifies each arch from the jaw struct as it stands (design on open plus any presence
+// edits since), picks the major connector its Kennedy class calls for, and previews the
+// placed result. Nothing lands on the arch until the user confirms.
 
-// Fill one row per jaw and cache the result on state for the session.
-function renderKennedyClassPanel(panel) {
+// Restore point for the preview: the proposal is applied for real to render the thumbnails,
+// then rolled back so the arch behind the dialog is untouched until Place Design.
+function snapshotDesignState() {
+  return {
+    teeth: JSON.parse(JSON.stringify(state.teeth)),
+    archOverlayPalatalHoleActive: state.archOverlayPalatalHoleActive,
+    hideLowerPlateVisuals: state.hideLowerPlateVisuals,
+  };
+}
+
+function restoreDesignState(snapshot) {
+  state.teeth = snapshot.teeth;
+  state.archOverlayPalatalHoleActive = snapshot.archOverlayPalatalHoleActive;
+  state.hideLowerPlateVisuals = snapshot.hideLowerPlateVisuals;
+}
+
+// Apply the proposal to the live arch. Deterministic from tooth presence + material, so
+// the preview pass and the confirmed pass produce the same design. Each render flag is
+// adopted only when its own jaw was in the proposal — a lower-only apply must not clear
+// an overlay the upper arch is still using.
+function applyKennedyProposal(proposal) {
+  const flags = applyDesignProposal(state.teeth, proposal);
+  if (proposal.jaws.upper) state.archOverlayPalatalHoleActive = flags.archOverlayPalatalHoleActive;
+  if (proposal.jaws.lower) state.hideLowerPlateVisuals = flags.hideLowerPlateVisuals;
+}
+
+function buildCurrentProposal() {
+  return buildDesignProposal(state.teeth, {
+    material: state.jawMaterial,
+    meshId: getDefaultMeshIdForDesignMode(meshSelectionContextFromState(state), COMPONENT_BY_ID),
+  });
+}
+
+// A preview per jaw, each with its own checkbox. An arch Kennedy gives no class has
+// nothing to place, so its row is disabled rather than merely unchecked.
+function renderKennedyProposalPanel(panel, proposal, thumbnails) {
   for (const row of panel.querySelectorAll(".kennedy-class-row")) {
     const jaw = row.dataset.jaw;
-    const classification = classifyArch(state.teeth, jaw);
+    const { classification, connector } = proposal.jaws[jaw];
     state.kennedy[jaw] = classification;
 
-    const { label, detail } = describeArchClassification(classification);
-    row.classList.toggle("is-unclassified", classification.classNumber == null);
-    row.querySelector(".kennedy-class-label").textContent = label;
-    row.querySelector(".kennedy-class-detail").textContent = detail;
+    row.classList.toggle("is-unclassified", !connector);
+    const checkbox = row.querySelector(".kennedy-jaw-checkbox");
+    checkbox.disabled = !connector;
+    checkbox.checked = Boolean(connector);
+
+    const img = row.querySelector(".kennedy-preview-img");
+    const src = connector ? thumbnails?.[jaw] : null;
+    if (src) img.setAttribute("src", src);
+    else img.removeAttribute("src");
   }
 }
 
-// Wire the "Load Template Jaw" button to the classification modal (markup in the HTML).
-function bindKennedyClassDialog() {
+// Render the proposal, photograph both arches, then roll the arch back — the dialog shows
+// what the design WOULD look like while the live arch stays as the user left it.
+async function captureProposalThumbnails(proposal) {
+  const snapshot = snapshotDesignState();
+  try {
+    applyKennedyProposal(proposal);
+    renderJaws();
+    const locks = await import("./annotationLocks.js");
+    return await locks.captureArchThumbnails();
+  } catch (err) {
+    console.warn("[kennedyProposal] preview capture failed", err);
+    return null;
+  } finally {
+    restoreDesignState(snapshot);
+    renderJaws();
+  }
+}
+
+// Wire the "Load Template Jaw" button to the proposal modal (markup in the HTML).
+function bindKennedyProposalDialog() {
   const btn = document.getElementById("loadProposalBtn");
   const modal = document.getElementById("loadTemplateJawModal");
   const backdrop = modal?.querySelector(".load-template-backdrop");
   const panel = document.getElementById("kennedyClassPanel");
-  const closeBtn = document.getElementById("loadTemplateCancelBtn");
+  const cancelBtn = document.getElementById("loadTemplateCancelBtn");
+  const applyBtn = document.getElementById("kennedyApplyBtn");
 
   if (!btn) return;
   // Modal markup missing — keep the button honest rather than silently dead.
-  if (!modal || !panel || !closeBtn) {
+  if (!modal || !panel || !cancelBtn || !applyBtn) {
     btn.addEventListener("click", () =>
-      setMessage("Kennedy classification is unavailable on this page.", true)
+      setMessage("The design proposal is unavailable on this page.", true)
     );
     return;
   }
 
-  const openModal = () => {
-    // Recomputed on every open so it tracks presence edits made since the last one.
-    renderKennedyClassPanel(panel);
-    modal.classList.remove("is-hidden");
-    modal.setAttribute("aria-hidden", "false");
+  /** The proposal currently on screen, re-applied on confirm for the checked jaws only. */
+  let pendingProposal = null;
+
+  /** The jaws the user left ticked, narrowed to the ones that have something to place. */
+  const selectedJaws = () =>
+    [...panel.querySelectorAll(".kennedy-jaw-checkbox")]
+      .filter((box) => box.checked && !box.disabled)
+      .map((box) => box.dataset.jaw);
+
+  const syncApplyButton = () => {
+    applyBtn.disabled = selectedJaws().length === 0;
   };
+
   const closeModal = () => {
     modal.classList.add("is-hidden");
     modal.setAttribute("aria-hidden", "true");
+    pendingProposal = null;
   };
 
-  btn.addEventListener("click", openModal);
-  closeBtn.addEventListener("click", closeModal);
+  const openModal = async () => {
+    // Rebuilt on every open so it tracks presence edits made since the last one.
+    pendingProposal = buildCurrentProposal();
+    const placeable = Object.values(pendingProposal.jaws).some((plan) => plan.connector);
+
+    const thumbnails = placeable ? await captureProposalThumbnails(pendingProposal) : null;
+    renderKennedyProposalPanel(panel, pendingProposal, thumbnails);
+    syncApplyButton();
+    modal.classList.remove("is-hidden");
+    modal.setAttribute("aria-hidden", "false");
+  };
+
+  const applyProposal = async () => {
+    const jaws = selectedJaws();
+    if (!pendingProposal || !jaws.length) return;
+    const historyBefore = getHistoryStateSignature();
+
+    // Narrow the proposal to the ticked arches; the other one is left untouched, mesh
+    // and all, since applyDesignProposal only ever walks the jaws it is handed.
+    applyKennedyProposal({
+      ...pendingProposal,
+      jaws: Object.fromEntries(jaws.map((jaw) => [jaw, pendingProposal.jaws[jaw]])),
+    });
+
+    // A new connector changes what the catalog offers and what the edit UI shows.
+    try {
+      const [catalog, locks] = await Promise.all([
+        import("./annotationCatalog.js"),
+        import("./annotationLocks.js"),
+      ]);
+      catalog.renderComponentCatalog();
+      locks.updateEditModeUI();
+    } catch (_) {}
+    renderJaws();
+
+    const placed = jaws
+      .map((jaw) => `${titleCase(jaw)}: ${pendingProposal.jaws[jaw].connector.label}`)
+      .join(", ");
+    closeModal();
+    setMessage(`Placed the proposed design (${placed}).`, false);
+    toast.success("Design placed");
+    recordHistoryIfChanged(historyBefore);
+  };
+
+  panel.addEventListener("change", (event) => {
+    if (event.target.classList.contains("kennedy-jaw-checkbox")) syncApplyButton();
+  });
+
+  btn.addEventListener("click", () => {
+    openModal().catch((err) => {
+      console.error("[kennedyProposal] could not build the proposal", err);
+      setMessage("Could not build a design proposal for this case.", true);
+    });
+  });
+  applyBtn.addEventListener("click", () => {
+    applyBtn.disabled = true;
+    applyProposal()
+      .catch((err) => {
+        console.error("[kennedyProposal] apply failed", err);
+        setMessage("Could not place the proposed design.", true);
+      })
+      .finally(() => {
+        applyBtn.disabled = false;
+      });
+  });
+  cancelBtn.addEventListener("click", closeModal);
   backdrop?.addEventListener("click", closeModal);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !modal.classList.contains("is-hidden")) closeModal();
@@ -1382,7 +1515,7 @@ function initAnnFooter() {
   });
 
   // Load Template Jaw: upload one or more Jaw Struct .txt files and apply them.
-  bindKennedyClassDialog();
+  bindKennedyProposalDialog();
 
   initSidebar();
 

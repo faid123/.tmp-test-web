@@ -1,12 +1,12 @@
 /**
- * Kennedy classification of an arch from tooth presence. kennedy.js is pure (constants
+ * Kennedy classification of an arch from tooth presence. JawDesign.js is pure (constants
  * only), so this suite needs no module mocks — just presence maps from freshTeeth.
  */
 import {
   classifyArch,
   describeArchClassification,
   getEdentulousSpans,
-} from "../src/js/2D/kennedy.js";
+} from "../src/js/2D/JawDesign.js";
 import { TOOTH_ORDER } from "../src/js/2D/constants.js";
 import { freshTeeth } from "./helpers/teeth.mjs";
 

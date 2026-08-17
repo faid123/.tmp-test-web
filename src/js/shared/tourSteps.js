@@ -310,8 +310,8 @@ export const PAGE_TOURS = {
       topic: "clear-arch",
     },
     {
-      title: "Check the Kennedy class, or start from scratch",
-      text: "Load Template Jaw reads the missing teeth on each arch and tells you its Kennedy class. Draw from Scratch clears the arch so you build the design up yourself. Both sit beside the Clear buttons and, like them, only appear in design mode.",
+      title: "Propose a design, or start from scratch",
+      text: "Load Template Jaw reads the missing teeth on each arch, works out its Kennedy class, and proposes the major connector that class calls for — you see a preview before anything is placed. Draw from Scratch clears the arch so you build the design up yourself. Both sit beside the Clear buttons and, like them, only appear in design mode.",
       selector: "#loadProposalBtn",
       reveal: "#jawLockToggleBtn",
       optional: true,
