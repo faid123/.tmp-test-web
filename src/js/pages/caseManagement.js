@@ -2610,22 +2610,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       window.location.reload();
     });
 
-    // Reload on becoming visible (or bfcache restore) so edits from a Start Case
-    // tab appear unprompted. Throttled and seeded so tab-switching can't hammer it.
-    let lastAutoRefreshAt = Date.now();
-    const AUTO_REFRESH_MIN_INTERVAL_MS = 10000;
-    const maybeAutoRefresh = () => {
-      if (document.visibilityState !== "visible") return;
-      if (refreshInFlight) return;
-      if (Date.now() - lastAutoRefreshAt < AUTO_REFRESH_MIN_INTERVAL_MS) return;
-      lastAutoRefreshAt = Date.now();
-      refreshInFlight = true;
-      window.location.reload();
-    };
-    document.addEventListener("visibilitychange", maybeAutoRefresh);
-    window.addEventListener("pageshow", (e) => {
-      if (e.persisted) maybeAutoRefresh();
-    });
+    // No reload-on-becoming-visible: the camera and the file picker HIDE the page
+    // on Android, so returning with a photo fired it and wiped the open dialog
+    // along with the capture. The refresh button above is the only way in.
 
     // Wire every logout affordance (the user-chip dropdown item + the
     // mobile-only header logout button both carry class .logout).
