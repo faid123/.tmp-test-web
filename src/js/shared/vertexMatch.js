@@ -1,14 +1,7 @@
-// Nearest-vertex matching between two meshes of the same scan.
-//
-// Used to copy per-vertex data — the undercut heatmap — from a case jaw onto an uploaded
-// copy of that jaw. Matching is by POSITION, never by index: the uploaded file is usually a
-// different export of the same scan, so vertex counts can agree while the ordering doesn't
-// (case 2270 ships an OFF jaw and an STL slot that both weld to 181,755 vertices in different
-// orders). Copying by index there lands each value on an unrelated vertex, which paints as
-// speckle scattered over the mesh.
-//
-// Both position arrays must be in the SAME frame — pass world-space positions when the two
-// meshes carry different transforms.
+// Copies per-vertex data (the undercut heatmap) between two exports of one scan.
+// Matching is by POSITION, never index: counts can agree while ordering doesn't,
+// and copying by index then paints speckle over the mesh.
+// Both position arrays must be in the SAME frame — pass world space when they differ.
 
 export const NO_VERTEX_MATCH = 0xffffffff;
 
@@ -60,9 +53,8 @@ export function buildVertexGrid(positions, matchRadiusMm = DEFAULT_MATCH_RADIUS_
   return { positions, count, minX, minY, minZ, cell, nx, ny, nz, starts, items };
 }
 
-// Map every vertex in `positions` to its nearest vertex in `grid`, or NO_VERTEX_MATCH when
-// nothing is within the radius. Returns the map plus how many vertices found a match, which
-// is what tells a caller whether the two meshes are actually the same thing.
+// Maps every vertex in `positions` to its nearest in `grid`, else NO_VERTEX_MATCH.
+// The match count is what tells a caller whether the two meshes are the same thing.
 export function mapNearestVertices(positions, grid, matchRadiusMm = DEFAULT_MATCH_RADIUS_MM) {
   const count = Math.floor(positions.length / 3);
   if (!grid || !count) return null;

@@ -1,22 +1,12 @@
-// Password reset — the two backend calls and the rules around them.
+// Password reset, shared by login.js's "Forgot password" and changePassword.js —
+// same two stages, differing only in where the email comes from.
 //
-// One implementation shared by both entry points: the "Forgot password" view on
-// the login page (login.js) and the "Change Account Password" item in the app
-// sidebar (changePassword.js). Both run the same two stages, differing only in
-// where the email comes from — typed by a signed-out user, or read from the
-// session of a signed-in one.
-//
-//   1. POST /user/reqpwreset  { email }
-//        -> emails a numeric key; 404 when the email is unknown.
+//   1. POST /user/reqpwreset  { email } -> emails a key; 404 unknown email.
 //   2. POST /user/resetpw     { email, passwordKey, newPassword }
-//        -> sets the password; 403 timed_out/invalid_key, 404 key/email
-//           not found.
+//        -> 403 timed_out/invalid_key, 404 key/email not found.
 //
-// Both take the shared [{ machine_id }, { ...payload }] envelope and are
-// authenticated by machine id only — which is why stage 2 needs the emailed
-// key: possession of the mailbox is what proves the request is genuine. There
-// is no endpoint that verifies a current password, so a signed-in change goes
-// through the same key.
+// Both are authenticated by machine id only, which is why stage 2 needs the
+// emailed key: possession of the mailbox is what proves the request is genuine.
 
 import { logApi } from "./apiLog.js";
 import { API_BASE, MACHINE_ID } from "./api.js";
@@ -26,9 +16,8 @@ import { API_BASE, MACHINE_ID } from "./api.js";
 // enforces nothing, so this guard lives entirely on the client.
 export const MIN_PASSWORD_LENGTH = 8;
 
-// Score a password 1-4 (Weak/Fair/Good/Strong) from length + character
-// variety. A password under the minimum length is always Weak regardless of
-// variety; length >= 12 with 3+ character classes counts as Strong.
+// Scores 1-4 (Weak/Fair/Good/Strong) from length + character variety. Under the
+// minimum length is always Weak; >= 12 with 3+ classes is Strong.
 export function computePasswordStrength(pw) {
   if (!pw) return { score: 0, label: "" };
 
@@ -52,14 +41,8 @@ export function computePasswordStrength(pw) {
   return { score, label: labels[score] };
 }
 
-// Reject a new password that embeds the account's own identity — its username
-// or email (requirement 2.3.2(h): a password must not be, or contain, the
-// account/user ID). The match is case-insensitive and substring-based, so a
-// username of "faid" is caught anywhere inside "myFaid2024!". Blank identifiers
-// are ignored, letting each caller pass whatever it knows: a signed-out reset
-// only has the email, while a signed-in change and the admin form also have the
-// username. Accepts a single string or an array. Returns the matched identifier
-// (trimmed, original case) or null when the password contains none of them.
+// Rejects a password embedding its own username or email (2.3.2(h)), matched
+// case-insensitively as a substring. Blank identifiers are ignored.
 export function findIdentifierInPassword(password, identifiers = []) {
   const pw = String(password || "").toLowerCase();
   if (!pw) return null;
@@ -70,10 +53,8 @@ export function findIdentifierInPassword(password, identifiers = []) {
   return null;
 }
 
-// Validate the new-password pair before spending a network round-trip on it.
-// `identifiers` is the username/email the password must not contain (a string
-// or array; see findIdentifierInPassword). Returns null when the pair is
-// acceptable, otherwise the message to show.
+// Validates the pair before spending a round-trip. Returns null when acceptable,
+// otherwise the message to show; `identifiers` feeds findIdentifierInPassword.
 export function validateNewPassword(newPassword, confirmPassword, identifiers = []) {
   if (!newPassword) return "Please enter a new password.";
   if (newPassword.length < MIN_PASSWORD_LENGTH) {
@@ -92,9 +73,8 @@ export function describeRequestError(status) {
   return "Couldn't start the reset. Please try again later.";
 }
 
-// Turn a failed stage-2 response into something worth reading. The backend
-// returns 403 for both an expired and a wrong key, distinguishing them only by
-// `kind`, so prefer that when it's present.
+// The backend returns 403 for both an expired and a wrong key, distinguishing
+// them only by `kind`, so prefer that when present.
 export function describeResetError(status, kind = "") {
   switch (kind) {
     case "timed_out":

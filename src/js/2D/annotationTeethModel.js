@@ -1,5 +1,5 @@
 import { COMPONENT_BY_ID, isMeshComponent } from "./components.js";
-import { forEachTooth, STATUS_VALUES, TOOTH_POSITION_MAP, TOOTH_SCALE_BY_UNIT, TOOTH_SCALE_OVERRIDE } from "./constants.js";
+import { forEachTooth, STATUS_VALUES, TOOTH_POSITION_MAP, TOOTH_SCALE_BY_UNIT } from "./constants.js";
 import { state } from "./2DAnnotation.js";
 import { normalizeSurface } from "./toothUtils.js";
 export { normalizeSurface } from "./toothUtils.js";
@@ -98,10 +98,8 @@ export function hasPlacement(tooth, componentId, surface) {
   );
 }
 
-// A tooth's reciprocating element is a single slot (Reciprocating.Tooth Type):
-// a reciprocating clasp OR a proximal/mesh plate, never both. Enforced here (the
-// universal choke point) so compound clasp/bar assemblies that call addPlacement
-// directly are covered too.
+// Reciprocating.Tooth Type is ONE slot: a reciprocating clasp OR a plate, never both.
+// Enforced at this choke point so assemblies calling addPlacement directly are covered.
 const RECIPROCATING_SLOT_IDS = new Set(["reciprocating-clasp", "plate-prox", "plate-crossmesh"]);
 
 // Add one component placement on tooth.

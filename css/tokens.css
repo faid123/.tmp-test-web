@@ -40,7 +40,7 @@
   --panel: #ffffff;
   --ink: #0f172a;
   --ink-soft: #475569;
-  /* was #94a3b8 - 2.56:1 on --panel, failed WCAG AA */
+  /* Do not lighten: #94a3b8 was 2.56:1 on --panel and failed WCAG AA. */
   --muted: #64748b;
   --line: #e2e8f0;
   --line-soft: #f1f5f9;
@@ -49,9 +49,8 @@
   --primary: #3BAE95;
   --primary-soft: #d4f0e8;
   --primary-dark: #25735f;
-  /* Any surface carrying white text or a white glyph must use --primary-strong:
-     white on --primary is 2.74:1 and fails AA, white on --primary-strong is
-     5.68:1 and passes. Reserve --primary itself for fills, borders and accents. */
+  /* White text/glyphs need --primary-strong (5.68:1); white on --primary is
+     2.74:1 and fails AA. Reserve --primary for fills, borders and accents. */
   --primary-strong: #25735f;
   --primary-stronger: #1c5a4a; /* hover/active for --primary-strong surfaces */
 
@@ -86,8 +85,7 @@
   --ring: 0 0 0 3px rgba(59, 174, 149, 0.18);
 
   /* ---- stacking ----
-     Every z-index in the app should reference one of these. Bare numeric
-     z-index values reintroduce the ordering bugs these replace. */
+     Every z-index must reference one of these; bare numbers cause ordering bugs. */
   --z-base: 1;
   --z-dropdown: 100;
   --z-sticky: 200;

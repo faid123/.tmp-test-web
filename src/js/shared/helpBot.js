@@ -1,20 +1,11 @@
-// In-app help assistant — a slide-in panel that answers "how do I…" questions
-// about the app, links to the screen involved, and can point at the control it
-// is describing.
-//
-// Opened from the sidebar Help item (appSidebar.js), so it is available on
-// every page that carries #appSidebar. The panel, its markup and its stylesheet
-// are all created on first open — a page that never opens Help pays nothing.
-//
-// Answers come from `provider`, which defaults to the offline knowledge base in
-// helpMatcher.js. The contract is async so a server-backed provider can replace
-// it through setAnswerProvider() without any change here.
-//
-// A conversation lasts one open: dismissing the panel clears it, and nothing is
-// stored, so Help always starts at the page greeting.
+// Slide-in panel answering "how do I…", built on first open, answered by
+// `provider` (helpMatcher.js). A conversation lasts one open; nothing is stored.
 
 import { PAGE_LABELS, PAGE_PATHS, TOPIC_BY_ID } from "./helpTopics.js";
 import { localProvider, relatedTopics, suggestionsFor } from "./helpMatcher.js";
+import { appRoot, currentPageId, ensureStylesheet } from "./pageContext.js";
+
+export { currentPageId };
 
 const TRANSCRIPT_MAX = 30;
 const HIGHLIGHT_MS = 6000;
@@ -35,36 +26,6 @@ export function setAnswerProvider(fn) {
   if (typeof fn === "function") provider = fn;
 }
 
-// ---------------------------------------------------------------- page context
-
-// Which screen the user is on — drives the greeting, the starter chips and the
-// same-page boost in scoring.
-export function currentPageId(pathname = window.location.pathname) {
-  const file = pathname.split("/").pop() || "index.html";
-  const inAdminDir = /\/admin\//.test(pathname);
-  if (inAdminDir) {
-    if (/admin_users/i.test(file)) return "admin_users";
-    if (/admin_machineid/i.test(file)) return "admin_machineid";
-    if (/admin_case_list/i.test(file)) return "admin_case_list";
-  }
-  if (/^case_list/i.test(file)) return "case_list";
-  if (/^2DAnnotation/i.test(file)) return "annotation_2d";
-  if (/^ThreeDViewer/i.test(file)) return "viewer_3d";
-  if (/^AnnotationHistory/i.test(file)) return "annotation_history";
-  if (/^VersionHistory/i.test(file)) return "version_history";
-  return "login";
-}
-
-// Path back to the repo root from whatever page we're on. Same depth check as
-// appSidebar.js — resolving against the page (not import.meta.url) keeps links
-// correct however the modules are served.
-function appRoot() {
-  const path = window.location.pathname;
-  if (/\/src\/pages\/admin\//.test(path)) return "../../../";
-  if (/\/src\/pages\//.test(path)) return "../../";
-  return "./";
-}
-
 function hrefForPage(pageId) {
   const path = PAGE_PATHS[pageId];
   return path ? new URL(appRoot() + path, window.location.href).href : null;
@@ -78,9 +39,8 @@ function isVisible(el) {
 
 const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
 
-// Poll until a control is on screen. Used after opening the view that contains
-// it — the create-case panes and the case-actions menu both appear synchronously
-// today, but a frame or two of slack costs nothing and survives an animation.
+// Poll until a control is on screen, after opening the view containing it.
+// Everything appears synchronously today; the slack survives a future animation.
 function waitForVisible(selector, timeout = REVEAL_TIMEOUT_MS) {
   return new Promise((resolve) => {
     const deadline = Date.now() + timeout;
@@ -94,14 +54,8 @@ function waitForVisible(selector, timeout = REVEAL_TIMEOUT_MS) {
   });
 }
 
-// Get the topic's control on screen, opening its container if that's what it
-// takes. `reveal` names the control that opens the view the target lives in (the
-// Create Case button, the ☰ case-actions toggle); we click it and wait for the
-// real target rather than highlighting the opener and calling it done.
-//
-// The opener is only clicked when the target isn't already visible — reopening
-// the create-case view calls resetCreateCaseForm(), which would throw away
-// whatever the user had already typed.
+// Clicks `reveal` and waits for the real target rather than the opener. Only
+// when the target is hidden: reopening create-case resets the form.
 async function resolveTarget(topic) {
   const existing = safeQuery(topic.selector);
   if (isVisible(existing)) return existing;
@@ -109,10 +63,8 @@ async function resolveTarget(topic) {
   const opener = safeQuery(topic.reveal);
   if (!isVisible(opener)) return null;
 
-  // Wait out the click that got us here before opening anything. The case-actions
-  // dropdown closes on any click outside itself, and our own "Show me" click is
-  // outside it — clicking the toggle mid-dispatch opens the menu only for that
-  // same event to close it again, leaving the ring on a control nobody can see.
+  // Wait out the click that got us here: the case-actions dropdown closes on any
+  // outside click, so opening it mid-dispatch would let that same event shut it.
   await nextFrame();
   opener.click();
 
@@ -123,11 +75,8 @@ async function resolveTarget(topic) {
   return isVisible(el) ? el : null;
 }
 
-// Dims the rest of the page around the "Show me" target, the same spotlight
-// trick pageTour.js uses: a box-shadow with a huge spread paints everywhere
-// OUTSIDE the element's own rect, so the rect itself stays transparent and the
-// real control shows through it — no extra z-index juggling needed. A ring
-// alone can get lost on a busy screen; the dimming is what makes it obvious.
+// Same spotlight trick as pageTour.js: a huge box-shadow spread paints
+// everywhere OUTSIDE the element's rect, so the control shows through untouched.
 let spotlightEl = null;
 let spotlightCleanup = null;
 
@@ -148,9 +97,8 @@ function positionSpotlight(el) {
   spotlightEl.style.height = `${r.height + pad * 2}px`;
 }
 
-// Follows `el` through the smooth scroll that just brought it into view (and any
-// resize). It stays lit for the whole highlight and is taken down with the ring —
-// the dimming IS the pointer here, so it must not leave the ring standing alone.
+// Follows `el` through the smooth scroll and any resize. Taken down with the
+// ring — the dimming is the pointer, so it must never outlive it.
 function showSpotlight(el) {
   hideSpotlight();
   ensureSpotlight();
@@ -171,10 +119,8 @@ function hideSpotlight() {
   spotlightCleanup = null;
 }
 
-// Scroll the topic's control into view and stage-light it briefly: the page dims
-// around it and a steady ring marks it, the same look a tour step gives its
-// target. Returns false when the control isn't reachable on this page, so the
-// caller can offer a deep link instead.
+// Scrolls the topic's control into view and stage-lights it like a tour step.
+// False when it isn't reachable here, so the caller can offer a deep link.
 async function showControl(topic) {
   // Resolved before the panel closes: a reveal that fails must not leave the
   // user with a dismissed panel and nothing highlighted.
@@ -201,17 +147,8 @@ async function showControl(topic) {
 
 // --------------------------------------------------------------- panel markup
 
-function ensureStylesheet() {
-  const href = new URL(`${appRoot()}css/helpBot.css`, window.location.href).href;
-  if (document.querySelector(`link[href="${href}"]`)) return;
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = href;
-  document.head.appendChild(link);
-}
-
 function buildPanel() {
-  ensureStylesheet();
+  ensureStylesheet("helpBot.css");
 
   root = document.createElement("div");
   root.id = "help-bot";
@@ -448,11 +385,8 @@ function resetConversation({ focus = true } = {}) {
 
 // -------------------------------------------------------------- open / close
 
-// Same open/close choreography as the app sidebar and case chat: reveal, then
-// transform on the next frame; on close, wait for the transition before hiding.
-// `topicId` opens straight onto one answer instead of the page greeting — the
-// hand-off from a guided tour step's "Read more", where the question has
-// already been chosen for the user.
+// Same open/close choreography as the sidebar and chat. `topicId` opens straight
+// onto one answer — the hand-off from a tour step's "Read more".
 export function openHelpBot({ topicId } = {}) {
   if (!root) {
     buildPanel();
@@ -474,11 +408,8 @@ export function openHelpBot({ topicId } = {}) {
   scrollToEnd();
 }
 
-// Dismissing the panel ends the conversation — the next open starts fresh. The
-// reset runs after the slide-out so the log is never seen being emptied.
-// `keepTranscript` is for "Show me", which closes the panel to uncover the
-// control it is describing; that is a hand-off within one answer, not a
-// dismissal, so the conversation has to survive it.
+// Dismissing ends the conversation, reset after the slide-out so the log is
+// never seen emptying. `keepTranscript` is for "Show me" — a hand-off, not an exit.
 export function closePanel({ keepTranscript = false } = {}) {
   if (!root) return;
   root.classList.remove("is-open");

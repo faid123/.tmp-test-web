@@ -220,9 +220,8 @@ function getRestPlacementToken(_componentId, toothId, surface) {
     if (normalizedSurface === "lingual_mesial") return "ac_mesial";
     if (normalizedSurface === "lingual_distal") return "ac_distal";
     if (normalizedSurface === "lingual_both") {
-      // ac_both art exists only on the lower anterior templates (41/42/43, which
-      // 31/32/33 mirror). Upper anterior (11/12/13) has no ac_both — fall back to
-      // the full cingulum.
+      // ac_both art exists only on the lower anterior templates (41/42/43, mirrored by
+      // 31/32/33). The upper anteriors fall back to the full cingulum.
       const templateToothId = getComponentTemplateToothId(toothId);
       return templateToothId === "41" || templateToothId === "42" || templateToothId === "43"
         ? "ac_both"

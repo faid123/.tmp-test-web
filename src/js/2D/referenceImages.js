@@ -114,9 +114,9 @@ function renderGallery(list) {
   body.appendChild(grid);
 }
 
-// ---- in-pane viewer ------------------------------------------------------
-// Opening an image swaps the grid for a full-pane view of it — inside the panel
-// border, not a modal over the page — with a Back link to the grid.
+// ---- in-pane viewer ----
+// Opening an image swaps the grid for a full-pane view inside the panel border, with a
+// Back link — deliberately not a modal over the page.
 
 function ensureViewer() {
   if (viewer) return viewer;
@@ -153,9 +153,8 @@ function ensureViewer() {
   return viewer;
 }
 
-// ---- zoom & pan ----------------------------------------------------------
-// Zoom is a transform on the <img>: the stage clips it, so a magnified image
-// still stays inside the panel. 1 = fit, and pan is only possible above that.
+// ---- zoom & pan ----
+// A transform on the <img>, clipped by the stage so it stays in the panel. 1 = fit.
 
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 6;

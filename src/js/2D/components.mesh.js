@@ -75,9 +75,8 @@ const MESH_IMAGE_SIZE_BY_COMPONENT = Object.freeze({
 });
 
 /**
- * Mesh SVG size by template tooth (11-18 / 41-48); quadrants 2/3 resolve via
- * getComponentTemplateToothId. Define `mesh-hole` per tooth; other mesh ids reuse
- * that box unless overridden. No row → falls back to MESH_IMAGE_SIZE_BY_COMPONENT.
+ * Mesh SVG size by template tooth (Q2/Q3 via getComponentTemplateToothId). Define
+ * `mesh-hole` per tooth; others reuse it, falling back to MESH_IMAGE_SIZE_BY_COMPONENT.
  */
 const MESH_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
   "11": {
@@ -557,6 +556,8 @@ export function handleMeshCatalogDoubleClickApplyAll(env, componentId) {
   // that has no mesh yet (18/28/38/48 are excluded by ensureMesh…MissingTeeth).
   migrateAllMeshPlacementsToMeshId(env.state.teeth, componentId, env.componentById);
   ensureMeshPlacementsOnMissingTeeth(env.state.teeth, componentId, env.componentById);
+  // Every saddle just became an anchor, so any connector run beside one grows onto it.
+  env.extendMajorConnectors?.();
   env.state.selectedComponentId = componentId;
   env.state.components = env.state.components.filter((id) => !isMeshComponent(id));
   if (!env.state.components.includes(componentId)) {

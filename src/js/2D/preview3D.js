@@ -8,7 +8,13 @@ import {
   updateSurveyPlacementArrow,
   autoApplySavedSurveyAngles,
 } from "./preview3DSurvey.js";
-import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
+import {
+  API_BASE,
+  MACHINE_ID,
+  fileToBase64,
+  getLoggedInUser,
+  uploadWithProgress,
+} from "../shared/api.js";
 import { buildVertexGrid, mapNearestVertices, NO_VERTEX_MATCH } from "../shared/vertexMatch.js";
 import { updateCaseStatus, STATUS_3D_DESIGN_APPROVED } from "./caseNote.js";
 import { confirmPreview3DApproval, sendApprovalEmails } from "./preview3DApproval.js";
@@ -33,9 +39,8 @@ export const SMARTRPD_API_BASE = API_BASE;
 // Default RPD jaw color used as the "no undercut" base in vertex-color renders.
 const DEFAULT_TOOTH_COLOR = [208 / 255, 190 / 255, 141 / 255];
 
-// Vertex-colour attributes are read as LINEAR by three.js, so heatmap values are
-// converted here or they render washed out. DEFAULT_TOOTH_COLOR is deliberately
-// NOT converted — do not "fix".
+// three.js reads vertex-colour attributes as LINEAR, so heatmap values convert here
+// or render washed out. DEFAULT_TOOTH_COLOR is deliberately NOT converted.
 export const srgbToLinear = (c) =>
   c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 
@@ -90,23 +95,19 @@ export const preview3DState = {
   extraGroups: {},
   extraFileNames: {},
   occupiedSlots: null,
-  // Extras are hidden on page entry; opening the "Extra 3D" tab stages them
-  // (maximize + jaws hidden) and that stage OUTLIVES the panel — closing it changes
-  // nothing. extrasPrevStage = jaw visibility + camera to restore if the extras all go
-  // away · stageHiddenJaws = jaws the stage is holding off screen.
+  // The "Extra 3D" stage (maximize + jaws hidden) OUTLIVES its panel — closing the panel
+  // changes nothing. extrasPrevStage = pose to restore · stageHiddenJaws = jaws held off.
   extrasVisible: false,
   extrasPrevStage: null,
   stageHiddenJaws: new Set(),
-  // On-demand extras load (see ensureExtraStlsLoaded): the in-flight promise doubles as
-  // the once-only latch · extrasLoading gates the slot list · extrasLoadProgress caches the
-  // current phase so a remounted card can replay it · extrasOverlay is that card.
+  // On-demand extras load (ensureExtraStlsLoaded): the in-flight promise is also the
+  // once-only latch; extrasLoadProgress caches the phase so a remounted card replays it.
   extrasLoadPromise: null,
   extrasLoading: false,
   extrasLoadProgress: null,
   extrasOverlay: null,
-  // Slots currently uploading → { frac, refs }: the phase drives that row's inline
-  // progress bar, refs are its live elements (rebuilt on every list re-render).
-  // A Map, not one slot, so the other three stay uploadable during an upload.
+  // Uploading slots → { frac, refs } driving each row's inline progress bar. A Map, not
+  // a single slot, so the other three stay uploadable during an upload.
   uploadingSlots: new Map(),
   upload3dModal: null,
   // Whether the Extra 3D tab is the one on screen; survives scene rebuilds.
@@ -135,9 +136,8 @@ export const preview3DState = {
   surveyKeyHandler: null,
   surveyDragCleanup: null,
   meshQuality: null,
-  // HD/SD toggle: re-renders the jaws from the kept source files without a page reload.
-  // qualitySource = {kind,files,jaws,undercut} from the last load — `files` is released on
-  // the Extra 3D tab and re-fetched on demand, `jaws` says what it covers meanwhile.
+  // HD/SD toggle re-renders from qualitySource {kind,files,jaws,undercut}. `files` is
+  // released on the Extra 3D tab and re-fetched; `jaws` says what it covers meanwhile.
   qualitySource: null,
   qualityToggleEl: null,
   qualityToggleBusy: false,
@@ -150,6 +150,28 @@ export const preview3DState = {
 };
 
 // ---- Entry points and lifecycle ------------------------------------------
+
+// Records what is on screen so the HD/SD toggle can re-load the same source, then
+// replays saved survey angles. Clears the progress bar if `populate` throws.
+async function finalizeJawLoad(populate, kind, files, normalizedUndercut) {
+  try {
+    await populate();
+    await finishMeshQualityProgress();
+    preview3DState.qualitySource = {
+      kind,
+      files,
+      jaws: jawKeysOfFiles(files),
+      undercut: normalizedUndercut,
+    };
+    updateQualityToggle();
+    autoApplySavedSurveyAngles().catch((err) =>
+      console.warn("[preview3D] saved survey auto-apply failed", err)
+    );
+  } catch (err) {
+    clearMeshQualityProgress();
+    throw err;
+  }
+}
 
 export async function loadInteractiveJawPreview(area) {
   showPreviewLoading(area, "Loading 3D jaws...");
@@ -185,23 +207,12 @@ export async function loadInteractiveJawPreview(area) {
       // Auto-open the heatmap whenever the case already has undercut data.
       setHeatmapEnabled(hasAnyUndercutSurface(normalizedUndercut));
       await waitForPreviewPaint();
-      try {
-        await populateJawPreviewFromOFF(meshFiles, normalizedUndercut, meshQuality);
-        await finishMeshQualityProgress();
-        preview3DState.qualitySource = {
-          kind: "off",
-          files: meshFiles,
-          jaws: jawKeysOfFiles(meshFiles),
-          undercut: normalizedUndercut,
-        };
-        updateQualityToggle();
-        autoApplySavedSurveyAngles().catch((err) =>
-          console.warn("[preview3D] saved survey auto-apply failed", err)
-        );
-      } catch (err) {
-        clearMeshQualityProgress();
-        throw err;
-      }
+      await finalizeJawLoad(
+        () => populateJawPreviewFromOFF(meshFiles, normalizedUndercut, meshQuality),
+        "off",
+        meshFiles,
+        normalizedUndercut
+      );
       // Extras are NOT fetched here — see ensureExtraStlsLoaded. The jaws are on screen,
       // and every extra would be created hidden, so the panel's first open pays for them.
       return true;
@@ -215,32 +226,20 @@ export async function loadInteractiveJawPreview(area) {
       // Auto-open the heatmap whenever the case already has undercut data.
       setHeatmapEnabled(hasAnyUndercutSurface(normalizedUndercut));
       await waitForPreviewPaint();
-      try {
-        await populateJawPreview(jawFiles, normalizedUndercut, meshQuality);
-        await finishMeshQualityProgress();
-        preview3DState.qualitySource = {
-          kind: "stl",
-          files: jawFiles,
-          jaws: jawKeysOfFiles(jawFiles),
-          undercut: normalizedUndercut,
-        };
-        updateQualityToggle();
-        autoApplySavedSurveyAngles().catch((err) =>
-          console.warn("[preview3D] saved survey auto-apply failed", err)
-        );
-      } catch (err) {
-        clearMeshQualityProgress();
-        throw err;
-      }
+      await finalizeJawLoad(
+        () => populateJawPreview(jawFiles, normalizedUndercut, meshQuality),
+        "stl",
+        jawFiles,
+        normalizedUndercut
+      );
       // Extras stay unfetched while the jaws hold the stage — see ensureExtraStlsLoaded.
     } else {
       clearMeshQualityProgress();
       // No jaw STLs yet (or all removed): keep the panel up with both rows in
       // their empty/upload state so the user can still add 3D files.
       showEmptyJawPanel();
-      // The one case that still loads eagerly: with no jaw mesh the extras are the only
-      // thing that could fill the viewport, so waiting for the panel would strand the
-      // user in front of an empty stage.
+      // The one eager load: with no jaw mesh the extras are all there is, so deferring
+      // them would strand the user on an empty stage.
       ensureExtraStlsLoaded().catch((err) =>
         console.warn("[preview3D] extra STL background load failed", err)
       );
@@ -293,10 +292,8 @@ function init3DPreview(area) {
   rows.appendChild(rowLower.row);
   toolbar.appendChild(rows);
 
-  // Icon button in the top-left corner IS the heatmap on/off toggle; the legend
-  // dropdown under it appears only while the heatmap is on (driven by .is-off).
-  // Asset path must stay "Undercut.png" — that's git's casing, and GitHub Pages
-  // is case-sensitive even though the local filesystem isn't.
+  // The top-left icon IS the heatmap toggle; the legend below shows only while it's on.
+  // Keep the "Undercut.png" casing — GitHub Pages is case-sensitive, the local FS isn't.
   const undercut = document.createElement("div");
   undercut.className = "jaw-preview-undercut is-off";
   undercut.innerHTML = `
@@ -379,9 +376,8 @@ function init3DPreview(area) {
   const hemi = new THREE.HemisphereLight(0xffffff, 0xfff1f5, 0.38);
   scene.add(hemi);
 
-  // The directional lights are CHILDREN OF THE CAMERA so the model stays lit from
-  // every orbit angle. Offsets are deliberately off the view axis: a pure headlight
-  // flattens the relief away.
+  // Lights are CHILDREN OF THE CAMERA so the model stays lit at every orbit angle.
+  // Offsets are deliberately off-axis: a pure headlight flattens the relief away.
   const keyLight = new THREE.DirectionalLight(0xffffff, 1.55);
   keyLight.position.set(-60, 80, 100);
   camera.add(keyLight);
@@ -516,9 +512,8 @@ function init3DPreview(area) {
 
   const resize = () => {
     const rect = mount.getBoundingClientRect();
-    // A hidden panel (Reference Images tab) measures 0×0. Anchoring the controls to that
-    // leaves screen.width 0, and TrackballControls divides the pointer position by it —
-    // every drag after coming back is then garbage. Skip until it has a size again.
+    // A hidden panel measures 0x0, and TrackballControls divides pointer position by
+    // screen.width — every later drag is garbage. Skip until it has a size again.
     if (!rect.width || !rect.height) return;
     const w = Math.max(220, Math.floor(rect.width));
     const h = Math.max(220, Math.floor(rect.height));
@@ -574,17 +569,8 @@ export function setPreview3DRenderPaused(paused) {
   startPreviewRenderLoop();
 }
 
-// A lost WebGL context is why the preview "suddenly goes dark" on iOS.
-//
-// Safari drops the context under memory pressure — a pair of jaw scans is ~50MB of geometry
-// on the GPU — and once it is gone THREE.WebGLRenderer.render() returns immediately, so this
-// loop keeps running at 60fps drawing nothing at all and the canvas just stays black. three.js
-// already calls preventDefault() on the loss (so the browser MAY restore) and re-initialises
-// GL state if a restore ever arrives, but Safari frequently never fires webglcontextrestored,
-// and nothing here noticed or told the user.
-//
-// So: stop burning frames on a dead context, say what happened, and offer a rebuild — that is
-// the only reliable recovery, since it creates a brand new context.
+// iOS Safari drops the WebGL context under memory pressure and often never restores it,
+// leaving render() a silent no-op. Stop the loop and offer a rebuild — the only recovery.
 function bindPreviewContextLossRecovery(canvas, area) {
   if (!canvas) return;
 
@@ -663,12 +649,8 @@ export function teardown3DPreview() {
   }
   disposeObject3D(preview3DState.scene);
   if (preview3DState.renderer) {
-    // dispose() frees three.js's own objects but NOT the WebGL context — that lives until
-    // the canvas is collected. On a device that is already short on GPU memory, holding a
-    // dead context while the rebuild creates a new one is what we are trying to avoid, so
-    // hand it back explicitly first.
-    // Skip when it is already gone — three.js looks WEBGL_lose_context up on a dead context
-    // and logs a misleading "extension not supported" warning.
+    // dispose() frees three.js objects but not the context, so hand it back before the
+    // rebuild allocates another. Skip if gone, or three.js logs a misleading warning.
     if (preview3DState.renderer.getContext?.()?.isContextLost?.() === false) {
       preview3DState.renderer.forceContextLoss?.();
     }
@@ -777,9 +759,8 @@ function hidePreviewLoading(area) {
 async function ensureThreeDeps() {
   if (THREE && TrackballControls && STLLoader) return true;
   try {
-    // Bare specifiers: 2DAnnotation.html's importmap maps them to the local
-    // vendor/three copy — the same entry createCase.js resolves, so both
-    // modules share one THREE instance.
+    // Bare specifiers: the page importmap points them at vendor/three, the same entry
+    // createCase.js resolves, so both modules share one THREE instance.
     const [threeMod, trackballMod, stlMod] = await Promise.all([
       import("three"),
       import("three/addons/controls/TrackballControls.js"),
@@ -899,9 +880,8 @@ function jawKeysOfFiles(files) {
   return (files || []).map((f) => getJawKeyFromFile(f)).filter(Boolean);
 }
 
-// Release the jaw STL source. The parsed meshes stay — only the base64 goes, which is
-// the single biggest hold on the page (~66MB on a case like 3008) and is needed by
-// nothing on screen. ensureJawSourceFiles fetches it again if a rebuild asks for it.
+// Drops only the base64 jaw source (~66MB on case 3008, the biggest hold on the page);
+// the parsed meshes stay. ensureJawSourceFiles re-fetches it if a rebuild needs it.
 function dropJawSourceFiles() {
   const src = preview3DState.qualitySource;
   if (src?.files) {
@@ -946,9 +926,8 @@ function updateQualityToggle() {
   el.disabled = preview3DState.qualityToggleBusy;
 }
 
-// HD/SD toggle click: re-render the jaws at the requested quality, reusing the same
-// progress overlay as the initial load. The source is fetched here when it has been
-// released (see dropJawSourceFiles) — a rare, deliberate click can afford the wait.
+// Re-render the jaws at the requested quality, reusing the initial load's overlay.
+// Re-fetches the source if it was released — a rare, deliberate click can afford it.
 async function switchMeshQuality(quality) {
   const normalized = quality === "high" ? "high" : "low";
   if (preview3DState.qualityToggleBusy) return;
@@ -1173,10 +1152,8 @@ function createDisplayGeometry(geometry, label = "mesh") {
 
 // ---- Case data and API fetches -------------------------------------------
 
-// Reuse the shared /case/get round-trip from 2D init instead of duplicating it.
-// Only used to preserve the other jaw's survey angles, so a null result is harmless.
-// Pass { force: true } to bypass the memoized copy (the survey save does, since it
-// re-sends the whole case row).
+// Reuses 2D init's /case/get round-trip. Only preserves the other jaw's survey angles,
+// so null is harmless; { force: true } bypasses the memoized copy (the survey save does).
 export function fetchCaseData(options) {
   return fetchCaseDetail(options);
 }
@@ -1349,6 +1326,29 @@ function filterRenderableJawFiles(files, sourcePath) {
 
 // ---- Jaw mesh building and rendering -------------------------------------
 
+// Mounts the built jaw groups into the model root and finalises the viewport.
+// Shared tail of both jaw-loading paths (initial load and quality re-load).
+async function mountJawGroups(upperGroup, lowerGroup) {
+  const root = preview3DState.modelRoot;
+  if (!root) return;
+  updateMeshQualityProgress(94, "Positioning jaw mesh");
+  await waitForPreviewPaint();
+  root.clear();
+  if (upperGroup.children.length) root.add(upperGroup);
+  if (lowerGroup.children.length) root.add(lowerGroup);
+
+  centerRootOnCombinedBounds(root);
+
+  preview3DState.groups.upper = upperGroup.children.length ? upperGroup : null;
+  preview3DState.groups.lower = lowerGroup.children.length ? lowerGroup : null;
+  setJawRowMode("upper", !!preview3DState.groups.upper);
+  setJawRowMode("lower", !!preview3DState.groups.lower);
+  applyJawVisibility();
+  fitPreviewCamera();
+  updateMeshQualityProgress(98, "Finalizing viewport");
+  await waitForPreviewPaint();
+}
+
 async function populateJawPreview(jawFiles, undercut, meshQuality = "low") {
   const loader = new STLLoader();
   const upperGroup = new THREE.Group();
@@ -1479,24 +1479,7 @@ async function populateJawPreview(jawFiles, undercut, meshQuality = "low") {
     await updateJawMeshProgress(i, totalFiles, 0.98, upper, "Loaded");
   }
 
-  const root = preview3DState.modelRoot;
-  if (!root) return;
-  updateMeshQualityProgress(94, "Positioning jaw mesh");
-  await waitForPreviewPaint();
-  root.clear();
-  if (upperGroup.children.length) root.add(upperGroup);
-  if (lowerGroup.children.length) root.add(lowerGroup);
-
-  centerRootOnCombinedBounds(root);
-
-  preview3DState.groups.upper = upperGroup.children.length ? upperGroup : null;
-  preview3DState.groups.lower = lowerGroup.children.length ? lowerGroup : null;
-  setJawRowMode("upper", !!preview3DState.groups.upper);
-  setJawRowMode("lower", !!preview3DState.groups.lower);
-  applyJawVisibility();
-  fitPreviewCamera();
-  updateMeshQualityProgress(98, "Finalizing viewport");
-  await waitForPreviewPaint();
+  await mountJawGroups(upperGroup, lowerGroup);
 }
 
 async function populateJawPreviewFromOFF(meshFiles, undercut, meshQuality = "low") {
@@ -1553,24 +1536,7 @@ async function populateJawPreviewFromOFF(meshFiles, undercut, meshQuality = "low
     await updateJawMeshProgress(i, totalFiles, 0.98, upper, "Loaded");
   }
 
-  const root = preview3DState.modelRoot;
-  if (!root) return;
-  updateMeshQualityProgress(94, "Positioning jaw mesh");
-  await waitForPreviewPaint();
-  root.clear();
-  if (upperGroup.children.length) root.add(upperGroup);
-  if (lowerGroup.children.length) root.add(lowerGroup);
-
-  centerRootOnCombinedBounds(root);
-
-  preview3DState.groups.upper = upperGroup.children.length ? upperGroup : null;
-  preview3DState.groups.lower = lowerGroup.children.length ? lowerGroup : null;
-  setJawRowMode("upper", !!preview3DState.groups.upper);
-  setJawRowMode("lower", !!preview3DState.groups.lower);
-  applyJawVisibility();
-  fitPreviewCamera();
-  updateMeshQualityProgress(98, "Finalizing viewport");
-  await waitForPreviewPaint();
+  await mountJawGroups(upperGroup, lowerGroup);
 }
 
 function parseOFFToGeometry(text) {
@@ -1667,9 +1633,8 @@ function removeJawMesh(jaw) {
     preview3DState.groups[jaw] = null;
   }
   delete preview3DState.jawFiles[jaw];
-  // Keep the HD/SD rebuild source in step, so toggling quality later doesn't
-  // resurrect a jaw the user removed this session — `jaws` is also what a released
-  // source filters its re-fetch by.
+  // Keeps the HD/SD rebuild source in step so a quality toggle can't resurrect a jaw
+  // removed this session; `jaws` also filters a released source's re-fetch.
   const src = preview3DState.qualitySource;
   if (src) {
     if (src.files?.length) src.files = src.files.filter((f) => getJawKeyFromFile(f) !== jaw);
@@ -1845,9 +1810,8 @@ function buildDualDedupGeometry(rawGeometry, surface, targetBackendCount) {
 }
 
 /**
- * Band-vote cleanup of an indexed geometry's color attribute: classify every vertex
- * to its nearest palette band, then adopt the majority band among its neighbours.
- * Kills speckle while keeping the bands quantized; ties keep the vertex's own band.
+ * Band-vote cleanup: classify each vertex to its nearest palette band, then adopt the
+ * majority band among its neighbours. Kills speckle; ties keep the vertex's own band.
  */
 function snapVertexColorBands(geometry, iterations = 2) {
   const colorAttr = geometry.getAttribute("color");
@@ -2182,9 +2146,8 @@ function getUndercutColorSeverity(r, g, b) {
   return dr * dr + dg * dg + db * db;
 }
 
-// Desktop's undercutColourMap, byte-exact. Returns sRGB on purpose (converted to
-// linear later by normalizeUndercutColor); "no undercut" emits the backend's white
-// sentinel so it resolves to the raw tan.
+// Desktop's undercutColourMap, byte-exact. Returns sRGB on purpose (normalizeUndercutColor
+// converts later); "no undercut" emits the backend's white sentinel, resolving to raw tan.
 export function colorForSurveyingValue(value) {
   const v = Math.max(0, Number(value) || 0);
   if (v <= 0) return [1, 1, 1];
@@ -2250,11 +2213,8 @@ function surveyingVertexCount(surface) {
   return Math.floor((surfaceFloatArray(surface, "surveying_values")?.length || 0) / 4);
 }
 
-// A jaw's welded vertex positions, kept before decimation so an extra slot holding the same jaw
-// can look its undercut values up BY POSITION. Vertex order and count are deliberately not
-// required to agree: the exported slot file is usually a different tessellation/ordering of the
-// same scan (case 2270 ships an OFF jaw and an STL slot), and matching by index there lands the
-// heatmap on unrelated vertices, which paints as red speckle.
+// Welded jaw positions kept pre-decimation so a slot looks its undercut up BY POSITION:
+// slot files are a different tessellation, and index matching paints red speckle.
 function recordJawVertexKey(jaw, geometry) {
   const position = geometry?.getAttribute?.("position");
   if (!position?.count) return;
@@ -2322,12 +2282,8 @@ function visibleModelBounds(root) {
   return box;
 }
 
-// `visibleOnly` fits to what is actually on screen — used when the extra-STL stage
-// hides the jaws, so the camera frames the extras instead of the whole model root.
-// `worldView` ({ dir, up }) aims the camera from an explicit WORLD direction; the
-// default is the gentle three-quarter view. Deliberately not PREVIEW_VIEW_PRESETS:
-// those are model-local and their names read inverted here (the gizmo's "front" is
-// this view's straight-down), which is a trap when the point is "90° from above".
+// `visibleOnly` frames just what's on screen; `worldView` aims from a WORLD direction —
+// deliberately not PREVIEW_VIEW_PRESETS, which are model-local and read inverted here.
 function fitPreviewCamera({ visibleOnly = false, worldView = null } = {}) {
   const root = preview3DState.modelRoot;
   const camera = preview3DState.camera;
@@ -2628,9 +2584,8 @@ async function uploadJawThumbnail(jaw) {
 
 // ---- Jaw STL upload and removal ------------------------------------------
 
-// Open a transient file picker for a jaw-row upload and hand the file to
-// uploadJawStl. One-shot input, removed after the pick.
-function pickAndUploadJawStl(jaw) {
+// One-shot .stl file picker; the input is removed as soon as a pick lands.
+function pickStlFile(onPick) {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = ".stl";
@@ -2639,9 +2594,13 @@ function pickAndUploadJawStl(jaw) {
   input.addEventListener("change", () => {
     const file = input.files?.[0];
     input.remove();
-    if (file) uploadJawStl(jaw, file);
+    if (file) onPick(file);
   });
   input.click();
+}
+
+function pickAndUploadJawStl(jaw) {
+  pickStlFile((file) => uploadJawStl(jaw, file));
 }
 
 // Upload a picked STL as the case's real jaw — mirrors case creation (POST /stl/raw + /stl) so it
@@ -2805,27 +2764,16 @@ const EXTRA_STL_SLOT_ICONS = {
   4: { src: "../../assets/lower.svg" },
 };
 
-// The jaw slots (1 & 3) in the case's own jaw tan, built exactly the way the
-// primary jaw meshes build theirs: float components straight into THREE.Color,
-// which go in UNCONVERTED (see srgbToLinear's note above DEFAULT_TOOTH_COLOR).
-//
-// That is what makes it the light cream the real jaws show. The 0xb0875a hex it
-// replaced took the other path — a hex is read as sRGB and converted to linear —
-// and landed a much darker brown, so a slot-1 jaw read as a different material
-// sitting next to the jaw it is a copy of.
-//
-// A function, not a constant: THREE is loaded on demand, so there is nothing to
-// construct at module scope.
+// Jaw slots (1 & 3) in jaw tan: float components into THREE.Color, UNCONVERTED — a hex is
+// read as sRGB and lands much darker. A function, not a constant: THREE loads on demand.
 const extraJawColor = () => new THREE.Color(...DEFAULT_TOOTH_COLOR);
 
 // Metal RPD slots (2 = upper arch, 4 = lower) render with a metallic finish
 // instead of the tan jaw colour.
 const METAL_RPD_SLOTS = new Set([2, 4]);
 
-// Jaw-scan slots borrow the matching jaw's undercut heatmap instead of being surveyed
-// themselves: the file is a copy of that jaw scan, so the DLL's per-vertex values already
-// describe it. Only applied when the vertex counts match exactly (see paintJawCopyHeatmap);
-// the metal-RPD slots are a different mesh and never borrow one.
+// Jaw-scan slots borrow the matching jaw's heatmap rather than being surveyed — the file is
+// a copy, so the DLL values already describe it. Metal-RPD slots never borrow one.
 const EXTRA_SLOT_JAW = { 1: "upper", 3: "lower" };
 
 const METAL_RPD_COLOR = 0xd6dadf; // brushed cobalt-chrome / stainless
@@ -2844,9 +2792,8 @@ function extraSlotAuth() {
   };
 }
 
-// One slot's file: the backend returns { filename, data, slotNumber, ... }, or 404 when
-// the slot is empty. Fetched, parsed and released one slot at a time by
-// loadExtraStlsIntoPreview — all four at once is ~133MB of base64 held simultaneously.
+// One slot's file, or 404 when empty. Fetched and released one at a time by
+// loadExtraStlsIntoPreview — all four at once is ~133MB of base64 held at once.
 async function fetchExtraStlSlot(slotNumber) {
   if (!state.caseIntID) return null;
   try {
@@ -2866,17 +2813,8 @@ async function fetchExtraStlSlot(slotNumber) {
   }
 }
 
-// Fetch + parse the extra slots at most once, and only when something actually needs
-// them. They are NOT loaded on page entry: each slot is its own full-size scan (~33MB of
-// base64 apiece, ~133MB for all four on a case like 3008, on top of the ~66MB jaw pair),
-// and renderExtraStl creates every one of them `visible = false` — nothing is on screen
-// until the "Extra 3D" tab is opened. Downloading and STL-parsing all of that
-// invisibly is what pushes an iPhone's content process over its memory ceiling, which
-// Safari reports as the tab reloading itself.
-//
-// The in-flight promise IS the latch, and it is never cleared on success: a second pass
-// would re-run the resets below and wipe a file uploaded during this session. It is
-// cleared on failure so the next open can retry.
+// Never load extras on entry: ~133MB of base64 parsed invisibly pushes an iPhone content
+// process past its ceiling. The in-flight promise is the latch; clearing it wipes new uploads.
 function ensureExtraStlsLoaded() {
   if (!preview3DState.extrasLoadPromise) {
     preview3DState.extrasLoading = true;
@@ -2922,9 +2860,8 @@ async function loadExtraStlsIntoPreview() {
     }
   }
   setExtrasLoadProgress(1, "Extra 3D files ready");
-  // Extras stay off the stage on page entry — they are only shown while the
-  // Extra 3D tab is up. Exception: with no jaw meshes at all, hiding them too
-  // would leave an empty viewport, so show them right away.
+  // Extras stay off stage until the Extra 3D tab is up — unless there are no jaw meshes
+  // at all, where hiding them too would leave an empty viewport.
   if (loaded && !preview3DState.groups.upper && !preview3DState.groups.lower) {
     setExtraStlsVisible(true);
     centerRootOnCombinedBounds(preview3DState.modelRoot);
@@ -2933,9 +2870,8 @@ async function loadExtraStlsIntoPreview() {
   renderUpload3dList();
 }
 
-// The extras load reuses the jaw load's card, centred in the stage, so both tabs
-// load the same way. Mounted here rather than in the panel; the panel just says
-// the slots aren't known yet.
+// Reuses the jaw load's card, centred in the stage, so both tabs load the same way.
+// Mounted here, not in the panel — the panel just says the slots aren't known yet.
 function showExtrasLoadingOverlay() {
   const mount = preview3DState.mount;
   if (!mount || !preview3DState.extrasLoading || preview3DState.extrasOverlay) return;
@@ -2981,11 +2917,8 @@ function setExtrasLoadProgress(frac, labelText) {
   overlay.querySelector(".jaw-preview-progress").setAttribute("aria-valuenow", String(pct));
 }
 
-// Colour a jaw-copy slot from the jaw's heatmap, looked up through the slot's nearest-jaw-vertex
-// map. Works whatever the slot file's vertex count or ordering is. A missing surface paints plain
-// tan, which keeps the colour attribute present so the heatmap toggle stays safe until a survey
-// lands. Handles the decimated display mesh via clusterSourceMap (most severe band per cluster),
-// which is how the SD build keeps thin undercut bands visible.
+// Colours a jaw-copy slot from the jaw's heatmap by nearest vertex, whatever its ordering.
+// A missing surface paints tan but keeps the attribute; clusterSourceMap keeps SD bands.
 function paintJawCopyHeatmap(geometry, surface) {
   const jawMap = geometry.userData?.jawVertexMap;
   if (!jawMap) return;
@@ -3029,9 +2962,8 @@ function paintJawCopyHeatmap(geometry, surface) {
   if (heatmapVerts && !clusterOf) snapVertexColorBands(geometry, 2);
 }
 
-// Parse a base64 STL and add it to the model root. Jaw slots use the jaw tan; metal-RPD slots
-// (2 & 4) use a metallic finish. A jaw-copy slot also gets the matching jaw's undercut heatmap
-// when one is already loaded — a survey that lands later repaints it (repaintExtraJawHeatmaps).
+// Parse a base64 STL into the model root: jaw slots in jaw tan, metal-RPD slots (2 & 4)
+// metallic. Jaw copies take the jaw's heatmap if loaded; a later survey repaints them.
 async function renderExtraStl({ slotNumber, filename, data }) {
   if (!(await ensureThreeDeps())) return;
   const root = preview3DState.modelRoot;
@@ -3042,9 +2974,8 @@ async function renderExtraStl({ slotNumber, filename, data }) {
   let geometry = loader.parse(base64ToArrayBuffer(data));
   geometry = mergeStlVertices(geometry);
 
-  // Match the slot's vertices to the jaw's by position while the mesh is still full resolution;
-  // the map is indexed by welded source vertex, the same basis clusterSourceMap uses, so it
-  // survives decimation unchanged.
+  // Match slot vertices to the jaw's by position while still full resolution. Indexed by
+  // welded source vertex — the basis clusterSourceMap uses — so it survives decimation.
   const slotJaw = EXTRA_SLOT_JAW[slotNumber];
   const matchedJaw = slotJaw && preview3DState.jawVertexKeys?.[slotJaw] ? slotJaw : null;
   const matchStart = performance.now();
@@ -3124,9 +3055,8 @@ function removeExtraStlMesh(slotNumber) {
   disposeObject3D(entry.group);
   delete preview3DState.extraGroups[slotNumber];
   if (preview3DState.modelRoot) centerRootOnCombinedBounds(preview3DState.modelRoot);
-  // Deleting the last extra leaves the stage empty, which is what the Extra 3D tab
-  // should show: the jaws belong to the 3D Preview tab and come back when this one is
-  // left (closeUpload3dModal). Off-tab there is nothing else to show, so hand it back.
+  // An empty stage is correct for the Extra 3D tab — the jaws belong to 3D Preview and
+  // return on leaving it. Off-tab there's nothing to show, so hand the stage back.
   if (!Object.keys(preview3DState.extraGroups).length && !isUpload3dModalOpen()) {
     exitExtraStlStage();
   }
@@ -3208,10 +3138,8 @@ async function uploadExtraStl(file, targetSlot = null) {
   setMessage?.(`Uploading ${file.name}...`);
   try {
     const base64 = await fileToBase64(file);
-    // case_id goes in the data object, not the auth one — the writer reads it
-    // from here (same as POST /stl). Without it the insert runs `case_id = NULL`
-    // and 500s, and that 500 has no CORS header so it surfaces as a bare
-    // "Failed to fetch".
+    // case_id belongs in the DATA object, not the auth one (same as POST /stl). Without it
+    // the insert 500s with no CORS header, surfacing as a bare "Failed to fetch".
     const payload = JSON.stringify([
       extraSlotAuth(),
       {
@@ -3221,7 +3149,7 @@ async function uploadExtraStl(file, targetSlot = null) {
         data: base64,
       },
     ]);
-    await uploadSlotXHR(payload, (frac) => setSlotUploadProgress(freeSlot, frac));
+    await uploadWithProgress("stl/slot/", payload, (frac) => setSlotUploadProgress(freeSlot, frac));
     preview3DState.occupiedSlots.add(freeSlot);
     await renderExtraStl({ slotNumber: freeSlot, filename: file.name, data: base64 });
     // Uploads always come from the open panel, so stage the new file (this is what puts
@@ -3242,20 +3170,8 @@ async function uploadExtraStl(file, targetSlot = null) {
   }
 }
 
-// Open a transient file picker for a specific extra slot and hand the file to
-// uploadExtraStl targeting that slot. One-shot input, removed after the pick.
 function pickAndUploadExtraStl(slot) {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = ".stl";
-  input.hidden = true;
-  document.body.appendChild(input);
-  input.addEventListener("change", () => {
-    const file = input.files?.[0];
-    input.remove();
-    if (file) uploadExtraStl(file, slot);
-  });
-  input.click();
+  pickStlFile((file) => uploadExtraStl(file, slot));
 }
 
 // Toggle ONE uploaded extra STL (clicking its file icon). Each slot has its own group in
@@ -3289,9 +3205,8 @@ function setJawVisible(jaw, visible) {
   preview3DState.topControls?.[rowKey]?.row?.classList.toggle("is-hidden-jaw", !visible);
 }
 
-// The jaw meshes come off the model root while the Extra 3D tab is up — detached,
-// never disposed, so the tab's stage holds the slot files alone and the camera
-// frames them without the jaws' bounds pulling on it.
+// Jaw meshes come off the model root while the Extra 3D tab is up — detached, never
+// disposed — so the camera frames the slots without the jaws' bounds pulling on it.
 function setJawMeshesOnStage(onStage) {
   const root = preview3DState.modelRoot;
   if (!root) return;
@@ -3303,9 +3218,8 @@ function setJawMeshesOnStage(onStage) {
   }
 }
 
-// The "Extra 3D" tab focuses the stage on the extras: take the jaws off it, reveal
-// the extras and frame them. Idempotent — a first upload re-enters to stage the
-// newly rendered file. Undone by leaving the tab (exitExtraStlStage).
+// Focuses the stage on the extras: jaws off, extras revealed and framed. Idempotent —
+// a first upload re-enters to stage the new file. Undone by exitExtraStlStage.
 function enterExtraStlStage() {
   const camera = preview3DState.camera;
   const controls = preview3DState.controls;
@@ -3350,10 +3264,8 @@ function exitExtraStlStage() {
     setHeatmapEnabled(!!prev.heatmap);
   }
   preview3DState.extrasPrevStage = null;
-  // Deleting an extra re-centres the root on whatever is left, so by now the root's
-  // offset belongs to the extras, not the jaws. Re-centre before restoring the saved
-  // pose — that pose was taken against a jaw-centred root, and trackball rotation is
-  // about controls.target, so an offset root orbits around a point off the mesh.
+  // The root's offset now belongs to the extras, but the saved pose was taken against a
+  // jaw-centred root. Re-centre first, or trackball orbits around a point off the mesh.
   centerRootOnCombinedBounds(preview3DState.modelRoot);
   const camera = preview3DState.camera;
   const controls = preview3DState.controls;
@@ -3373,15 +3285,12 @@ function exitExtraStlStage() {
 const UPPER_EXTRA_SLOTS = [1, 2];
 const LOWER_EXTRA_SLOTS = [3, 4];
 
-// Captures are downscaled to this width before becoming data URLs. The preview
-// canvas is up to ~2700px across on a retina display, and these are both shown in
-// a ~360px dialog panel AND attached to every approval email — two full-size PNGs
-// per message would be megabytes on the wire.
+// Captures downscale to this width first: the canvas is up to ~2700px on retina, and these
+// go in a ~360px panel AND every approval email — full-size PNGs would be megabytes.
 const APPROVAL_SHOT_MAX_WIDTH = 900;
 
-// The current frame as a PNG data URL, scaled to APPROVAL_SHOT_MAX_WIDTH. Must be
-// called straight after renderer.render(): the renderer keeps no drawing buffer,
-// so both toDataURL and drawImage only see the frame within the same tick.
+// Current frame as a PNG data URL. Must run straight after renderer.render() — there's no
+// preserved drawing buffer, so the frame is only readable within the same tick.
 function renderedShotDataUrl(renderer) {
   const source = renderer.domElement;
   const scale = Math.min(1, APPROVAL_SHOT_MAX_WIDTH / (source.width || 1));
@@ -3393,9 +3302,8 @@ function renderedShotDataUrl(renderer) {
   return scaled.toDataURL("image/png");
 }
 
-// Which panel a capture taken on the Extra 3D tab belongs to: the arch whose slot
-// files are the ones on screen. With both arches (or neither) showing, it fills
-// the panel that is still empty, upper first.
+// Which panel an Extra 3D capture belongs to: the arch whose slots are on screen. With
+// both or neither showing, it fills whichever panel is still empty, upper first.
 function captureArchForExtras() {
   const shown = Object.entries(preview3DState.extraGroups || {})
     .filter(([, entry]) => entry?.group?.visible)
@@ -3421,10 +3329,8 @@ function captureExtraSlotShot() {
   return arch;
 }
 
-// Approve = flip the case status, exactly as the 2D Case Note's Approve does with
-// its own status, then mail the users ticked in the dialog (/sendCustomEmail, one
-// request each). The mail goes out only after the status write lands — the same
-// rule the 2D approval follows, so an approval that failed is never announced.
+// Approve flips the case status, then mails the ticked users (one /sendCustomEmail each).
+// Mail goes only after the status write lands, so a failed approval is never announced.
 async function openPreview3DApproval(btn) {
   if (!state.caseIntID) {
     toast.error("Open a case before approving.");
@@ -3467,40 +3373,10 @@ async function openPreview3DApproval(btn) {
 }
 
 // Read a File as base64 (chunked to stay off the call stack for big STLs).
-async function fileToBase64(file) {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let binary = "";
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
-}
-
-// POST the slot via XHR (not fetch) so we can report real upload progress.
-// `onProgress` receives a 0..1 fraction of bytes sent.
-function uploadSlotXHR(payload, onProgress) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${SMARTRPD_API_BASE}/stl/slot/`);
-    xhr.setRequestHeader("Content-Type", "application/json");
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
-    };
-    xhr.onload = () =>
-      xhr.status >= 200 && xhr.status < 300
-        ? resolve(xhr.responseText)
-        : reject(new Error(`HTTP ${xhr.status}`));
-    xhr.onerror = () => reject(new Error("network error"));
-    xhr.send(payload);
-  });
-}
-
 // ---- Extra 3D files panel -------------------------------------------------
 
-// Docked in the preview frame's lower-left under the "Extra 3D" tab, so the slot
-// rows sit beside the 3D view they toggle. Built lazily once; element refs
-// cached on preview3DState.
+// Docked lower-left under the "Extra 3D" tab so the slot rows sit beside the view they
+// toggle. Built lazily once; element refs cached on preview3DState.
 function ensureUpload3dModal() {
   const area = preview3DState.area || document.getElementById("imagePreviewArea");
   if (!area) return null;
@@ -3600,9 +3476,8 @@ export function closeUpload3dModal() {
   if (preview3DState.extrasPrevStage) exitExtraStlStage();
 }
 
-// Drop every slot mesh and reset the load latch, so the extras only occupy memory
-// while their tab is up. Re-entering the tab fetches them again — the meshes are the
-// biggest thing in the scene and they are on screen far less often than the jaws.
+// Drops every slot mesh and resets the load latch so extras only hold memory while their
+// tab is up. They are the biggest thing in the scene and on screen the least.
 function disposeExtraStls() {
   // With no jaw meshes the extras ARE the stage (same fallback the load uses);
   // freeing them would leave an empty viewport for a case that has nothing else.
@@ -3623,9 +3498,8 @@ function disposeExtraStls() {
   preview3DState.extrasLoadProgress = null;
 }
 
-// Drive one slot's inline progress bar. `frac` is that upload's 0..1 fraction; at 1
-// the bytes are in and the server is still processing. Called with no frac to replay
-// the cached phase into a row the list just rebuilt.
+// Drives one slot's inline progress bar; `frac` is 0..1, and 1 means the bytes are in but
+// the server is still processing. Called with no frac to replay into a rebuilt row.
 function setSlotUploadProgress(slot, frac) {
   const phase = preview3DState.uploadingSlots.get(slot);
   if (!phase) return;
@@ -3644,9 +3518,8 @@ function renderUpload3dList() {
   const list = modal.list;
   list.innerHTML = "";
 
-  // Slot contents aren't known until the on-demand load finishes, so the list stays
-  // empty rather than offering four "empty" slots to upload into. The stage's load
-  // card is what says a load is running.
+  // Slot contents are unknown until the on-demand load finishes, so the list stays empty
+  // rather than offering four false "empty" slots. The stage's card says a load is running.
   if (preview3DState.extrasLoading) return;
 
   const occupied = preview3DState.occupiedSlots || new Set();

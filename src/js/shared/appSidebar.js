@@ -1,16 +1,10 @@
-// Shared slide-in sidebar wiring. Both case_list and 2DAnnotation embed the
-// same #appSidebar markup; this module handles open/close + the items that
-// behave identically on both pages (logout, quit, change password, help,
-// report issue, feedback, about, language). Page-specific items (Save,
-// Return, etc.) are wired by the calling page directly.
+// Shared slide-in sidebar for every page embedding #appSidebar: open/close plus
+// the items common to all of them. Page-specific items are wired by the page.
 
 import { toast, confirmModal } from "./toast.js";
 
-// Languages offered by the sidebar picker, labelled in their own script so a
-// speaker recognises their language without reading English first. Single
-// source of truth: the pages only ship the trigger button (#sidebarLanguageBtn)
-// and the dropdown under it is built from this list, so adding a language here
-// adds it everywhere #appSidebar is embedded.
+// Labelled in their own script. Pages ship only #sidebarLanguageBtn — the
+// dropdown is built from this list, so adding one here adds it everywhere.
 const LANGUAGES = [
   { code: "en", label: "English" },
   { code: "zh", label: "中文" },
@@ -70,10 +64,8 @@ export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../.
   try {
     const me = JSON.parse(localStorage.getItem("loggedInUser") || "null");
     if (Number(me?.isAdmin) === 1) {
-      // admin_users.html lives in src/pages/admin/. Pages that embed #appSidebar
-      // sit at two depths: src/pages/ (case_list, 2DAnnotation) and, now,
-      // src/pages/admin/ (admin_case_list). Resolve relative to whichever the
-      // current page is so the link works from both.
+      // Pages embedding #appSidebar sit at two depths (src/pages/ and
+      // src/pages/admin/), so resolve relative to whichever this one is.
       const inAdminDir = /\/admin\//.test(window.location.pathname);
       const adminUsersHref = inAdminDir ? "./admin_users.html" : "./admin/admin_users.html";
       const goToAdmin = () => (window.location.href = adminUsersHref);
@@ -157,9 +149,8 @@ export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../.
       toast.error("Help is unavailable right now.");
     }
   };
-  // About replays the page's guided tour — the spotlight walk a first-time
-  // visitor gets automatically. Imported on click for the same reason Help is:
-  // a page whose tour is never asked for should not pay for the overlay.
+  // About replays the page's guided tour. Imported on click for the same reason
+  // Help is: a page whose tour is never asked for shouldn't pay for the overlay.
   const showAbout = async () => {
     close();
     try {
@@ -171,9 +162,8 @@ export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../.
     }
   };
 
-  // Help is reachable from two places: the sidebar row and the footer status-bar
-  // button. Same action either way, so they share a handler (close() is a
-  // harmless no-op when the click came from the footer). About is sidebar-only.
+  // Sidebar row and footer button do the same thing, so they share a handler
+  // (close() is a harmless no-op from the footer). About is sidebar-only.
   ["sidebarHelpBtn", "footerHelpBtn"].forEach((id) => {
     document.getElementById(id)?.addEventListener("click", openHelp);
   });
@@ -193,9 +183,8 @@ export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../.
 
   languageMenu = setupLanguageMenu();
 
-  // First visit to a page that has a tour: run it once, unprompted. It waits for
-  // the page's own toolbar to exist before deciding, and does nothing on every
-  // later visit — About is how you get it back.
+  // First visit to a page that has a tour: run it once, unprompted. Every later
+  // visit does nothing — About is how you get it back.
   import("./pageTour.js")
     .then(({ maybeAutoStartTour }) => maybeAutoStartTour())
     .catch((err) => console.error("[appSidebar] guided tour failed to load:", err));
@@ -203,20 +192,11 @@ export function setupAppSidebar({ triggerId = "footerMenuBtn", indexHref = "../.
   return { open, close };
 }
 
-// Builds the language dropdown under #sidebarLanguageBtn and keeps the choice
-// in localStorage so it survives navigation between pages.
-//
-// Scope note: this stores and reflects a *preference* only. There is no i18n
-// layer in the app yet, so picking a language does not translate the UI — the
-// toast says as much rather than leaving the user waiting for a change that
-// never comes. Wire the real string lookup to LANGUAGES/LANGUAGE_STORAGE_KEY
-// when that layer lands.
-//
-// Returns a small handle so the sidebar's close() can collapse the dropdown.
+// Language dropdown under #sidebarLanguageBtn, persisted to localStorage, with a
+// handle so close() can collapse it. Stores a preference only — no i18n layer yet.
 function setupLanguageMenu() {
   let current = readStoredLanguage();
-  // Worth doing even when the trigger is absent (pages that embed the sidebar
-  // without the language row): it keeps the document's declared language in
+  // Done even without the trigger: keeps the document's declared language in
   // step with the stored preference for screen readers and spell-checkers.
   document.documentElement.lang = current;
 

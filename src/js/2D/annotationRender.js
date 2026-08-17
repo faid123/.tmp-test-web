@@ -8,7 +8,6 @@ import {
   handleMeshToolDoubleClick,
   isBarComponent,
   isClaspComponent,
-  isMajorConnectorComponent,
   isMeshComponent,
   isPlateComponentId,
   pruneInvalidMajorConnectorPlacementsInJaw,
@@ -29,7 +28,10 @@ import {
   openRemoveComponentPicker,
 } from "./2DAnnotation.js";
 import { renderComponentCatalog } from "./annotationCatalog.js";
-import { placeSelectedComponentOnTooth } from "./annotationPlacement.js";
+import {
+  extendMajorConnectorsInAllJaws,
+  placeSelectedComponentOnTooth,
+} from "./annotationPlacement.js";
 import {
   getToothPlacement,
   toggleToothPresence,
@@ -52,19 +54,14 @@ import {
   showBarSuggestions,
 } from "./annotationVisuals.js";
 
-// Safari/iOS drops CSS `filter:` color chains on SVG <image> elements loading external
-// .svg files. SVG-native <filter> defs work cross-browser, so each tint is published here
-// as a named filter, referenced from CSS via `filter: url(#tint-...)`. Tooth tints bake the
-// drop-shadow in (chained url()+drop-shadow() is unreliable in Safari inside a transformed <g>).
+// Safari/iOS drops CSS `filter:` colour chains on SVG <image>, so each tint is an SVG-native
+// <filter> with the drop-shadow baked in — chaining url() + drop-shadow() is unreliable.
 const SVG_TINT_FILTERS = {
-  // Present vs missing teeth read purely by tint value against the mid-grey arch:
-  // present sits near-black with a crisp shadow, missing sits pale with a faint one
-  // (further faded by `.tooth.is-missing .tooth-image` opacity in CSS).
+  // Present vs missing reads purely by tint against the mid-grey arch: present near-black
+  // with a crisp shadow, missing pale and faint (CSS opacity fades it further).
   "tint-tooth-base": { color: "#0d0d0d", shadow: true, shadowOpacity: 0.75 },
-  // Tooth art is line art with a transparent interior, so a flat tint colours only the
-  // strokes. `fillBody` closes the outline into a solid silhouette and paints it, leaving
-  // the tinted lines a shade darker on top so the tooth's anatomy stays readable. Each
-  // status paints its own hue: blue abutment, green compromised, grey missing.
+  // Tooth art is line art with a transparent interior, so a flat tint colours only strokes.
+  // `fillBody` closes the outline into a silhouette; each status paints its own hue.
   "tint-tooth-abutment": {
     color: "#1565c0",
     fillBody: "#b9d7f5",
@@ -208,16 +205,8 @@ function buildJawTintFilter(jaw) {
   return filterEl;
 }
 
-// Every arch filter lives in ONE hidden <svg> on <body>, published once — same idiom as
-// annotationCatalog's ensureMeshIconTintFilter. They used to be re-emitted into each
-// arch's own <defs> on every render, which had two costs: both arches published the SAME
-// 13 tint ids, so `url(#tint-…)` resolved document-wide to whichever came first and
-// re-rendering EITHER arch invalidated every tooth on the page; and renderJaw's
-// `svg.innerHTML = ""` threw the filters away on every component placement. In WebKit that
-// re-ran the feMorphology body-fill for all 32 teeth per tap (~83ms per
-// missing/abutment/compromised tooth — 1.4s on a 16-missing case, vs 34ms once cached).
-// Filter regions are objectBoundingBox-relative, so hosting them outside the arch <svg>
-// does not change how any of them paint.
+// Every arch filter lives in ONE hidden <svg> on <body>: per-arch <defs> duplicated all 13
+// tint ids and re-ran feMorphology for 32 teeth per tap (~1.4s in WebKit).
 const ARCH_TINT_DEFS_HOST_ID = "annotationArchTintDefs";
 
 function ensureArchTintDefs() {
@@ -240,10 +229,8 @@ function ensureArchTintDefs() {
   document.body.appendChild(host);
 }
 
-// A detached copy of every arch filter, for callers that serialize an arch <svg> on its
-// own (the 2D screenshot / case thumbnail path in annotationLocks). Without it the
-// standalone SVG has no filter definitions to resolve `url(#tint-…)` against, and the jaw
-// template plus every tooth render untinted — which reads as a blank jaw in the thumbnail.
+// A detached copy of every arch filter for callers serializing an arch <svg> alone. Without
+// it the standalone SVG resolves `url(#tint-…)` against nothing and renders a blank jaw.
 export function cloneArchTintDefs() {
   ensureArchTintDefs();
   const defs = document.getElementById(ARCH_TINT_DEFS_HOST_ID)?.querySelector("defs");
@@ -310,18 +297,34 @@ export function renderJaws() {
   renderJaw("lower");
 }
 
-// Swap in only the top-level children that actually changed, keeping every untouched
-// node — and therefore its cached filter result — in place.
-//
-// This used to be `svg.innerHTML = ""` + rebuild. Recreating an <image> that carries a
-// tint filter makes WebKit re-run that filter from scratch, and the four `fillBody` tints
-// (missing / abutment / compromised / bar-suggestible) run feMorphology dilate+erode at
-// radius 40 — ~83ms per tooth at 3x DPR. So a wholesale rebuild cost ~83ms x (teeth not
-// plainly present): ~1.5s per component placement on a 16-missing arch, ~2.9s on a fully
-// edentulous one, against a 34ms floor. Chromium is ~33ms flat either way, which is why
-// this never showed up in desktop testing. `isEqualNode` compares attributes and the whole
-// subtree, so a node is only kept when its markup is byte-identical — the arch paints
-// exactly as before.
+// Swap in only the changed children, so untouched nodes keep their cached filter results.
+// A wholesale rebuild re-runs every tooth's feMorphology tint — ~1.5s per placement.
+
+// Places a bar on one tooth, resolving its side and flipping an existing
+// placement to the opposite surface when both sides are mesh-bearing.
+function placeBarOnTooth(toothId, jaw, tooth, catalogPick, hadSuppressedHints) {
+  const barSurface = getBarPlacementSurfaceForTooth(toothId, jaw, state.teeth);
+  if (!barSurface) {
+    setMessage("Could not resolve bar type for this tooth.", true);
+    if (hadSuppressedHints) renderJaw(jaw);
+    return;
+  }
+  const existing = (tooth.componentPlacements || []).find(
+    (entry) => entry.componentId === catalogPick.id && String(entry.surface || "").startsWith("bar_")
+  );
+  const canSwitchSide = hasMissingTeethOnBothSidesForBar(toothId, jaw, state.teeth);
+  if (existing && !canSwitchSide) {
+    setMessage("Bar side switch requires mesh-bearing teeth on both sides of this anchor tooth.", true);
+    renderJaw(jaw);
+    return;
+  }
+  const surfaceToPlace = existing
+    ? (canSwitchSide ? (getOppositeBarSurface(existing.surface) || barSurface) : String(existing.surface))
+    : barSurface;
+  placeSelectedComponentOnTooth(toothId, { surface: surfaceToPlace });
+  renderJaw(jaw);
+}
+
 function reconcileArchChildren(parent, fragment) {
   const next = [...fragment.childNodes];
   const prev = [...parent.childNodes];
@@ -344,9 +347,8 @@ export function renderJaw(jaw) {
   if (!config) return;
   const svg = document.getElementById(config.svgId);
   if (!svg) return;
-  // Only write when it actually changes: setAttribute dirties the SVG root even when the
-  // value is identical, which repaints the whole arch and re-runs every tooth filter —
-  // exactly what reconcileArchChildren exists to avoid.
+  // Only write on a real change: setAttribute dirties the SVG root even for an identical
+  // value, repainting the arch and re-running every tooth filter.
   if (svg.getAttribute("viewBox") !== config.viewBox) {
     svg.setAttribute("viewBox", config.viewBox);
   }
@@ -358,10 +360,8 @@ export function renderJaw(jaw) {
   const ids = TOOTH_ORDER[jaw];
   pruneInvalidMajorConnectorPlacementsInJaw(state.teeth, COMPONENT_BY_ID, jaw);
   pruneInvalidBarPlacementsInJaw(state.teeth, jaw);
-  // Suggestion dots live in a layer above every tooth group. Placed clasp/rest art
-  // is a large mostly-transparent <image> with pointer-events:all, so a neighbour
-  // drawn later in TOOTH_ORDER (e.g. 26 over 25) would otherwise swallow clicks on
-  // the dots of the tooth before it.
+  // Suggestion dots sit in a layer above every tooth group: placed art is a large mostly
+  // transparent <image>, so a later-drawn neighbour would swallow the previous tooth's dots.
   const suggestionLayer = svgEl("g", { class: "tooth-suggestion-layer" });
   ids.forEach((toothId) => {
     const placement = getToothPlacement(jaw, toothId);
@@ -426,11 +426,8 @@ export function renderJaw(jaw) {
 
     const toothClickKey = `mesh-tooth:${jaw}:${toothId}`;
     group.addEventListener("click", (event) => {
-      // Read the tooth at click time instead of closing over the build-time object: a
-      // preserved node (see reconcileArchChildren) keeps the listener from an earlier
-      // render, and undo/redo and a fresh server load both replace every entry in
-      // state.teeth wholesale. toothId and jaw are stable for this node, so they stay
-      // captured.
+      // Read the tooth at CLICK time: a preserved node keeps its earlier listener, and
+      // undo/redo or a server load replaces every state.teeth entry wholesale.
       const tooth = state.teeth[toothId];
       if (!tooth) return;
       if (!state.designMode && state.rangeMissingMode && event.detail > 1) {
@@ -440,9 +437,8 @@ export function renderJaw(jaw) {
         onToothClick(jaw, toothId);
         return;
       }
-      // Mobile keeps the eraser toggle: tapping a tooth while remove mode is on
-      // opens its remove list. Desktop uses right-click instead (contextmenu
-      // below) and hides the eraser button via CSS.
+      // Mobile keeps the eraser toggle, so a tap in remove mode opens the remove list.
+      // Desktop uses right-click instead and hides the button via CSS.
       if (state.removeComponentMode) {
         event.stopPropagation();
         openRemoveComponentPicker(toothId, jaw, event);
@@ -467,10 +463,8 @@ export function renderJaw(jaw) {
         return;
       }
 
-      // Empty-hand tap (present OR missing/mesh) opens the picker popup. On touch
-      // the bottom #editModePanel is hidden, so this is the only canvas entry point;
-      // on desktop it complements the catalog. Gated on `!catalogPick` so an
-      // in-progress mesh/bar/major workflow isn't disrupted by accidental taps.
+      // An empty-hand tap opens the picker — the only canvas entry point on touch, where
+      // #editModePanel is hidden. Gated on `!catalogPick` so it can't disrupt a workflow.
       if (!catalogPick) {
         showPresentToothRadialQuickPick(toothId, event.clientX, event.clientY);
         if (hadSuppressedHints) renderJaw(jaw);
@@ -486,26 +480,7 @@ export function renderJaw(jaw) {
         if (catalogPick && isBarComponent(catalogPick)) {
           const set = getBarSuggestibleToothIdSet(state.teeth, jaw);
           if (set.has(toothId)) {
-            const barSurface = getBarPlacementSurfaceForTooth(toothId, jaw, state.teeth);
-            if (!barSurface) {
-              setMessage("Could not resolve bar type for this tooth.", true);
-              if (hadSuppressedHints) renderJaw(jaw);
-              return;
-            }
-            const existing = (tooth.componentPlacements || []).find(
-              (entry) => entry.componentId === catalogPick.id && String(entry.surface || "").startsWith("bar_")
-            );
-            const canSwitchSide = hasMissingTeethOnBothSidesForBar(toothId, jaw, state.teeth);
-            if (existing && !canSwitchSide) {
-              setMessage("Bar side switch requires mesh-bearing teeth on both sides of this anchor tooth.", true);
-              renderJaw(jaw);
-              return;
-            }
-            const surfaceToPlace = existing
-              ? (canSwitchSide ? (getOppositeBarSurface(existing.surface) || barSurface) : String(existing.surface))
-              : barSurface;
-            placeSelectedComponentOnTooth(toothId, { surface: surfaceToPlace });
-            renderJaw(jaw);
+            placeBarOnTooth(toothId, jaw, tooth, catalogPick, hadSuppressedHints);
             return;
           }
         }
@@ -525,26 +500,7 @@ export function renderJaw(jaw) {
           if (hadSuppressedHints) renderJaw(jaw);
           return;
         }
-        const barSurface = getBarPlacementSurfaceForTooth(toothId, jaw, state.teeth);
-        if (!barSurface) {
-          setMessage("Could not resolve bar type for this tooth.", true);
-          if (hadSuppressedHints) renderJaw(jaw);
-          return;
-        }
-        const existing = (tooth.componentPlacements || []).find(
-          (entry) => entry.componentId === catalogPick.id && String(entry.surface || "").startsWith("bar_")
-        );
-        const canSwitchSide = hasMissingTeethOnBothSidesForBar(toothId, jaw, state.teeth);
-        if (existing && !canSwitchSide) {
-          setMessage("Bar side switch requires mesh-bearing teeth on both sides of this anchor tooth.", true);
-          renderJaw(jaw);
-          return;
-        }
-        const surfaceToPlace = existing
-          ? (canSwitchSide ? (getOppositeBarSurface(existing.surface) || barSurface) : String(existing.surface))
-          : barSurface;
-        placeSelectedComponentOnTooth(toothId, { surface: surfaceToPlace });
-        renderJaw(jaw);
+        placeBarOnTooth(toothId, jaw, tooth, catalogPick, hadSuppressedHints);
         return;
       }
       if (catalogPick && isMeshComponent(catalogPick)) {
@@ -558,10 +514,8 @@ export function renderJaw(jaw) {
       placeSelectedComponentOnTooth(toothId, null);
       renderJaw(jaw);
     });
-    // Desktop: right-click a tooth in design mode to open its remove list.
-    // Left-click always adds; the eraser button is hidden on desktop (CSS).
-    // Mobile keeps the eraser toggle instead, so skip the contextmenu path on
-    // touch/coarse-pointer devices.
+    // Desktop right-click opens a tooth's remove list (left-click always adds). Skipped on
+    // coarse pointers, which keep the eraser toggle instead.
     group.addEventListener("contextmenu", (event) => {
       const coarsePointer =
         typeof window.matchMedia === "function" &&
@@ -710,4 +664,7 @@ registerMeshAnnotationEnv(() => ({
   redrawJaws: renderJaws,
   redrawJaw: renderJaw,
   placeSelectedOnTooth: placeSelectedComponentOnTooth,
+  // Bulk mesh writes straight to the teeth, so it has to ask for the connector growth the
+  // placement engine does on its own.
+  extendMajorConnectors: extendMajorConnectorsInAllJaws,
 }));

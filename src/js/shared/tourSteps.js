@@ -1,37 +1,21 @@
-// Guided start-up tours — the step scripts behind the About button.
-//
-// Pure data, no DOM and no imports, so pageTour.js and its tests can load it
-// anywhere. One entry per page id (the ids in helpTopics.js PAGE_LABELS), each
-// a short walk through the controls a first-time user needs on that screen.
+// Guided start-up tours — the step scripts behind the About button. Pure data,
+// no DOM and no imports, keyed by the page ids in helpTopics.js PAGE_LABELS.
 //
 // Fields:
-//   title     the step heading
-//   text      one or two sentences — what the control is for, not how it looks
-//   bullets   optional "LABEL — what it does" lines, listed under the prose for
-//             a step that covers several things at once (the Components tabs)
-//   selector  optional CSS selector for the control to spotlight. A step with
-//             no selector is a centred card (the welcome and sign-off steps).
-//             May be an array, in preference order — the first one actually on
-//             screen is spotlighted, so a step can prefer a real data row and
-//             fall back to the header when the table is empty
-//   reveal    optional selector for the control that opens the view `selector`
-//             lives in, same contract as helpTopics.js — the tour clicks it,
-//             waits for the target, then spotlights the target. May be an array
-//             of alternatives when a control has more than one way in; the
-//             first one that is actually on screen is the one clicked
-//   dismiss   optional selector for the control that closes what `reveal`
-//             opened. The tour clicks it once it leaves the run of steps
-//             sharing that reveal, and again when the tour ends, so a panel the
-//             tour opened is never left behind. Omit it when the reveal changes
-//             a mode the user keeps (the padlock) rather than opening a panel
-//   optional  true when the control only exists in some states (a case must be
-//             selected, the design must be unlocked). Missing targets are
-//             skipped either way; this marks the ones we expect to skip
-//   topic     optional help-topic id, offered as "Read more" on the step
+//   title/text  the heading, and what the control is for (not how it looks)
+//   bullets     optional "LABEL — what it does" lines for a step covering several
+//   selector    control to spotlight; omit for a centred card. An array is a
+//               preference order — first one on screen wins
+//   reveal      control that opens the view `selector` lives in; clicked, then
+//               the target is awaited. May also be an array of alternatives
+//   dismiss     closes what `reveal` opened, on leaving its run and at the end.
+//               Omit when the reveal changes a mode the user keeps (the padlock)
+//   optional    marks a control that only exists in some states, so an expected
+//               skip is distinguishable from an accidental one
+//   topic       optional help-topic id, offered as "Read more"
 //
-// Steps whose target never appears are dropped when the tour starts, so a tour
-// stays coherent on a page where half the controls are gated behind admin
-// rights or a selected case.
+// Steps whose target never appears are dropped at start, so a tour stays coherent
+// where controls are gated behind admin rights or a selected case.
 
 // Bump when a tour's steps change materially — a viewer who has seen v1 is
 // shown v2 once, rather than never seeing the new steps.
@@ -41,23 +25,15 @@ export const TOUR_VERSION = 1;
 // about it points at an item inside and names the toggle as its `reveal`.
 const CASE_MENU = ".cm-detail .dropdown-toggle";
 
-// Create Case replaces the list with a pair of panes rather than opening a
-// dialog, so the steps inside it are revealed by the button and put back by
-// Cancel — which resets the form and restores the list without confirming.
+// Create Case swaps the list for a pair of panes, so its steps are revealed by
+// the button and put back by Cancel (which resets without confirming).
 const CREATE_CASE = "#createCaseBtn";
 const CREATE_CASE_BACK = "#createCaseUpload .cancel-btn";
 
-// The 2D design has two entirely different ways into the Case Note, chosen by a
-// media query at 1200px: above it the CASE NOTE tab in the Components panel
-// (`.is-form-tab`), below it the footer button that opens the bottom sheet. Each
-// is display:none on the other's viewport, so the tour offers both and clicks
-// whichever is real.
-//
-// The padlock is last and is normally never clicked — by the time these steps
-// run the tour has already locked the arches, so the CASE NOTE tab is on screen
-// and matches first. It is listed because the step filter runs before the tour
-// starts, when the Components panel is still shut and neither of the first two
-// is visible: without it, every Case Note step would be dropped on a desktop.
+// Two ways into the Case Note, chosen by a media query at 1200px: the CASE NOTE
+// tab above it, the footer sheet below. The tour offers both and clicks the real
+// one. The padlock is listed last for the start-of-tour filter only — it runs
+// while the panel is shut, and without it every Case Note step would be dropped.
 const CASE_NOTE_WAYS_IN = [
   "#componentTabs .component-tab.is-form-tab",
   "#footerCaseNoteBtn",
@@ -127,12 +103,8 @@ export const PAGE_TOURS = {
     },
 
     // ---- inside the create-case form ------------------------------------
-    //
-    // Create Case swaps the list out for a pair of panes, so every step here
-    // names it as their `reveal` to survive the start-of-tour filter. Only the
-    // first presses it: reopening the view calls resetCreateCaseForm(), which
-    // would throw away anything already typed. Cancel is the `dismiss`, which
-    // puts the case list back before the tour carries on with it.
+    // Every step names Create Case as its `reveal` to survive the start-of-tour
+    // filter; only the first presses it, since reopening resets the form.
     {
       title: "Name the case",
       text: "The only field that has to be filled in. Case Owner and Case Create Date beside it are filled in for you.",
@@ -239,9 +211,8 @@ export const PAGE_TOURS = {
   ],
 
   // ------------------------------------------------------------- 2D design
-  //
-  // Order: the 3D preview and its per-jaw controls first, then tooth selection,
-  // then the lock and the components it unlocks.
+  // Order: the 3D preview and per-jaw controls, then tooth selection, then the
+  // lock and the components it unlocks.
   annotation_2d: [
     {
       title: "The 2D design",
@@ -302,9 +273,8 @@ export const PAGE_TOURS = {
     },
     {
       title: "The Components panel",
-      // `reveal` locks the arches for the user: the panel below is display:none
-      // until then, so there is nothing to point at otherwise. Skipped when the
-      // design is already locked, since the panel is on screen already.
+      // `reveal` locks the arches: the panel below is display:none until then.
+      // Skipped when already locked, since the panel is on screen.
       text: "Locking opens the Components panel — we've locked it here so you can see it. Pick a tab, pick an item from the list below it, then select the tooth to place it on.",
       bullets: [
         "MESH — the retentive mesh the acrylic and teeth are built onto.",
@@ -328,23 +298,20 @@ export const PAGE_TOURS = {
       topic: "clinical-info",
     },
     {
-      // Clear Top / Clear Bottom are design-mode-only buttons, and the tour is
-      // in design mode from the Components step on — the select-mode pair
-      // (Clear upper/lower teeth) is hidden by then.
+      // Design-mode-only buttons, and the tour is in design mode from the
+      // Components step on — the select-mode pair is hidden by then.
       title: "Clear an arch",
       text: "Clear Top and Clear Bottom strip every component from one jaw and leave the teeth as they are. Before the arches are locked the same row carries Clear upper teeth and Clear lower teeth instead, which reset tooth selection rather than components.",
-      // Same reveal as the Components step: these buttons are hidden while the
-      // arches are unlocked, and the filter runs before the tour starts — without
-      // it the step would be dropped for a design that is not locked yet. By the
-      // time the tour arrives the padlock is already on, so nothing is clicked.
+      // Same reveal as the Components step, needed only so the start-of-tour
+      // filter keeps this step on an unlocked design. Nothing is clicked.
       selector: "#clearUpperComponentsBtn",
       reveal: "#jawLockToggleBtn",
       optional: true,
       topic: "clear-arch",
     },
     {
-      title: "Start from a template, or from scratch",
-      text: "Load Template Jaw fills the arch with a standard starting layout to work from. Draw from Scratch clears it so you build the design up yourself. Both sit beside the Clear buttons and, like them, only appear in design mode.",
+      title: "Propose a design, or start from scratch",
+      text: "Load Template Jaw reads the missing teeth on each arch, works out its Kennedy class, and proposes the major connector that class calls for — you see a preview before anything is placed. Draw from Scratch clears the arch so you build the design up yourself. Both sit beside the Clear buttons and, like them, only appear in design mode.",
       selector: "#loadProposalBtn",
       reveal: "#jawLockToggleBtn",
       optional: true,
@@ -358,11 +325,8 @@ export const PAGE_TOURS = {
     },
 
     // ---- inside the Noticeboard -----------------------------------------
-    //
-    // The board is a modal, shut at tour start, so every step in this run names
-    // the footer button as its `reveal` — otherwise the filter would drop them
-    // all before it ever opens. Only the first actually clicks it; `dismiss`
-    // closes the board again as the tour moves on to Save.
+    // The board is shut at tour start, so every step names the footer button as
+    // its `reveal` or the filter drops them all. Only the first clicks it.
     {
       title: "The Noticeboard",
       text: "Everything the technician should see about this case, in two columns: 2D Setup & Design on the left and 3D Design on the right. It's also what the case report is generated from.",
@@ -408,21 +372,9 @@ export const PAGE_TOURS = {
       optional: true,
       topic: "noticeboard",
     },
-    {
-      title: "The board's own actions",
-      text: "Along the bottom: DOWNLOAD JAW PROFILE, the same download you saw in the footer, and DRAW FROM SCRATCH to start the design over. Closing the board brings you back to the arches.",
-      selector: "#downloadJawProfileBtn",
-      reveal: "#openNoticeboardBtn",
-      dismiss: "#noticeboardCloseBtn",
-      optional: true,
-      topic: "noticeboard",
-    },
-
     // ---- inside the Case Note -------------------------------------------
-    //
-    // Same reveal/dismiss pairing as the Noticeboard — but here re-clicking the
-    // reveal would rebuild the form and discard anything already typed, so it
-    // matters that only the first step in the run presses it.
+    // Same reveal/dismiss pairing as the Noticeboard, but re-clicking the reveal
+    // here would rebuild the form and discard anything typed.
     {
       title: "The Case Note",
       text: "The written brief that travels with the case. Case Owner and Case Number at the top are filled in for you and can't be edited — everything below them is yours to fill in.",

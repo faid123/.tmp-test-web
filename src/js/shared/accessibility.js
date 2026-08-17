@@ -1,35 +1,10 @@
-// Accessibility / presentation helpers: the .docx report builder used by the
-// case-list download.
-//
-// The footer Wi‑Fi / connectivity indicator that used to live here was removed
-// along with its #footerConnection slot in every footer; the status bar now
-// carries Help and About buttons in that spot instead.
+// Builds the .docx case report for the case-list download. Word can't reproduce
+// the tooth chart from HTML/CSS, so it ships as one rasterized full-page image.
 
-// === Report exporters ======================================================
-// Two renderings of the case report, both from the same HTML that
-// noticeboard.js's buildReportHtml() produces:
-//
-//   reportHtmlToDocxBytes() → .docx, for the case-list bulk download.
-//   reportHtmlToPdfBlob()   → .pdf, for the 2D case-note approval preview.
-//
-// The report is a richly-styled tooth chart (CSS filters, absolute-positioned
-// overlays, flex layouts) that neither Word nor a PDF writer can reproduce from
-// HTML/CSS, so both paths rasterize it with html2canvas and embed the bitmap as
-// a single full-page image. The .docx is a hand-assembled OOXML zip (JSZip);
-// the PDF is built with jsPDF.
-//
-// Both third-party libs are fetched on demand rather than via a <script> tag on
-// every page: they are ~400KB each and only matter the moment someone actually
-// exports a report. Pages that already carry the tag (case_list.html loads
-// html2canvas) short-circuit to the existing global.
-
-// Vendored builds (html2canvas 1.4.1 / jspdf 4.2.1). Resolved against this
-// module's own URL, not the document — pages load from two different depths
-// (src/pages/ and src/pages/admin/). import.meta is safe here: this module is
-// NOT in the webpack viewer bundle, where UMD output rejects it.
+// Resolved against this module's URL, not the document — pages load from two
+// depths. import.meta is safe: this module is not in the webpack viewer bundle.
 const LIB_URLS = {
   html2canvas: new URL("../../../vendor/html2canvas/html2canvas.min.js", import.meta.url).href,
-  jspdf: new URL("../../../vendor/jspdf/jspdf.umd.min.js", import.meta.url).href,
 };
 
 const scriptPromises = new Map();
@@ -60,16 +35,6 @@ async function ensureHtml2Canvas() {
   await loadScriptOnce(LIB_URLS.html2canvas);
   if (typeof window.html2canvas !== "function") throw new Error("html2canvas not loaded");
   return window.html2canvas;
-}
-
-// The UMD build publishes the namespace `window.jspdf`, with the constructor as
-// `jsPDF` on it.
-async function ensureJsPdf() {
-  if (typeof window.jspdf?.jsPDF === "function") return window.jspdf.jsPDF;
-  await loadScriptOnce(LIB_URLS.jspdf);
-  const ctor = window.jspdf?.jsPDF;
-  if (typeof ctor !== "function") throw new Error("jsPDF not loaded");
-  return ctor;
 }
 
 const CONTENT_TYPES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -220,92 +185,4 @@ export async function reportHtmlToDocxBytes(html) {
   zip.file("word/_rels/document.xml.rels", DOC_RELS_XML);
   zip.file("word/media/image1.png", pngBytes);
   return zip.generateAsync({ type: "uint8array" });
-}
-
-// === Report .pdf builder ===================================================
-// A4 portrait, in points — the same page size the report's own
-// `@page { size: A4 portrait }` targets, so the PDF matches what printing the
-// HTML would have produced.
-const PDF_PAGE = { w: 595.28, h: 841.89 };
-const PDF_MARGIN = 28.35; // 10mm, matching the report's @page margin
-
-// Wrap an already-rasterized report in a single-page A4 PDF Blob.
-//
-// JPEG rather than PNG: the report is a full-bleed bitmap at scale 2, and PNG
-// runs to several MB, which is slow to hand to a PDF viewer. 0.92 quality keeps
-// the tooth chart and its thin overlay strokes legible.
-function jpegToPdfBlob(jpegDataUrl, aspectRatio, JsPDF) {
-  const pdf = new JsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
-  const maxW = PDF_PAGE.w - PDF_MARGIN * 2;
-  const maxH = PDF_PAGE.h - PDF_MARGIN * 2;
-  // Fit inside the content box preserving aspect ratio, so nothing is cropped,
-  // then centre what's left over.
-  let w = maxW;
-  let h = w * aspectRatio;
-  if (h > maxH) {
-    h = maxH;
-    w = h / aspectRatio;
-  }
-  const x = PDF_MARGIN + (maxW - w) / 2;
-  const y = PDF_MARGIN + (maxH - h) / 2;
-
-  pdf.addImage(jpegDataUrl, "JPEG", x, y, w, h);
-  return pdf.output("blob");
-}
-
-// Rasterize the report and wrap it in a single-page A4 PDF, returned as a Blob.
-export async function reportHtmlToPdfBlob(html) {
-  const { pdfBlob } = await reportHtmlToPreview(html);
-  return pdfBlob;
-}
-
-// Width the emailed PNG is reduced to: A4 at 96dpi. The report is rendered at
-// scale 2 (~1588px), and a PNG of that runs to several MB — far past what a JSON
-// request body will carry. Halving it keeps the page legible at a few hundred KB.
-const EMAIL_PNG_MAX_W = 794;
-
-// A PNG data URL of the report, downscaled to `maxWidth`. PNG rather than JPEG
-// because /sendEmail's `thumbnail` field is a PNG data URL everywhere else it is
-// used (viewer3d sends "data:image/png;base64,…").
-function toPngDataUrl(canvas, maxWidth) {
-  if (canvas.width <= maxWidth) return canvas.toDataURL("image/png");
-
-  const out = document.createElement("canvas");
-  out.width = maxWidth;
-  out.height = Math.round((canvas.height / canvas.width) * maxWidth);
-  const ctx = out.getContext("2d");
-  // Painted white first: the report is opaque, but a PNG's transparent ground
-  // renders black in some mail clients.
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, out.width, out.height);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(canvas, 0, 0, out.width, out.height);
-  return out.toDataURL("image/png");
-}
-
-// Rasterize the report ONCE and hand back three forms of it:
-//
-//   imageUrl — the page as a JPEG data URL, for showing on screen as a plain
-//              <img>. An <iframe> pointed at the PDF would drag in the browser's
-//              own PDF viewer (toolbar, page controls, zoom widget, thumbnail
-//              rail, and a blob UUID where a filename should be), which is
-//              chrome around a document nobody asked for.
-//   pngUrl   — the page as a downscaled PNG data URL, for /sendEmail's
-//              `thumbnail` field.
-//   pdfBlob  — the same bitmap as a downloadable A4 PDF.
-//
-// html2canvas is by far the expensive step, so all three share one render.
-export async function reportHtmlToPreview(html) {
-  const [html2canvas, JsPDF] = await Promise.all([ensureHtml2Canvas(), ensureJsPdf()]);
-
-  const canvas = await renderReportCanvas(html, html2canvas);
-  if (!canvas.width || !canvas.height) throw new Error("report rendered empty");
-
-  const imageUrl = canvas.toDataURL("image/jpeg", 0.92);
-  return {
-    imageUrl,
-    pngUrl: toPngDataUrl(canvas, EMAIL_PNG_MAX_W),
-    pdfBlob: jpegToPdfBlob(imageUrl, canvas.height / canvas.width, JsPDF),
-  };
 }

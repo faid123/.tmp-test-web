@@ -1,10 +1,8 @@
-// .NET BinaryFormatter (MS-NRBF) serializer — just enough to reproduce the exact
-// byte layout the SmartRPD desktop writes for noticeboard `filenames`/`data`
-// columns, so web-saved editedview rows are desktop-readable. Verified byte-for-
-// byte against production records (case 697, cases 1199/1374/1665/2270).
+// .NET BinaryFormatter (MS-NRBF) serializer, just enough to reproduce the byte layout the
+// SmartRPD desktop writes for noticeboard `filenames`/`data`. Verified byte-for-byte.
 //
-// Column shape: root is a jagged byte[][]. filenames: each inner byte[] is a
-// BinaryFormatter stream wrapping one string. data: each inner byte[] is raw PNG bytes.
+// Root is a jagged byte[][]: each filenames entry wraps one string, each data entry is
+// raw PNG bytes.
 
 const REC_HEADER = 0x00; // SerializationHeaderRecord
 const REC_BIN_ARRAY = 0x07; // BinaryArray
@@ -128,9 +126,8 @@ function loadImage(src) {
   });
 }
 
-// The desktop stores raw PNG bytes. Decode a PNG data URL directly; re-encode
-// anything else (e.g. JPEG capture) to PNG via a canvas so both the desktop
-// and the web's own PNG-scanning reader can recover it.
+// The desktop stores raw PNG bytes, so decode a PNG data URL directly and re-encode
+// anything else through a canvas — the read-back scans for PNG signatures.
 export async function dataUrlToPngBytes(dataUrl) {
   const m = /^data:([a-z0-9.+/-]+);base64,(.*)$/i.exec(String(dataUrl || ""));
   if (m && m[1].toLowerCase() === "image/png") return base64ToBytes(m[2]);
@@ -152,9 +149,8 @@ function ensurePngName(name, idx) {
   return t;
 }
 
-// Encode parallel filenames/data-URL arrays into the desktop's editedview
-// column format. Entries without a usable image are skipped (keeping the two
-// columns aligned). Returns base64 strings ready to POST.
+// Encodes parallel filenames/data-URL arrays into the desktop's editedview columns,
+// skipping unusable entries so the two stay aligned. Returns base64 ready to POST.
 export async function encodeEditedViewColumns(filenames, dataUrls) {
   const names = Array.isArray(filenames) ? filenames : [];
   const datas = Array.isArray(dataUrls) ? dataUrls : [];
@@ -180,4 +176,68 @@ export async function encodeEditedViewColumns(filenames, dataUrls) {
     data: bytesToBase64(dataBlob),
     count: outBytes.length,
   };
+}
+
+// Base64 decode tolerant of whitespace, URL-safe alphabet and missing padding —
+// the shapes the backend actually returns. Returns null instead of throwing.
+export function safeAtob(b64) {
+  if (typeof b64 !== "string") return null;
+  try {
+    const cleaned = b64.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+    const padded = cleaned + "=".repeat((4 - (cleaned.length % 4)) % 4);
+    // atob in browser; Buffer fallback for Node-based tests.
+    if (typeof atob === "function") return atob(padded);
+    return Buffer.from(padded, "base64").toString("binary");
+  } catch {
+    return null;
+  }
+}
+
+// Captures are stored as a base64'd BinaryFormatter image list, not JSON, so scan
+// the decoded bytes for PNG signatures and rebuild data URLs from them.
+export function extractPngsFromBinaryFormatter(outerBase64) {
+  const decoded = safeAtob(outerBase64);
+  if (!decoded) return [];
+
+  const out = [];
+  const PNG_SIG = "\x89PNG\r\n\x1a\n";
+  const PNG_END = "IEND\xae\x42\x60\x82";
+  let i = 0;
+  while (true) {
+    const start = decoded.indexOf(PNG_SIG, i);
+    if (start === -1) break;
+    const endMarker = decoded.indexOf(PNG_END, start);
+    if (endMarker === -1) break;
+    const end = endMarker + PNG_END.length;
+    out.push("data:image/png;base64," + btoa(decoded.slice(start, end)));
+    i = end;
+  }
+  if (out.length) return out;
+
+  // Fallback: the blob may hold base64-encoded PNG *strings* rather than raw
+  // bytes, so scan for the canonical base64-PNG header instead.
+  const B64_PNG_HEAD = "iVBORw0KGgo";
+  let j = 0;
+  while (true) {
+    const idx = decoded.indexOf(B64_PNG_HEAD, j);
+    if (idx === -1) break;
+    let k = idx;
+    while (k < decoded.length && /[A-Za-z0-9+/=]/.test(decoded[k])) k += 1;
+    const b64 = decoded.slice(idx, k).replace(/=+$/, "");
+    const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+    out.push("data:image/png;base64," + b64 + pad);
+    j = k;
+  }
+  return out;
+}
+
+// Image filenames out of the same blob, in stored order.
+export function extractFilenamesFromBinaryFormatter(outerBase64) {
+  const decoded = safeAtob(outerBase64);
+  if (!decoded) return [];
+  const out = [];
+  const RE = /[A-Za-z0-9_\-\. ]{1,80}\.(?:png|jpe?g|gif|bmp)/gi;
+  let m;
+  while ((m = RE.exec(decoded)) !== null) out.push(m[0]);
+  return out;
 }

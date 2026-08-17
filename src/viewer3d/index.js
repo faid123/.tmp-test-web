@@ -58,8 +58,8 @@ const url = new URL(window.location.href);
 let paramValue = url.searchParams.get("id");
 const close = url.searchParams.get("close");
 
-//decrypts the paramvalue
-//if doing testing with test cases jus comment it out
+// Decryption of ?id= is currently OFF, so the viewer takes a raw case id.
+// Uncomment to go back to encrypted links.
 //paramValue = lol(paramValue);
 
 if (!paramValue) {
@@ -218,8 +218,6 @@ const viewerRotationOrigin = new THREE.Vector3(0, 0, 0);
 let viewerRotationBoundsRadius = 40;
 let hasViewerRotationOrigin = false;
 const VIEWER_TARGET_MIN_DRIFT_LIMIT = 45;
-let isViewerRotating = false;
-const viewerRotationTargetAnchor = new THREE.Vector3();
 
 const POLYLINE_COMPONENT_COLORS = [
   0x6f35ff,
@@ -347,10 +345,8 @@ function saveAnnotationBackground(storageKey, dataUrl) {
   }
 }
 
-// Gate shown when a non-logged-in viewer clicks "Annotate" in the 3D viewer.
-// Login -> caller-defined destination; Continue as guest -> caller-defined
-// fallback (hidden unless onGuest is passed in). Styled inline since the 3D
-// viewer doesn't load noticeboard.css.
+// Gate for a guest clicking "Annotate": Login and Continue-as-guest both go
+// where the caller says. Styled inline — the viewer doesn't load noticeboard.css.
 function openAnnotateGate({
   onLogin,
   onGuest,
@@ -400,9 +396,8 @@ function getViewerRightNav() {
 
 window.getViewerRightNav = getViewerRightNav;
 
-// One row holding the design/upload pair and the reset/lock pair. Both are
-// built by different modules at different times, so they share this host and
-// contribute their buttons to it via display: contents.
+// One row shared by the design/upload and reset/lock pairs, which are built by
+// different modules at different times and join it via display: contents.
 function getViewerNavToolbar() {
   let toolbar = document.getElementById("viewer-nav-toolbar");
   if (toolbar) return toolbar;
@@ -622,27 +617,6 @@ function clampViewerControlTarget(control = controls) {
   return true;
 }
 
-function anchorViewerRotationTarget(control = controls) {
-  if (!control?.target || !isViewerRotating) return false;
-  const drift = control.target.distanceTo(viewerRotationTargetAnchor);
-  if (!Number.isFinite(drift) || drift < 0.0001) return false;
-
-  const correction = viewerRotationTargetAnchor.clone().sub(control.target);
-  control.target.copy(viewerRotationTargetAnchor);
-  camera.position.add(correction);
-  if (orb_controls?.target) {
-    orb_controls.target.copy(viewerRotationTargetAnchor);
-  }
-  camera.updateProjectionMatrix();
-  return true;
-}
-
-function setViewerRotationAnchorToCurrentTarget(control = controls) {
-  if (!control?.target) return false;
-  viewerRotationTargetAnchor.copy(control.target);
-  return true;
-}
-
 function bindViewerRotationTargetAnchor(domElement) {
   if (!domElement) return;
   const activeTouchPointers = new Set();
@@ -661,10 +635,6 @@ function bindViewerRotationTargetAnchor(domElement) {
   };
   const minTouchZoom = 2;
   const maxTouchZoom = 50;
-
-  const releaseRotationAnchor = () => {
-    isViewerRotating = false;
-  };
 
   const releaseManualPan = () => {
     if (manualPanState.pointerId != null) {
@@ -697,9 +667,8 @@ function bindViewerRotationTargetAnchor(domElement) {
     }
   };
 
-  // Jaw is locked at the centre: panning is disabled so the right mouse button
-  // (and middle / shift-drag / two-finger touch pan) can't drag the model
-  // off-centre. Rotation (left-drag) and zoom (wheel / pinch) stay active.
+  // Jaw locked at the centre: every pan gesture is disabled so nothing can drag
+  // the model off-centre. Rotation and zoom stay active.
   const VIEWER_PAN_LOCKED = true;
   const panViewerTargetByScreenDelta = (deltaX, deltaY) => {
     if (VIEWER_PAN_LOCKED) return;
@@ -718,12 +687,10 @@ function bindViewerRotationTargetAnchor(domElement) {
 
     camera.position.add(panOffset);
     controls.target.add(panOffset);
-    viewerRotationTargetAnchor.copy(controls.target);
     if (orb_controls?.target) {
       orb_controls.target.copy(controls.target);
     }
     clampViewerControlTarget(controls);
-    viewerRotationTargetAnchor.copy(controls.target);
     camera.updateProjectionMatrix();
   };
 
@@ -738,7 +705,6 @@ function bindViewerRotationTargetAnchor(domElement) {
     camera.zoom = nextZoom;
     camera.updateProjectionMatrix();
     clampViewerControlTarget(controls);
-    viewerRotationTargetAnchor.copy(controls.target);
     if (orb_controls?.target) {
       orb_controls.target.copy(controls.target);
     }
@@ -747,7 +713,6 @@ function bindViewerRotationTargetAnchor(domElement) {
   const startTouchGesture = (event) => {
     event.preventDefault();
     event.stopImmediatePropagation?.();
-    releaseRotationAnchor();
     releaseManualPan();
     const metrics = getTouchGestureMetrics();
     if (!metrics) return;
@@ -763,7 +728,6 @@ function bindViewerRotationTargetAnchor(domElement) {
   const startManualPan = (event) => {
     event.preventDefault();
     event.stopImmediatePropagation();
-    releaseRotationAnchor();
     manualPanState.active = true;
     manualPanState.pointerId = event.pointerId ?? null;
     manualPanState.lastX = event.clientX;
@@ -811,8 +775,6 @@ function bindViewerRotationTargetAnchor(domElement) {
       return;
     }
 
-    isViewerRotating = true;
-    setViewerRotationAnchorToCurrentTarget(controls);
   }, true);
 
   const releasePointer = (event) => {
@@ -823,7 +785,6 @@ function bindViewerRotationTargetAnchor(domElement) {
         releaseTouchGesture();
       }
     }
-    releaseRotationAnchor();
     if (event.type !== "pointerleave") {
       releaseManualPan();
     }
@@ -863,7 +824,6 @@ function bindViewerRotationTargetAnchor(domElement) {
   window.addEventListener("blur", () => {
     activeTouchPointers.clear();
     touchPointerPositions.clear();
-    releaseRotationAnchor();
     releaseManualPan();
     releaseTouchGesture();
   });
@@ -1848,9 +1808,8 @@ function shouldSeatPolylineComponentOnJaw(component) {
 function getJawMeshForPolyline(jawType) {
   const jawText = jawType.toLowerCase();
   return parentObject.children.find((child) => {
-    // Slot STLs sit in this list too, carry a jaw_type, and are added first
-    // (they are the landing view), so an unfiltered search returns one of them
-    // and the polylines inherit ITS transform instead of the case jaw's.
+    // Slot STLs share this list and are added FIRST, so an unfiltered search
+    // returns one and the polylines inherit its transform, not the case jaw's.
     if (child.userData?.isDesignSlot) return false;
     const type = String(child.userData?.jaw_type || child.name || "").toLowerCase();
     return type.includes(jawText);
@@ -2589,28 +2548,6 @@ function syncPolylineOverlayVisibility() {
   syncPolylineFocusMode();
 }
 
-function syncPolylineDepthTest() {
-  polylineOverlayGroup.traverse((child) => {
-    const overlayType = child.userData?.overlayType;
-    if (
-      overlayType !== "polyline-tube" &&
-      overlayType !== "polyline-edit-point"
-    ) {
-      return;
-    }
-
-    const materials = Array.isArray(child.material)
-      ? child.material
-      : [child.material];
-    materials.forEach((materialEntry) => {
-      if (!materialEntry) return;
-      materialEntry.depthTest = polylineDepthTestEnabled;
-      materialEntry.depthWrite = false;
-      materialEntry.needsUpdate = true;
-    });
-  });
-}
-
 window.auditPolylines = auditRenderedPolylines;
 
 function getPolylineComponentSummary() {
@@ -3209,9 +3146,8 @@ function attachPolylineDragHandlers(domElement) {
 function createViewerLoadingScreen() {
   const existing = document.getElementById("viewer-loading-screen");
   if (existing) {
-    // Returning early on a fading screen would leave the caller with no bar to
-    // drive: a screen mid-fade still answers getElementById but has already
-    // given up window.viewerLoadingEls.
+    // A screen mid-fade still answers getElementById but has already dropped
+    // window.viewerLoadingEls, so returning early leaves the caller no bar.
     if (!existing.classList.contains("vls-fade")) return;
     existing.remove();
     document.getElementById("viewer-loading-screen-style")?.remove();
@@ -3526,37 +3462,6 @@ function removeViewerLoadingScreen() {
 
             twodGroup.appendChild(watermark);
 
-            // // 1️⃣ 创建 canvas
-            // const canvas = document.createElement('canvas');
-            // canvas.width = enlargedImg.naturalWidth;
-            // canvas.height = enlargedImg.naturalHeight;
-
-            // const ctx = canvas.getContext('2d');
-
-            // // 2️⃣ 绘制底图
-            // const baseImage = new Image();
-            // baseImage.onload = () => {
-            //   ctx.drawImage(baseImage, 0, 0);
-
-            //   // 3️⃣ 画水印文字
-            //   const caseID = window.caseID || "N/A";
-            //   const text = `🦷 Case: ${caseID}`;
-            //   ctx.font = 'bold 32px sans-serif';
-            //   ctx.fillStyle = 'white';
-            //   ctx.textAlign = 'center';
-            //   ctx.textBaseline = 'middle';
-            //   ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-            //   ctx.shadowBlur = 10;
-            //   ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
-            //   // 4️⃣ 转为 base64 并存入 localStorage，Key 包含加密 ID
-            //   const composedDataURL = canvas.toDataURL();
-            //   localStorage.setItem(`annotateBackground_${caseID}`, composedDataURL);
-            //   console.log(`✅ 保存图像到 localStorage: annotateBackground_${caseID}`);
-            // };
-
-            // baseImage.src = enlargedImg.src;
-
             // Buttons container
             const btnContainer2D = document.createElement("div");
             btnContainer2D.className = "smart-btn-container-2d";
@@ -3584,9 +3489,8 @@ function removeViewerLoadingScreen() {
                 window.location.hostname.includes("github.io");
               const basePath = isGitHubPages ? "/.tmp-test-web" : "";
 
-              // Pathway 1 (logged in): compose the annotation background, then
-              // open the full 2D annotation noticeboard. `then` lets the login
-              // flow reuse the same compose+save before redirecting to login.
+              // Logged in: compose the annotation background, then open the 2D
+              // noticeboard. `then` lets the login flow reuse the same compose.
               const composeBackgroundThen = (then) => {
                 const enlargedImg = document.querySelector(
                   ".twod-fullscreen-image"
@@ -3644,9 +3548,8 @@ function removeViewerLoadingScreen() {
                 return;
               }
 
-              // Guests get the gate: Login -> 2D noticeboard (pathway 1, after
-              // signing in), or Continue as guest -> Annotation History
-              // (pathway 2, no login).
+              // Guests get the gate: Login goes on to the 2D noticeboard,
+              // Continue as guest to Annotation History.
               openAnnotateGate({
                 onLogin: () =>
                   composeBackgroundThen(() => {
@@ -3683,33 +3586,6 @@ function removeViewerLoadingScreen() {
           mobileTwodBtn.addEventListener("click", openTwodOverlay);
           getViewerRightNav().appendChild(mobileTwodBtn);
 
-          /* 			button.addEventListener('click', function () {
-				
-			  // Fullscreen overlay
-			  const overlay = document.createElement('div');
-			  overlay.className = 'twod-overlay';
-
-			  // Group container (card)
-			  const twodGroup = document.createElement('div');
-			  twodGroup.className = 'twod-group';
-
-			  // Enlarged image
-			  const enlargedImg = new Image();
-			  enlargedImg.src = img.src;
-			  enlargedImg.className = 'twod-fullscreen-image';
-			  twodGroup.appendChild(enlargedImg);
-
-			  // Buttons container
-			  const btnContainer2D = document.createElement('div');
-			  btnContainer2D.className = 'smart-btn-container-2d';
-
-			  twodGroup.appendChild(btnContainer2D);
-			  overlay.appendChild(twodGroup);
-			  document.body.appendChild(overlay);
-
-			  // Close on overlay click
-			  overlay.addEventListener('click', () => overlay.remove());
-			}); */
         }
       }
   } catch (error) {
@@ -3718,11 +3594,8 @@ function removeViewerLoadingScreen() {
   // to get the undercut and occulsion values
   let undercut_values = [];
 
-  // Heatmaps are per-vertex RGBA arrays for the case's own jaws — megabytes on a
-  // real case, and only the case view can display them. Fetched as part of the
-  // on-demand bundle (loadCaseAssets), never on entry. The design view doesn't
-  // want them either: uploads carry no surveying data, so slot meshes fall back
-  // to the loaders' "stl" (no-heatmap) sentinel.
+  // Per-vertex RGBA arrays, megabytes on a real case, so they ride loadCaseAssets
+  // and never load on entry. Uploads fall back to the loaders' "stl" sentinel.
   async function fetchUndercutHeatmaps() {
   try {
     // Call the post method and wait for the response
@@ -3732,13 +3605,9 @@ function removeViewerLoadingScreen() {
       apiClient.post(heatmapEndpoint, data2, false, "Heatmap upper"),
     ]);
 
-    // Pair each heatmap with its jaw by the RESPONSE's own jaw_type, never by
-    // request order (preview3D.fetchUndercutForCase does the same). Verified
-    // against case 2437: requesting jaw_type=1 returns jaw_type:"upper_jaw"
-    // (point_size exactly matches the upper jaw mesh's vertex count) and
-    // jaw_type=2 returns "lower_jaw" — the opposite of what data/data2's
-    // comments assumed, which swapped the undercut colours between the jaws.
-    // Downstream convention: undercut_values[0]=lower jaw, [1]=upper jaw.
+    // Pair each heatmap by the RESPONSE's jaw_type, NEVER request order — that
+    // swapped the jaws' colours. Case 2437: jaw_type=1 answers "upper_jaw".
+    // Downstream convention: undercut_values[0]=lower, [1]=upper.
     let upperHeat = null;
     let lowerHeat = null;
     [undercut_value, undercut_value1].forEach((heatmap) => {
@@ -3773,11 +3642,8 @@ function removeViewerLoadingScreen() {
   let responseDatas = [];
   let responseData;
 
-  // The viewer opens on the design (the uploaded slot STLs) and does not fetch
-  // the case's own assets at all until the 3D button asks for them — the case
-  // mesh is ~50 MB that the landing view never shows. This flag makes the
-  // fetch below a no-op on entry; loadCaseAssets() flips it and reruns the same
-  // path, so there is exactly one implementation of the fetch.
+  // The viewer lands on the uploads and fetches none of the case's ~50 MB assets
+  // until the 3D button asks; loadCaseAssets() flips this and reruns the path.
   let caseMeshRequested = false;
 
   // Pre-start both mesh downloads in parallel so denture downloads while jaw is being
@@ -3804,72 +3670,25 @@ function removeViewerLoadingScreen() {
         } else if (url == "/surface/getall") {
           name_of_mesh = "Denture mesh";
         }
-        // Await the pre-started promise instead of issuing a new request.
-        // Skipped entirely on the landing pass — the UI below still gets built,
-        // it just has no case mesh to work with yet.
+        // Await the pre-started promise rather than issue a second request.
+        // Skipped on the landing pass: the UI builds with no case mesh yet.
         responseData = caseMeshRequested ? await meshPromises[url] : "stl";
         //console.log(responseData);
         if (isObject(responseData)) {
           responseDatas = responseDatas.concat(responseData);
         }
         if (url == "/parameterisation/mesh/getall") {
-          //check for closed.off
-          const test = caseMeshRequested
-            ? await apiClient.post(
-                "/stl/get",
-                [data],
-                "test",
-                "Closed Jaw Mesh Check"
-              )
-            : "stl";
-
-          if (test != "stl") {
-            /* // Create a button element
-          const button = document.createElement('button');
-          button.textContent = 'Parameterized Jaw'; // Set the text content of the button. initially was called Close.off check for bool close
-
-          // Style the button
-          button.style.position = 'fixed';
-          button.style.bottom = '10px';  // Adjust the bottom position as needed
-          button.style.right = '20px';   // Adjust the right position as needed
-          button.style.padding = '10px';
-          button.style.backgroundColor = 'blue';
-          button.style.color = 'white';
-          button.style.border = 'none';
-          button.style.cursor = 'pointer';
-          button.style.borderRadius = '5px';
-          button.style.zIndex = '1000';  // Ensure it's above other elements
-
-          // Function to handle button click
-          function redirectToUrl() {
-            // Change this URL to the desired destination
-
-            window.location.href = window.location.href + '&close=true';  // Redirect to the specified URL
-          }
-
-          // Add click event listener to button
-          button.addEventListener('click', redirectToUrl);
-
-          // Append the button to the body or another container
-          document.body.appendChild(button); */
-          }
-
           // Create a container for the buttons
           const btnContainer = document.createElement("div");
           btnContainer.className = "smart-btn-container";
 
-          /* 		// === NEW: Container for 2D Buttons on the Left ===
-		const btnContainer2D = document.createElement('div');
-		btnContainer2D.className = 'smart-btn-container-2d';
-		*/
 
           // === NEW: Container for 3D Buttons under Chat ===
           const btnContainer3D = document.createElement("div");
           btnContainer3D.className = "smart-btn-container-3d";
 
-          // Switches between the uploaded design (the landing view) and the
-          // case's own scan + polylines + artificial teeth. Both stay loaded, so
-          // this is a visibility flip, not a reload.
+          // Switches between the uploaded design and the case's own scan.
+          // Both stay loaded, so this is a visibility flip, not a reload.
           const loadOtherStlButton = document.createElement("button");
           loadOtherStlButton.id = "center-load-button";
           loadOtherStlButton.className = "smart-btn other-stl";
@@ -3901,9 +3720,8 @@ function removeViewerLoadingScreen() {
           });
           btnContainer3D.appendChild(loadOtherStlButton);
 
-          // Opens the slot manager at any time, not just on a case that has no
-          // uploads — otherwise the four slots are only ever fillable before the
-          // first file lands.
+          // Opens at any time, not only on an empty case — otherwise the four
+          // slots are only ever fillable before the first file lands.
           const uploadSlotsButton = document.createElement("button");
           uploadSlotsButton.id = "upload-slots-button";
           uploadSlotsButton.className = "smart-btn upload-slots";
@@ -4079,9 +3897,8 @@ function removeViewerLoadingScreen() {
       pointer-events: auto;
   }
 
-  /* Frosted glass over the model, same recipe as the objects panel. The tint
-     stays fairly opaque because the scene behind renders near-white, and white
-     card text has to stay readable against it. */
+  /* Frosted glass, same recipe as the objects panel. Kept fairly opaque because
+     the scene behind renders near-white and white card text must stay readable. */
   #design-upload-prompt .dup-card {
       display: flex;
       flex-direction: column;
@@ -4148,9 +3965,8 @@ function removeViewerLoadingScreen() {
       background: rgba(79, 163, 232, 0.16);
   }
 
-  /* A file dragged over an empty, idle slot — same highlight as hover, plus a
-     solid border so the drop target reads clearly while the pointer is busy
-     carrying a file instead of showing a normal cursor. */
+  /* A file dragged over an empty idle slot: hover's highlight plus a solid
+     border, since the pointer is carrying a file rather than showing a cursor. */
   #design-upload-prompt .dup-slot-wrap.is-dragover .dup-slot {
       border-style: solid;
       border-color: #4fa3e8;
@@ -4349,15 +4165,6 @@ function removeViewerLoadingScreen() {
     display: contents;
   }
 
-/*   .smart-btn-container-2d {
-	position: fixed;
-	left: 10px;
-	top: 160px;
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	z-index: 1000;
-	} */
 
 	.smart-btn-container-3d {
 		display: contents;
@@ -4876,29 +4683,18 @@ function removeViewerLoadingScreen() {
       gap: 8px;
       z-index: auto;
       order: 4;
-      /* Matches .twod-mobile-trigger / .preset-view-current's height at this
-         breakpoint, now that every button in the toolbar is grown to the same
-         58px as its siblings (see --toolbar-btn-size and .smart-btn below) —
-         keeps every icon sitting in one visual line instead of the smaller
-         "bare icon" buttons reading as a different, disconnected row. */
+      /* Matches its siblings' height at this breakpoint (see --toolbar-btn-size),
+         so every icon sits on one visual line rather than in two rows. */
       height: 58px;
-      /* The one place #reset-button/#lock-rotation-button's size is set for
-         this breakpoint — resetButton.js's own stylesheet reads this variable
-         instead of hardcoding a width/height, so there's no second, tied
-         declaration to fight with (see the var() comment in resetButton.js). */
+      /* The ONLY place reset/lock's size is set for this breakpoint —
+         resetButton.js reads this variable rather than declaring its own. */
       --toolbar-btn-size: 58px;
     }
 
     #viewer-nav-toolbar .smart-btn {
       display: flex !important;
-      /* Without these, the button is a flex container with no cross-axis
-         alignment set, so its icon (34-36px) sits flush at the top of the
-         button's now much taller 56-58px box instead of centered — the img's
-         own margin: 0 auto (from the base .smart-btn img rule) is honored as
-         flex auto-margin centering horizontally, but there's no vertical
-         equivalent, so it read as "floating" at the top. #reset-button /
-         #lock-rotation-button never had this because their own rule already
-         sets align-items/justify-content directly. */
+      /* Without these the icon sits flush at the TOP of the taller button: the
+         img's margin:0 auto centres it horizontally only. */
       align-items: center;
       justify-content: center;
       flex: 0 0 auto;
@@ -4912,9 +4708,8 @@ function removeViewerLoadingScreen() {
     #lock-icon {
       width: 36px;
       height: 36px;
-      /* reset.png/lock.png read slightly lower than the other toolbar icons
-         once centered in their button — nudge both up a touch. Tablet/mobile
-         only; desktop reset button is unaffected. */
+      /* reset.png/lock.png read slightly low once centred, so nudge both up.
+         Tablet/mobile only — the desktop reset button is unaffected. */
       margin-bottom: 3px;
     }
 
@@ -5225,11 +5020,8 @@ function removeViewerLoadingScreen() {
       gap: 6px;
       z-index: auto;
       order: 4;
-      /* Matches .twod-mobile-trigger / .preset-view-current's height at this
-         breakpoint, now that every button in the toolbar is grown to the same
-         56px as its siblings (see --toolbar-btn-size and .smart-btn below) —
-         keeps every icon sitting in one visual line instead of the smaller
-         "bare icon" buttons reading as a different, disconnected row. */
+      /* Matches its siblings' height at this breakpoint (see --toolbar-btn-size),
+         so every icon sits on one visual line rather than in two rows. */
       height: 56px;
       /* See the tablet rule above — the only place reset/lock's size is set
          for this breakpoint, read by resetButton.js's var(). */
@@ -5254,9 +5046,8 @@ function removeViewerLoadingScreen() {
       width: 34px;
       height: 34px;
       margin-right: 0;
-      /* reset.png/lock.png read slightly lower than the other toolbar icons
-         once centered in their button — nudge both up a touch. Phone/tablet
-         only; desktop reset button is unaffected. */
+      /* reset.png/lock.png read slightly low once centred, so nudge both up.
+         Phone/tablet only — the desktop reset button is unaffected. */
       margin-bottom: 3px;
     }
 
@@ -5399,53 +5190,9 @@ function removeViewerLoadingScreen() {
 `;
   document.head.appendChild(style);
 
-  /* async function loadAllSTLSlots() {
-    const apiUrl = "/stl/slot/get"; // only the endpoint, since apiClient handles base URL
 
-    const authPayload = {
-        machine_id: MACHINE_ID,
-        uuid: 'AC4gRQXZJoNz9EhhW36Q8jMJXBsf',
-        caseIntID: paramValue // This is your numeric case ID from decrypted param
-    };
-
-    let anyLoaded = false;
-
-    for (let slot = 1; slot <= 4; slot++) {
-        const payload = [authPayload, { slotNumber: slot }];
-
-        try {
-            const result = await apiClient.post(apiUrl, payload, false, `Slot ${slot}`);
-
-            if (!result || !result.data) {
-                console.log(`❌ Slot ${slot}: No STL data found.`);
-                continue;
-            }
-
-            const binarySTL = atob(result.data);
-            const stlLoader = new STLMeshLoader(material);
-            const [mesh] = stlLoader.load(binarySTL, null);
-
-            mesh.name = result.filename || `Slot ${slot}`;
-            enforceOpaqueJawMesh(mesh);
-            parentObject.add(mesh);
-
-            console.log(`✅ Loaded STL from slot ${slot}`);
-            anyLoaded = true;
-        } catch (error) {
-            console.warn(`⚠️ Slot ${slot} failed:`, error.message || error);
-        }
-    }
-
-    if (!anyLoaded) {
-        alert("❌ No STL files found in slots 1 to 4.");
-    } else {
-        alert("✅ STL loading completed.");
-    }
-} */
-
-  // The viewer LANDS on the design (the uploaded slot STLs); the case's own
-  // mesh, polylines and artificial teeth are loaded but hidden until the 3D
-  // button asks for them. Both sets stay in memory, so switching is instant.
+  // The viewer LANDS on the uploaded slot STLs; the case's own mesh and overlays
+  // load hidden behind the 3D button. Both stay in memory, so switching is instant.
   const designSlotMeshes = [];
   let designViewActive = false;
 
@@ -5466,16 +5213,12 @@ function removeViewerLoadingScreen() {
     3: "Icon_LowerJaw_Occlusal.png",
     4: "lower.svg",
   };
-  // Slot colours are kept identical to the 3D preview panel so the same upload
-  // reads the same in both places (extraJawColor / METAL_RPD_COLOR there).
+  // Identical to the 3D preview panel's extraJawColor / METAL_RPD_COLOR, so one
+  // upload reads the same in both places.
   //
-  // The jaw slots take the same light tan as the viewer's OWN jaw meshes, whose
-  // vertex colours are 208/190/141 (see STLMeshLoader). Float components go into
-  // THREE.Color unconverted — three treats them as already-linear — which is what
-  // makes it that light cream. The 0xb0875a hex this replaced took the other path
-  // (a hex is read as sRGB and converted to linear) and landed a much darker
-  // brown, so an uploaded jaw read as a different material from the scan it
-  // sits beside.
+  // Float components go into THREE.Color UNCONVERTED (three treats them as
+  // already-linear), which is what matches the jaw meshes' 208/190/141. A hex
+  // instead is read as sRGB and converted, landing a much darker brown.
   const EXTRA_STL_JAW_COLOR = new THREE.Color(208 / 255, 190 / 255, 141 / 255);
   const METAL_RPD_COLOR = 0xd6dadf; // brushed cobalt-chrome / stainless
 
@@ -5492,9 +5235,8 @@ function removeViewerLoadingScreen() {
     delete all_mesh_mat[mesh.name];
   }
 
-  // Build one slot's mesh and put it in the scene. Shared by the initial load
-  // and by an upload, which renders the bytes it just sent instead of asking
-  // for them back — same as the 3D preview panel's renderExtraStl.
+  // Shared by the initial load and by an upload, which renders the bytes it just
+  // sent rather than asking for them back — as preview3D's renderExtraStl does.
   function addDesignSlotMesh(slot, filename, binarySTL) {
     // Re-uploading a slot replaces what was there.
     const previous = designSlotMeshes.findIndex(
@@ -5521,10 +5263,8 @@ function removeViewerLoadingScreen() {
       roughness: isMetalRpd ? 0.32 : 0.6,
     });
 
-    // Jaw side comes from the slot number, not the filename: the slots are fixed
-    // (1 upper jaw, 2 upper metal RPD, 3 lower jaw, 4 lower metal RPD) and
-    // uploads are named freely, so "jawSTLSlot3.stl" and "ATC-C-05L.stl" (both
-    // lower) were being treated as upper and given the upper jaw's transform.
+    // Jaw side comes from the SLOT NUMBER, never the filename — uploads are named
+    // freely, so "jawSTLSlot3.stl" (lower) was read as upper and mis-transformed.
     const isLower = EXTRA_STL_SLOT_JAW[slot] === "lower";
     const undercutForSlot =
       (isLower ? undercut_values[0] : undercut_values[1]) ?? "stl";
@@ -5550,16 +5290,12 @@ function removeViewerLoadingScreen() {
       sourceFilename: filename || "3D file",
     };
 
-    // No transform: slot STLs are rendered exactly as uploaded, so what the
-    // viewer shows is what is in the files. The 180° Z flip the OFF upper jaw
-    // needs turns the upper arch upside down and drops it through the lower
-    // one, so it must not be applied here. Same as the 3D preview panel, which
-    // renders extras untransformed.
+    // NO transform: slots render exactly as uploaded, so the viewer shows what is
+    // in the files. The OFF upper jaw's 180° Z flip must NOT be applied — it turns
+    // the arch upside down through the lower one.
     //
-    // Uploads are not guaranteed to share a coordinate frame — on case 2967
-    // both casts were exported teeth-up over the same Z band (~20mm of
-    // interpenetration) with the denture in a third frame. Nothing here
-    // compensates for that; an articulated export is what fixes it.
+    // Uploads aren't guaranteed to share a frame (case 2967: both casts teeth-up
+    // over one Z band, ~20mm interpenetration). An articulated export is the fix.
 
     enforceOpaqueJawMesh(mesh);
     parentObject.add(mesh);
@@ -5569,26 +5305,23 @@ function removeViewerLoadingScreen() {
 
   // ---- Undercut heatmap on the uploaded jaw slots -------------------------
   //
-  // The jaw slots (1 upper, 3 lower) can show the same undercut heatmap the 2D preview does.
-  // The case's own scan is NOT the source: the viewer serves it as the parameterisation mesh,
-  // which is the scan re-oriented and smoothed, so neither its coordinates (17% of an upload's
-  // vertices land within 1mm of it on case 2270) nor its vertex ordering line up well enough
-  // to copy per-vertex values — doing either scatters the heatmap over the mesh as speckle.
+  // NEVER copy the case scan's heatmap onto an upload: the viewer serves the scan
+  // as the parameterisation mesh (re-oriented and smoothed), so neither
+  // coordinates nor vertex order line up — only 17% of case 2270's upload
+  // vertices land within 1mm — and copying scatters the heatmap as speckle.
   //
-  // The upload is surveyed on its own instead: /dll/compute-surveying-no-pd accepts the STL in
-  // the request body (`stl_data`) and returns one value per welded vertex, in exactly the order
-  // STLMeshLoader.mergeVertices produces — both weld coincident corners at 1e-4 in first-seen
-  // order, which is why this is a straight index lookup with nothing to match.
+  // The upload is surveyed on its own via /dll/compute-surveying-no-pd, which
+  // takes the STL as `stl_data` and returns one value per welded vertex in
+  // exactly STLMeshLoader.mergeVertices' order (both weld at 1e-4, first-seen),
+  // so this is a straight index lookup with nothing to match.
   //
-  // Nothing runs on landing: slots start with undercut off, and the survey happens the first
-  // time a slot's undercut button is pressed (the slot download plus ~10s in the DLL).
+  // Nothing runs on landing — the survey costs a download plus ~10s in the DLL,
+  // so it waits for the slot's undercut button.
 
   const UNDERCUT_TAN = [208 / 255, 190 / 255, 141 / 255];
 
-  // Vertex-colour attributes are read as LINEAR by three.js, so the sRGB band colours
-  // below have to be converted here or they render washed out. Matches preview3D.js's
-  // srgbToLinear byte-for-byte — keep the two in sync. UNDERCUT_TAN is deliberately NOT
-  // converted, same as preview3D.js's DEFAULT_TOOTH_COLOR — do not "fix".
+  // three.js reads colour attributes as LINEAR, so the sRGB bands below convert.
+  // UNDERCUT_TAN deliberately does NOT, matching preview3D.js — do not "fix".
   function srgbToLinear(c) {
     return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
   }
@@ -5605,9 +5338,8 @@ function removeViewerLoadingScreen() {
     return rgb.map(srgbToLinear);
   }
 
-  // The case stores each jaw's insertion vector already in the DLL/mesh frame; the only step
-  // between it and the DLL's `dir` is desktop's per-jaw flip (see preview3DSurvey.js). Null
-  // when the jaw was never surveyed — (0,0,0) is how an unset case reads.
+  // Insertion vectors are already stored in the DLL/mesh frame; the only step to
+  // the DLL's `dir` is desktop's per-jaw flip. (0,0,0) means never surveyed.
   function slotSurveyDirection(jawKey) {
     const raw = ["x", "y", "z"].map((axis) =>
       Number(positionData?.[`${jawKey}_insertion_angle_${axis}`])
@@ -5626,9 +5358,8 @@ function removeViewerLoadingScreen() {
     return new Float32Array(bytes.buffer);
   }
 
-  // Roughly how long the DLL takes on a jaw-sized mesh, used to pace the survey phase of the
-  // progress bar. Measured 5-17s on case 2270 — the bar eases toward the end of its phase over
-  // this long and waits there if the call runs over, rather than claiming to be finished.
+  // Paces the survey phase of the progress bar; measured 5-17s on case 2270. The
+  // bar eases to the end of its phase and waits there rather than claiming done.
   const SLOT_SURVEY_EXPECTED_MS = 15000;
 
   // The viewer's loading screen, driven across the two phases a slot survey has: downloading
@@ -5665,12 +5396,8 @@ function removeViewerLoadingScreen() {
     paint(0.02, `Reading ${slotLabel}…`);
 
     return {
-      // ApiClient writes download bytes into window.viewerLoadingEls.progressBar. Swap in a
-      // stand-in that folds them into this slice of our bar instead — the same trick
-      // routeSlotDownloadProgress uses to send bytes to a slot tile. Returns the restore.
-      // Every response has to be wrapped, or ApiClient's own percentage and "Downloading…"
-      // readout land in the card mid-survey. Without a label the bar is left alone until the
-      // first byte arrives, so a running estimate can hand over rather than jump.
+      // ApiClient writes bytes into window.viewerLoadingEls.progressBar, so swap in
+      // a stand-in. EVERY response must be wrapped or its readout leaks through.
       trackDownload(from, to, label) {
         if (label) paint(from, label);
         const previous = window.viewerLoadingEls;
@@ -5833,9 +5560,8 @@ function removeViewerLoadingScreen() {
     );
   }
 
-  // Driven by the slot's undercut button in the objects panel. Async because the first switch
-  // surveys the upload; the result is kept for the session, so later toggles are instant.
-  // Returns whether undercut is on afterwards, so a slot that can't be surveyed falls back.
+  // Async because the first switch surveys the upload; the result is kept for the
+  // session. Returns the resulting state, so an unsurveyable slot falls back.
   async function setDesignSlotUndercut(slot, enabled) {
     const mesh = designSlotMeshes.find((m) => m.userData?.designSlot === slot);
     if (!mesh) return false;
@@ -5895,10 +5621,8 @@ function removeViewerLoadingScreen() {
     return designViewActive;
   }
 
-  // While the design view is up the objects panel lists the four slots instead
-  // of the case's jaw/mesh rows. Empty slots still get a row (disabled) so the
-  // panel always reads as the fixed 4-slot set, like the preview panel.
-  // Returns [] in case view, which restores the normal rows.
+  // In design view the panel lists the four slots (empty ones disabled) instead of
+  // the case's rows. Returns [] in case view, which restores them.
   function getDesignSlotRoster() {
     if (!designViewActive || !designSlotMeshes.length) return [];
     return [1, 2, 3, 4].map((slot) => ({
@@ -5922,10 +5646,8 @@ function removeViewerLoadingScreen() {
 
   const JAW_KEYS = ["upper", "lower"];
 
-  // Hide the case's meshes plus its polyline and artificial-teeth overlays —
-  // all three belong to the scanned case, not to the uploads. Safe to call
-  // again: the overlays finish loading in the background well after the design
-  // is already on screen, and this picks them up without double-recording.
+  // Hides the case's meshes and both overlays, which belong to the scan, not the
+  // uploads. Re-callable: overlays finish loading long after the design is up.
   function hideCaseAssetsForDesign() {
     parentObject.children.forEach((child) => {
       if (!child.isMesh || child.userData?.isDesignSlot) return;
@@ -5983,9 +5705,8 @@ function removeViewerLoadingScreen() {
     );
   }
 
-  // Show the uploaded 3D files. Fetches them on first use; afterwards it is
-  // just a visibility flip. Returns false when the case has no uploads — the
-  // caller then offers the upload affordance instead.
+  // Fetches the uploads on first use, then it is just a visibility flip. False
+  // when the case has none, so the caller offers the upload affordance instead.
   async function showDesignView({ silent = false } = {}) {
     if (!designSlotMeshes.length) {
       const loaded = await loadAllSTLSlots({ silent });
@@ -5998,9 +5719,8 @@ function removeViewerLoadingScreen() {
     return true;
   }
 
-  // Put the scene into design view with whatever slot meshes are loaded. Split
-  // out of showDesignView so an upload can switch to what it just added without
-  // going back to the network for all four slots.
+  // Design view with whatever slot meshes are already loaded. Split out so an
+  // upload can show what it just added without re-fetching all four slots.
   function activateDesignView() {
     designViewActive = true;
     hideCaseAssetsForDesign();
@@ -6012,8 +5732,8 @@ function removeViewerLoadingScreen() {
   }
 
   // ── Upload affordance for a case with no uploads ────────────────────────
-  // Mirrors the 3D preview panel's empty slot rows: a "+" per slot that opens a
-  // file picker and POSTs to /stl/slot/, then reloads the design view.
+  // Mirrors the 3D preview panel's empty rows: a "+" per slot that picks a file,
+  // POSTs to /stl/slot/, then reloads the design view.
   function removeDesignUploadPrompt() {
     document.getElementById("design-upload-prompt")?.remove();
   }
@@ -6045,9 +5765,8 @@ function removeViewerLoadingScreen() {
     });
   }
 
-  // Shared by the file-picker flow (pickAndUploadSlot) and drag-and-drop
-  // (wireSlotDropTarget): validates, uploads and renders one file into one
-  // slot. Either entry point just has to hand it a File.
+  // Validates, uploads and renders one File into one slot. Shared by the file
+  // picker and drag-and-drop, which each just hand it a File.
   async function uploadFileToSlot(file, slot, statusEl) {
     if (!file) return;
     if (!/\.stl$/i.test(file.name)) {
@@ -6067,10 +5786,8 @@ function removeViewerLoadingScreen() {
             uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
             caseIntID: paramValue,
           },
-          // case_id belongs in THIS object, not the auth one: the writer reads
-          // it from here (same as POST /stl) and without it the insert runs
-          // `case_id = NULL` and 500s. The 500 carries no CORS header, so the
-          // browser only ever saw "Failed to fetch".
+          // case_id belongs in THIS object, not the auth one (same as POST /stl):
+          // without it the insert 500s with no CORS header, seen as "Failed to fetch".
           {
             case_id: paramValue,
             slotNumber: slot,
@@ -6081,10 +5798,8 @@ function removeViewerLoadingScreen() {
         (fraction) => setSlotTileBusy(slot, "Uploading", fraction)
       );
 
-      // Render the bytes we just sent instead of reloading the design: the old
-      // path called showDesignView(), which re-downloaded every slot AND tore
-      // the panel down, so the first upload ended the session — there was no way
-      // to add the other three files. Same approach as the 3D preview panel.
+      // Render the bytes just sent rather than showDesignView(), which re-downloads
+      // every slot and tears the panel down, ending the session after one upload.
       statusEl.textContent = `${file.name} uploaded. Preparing…`;
       setSlotTileBusy(slot, "Preparing");
       // Parsing blocks the main thread, so let the tile paint "Preparing…" first.
@@ -6115,9 +5830,8 @@ function removeViewerLoadingScreen() {
     await uploadFileToSlot(file, slot, statusEl);
   }
 
-  // Lets a slot tile accept a dragged-in STL directly, instead of only
-  // opening the file picker. Mirrors the click path's guard: a filled or
-  // busy slot won't accept a drop, the same as its tile being disabled.
+  // Lets a tile take a dragged-in STL, not just the file picker. Same guard as
+  // the click path: a filled or busy slot refuses the drop.
   function wireSlotDropTarget(wrap, slot, statusEl) {
     const canAcceptDrop = () =>
       !wrap.classList.contains("is-filled") && !wrap.classList.contains("is-busy");
@@ -6158,9 +5872,8 @@ function removeViewerLoadingScreen() {
     );
   }
 
-  // Put one slot's tile into its working state: a bar of its own, per slot, so
-  // each file reports itself instead of four downloads sharing one number.
-  // fraction null draws an indeterminate bar (parsing, deleting — no byte count).
+  // Each slot gets its own bar, so four downloads don't share one number.
+  // A null fraction draws an indeterminate bar (parsing, deleting — no bytes).
   function setSlotTileBusy(slot, note, fraction = null) {
     const wrap = getSlotWrap(slot);
     if (!wrap) return;
@@ -6190,9 +5903,8 @@ function removeViewerLoadingScreen() {
     if (noteEl) noteEl.textContent = "";
   }
 
-  // Hands ApiClient a per-slot stand-in for the loading screen's progress
-  // elements, so a slot's download bytes land in that slot's own tile. Restore()
-  // must run before the next slot starts.
+  // Gives ApiClient a per-slot stand-in for the loading screen's progress
+  // elements. Restore() MUST run before the next slot starts.
   function routeSlotDownloadProgress(slot) {
     const previous = window.viewerLoadingEls;
     let fileMax = 1;
@@ -6227,10 +5939,8 @@ function removeViewerLoadingScreen() {
     };
   }
 
-  // Paint every tile from current slot state: filled slots show their filename
-  // and a delete button, empty ones keep the "+". Called after each upload so
-  // the panel stays open for the next file, the way the 3D preview panel's
-  // "Other 3D files" list does.
+  // Repaints every tile from current state, so the panel stays open for the next
+  // file after each upload — as preview3D's "Other 3D files" list does.
   function refreshUploadPromptSlots() {
     const prompt = document.getElementById("design-upload-prompt");
     if (!prompt) return;
@@ -6295,9 +6005,8 @@ function removeViewerLoadingScreen() {
     if (!isBusy) refreshUploadPromptSlots();
   }
 
-  // Free the slot on the backend, then drop its mesh. Confirmed first: the file
-  // is gone for every viewer of the case and re-uploading means finding the
-  // original STL again.
+  // Frees the slot on the backend, then drops its mesh. Confirmed first: the file
+  // goes for every viewer of the case, and re-uploading needs the original STL.
   async function deleteSlotFile(slot, statusEl) {
     const filename = getUploadedSlotName(slot);
     if (!filename) return;
@@ -6341,9 +6050,8 @@ function removeViewerLoadingScreen() {
     }
   }
 
-  // The slot manager: four tiles, one per slot, mirroring the 3D preview panel's
-  // "Other 3D files" list. Opens automatically when a case has no uploads at
-  // all, and on demand from the toolbar button.
+  // Four tiles, one per slot, mirroring preview3D's "Other 3D files" list. Opens
+  // automatically on a case with no uploads, and on demand from the toolbar.
   function showDesignUploadPrompt() {
     if (document.getElementById("design-upload-prompt")) {
       refreshUploadPromptSlots();
@@ -6402,9 +6110,8 @@ function removeViewerLoadingScreen() {
       slotsRow.appendChild(wrap);
     });
 
-    // Doubles as "done" once something is uploaded: with files in the scene
-    // there is a design to go back to, so closing the panel is the useful
-    // action rather than switching to the case scan.
+    // Doubles as "done" once something is uploaded: with files in the scene,
+    // closing beats switching to the case scan.
     const closeBtn = document.createElement("button");
     closeBtn.type = "button";
     closeBtn.className = "dup-open-scan";
@@ -6423,9 +6130,8 @@ function removeViewerLoadingScreen() {
     (viewerContainer || document.body).appendChild(prompt);
     refreshUploadPromptSlots();
 
-    // A drop that lands on the card but misses a tile (gap between slots,
-    // heading, etc.) still has to be swallowed here — without this the
-    // browser's default action is to navigate to/open the dropped file.
+    // A drop that hits the card but misses a tile must still be swallowed, or the
+    // browser navigates to the dropped file.
     prompt.addEventListener("dragover", (event) => event.preventDefault());
     prompt.addEventListener("drop", (event) => event.preventDefault());
   }
@@ -6436,14 +6142,12 @@ function removeViewerLoadingScreen() {
   window.removeDesignUploadPrompt = removeDesignUploadPrompt;
 
   // ── Case assets, loaded on demand ───────────────────────────────────────
-  // Nothing here is fetched on entry. The 3D button is what pulls the case's
-  // mesh, polylines and artificial teeth down, once; afterwards switching views
-  // is just a visibility flip.
+  // Nothing here is fetched on entry: the 3D button pulls the case's mesh and
+  // overlays once, after which switching views is a visibility flip.
   let caseAssetsPromise = null;
 
-  // Same endpoints and fallback the eager path used: parameterisation meshes
-  // first, /stl/get when that is unavailable (which also sets `stl`, the flag
-  // that decides the upper jaw's orientation).
+  // Parameterisation meshes first, /stl/get as fallback — which also sets `stl`,
+  // the flag deciding the upper jaw's orientation.
   async function fetchCaseMeshData() {
     const fetched = [];
     const jawMesh = await apiClient.post(
@@ -6526,9 +6230,8 @@ function removeViewerLoadingScreen() {
     rebuildObjectsPanel();
   }
 
-  // Fetches the four upload slots and adds them to the scene. Visibility and
-  // the objects panel are the caller's job (showDesignView). `silent` skips the
-  // alerts, for the automatic load on entry. Returns true if anything loaded.
+  // Fetches the four slots into the scene; visibility is showDesignView's job.
+  // `silent` skips alerts for the automatic load on entry.
   async function loadAllSTLSlots({ silent = false } = {}) {
     const slotLoadStartedAt = performance.now();
     startViewerLoadTimer("viewer: framework/denture mesh loading");
@@ -6562,10 +6265,8 @@ function removeViewerLoadingScreen() {
     );
     if (guiBlackBox) guiBlackBox.remove();
 
-    // The slot manager is the progress UI: each of the four tiles reports its
-    // own file. That replaced a single bar on the loading screen that pooled all
-    // four downloads into one number — you could not tell which file was slow,
-    // or which slots the case even had until the whole thing finished.
+    // The slot manager IS the progress UI, each tile reporting its own file —
+    // one pooled bar hid which file was slow and which slots the case had.
     showDesignUploadPrompt();
     const prompt = document.getElementById("design-upload-prompt");
     prompt?.classList.add("is-loading");
@@ -6574,11 +6275,8 @@ function removeViewerLoadingScreen() {
 
     let anyLoaded = false;
 
-    // The backend throttles bursts of requests and the rejection comes back
-    // without CORS headers, so the browser reports it as a CORS failure rather
-    // than a status. Loading on entry puts slot 1 right behind the case-mesh
-    // downloads, which was enough to lose it — pause and retry before dropping
-    // a slot. Same reason the case list loads its rows lazily.
+    // A throttled burst returns without CORS headers, so the browser reports a CORS
+    // failure, not a status. Pause and retry before dropping a slot.
     const fetchSlot = async (payload, slot) => {
       for (let attempt = 1; ; attempt += 1) {
         try {
@@ -6605,11 +6303,8 @@ function removeViewerLoadingScreen() {
           setSlotTileBusy(slot, "Downloading", 0);
           const result = await fetchSlot(payload, slot);
 
-          // Match the 3D preview panel (preview3D.fetchExtraStlsForCase): the
-          // /stl/slot/get endpoint may return a single object OR a one-element
-          // array ([{ filename, data, ... }]). Newly created slot STLs come back
-          // array-wrapped, so read result[0] when it's an array — otherwise the
-          // viewer silently skipped them.
+          // /stl/slot/get returns a single object OR a one-element array — newly
+          // created slots come back wrapped, and were silently skipped.
           const slotItem = Array.isArray(result) ? result[0] : result;
 
           if (!slotItem || !slotItem.data) {
@@ -6617,9 +6312,8 @@ function removeViewerLoadingScreen() {
             continue;
           }
 
-          // Parsing a 15–20 MB STL blocks the main thread, so hand the browser a
-          // frame to paint this status before it freezes — otherwise the bar sits
-          // at 100% with no explanation for several seconds per file.
+          // Parsing a 15-20 MB STL blocks the main thread, so yield a frame to
+          // paint this status first or the bar sits at 100% with no explanation.
           setSlotTileBusy(slot, "Preparing");
           await new Promise((resolve) => requestAnimationFrame(resolve));
 
@@ -6667,21 +6361,16 @@ function removeViewerLoadingScreen() {
     return anyLoaded;
   }
 
-  //console.log(responseDatas);
-  // Decode/parse/add the case's own meshes. Extracted so the 3D button can
-  // run it later: on entry `responseDatas` is empty (nothing was fetched) and
-  // this is a no-op.
+  // Decodes/parses/adds the case's own meshes. Extracted so the 3D button can run
+  // it later: on entry `responseDatas` is empty and this is a no-op.
   function renderCaseMeshes(responseDatas) {
     const meshCpuStartedAt = performance.now();
     let jawMeshCpuMs = 0;
     let frameworkMeshCpuMs = 0;
     startViewerLoadTimer("viewer: mesh decode/parse/render");
 
-    // Normalize each mesh entry so the `.includes()` checks below never throw and
-    // jaw-side detection matches the 3D preview panel (getJawKeyFromFile). The
-    // /stl/get fallback can return a NUMERIC `type` (1=upper, 2=lower) or omit
-    // `filename`; calling `.includes()` on a number threw here, halting the parse
-    // loop and leaving the loader stuck at 100%.
+    // Normalized so the `.includes()` checks below never throw: /stl/get can send a
+    // NUMERIC `type` or omit `filename`, which halted the loop at 100%.
     for (const f of responseDatas) {
       if (typeof f.filename !== "string") f.filename = String(f.filename ?? "");
       const t = String(f.type ?? "").toLowerCase();
@@ -6733,20 +6422,14 @@ function removeViewerLoadingScreen() {
       //console.log('check stl:' + stl)
       const meshParseStartedAt = performance.now();
 
-      // `stl` only records that /parameterisation/mesh/getall was unavailable and
-      // we fell back to /stl/get — it does NOT guarantee the bytes are STL. That
-      // fallback route serves OFF meshes for some cases (e.g. upperjawclosed.off),
-      // and feeding OFF text into the STL loader throws
-      // "RangeError: Offset is outside the bounds of the DataView", which escapes
-      // this loop and leaves the loader stuck at 100% (the 3D preview panel avoids
-      // this by sniffing each payload — see preview3D.inspectMeshPayload). Detect
-      // the real format from the decoded head and route OFF data to the OFF loader
-      // regardless of the flag; keep `stl` for orientation (closed OFF jaws, like
-      // real STLs, are already world-oriented and must NOT get the +180 flip).
+      // `stl` records only that we fell back to /stl/get — it does NOT mean the
+      // bytes are STL. That route serves OFF for some cases, and OFF text in the
+      // STL loader throws a DataView RangeError that escapes the loop and sticks
+      // the loader at 100%. So sniff the decoded head and route by real format,
+      // keeping `stl` for ORIENTATION only (closed OFF jaws must not get +180).
       const isOffData = offdata.trimStart().slice(0, 3).toUpperCase() === "OFF";
-      // "stl" is the loaders' no-heatmap sentinel — an undefined surface would
-      // throw inside OFFLoader ('surveying_values' in undefined) and re-create
-      // the stuck-at-100% hang.
+      // "stl" is the loaders' no-heatmap sentinel: an undefined surface throws
+      // inside OFFLoader ('surveying_values' in undefined) and re-creates the hang.
       const undercutForJaw =
         (offFile.type.includes("upper")
           ? undercut_values[1]
@@ -6763,10 +6446,8 @@ function removeViewerLoadingScreen() {
       }
       meshParseMs = performance.now() - meshParseStartedAt;
 
-      // If the jaw side couldn't be resolved (unexpected `type`) or the loader
-      // rejected the payload (OFFLoader.parse returns the string "stl" on a bad
-      // header), mesh_geo isn't a [mesh, materials] pair — skip rather than throw
-      // (a throw here halts the loop and leaves the loading screen stuck at 100%).
+      // An unresolved jaw side, or a payload OFFLoader.parse rejected, leaves
+      // mesh_geo not a pair. SKIP — a throw here sticks the loader at 100%.
       if (!mesh_geo || typeof mesh_geo === "string" || !mesh_geo[0]) {
         console.warn(
           `[viewer3D] Skipping mesh with unresolved geometry: ${offFile.filename} (type=${offFile.type})`
@@ -6786,20 +6467,6 @@ function removeViewerLoadingScreen() {
         all_mesh_mat[offFile.filename] = mesh_geo[1].slice();
       }
 
-      //addVisibilityControl(mesh, 'BoxMesh');
-      //addTransparencyControl(material, 'BoxMesh');
-      /*
-      if(offFile.filename.includes('surface')[])
-        {
-          if(offFile.filename.includes('upper'))
-            {
-              changeMeshRotation(mesh,pos['upper'][0],pos['upper'][1],pos['upper'][2]);
-            }
-            else{
-              changeMeshRotation(mesh,pos['lower'][0],pos['lower'][1],pos['lower'][2]);
-            }
-        }
-            */
       // Add the mesh to the parent object
 
       if (offFile.type.includes("upper") && !stl && !close) {
@@ -6809,12 +6476,6 @@ function removeViewerLoadingScreen() {
       }
 
       //console.log(mesh)
-      /*
-      if(stl)
-        {
-          changeMeshRotation(mesh,0,105,0);
-        }
-          */
       enforceOpaqueJawMesh(mesh);
       parentObject.add(mesh);
       syncPolylineFocusMode();
@@ -6859,9 +6520,8 @@ function removeViewerLoadingScreen() {
   renderCaseMeshes(responseDatas);
   //console.log(all_mesh_mat);
 
-  // Show "No STL/3D Scan File Found!" when the API returned no jaw mesh data.
-  // Only meaningful once the scan has actually been requested — on entry
-  // nothing is fetched, and an empty `responseDatas` just means "not asked for".
+  // Only meaningful once the scan has been requested: on entry nothing is
+  // fetched, and an empty `responseDatas` just means "not asked for".
   const hasJawFiles = responseDatas.some(
     (f) => f.filename && !f.filename.includes("surface")
   );
@@ -6907,17 +6567,13 @@ function removeViewerLoadingScreen() {
   // Load the OFF file
 
   window.finished = true; // window property (declared at top) — a bare `finished` only resolves through it
-  // Instantiate a new renderer and set its size
-  // antialias on: fissures are sub-pixel at normal zoom and alias into noise
-  // without it. Do NOT add setPixelRatio here — resizeViewerStage() calls
-  // setSize(w, h, false), so the canvas carries no CSS size and `#container3D
-  // canvas { width/height: auto !important }` lays it out at its INTRINSIC
-  // (attribute) size. A pixel ratio of 2 therefore lays the canvas out at twice
-  // the stage and pushes the jaw off-screen.
+  // antialias on: fissures are sub-pixel at normal zoom and alias into noise.
+  // Do NOT add setPixelRatio — resizeViewerStage() calls setSize(w, h, false), so
+  // the canvas has no CSS size and is laid out at its INTRINSIC size; a ratio of
+  // 2 then doubles the stage and pushes the jaw off-screen.
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-  // White by choice. Note it costs silhouette contrast — tan crowns measure 2.6:1
-  // on white versus 5.6:1 on dark slate, so interproximal embrasures read less
-  // strongly. Keep #container3D's background-color in step with this.
+  // White by choice, at a cost in silhouette contrast (tan crowns measure 2.6:1 on
+  // white vs 5.6:1 on slate). Keep #container3D's background-color in step.
   renderer.setClearColor(0xffffff, 1);
   resizeViewerStage(renderer);
 
@@ -6993,8 +6649,7 @@ function removeViewerLoadingScreen() {
     controls.rotateSpeed = 4.0;
     controls.zoomSpeed = 1.4;
     controls.panSpeed = 30;
-    // Panning is handled manually so the rotation target can stay anchored
-    // after the jaw has been moved around the screen.
+    // Panning is handled manually rather than by the controls.
     // Action -> button: rotate on right-drag, matching the 2D page's 3D preview.
     controls.mouseButtons = {
       LEFT: 2,
@@ -7127,11 +6782,8 @@ function removeViewerLoadingScreen() {
       console.warn("[viewer3D] Design view failed to load:", error);
     });
 
-  // No /user/logout here any more. It used to fire once the entry load
-  // finished, which ended the shared server-side session while the page was
-  // still open — the 3D button then 401'd on its first request and only
-  // recovered through ApiClient's re-login. With the case assets, uploads and
-  // status changes all happening after entry, the session has to outlive it.
+  // NO /user/logout here: it ended the shared server-side session while the page
+  // was still open, so the 3D button 401'd on its first request.
 
   addViewerLoadTiming(
     "total viewer load",
@@ -7150,99 +6802,6 @@ function isMobileDevice() {
   return /Mobi|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
     navigator.userAgent
   );
-}
-
-function displayFullScreenImage(img) {
-  // Create a fullscreen container
-  const fullscreenContainer = document.createElement("div");
-  fullscreenContainer.style.position = "fixed";
-  fullscreenContainer.style.top = "0";
-  fullscreenContainer.style.left = "0";
-  fullscreenContainer.style.width = "100%";
-  fullscreenContainer.style.height = "100%";
-  fullscreenContainer.style.backgroundColor = "rgba(0, 0, 0, 0.9)"; // Semi-transparent black background
-  fullscreenContainer.style.zIndex = "1000"; // Ensure it's above other content
-  fullscreenContainer.style.display = "flex";
-  fullscreenContainer.style.justifyContent = "center";
-  fullscreenContainer.style.alignItems = "center";
-  fullscreenContainer.style.flexDirection = "column"; // stack vertically
-
-  // 🦷 Create and append the case title watermark
-  const watermark = document.createElement("div");
-  watermark.textContent = `🦷 Case: ${window.caseID || "N/A"}`;
-  watermark.style.position = "absolute";
-  watermark.style.top = "8px";
-  watermark.style.left = "50%";
-  watermark.style.transform = "translateX(-50%)";
-  watermark.style.color = "black";
-  watermark.style.fontSize = "16px";
-  watermark.style.fontWeight = "bold";
-  watermark.style.textShadow = "0px 0px 10px rgba(0, 0, 0, 0.8)";
-  watermark.style.pointerEvents = "none";
-  watermark.classList.add("case-title-watermark");
-
-  fullscreenContainer.appendChild(watermark);
-
-  // watermark stays pinned to top: 8px — no dynamic centering needed
-
-  // Calculate maximum dimensions for the fullscreen image
-  const screenWidth = window.innerWidth;
-  const screenHeight = window.innerHeight;
-  let maxImageWidth;
-  let maxImageHeight;
-  //if is mobile then expand image
-  if (isMobileDevice()) {
-    maxImageWidth = screenWidth * 0.9; // Adjust as needed, e.g., 90% of screen width
-    maxImageHeight = screenHeight * 0.9; // Adjust as needed, e.g., 90% of screen height
-  } else {
-    maxImageWidth = img.width;
-    maxImageHeight = img.height;
-  }
-
-  // Create an image element inside the fullscreen container
-  const fullscreenImg = new Image();
-  fullscreenImg.src = img.src; // Set the source of the fullscreen image
-
-  // Calculate image dimensions to maintain aspect ratio
-  const aspectRatio = img.width / img.height;
-  let displayWidth = maxImageWidth;
-  let displayHeight = maxImageWidth / aspectRatio;
-
-  // Adjust based on height if necessary
-  if (displayHeight > maxImageHeight) {
-    displayHeight = maxImageHeight;
-    displayWidth = maxImageHeight * aspectRatio;
-  }
-
-  // Apply calculated dimensions and styles to the image
-  fullscreenImg.style.width = `${displayWidth}px`;
-  fullscreenImg.style.height = `${displayHeight}px`;
-  fullscreenImg.style.objectFit = "contain"; // Maintain aspect ratio
-  const touchMoveHandler = function (event) {
-    if (event.scale !== 1) {
-      event.preventDefault();
-    }
-  };
-
-  const wheelHandler = function (event) {
-    if (event.ctrlKey) {
-      event.preventDefault();
-    }
-  };
-  document.addEventListener("touchmove", touchMoveHandler, { passive: false });
-  document.addEventListener("wheel", wheelHandler, { passive: false });
-  // Append the fullscreen image to the container
-  fullscreenContainer.appendChild(fullscreenImg);
-  // Close fullscreen on click outside the image
-  fullscreenContainer.addEventListener("click", function () {
-    document.removeEventListener("touchmove", touchMoveHandler, {
-      passive: false,
-    });
-    document.removeEventListener("wheel", wheelHandler, { passive: false });
-    document.body.removeChild(fullscreenContainer); // Remove fullscreen container
-  });
-  // Append the fullscreen container to the body
-  document.body.appendChild(fullscreenContainer);
 }
 
 function isObject(variable) {

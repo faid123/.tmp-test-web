@@ -1,12 +1,13 @@
 import { state, setMessage } from "./2DAnnotation.js";
 import { loadCaseNote, WORK_CATEGORY_LABELS } from "./caseNote.js";
 import { logApi } from "../shared/apiLog.js";
+import { resolveToothArtSources } from "./toothUtils.js";
+import { safeAtob } from "./dotnetBinaryFormatter.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 
 const ASSET_BASE = "../../assets/clinicalInfo";
-// .NET BinaryFormatter "single System.String" envelope — must match the desktop
-// SmartRPD app byte-for-byte so it can deserialize web-saved clinical info (and
-// vice-versa). Layout: HEADER(17) + STRING_RECORD(5) + <7-bit length> + UTF-8 JSON + END(1).
+// .NET BinaryFormatter single-String envelope; MUST match desktop byte-for-byte.
+// Layout: HEADER(17) + STRING_RECORD(5) + <7-bit length> + UTF-8 JSON + END(1).
 const NET_BF_HEADER = [0, 1, 0, 0, 0, 255, 255, 255, 255, 1, 0, 0, 0, 0, 0, 0, 0];
 const NET_BF_STRING_RECORD = [0x06, 1, 0, 0, 0]; // BinaryObjectString, objectId = 1
 const NET_BF_END = 0x0b; // MessageEnd
@@ -103,20 +104,8 @@ function noteFor(toothId) {
   return clinicalNotes[toothId];
 }
 
-function safeAtob(b64) {
-  if (typeof b64 !== "string") return null;
-  try {
-    const cleaned = b64.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
-    const padded = cleaned + "=".repeat((4 - (cleaned.length % 4)) % 4);
-    return atob(padded);
-  } catch {
-    return null;
-  }
-}
-
-// Pull the JSON string out of a .NET BinaryFormatter single-String envelope by
-// walking it (header 17 + 0x06 + objId 4 + 7-bit length + bytes). Robust to a
-// length-prefix byte that happens to equal '[' — which the old bracket-scan wasn't.
+// Walks the envelope (header 17 + 0x06 + objId 4 + 7-bit length + bytes) rather than
+// scanning for '[', which broke when a length-prefix byte happened to equal it.
 function extractDotNetString(bin) {
   if (bin.length < 23 || bin.charCodeAt(17) !== 0x06) return null;
   let p = 22; // 17 (header) + 1 (record type) + 4 (objectId)
@@ -166,9 +155,8 @@ function encode7BitLength(byteLength) {
 }
 
 export function encodeClinicalInfoData(rows) {
-  // 2-space JSON mirrors the desktop's style for human-diffability; any whitespace
-  // deserializes fine. Payload is pure ASCII, so char length == UTF-8 byte length,
-  // which the .NET length prefix below requires.
+  // 2-space JSON mirrors the desktop's style; any whitespace deserializes. The payload is
+  // pure ASCII, so char length == byte length, which the .NET length prefix requires.
   const json = JSON.stringify(Array.isArray(rows) ? rows : [], null, 2);
   const header = String.fromCharCode(...NET_BF_HEADER);
   const record = String.fromCharCode(...NET_BF_STRING_RECORD);
@@ -312,25 +300,7 @@ function buildToothCell(toothId) {
     const stack = document.createElement("div");
     stack.className = "clinical-info-tooth-stack";
 
-    // Pick the crown source: Cracked SVG replaces the crown when cracked is set.
-    const crownSrc = note?.cracked ? `${id}_Cracked.svg` : `${id}_Crown.svg`;
-    // Pick the root source: Implant > RCT > default.
-    const rootSrc = note?.implant
-      ? `${id}_Implant.svg`
-      : note?.rct
-      ? `${id}_RCT.svg`
-      : `${id}_Root.svg`;
-    // Root tint only when the root image isn't already a replaced (implant/RCT) graphic.
-    const rootReplaced = !!(note?.implant || note?.rct);
-    const mobilityTint = rootReplaced
-      ? ""
-      : note?.mobility === "1"
-      ? "is-tint-green"
-      : note?.mobility === "2"
-      ? "is-tint-yellow"
-      : note?.mobility === "3"
-      ? "is-tint-red"
-      : "";
+    const { crownSrc, rootSrc, mobilityTint } = resolveToothArtSources(id, note);
 
     const crownClasses = [
       "clinical-info-tooth-crown",
@@ -413,9 +383,8 @@ export async function getClinicalNotesForCase(caseIntID) {
   }
 }
 
-// Mesial = toward the midline (between 11/21 upper and 41/31 lower).
-// Right-half teeth (11-18, 41-48) sit visually left of the midline, so mesial points →.
-// Left-half teeth (21-28, 31-38) sit visually right of the midline, so mesial points ←.
+// Mesial = toward the midline. Right-half teeth (11-18, 41-48) sit visually left of it so
+// mesial points right; left-half teeth (21-28, 31-38) point left.
 export function tiltArrowFor(direction, toothId) {
   const isRightSide =
     (toothId >= 11 && toothId <= 18) || (toothId >= 41 && toothId <= 48);

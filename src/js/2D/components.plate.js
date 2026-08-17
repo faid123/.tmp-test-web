@@ -273,17 +273,13 @@ export function ensurePlatePlacementsOnPresentTeeth(teeth, plateComponentId, com
 }
 
 /**
- * Keep each tooth's `plate-prox` (per-tooth plating — desktop's Reciprocating.Tooth
- * Type = 2) in step with the jaw's major connector after a switch:
- *  - PLATE / strap / horseshoe plates every present tooth it covers, giving each a
- *    real, erasable `plate-prox` (renderer draws it as the tooth's fill).
- *  - the LOWER lingual BAR plates nothing, so it CLEARS every `plate-prox`. Critical
- *    after loading a PLATE: else the bar encodes Type = 2 per tooth and a reopen
- *    re-materializes it (the bar "comes back as a plate").
- *  - the UPPER PALATAL BAR is the exception: its plates are user-managed, so it neither
- *    adds nor removes `plate-prox` (lets an anterior plate coexist with a palatal bar).
- * A reciprocating clasp keeps its slot (clasp XOR plate); excluded teeth lose their
- * plate. This is what makes the plate data-driven and removable.
+ * Keeps each tooth's `plate-prox` (Reciprocating.Tooth Type = 2) in step after a connector
+ * switch, which is what makes plating data-driven and removable:
+ *  - PLATE / strap / horseshoe give every covered present tooth an erasable `plate-prox`.
+ *  - the LOWER lingual BAR CLEARS them all, or it re-encodes Type = 2 and "comes back as
+ *    a plate" on reopen.
+ *  - the UPPER PALATAL BAR neither adds nor removes any — its plates are user-managed.
+ * A reciprocating clasp keeps its slot (clasp XOR plate).
  */
 export function syncReciprocatingPlatesToMajorConnector(teeth, majorComponentId, jawKeys) {
   if (!teeth || typeof teeth !== "object" || !Array.isArray(jawKeys)) {

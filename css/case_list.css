@@ -28,11 +28,8 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
   grid-template-rows: 1fr auto;
-  /* 100vh is the LARGEST viewport on mobile (URL bar hidden), so on real devices
-     the page grows taller than the visible area and the footer drops below the
-     fold — even though DevTools device-emulation (which uses the exact viewport)
-     shows it. 100dvh tracks the currently visible height so the footer stays put;
-     100vh is the fallback for browsers without dvh. */
+  /* 100dvh tracks the visible height so the footer stays put; 100vh is the
+     fallback and is too tall on mobile (it assumes the URL bar is hidden). */
   height: 100vh;
   height: 100dvh;
   background: var(--bg);
@@ -129,9 +126,6 @@ button {
 }
 
 .cm-footer-chat-btn { color: #fff; }
-
-/* The footer Wi‑Fi / connectivity indicator was removed; the status bar now
-   ends with the Help and About buttons, which use .cm-footer-btn above. */
 
 /* ============ slide-in sidebar (hamburger menu) ============ */
 .app-sidebar {
@@ -268,9 +262,8 @@ button {
 .app-sidebar-item-icon {
   width: 34px;
   height: 34px;
-  /* Font Awesome loads after this file and forces .fa back to inline-block via
-     --fa-display; set it to inline-flex so the glyph centers in the chip.
-     line-height/text-align are a fallback if FA isn't the display source. */
+  /* Font Awesome loads later and forces .fa to inline-block via --fa-display;
+     override it so the glyph centers. line-height/text-align are the fallback. */
   --fa-display: inline-flex;
   display: inline-flex;
   align-items: center;
@@ -300,12 +293,8 @@ button {
   margin: 8px 14px;
 }
 
-/* ---- language picker (trigger + inline dropdown) ----
-   The trigger is a plain .app-sidebar-item like every other row; only the
-   disclosure caret and the expanding submenu are extra. The list is built by
-   src/js/shared/appSidebar.js so the language set lives in one place.
-   The menu expands inline (rather than floating) because .app-sidebar-list
-   scrolls — an absolutely positioned panel would be clipped by it. */
+/* ---- language picker ---- List built by src/js/shared/appSidebar.js; expands
+   inline because .app-sidebar-list scrolls and would clip an absolute panel. */
 .app-sidebar-item-caret {
   margin-left: auto;
   font-size: 10px;
@@ -388,8 +377,6 @@ button {
 
 .cm-titles h1 {
   font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
   color: var(--ink);
   
 }
@@ -411,10 +398,8 @@ button {
 .notification-popup {
   position: absolute;
   top: calc(100% + 10px);
-  /* Anchor the popup to the BELL specifically. The bell sits to the left of
-     the logout avatar inside .cm-header-right; offsetting the right edge by
-     `(avatar 40px + gap 12px)` lines the popup's right edge up with the
-     bell instead of with the logout button. */
+  /* Anchors the popup to the bell, not the logout avatar: offsetting the right
+     edge by (avatar 40px + gap 12px) lines it up with the bell. */
   right: 0;
   left: auto;
   width: 340px;
@@ -495,19 +480,15 @@ button {
   height: 40px;
   border-radius: 12px;
   background: var(--panel);
-  box-shadow: var(--shadow-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--ink-soft);
   font-size: 16px;
-  transition: transform 0.15s ease;
 }
-.cm-bell:hover { transform: translateY(-1px); }
 
-/* Phone-only header actions (search + create). The filter toolbar carries both
-   at desktop widths, so these stay hidden until the phone breakpoint unhides
-   them. Same for the search bar they reveal. */
+/* Phone-only header actions (search + create), hidden until the phone
+   breakpoint — the filter toolbar carries both at desktop widths. */
 .cm-mobile-only { display: none; }
 .cm-mobile-search { display: none; }
 .cm-mobile-create {
@@ -561,10 +542,8 @@ button {
 }
 
 .cm-user-avatar.logout {
-  background: var(--primary-strong);
   color: #fff;
   cursor: pointer;
-  transition: background 0.15s ease;
 }
 
 .cm-user-avatar.logout:hover {
@@ -584,11 +563,8 @@ button {
   flex-wrap: nowrap;
 }
 
-/* Spread the toolbar items across the full row at every viewport width —
-   leftover space is shared instead of pooling after the Create button.
-   Applies on desktop's single row and on tablet's wrapped rows alike
-   (each wrapped row fills its own width). The phone grid (≤640) overrides
-   display, so this flex rule is inert there. */
+/* Spread toolbar items across the row so slack is shared rather than pooling
+   after Create. Inert on phone (≤640), where the grid overrides display. */
 .cm-toolbar > * {
   flex: 1 1 auto;
   min-width: 0;
@@ -606,7 +582,6 @@ button {
   gap: 8px;
   padding: 9px 14px;
   border-radius: 10px;
-  background: var(--line-soft);
   color: var(--ink-soft);
   font-size: 13px;
   font-weight: 500;
@@ -616,14 +591,12 @@ button {
 
 .cm-chip-dark {
   background: #0f172a;
-  color: #fff;
 }
 
 .cm-chip-button {
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.cm-chip-button:hover { background: #e9eef5; }
 
 .cm-chip-filter label {
   font-size: 12px;
@@ -676,10 +649,6 @@ button {
   background: var(--line);
   color: var(--ink);
 }
-.cm-chip-dark .cm-count {
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
-}
 .cm-count-red {
   background: #fee2e2;
   color: var(--danger);
@@ -699,12 +668,7 @@ button {
 }
 
 .cm-btn-primary {
-  background: var(--primary-strong);
   color: #fff;
-}
-.cm-btn-primary:hover {
-  background: var(--primary-stronger);
-  transform: translateY(-1px);
 }
 
 .cm-btn-secondary {
@@ -753,20 +717,17 @@ button {
   overflow: auto;
   background: var(--panel);
   border-radius: 8px;
-  box-shadow: var(--shadow-sm);
 }
 
 .cm-table-wrap::-webkit-scrollbar { width: 8px; height: 8px; }
 .cm-table-wrap::-webkit-scrollbar-thumb {
-  background: #d4d8e0;
   border-radius: 4px;
 }
 
 .cm-table {
   width: 100%;
-  /* Keep columns legible on narrow tablet/phone widths — the .cm-table-wrap
-     above this is overflow:auto, so falling below this width turns into a
-     clean horizontal scroll instead of crushed columns. */
+  /* Keeps columns legible when narrow: .cm-table-wrap is overflow:auto, so
+     below this width it scrolls horizontally instead of crushing columns. */
   min-width: 720px;
   border-collapse: collapse;
   font-size: 13px;
@@ -776,7 +737,6 @@ button {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--panel);
   text-align: left;
   padding: 14px 16px;
   font-size: 11px;
@@ -784,7 +744,6 @@ button {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
 
@@ -807,20 +766,12 @@ button {
 
 .cm-row {
   cursor: pointer;
-  transition: background 0.12s ease;
-}
-.cm-row:hover { background: var(--line-soft); }
-
-.cm-row.is-active {
-  background: #f0faf7;
-  box-shadow: inset 3px 0 0 var(--primary);
 }
 .cm-row.is-active:hover { background: #e6f5ef; }
 
 .cm-td-name { min-width: 160px; max-width: 240px; position: relative; }
-/* Name + rename pencil + pin flag on one baseline. Flex (not inline flow) so a
-   name that wraps onto a second line keeps the icons beside it, vertically
-   centred, instead of pushing them onto a line of their own. */
+/* Name + rename pencil + pin flag on one baseline. Flex, not inline flow, so a
+   wrapped name keeps the icons beside it instead of on their own line. */
 .cm-name-line {
   display: flex;
   align-items: center;
@@ -836,10 +787,8 @@ button {
   word-break: break-word;
 }
 
-/* Due-date urgency bar: vertical indicator at the far-left edge of the row
-   (in the same gutter as the active-row accent), spanning the row height.
-   Color set in JS (dueDateIndicator): overdue=black, due today=red,
-   within 3 days=blue, within 10 days=green; >10 days shows no bar. */
+/* Due-date urgency bar in the row's left gutter. Colour set by JS
+   (dueDateIndicator): overdue/today/3-day/10-day; beyond that, no bar. */
 .cm-due-bar {
   position: absolute;
   left: 0px;
@@ -866,9 +815,8 @@ button {
 .cm-td-status { min-width: 150px; }
 .cm-td-status .cm-pill { white-space: nowrap; }
 
-/* The status pill is the editor's trigger — clicking it swaps it in place for a
-   <select>. Only in the table: the detail pane's pill has its own overlaid
-   select and must stay a plain label. */
+/* The status pill is the editor's trigger, swapped in place for a <select>.
+   Table only — the detail pane's pill has its own overlay and stays a label. */
 .cm-td-status .cm-pill[data-action="edit-status"] {
   cursor: pointer;
   gap: 6px;
@@ -906,8 +854,7 @@ button {
 
 .cm-td-date { white-space: nowrap; }
 
-/* Inline edit affordances inside cells: the Due column's pencil, the Case Name
-   rename pencil and the Shared With "manage users" pencil. Each sits next to
+/* Inline cell-edit pencils (due date / rename / shared users). Each sits beside
    the value it edits and stays subtle until the row is hovered. */
 .cm-due-date { position: relative; }
 .cm-due-edit,
@@ -1003,10 +950,8 @@ button {
    preparation-stage statuses: 3D design drafted / approved). */
 .cm-pill-prep { background: #fef3c7; color: #b45309; }
 
-/* ----- status: read-only pill + inline edit pencil (mirrors the Due column).
-   The native <select> is retained for editing but overlaid invisibly on top of
-   the pill/pencil, so a click anywhere opens the browser's status picker and all
-   the existing commit logic stays intact. ----- */
+/* Status: read-only pill + pencil, mirroring the Due column. The native
+   <select> is kept but overlaid invisibly, so the commit logic is untouched. */
 .cm-status-control {
   position: relative;
   display: inline-flex;
@@ -1063,17 +1008,12 @@ button {
 
 /* ============ right detail pane ============ */
 .cm-detail {
-  border-left: 1px solid var(--line);
-  background: var(--bg);
   padding: 5px 5px 5px 5px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  /* The pane itself doesn't scroll; only .cm-detail-body (the Case Details
-     header + fields) does, so the image/nav stay at top and the CTA stays
-     pinned at the bottom. Grid items default to min-height:auto and won't shrink
-     below their content — min-height:0 lets the pane match its 1fr row so the
-     inner scroll region has a bounded height. */
+  /* Only .cm-detail-body scrolls, so image/nav stay top and the CTA stays
+     pinned. min-height:0 overrides grid's auto so the pane matches its 1fr row. */
   overflow: hidden;
   min-height: 0;
   border: 1px solid var(--line);
@@ -1085,15 +1025,11 @@ button {
   position: relative;
   width: 100%;
   aspect-ratio: 12 / 6;
-  /* Keep the 12:6 shape on every screen. As a flex child of the scrolling
-     .cm-detail column it defaults to flex-shrink:1, so on shorter viewports
-     (Windows display scaling, mobile portrait) flexbox squished it below the
-     aspect-ratio height — making the box the wrong shape. flex:0 0 auto pins
-     it to its aspect-ratio size and lets the panel scroll instead. */
+  /* flex:0 0 auto pins the 12:6 shape. As a flex child it defaults to
+     shrink:1, which squashed it below its aspect-ratio on short viewports. */
   flex: 0 0 auto;
   background: #eef2f7;
   border-radius: var(--radius);
-  border: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1217,13 +1153,11 @@ button {
 .cm-image-nav button:hover { background: var(--line-soft); }
 
 /* ============ detail body fields ============ */
-/* The detail pane is a fixed-width column with a lot of stacked fields, so it is
-   deliberately a step smaller than the rest of the page — this keeps the whole
-   case summary visible without scrolling on a laptop. */
+/* A step smaller than the rest of the page: the pane stacks many fields into a
+   fixed width, and this keeps the whole summary visible on a laptop. */
 .cm-detail-body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
   overflow-y: auto;
 }
 
@@ -1243,7 +1177,6 @@ button {
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
 }
 
 .cm-field-label {
@@ -1284,9 +1217,8 @@ button {
 
 .cm-field-hidden { display: none; }
 
-/* Case instructions — free-text note stored in additionalcasedetails.comments.
-   There is no Save button: the note commits on Enter or when focus leaves (see
-   caseManagement.js), and the only chrome is a transient status chip. */
+/* Case instructions — free text in additionalcasedetails.comments. No Save
+   button: it commits on Enter or blur (caseManagement.js), with a status chip. */
 .cm-instructions-wrap { position: relative; }
 
 .cm-instructions {
@@ -1301,10 +1233,8 @@ button {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  /* Resting height. While the user types the box grows past this to fit the note
-     (autoGrowInstructions), then collapses back here once the note is committed.
-     The drag handle is off — it would fight the auto-sizing — and past the cap the
-     textarea scrolls internally rather than pushing the panel off screen. */
+  /* Resting height; autoGrowInstructions grows past it while typing. Resize is
+     off (it fights auto-sizing) and past the cap the textarea scrolls. */
   resize: none;
   overflow-y: auto;
   min-height: 148px;
@@ -1319,9 +1249,8 @@ button {
   color: var(--muted);
 }
 
-/* Transient "Saving…/Saved." chip, tucked into the bottom-right of the field.
-   Floats over the text rather than reserving a strip, and disappears entirely
-   when there's no message (:empty) so it costs nothing at rest. */
+/* Transient "Saving…/Saved." chip, floating bottom-right over the text rather
+   than reserving a strip; :empty removes it entirely at rest. */
 .cm-instructions-status {
   position: absolute;
   right: 8px;
@@ -1479,17 +1408,15 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  /* No `margin-top: auto` — that pinned the CTA to the bottom of the panel and
-     opened an arbitrary gap under the last field on tall viewports. The buttons
-     now sit directly below the case instructions box. */
+  /* No `margin-top: auto`: it pinned the CTA to the panel bottom and opened a
+     gap under the last field on tall viewports. */
   margin-top: 4px;
 }
 .cm-detail-cta > .cm-btn {
   width: 100%;
 }
-/* .cm-btn sets display:inline-flex, which otherwise beats the UA [hidden]
-   rule — so a JS-toggled `hidden` button (Retrieve ⇄ Delete) would stay
-   visible. Make [hidden] win for the detail CTAs. */
+/* .cm-btn's display:inline-flex beats the UA [hidden] rule, leaving JS-toggled
+   buttons (Retrieve ⇄ Delete) visible. Make [hidden] win for the detail CTAs. */
 .cm-detail-cta > .cm-btn[hidden] {
   display: none;
 }
@@ -1681,16 +1608,14 @@ button {
   .cm-table thead th,
   .cm-table tbody td { padding: 12px 12px; }
 
-  /* iPad mini landscape (~1024) still reserves the 340px detail column, so the
-     toolbar can't keep all chips on one line. Let it wrap to a second row
-     instead of squishing each chip's label onto two lines. */
+  /* iPad mini landscape still reserves the 340px detail column, so let the
+     toolbar wrap to a second row instead of squishing each chip's label. */
   .cm-toolbar { flex-wrap: wrap; }
   .cm-chip { white-space: nowrap; }
 }
 
-/* Tablet portrait / iPad mini portrait (~744). Single column with the detail
-   pane sliding in on row click. The JS handleRowClick adds .show-details to
-   .cm-page when innerWidth ≤ 860 — keep these breakpoints in sync. */
+/* Tablet portrait (~744): single column, detail pane slides in on row click.
+   handleRowClick adds .show-details at ≤860 — keep these breakpoints in sync. */
 @media (max-width: 860px) {
   .cm-page { grid-template-columns: 1fr; }
   .cm-main { padding: 20px 18px 14px; gap: 14px; }
@@ -1700,8 +1625,6 @@ button {
     position: fixed;
     inset: 0;
     z-index: 80;
-    border-left: none;
-    background: var(--bg);
     transform: translateX(100%);
     transition: transform 0.22s ease;
     padding: 12px 10px 14px;
@@ -1716,22 +1639,16 @@ button {
    clickable table headers (which are themselves hidden on phone). */
 .cm-sort-chip { display: none; }
 
-/* Phone (≤640). The table collapses to a vertical card list — a horizontally
-   scrolling 6-column table on a 390px viewport is unusable. Each row becomes
-   a self-contained card with its own field labels (via data-label attrs on
-   the date/owner cells). The thead is hidden; the .cm-sort-chip dropdown is
-   the sort affordance instead. */
+/* Phone (≤640): the table becomes a vertical card list, each row a card with
+   its own labels (data-label attrs). thead is hidden; .cm-sort-chip sorts. */
 @media (max-width: 640px) {
   .cm-sort-chip { display: inline-flex; }
 
   .cm-main { padding: 16px 14px 12px; gap: 12px; }
   .cm-detail { padding: 18px 14px 22px; }
 
-  /* Phone header matches the admin case list's (.au-topbar at this width): a
-     flat white bar with a hairline under it, a title that ellipsizes rather than
-     wrapping, and compact round controls. Kept as parallel rules rather than a
-     shared class because the admin bar is teal above this breakpoint and only
-     reverts to white here. */
+  /* Matches the admin .au-topbar at this width. Parallel rules, not a shared
+     class, because the admin bar is teal above this breakpoint. */
   .cm-header {
     background: #fff;
     border-radius: 0;
@@ -1771,10 +1688,8 @@ button {
     color: #fff;
   }
 
-  /* The filter toolbar is dropped entirely on phone (clinic feedback: it ate the
-     top third of the screen before a single case was visible). Its two essential
-     actions — search and create — move into the header as icons; the rest
-     (date/status filter, sort, refresh) are desktop-only. */
+  /* Filter toolbar dropped on phone — it ate the top third of the screen.
+     Search and create move into the header; the rest are desktop-only. */
   .cm-toolbar { display: none; }
 
   .cm-mobile-only { display: inline-flex; }
@@ -1822,11 +1737,8 @@ button {
     gap: 6px;
     overflow: hidden;
   }
-  /* Drop the chip labels on phone — the icons (calendar / filter / sort) and
-     the selected values carry the meaning, and reclaiming the label space is
-     what lets the native date input actually show its placeholder. The dark
-     "All Cases" chip is .cm-chip-dark (not .cm-chip-filter), so its count
-     stays. */
+  /* Drop chip labels on phone: the icons and selected values carry the meaning,
+     and the freed space lets the native date input show its placeholder. */
   .cm-chip-filter > label { display: none; }
   .cm-filter-select,
   .cm-date-input {
@@ -1841,7 +1753,6 @@ button {
      vertically inside and the wrap scrolls only on the Y axis. */
   .cm-table-wrap {
     background: transparent;
-    box-shadow: none;
     border-radius: 0;
     overflow-x: hidden;
     overflow-y: auto;
@@ -1852,28 +1763,22 @@ button {
   .cm-table tr,
   .cm-table td { display: block; }
 
-  /* Compact card: case name on top, status and due date on one line under it.
-     Created / Owner / Shared With / row actions stacked into a ~280px card that
-     fit barely two cases on a phone, and all of them are in the detail pane —
-     which is what tapping the card opens. The due date stays because "how soon
-     is this due" is what you scan a case list for. */
+  /* Compact card: name on top, status and due date under it. Created/Owner/
+     Shared With are dropped — they're in the detail pane the card opens. */
   /* `.cm-table td` above turns every cell into a block and outranks a bare
      `.cm-td-*`, so these have to be at least as specific to hide at all. */
   .cm-table td.cm-td-date:not(.cm-due-date),
   .cm-table td.cm-td-owner,
   .cm-table td.cm-td-shared,
   .cm-table td.cm-td-actions { display: none; }
-  /* Rename / shared-users pencils go with the actions; due date is edited from
-     the detail pane too, so its pencil would be a dead-looking target here.
-     The urgency bar goes as well — the due date now carries that colour
-     itself, so the bar was saying the same thing twice. */
+  /* Edit pencils go with the actions (editing happens in the detail pane), and
+     the urgency bar goes too — the due date already carries that colour. */
   .cm-inline-edit,
   .cm-due-edit,
   .cm-due-bar { display: none; }
 
-  /* Exactly two lines: the name spans both columns, then status and due date
-     share the row under it. A grid rather than wrapped flex so a long status
-     label can never push the date onto a third line. */
+  /* Exactly two lines: name spans both columns, status and due date share the
+     next. A grid, not wrapped flex, so a long status can't force a third line. */
   .cm-table tr.cm-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1888,8 +1793,6 @@ button {
     padding: 12px 14px;
     margin-bottom: 8px;
   }
-  .cm-row:hover { background: var(--panel); } /* drop the table-row hover */
-  .cm-row.is-active { background: #f0faf7; }
 
   .cm-table tbody td { padding: 0 !important; border: none; }
   .cm-table tbody tr:last-child td { border: none; }
@@ -2132,20 +2035,7 @@ button {
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-#renameCaseModal .modal-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(59, 174, 149, 0.18);
-}
-#renameCaseModal .rename-modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 22px;
-}
 #renameCaseModal .close-btn {
-  top: 14px;
-  right: 18px;
-  color: var(--muted);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 #renameCaseModal .modal-input:focus {
@@ -2164,14 +2054,10 @@ button {
   color: var(--muted);
 }
 #renameCaseModal .close-btn:hover { color: var(--ink); }
-#renameCaseModal .close-btn:hover { color: var(--ink); }
 
 /* ============ Admin read-only view ============ */
-/* When logged in as an admin, hide the Start Case button, the 3D viewer link
-   row, the table's Actions column (header + all body cells) and every inline
-   cell-edit pencil (due date / rename / shared users — those writes don't work
-   from the admin view). Only the View Dashboard button remains in the detail
-   CTA. */
+/* Admins lose Start Case, the 3D viewer row, the Actions column and every
+   inline edit pencil (those writes fail from admin). View Dashboard remains. */
 body.is-admin .start-case-button,
 body.is-admin #view3dLinkRow,
 body.is-admin .cm-th-actions,
@@ -2453,7 +2339,6 @@ body.is-admin .cm-admin-stats:not([hidden]) {
   border-radius: 12px;
   background: var(--panel);
   border: 1px solid var(--line);
-  box-shadow: var(--shadow-sm);
   min-width: 280px;
   max-width: 380px;
   position: relative; /* anchor for the corner result-count badge */
@@ -2461,16 +2346,14 @@ body.is-admin .cm-admin-stats:not([hidden]) {
 }
 .cm-header-search:focus-within {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
 }
 .cm-header-search > i {
   color: var(--muted);
   font-size: 14px;
   flex: 0 0 auto;
 }
-/* Mode picker (Name / Date / Status) at the left of the search box. Transparent
-   so it blends into the field and reads as one control; the accent color +
-   hover mark it as interactive. */
+/* Mode picker (Name / Date / Status) left of the search box. Transparent so the
+   two read as one control; accent colour and hover mark it interactive. */
 .cm-search-mode {
   border: none;
   outline: none;
@@ -2507,19 +2390,16 @@ body.is-admin .cm-admin-stats:not([hidden]) {
 .cm-header-search-date { cursor: pointer; }
 .cm-header-search-input[hidden] { display: none; }
 
-/* Placeholder-like fade for the date + status controls when nothing is chosen
-   (toggled via .is-empty in caseManagement.js). Native date/select fields have
-   no ::placeholder, so we mute the text directly and snap back to solid ink
-   once a real value is picked. */
+/* Placeholder-like fade for the date/status controls (.is-empty, set by
+   caseManagement.js) — native date and select fields have no ::placeholder. */
 .cm-header-search-date.is-empty,
 .cm-header-search-date.is-empty::-webkit-datetime-edit,
 .cm-header-search-select.is-empty { color: var(--muted); }
 /* Keep the dropdown list itself readable while the closed select reads muted. */
 .cm-header-search-select option { color: var(--ink); }
 
-/* Match-count badge: a small red circle pinned to the top-right corner of the
-   search bar (like the notification bell's count), shown only while a search is
-   active. */
+/* Match-count badge — a red circle on the search bar's top-right corner,
+   shown only while a search is active. */
 .cm-search-count {
   position: absolute;
   top: -7px;
@@ -2541,9 +2421,8 @@ body.is-admin .cm-admin-stats:not([hidden]) {
 .cm-search-count[hidden] { display: none; }
 
 /* ============ stat-card stage filters (toolbar) ============ */
-/* Three cards (Preparation / Delivery / Completed) that show a live count and,
-   when clicked, filter the list to that stage. Accent + soft colors are driven
-   by per-card CSS vars set on the modifier classes below. */
+/* Preparation / Delivery / Completed cards: live count, click to filter to that
+   stage. Accent and soft colours come from per-card vars on the modifiers. */
 .cm-stat-filters {
   display: flex;
   align-items: stretch;
@@ -2562,18 +2441,12 @@ body.is-admin .cm-admin-stats:not([hidden]) {
   gap: 8px;
   padding: 5px 12px;
   border-radius: 10px;
-  background: var(--line-soft);
   border: 1px solid var(--stat-accent, var(--muted));
-  border-left: 3px solid var(--stat-accent, var(--muted));
   color: var(--ink-soft);
   cursor: pointer;
   text-align: left;
   transition: background 0.15s ease, border-color 0.15s ease,
     transform 0.12s ease, box-shadow 0.15s ease;
-}
-.cm-stat-filter:hover {
-  background: #e9eef5;
-  transform: translateY(-1px);
 }
 .cm-stat-filter:focus-visible {
   outline: none;
@@ -2636,12 +2509,10 @@ body.is-admin .cm-admin-stats:not([hidden]) {
 .cm-stat-filter-all {
   /* Hug its content instead of stretching equally with the stage cards. */
   flex: 0 0 auto;
-  background: #0f172a;
   border-color: #0f172a;
   border-left-color: #0f172a;
   color: #fff;
 }
-.cm-stat-filter-all:hover { background: #1e293b; }
 .cm-stat-filter-all .cm-stat-filter-label { color: #fff; }
 .cm-stat-filter-all .cm-stat-filter-sub { color: rgba(255, 255, 255, 0.7); }
 .cm-stat-filter-all .cm-stat-filter-count {
@@ -2664,9 +2535,8 @@ body.is-admin .cm-admin-stats:not([hidden]) {
   .cm-toolbar > .cm-btn-primary { flex: 1 1 100%; }
 }
 
-/* Phone: the whole .cm-toolbar is already hidden, so the stat cards go with it.
-   Hide the desktop header search here too — the magnifier reveals the mobile
-   search bar instead. */
+/* Phone: .cm-toolbar is already hidden, so the stat cards go with it. The
+   desktop header search hides too — the magnifier reveals the mobile one. */
 @media (max-width: 640px) {
   .cm-desktop-only { display: none !important; }
 }
@@ -2816,17 +2686,14 @@ body.is-admin .cm-admin-stats:not([hidden]) {
 .au-user-dropdown-item.logout,
 .au-user-dropdown-item.logout i { color: #dc2626; }
 
-/* Mobile-only header logout button — hidden on tablet/desktop (logout lives in
-   the user-chip dropdown there); the ≤640 media query reveals it. The
-   .au-topbar-scoped selector is needed to outgun the (0,2,0)
-   `.au-topbar .cm-bell { display: inline-flex }` rule above. */
+/* Mobile-only header logout, revealed by the ≤640 query (elsewhere logout is in
+   the user-chip dropdown). Scoped to .au-topbar to outgun the (0,2,0) rule above. */
 .au-mobile-logout,
 .au-topbar .au-mobile-logout { display: none; }
 
 /* ============ Admin branded bar — mobile revert (both admin pages) ============ */
-/* On phones, drop the teal brand treatment and the added logo/bell/chip so the
-   header reads like the original compact bar. Keeps the essential controls
-   (title, back button, existing notification bell + logout on the case list). */
+/* On phones drop the teal treatment and the added logo/bell/chip, leaving the
+   compact bar: title, back button, and the case list's own bell and logout. */
 @media (max-width: 640px) {
   .au-topbar {
     background: #fff;
@@ -2880,15 +2747,9 @@ body.is-admin .cm-admin-stats:not([hidden]) {
 }
 
 /* ============================================================================
-   Premium polish (case list + admin overview). Appended last so it wins via
-   the cascade. Visual only — no layout structure changed.
+   Premium polish (case list + admin overview). Appended last to win the
+   cascade; visual only, no layout structure changed.
    ============================================================================ */
-
-/* Crisp hairline border so the table sits cleanly on the bg (the toolbar has
-   no surface of its own — its stat cards float directly on the page). */
-.cm-table-wrap {
-  border: 1px solid var(--line);
-}
 
 /* Elevated, interactive stat cards. */
 body.is-admin .cm-stat-card {
@@ -2914,13 +2775,6 @@ body.is-admin .cm-stat-value {
   letter-spacing: -0.01em;
 }
 
-/* Table: solid tinted sticky header + smoother, on-brand row hover. */
-.cm-table thead th {
-  background: #f8fafb;
-  border-bottom: 1px solid var(--line);
-}
-.cm-row:hover { background: #f3faf8; }
-
 /* Toolbar chips: clean white surface with a hairline border and soft hover. */
 .cm-chip {
   border: 1px solid var(--line);
@@ -2941,9 +2795,8 @@ body.is-admin .cm-stat-value {
 }
 
 /* ============================================================================
-   Admin user/machine detail panes: center-align the fields and distribute them
-   evenly down the pane (buttons anchored at the bottom). Scoped by id so the
-   case-list detail pane keeps its default left-aligned layout.
+   Admin user/machine detail panes: fields centred and spread down the pane,
+   buttons at the bottom. Scoped by id so the case-list pane stays left-aligned.
    ============================================================================ */
 #userDetail .cm-detail-body,
 #machineDetail .cm-detail-body {
@@ -2975,12 +2828,8 @@ body.is-admin .cm-stat-value {
 
 
 /* ============================================================================
-   PREMIUM POLISH — case management view
-   ----------------------------------------------------------------------------
-   Appended last so these visual refinements win the same-specificity tie over
-   the base rules above. Intentionally limited to appearance (background,
-   border, shadow, radius, colour, transition) — no layout/positioning changes —
-   so the grid, flex and responsive behaviour defined earlier stay intact.
+   PREMIUM POLISH — case management view. Appended last to win the
+   same-specificity tie; appearance only, so the layout above stays intact.
    ============================================================================ */
 
 /* Crisper text rendering across the app. */
@@ -3077,9 +2926,8 @@ body,
 .cm-btn-primary:active { transform: translateY(0); }
 
 /* ---- table: elevated card with a refined header ---- */
-/* No border-radius here on purpose: the corner rounding is owned by the
-   ".cm-table-wrap" rule in the "case table" section above, and by its ≤640px
-   reset. Re-declaring it in this late pass silently overrode both. */
+/* No border-radius here on purpose — it is owned by .cm-table-wrap in the case
+   table section and by its ≤640px reset; re-declaring it overrode both. */
 .cm-table-wrap {
   border: 1px solid rgba(15, 23, 42, 0.06);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 18px 40px -24px rgba(15, 23, 42, 0.4);
@@ -3125,13 +2973,8 @@ body,
 
 
 /* ============================================================================
-   CASE DETAILS — paneled card with width-responsive item spacing
-   ----------------------------------------------------------------------------
-   The details section reads as a distinct card (surface + border + shadow),
-   and its field rows are separated by hairline dividers instead of a flat gap.
-   Row padding and the label/value gap scale with the viewport width via
-   clamp(), so the items breathe on wide screens and tighten on narrow ones
-   while staying aligned in the two-column (label left / value right) read.
+   CASE DETAILS — a distinct card, rows split by hairline dividers rather than a
+   flat gap. Padding and label/value gap scale with viewport width via clamp().
    ============================================================================ */
 .cm-detail-body {
   gap: 0;
@@ -3155,14 +2998,8 @@ body,
 
 
 /* ============================================================================
-   CASE DETAILS — scrollable fields panel
-   ----------------------------------------------------------------------------
-   The details column has a fixed height (the grid's 1fr row on desktop, the
-   full-screen fixed pane on mobile). The image/nav sit at the top and the Start
-   Case CTA is pinned at the bottom — both at their natural size — while the
-   fields panel (.cm-detail-body) takes the space in between and scrolls
-   internally whenever the fields (including a long instructions note) are taller
-   than that space.
+   CASE DETAILS — scrollable fields panel. Image/nav and the Start Case CTA keep
+   their natural size; .cm-detail-body takes what's left and scrolls internally.
    ============================================================================ */
 @media (min-width: 786px) {
   .cm-detail {
@@ -3204,4 +3041,24 @@ body,
   .cm-detail-cta {
     flex: 0 0 auto;
   }
+}
+
+/* ---- responsive re-assertions -------------------------------------------
+   The polish layer above is unconditional and lands AFTER the breakpoint
+   blocks, so it was overriding these. Kept last so the media queries win. */
+@media (max-width: 860px) {
+  /* Off-canvas detail panel: flat page surface, no desktop edge. */
+  .cm-detail {
+    border-left: none;
+    background: var(--bg);
+  }
+}
+
+@media (max-width: 640px) {
+  /* The wrap loses its panel chrome — each card carries its own. */
+  .cm-table-wrap { box-shadow: none; }
+  /* Cards, not table rows. `.cm-table tr.cm-row` above is (0,2,1), so the
+     active fill has to match that specificity to land; plain `.cm-row:hover`
+     is already neutralised by it and needs no rule of its own. */
+  .cm-table tr.cm-row.is-active { background: #f0faf7; }
 }

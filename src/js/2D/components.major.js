@@ -7,9 +7,8 @@ const BAR_MAJOR_CONNECTOR_IDS = Object.freeze(
   new Set(["major-lower-lingual-bar", "major-upper-palatal-bar"])
 );
 
-// No major connector excludes the third molars (*8) anymore — every connector may
-// span them when those teeth anchor it. The only remaining exclusion is the palatal
-// strap's anterior teeth (11-13 / 21-23), a separate rule.
+// Every connector may span the third molars (*8) when those teeth anchor it. The only
+// exclusion left is the palatal strap's anterior teeth (11-13 / 21-23).
 const MAJOR_CONNECTOR_EXCLUDED_TOOTH_IDS_BY_COMPONENT = Object.freeze({
   "major-upper-palatal-strap": Object.freeze(new Set(["11", "12", "13", "21", "22", "23"])),
   "major-upper-horseshoe": Object.freeze(new Set([])),
@@ -80,9 +79,8 @@ function strapAttachPoints(toothId, archCenter) {
 }
 
 /**
- * 8 polygon points for the palatal strap overlay from the placed teeth. Each pair
- * (palatal + buccal) attaches to a connector tooth; each side uses its most-anterior
- * and most-posterior placed tooth.
+ * 8 palatal-strap overlay points from the placed teeth: each palatal/buccal pair attaches
+ * to a connector tooth, per side using its most-anterior and most-posterior.
  */
 export function computePalatalStrapPolygonPoints(teeth) {
   const has = (id) => teeth?.[id]?.componentPlacements?.some((e) => e.componentId === PALATAL_STRAP_MAJOR_COMPONENT_ID);
@@ -310,11 +308,8 @@ export function shouldUseMajorConnectorEndAsset(toothId, teeth) {
 }
 
 /**
- * Page-relative href for a MajorConnector template SVG.
- * Upper Q1/Q2: template 11–18 naming (Q2 maps to 11–18 by unit digit).
- * Lower Q4 (`41`–`48`) and Q3 (`31`–`38`): same rule as upper — Q4 uses FDI id; Q3 uses the Q4
- * twin basename `4${u}` (only `41`–`48` SVGs on disk). View mirroring comes from the tooth transform.
- * When `teeth` is passed: mesial/distal open ends use `_mesial` / `_distal` where available.
+ * Page-relative href for a MajorConnector template SVG. Only 11-18 and 41-48 exist on disk,
+ * so Q2/Q3 map onto their twin by unit digit and mirroring comes from the transform.
  * @param {string} toothId
  * @param {string} jaw
  * @param {Record<string, unknown> | null | undefined} [teeth]
@@ -533,13 +528,8 @@ function toothHasPalatalBarPlacementOnTooth(tooth) {
 }
 
 /**
- * Palatal bar: whether this tooth ends its bar run distally, so the segment takes the
- * `{n}_distal` cap (`{n}_end.svg` is the same art) instead of straight body art.
- *
- * Must read the UN-augmented arch: augmentTeethForPalatalBarConnectorNeighbors tags
- * every connector tooth, so the augmented view shows a distal neighbour on all of them
- * and no run end would ever be found. A run ending short of the second molar (e.g. at
- * 15, when 16-18 carry no bar) is what this catches.
+ * Whether this tooth ends its palatal-bar run distally, taking the `{n}_distal` cap. MUST
+ * read the UN-augmented arch, or every connector tooth looks like it has a distal neighbour.
  * @param {string} toothId
  * @param {Record<string, unknown> | null | undefined} teeth Un-augmented arch state.
  */
@@ -595,20 +585,16 @@ export function augmentTeethForPalatalBarConnectorNeighbors(teeth) {
 }
 
 /**
- * Anterior AP strap — always drawn for a palatal-hole connector. Frame in the upper
- * jaw viewBox (0 0 600 420). Posterior straps are selected per side by
- * getPalatalHoleArchOverlayLayers.
+ * Anterior AP strap, always drawn for a palatal-hole connector; frame in the upper jaw
+ * viewBox (0 0 600 420). Posterior straps come from getPalatalHoleArchOverlayLayers.
  */
 export const PALATAL_HOLE_ARCH_OVERLAY_LAYERS = Object.freeze([
   { file: "AP_Strap01.svg", x: 248, y: 138, width: 140, height: 74 },
 ]);
 
 /**
- * Posterior AP strap, selected per side by the terminal molar the palatal-hole
- * connector reaches: unit 6/7/8 → AP-Strap_6/7/8. A side ending before the molars
- * gets none. Frames in the 600×420 viewBox (7 verified vs case 2511; 6/8 best-effort).
- * One as-authored half per molar; Q2 reuses the SAME asset shifted one half-width
- * right and mirrored by the renderer. `width` is one half-width.
+ * Posterior AP strap per side, keyed by the terminal molar reached; a side ending before the
+ * molars gets none. Q2 reuses the SAME asset shifted one half-width and mirrored.
  */
 const PALATAL_HOLE_POSTERIOR_STRAP_BY_UNIT = Object.freeze({
   6: { file: "AP-Strap_6.svg", x: 209, y: 220, width: 108, height: 150 },
@@ -634,9 +620,8 @@ function palatalHoleTerminalMolarUnit(teeth, molars) {
 }
 
 /**
- * Overlay layers for the current palatal-hole design: anterior strap + each side's
- * posterior strap sized to its terminal molar (AP-Strap_6/7/8). The Q2 half is the
- * same asset shifted one half-width right with `mirror: true`.
+ * Overlay layers for a palatal-hole design: the anterior strap plus each side's posterior
+ * strap, sized to its terminal molar. Q2 is the same asset shifted and mirrored.
  */
 export function getPalatalHoleArchOverlayLayers(teeth) {
   const layers = [...PALATAL_HOLE_ARCH_OVERLAY_LAYERS];
@@ -672,9 +657,8 @@ export function hasPalatalHolePlacementOnUpperArch(teeth) {
 // --- Placement tuning (offset / scale for major-connector SVG per tooth) ---
 
 /**
- * When true, major-connector translation uses only CONNECTOR_EXTRA_OFFSET_SEED_BY_TOOTH
- * (plus mirroring) — mesh/plate anchors ignored, so the frame is the same for mesh or
- * plate sites. When false, translation = mesh/plate anchor + extra.
+ * When true, translation uses only CONNECTOR_EXTRA_OFFSET_SEED_BY_TOOTH plus mirroring, so
+ * mesh and plate sites frame identically. When false it is anchor + extra.
  */
 export const CONNECTOR_POSITION_IGNORE_MESH_PLATE_ANCHOR = true;
 
@@ -687,9 +671,8 @@ export const CONNECTOR_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
 });
 
 /**
- * Extra x/y (tooth-local), added on top of the mesh/plate anchor (unless
- * CONNECTOR_POSITION_IGNORE_MESH_PLATE_ANCHOR). Keys: upper template 11-18 (Q2 mirrors),
- * lower 41-48 (Q3 mirrors), or exact FDI to override. Quadrants 2/3 flip X for template rows.
+ * Tooth-local extra x/y on top of the mesh/plate anchor. Keyed by template 11-18 / 41-48
+ * (Q2 and Q3 mirror, flipping X) or by exact FDI to override.
  */
 export const CONNECTOR_EXTRA_OFFSET_SEED_BY_TOOTH = Object.freeze({
   "11": { x: 13, y: 76 },
@@ -841,11 +824,8 @@ export function getDefaultMajorConnectorIdForDesignMode(componentById) {
 }
 
 /**
- * Major-connector ids whose coverage runs continuously to the midline. The desktop draws
- * these as one span from the most-distal anchor across every tooth to the central incisors
- * (CheckAndSetTop for upper, SetLingualMajor for ALL lower connectors, lingual bar included).
- * The only posterior-only majors are the upper palatal bar/strap (EndCheck=5), which keep
- * per-tooth placement.
+ * Majors whose coverage runs continuously to the midline, as the desktop draws them.
+ * Only the upper palatal bar/strap are posterior-only and keep per-tooth placement.
  */
 const MIDLINE_REACHING_MAJOR_CONNECTOR_IDS = Object.freeze(
   new Set([
@@ -865,8 +845,7 @@ export function majorConnectorRunsToMidline(componentId) {
 
 /**
  * Whether a tooth can anchor a major-connector run: present via plate/clasp, missing via
- * mesh. Mirrors the desktop start test, narrowed to web-modeled components. Shared by
- * placement and pruneInvalidMajorConnectorPlacementsInJaw.
+ * mesh. The desktop start test, narrowed to web-modeled components.
  */
 function toothAnchorsMajorConnector(tooth, componentById) {
   if (!tooth || !Array.isArray(tooth.componentPlacements)) {
@@ -903,6 +882,70 @@ function placeMajorConnectorOnce(tooth, majorComponentId) {
   }
 }
 
+/** Whether `toothId` may carry this major at all: it needs connector art, must not be one
+ *  of the major's excluded teeth, and the palatal bar only ever sits on its own segments. */
+function canToothCarryMajorConnector(majorComponentId, toothId, jawKey) {
+  if (isMajorConnectorToothExcluded(majorComponentId, toothId)) {
+    return false;
+  }
+  if (
+    String(majorComponentId) === PALATAL_BAR_MAJOR_COMPONENT_ID &&
+    !PALATAL_BAR_CONNECTOR_TOOTH_IDS.has(String(toothId))
+  ) {
+    return false;
+  }
+  return Boolean(getMajorConnectorAssetReference(toothId, jawKey));
+}
+
+/**
+ * A tooth that gains an anchor beside a connector run joins it: a major ending at 16 reaches
+ * 17 once the dentist plates 17, and reaches a meshed saddle the same way — the tooth the
+ * span walk would have started from had the anchor been there first. Growth repeats until it
+ * stops, so a run also takes the anchored teeth beyond the one just placed.
+ *
+ * Placement-time only. The renderer must NEVER re-derive this, or removing a run's end
+ * tooth (the one removal the UI allows) would be undone on the next frame.
+ */
+export function extendMajorConnectorToAnchoredNeighboursInJaw(teeth, componentById, jawKey) {
+  const order = TOOTH_ORDER && Array.isArray(TOOTH_ORDER[jawKey]) ? TOOTH_ORDER[jawKey] : null;
+  if (!teeth || typeof teeth !== "object" || !order) {
+    return;
+  }
+
+  const majorIdOn = (toothId) => {
+    const entry = (teeth[toothId]?.componentPlacements || []).find((e) =>
+      isMajorConnectorComponent(e.componentId)
+    );
+    return entry ? String(entry.componentId) : null;
+  };
+  const majorByToothId = new Map(order.map((toothId) => [toothId, majorIdOn(toothId)]));
+
+  // Each pass can only place on a tooth next to the run as it stood, so a run that has to
+  // grow several teeth needs several passes. Every pass but the last places at least one.
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (let i = 0; i < order.length; i += 1) {
+      const toothId = order[i];
+      const tooth = teeth[toothId];
+      if (!tooth || majorByToothId.get(toothId)) {
+        continue;
+      }
+      // Present via plate/clasp, missing via mesh — the same anchor test the span walk uses.
+      if (!toothAnchorsMajorConnector(tooth, componentById)) {
+        continue;
+      }
+      const majorComponentId = majorByToothId.get(order[i - 1]) || majorByToothId.get(order[i + 1]);
+      if (!majorComponentId || !canToothCarryMajorConnector(majorComponentId, toothId, jawKey)) {
+        continue;
+      }
+      placeMajorConnectorOnce(tooth, majorComponentId);
+      majorByToothId.set(toothId, majorComponentId);
+      grew = true;
+    }
+  }
+}
+
 /** Per-tooth placement for posterior-only majors (bar/strap): place on every eligible
  *  tooth that already anchors it (mesh if missing, plate if present). */
 function placeMajorConnectorPerTooth(teeth, majorComponentId, componentById, jawKey) {
@@ -918,23 +961,12 @@ function placeMajorConnectorPerTooth(teeth, majorComponentId, componentById, jaw
 }
 
 /**
- * Desktop-style span for midline-reaching majors, as a tooth list. Per side, scan distal →
- * midline, start the run at the first anchor tooth (mesh saddle or plate/clasp abutment),
- * then take EVERY subsequent tooth with connector art to the midline (bare anteriors
- * included). Mirrors the isStartFound continuation in CheckAndSetTop.
+ * Desktop-style span for midline-reaching majors: scan distal to midline, start at the first
+ * anchor, then take every subsequent tooth with connector art. Shared with the click gate so
+ * the arch can never offer a tooth the fill won't reach.
  *
- * Exported because the click/preview gate asks the SAME walk whether a bare tooth is in the
- * span (toothSupportsMajorConnectorOverlay). Kept as one function so the arch can never
- * offer a tooth the fill will not reach: the run only ever grows midline-ward from its
- * start, so a terminal molar sitting distal of every anchor is outside the span no matter
- * how far the run gets.
- *
- * `options.includeExistingPlacements` also starts the run at a tooth that already CARRIES a
- * major. Only the gate passes it, and it exists for the bar: a bar plates nothing, so
- * switching to one strips the plate-prox anchors out from under its own span. Deriving from
- * anchors alone would then declare most of the bar's arch unplaceable, and a segment removed
- * by hand could not be put back — the "can't place the MJ again" failure. A run that is
- * already drawn is its own start. Placement must NOT pass this, or a run could never shrink.
+ * `options.includeExistingPlacements` also starts a run at a tooth already carrying a major.
+ * Only the GATE may pass it; placement must NOT, or a run could never shrink.
  */
 export function getMajorConnectorSpanTeeth(
   teeth,
@@ -983,10 +1015,8 @@ function fillMajorConnectorSpanInArch(teeth, majorComponentId, componentById, ja
 }
 
 /**
- * Place `majorComponentId` on EXACTLY the given teeth — the load path honoring a saved
- * design's major-connector span instead of re-deriving it (fillMajorConnectorSpanInArch).
- * Teeth with no art or that the connector excludes are skipped; no gap-filling, so
- * coverage matches the data, not the rule.
+ * Place on EXACTLY the given teeth — the load path, honouring a saved span rather than
+ * re-deriving it. No gap-filling, so coverage matches the data, not the rule.
  */
 export function placeMajorConnectorOnExactTeeth(
   teeth,
@@ -1014,23 +1044,10 @@ export function placeMajorConnectorOnExactTeeth(
 }
 
 /**
- * Switch the given jaws to `majorComponentId`, keeping the coverage the outgoing connector
- * had. The order matters and is the whole point of this function living here rather than in
- * the catalog handler: the span is snapshotted BEFORE anything is cleared, because
- * re-deriving it from anchors alone loses ground on a plate -> bar -> plate round trip. A
- * bar carries no plating, so switching to one strips every plate-prox in the jaw; on the way
- * back the plated abutments anchor nothing, the span comes back short — or not at all — and
- * the connector can then be placed neither from the catalog nor by clicking a tooth.
- *
- * Not for the upper palatal bar, which has its own placement path.
+ * Switch jaws to `majorComponentId`, keeping the outgoing coverage. The span is snapshotted
+ * BEFORE anything is cleared, or a plate -> bar -> plate round trip becomes unplaceable.
  */
-export function switchMajorConnectorInJaws(
-  teeth,
-  majorComponentId,
-  componentById,
-  jawKeys,
-  options = {}
-) {
+export function switchMajorConnectorInJaws(teeth, majorComponentId, componentById, jawKeys) {
   if (!teeth || !Array.isArray(jawKeys)) return;
 
   const previousSpanByJaw = {};
@@ -1058,8 +1075,7 @@ export function switchMajorConnectorInJaws(
     teeth,
     majorComponentId,
     componentById,
-    jawKeys,
-    options
+    jawKeys
   );
 
   // Re-cover whatever the outgoing connector reached but the anchor scan missed. The new
@@ -1076,9 +1092,8 @@ export function switchMajorConnectorInJaws(
 }
 
 /**
- * On lock, drop a default major connector on every tooth that already has mesh (missing) or
- * plate (present) and has connector art for that jaw (upper 11-28; lower 31-48 via 41-48
- * basenames, Q3 mirrored).
+ * On lock, drop a default major connector on every tooth with mesh (missing) or plate
+ * (present) that has connector art for its jaw.
  */
 export function ensureMajorConnectorPlacementsOnSupportedTeeth(teeth, majorComponentId, componentById) {
   ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
@@ -1089,39 +1104,15 @@ export function ensureMajorConnectorPlacementsOnSupportedTeeth(teeth, majorCompo
   );
 }
 
-// Terminal third molars — excluded so a full-acrylic span runs "7 to 7".
-const TERMINAL_THIRD_MOLAR_IDS = Object.freeze(new Set(["18", "28", "38", "48"]));
-
 /**
- * Full-acrylic span: the acrylic denture base runs the whole arch from #7 to #7
- * (second molar to second molar), independent of per-tooth anchors and without the
- * metal-framework plate/mesh stamping. The terminal third molars (#8: 18/28/38/48)
- * are excluded. Used when the case material is full acrylic (state.jawMaterial === 2).
- */
-function fillMajorConnectorFullArchSpan(teeth, majorComponentId, jawKey) {
-  const order = TOOTH_ORDER && Array.isArray(TOOTH_ORDER[jawKey]) ? TOOTH_ORDER[jawKey] : [];
-  for (const toothId of order) {
-    if (TERMINAL_THIRD_MOLAR_IDS.has(toothId)) continue; // keep the span 7-to-7
-    if (!getMajorConnectorAssetReference(toothId, jawKey)) continue;
-    if (isMajorConnectorToothExcluded(majorComponentId, toothId)) continue;
-    const tooth = teeth[toothId];
-    if (!tooth) continue;
-    placeMajorConnectorOnce(tooth, majorComponentId);
-  }
-}
-
-/**
- * Jaw-scoped variant of major auto-placement.
- * `jawKeys` accepts `"upper"` and/or `"lower"`.
- * `options.fullAcrylic` — when true, midline-reaching majors span the full arch
- * (7-to-7), anchor-independent, for an all-acrylic denture base.
+ * Jaw-scoped major auto-placement. The denture base material makes no difference here: a
+ * full-acrylic major is anchored and spans exactly like a metal one.
  */
 export function ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
   teeth,
   majorComponentId,
   componentById,
-  jawKeys,
-  options = {}
+  jawKeys
 ) {
   if (
     !majorComponentId ||
@@ -1132,20 +1123,14 @@ export function ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
     return;
   }
 
-  const fullAcrylic = options.fullAcrylic === true;
-
-  // Midline-reaching majors (plate / horseshoe / hole / kennedy) fill one continuous run
-  // across the arch — including bare anterior teeth between anchors — matching the desktop.
-  // Posterior-only majors (bar / strap) keep the per-tooth placement. Full-acrylic cases
-  // span 7-to-7 regardless of anchors (the acrylic base covers the arch).
+  // Midline-reaching majors fill one continuous run including bare anteriors, as the
+  // desktop does; bar/strap stay per-tooth.
   const runsToMidline = majorConnectorRunsToMidline(majorComponentId);
   for (const jawKey of jawKeys) {
     if (jawKey !== "upper" && jawKey !== "lower") {
       continue;
     }
-    if (fullAcrylic && runsToMidline) {
-      fillMajorConnectorFullArchSpan(teeth, majorComponentId, jawKey);
-    } else if (runsToMidline) {
+    if (runsToMidline) {
       fillMajorConnectorSpanInArch(teeth, majorComponentId, componentById, jawKey);
     } else {
       placeMajorConnectorPerTooth(teeth, majorComponentId, componentById, jawKey);
@@ -1250,25 +1235,7 @@ export function pruneInvalidMajorConnectorPlacementsInJaw(teeth, componentById, 
 
   const touchedToothIds = new Set();
 
-  const hasAnchorSupport = (tooth) => {
-    if (!tooth || !Array.isArray(tooth.componentPlacements)) {
-      return false;
-    }
-    return tooth.componentPlacements.some(({ componentId }) => {
-      const def = componentById?.get?.(componentId);
-      if (!def) {
-        return false;
-      }
-      if (tooth.isPresent) {
-        // Plate or any clasp anchors the connector (matches the desktop anchor test).
-        return (
-          String(componentId).startsWith("plate-") ||
-          String(componentId).endsWith("-clasp")
-        );
-      }
-      return def.tab === "mesh" || String(componentId).startsWith("mesh-");
-    });
-  };
+  const hasAnchorSupport = (tooth) => toothAnchorsMajorConnector(tooth, componentById);
 
   for (const toothId of order) {
     const tooth = teeth[toothId];
@@ -1288,20 +1255,15 @@ export function pruneInvalidMajorConnectorPlacementsInJaw(teeth, componentById, 
     }
   }
 
-  // Drop major-connector runs that aren't anchored anywhere. A major is one continuous span
-  // anchored by ≥1 mesh saddle or abutment; a run of major-bearing teeth with no anchor is
-  // stray → remove the whole run. Run-scoped (not per-tooth) so span-filled bare anteriors
-  // mid-run survive instead of unravelling from the open end.
+  // Drop major runs anchored by no mesh saddle or abutment. Run-scoped, not per-tooth, so
+  // span-filled bare anteriors survive instead of unravelling from the open end.
   const majorOnTooth = (tooth) =>
     tooth &&
     Array.isArray(tooth.componentPlacements) &&
     tooth.componentPlacements.some((entry) => isMajorConnectorComponent(entry.componentId));
 
-  // A BAR carries no plating at all — switching to one strips every plate-prox in the jaw
-  // (else it would encode Reciprocating.Tooth Type = 2 and reopen as a plate). On a design
-  // whose abutments were plated rather than clasped that removes the very anchors this test
-  // reads, so a bar would delete itself the moment it was picked, and the plate could never
-  // be picked back. Plating is not a bar's anchor, so it is not judged by one.
+  // A BAR carries no plating, so switching to one strips every plate-prox — including the
+  // anchors this test reads. Judged by them, a bar would delete itself on being picked.
   const runIsBarOnly = (fromIndex, toIndex) => {
     for (let k = fromIndex; k < toIndex; k += 1) {
       const majors = (teeth[order[k]]?.componentPlacements || []).filter((e) =>

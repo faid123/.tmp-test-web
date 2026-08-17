@@ -1,6 +1,4 @@
-// Login + OTP flow.
-// UI referenced from the "Sort case list" design (two-view: login -> OTP).
-// OTP API logic referenced from the nyunt/dev branch.
+// Login + OTP flow, a two-view (login -> OTP) screen from the case-list design.
 
 import {
   computePasswordStrength,
@@ -12,9 +10,8 @@ import {
 } from "../shared/passwordReset.js";
 import { API_BASE, MACHINE_ID } from "../shared/api.js";
 
-// Local copy of apiLog.js's dedup contract: log success once per label. Kept
-// inline (rather than imported) only because the rest of this file predates
-// the module conversion and still uses it everywhere.
+// Local copy of apiLog.js's dedup contract: log success once per label. Inline
+// only because this file predates the module conversion.
 const _apiLoggedLogin = new Set();
 function logApi(res, label) {
   if (!res.ok) {
@@ -33,11 +30,8 @@ const REMEMBER_KEY = "rememberedUsername";
 
 let currentUUID = null;
 
-// Where to send the user after a successful login. A guest who hit the
-// noticeboard's "Login" button stashes the case page URL in localStorage
-// (postLoginRedirect) so we can return them there; otherwise default to the
-// case list. Only same-origin targets are honored to avoid an open redirect,
-// and the stash is consumed (one-shot) so it can't leak into later logins.
+// A guest sent here from a case page stashes its URL in postLoginRedirect, else
+// the case list. Same-origin only (no open redirect), and consumed one-shot.
 function postLoginTarget() {
   try {
     const stored = localStorage.getItem("postLoginRedirect");
@@ -49,9 +43,8 @@ function postLoginTarget() {
   } catch (e) {
     /* ignore malformed/absent value */
   }
-  // Route by role so admins land straight on the admin case list (avoids a
-  // redirect flash from case_list.html). caseManagement.js re-checks and
-  // redirects anyway if someone reaches the wrong page.
+  // Routed by role so admins skip the redirect flash through case_list.html.
+  // caseManagement.js re-checks and redirects anyway on the wrong page.
   let isAdmin = false;
   try {
     isAdmin = Number(JSON.parse(localStorage.getItem("loggedInUser") || "null")?.isAdmin) === 1;
@@ -255,16 +248,11 @@ async function handleSignup() {
     return false;
   }
 
-  // POST /user/register/request (smart.reqRegisterUser) — the backend's
-  // registration-request workflow, confirmed from source:
-  //   • Auth.none: fully public, so the logged-out login page can call it.
-  //   • User.requestRegister stores NOTHING — it emails every admin account
-  //     ("SmartRPD Registration Request for user X" with username/email/
-  //     machine-id). The admin then approves by registering the user in the
-  //     admin User Management page (user/register), which creates the account
-  //     and emails this user to set a password via password reset.
-  //   • No password is sent: the account's password is set through that
-  //     emailed step after approval, so the form doesn't collect one.
+  // POST /user/register/request, confirmed from backend source:
+  //   • Auth.none — fully public, callable from the logged-out login page.
+  //   • Stores NOTHING. It only emails every admin; approval happens by an admin
+  //     registering the user via user/register, which emails them to set a password.
+  //   • No password is sent, which is why the form doesn't collect one.
   try {
     const res = await fetch(`${API_BASE}/user/register/request`, {
       method: "POST",
@@ -309,16 +297,11 @@ async function handleSignup() {
 }
 
 // --- forgot password ------------------------------------------------------
-//
-// Two-stage flow backed by two endpoints (both take the shared
-// [{ machine_id }, { ...payload }] envelope, Auth.authMachineID only):
-//   1. POST /user/reqpwreset  { email }
-//        -> emails a numeric "password key"; 404 if the email is unknown.
+// Two stages in one view (forgotStage tracks which is live), both authenticated
+// by machine id alone:
+//   1. POST /user/reqpwreset  { email } -> emails a key; 404 unknown email.
 //   2. POST /user/resetpw     { email, passwordKey, newPassword }
-//        -> resets the password; 403 timed_out/invalid_key, 404 key/email
-//           not found.
-// The same forgot-view hosts both stages; forgotStage tracks which one is
-// live and forgotEmail carries the address from stage 1 into stage 2.
+//        -> 403 timed_out/invalid_key, 404 key/email not found.
 
 let forgotStage = "request"; // "request" | "reset"
 let forgotEmail = "";
@@ -364,13 +347,11 @@ function resetForgotView() {
 }
 
 // --- password strength ----------------------------------------------------
-//
 // Scoring, validation and both endpoint calls live in shared/passwordReset.js,
 // which the in-app "Change Account Password" flow uses too.
 
-// Reflect the current new-password value onto the strength meter. Hidden while
-// the field is empty; otherwise sets data-score (drives the bar/label color in
-// CSS) and the "<label> password" text.
+// Hidden while the field is empty; otherwise sets data-score (which drives the
+// bar/label colour in CSS) and the "<label> password" text.
 function updatePasswordStrength() {
   const input = document.getElementById("forgot-new-password");
   const meter = document.getElementById("forgot-strength");

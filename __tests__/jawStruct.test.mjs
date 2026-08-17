@@ -20,8 +20,8 @@ import { join } from "node:path";
 
 jest.mock("../src/js/2D/2DAnnotation.js", () => ({ state: { teeth: {} } }));
 
+import { safeAtob } from "../src/js/2D/dotnetBinaryFormatter.js";
 import {
-  safeAtob,
   parseJawStructText,
   decodeJawStructResponse,
   resolveJawStructDesign,

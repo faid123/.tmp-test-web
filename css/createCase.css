@@ -1,6 +1,5 @@
 /* ==================== Inline Create-Case View ==================== */
-/* The form pane lives inside .cm-main (sibling of the .cm-table-wrap list);
-   the upload pane lives inside .cm-detail. Both are hidden unless
+/* Form pane lives in .cm-main, upload pane in .cm-detail; both hidden unless
    .cm-page.creating. */
 
 .cc-form-pane.hidden,
@@ -57,10 +56,8 @@
   border-color: var(--primary, #3BAE95);
 }
 
-/* Free-text case instructions. Inherits .modal-input's box styling; only the
-   textarea-specific bits are set here (textareas don't inherit the page font).
-   Height follows the content (autoGrowTextarea in createCase.js), so the drag
-   handle is off — it would fight the auto-sizing. Past the cap it scrolls. */
+/* Free-text case instructions; inherits .modal-input's box styling. Height
+   follows content (autoGrowTextarea), so resize is off — it fights auto-sizing. */
 .cc-textarea {
   resize: none;
   overflow-y: auto;
@@ -111,10 +108,8 @@
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14);
 }
 
-/* Suggested users (shared/userSuggest.js). A custom listbox rather than a
-   <datalist>, which cannot be styled — the shared-case count is what justifies
-   the ordering, so it has to be legible. Used by the invite box here and by the
-   User Access modal below; both host it in a position:relative wrapper. */
+/* Suggested users (shared/userSuggest.js) — a custom listbox because <datalist>
+   can't be styled. Host must be position:relative (invite box + User Access). */
 .user-suggest {
   position: absolute;
   top: calc(100% + 6px);
@@ -249,9 +244,8 @@
 
 .cc-loading-overlay.hidden { display: none !important; }
 
-/* Fixed full-viewport variant. The base overlay is absolute (scoped to the
-   create-case pane); duplication is triggered from the case list, so its
-   progress pop-up must cover the whole screen instead. */
+/* Fixed full-viewport variant: the base overlay is absolute to the create-case
+   pane, but duplication runs from the case list and must cover the screen. */
 .cc-loading-overlay--fixed {
   position: fixed;
   border-radius: 0;
@@ -337,10 +331,8 @@
   .cc-loading-bar-fill { transition: none; }
 }
 
-/* On small screens (iPad Mini portrait + phones) the case-list layout pushes
-   .cm-detail off-canvas. In create mode we want the upload pane to stack
-   below the form pane, so override the off-canvas positioning and allow
-   the page to scroll vertically (the base layout locks scrolling). */
+/* Small screens push .cm-detail off-canvas. In create mode the upload pane must
+   stack below the form instead, so undo that and unlock vertical scrolling. */
 @media (max-width: 860px) {
   html:has(body.creating-case),
   body.creating-case {
@@ -404,9 +396,8 @@
 .cc-jaw-tile {
   min-height: 200px;
 }
-/* The reference card is exactly one thumbnail row tall in both states — the
-   empty prompt is the same height as the filled strip, so adding images never
-   moves the rest of the form. The prompt goes on one line to fit. */
+/* One thumbnail row tall in both states, so adding images never moves the rest
+   of the form. The empty prompt goes on one line to fit. */
 .cc-ref-tile {
   min-height: 0;
   height: 150px; /* fixed, so adding images never moves the rest of the form */
@@ -449,10 +440,8 @@
   gap: 12px;
 }
 
-/* ---- Mobile upload tiles ---------------------------------------------------
-   Placed after the base tile rules so these overrides win inside the breakpoint.
-   - Jaw cards sit side by side.
-   - Drop everything except the icon + a short one-word label (data-short). */
+/* ---- Mobile upload tiles ----
+   Jaw cards side by side; icon + short one-word label (data-short) only. */
 @media (max-width: 860px) {
   .cc-jaw-row .cc-jaw-models {
     grid-template-columns: 1fr 1fr;
@@ -461,9 +450,6 @@
   /* The reference tile keeps its one-row height on mobile too. */
   .cc-jaw-tile {
     min-height: 120px;
-  }
-  .cc-jaw-models .uploaded-model {
-    height: 120px;
   }
   .cc-jaw-text,
   .cc-jaw-or,
@@ -479,9 +465,8 @@
   }
 }
 
-/* One fixed-height row that scrolls sideways: wrapping used to grow the tile
-   until Save and the rest of the form were pushed out of reach. The extra
-   height over the 110px thumbnail leaves room for a classic scrollbar. */
+/* Fixed-height row scrolling sideways — wrapping grew the tile until Save was
+   pushed out of reach. Extra height over the 110px thumb fits a scrollbar. */
 .cc-ref-grid {
   display: flex;
   flex-wrap: nowrap;
@@ -493,12 +478,8 @@
   overscroll-behavior-x: contain;
 }
 
-/* Uploaded reference thumbnails live INSIDE the dashed tile; once any image
-   is present the tile swaps its placeholder content for the grid (clicking
-   leftover empty space still opens the file picker to add more). */
-/* The grid div is always in the markup, empty until the first upload. Left
-   visible it is a full-height flex item that shoves the prompt's icon and label
-   to opposite ends of the tile — hide it while there is nothing to show. */
+/* Thumbnails live in the dashed tile, which swaps its placeholder for the grid
+   once an image lands. Hidden while empty, or it splays the prompt's contents. */
 .cc-ref-tile:not(.has-images) .cc-ref-grid {
   display: none;
 }
@@ -885,11 +866,8 @@
 
 .uam-add-btn { flex-shrink: 0; }
 
-/* The suggestion listbox (.user-suggest, defined above) drops out of
-   .uam-search-wrap. The modal clips — overflow: hidden for its rounded corners —
-   so the panel has to fit inside it: with an empty "Shared with" list, the
-   shortest the modal ever is, there are ~255px below the search box. Past this
-   the panel scrolls. */
+/* .user-suggest drops out of .uam-search-wrap, and the modal clips it. ~255px
+   is all there is below the search box at the modal's shortest; then it scrolls. */
 .uam-suggest { max-height: 240px; }
 
 .uam-list-section {
@@ -1042,3 +1020,9 @@
 }
 
 .uam-footer .cm-btn { min-width: 120px; }
+
+/* Re-asserted after the unconditional .uploaded-model rule above, which was
+   overriding the mobile height. */
+@media (max-width: 860px) {
+  .cc-jaw-models .uploaded-model { height: 120px; }
+}

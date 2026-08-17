@@ -1,11 +1,5 @@
-// Centralized backend identifiers + service credentials.
-//
-// ⚠️ SECURITY: these values ship to the browser — they are bundled into
-// dist/bundle.js and also served raw to the case-management / 2D module pages.
-// Centralizing them here does NOT make them secret; anyone can read them in
-// DevTools. The only real fix is to move authentication server-side (a token
-// exchange or API proxy). This module just gives one place to rotate the value
-// and a single import for app code. See CODE_FLAGS.md #1/#2.
+// ⚠️ SECURITY: these credentials ship to the browser and are readable in DevTools.
+// One place to rotate them, NOT a way to keep them secret. See CODE_FLAGS.md #1/#2.
 
 export const MACHINE_ID = "3a0df9c37b50873c63cebecd7bed73152a5ef616";
 

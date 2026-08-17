@@ -1,7 +1,5 @@
-/* Admin machine-ID page. Piggybacks on case_list.css (page frame, chips,
-   buttons, table), createCase.css (modal) and admin_users.css (shared admin
-   bits: au-page grid, gate, badges, detail pane, modal extras). Only the
-   machine-ID-specific tweaks live here. */
+/* Admin machine-ID page — only machine-ID-specific tweaks. Piggybacks on
+   case_list.css, createCase.css (modal) and admin_users.css (shared au-* bits). */
 
 /* Three overview cards instead of the user page's five. */
 .mid-stats {

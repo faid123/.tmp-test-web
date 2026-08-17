@@ -45,7 +45,6 @@ import {
   hasPalatalBarPlacementOnUpperArch,
   hasPalatalPlatePlacementOnUpperArch,
   hasPalatalHolePlacementOnUpperArch,
-  computePalatalStrapPolygonPoints,
   hasPalatalStrapPlacementOnUpperArch,
   PALATAL_STRAP_MAJOR_COMPONENT_ID,
   isPalatalStrapMajorComponent,
@@ -66,7 +65,6 @@ import {
   meshHoleUniformScaleToothId,
   PALATAL_BAR_ARCH_OVERLAY,
   PALATAL_BAR_CONNECTOR_TOOTH_IDS,
-  PALATAL_BAR_MAJOR_COMPONENT_ID,
   PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS,
   getPalatalHoleArchOverlayLayers,
   getPalatalPlateArchOverlayFrame,
@@ -126,7 +124,6 @@ import {
   normalizeStatus,
   normalizeSurface,
   removePlacement,
-  removePlacementAtIndex,
 } from "./annotationTeethModel.js";
 
 // Apply status CSS classes for present/abutment/compromised/missing tooth visuals.
@@ -223,28 +220,16 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
   }
 
   for (const majorId of majorIds) {
-    // Lingual plate = the lingual bar band PLUS a plate filling each tooth's lingual
-    // surface up to the bar. The fill climbs a real tooth, so it's PRESENT teeth only;
-    // a missing saddle gets the band crossing it but NO fill. Draw the fill first, band
-    // on top. The fill IS the tooth's reciprocal — if the tooth has a reciprocating
-    // clasp, skip the fill (clasp XOR plate) and let the clasp show.
-    //
-    // Every major attaches via this per-tooth fill BY DEFAULT; the only exceptions are
-    // the bars (lower lingual / upper palatal), which are band-only. On the upper this
-    // complements the palate arch overlay (overlay = palate body, fill = each tooth's
-    // palatal climb). The fill is gated on the tooth's plate-prox component, so it's
-    // data-driven and removable (erasing plate-prox drops the fill, encodes reciprocating=0).
-    // Also the single source for the plate visual (the plate pass skips plate-prox under a
-    // non-bar major), so no double-draw / anterior overlap.
+    // Lingual plate = band PLUS a per-tooth fill on each PRESENT tooth; the fill IS the
+    // reciprocal. Gated on plate-prox, and the SINGLE source of the plate visual.
     if (
       majorId !== "major-lower-lingual-bar" &&
       tooth.isPresent &&
       tooth.components.includes("plate-prox") &&
       !tooth.components.some((id) => isReciprocatingClaspComponent(id))
     ) {
-      // A palatal bar's last plate is the run's visible terminus, and the plate art
-      // stops on a straight cut — round it so the end reads finished like the
-      // connector's own _distal cap next to it.
+      // A palatal bar's last plate terminates the run but the art stops on a straight cut,
+      // so round it to match the connector's own _distal cap beside it.
       const plate = createComponentVisual("plate-prox", toothId, jaw, {
         roundDistalEnd:
           isPalatalBarMajorComponent(majorId) && isPalatalBarDistalRunEnd(toothId, state.teeth),
@@ -301,13 +286,8 @@ function appendToothPlateComponentVisuals(group, tooth, toothId, jaw) {
         .filter((x) => x.def)
     : [];
 
-  // The connector pass already draws the plate-prox fill for any major except the lower
-  // lingual bar, so re-drawing here would stack two plates (anterior overlap). Draw plate-prox
-  // here only when no such connector (standalone plate, e.g. RPI under a lingual bar). Mesh
-  // plates (plate-crossmesh) always draw here — the connector pass never does.
-  //
-  // EXCEPTION: under a palatal bar the connector pass SUPPRESSES the anterior teeth from its
-  // loop, so treat those as NOT drawn-by-connector so the anterior plate renders here instead.
+  // The connector pass fills plate-prox for every major but the lower lingual bar, so only
+  // standalone plates render here — plus a palatal bar's anteriors, which it suppresses.
   const suppressedFromConnectorFill =
     jaw === "upper" &&
     shouldShowPalatalBarArchOverlay() &&
@@ -383,9 +363,8 @@ function getNeighborTeeth(toothId, jaw) {
 }
 
 /**
- * If the embrasure on `side` of `toothId` is shared (the neighbour across it also supports
- * back), return that neighbour's id, else null. A shared embrasure gets one `mid` (full)
- * connector; a solo side draws the `mesial`/`distal` half. (Caller renders `mid` once.)
+ * The neighbour across a SHARED embrasure, else null. A shared embrasure gets one `mid`
+ * (full) connector, drawn once by the caller; a solo side draws its directional half.
  */
 function getMinorConnectorSharedNeighborId(toothId, jaw, side) {
   const neighborId = getNeighborToothIds(toothId, jaw)[side];
@@ -416,18 +395,25 @@ function appendMinorConnectorVisual(group, toothId, jaw, variant, side, mirrored
   });
   minor.appendChild(
     svgEl("image", {
-      href,
-      x: String(-width / 2),
-      y: String(-height / 2),
-      width: String(width),
-      height: String(height),
-      preserveAspectRatio: "xMidYMid meet",
+      ...centeredImageAttrs(href, width, height),
       class: state.jawMaterial === 2 ? "minor-connector-image is-acrylic" : "minor-connector-image",
       "data-component-id": "minor-connector",
       "pointer-events": "none",
     })
   );
   group.appendChild(minor);
+}
+
+// Geometry for an <image> centred on its parent group's origin.
+function centeredImageAttrs(href, width, height) {
+  return {
+    href,
+    x: String(-width / 2),
+    y: String(-height / 2),
+    width: String(width),
+    height: String(height),
+    preserveAspectRatio: "xMidYMid meet",
+  };
 }
 
 function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
@@ -454,9 +440,20 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
     return Boolean(componentId && state.selectedComponentId === componentId);
   };
 
-  // One minor connector per supported embrasure side. A shared embrasure is bridged by a single
-  // `mid` (full) connector drawn ONCE (owner = higher-id/more-distal tooth, e.g. 44 distal + 45
-  // mesial → 45 owns it), using that tooth's mid offset; a solo side draws its directional half.
+  // Removal handler shared by every placement marker. Bails WITHOUT trapping the click
+  // when the component is protected, so the tooth's own handler still runs.
+  const removeOnClick = (placement, surface, message) => (event) => {
+    if (state.removeComponentMode) return;
+    if (!canRemoveComponentId(placement.componentId)) return;
+    event.stopPropagation();
+    removePlacement(tooth, placement.componentId, surface);
+    const label = COMPONENT_BY_ID.get(placement.componentId)?.label || placement.componentId;
+    setMessage(message || `Removed ${label} (${surface}) from tooth ${toothId}.`, false);
+    renderJaw(jaw);
+  };
+
+  // One minor connector per supported embrasure side. A shared embrasure gets a single `mid`
+  // connector, owned by the higher-id tooth; a solo side draws its directional half.
   const minorConnectorSupportSides = getMinorConnectorSupportSides(
     tooth,
     getNeighborTeeth(toothId, jaw)
@@ -503,12 +500,7 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
 
       imageGroup.appendChild(
         svgEl("image", {
-          href: assetHref,
-          x: String(-width / 2),
-          y: String(-height / 2),
-          width: String(width),
-          height: String(height),
-          preserveAspectRatio: "xMidYMid meet",
+          ...centeredImageAttrs(assetHref, width, height),
           class: `rest-placement-image rest-placement-${surface}${
             placement.componentId === REST_CALIBRATION_COMPONENT_ID ? " is-placed-rest-seat" : ""
           }`,
@@ -517,18 +509,7 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
         })
       );
 
-      imageGroup.addEventListener("click", (event) => {
-        if (state.removeComponentMode) return;
-        if (!canRemoveComponentId(placement.componentId)) {
-          // Let the tooth click handler run (radial / placement), don't trap the click.
-          return;
-        }
-        event.stopPropagation();
-        removePlacement(tooth, placement.componentId, surface);
-        const label = COMPONENT_BY_ID.get(placement.componentId)?.label || placement.componentId;
-        setMessage(`Removed ${label} (${surface}) from tooth ${toothId}.`, false);
-        renderJaw(jaw);
-      });
+      imageGroup.addEventListener("click", removeOnClick(placement, surface));
 
       group.appendChild(imageGroup);
       continue;
@@ -545,18 +526,7 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
         "data-component-id": placement.componentId,
       });
 
-    marker.addEventListener("click", (event) => {
-      if (state.removeComponentMode) return;
-      if (!canRemoveComponentId(placement.componentId)) {
-        // Let the tooth click handler run (radial / placement), don't trap the click.
-        return;
-      }
-      event.stopPropagation();
-      removePlacement(tooth, placement.componentId, surface);
-      const label = COMPONENT_BY_ID.get(placement.componentId)?.label || placement.componentId;
-      setMessage(`Removed ${label} (${surface}) from tooth ${toothId}.`, false);
-      renderJaw(jaw);
-    });
+    marker.addEventListener("click", removeOnClick(placement, surface));
 
     group.appendChild(marker);
   }
@@ -599,12 +569,7 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
 
       outerG.appendChild(
         svgEl("image", {
-          href: assetHref,
-          x: String(-width / 2),
-          y: String(-height / 2),
-          width: String(width),
-          height: String(height),
-          preserveAspectRatio: "xMidYMid meet",
+          ...centeredImageAttrs(assetHref, width, height),
           class: `clasp-placement-image clasp-placement-${surface}`,
           "data-surface": surface,
           "data-component-id": placement.componentId,
@@ -623,17 +588,10 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
       );
     }
 
-    outerG.addEventListener("click", (event) => {
-      if (state.removeComponentMode) return;
-      if (!canRemoveComponentId(placement.componentId)) {
-        // Let the tooth click handler run (radial / placement), don't trap the click.
-        return;
-      }
-      event.stopPropagation();
-      removePlacement(tooth, placement.componentId, surface);
-      setMessage(`Removed clasp (${surface}) from tooth ${toothId}.`, false);
-      renderJaw(jaw);
-    });
+    outerG.addEventListener(
+      "click",
+      removeOnClick(placement, surface, `Removed clasp (${surface}) from tooth ${toothId}.`)
+    );
 
     group.appendChild(outerG);
   }
@@ -677,22 +635,15 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
 
     outerG.appendChild(
       svgEl("image", {
-        href,
-        x: String(-width / 2),
-        y: String(-height / 2),
-        width: String(width),
-        height: String(height),
-        preserveAspectRatio: "xMidYMid meet",
+        ...centeredImageAttrs(href, width, height),
         class: `bar-placement-image bar-placement-${barSurface}`,
         "data-surface": barSurface,
         "data-component-id": placement.componentId,
       })
     );
 
-    // Hit target ~half the bar image so a click anywhere on the visible bar toggles it,
-    // without the transparent bounding rect blocking clicks on neighboring teeth.
-    // Only intercept when this exact bar is the active tool — otherwise it would cover
-    // adjacent teeth and block their interactions (quick-pick, rest points) outside bar mode.
+    // ~Half the bar image, so the visible bar is clickable without its transparent bounds
+    // blocking neighbours. Only intercepts while this exact bar is the active tool.
     const barIsActiveTool =
       !state.removeComponentMode &&
       state.selectedComponentId === placement.componentId;
@@ -708,17 +659,10 @@ function appendPlacedComponentMarkers(group, tooth, toothId, jaw) {
       // `.bar-placement-hit-target { pointer-events: visible }` CSS rule.
       style: barIsActiveTool ? "" : "pointer-events: none;",
     });
-    barHitTarget.addEventListener("click", (event) => {
-      if (state.removeComponentMode) return;
-      if (!canRemoveComponentId(placement.componentId)) {
-        // Let the tooth click handler run (radial / placement), don't trap the click.
-        return;
-      }
-      event.stopPropagation();
-      removePlacement(tooth, placement.componentId, barSurface);
-      setMessage(`Removed bar from tooth ${toothId}.`, false);
-      renderJaw(jaw);
-    });
+    barHitTarget.addEventListener(
+      "click",
+      removeOnClick(placement, barSurface, `Removed bar from tooth ${toothId}.`)
+    );
     outerG.appendChild(barHitTarget);
 
     group.appendChild(outerG);
@@ -730,10 +674,8 @@ function isAnteriorRestSurfaceDialogTooth(toothId) {
   return ANTERIOR_REST_SURFACE_DIALOG_TEETH.has(String(toothId));
 }
 
-// A cingulum rest can be stored on any lingual sub-surface: full coverage
-// ("lingual"), mesial/distal halves ("lingual_mesial"/"lingual_distal"), or both
-// halves ("lingual_both", from a loaded ac_both desktop design). They are all the
-// same logical rest for placement/removal purposes.
+// A cingulum rest may be stored on any lingual sub-surface ("lingual", "lingual_mesial",
+// "lingual_distal", "lingual_both"). All are the same logical rest for place/remove.
 const CINGULUM_REST_SURFACES = new Set([
   "lingual",
   "lingual_mesial",
@@ -770,9 +712,8 @@ function canPlaceEmbrasureAtSurface(toothId, jaw, surface) {
 
 const CONTINUOUS_CLASPS_ID = "assembly-circ-multi";
 
-// Only a distal-extension abutment gets an RPI/RPA suggestion, and only on its mesial.
-// RPI additionally needs the saddle meshed — its I-bar has nothing to base from
-// otherwise, and pruneInvalidBarPlacementsInJaw would drop it on the next render.
+// Only a distal-extension abutment is offered RPI/RPA, and only on its mesial. RPI also
+// needs the saddle meshed, or pruneInvalidBarPlacementsInJaw drops the I-bar next render.
 function getRpxAssemblyAllowedRestSurfaces(componentId, toothId, jaw) {
   const eligible = componentId === "assembly-rpi"
     ? hasMeshedDistalSaddle(toothId, jaw)
@@ -957,10 +898,8 @@ function handleRestSuggestionPick(jaw, toothId, pointSurface, anchor) {
     return;
   }
 
-  // Toggle-off path: the surface dialog offers only a subset of cingulum sub-surfaces, so a
-  // surface-exact toggle can't remove a rest whose stored sub-surface isn't offered (e.g. a
-  // loaded "lingual_both"/ac_both). So a lingual-point click on a tooth that already has a
-  // cingulum rest = remove it (any sub-surface); open the dialog only when none exists yet.
+  // The dialog offers only some cingulum sub-surfaces, so any lingual click removes an
+  // existing rest; the dialog opens only when none exists yet.
   const selectedTooth = state.teeth[String(toothId)];
   if (selectedComponent?.id === "rest-seat" && selectedTooth) {
     ensureToothPlacementState(selectedTooth);
@@ -1068,9 +1007,8 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
   if (!selectedComponent) return;
   const isAssembly = ASSEMBLY_REST_SUGGESTION_IDS.has(selectedComponent.id);
   if (!isAssembly && !isRestComponent(selectedComponent)) return;
-  // Combine Clasps brackets an edentulous area anywhere on the arch, so it is exempt
-  // from the posterior-only gate the circum assemblies share (with 23 missing, the
-  // abutments are 22 and 24 — one of them anterior).
+  // Combine Clasps brackets a gap anywhere on the arch, so it is exempt from the
+  // posterior-only gate — with 23 missing, abutment 22 is anterior.
   if (
     isAssembly &&
     selectedComponent.id !== COMBINE_CLASPS_ID &&
@@ -1131,12 +1069,7 @@ function appendRestSuggestionPoints(group, tooth, toothId, jaw) {
 
       imageGroup.appendChild(
         svgEl("image", {
-          href: assetHref,
-          x: String(-width / 2),
-          y: String(-height / 2),
-          width: String(width),
-          height: String(height),
-          preserveAspectRatio: "xMidYMid meet",
+          ...centeredImageAttrs(assetHref, width, height),
           class: `rest-suggestion-image rest-suggestion-${surface}`,
           "data-surface": surface,
         })
@@ -1200,9 +1133,8 @@ function appendRetainerClaspSuggestionPoints(group, tooth, toothId, jaw) {
 
   let points = getRetainerClaspSuggestionPointsForTooth(toothId, jaw);
   if (isReciprocating) {
-    // The reciprocating arm sits on the arch-side OPPOSITE the retentive component
-    // (buccal clasp → lingual reci, bar → lingual reci). Offer only the two points on
-    // that side; with no retentive clasp/bar yet, fall back to all four anchors.
+    // The reciprocating arm sits OPPOSITE the retentive component, so only that side's two
+    // points are offered. With no retentive clasp or bar yet, all four are.
     const reciSide = getReciprocatingArchSide(tooth);
     if (reciSide) {
       points = points.filter((p) => normalizeSurface(p.surface).includes(reciSide));
@@ -1269,10 +1201,8 @@ function getPlacedClaspSurface(tooth, classifier) {
   return normalizeSurface(found?.surface);
 }
 
-// The arch-side a reciprocating clasp should occupy on this tooth: opposite the
-// retentive clasp/ring (buccal <-> lingual), or lingual when a bar is present
-// (bars approach from the buccal). Returns "buccal", "lingual", or null when the
-// tooth carries no retentive component to reciprocate.
+// The arch-side for a reciprocating clasp: opposite the retentive clasp/ring, or lingual
+// under a bar (bars approach buccally). null when there is nothing to reciprocate.
 function getReciprocatingArchSide(tooth) {
   ensureToothPlacementState(tooth);
   if (tooth.componentPlacements.some((entry) => isBarComponent(entry.componentId))) {
@@ -1527,10 +1457,8 @@ function createMajorConnectorVisual(majorComponentId, tooth, toothId, jaw) {
     transform: `translate(${ox.toFixed(2)} ${oy.toFixed(2)}) scale(${scaleXConn.toFixed(3)} ${scaleYConn.toFixed(3)})`,
   });
   const isSeparated = isMajorConnectorPlacementSeparated(toothId, state.teeth, jaw);
-  // A separated segment is a stray floating major-connector cap whose order-neighbors carry
-  // no connector — e.g. a lone clasped *8 abutment under a posterior-only palatal bar/strap.
-  // A major is a continuous span, so a single-tooth segment is meaningless: don't render it in
-  // the locked preview (design mode still draws it tinted below as an editing cue).
+  // A stray single-tooth connector cap whose neighbours carry none is meaningless — a major
+  // is a continuous span — so the locked preview hides it. Design mode still tints it.
   if (isSeparated && !state.designMode) {
     return null;
   }
@@ -1554,11 +1482,8 @@ function createMajorConnectorVisual(majorComponentId, tooth, toothId, jaw) {
   return visual;
 }
 
-// Rounded cap for a plate whose distal edge terminates a connector run. The plate art
-// sits in the upper-right of its image box and ends on a straight cut, so the cap is a
-// circle that just clips that corner away — a box-edge rounding would miss the art
-// entirely. Centre/radius are fractions of the image half-extents (tuned on 17/27, which
-// share a template; Q2 mirrors with the frame's own scaleX).
+// Rounded cap for a plate ending a connector run: a circle clipping the art's upper-right
+// corner, since box-edge rounding would miss it. Fractions of the half-extents.
 const DISTAL_CAP_CENTRE_X_RATIO = 0.30;
 const DISTAL_CAP_CENTRE_Y_RATIO = -0.19;
 const DISTAL_CAP_RADIUS_RATIO = 0.69;

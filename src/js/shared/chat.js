@@ -3,9 +3,8 @@ import { lol } from './crypt.js';
 import { logApi } from "./apiLog.js";
 import { API_BASE } from "./api.js";
 
-// DOM elements are resolved lazily (bindDom) so this module can be imported on
-// any page — including ones where the chat widget is injected after scripts run
-// or isn't present at all. It no longer throws at load when there's no case id.
+// DOM elements resolve lazily (bindDom) so this module imports cleanly on pages
+// where the widget is injected after scripts run, or isn't present at all.
 let chatBox, textInput, sendBtn, uploadBtn, imageInput, imageModal, modalImage;
 
 let messages = [];
@@ -13,15 +12,12 @@ let pendingImageBase64 = null;
 let pendingImageMime = 'image/jpeg';
 let caseId = null;
 let domBound = false;
-// `null` = "force the next render" (initial load + on case switch). Real
-// signatures are always strings (''.join for an empty chat), so the null
+// `null` = "force the next render". Real signatures are always strings, so the
 // sentinel can never equal one — an empty chat still renders/clears once.
 let lastNotesSignature = null;
 
-// Live-chat lifecycle. We poll only while the panel is open and the tab is
-// visible, and we hard-stop (clear timer + abort any in-flight request) when
-// the panel closes OR the page is being unloaded — so navigating back to the
-// case list never leaves a chat fetch running and competing with its load.
+// Poll only while the panel is open and the tab visible; hard-stop (timer +
+// in-flight abort) on close or unload so no fetch competes with the next page.
 let pollTimer = null;        // setInterval handle while the chat is live
 let pollInFlight = false;    // guards against overlapping polls
 let notesInFlight = false;   // a /notes/get request is currently running
@@ -31,20 +27,16 @@ let lifecycleBound = false;  // visibilitychange/pagehide bound once
 // Poll cadence while the chat is open and the tab is focused.
 const CHAT_POLL_MS = 3000;
 
-// Per-case localStorage cache of the last rendered conversation. The notes
-// endpoint returns every note's full base64 image inline, so the first fetch on
-// open is payload-heavy and slow; painting this cache first makes reopening feel
-// instant while the network refresh lands in the background.
+// Per-case cache of the last rendered conversation. /notes returns every image
+// inline, so painting this first makes reopening instant while the refresh lands.
 const CHAT_CACHE_PREFIX = 'chat_cache_';
 const cacheKey = (id) => `${CHAT_CACHE_PREFIX}${id}`;
 
 // Author tag used for the local-only "pending upload" preview bubble.
 const PREVIEW_AUTHOR = 'Click send to upload image';
 
-// Resolve the (decrypted) case id from, in priority order: an explicit
-// encrypted id passed by the caller, the page's ?id= query param, or
-// window.SMARTRPD_CHAT_CASE_ID — set by pages that track the selected case in
-// memory rather than the URL (e.g. the case list).
+// Priority: an explicit encrypted id, the page's ?id=, then
+// window.SMARTRPD_CHAT_CASE_ID (pages tracking the case in memory, not the URL).
 function resolveCaseId(explicitEncryptedId) {
     const enc =
         explicitEncryptedId ||
@@ -56,9 +48,8 @@ function resolveCaseId(explicitEncryptedId) {
     return decoded || null;
 }
 
-// The note author. Signed-in users post under their own username; guests (no
-// session — e.g. someone opening a shared viewer link) are allowed to chat but
-// are labelled "Guest" so their messages are clearly unauthenticated.
+// Signed-in users post under their username; guests (a shared viewer link) may
+// chat but are labelled "Guest" so their messages read as unauthenticated.
 function currentUsername() {
     try {
         const u = JSON.parse(localStorage.getItem('loggedInUser') || 'null');
@@ -78,9 +69,8 @@ function detectImageMime(base64) {
     return 'image/jpeg';
 }
 
-// Persist the conversation for instant paint on the next open. Base64 images can
-// blow the localStorage quota, so on failure fall back to a text-only cache (so
-// at least the text renders instantly), and give up quietly if even that fails.
+// Base64 images can blow the localStorage quota, so fall back to a text-only
+// cache on failure, then give up quietly.
 function saveCachedMessages(id, msgs) {
     if (!id || !Array.isArray(msgs)) return;
     const key = cacheKey(id);
@@ -125,13 +115,8 @@ function renderCachedMessages() {
 // 获取历史记录
 async function fetchNotes() {
     if (!caseId || !chatBox) return;
-    // True single-flight: if a notes request is already running, SKIP rather than
-    // abort-and-restart it. The payload is large (every note's full base64 image)
-    // and slow (tens of seconds), so a poll/visibility refresh firing mid-flight
-    // used to cancel the in-flight request and immediately start an identical one
-    // — multiplying that heavy query on the server and tying up several
-    // connections to the API host. That is what left the case list waiting right
-    // after the chat was used. stopChatLive() still aborts on close / page-leave.
+    // True single-flight: SKIP while a notes request runs, never abort-and-restart
+    // — that multiplied the heavy query and starved the case list. Close still aborts.
     if (notesInFlight) return;
     notesAbort?.abort();
     const ctrl = new AbortController();
@@ -150,9 +135,8 @@ async function fetchNotes() {
             const tNet = performance.now();
             const notes = await response.json();
             const tParse = performance.now();
-            // Surface where the time goes: network (download) vs JSON.parse. The
-            // payload is dominated by inline base64 images, so a big parse number
-            // means the list is image-heavy (the case for an image-URL endpoint).
+            // Splits network vs JSON.parse: a big parse number means the list is
+            // image-heavy (the argument for an image-URL endpoint).
             const lenKB = Number(response.headers.get('content-length') || 0) / 1024;
             console.log(
                 `[chat] notes/get: ${notes.length} notes` +
@@ -160,14 +144,8 @@ async function fetchNotes() {
                 `, net ${Math.round(tNet - t0)}ms, parse ${Math.round(tParse - tNet)}ms`
             );
             notes.reverse();
-            // Only re-render when the server data actually changed, so the
-            // auto-refresh poll doesn't yank the user's scroll position or
-            // flicker the list every few seconds.
-            // The signature is cheap — ids only, no image payload. Bail here
-            // when the server data is unchanged so an open chat doesn't
-            // re-stringify every note's base64 image into HTML (and re-render)
-            // on every 3s poll. The network round-trip + JSON.parse are still
-            // unavoidable until the endpoint supports incremental fetch.
+            // Re-render only on real change, so the poll never yanks scroll or
+            // re-stringifies every base64 image into HTML every 3s.
             const signature = notes
                 .map(n => n.id ?? `${n.author_username}:${n.created_at}`)
                 .join('|');
@@ -196,9 +174,7 @@ async function fetchNotes() {
             if (pendingImageBase64) messages.push(buildPendingPreviewMessage());
             displayMessages();
         } else {
-            // (A stale `firstLoad` clear lived here — the flag no longer exists,
-            // so reading it threw and the catch swallowed this whole branch.
-            // The cached-paint design keeps prior messages visible on failure.)
+            // Keep the cached paint on failure — prior messages stay visible.
             console.error('❌ Failed to fetch notes:', await response.text());
         }
     } catch (err) {
@@ -215,10 +191,8 @@ async function fetchNotes() {
     }
 }
 
-// One guarded poll. Hard rule first: if the panel is closed (is-hidden), stop
-// the whole live loop — a closed chat must never poll in the background, even if
-// some path left a timer running. Otherwise skip (without stopping) when a
-// request is already in flight, there's no case, or the tab is backgrounded.
+// One guarded poll. A closed panel (is-hidden) stops the whole loop; an in-flight
+// request, no case, or a backgrounded tab merely skips this tick.
 async function pollTick() {
     const widget = document.getElementById('chat-widget');
     if (!widget || widget.classList.contains('is-hidden')) {
@@ -234,9 +208,8 @@ async function pollTick() {
     }
 }
 
-// Bind the visibility/unload hooks once. Returning to the tab refreshes right
-// away (so messages that arrived while it was hidden show at once), and leaving
-// the page hard-stops the chat so no request lingers into the next page.
+// Bound once: returning to the tab refreshes immediately, and leaving the page
+// hard-stops the chat so no request lingers into the next one.
 function bindChatLifecycle() {
     if (lifecycleBound) return;
     lifecycleBound = true;
@@ -398,9 +371,8 @@ function previewImage(base64, mime = 'image/jpeg') {
 const MAX_INPUT_ROWS = 5;
 function autoResizeInput() {
     if (!textInput) return;
-    // Skip while the panel is hidden (display:none): scrollHeight is 0 then, so
-    // sizing here would squash the box to ~0 until the user types. CSS
-    // min-height keeps it at one row in the meantime.
+    // Skip while hidden: scrollHeight is 0 under display:none, so sizing here
+    // would squash the box to ~0 until the user types.
     if (!textInput.offsetParent) return;
     const cs = getComputedStyle(textInput);
     const lineHeight = parseFloat(cs.lineHeight) || 20;
@@ -488,11 +460,8 @@ function bindDom() {
         });
     }
 
-    // Drag-and-drop an image onto the chat panel to attach it. Mirrors the
-    // proven drop-zone pattern in createCase.js: bind to a concrete element
-    // (the panel has pointer-events:auto — a pointer-events:none overlay does
-    // not reliably receive drops), guard on dragged files, and use
-    // relatedTarget to avoid dragleave flicker.
+    // Same drop-zone pattern as createCase.js: bind to a concrete element (a
+    // pointer-events:none overlay misses drops), relatedTarget stops the flicker.
     const hasFiles = (e) =>
         Array.from((e.dataTransfer && e.dataTransfer.types) || []).includes('Files');
     const dropZone = (chatWidget && chatWidget.querySelector('.chat-sidebar-panel')) || chatBox;
@@ -542,11 +511,8 @@ function bindDom() {
     return true;
 }
 
-// Load (or reload) the conversation for a case. Returns true when the chat is
-// ready (widget present + a resolvable case id), false otherwise. It does NOT
-// start the live poll — polling is tied to the panel being open (openWidget),
-// so a slide-in chat that carries the widget but stays closed (the 2D annotation
-// and case-list footer panels) never polls in the background.
+// Loads a case's conversation; true when the widget and a case id both resolve.
+// Does NOT start polling — that is openWidget's job, so a closed panel stays quiet.
 export function initChat(explicitEncryptedId) {
     if (!bindDom()) return false;
     const resolved = resolveCaseId(explicitEncryptedId);
@@ -554,9 +520,8 @@ export function initChat(explicitEncryptedId) {
     const changed = resolved !== caseId;
     caseId = resolved;
     if (changed) {
-        // Switching cases: drop the old conversation so it can't linger. Reset
-        // the signature to the null sentinel so the next fetch always re-renders
-        // (clearing the old case's messages) even if the new case is empty.
+        // Switching cases: drop the old conversation and reset the signature so
+        // the next fetch re-renders even if the new case is empty.
         messages = [];
         lastNotesSignature = null;
     }
@@ -605,19 +570,12 @@ export function toggleChat(explicitEncryptedId) {
     openWidget(widget);
 }
 
-// Standalone viewer behaviour: when the page already carries a ?id= and the
-// widget exists, go live on boot — only for always-on chat widgets (e.g. the 3D
-// viewer's inline panel, which has no open/close toggle, so boot is its "open").
-// Slide-in sidebar widgets start hidden (.is-hidden) and go live when the user
-// actually opens them instead (toggleChat → openWidget).
+// Always-on widgets (the 3D viewer's inline panel, which has no toggle) go live
+// on boot. Slide-in widgets start .is-hidden and go live when opened.
 if (new URLSearchParams(window.location.search).get('id')) {
     const boot = () => {
-        // Closed slide-in panels (annotation / case-list footer chat) must stay
-        // off the network on boot: a notes/get here hits the same API host as the
-        // jaw STL downloads, and chat.js is imported before the page entry module,
-        // so it would jump ahead of the jaws in the per-host connection queue.
-        // Those panels go live when opened. Only always-on widgets (no is-hidden
-        // state) start polling immediately here.
+        // Closed slide-in panels stay off the network on boot: chat.js imports
+        // first, so a notes/get would outrank the jaw STLs in the host queue.
         const widget = document.getElementById('chat-widget');
         if (widget && widget.classList.contains('is-hidden')) return;
         if (!initChat()) return;

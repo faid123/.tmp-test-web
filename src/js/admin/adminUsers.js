@@ -1,18 +1,12 @@
-// Admin user management (web counterpart of the desktop UI_AdminUserListing).
-// Talks to the admin-only endpoints: user/getall, user/register, user/modify,
-// user/delete, user/restore. There is no /admin URL prefix — the server checks
-// is_admin from the caller uuid in element 0 of the request body and answers
-// 401 {"serverErrorMessage":"admin auth failed"} for non-admins. The local
-// isAdmin flag only decides what UI to show; the server stays authoritative.
+// Admin user management over user/getall|register|modify|delete|restore. No
+// /admin URL prefix — the server checks is_admin from the caller uuid and 401s,
+// so the local flag only decides what UI to show.
 //
-// NOTE: request shapes follow the codebase-wide [{machine_id, uuid}, {...}]
-// convention, verified live for user/getall's error path. The success payload
-// of getall and the exact mutation payloads are unverified until first run
-// with a real admin account — everything shape-related is centralized in the
-// api object + normalizeUser below so adjustments stay one-line.
+// The mutation payloads are UNVERIFIED against a real admin account; every shape
+// lives in the api object + normalizeUser below so a correction stays one line.
 
 import { toast, confirmModal, attachThemedCalendar } from "../shared/toast.js";
-import { setupAppSidebar } from "../shared/appSidebar.js";
+import { initAdminShell, setStatLinkState } from "./adminShell.js";
 import { findIdentifierInPassword } from "../shared/passwordReset.js";
 import { apiPost, ApiError, getLoggedInUser } from "../shared/api.js";
 
@@ -20,18 +14,14 @@ import { apiPost, ApiError, getLoggedInUser } from "../shared/api.js";
 // API layer
 // ---------------------------------------------------------------------------
 
-// user/getall → User.getAll(fromDate, toDate, search, sortBy, sortByAscending,
-// limitStartIndex, limitAmount) — parameter names confirmed from the backend
-// route/controller/model (smartrpd.controller.getAllUsers → user.model.getAll).
-//
-// Model behaviour that drives the values below:
-//   • fromDate == 0 && toDate == 0  → no create_time WHERE clause (all dates).
-//   • search === ""                 → no username LIKE filter.
-//   • sortBy: 0 = none, 1 = username, 2 = email, 3 = create_time, 4 = is_admin;
-//     sortByAscending toggles ASC/DESC.
-//   • limitStartIndex == 0 && limitAmount == 0 → NO LIMIT clause is emitted, so
-//     every row is returned. (The earlier 500 "LIMIT undefined,undefined" was
-//     just these two keys arriving undefined under the wrong names.)
+// user/getall parameter names, confirmed from the backend controller + model.
+// Model behaviour driving the values below:
+//   • fromDate == 0 && toDate == 0  → no create_time clause (all dates)
+//   • search === ""                 → no username LIKE filter
+//   • sortBy: 0 none, 1 username, 2 email, 3 create_time, 4 is_admin
+//   • limitStartIndex == 0 && limitAmount == 0 → no LIMIT, so every row returns.
+//     These keys arriving under the wrong names is what caused the old
+//     500 "LIMIT undefined,undefined".
 const USER_LIST_FILTER = () => ({
   fromDate: 0,          // 0 = no lower bound
   toDate: 0,            // 0 = no upper bound → all users regardless of date
@@ -54,10 +44,9 @@ const api = {
   restoreUser: (uuid) => apiPost("user/restore", { uuid }),
 };
 
-// Map a server row to what the table needs. Column names are CONFIRMED from the
-// query user/getall runs — SELECT username, email, create_time, is_admin, uuid,
-// deleted FROM users — captured live 2026-07-10. (Kept a couple of fallback
-// spellings for safety, but is_admin/deleted/create_time are the real ones.)
+// Column names CONFIRMED live 2026-07-10 from the query user/getall runs:
+// username, email, create_time, is_admin, uuid, deleted. The fallback spellings
+// below are belt-and-braces only.
 function normalizeUser(raw) {
   return {
     uuid: raw.uuid ?? raw.user_uuid ?? "",
@@ -65,9 +54,8 @@ function normalizeUser(raw) {
     email: raw.email ?? "",
     isAdmin: Number(raw.is_admin ?? raw.isAdmin ?? 0) === 1,
     deleted: Number(raw.deleted ?? raw.is_deleted ?? raw.isDeleted ?? 0) === 1,
-    // Signup request awaiting approval (user/register/request stores it as a
-    // soft-deleted, password-less row; getAll exposes `pending`). Absent until
-    // the backend ships that column — everything pending-related then hides.
+    // A signup request awaiting approval, exposed by getAll as `pending`. Absent
+    // until the backend ships that column, which hides everything pending-related.
     pending: Number(raw.pending ?? 0) === 1,
     createTime: raw.create_time ?? null,
     raw,
@@ -337,9 +325,8 @@ async function loadUsers() {
       showGate("The server rejected this account (admin auth failed).");
       return;
     }
-    // Detect the old pagination SQL error as a safety net; the request now
-    // sends the confirmed limit params (0/0 → no LIMIT), so this should no
-    // longer trip, but keep a clear message in case the backend changes.
+    // Safety net for the old pagination SQL error. The confirmed limit params
+    // (0/0 → no LIMIT) should stop it tripping, but the message stays clear.
     const errBlob = err instanceof ApiError
       ? `${err.message} ${err.data?.code || ""} ${err.data?.sql || ""}`
       : "";
@@ -511,70 +498,8 @@ function refreshDetailIfSelected(uuid) {
 // ---------------------------------------------------------------------------
 
 document.addEventListener("DOMContentLoaded", () => {
-  const me = getLoggedInUser();
-  if (!me?.uuid) {
-    window.location.href = "../../../index.html";
-    return;
-  }
-
-  // Populate the header user chip from the logged-in account.
-  const uname = me.username || "User";
-  const nameEl = document.getElementById("adminUserName");
-  const avatarEl = document.getElementById("adminUserAvatar");
-  if (nameEl) nameEl.textContent = uname;
-  if (avatarEl) avatarEl.textContent = uname.charAt(0);
-  const footerUser = document.getElementById("footerUserName");
-  if (footerUser) footerUser.textContent = uname;
-
-  // User chip → dropdown with Logout.
-  const chip = document.getElementById("adminUserChip");
-  const chipMenu = document.getElementById("adminUserDropdown");
-  if (chip && chipMenu) {
-    const toggleChip = (e) => {
-      e.stopPropagation();
-      const open = chipMenu.classList.toggle("hidden") === false;
-      chip.setAttribute("aria-expanded", String(open));
-    };
-    chip.addEventListener("click", toggleChip);
-    chip.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") toggleChip(e);
-    });
-    document.addEventListener("click", (e) => {
-      if (chipMenu.classList.contains("hidden")) return;
-      if (!chipMenu.contains(e.target) && !chip.contains(e.target)) {
-        chipMenu.classList.add("hidden");
-        chip.setAttribute("aria-expanded", "false");
-      }
-    });
-  }
-  document.getElementById("userChipLogout")?.addEventListener("click", async () => {
-    const ok = await confirmModal({
-      title: "Log out?",
-      message: "You'll need to sign in again to access the admin tools.",
-      confirmText: "Log out",
-      cancelText: "Cancel",
-      variant: "info",
-    });
-    if (!ok) return;
-    try { localStorage.removeItem("loggedInUser"); } catch { /* ignore */ }
-    window.location.href = "../../../index.html";
-  });
-
-  // This page is admin-only, so return to the admin case list — now a sibling
-  // in the same src/pages/admin/ folder.
-  const goBack = () => (window.location.href = "./admin_case_list.html");
-  document.getElementById("backToCasesBtn").addEventListener("click", goBack);
-  document.getElementById("gateBackBtn").addEventListener("click", goBack);
-
-  // Footer hamburger opens the shared slide-in sidebar (same as the case list).
-  // This page sits in src/pages/admin/, so index.html is three levels up.
-  setupAppSidebar({ indexHref: "../../../index.html" });
-
-  // UI-only pre-gate; the server re-checks on every call anyway.
-  if (Number(me.isAdmin) !== 1) {
-    showGate();
-    return;
-  }
+  const me = initAdminShell({ onDenied: showGate });
+  if (!me) return;
 
   // Bell dot starts hidden — renderUserStats lights it when pending signup
   // requests are in the loaded data.
@@ -595,9 +520,8 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("userSearchInput").addEventListener("input", renderUsers);
   document.getElementById("userStatusFilter").addEventListener("change", renderUsers);
 
-  // Registration-date filter + its clear button. Enhance the native date input
-  // with the shared on-brand calendar (toast.js) — it writes the value back and
-  // fires `change`, so the existing renderUsers listener keeps working.
+  // The shared themed calendar (toast.js) writes the value back and fires
+  // `change`, so the existing renderUsers listener keeps working.
   const userDateInput = document.getElementById("userDateFilter");
   if (userDateInput) attachThemedCalendar(userDateInput, { allowClear: true });
   userDateInput?.addEventListener("change", renderUsers);
@@ -606,19 +530,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (d) d.value = "";
     renderUsers();
   });
-
-  // Update a stat-card "View" link's label + icon (eye ↔ back arrow) in place.
-  // The links carry an <i> icon and a .cm-stat-link-text span, so we set the
-  // span rather than textContent (which would drop the icon).
-  const setStatLinkState = (link, text, active) => {
-    if (!link) return;
-    const label = link.querySelector(".cm-stat-link-text");
-    if (label) label.textContent = text;
-    else link.textContent = text;
-    const icon = link.querySelector("i");
-    if (icon) icon.className = active ? "fa fa-arrow-left" : "fa fa-eye";
-    link.classList.toggle("is-active", active);
-  };
 
   // "View" link under the Deactivated card: jump the status filter to
   // deactivated (and toggle back to active).

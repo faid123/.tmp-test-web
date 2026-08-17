@@ -1,11 +1,5 @@
-/* Help assistant — slide-in panel opened from the sidebar Help item.
-   Mirrors the case-chat sidebar pattern (full-screen overlay + backdrop that
-   closes on outside click + a panel that slides in via transform), but under
-   its own hb- prefix so it can sit on the same pages as #chat-widget without
-   either one styling the other. Injected by helpBot.js on first open.
-
-   Tokens are re-declared locally: the panel is appended to <body> on every
-   page, including ones that don't load case_list.css. */
+/* Help assistant — slide-in panel injected by helpBot.js. hb- prefix isolates it
+   from #chat-widget; tokens are local (it lands on pages without case_list.css). */
 
 #help-bot {
   --hb-panel: #ffffff;
@@ -275,12 +269,8 @@
 
 /* --------------------------------------------------------------- highlight */
 
-/* Dims the rest of the page around the "Show me" target. A box-shadow with a
-   huge spread paints everywhere OUTSIDE this element's own rect, so the rect
-   itself stays transparent and the real control (positioned under it, same
-   spot) shows through — sized and moved by helpBot.js to track the target.
-   pointer-events: none — this is a look-here hint, not a modal, so clicks
-   still reach the page (and the highlighted control itself) underneath. */
+/* Dims the page around the "Show me" target — a huge box-shadow spread paints
+   outside this rect. Not a modal: pointer-events:none lets clicks through. */
 .hb-spotlight {
   position: fixed;
   top: 50%;
@@ -300,9 +290,7 @@
   opacity: 1;
 }
 
-/* Applied by "Show me" to the control being described — a steady ring that holds
-   for as long as the dimming does, matching the page tour's .pt-target so both
-   features read as the same stage-light idiom rather than two different alerts.
+/* "Show me" ring on the described control, matching the tour's .pt-target.
    box-shadow rather than outline/border so it never shifts the page's layout. */
 .hb-highlight {
   border-radius: 8px;

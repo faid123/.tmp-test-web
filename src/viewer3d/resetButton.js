@@ -35,13 +35,9 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
             display: flex;
             align-items: center;
             justify-content: center;
-            /* Single source of truth for size: index.js's responsive rules set
-               --toolbar-btn-size on an ancestor (#viewer-nav-toolbar) per
-               breakpoint instead of declaring their own width/height here —
-               two separately-injected <style> tags both hardcoding a width
-               for #reset-button used to tie on specificity, and which one won
-               depended on script load order. Reading a variable means there's
-               only ever one declaration in effect, so there's no tie to win. */
+            /* Size comes from --toolbar-btn-size, set per breakpoint by index.js.
+               Two <style> tags hardcoding a width here tied on specificity and
+               were decided by script load order; a variable leaves one winner. */
             width: var(--toolbar-btn-size, 46px);
             height: var(--toolbar-btn-size, 46px);
             box-shadow: none;
@@ -95,9 +91,8 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
             transform: scale(1.06);
         }
 
-        /* Parallel to #reset-icon: sized here (not inline on the element) so
-           index.js's breakpoints can grow it to match the toolbar's other
-           icons on tablet/mobile, the way #reset-icon already does. */
+        /* Sized here, not inline, so index.js's breakpoints can grow it with
+           the toolbar's other icons — same as #reset-icon. */
         #lock-icon {
             width: 30px;
             height: 30px;
@@ -132,10 +127,8 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
     function handleResetButtonClick() {
         // Add class to trigger animation
         resetButton.classList.add('clicked');
-        // `false` = non-recursive copy: only transform/zoom are restored.
-        // A recursive copy (the default) would re-add clones of the camera's
-        // light children (key/fill/rim lights parented to the camera) on top
-        // of the existing ones every click, additively brightening the scene.
+        // `false` = non-recursive: a recursive copy would re-clone the camera's
+        // child lights on every click, additively brightening the scene.
         camera.copy(clone, false)
         // Reset the camera zoom
         camera.zoom = 7;
@@ -148,10 +141,6 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
             controls.target.set(0, 0, 0);
         }
         controls.update();
-        //console.log('Camera reset:');
-        //console.log('Position:', camera.position);
-        //console.log('Rotation:', camera.rotation);
-        //console.log('Zoom:', camera.zoom);
 
         // Reset animation after delay
         setTimeout(() => {
@@ -204,10 +193,8 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
         const img = document.createElement('img');
         img.src = imageUrl;
         img.alt = rotationLocked ? 'Locked' : 'Unlocked';
-        // Sized via #lock-icon in this file's <style> block, not inline —
-        // inline width/height would beat every breakpoint override below it,
-        // the same way #reset-icon is already sized purely through CSS so it
-        // can grow on tablet/mobile.
+        // Sized via #lock-icon in this file's <style> block: inline width/height
+        // would beat every breakpoint override, as with #reset-icon.
         img.id = 'lock-icon';
 
         // Append the icon only (no text label)

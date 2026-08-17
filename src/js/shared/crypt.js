@@ -1,6 +1,5 @@
-// Performs symmetric encryption and decryption for case IDs used in URLs.
-// The function `lol(input)` will automatically encrypt if given a number (e.g. case ID),
-// and decrypt if given an encrypted string (e.g. from URL parameter).
+// Symmetric encryption for case IDs in URLs. `lol(input)` encrypts a number and
+// decrypts an encrypted string, so the same call works in both directions.
 
 // XOR-based encryption with base64 + noise padding for obfuscation
 

@@ -1,4 +1,4 @@
-import { state, setMessage, fetchCaseDetail } from "./2DAnnotation.js";
+import { state, setMessage } from "./2DAnnotation.js";
 import { captureJawJpegDataUrl } from "./annotationLocks.js";
 import { openInstructionEditor } from "./instructionEditor.js";
 import { capture3DPreviewDataUrl } from "./preview3D.js";
@@ -12,15 +12,18 @@ import {
 } from "./clinicalInfo.js";
 import { WORK_CATEGORY_LABELS, loadCaseNote, fetchAdditionalCaseDetails } from "./caseNote.js";
 import { statusLabel } from "../shared/apiLog.js";
-import { encodeEditedViewColumns } from "./dotnetBinaryFormatter.js";
+import {
+  encodeEditedViewColumns,
+  extractFilenamesFromBinaryFormatter,
+  extractPngsFromBinaryFormatter,
+} from "./dotnetBinaryFormatter.js";
+import { resolveToothArtSources } from "./toothUtils.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 
 //Add constants
 
-// Dedupe local + server noticeboard items by a stable key (title -> id ->
-// preview). On a key collision the server fields win, but local-only fields on
-// the matching item survive (shallow merge). Pure (no DOM) and exported so the
-// unit test drives the real thing — see hydrateFromServer() for both call sites.
+// Dedupe local + server items by stable key (title -> id -> preview): server fields win
+// on collision, local-only fields survive. Pure and exported so the unit test drives it.
 export function mergeInstructions(localItems, serverItems) {
   const map = new Map();
   const keyOf = (item) => {
@@ -36,10 +39,8 @@ export function mergeInstructions(localItems, serverItems) {
   return Array.from(map.values());
 }
 
-//Add helper to read logged-in user
-// A "guest" is anyone who reached this page via a shared link without signing
-// in (no logged-in uuid). Guests can't write to the server endpoints, so their
-// noticeboard is mirrored to localStorage instead. See openNoticeboard().
+// A "guest" reached this page via a shared link with no uuid. They can't write to the
+// server, so their noticeboard mirrors to localStorage instead. See openNoticeboard().
 function isGuest(){
   return !getLoggedInUser()?.uuid;
 }
@@ -101,11 +102,8 @@ async function fetchNoticeboardEdited(caseIntID, uuid) {
 async function saveNoticeboardEdited(caseIntID, uuid, filenames, data) {
   const names = Array.isArray(filenames) ? filenames : [];
   const datas = Array.isArray(data) ? data : [];
-  // Encode in the desktop's .NET BinaryFormatter byte[][] layout so SmartRPD can
-  // deserialize web-saved editedview rows. Plain JSON here made desktop login wipe
-  // web uploads (desktop fails to parse → empty noticeboard → overwrites the row).
-  // Verified byte-for-byte (dotnetBinaryFormatter.js); the web read-back recovers
-  // PNGs + filenames from this blob, so rows round-trip.
+  // MUST be the desktop's .NET BinaryFormatter byte[][] layout: plain JSON here made
+  // desktop login fail to parse, empty the noticeboard and overwrite web uploads.
   const { filenames: filenamesBlob, data: dataBlob, count } =
     await encodeEditedViewColumns(names, datas);
   const payload = [
@@ -141,10 +139,8 @@ async function saveNoticeboardEdited(caseIntID, uuid, filenames, data) {
   return res.json().catch(() => null);
 }
 
-// Merge local filename/data arrays over a capture table's current server arrays:
-// local entries win by filename; server-only entries are preserved so a save
-// can't delete something another session or the desktop client wrote. Shared by
-// the editedview save and the view_capture mirror.
+// Merge local filename/data arrays over the server's: local wins by filename, server-only
+// entries survive so a save can't delete what another session or desktop wrote.
 function mergeCaptureArrays(localFilenames, localData, serverRow) {
   const server = readEditedViewArrays(serverRow);
   const filenames = [...localFilenames];
@@ -160,10 +156,8 @@ function mergeCaptureArrays(localFilenames, localData, serverRow) {
   return { filenames, data };
 }
 
-// Generic create POST for a noticeboard capture table (used for view_capture,
-// /noticeboard/view). Columns use the desktop's .NET BinaryFormatter byte[][] layout
-// (desktop-readable; web read-back recovers them). Throws on non-2xx so the caller
-// can log + continue.
+// Create POST for a capture table (view_capture, /noticeboard/view); columns use the
+// desktop's .NET BinaryFormatter byte[][] layout. Throws on non-2xx so callers continue.
 async function postNoticeboardCapture(createPath, caseIntID, uuid, filenames, data) {
   // Same desktop .NET BinaryFormatter byte[][] layout as editedview, so the
   // view_capture table is desktop-readable too.
@@ -185,10 +179,8 @@ async function postNoticeboardCapture(createPath, caseIntID, uuid, filenames, da
   return res.json().catch(() => null);
 }
 
-// Mirror capture PNGs into a dedicated capture table (view_capture, /noticeboard/view)
-// alongside the editedview blob. Fetch-merge-save so we don't clobber desktop rows.
-// Best-effort: editedview stays the read-back source of truth, so a mirror failure
-// doesn't fail the save.
+// Mirror capture PNGs into view_capture alongside the editedview blob, fetch-merge-save so
+// desktop rows survive. Best-effort — editedview stays the read-back source of truth.
 async function mirrorCaptureTable(createPath, getPath, caseIntID, uuid, filenames, data) {
   try {
     const existing = await postNoticeboardEndpoint(getPath, noticeboardPayload(caseIntID, uuid));
@@ -223,71 +215,9 @@ function isDataUrlImage(v) {
   return typeof v === "string" && v.startsWith("data:image/");
 }
 
-// Decode base64 (tolerant of URL-safe variants and missing padding) into a
-// binary string where each character represents one byte.
-function safeAtob(b64) {
-  if (typeof b64 !== "string") return null;
-  try {
-    const cleaned = b64.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
-    const padded = cleaned + "=".repeat((4 - (cleaned.length % 4)) % 4);
-    return atob(padded);
-  } catch {
-    return null;
-  }
-}
 
-// The desktop stores captures as a .NET BinaryFormatter list of images, base64'd —
-// not JSON, so JSON.parse fails. This scans the decoded bytes for embedded PNG
-// signatures (or base64 PNG strings as fallback) and rebuilds data URLs.
-function extractPngsFromBinaryFormatter(outerBase64) {
-  const decoded = safeAtob(outerBase64);
-  if (!decoded) return [];
-
-  const out = [];
-  const PNG_SIG = "\x89PNG\r\n\x1a\n";
-  const PNG_END = "IEND\xae\x42\x60\x82";
-  let i = 0;
-  while (true) {
-    const start = decoded.indexOf(PNG_SIG, i);
-    if (start === -1) break;
-    const endMarker = decoded.indexOf(PNG_END, start);
-    if (endMarker === -1) break;
-    const end = endMarker + PNG_END.length;
-    out.push("data:image/png;base64," + btoa(decoded.slice(start, end)));
-    i = end;
-  }
-  if (out.length) return out;
-
-  // Fallback: the blob may contain base64-encoded PNG *strings* rather than
-  // raw PNG bytes. Scan for the canonical base64-PNG header.
-  const B64_PNG_HEAD = "iVBORw0KGgo";
-  let j = 0;
-  while (true) {
-    const idx = decoded.indexOf(B64_PNG_HEAD, j);
-    if (idx === -1) break;
-    let k = idx;
-    while (k < decoded.length && /[A-Za-z0-9+/=]/.test(decoded[k])) k += 1;
-    const b64 = decoded.slice(idx, k).replace(/=+$/, "");
-    const pad = "=".repeat((4 - (b64.length % 4)) % 4);
-    out.push("data:image/png;base64," + b64 + pad);
-    j = k;
-  }
-  return out;
-}
-
-function extractFilenamesFromBinaryFormatter(outerBase64) {
-  const decoded = safeAtob(outerBase64);
-  if (!decoded) return [];
-  const out = [];
-  const RE = /[A-Za-z0-9_\-\. ]{1,80}\.(?:png|jpe?g|gif|bmp)/gi;
-  let m;
-  while ((m = RE.exec(decoded)) !== null) out.push(m[0]);
-  return out;
-}
-
-// Desktop client filenames are prefixed `2D_*` for instructions and `3D_*`
-// (or no prefix) for viewcaptures. Anything else routes to viewcaptures by
-// default so nothing gets dropped silently.
+// Desktop filenames prefix `2D_*` for instructions, `3D_*` (or none) for viewcaptures.
+// Anything else defaults to viewcaptures so nothing is silently dropped.
 function isInstructionFilename(name) {
   return /^\s*2d[_\-\.\s]/i.test(String(name || ""));
 }
@@ -329,9 +259,8 @@ function buildServerEntries(editedRow) {
   return { instructions, viewcaptures };
 }
 
-// Ensure the persisted title carries a 2D_/3D_ prefix so the next hydrate
-// can route it back to the correct bucket. We don't double-prefix if one is
-// already present.
+// Persisted titles must carry a 2D_/3D_ prefix so the next hydrate routes them back to
+// the right bucket. Never double-prefix one that already has it.
 function ensureKindPrefix(title, kind) {
   const t = String(title || "").trim();
   if (/^\s*(2d|3d)[_\-\.\s]/i.test(t)) return t;
@@ -355,9 +284,8 @@ function serializeForEditedView(instructions, viewcaptures) {
   return { filenames, data };
 }
 
-// Read the server's current filenames+data arrays for the edited view, then
-// fall back to the BinaryFormatter parser if the server response is the
-// desktop client's blob format rather than JSON.
+// Read the server's current editedview filename+data arrays, falling back to the
+// BinaryFormatter parser when the response is the desktop's blob rather than JSON.
 function readEditedViewArrays(row) {
   if (!row) return { filenames: [], data: [] };
   let names = safeJsonParse(row.filenames || "[]", null);
@@ -396,22 +324,13 @@ async function syncInstructionsToEditedView() {
     const viewcaptures = dataModel.viewcaptures || [];
     const local = serializeForEditedView(instructions, viewcaptures);
 
-    // 3) Merge over the server's current editedview arrays (local wins by
-    // filename; server-only entries preserved) and 4) POST back to /editedview,
-    // which stays the source of truth for read-back.
+    // 3) Merge over the server's editedview arrays (local wins by filename, server-only
+    // survives), then 4) POST back — /editedview stays the read-back source of truth.
     const merged = mergeCaptureArrays(local.filenames, local.data, row);
     await saveNoticeboardEdited(state.caseIntID, user.uuid, merged.filenames, merged.data);
 
-    // 5) Additionally mirror BOTH buckets into the desktop's view_capture table
-    // (/noticeboard/view). SmartRPD reads the actual slide PNGs for BOTH its 2D and
-    // 3D tabs from this ONE table and classifies each slide as 2D vs 3D purely by the
-    // 2D_/3D_ filename prefix — not by which table it lives in. (drawnview is only a
-    // paint-overlay layer inside the desktop slide editor, and editedview is just the
-    // thumbnail/composite source — neither surfaces a slide in the 2D tab, which is why
-    // 2D instructions previously written only to drawnview never appeared on desktop.)
-    // One merged, idempotent write (stable filenames dedupe) so the two buckets don't
-    // overwrite each other in the shared row. Best-effort: failures are logged but
-    // don't fail the save (editedview stays the web read-back source of truth).
+    // 5) Mirror BOTH buckets into view_capture — SmartRPD reads its 2D AND 3D slides from
+    // that ONE table, classifying by the 2D_/3D_ prefix. One merged idempotent write.
     const all = serializeForEditedView(instructions, viewcaptures);
     await mirrorCaptureTable(
       "/noticeboard/view",
@@ -455,9 +374,8 @@ async function hydrateNoticeboardFromServer() {
     if (!srvInst.length && !srvVc.length) return false;
 
     const data = ensureCache();
-    // Drop previously-hydrated server items from both buckets before merging
-    // the fresh split, so re-routing (e.g. an item that used to land in
-    // instructions but now belongs in viewcaptures) doesn't leave a duplicate.
+    // Drop previously-hydrated server items from both buckets first, so an item that
+    // re-routes between them doesn't leave a duplicate behind.
     const keepLocal = (it) => it && it.source !== "server";
     data.instructions = mergeInstructions((data.instructions || []).filter(keepLocal), srvInst);
     data.viewcaptures = mergeInstructions((data.viewcaptures || []).filter(keepLocal), srvVc);
@@ -474,16 +392,14 @@ async function hydrateNoticeboardFromServer() {
 }
 
 
-// In-memory only — matching the legacy 2Dannotation.js approach. The server
-// (/noticeboard/editedview) is the sole source of truth; nothing is persisted
-// to localStorage, so we never have to worry about the ~5 MB quota.
+// In-memory only: /noticeboard/editedview is the sole source of truth, and nothing hits
+// localStorage, so the ~5MB quota never applies.
 function emptyData() {
   return { instructions: [], viewcaptures: [] };
 }
 
-// Logged-in: `saveData` is a no-op — the cache is live and the server is updated via
-// syncInstructionsToEditedView on add/edit. Guests have no uuid, so mirror the cache
-// to localStorage (keyed by case) so their instructions survive a reload (device-only).
+// A no-op when logged in (the cache is live, the server updated on add/edit). Guests have
+// no uuid, so mirror to localStorage per case and their work survives a reload.
 function saveData(data) {
   if (!isGuest()) return;
   const key = guestStorageKey();
@@ -670,9 +586,8 @@ function onPreviewKeydown(e) {
   else if (e.key === "ArrowRight") { e.preventDefault(); navigatePreview(1); }
 }
 
-// The thumbnail pencil opens the instruction editor directly (no Edit/Delete
-// menu). Deletion isn't offered because the server editedview blob retains
-// items and the next hydrate resurrects them, so a delete never sticks.
+// The pencil opens the editor directly, with no Delete: the editedview blob retains items
+// and the next hydrate resurrects them, so a delete would never stick.
 async function editInstructionItem(items, idx, kind) {
   const item = items[idx];
   if (!item) return;
@@ -724,9 +639,8 @@ async function refreshAddInstructionPreview() {
   }
 }
 
-// The 3D panel is usually a WebGL canvas (preview3D.js) — capture it. If that's
-// not active, fall back to the static <img id="previewImage">. Shared by the
-// add-viewcapture flow and its add-card preview thumbnail.
+// Capture the 3D WebGL canvas when preview3D is active, else fall back to the static
+// <img id="previewImage">. Shared by the add-viewcapture flow and its card thumbnail.
 function capture3DOrFallbackDataUrl() {
   let src = capture3DPreviewDataUrl();
   if (!src) {
@@ -746,9 +660,8 @@ function refreshAddViewcapturePreview() {
   else previewImg.removeAttribute("src");
 }
 
-// Shared add flow for both noticeboard columns: grab a base image, open the
-// instruction editor on it, then push the result into the given bucket and
-// sync to the server. `captureBaseImage` may be sync or async.
+// Shared add flow for both columns: grab a base image, open the editor on it, push the
+// result into the given bucket and sync. `captureBaseImage` may be sync or async.
 async function addBoardItem({ bucket, idPrefix, titlePrefix, captureBaseImage }) {
   setMessage("Opening instruction editor…", false);
   const baseImage = await captureBaseImage();
@@ -808,9 +721,8 @@ function buildReportToothHtml(toothId, assetBase, note) {
   const isUpper = toothId >= 11 && toothId <= 28;
   const mirrorClass = mirrored ? " is-mirrored" : "";
 
-  // Mirror the clinical-info chart: a tooth flagged missing in the clinical
-  // notes (note.present === false, e.g. desktop ToothPresence=1) renders as
-  // missing — i.e. gets the cross — even when the base annotation status isn't.
+  // Mirrors the clinical-info chart: note.present === false (desktop ToothPresence=1)
+  // renders as missing and gets the cross, even when the annotation status doesn't.
   let effectiveStatus = baseStatus;
   if (note && note.present === false) effectiveStatus = "missing";
   if (note?.abutment) effectiveStatus = "abutment";
@@ -823,22 +735,7 @@ function buildReportToothHtml(toothId, assetBase, note) {
   if (effectiveStatus === "abutment") {
     body = `<img class="cli-tooth-img cli-tooth-full${mirrorClass}" src="${assetBase}/${id}_Abutment.svg" alt="" />`;
   } else {
-    const crownSrc = note?.cracked ? `${id}_Cracked.svg` : `${id}_Crown.svg`;
-    const rootSrc = note?.implant
-      ? `${id}_Implant.svg`
-      : note?.rct
-      ? `${id}_RCT.svg`
-      : `${id}_Root.svg`;
-    const rootReplaced = !!(note?.implant || note?.rct);
-    const mobilityTint = rootReplaced
-      ? ""
-      : note?.mobility === "1"
-      ? "is-tint-green"
-      : note?.mobility === "2"
-      ? "is-tint-yellow"
-      : note?.mobility === "3"
-      ? "is-tint-red"
-      : "";
+    const { crownSrc, rootSrc, mobilityTint } = resolveToothArtSources(id, note);
 
     const crownExtra =
       (!note?.cracked && note?.crown ? " is-tint-yellow" : "") +
@@ -945,10 +842,8 @@ function reportFieldRow(label, value) {
   return `<div class="cli-field"><span class="cli-field-label">${escapeHtml(label)} :</span><span class="cli-field-value">${escapeHtml(value || "")}</span></div>`;
 }
 
-// Crop the uniform white border around an image so the actual content fills
-// the frame. Editor previews are exported at the editor's aspect ratio and
-// letterbox the design, leaving it small once placed on the report page.
-// Returns the original data URL unchanged if nothing meaningful can be cropped.
+// Crops the uniform white border so content fills the frame — editor previews export at
+// the editor's aspect ratio and letterbox the design. Returns the original if it can't.
 function trimImageMargins(dataUrl) {
   return new Promise((resolve) => {
     if (!dataUrl) {
@@ -1023,9 +918,8 @@ function trimImageMargins(dataUrl) {
   });
 }
 
-// Map the case's API status string to a display label + pill colors, mirroring
-// statusPillClass/statusDisplayText in caseManagement.js (which aren't exported)
-// and the --status-* palette in case_list.css. Drives the top-right status badge.
+// Maps the API status to a label + pill colours, mirroring caseManagement.js's unexported
+// statusPillClass/statusDisplayText and the --status-* palette in case_list.css.
 function reportStatusBadge(apiStatus) {
   const v = apiStatus ? String(apiStatus).toLowerCase().replace(/ /g, "_") : "na";
 
@@ -1044,9 +938,8 @@ function reportStatusBadge(apiStatus) {
   return { label, bg, fg };
 }
 
-// Fetch the case's upper (slot 1) / lower (slot 2) 3D jaw renders for the report.
-// POST /thumbnails/get returns one row per slot (0 = composite 2D, 1/2 = upper/lower
-// STL). Prefer the slot field; if absent, classify by aspect ratio like the carousel.
+// Fetch the report's upper (slot 1) / lower (slot 2) jaw renders. /thumbnails/get returns
+// a row per slot (0 = composite 2D); prefer the slot field, else classify by aspect.
 async function fetchCaseThumbnailSlots(caseIntID) {
   const user = getLoggedInUser();
   if (!caseIntID || !user?.uuid) return { upper: "", lower: "" };
@@ -1120,9 +1013,8 @@ async function fetchCaseDetailById(caseIntID) {
   }
 }
 
-// Pull the most recent 2D design (2D_* instruction) for a case straight from the
-// server editedview blob — used when building the report off the annotation page
-// (the case-list download), where the local noticeboard cache isn't populated.
+// Pull the newest 2D_* instruction straight from the editedview blob — used when building
+// the report off-page (the case-list download), where the local cache is empty.
 async function fetchTwoDPreviewSrc(caseIntID) {
   const user = getLoggedInUser();
   if (!caseIntID || !user?.uuid) return "";
@@ -1136,10 +1028,8 @@ async function fetchTwoDPreviewSrc(caseIntID) {
   }
 }
 
-// Build the standalone report HTML for a case, gathering every input by caseIntID so
-// it works off the live page too (e.g. case-list bulk download). `twoDPreviewSrc`
-// reuses a loaded 2D design (else fetched from editedview); `autoPrint` appends the
-// print-on-load script.
+// Build the standalone report HTML, gathering every input by caseIntID so it works off the
+// live page. `twoDPreviewSrc` reuses a loaded design; `autoPrint` adds the print script.
 export async function buildReportHtml(
   caseIntID,
   { caseLabel, caseOwner, twoDPreviewSrc, apiStatus, autoPrint = false } = {}
@@ -1151,16 +1041,13 @@ export async function buildReportHtml(
   const workCategoryLabel =
     WORK_CATEGORY_LABELS[caseNote.workCategory] || caseNote.workCategory || "";
 
-  // Bottom-left "2D Design" panel shows only the "2D Setup & Design" column — the most
-  // recent 2D instruction (2D_*) and its edited .preview. The viewcaptures bucket (3D
-  // screenshots) is deliberately NOT used here. No 2D design → placeholder.
+  // The "2D Design" panel shows only the newest 2D_* instruction and its edited .preview.
+  // The viewcaptures bucket is deliberately NOT used here; no design → placeholder.
   let twoDSrc = twoDPreviewSrc;
   if (twoDSrc == null) twoDSrc = await fetchTwoDPreviewSrc(caseIntID);
 
-  // Case detail gives the string case id for the upper/lower 3D renders (slots 1/2).
-  // For the status badge, /case/get/:id doesn't reliably carry new_status — read it
-  // from additionalcasedetails (same authoritative source as the dashboard). Callers
-  // holding the status (case-list row) pass `apiStatus` to skip the request.
+  // /case/get/:id doesn't reliably carry new_status, so the badge reads it from
+  // additionalcasedetails. Callers already holding it pass `apiStatus` to skip that.
   const [detail, addlRes] = await Promise.all([
     fetchCaseDetailById(caseIntID),
     apiStatus === undefined ? fetchAdditionalCaseDetails(caseIntID) : Promise.resolve(null),
@@ -1172,13 +1059,11 @@ export async function buildReportHtml(
   const label =
     caseLabel ||
     (detail?.id != null && detail?.case_id
-      ? `UID ${detail.id} : ${detail.case_id}`
+      ? `${detail.id} : ${detail.case_id}`
       : caseIdStr ?? "Unknown");
 
-  // The 2D preview is exported at the editor's on-screen aspect ratio, which
-  // letterboxes the design with wide white margins. Trim those so the design
-  // itself — not the padding — fills its panel. The 3D jaw renders come from
-  // the case thumbnail slots (1 = upper, 2 = lower).
+  // The 2D preview exports at the editor's aspect ratio and letterboxes the design, so trim
+  // the margins. The 3D renders come from thumbnail slots 1 (upper) and 2 (lower).
   const [jaw2dSrc, jaws] = await Promise.all([
     trimImageMargins(twoDSrc),
     fetchCaseThumbnailSlots(caseIntID),
@@ -1279,10 +1164,8 @@ export async function buildReportHtml(
   .cli-comment .cli-field-label { color: #4a5663; margin-right: 6px; }
   .cli-comment .cli-field-value { color: #2f3b46; font-weight: 500; white-space: pre-wrap; }
 
-  /* Bottom panel: 2D design on the left, the two 3D jaw renders stacked right.
-     A tall fixed height fills most of the page below the chart while staying
-     safely within one printed page (forcing a full-page flex fill is unreliable
-     under print fragmentation and bumps this block to a second page). */
+  /* Bottom panel: 2D design left, the two jaw renders stacked right. A fixed height, not a
+     full-page flex fill — that fragments unreliably and pushes this to a second page. */
   .cli-bottom { display: flex; gap: 12px; align-items: stretch; height: 470px; margin-top: 16px; }
   .cli-bottom-left { flex: 1.15; }
   .cli-bottom-right { flex: 1; display: flex; flex-direction: column; gap: 12px; }
@@ -1372,12 +1255,10 @@ export async function buildReportHtml(
   return html;
 }
 
-// Noticeboard "Generate Report" button: build the report from the live
-// annotation page state and open it in a new window for printing (the original
-// behavior). The case-list bulk download instead calls buildReportHtml directly
-// and renders it to a PDF.
+// "Generate Report" builds from live page state and opens a print window. The case-list
+// bulk download instead calls buildReportHtml directly and renders a PDF.
 async function generateReport() {
-  // Prefer the full "UID {id}:{name}" label rendered in the topbar so the
+  // Prefer the full "{id} : {name}" label rendered in the topbar so the
   // report matches what the user sees on screen.
   const topbarLabel = (document.getElementById("caseLabel")?.textContent || "")
     .replace(/^Case:\s*/i, "")
@@ -1406,9 +1287,8 @@ export function openNoticeboard() {
   const modal = getModal();
   if (!modal) return;
 
-  // Guests reach this page via a shared link without signing in. They can't
-  // save to the server, so the first time they open the noticeboard per tab
-  // session, gate it behind a Login / Continue-as-guest prompt.
+  // Guests can't save to the server, so the first noticeboard open per tab session is
+  // gated behind a Login / Continue-as-guest prompt.
   if (isGuest() && sessionStorage.getItem(GUEST_ACK_KEY) !== "1") {
     openGuestGate();
     return;
@@ -1517,16 +1397,6 @@ export function initNoticeboard() {
     ?.addEventListener("click", generateReport);
   document.getElementById("addInstructionBtn")?.addEventListener("click", addInstruction);
   document.getElementById("addViewcaptureBtn")?.addEventListener("click", addViewcapture);
-  document.getElementById("downloadJawProfileBtn")?.addEventListener("click", () => {
-    // Close the noticeboard so the download menu (STL / JPEG) isn't hidden
-    // behind it, then trigger the same flow as the footer button.
-    closeNoticeboard();
-    window.dispatchEvent(new CustomEvent("request-download-jaw-profile"));
-  });
-  document.getElementById("drawFromScratchModalBtn")?.addEventListener("click", () => {
-    closeNoticeboard();
-    document.getElementById("drawFromScratchBtn")?.click();
-  });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !getModal()?.classList.contains("is-hidden")) {
       closeNoticeboard();

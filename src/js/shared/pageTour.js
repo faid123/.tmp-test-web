@@ -1,32 +1,20 @@
-// Guided start-up journey — a spotlight walk through the current page.
-//
-// Opened from the About item (appSidebar.js), and once automatically the first
-// time someone lands on a page that has a tour. The overlay, its markup and its
-// stylesheet are built on first run, so a page whose tour never runs pays
-// nothing.
-//
-// The steps come from tourSteps.js, keyed by the same page ids helpBot.js uses.
-// Steps whose control isn't on the page are dropped before the tour starts —
-// admin buttons, the components panel before the arches are locked, anything
-// that needs a selected case — so the numbering never counts a step that will
-// be skipped over.
-//
-// While a tour runs the page underneath is not interactive: the overlay swallows
-// clicks. That keeps the app from changing shape halfway through a walkthrough
-// that is describing it.
+// A spotlight walk through the current page, from About or a first visit. Steps
+// come from tourSteps.js, with unreachable ones dropped before the numbering is
+// fixed. The overlay swallows clicks so the page can't change shape mid-walk.
 
 import { PAGE_LABELS } from "./helpTopics.js";
 import { tourFor, tourStorageKey } from "./tourSteps.js";
+import { currentPageId, ensureStylesheet } from "./pageContext.js";
+
+export { currentPageId };
 
 const REVEAL_TIMEOUT_MS = 1500;
 const AUTOSTART_TIMEOUT_MS = 4000;
 const CARD_GAP = 14;      // space between the spotlight and the card
 const VIEWPORT_PAD = 12;  // keep the card this far off every edge
 
-// Below either of these the card stops being a floating card and becomes a
-// full-width sheet against one edge. Height counts as much as width: a phone
-// held sideways is around 390px tall — wide enough to miss a width-only
-// breakpoint, far too short for a card that has to clear a spotlight.
+// Below either of these the card becomes a full-width sheet. Height counts as
+// much as width: a phone held sideways is ~390px tall.
 const SHEET_MAX_WIDTH = 560;
 const SHEET_MAX_HEIGHT = 520;
 const SHEET_MAX_FRACTION = 0.6; // the sheet never eats more of the screen than this
@@ -40,32 +28,6 @@ let running = false;
 let reflowFrame = 0;
 let currentTarget = null;
 let openedByTour = null;  // { reveal, dismiss } for a panel this tour opened
-
-// ---------------------------------------------------------------- page context
-
-// Same page ids as the help assistant. Duplicated rather than imported so the
-// tour does not pull the help bot's knowledge base into its bundle.
-export function currentPageId(pathname = window.location.pathname) {
-  const file = pathname.split("/").pop() || "index.html";
-  if (/\/admin\//.test(pathname)) {
-    if (/admin_users/i.test(file)) return "admin_users";
-    if (/admin_machineid/i.test(file)) return "admin_machineid";
-    if (/admin_case_list/i.test(file)) return "admin_case_list";
-  }
-  if (/^case_list/i.test(file)) return "case_list";
-  if (/^2DAnnotation/i.test(file)) return "annotation_2d";
-  if (/^ThreeDViewer/i.test(file)) return "viewer_3d";
-  if (/^AnnotationHistory/i.test(file)) return "annotation_history";
-  if (/^VersionHistory/i.test(file)) return "version_history";
-  return "login";
-}
-
-function appRoot() {
-  const path = window.location.pathname;
-  if (/\/src\/pages\/admin\//.test(path)) return "../../../";
-  if (/\/src\/pages\//.test(path)) return "../../";
-  return "./";
-}
 
 // -------------------------------------------------------------------- storage
 
@@ -126,13 +88,8 @@ function waitForVisible(selectors, timeout = REVEAL_TIMEOUT_MS) {
   });
 }
 
-// The 3D viewer covers its whole stage until the case's 3D files have
-// downloaded — tens of MB, so tens of seconds. Highlighting controls nobody can
-// see yet is worse than starting late, so hold the tour until the screen lifts.
-// Resolves false if it is still up after the cap, which skips the tour for this
-// visit and leaves it unseen for the next one.
-// Two stages cover the viewer: its own loading screen while the scene builds,
-// then the slot manager while the case's 3D files download into it.
+// The 3D viewer covers its stage while the case downloads, so wait for both its
+// loading screen and the slot manager. False past the cap skips this visit only.
 const LOADING_SCREEN_SELECTOR =
   "#viewer-loading-screen, #design-upload-prompt.is-loading";
 const LOADING_SCREEN_TIMEOUT_MS = 180000;
@@ -151,33 +108,21 @@ function waitForLoadingScreen(timeout = LOADING_SCREEN_TIMEOUT_MS) {
 
 const asList = (v) => (Array.isArray(v) ? v : v ? [v] : []);
 
-// First of these selectors that is actually on screen. Order is the preference
-// order, which is why this is not a CSS selector list — `querySelector("a, b")`
-// returns whichever comes first in the document, not whichever we asked for
-// first, and the case-table step wants a data row ahead of the header above it.
+// First selector actually on screen, in preference order — NOT a CSS list, since
+// `querySelector("a, b")` returns document order, not the order asked for.
 const firstVisible = (selectors) => asList(selectors).map(safeQuery).find(isVisible) || null;
 
-// `selector` and `reveal` may each name several alternatives. The 2D design puts
-// the Case Note behind the CASE NOTE tab on a desktop and a footer button on a
-// tablet — which one exists is a media query — and the case table is worth
-// pointing at by its first row when the list has one, or its header when empty.
+// Each may name several alternatives: the 2D Case Note sits behind a tab or a
+// footer button depending on a media query, and the case table prefers a row.
 const selectorList = (step) => asList(step.selector);
 const revealList = (step) => asList(step.reveal);
 
-// Identifies the run of steps sharing one panel. A string, not the array itself:
-// each step carries its own copy of the list, so comparing by reference would
-// close the panel between two steps that are both inside it.
+// Identifies the run of steps sharing one panel. A string, not the array — each
+// step has its own copy, so a reference compare would close the panel between them.
 const revealKey = (step) => revealList(step).join("|");
 
-// Can this step be shown at all? A step with no selector is a centred card and
-// always qualifies; otherwise the control must be ON SCREEN now, or reachable by
-// opening one of the views named in `reveal`.
-//
-// Visibility, not existence: the 2D design ships #componentTabs inside a panel
-// that is display:none until the arches are locked, and the case detail panel's
-// controls are in the document before a case is picked. Testing for existence
-// kept those steps in the tour and then handed the resolver a target it could
-// never show — a step that arrived with no spotlight and nothing to look at.
+// No selector means a centred card, which always qualifies. Otherwise test
+// VISIBILITY, not existence — display:none controls are in the document early.
 function stepIsReachable(step) {
   if (!selectorList(step).length) return true;
   if (firstVisible(selectorList(step))) return true;
@@ -191,33 +136,25 @@ async function resolveTarget(step) {
   const existing = firstVisible(selectorList(step));
   if (existing) return existing;
 
-  // The panel this step lives in is already open, because this tour opened it.
-  // A target still not found is genuinely missing — and pressing the opener
-  // again would re-run whatever it does on the way in: Create Case calls
-  // resetCreateCaseForm(), the Case Note rebuilds its form from scratch. Both
-  // would throw away what the user had typed. Show the step without a spotlight
-  // rather than reopening.
+  // The panel is already open, so a missing target is genuinely missing — and
+  // re-pressing the opener would reset the form and discard what was typed.
   if (openedByTour && revealKey(step) === openedByTour.key) return null;
 
   const opener = firstVisible(revealList(step));
   if (!opener) return null;
 
-  // Wait out the click that got us here before opening anything. The
-  // case-actions dropdown closes on any click outside itself, and the Next
-  // button is outside it — clicking the toggle mid-dispatch would open the menu
-  // only for that same event to close it again.
+  // Wait out the click that got us here: the case-actions dropdown closes on any
+  // outside click, and Next is outside it.
   await nextFrame();
   opener.click();
-  // Remember what we opened so the tour can shut it again on the way out. Only
-  // panels that name a `dismiss` are tracked — the padlock opens design mode,
-  // which is a mode the user keeps, not a panel to be tidied away.
+  // Only panels naming a `dismiss` are tracked — the padlock opens design mode,
+  // which the user keeps, rather than a panel to tidy away.
   if (step.dismiss) openedByTour = { key: revealKey(step), dismiss: step.dismiss };
   return waitForVisible(selectorList(step));
 }
 
-// Shut the panel this tour opened. Called when the tour moves off the run of
-// steps that share it, and when the tour ends — a walkthrough should leave the
-// screen the way it found it.
+// Shuts the panel this tour opened, on leaving its run of steps and at the end —
+// a walkthrough should leave the screen the way it found it.
 function closeOpenedContainer() {
   const dismiss = openedByTour?.dismiss;
   openedByTour = null;
@@ -228,24 +165,14 @@ function closeOpenedContainer() {
 
 // -------------------------------------------------------------------- overlay
 
-function ensureStylesheet() {
-  const href = new URL(`${appRoot()}css/pageTour.css`, window.location.href).href;
-  if (document.querySelector(`link[href="${href}"]`)) return;
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = href;
-  document.head.appendChild(link);
-}
-
 function buildOverlay() {
-  ensureStylesheet();
+  ensureStylesheet("pageTour.css");
 
   root = document.createElement("div");
   root.id = "page-tour";
   root.className = "pt-root is-hidden";
-  // Div-only markup, deliberately: ThreeDViewer.html loads style.css, which
-  // styles bare <header> — a semantic tag here would inherit that page's own
-  // chrome. Roles carry the semantics instead.
+  // Div-only, deliberately: style.css styles bare <header>, so a semantic tag
+  // would inherit the viewer page's chrome. Roles carry the semantics instead.
   root.innerHTML = `
     <div class="pt-mask" id="ptMask"></div>
     <div class="pt-card" id="ptCard" role="dialog" aria-modal="true" aria-labelledby="ptTitle">
@@ -275,21 +202,16 @@ function buildOverlay() {
   root.querySelector("#ptNext").addEventListener("click", () => goTo(index + 1));
   root.querySelector("#ptMore").addEventListener("click", openTopicInHelp);
 
-  // Clicking the dimmed page moves on rather than doing nothing — the overlay is
-  // swallowing that click anyway, and a stuck-looking tour is worse than one
-  // that advances a step early. Bound on the root, not the mask: the mask is only
-  // the hole, so the dimming (which is its shadow, and belongs to the root as far
-  // as hit-testing goes) took no clicks at all. Matters most on a phone, where
-  // tapping the veil is how people expect to move on.
+  // Tapping the dimmed page advances. Bound on the root, not the mask: the mask
+  // is only the hole, so the dimming (its shadow) hit-tests against the root.
   root.addEventListener("click", (e) => {
     if (e.target === root || e.target === maskEl) goTo(index + 1);
   });
 
   document.addEventListener("keydown", onKeydown, true);
   window.addEventListener("resize", scheduleReflow);
-  // Mobile browsers resize the visual viewport, not the window, when the address
-  // bar slides away or a keyboard opens — without these the sheet is left
-  // measuring a window that is no longer the size of the screen.
+  // Mobile resizes the visual viewport, not the window, when the address bar
+  // slides away — without these the sheet measures a stale screen size.
   window.visualViewport?.addEventListener("resize", scheduleReflow);
   window.visualViewport?.addEventListener("scroll", scheduleReflow);
   // Capture phase: the spotlight has to follow the target through a scrolling
@@ -321,9 +243,8 @@ function scheduleReflow() {
   });
 }
 
-// The mask is a hole in a page-sized shadow: sizing it to the target cuts the
-// spotlight, and collapsing it to a point in the middle dims the whole page for
-// the steps that have no control to point at.
+// The mask is a hole in a page-sized shadow: sized to the target it cuts the
+// spotlight; collapsed to a point it dims everything for a step with no target.
 function positionFor(el) {
   if (!maskEl || !cardEl) return;
 
@@ -367,15 +288,8 @@ function clearSheet() {
   cardEl.style.maxHeight = "";
 }
 
-// Full-width sheet against whichever edge the target leaves most room beside, so
-// the card cannot land on the control the step is describing. The 3D viewer is
-// the case that forces this: its pen, notes and chat buttons are all in a 35px
-// footer, and a sheet pinned to the bottom covered every one of them.
-//
-// Capped to a share of the window as well as to the free space, so a step
-// against a full-bleed target — the viewer's #container3D is the whole stage —
-// gets a short sheet with the model still visible above it rather than a card
-// filling the screen.
+// Sheet takes whichever edge leaves most room, so it can't cover the control.
+// Capped to a share of the window, so a full-bleed target still shows through.
 function placeCardAsSheet(r) {
   cardEl.classList.add("is-sheet");
   cardEl.style.transform = "none";
@@ -385,31 +299,23 @@ function placeCardAsSheet(r) {
   const below = Math.max(0, window.innerHeight - r.bottom);
   const toTop = above > below;
 
-  // Free space is what the sheet gets, but never less than the card needs to
-  // show its own buttons: against a full-bleed target — the viewer's #container3D
-  // is the whole stage — there is no free space at all, and a sheet sized to it
-  // pushed Back and Next off the bottom of the screen.
+  // Never less than the card needs for its own buttons: a full-bleed target
+  // leaves no free space, and sizing to it pushed Back/Next off the screen.
   cardEl.style.maxHeight = "";
   const natural = cardEl.scrollHeight;
   const cap = Math.min(window.innerHeight - VIEWPORT_PAD * 2, Math.round(window.innerHeight * SHEET_MAX_FRACTION));
   const room = Math.round((toTop ? above : below) - CARD_GAP);
   cardEl.style.maxHeight = `${Math.min(cap, Math.max(natural, room))}px`;
 
-  // One edge is pinned and the other is cleared rather than set to "auto" — an
-  // inline top left over from the previous step would otherwise win over bottom
-  // and leave the sheet floating mid-screen.
+  // The opposite edge is cleared, not set to "auto": an inline top left from the
+  // previous step would win over bottom and float the sheet mid-screen.
   cardEl.classList.toggle("is-sheet-top", toTop);
   cardEl.style.top = toTop ? "0px" : "";
   cardEl.style.bottom = toTop ? "" : "0px";
 }
 
-// Below the spotlight by preference, then above, then beside it — and only as a
-// last resort on top of it.
-//
-// The side placements matter for the tall panels: the 2D design's Components
-// panel and 3D preview are most of the window's height, so below and above both
-// fail and a card centred over the target would hide the very thing the step is
-// pointing at.
+// Below by preference, then above, then beside, and only last on top. The side
+// placements carry the tall panels, where below and above both fail.
 function placeCardNear(r) {
   clearSheet();
   cardEl.style.transform = "none";
@@ -561,9 +467,8 @@ export function startPageTour({ pageId = currentPageId() } = {}) {
   return true;
 }
 
-// The help panel and the tour both own the screen; opening one closes the other.
-// Poked through the DOM rather than imported so the tour doesn't pull the help
-// assistant into its bundle.
+// Both own the screen, so opening one closes the other. Poked through the DOM
+// rather than imported, to keep the help assistant out of the tour's bundle.
 function closeHelpPanel() {
   document.querySelector("#help-bot.is-open .hb-close")?.click();
 }
@@ -589,10 +494,8 @@ export function tourPageLabel(pageId = currentPageId()) {
   return PAGE_LABELS[pageId] || "this page";
 }
 
-// First visit to a page that has a tour: run it once, unprompted. Waits for the
-// first anchored step's control to exist, because the case list and the 2D
-// design both build their toolbars after data arrives — starting before that
-// would drop half the steps as unreachable.
+// First visit runs the tour once, unprompted. Waits for the first anchored step's
+// control, since toolbars are built after data arrives.
 export async function maybeAutoStartTour({ pageId = currentPageId() } = {}) {
   const script = tourFor(pageId);
   if (!script?.length || hasSeen(pageId)) return false;
@@ -604,9 +507,8 @@ export async function maybeAutoStartTour({ pageId = currentPageId() } = {}) {
     // One more frame so the rest of the toolbar lands before we filter steps.
     await nextFrame();
   }
-  // Checked after the anchor wait, not before: this module is imported
-  // dynamically, so on a fast connection it can get here before the viewer has
-  // even put its loading screen up.
+  // Checked after the anchor wait: this module loads dynamically and can arrive
+  // before the viewer has even put its loading screen up.
   if (!(await waitForLoadingScreen())) return false;
   // Someone who started working (or opened Help) in the meantime is not waiting
   // for a tour to take over their screen.

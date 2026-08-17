@@ -48,9 +48,8 @@ function mirrorTemplateRowForTooth(toothId, row) {
 }
 
 /**
- * Base offset for a SOLO mesial/distal minor-connector half, per template tooth
- * (11-18 / 41-48; quadrants 2 & 3 mirror X). The directional nudge is added on top
- * (getMinorConnectorOffset); the `mid` connector uses its own table. +x = toward lingual.
+ * Base offset for a SOLO minor-connector half, per template tooth (Q2/Q3 mirror X).
+ * The directional nudge adds on top; `mid` has its own table. +x = toward lingual.
  */
 const MINOR_CONNECTOR_OFFSET_SEED_BY_TEMPLATE_TOOTH = Object.freeze({
   "11": { x: 29, y: 33 },
@@ -88,9 +87,8 @@ export function getMinorConnectorAssetReference(toothId, variant = "mid") {
 }
 
 /**
- * Per-variant size multiplier to fine-tune a mesial/distal half that renders too
- * big/small. Keyed by template tooth (11-18 / 41-48); default 1.
- * e.g. shrink tooth 12's distal half → `distal: { "12": 0.8 }`.
+ * Per-variant size multiplier for a half that renders too big or small, keyed by template
+ * tooth; default 1. e.g. shrink 12's distal half with `distal: { "12": 0.8 }`.
  */
 const MINOR_CONNECTOR_VARIANT_SCALE_BY_TEMPLATE_TOOTH = Object.freeze({
   mid: {},
@@ -116,9 +114,8 @@ export function getMinorConnectorRenderScale(jaw) {
 }
 
 /**
- * Hand-tuned nudge toward the tooth's rest/clasp side: a `{x, y}` delta added to
- * the base offset per template tooth (11-18 / 41-48; quadrants 2 & 3 mirror X),
- * for MESIAL vs DISTAL support. Absent = no nudge. +x = toward lingual.
+ * Hand-tuned `{x, y}` nudge toward the tooth's rest/clasp side, added to the base offset
+ * per template tooth and support side (Q2/Q3 mirror X). Absent = none. +x = lingual.
  */
 const MINOR_CONNECTOR_DIRECTIONAL_OFFSET_SEED_BY_TEMPLATE_TOOTH = Object.freeze({
   // template: { mesial: { x, y }, distal: { x, y } }
@@ -162,9 +159,8 @@ export function getMinorConnectorOffset(toothId, direction) {
 }
 
 /**
- * Per-template OVERRIDE for the shared `mid` connector (embrasure, both teeth support).
- * Defaults to the solo-half base seed; add a row only where the mid connector must sit
- * elsewhere. Keyed per template tooth (11-18 / 41-48; quadrants 2 & 3 mirror X). +x = lingual.
+ * Per-template OVERRIDE for the shared `mid` connector, defaulting to the solo-half seed.
+ * Add a row only where mid must sit elsewhere. Q2/Q3 mirror X; +x = lingual.
  */
 const MINOR_CONNECTOR_MID_OFFSET_OVERRIDE_BY_TEMPLATE_TOOTH = Object.freeze({
   // e.g. "12": { x: 30, y: 20 },  // move only tooth 12's mid connector, leaving its solo halves
@@ -181,11 +177,8 @@ export function getMinorConnectorMidOffset(toothId) {
 }
 
 /**
- * Back-action geometry: the retentive clasp and the reciprocating clasp sit at OPPOSITE
- * mesial/distal corners. Simple Circum keeps them at the SAME corner (the reciprocal is
- * the retainer arch-flipped), so this only matches an arm that wraps the tooth — today
- * Back-action Clasps and Half & Half. Returns the clasp's own side, or null when the
- * tooth isn't in that geometry.
+ * Back-action geometry — retentive and reciprocating clasps at OPPOSITE corners, unlike
+ * Simple Circum. Matches only a wrapping arm; returns the clasp's own side, or null.
  */
 function getWrappedArmConnectorSide(tooth) {
   let claspSide = null;
@@ -219,9 +212,8 @@ function hasReciprocatingOrMeshElement(tooth) {
   );
 }
 
-/** Sides a meshed saddle must bridge itself: the neighbour across that embrasure is a
- *  present tooth carrying no reciprocating element and no mesh, so nothing else joins
- *  the mesh to the major connector there. Needs `neighbors` — without it, no mesh sides. */
+/** Sides a meshed saddle must bridge itself, because the neighbour across the embrasure
+ *  carries nothing to join it to the major. Needs `neighbors`, else no mesh sides. */
 function getMeshMinorConnectorSides(tooth, neighbors) {
   const sides = { mesial: false, distal: false };
   if (!neighbors) return sides;
@@ -236,16 +228,12 @@ function getMeshMinorConnectorSides(tooth, neighbors) {
 }
 
 /**
- * Which embrasure side(s) a tooth's minor connector attaches on, from placed components
- * (mirrors desktop GetConnectorData + isMesio): a rest/bar sits on its own surface; a
- * retentive clasp anchors at its ORIGIN, opposite the tip (mesial-tip → connects distally).
- * A reciprocating clasp isn't a retainer, so it's ignored. Returns `{ mesial, distal }`.
+ * Which embrasure sides a tooth's minor connector attaches on (desktop GetConnectorData):
+ * a rest/bar sits on its own surface, a retentive clasp anchors at its ORIGIN opposite the
+ * tip, and a reciprocating clasp is ignored — it is not a retainer.
  *
- * `neighbors` — `{ mesial, distal }` tooth records across each embrasure — enables the
- * mesh rule (see getMeshMinorConnectorSides); omit it for pure single-tooth derivation.
- *
- * Exception: a wrapped arm (see getWrappedArmConnectorSide) joins at the clasp's own
- * side, which replaces the derivation rather than adding to it.
+ * `neighbors` enables the mesh rule; omit it for pure single-tooth derivation. A wrapped
+ * arm REPLACES this derivation with the clasp's own side.
  */
 export function getMinorConnectorSupportSides(tooth, neighbors = null) {
   const sides = { mesial: false, distal: false };
@@ -263,9 +251,8 @@ export function getMinorConnectorSupportSides(tooth, neighbors = null) {
 
   for (const placement of tooth.componentPlacements) {
     const id = placement?.componentId;
-    // A mesh plate (cross-mesh) spans the tooth proximally and joins the major on both
-    // embrasures, so it carries a minor connector despite no anchor surface. (plate-prox
-    // under a major is already joined by the connector fill, so not added here.)
+    // A cross-mesh plate spans the tooth proximally and joins the major on both embrasures,
+    // so it connects despite having no anchor surface. plate-prox is already joined.
     if (id === "plate-crossmesh") {
       sides.mesial = true;
       sides.distal = true;

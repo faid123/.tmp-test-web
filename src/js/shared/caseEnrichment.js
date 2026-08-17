@@ -1,9 +1,5 @@
-// Per-case data the case-list row doesn't carry: the lazy-enrichment wire
-// contract (details + co-owner roles), and the case's reference images.
-// The queue/observer/breaker machinery and all DOM row-patching stay in
-// caseManagement.js, which feeds resilientFetch(...) into
-// applyEnrichmentResponses(). Both halves are covered by
-// __tests__/caseEnrichment.test.mjs.
+// Per-case data the case-list row doesn't carry: details, co-owner roles and
+// reference images. The queue/observer/breaker stays in caseManagement.js.
 
 // uuid is passed in by the caller (the enrich queue already has the session
 // user), so this module takes the constants only — not callerIdentity().
@@ -46,11 +42,8 @@ export function buildEnrichRequests(caseIntID, uuid) {
   ];
 }
 
-// Fold the two responses into the case object. Returns false when BOTH are
-// null — the backend refused (throttle/outage → resilientFetch null) — so the
-// caller parks the case and retries after the breaker cooldown. A response
-// that is merely !ok (a real 4xx answer) is terminal — retrying wouldn't
-// change it — so it still returns true with the base fields kept.
+// Folds both responses into the case object. False only when BOTH are null (the
+// backend refused) so the caller retries; a real 4xx is terminal and returns true.
 export async function applyEnrichmentResponses(caseObj, detailRes, rolesRes, logApi = () => {}) {
   if (!detailRes && !rolesRes) return false;
 
@@ -82,11 +75,8 @@ export async function applyEnrichmentResponses(caseObj, detailRes, rolesRes, log
           caseObj.co_owners = rows
             .filter((r) => r && r.role === "coowner" && r.username)
             .map((r) => r.username);
-          // The role table is authoritative for ownership. Some cases (e.g.
-          // SwiftRPD/3D-upload created) store a placeholder like "nobody" or a
-          // raw uuid in `assigned_to`, so the desktop app shows the owner from
-          // the `owner` role row instead. Match that: prefer the owner role's
-          // username, then fall back to the uuid→username remap.
+          // The role table is authoritative: `assigned_to` can hold "nobody" or
+          // a raw uuid, so prefer the owner role's username as the desktop does.
           const ownerRow = rows.find(
             (r) => r && String(r.role).toLowerCase() === "owner" && r.username
           );
@@ -107,8 +97,8 @@ export async function applyEnrichmentResponses(caseObj, detailRes, rolesRes, log
 }
 
 // --- Reference images -----------------------------------------------------
-// The referenceImages table first, mirrored thumbnail slots as fallback (0-2
-// are the 2D composite and the jaw renders, so 3+ are the references).
+// referenceImages table first, thumbnail slots 3+ as fallback (0-2 are the 2D
+// composite and jaw renders).
 
 function refImagesCaller(caseIntID, uuid) {
   return { machine_id: MACHINE_ID, uuid, caseIntID };

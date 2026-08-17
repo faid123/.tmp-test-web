@@ -31,12 +31,8 @@ export class ApiClient {
 
     let response = await send();
 
-    // The backend session lives server-side, keyed by machine_id + uuid (no
-    // cookie is set), and this client logs in once per page load. Anything that
-    // logs that shared account out — session TTL, another tab, another client —
-    // makes every later call 401 "user is logged out", which is what broke the
-    // design-overlay button: the page loaded fine, then the click 401'd on all
-    // four slots. Re-login once and retry instead of failing the call.
+    // The session is server-side on ONE shared account, so any other tab logging
+    // out 401s every later call here. Re-login once and retry.
     if (response.status === 401) {
       console.warn(`[ApiClient] session expired on POST ${endpoint} — re-logging in`);
       resetSessionLogin();
@@ -58,10 +54,8 @@ export class ApiClient {
 
     const contentLength = response.headers.get('content-length');
     if (!contentLength) {
-      // Server used chunked transfer encoding — no progress bar possible.
-      // Nothing to tear down here: the fallback container is only created
-      // below, and touching it at this point threw a TDZ ReferenceError that
-      // failed the whole request.
+      // Chunked transfer encoding — no progress bar possible. Nothing to tear
+      // down: the container below doesn't exist yet, and touching it threw TDZ.
       return response.json();
     }
 

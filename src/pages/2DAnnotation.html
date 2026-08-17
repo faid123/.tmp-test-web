@@ -459,19 +459,6 @@
           <div id="viewcaptureGrid" class="noticeboard-grid" role="list"></div>
         </section>
       </div>
-
-      <footer class="noticeboard-footer">
-        <button type="button" id="downloadJawProfileBtn" class="noticeboard-footer-btn">
-          DOWNLOAD JAW PROFILE
-        </button>
-        <button
-          type="button"
-          id="drawFromScratchModalBtn"
-          class="noticeboard-footer-btn noticeboard-footer-btn-primary"
-        >
-          DRAW FROM SCRATCH
-        </button>
-      </footer>
     </div>
   </div>
 
@@ -546,26 +533,28 @@
       aria-modal="true"
       aria-labelledby="loadTemplateTitle"
     >
-      <h3 id="loadTemplateTitle">Load Template Jaw</h3>
-      <p class="load-template-hint">
-        Upload a Jaw Struct (<code>.txt</code>) file to load its design onto the arch.
-        You can select the upper and lower files together.
-      </p>
-      <label id="loadTemplateDropzone" class="load-template-dropzone" for="loadTemplateFileInput">
-        <span class="load-template-dropzone-icon" aria-hidden="true">&#8682;</span>
-        <span class="load-template-dropzone-text">Choose Jaw Struct file(s) or drop them here</span>
-        <input
-          id="loadTemplateFileInput"
-          type="file"
-          accept=".txt,text/plain"
-          multiple
-          hidden
-        />
-      </label>
-      <ul id="loadTemplateFileList" class="load-template-file-list"></ul>
+      <h3 id="loadTemplateTitle">Proposed Design</h3>
+      <!-- Rows filled by renderKennedyProposalPanel: a preview of the proposal applied.
+           Each jaw's checkbox decides whether Place Design touches that arch. -->
+      <ul id="kennedyClassPanel" class="kennedy-class-panel">
+        <li class="kennedy-class-row" data-jaw="upper">
+          <img class="kennedy-preview-img" alt="Proposed upper arch design" />
+          <label class="kennedy-jaw-toggle">
+            <input type="checkbox" class="kennedy-jaw-checkbox" data-jaw="upper" checked />
+            <span>Upper</span>
+          </label>
+        </li>
+        <li class="kennedy-class-row" data-jaw="lower">
+          <img class="kennedy-preview-img" alt="Proposed lower arch design" />
+          <label class="kennedy-jaw-toggle">
+            <input type="checkbox" class="kennedy-jaw-checkbox" data-jaw="lower" checked />
+            <span>Lower</span>
+          </label>
+        </li>
+      </ul>
       <div class="load-template-actions">
         <button id="loadTemplateCancelBtn" type="button">Cancel</button>
-        <button id="loadTemplateLoadBtn" type="button" class="is-primary" disabled>Load</button>
+        <button id="kennedyApplyBtn" type="button" class="is-primary">Place Design</button>
       </div>
     </div>
   </div>

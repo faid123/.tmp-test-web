@@ -1,14 +1,14 @@
 // 顶部引入模块
 import { lol } from "../shared/crypt.js";
-import { toast, flashToast, confirmModal, attachThemedCalendar } from "../shared/toast.js";
+import { toast, flashToast, attachThemedCalendar } from "../shared/toast.js";
 import { logApi } from "../shared/apiLog.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 import { attachUserSuggest, initialsFor } from "../shared/userSuggest.js";
+import { confirmRemoveUserFromCase } from "../shared/caseRoles.js";
+import { normalizeImageFile } from "../shared/imageFiles.js";
 
-// Resolve an asset path relative to the app root (everything before "/src/") so
-// it loads whether this shared module runs from src/pages/ (case_list) or the
-// deeper src/pages/admin/ (admin_case_list); a fixed "../../assets" only works
-// for the shallower page. Falls back to the original relative path off-browser.
+// Resolved against the app root (everything before "/src/") so it loads from
+// both src/pages/ and the deeper src/pages/admin/, where a fixed path would not.
 function appAsset(relFromRoot) {
   const href = typeof window !== "undefined" && window.location ? window.location.href : "";
   const i = href.indexOf("/src/");
@@ -18,12 +18,8 @@ function appAsset(relFromRoot) {
 let THREE;
 let STLLoader;
 
-// Lazy-load Three.js + STLLoader. Bare specifiers resolve both ways this
-// module is delivered: the case-list pages' <script type="importmap"> maps
-// them to vendor/three (same entry preview3D.js resolves — one shared
-// instance), and the webpack viewer bundle resolves them from node_modules.
-// webpackMode eager keeps the bundle single-file — an async chunk would never
-// be copied by deploy.yml, which ships dist/bundle.js alone.
+// Bare specifiers resolve both ways this ships (page importmap, webpack).
+// webpackMode eager keeps one file — deploy.yml ships dist/bundle.js alone.
 async function loadThreeDeps() {
   if (THREE && STLLoader) return;
   const [threeMod, loaderMod] = await Promise.all([
@@ -54,10 +50,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const caseNameInput = document.getElementById("caseName");
   const requestDateInput = document.getElementById("requestDate");
   const instructionsInput = document.getElementById("ccCaseInstructions");
-  // Grow the instructions box with its content instead of giving it a drag
-  // handle. Height is cleared first so it can shrink again; the border is added
-  // back on top of scrollHeight (content + padding only) to avoid clipping the
-  // last line on a border-box textarea.
+  // Grows with its content instead of taking a drag handle. Height is cleared so
+  // it can shrink, and the border added back on top of scrollHeight, which omits it.
   const autoGrowTextarea = (el) => {
     if (!el) return;
     el.style.height = "auto";
@@ -156,9 +150,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       li.appendChild(x);
       inviteListEl.appendChild(li);
     });
-    // Queued names drop out of the suggestions. Re-rendering also re-opens the
-    // list while the box still has focus, since inviting two or three people in
-    // a row is the norm.
+    // Queued names drop out of the suggestions, and re-rendering re-opens the list
+    // while the box has focus — inviting several people in a row is the norm.
     inviteSuggest.refresh();
   };
 
@@ -172,11 +165,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     onInput: () => setInviteMsg(""),
   });
 
-  // Resolve a username to its uuid, the way the User Access modal's Add does.
-  // The endpoint answers with the account's uuid; a non-2xx, an empty body or a
-  // body without a uuid all mean "no such user". Throws only when the request
-  // itself never completed, which the caller reports as a different failure —
-  // an unconfirmed name is never queued either way.
+  // A non-2xx, an empty body or a body without a uuid all mean "no such user";
+  // only a request that never completed throws. Either way the name isn't queued.
   const resolveInviteUuid = async (username) => {
     const res = await fetch(`${API_BASE}/user/checkifusernameexists/get`, {
       method: "POST",
@@ -190,9 +180,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     return row?.uuid || null;
   };
 
-  // Why an invite was refused, shown under the box rather than as a toast: the
-  // message is about the field the user is still standing in, so it belongs
-  // next to it (and stays put while they fix the name).
+  // Shown under the box rather than as a toast: it's about the field the user is
+  // still standing in, and stays put while they fix the name.
   const setInviteMsg = (text, tone = "error") => {
     if (!inviteMsgEl) return;
     inviteMsgEl.textContent = text || "";
@@ -222,10 +211,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    // Nothing is queued until the server confirms the account exists. The invite
-    // loop that runs after the case is created skips unknown usernames silently,
-    // so an unchecked typo would vanish with no sign the person was never
-    // invited — and it is what the User Access modal already does on Add.
+    // Nothing is queued until the server confirms the account: the post-create
+    // invite loop skips unknown usernames silently, so a typo would vanish unseen.
     if (inviteAddBtn) inviteAddBtn.disabled = true;
     try {
       const uuid = await resolveInviteUuid(name);
@@ -363,10 +350,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (refUploadInput) refUploadInput.value = "";
   };
 
-  // Process a dropped/picked STL file. The wrapper is inserted into the DOM
-  // synchronously (with the File attached) so a fast Start-click after drop
-  // still sees `.uploaded-model[data-jaw="..."]` and uploads the STL; the
-  // rendered preview thumbnail fills in once Three.js finishes parsing.
+  // The wrapper goes into the DOM synchronously with the File attached, so a fast
+  // Start-click still finds and uploads the STL; the preview fills in after.
   const processStlFile = (file, target) => {
     if (!file || !target) return;
     const jaw = target.dataset.jaw;
@@ -423,9 +408,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         const center = geometry.boundingBox.getCenter(new THREE.Vector3());
         mesh.position.sub(center);
 
-        // Render at thumbnail-friendly resolution so the PNG we upload to the
-        // case thumbnail slot is crisp. The on-screen preview img is sized via
-        // CSS (width: 100px), so a 512² source still displays correctly.
+        // Rendered large so the PNG uploaded to the thumbnail slot is crisp; the
+        // on-screen preview is CSS-sized, so a 512² source still fits.
         const width = 512;
         const height = 512;
         const camera = new THREE.PerspectiveCamera(70, width / height, 0.1, 1000);
@@ -457,7 +441,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Insert ref image wrapper synchronously (with File attached) so Start-click
   // immediately after drop still sees it; fill the preview when FileReader finishes.
   const addRefImageFromFile = (file) => {
-    if (!file || !file.type.startsWith("image/")) return;
+    // Extension is checked too, not just the MIME type: some Android providers
+    // hand over a picked photo with `type` empty, and dropping it silently is
+    // indistinguishable from the picker doing nothing at all.
+    if (!file) return;
+    if (!file.type.startsWith("image/") && !/\.(png|jpe?g|gif|bmp|webp|hei[cf])$/i.test(file.name || "")) return;
 
     const wrapper = document.createElement("div");
     wrapper.className = "uploaded-model";
@@ -798,21 +786,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       const from_user = loggedInUser.username || "";
       for (const username of pendingInvites) {
         try {
-          const checkRes = await fetch(
-            `${API_BASE}/user/checkifusernameexists/get`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify([{ machine_id }, { username }]),
-            }
-          );
-          logApi(checkRes, 'POST /user/checkifusernameexists/get');
-          const checkData = await checkRes.json();
-          if (!checkData || !checkData.uuid) {
+          const targetUUID = await lookupUserUUID(machine_id, username);
+          if (!targetUUID) {
             console.warn(`User "${username}" not found — skipping.`);
             continue;
           }
-          const targetUUID = checkData.uuid;
           const roleInviteRes = await fetch(`${API_BASE}/role`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -867,10 +845,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     saveStartBtn.addEventListener("click", () => submitCase("start", saveStartBtn));
   }
 
-  // Who already has access, read off the rendered list rather than a cached
-  // array: the modal is opened and repainted by whichever page module owns the
-  // page (caseManagement.js on open, this file after an add), so the DOM is the
-  // one copy of that state both of them keep current.
+  // Read off the rendered list, not a cached array: two modules repaint this
+  // modal, so the DOM is the only copy of that state both keep current.
   const sharedUsernames = () =>
     [...document.querySelectorAll("#sharedUserList .shared-user-item")]
       .map((li) => li.dataset.username || "")
@@ -900,22 +876,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
 
       try {
-        // 1️⃣ 检查用户是否存在
-        const checkRes = await fetch(
-          `${API_BASE}/user/checkifusernameexists/get`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify([{ machine_id }, { username }]),
-          }
-        );
-        logApi(checkRes, 'POST /user/checkifusernameexists/get');
-        const checkData = await checkRes.json();
-        if (!checkData || !checkData.uuid) {
-          throw new Error("User not found");
-        }
-
-        const targetUUID = checkData.uuid;
+        const targetUUID = await lookupUserUUID(machine_id, username);
+        if (!targetUUID) throw new Error("User not found");
 
         // 2️⃣ 添加为 co-owner
         const roleRes = await fetch(
@@ -1065,9 +1027,8 @@ async function uploadSTL(
           console.log(`✅ Uploaded ${jawType} STL (raw)`);
         }
 
-        // 2) Processed STL bucket — what the SmartRPD desktop client loads via
-        // RestAPI.CreateSTL. C# enum: Upper=0, Lower=1; DB column is 1-based,
-        // so we send the integer (jawType "upper_jaw" → 1, "lower_jaw" → 2).
+        // Processed STL bucket, read by the desktop's RestAPI.CreateSTL. The C#
+        // enum is Upper=0/Lower=1 but the DB column is 1-based, hence 1 and 2.
         const dbType = jawType === "upper_jaw" ? 1 : jawType === "lower_jaw" ? 2 : 0;
         const stlPayload = [
           { machine_id, uuid, caseIntID },
@@ -1172,37 +1133,9 @@ function renderSharedUserList() {
       deleteBtn.innerHTML = '<i class="fa fa-xmark" aria-hidden="true"></i>';
 
       deleteBtn.addEventListener("click", async () => {
-        const confirmed = await confirmModal({
-          title: "Remove user?",
-          message: `Remove ${user.username} from this case? They'll lose access immediately.`,
-          confirmText: "Remove",
-          cancelText: "Cancel",
-          variant: "danger",
-        });
-        if (!confirmed) return;
-
-        try {
-          const { caseIntID, uuid, machine_id } = window._inviteContext;
-          const res = await fetch(
-            `${API_BASE}/role/delete`,
-            {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify([
-                { machine_id, uuid, caseIntID },
-                { case_int_id: caseIntID, uuid: user.uuid },
-              ]),
-            }
-          );
-          logApi(res, 'PUT /role/delete');
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-          existingUsers = existingUsers.filter((u) => u.uuid !== user.uuid);
-          renderSharedUserList();
-        } catch (err) {
-          console.error("Failed to remove user:", err);
-          toast.error("Failed to remove user.");
-        }
+        if (!(await confirmRemoveUserFromCase(user))) return;
+        existingUsers = existingUsers.filter((u) => u.uuid !== user.uuid);
+        renderSharedUserList();
       });
 
       li.appendChild(deleteBtn);
@@ -1210,6 +1143,18 @@ function renderSharedUserList() {
 
     container.appendChild(li);
   });
+}
+
+// Resolve a username to its uuid, or null when the account doesn't exist.
+async function lookupUserUUID(machine_id, username) {
+  const res = await fetch(`${API_BASE}/user/checkifusernameexists/get`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([{ machine_id }, { username }]),
+  });
+  logApi(res, "POST /user/checkifusernameexists/get");
+  const data = await res.json();
+  return data?.uuid || null;
 }
 
 async function uploadReferenceImage(
@@ -1226,67 +1171,62 @@ async function uploadReferenceImage(
   }
 
   const file = wrapperEl.file;
-  const reader = new FileReader();
 
-  return new Promise((resolve, reject) => {
-    reader.onload = async function (e) {
-      try {
-        const base64data = e.target.result;
+  // Re-encoded first: a phone capture is multi-MB, and it is posted twice below.
+  // A file that can't be decoded (HEIC on Android) is reported and skipped —
+  // never fatal, the case itself is already created by this point.
+  let image;
+  try {
+    image = await normalizeImageFile(file);
+  } catch (err) {
+    console.warn(`⚠️ Reference image skipped: ${file.name}`, err);
+    toast.error(err.message);
+    return;
+  }
+  const base64data = image.dataUrl;
 
-        const payload = [
-          {
-            machine_id,
-            uuid,
-            caseIntID,
-          },
-          {
-            case_id,
-            image_name: file.name || `ref_image_${index}.png`,
-            image_data: base64data,
-          },
-        ];
+  try {
+    const payload = [
+      {
+        machine_id,
+        uuid,
+        caseIntID,
+      },
+      {
+        case_id,
+        image_name: image.name || `ref_image_${index}.jpg`,
+        image_data: base64data,
+      },
+    ];
 
-        const res = await fetch(
-          `${API_BASE}/referenceimages`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          }
-        );
-        logApi(res, 'POST /referenceimages');
-        if (!res.ok) {
-          console.error(
-            `❌ Failed to upload reference image ${file.name}`,
-            res.status
-          );
-        } else {
-          console.log(`✅ Uploaded reference image: ${file.name}`);
-        }
-
-        // Also save the reference image into a thumbnail slot so it shows up in
-        // the case detail carousel (which reads /thumbnails by slot). Slots 0–2
-        // are reserved for the 2D composite + upper/lower jaw renders, so
-        // reference images take the slots after them (3, 4, …). `index` is
-        // 1-based, giving ref image 1 → slot 3.
-        await uploadCaseThumbnail(machine_id, uuid, caseIntID, 2 + index, base64data);
-
-        resolve();
-      } catch (err) {
-        console.error(`❌ Error uploading reference image ${file.name}:`, err);
-        resolve();
+    const res = await fetch(
+      `${API_BASE}/referenceimages`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       }
-    };
+    );
+    logApi(res, 'POST /referenceimages');
+    if (!res.ok) {
+      console.error(
+        `❌ Failed to upload reference image ${image.name}`,
+        res.status
+      );
+    } else {
+      console.log(`✅ Uploaded reference image: ${image.name}`);
+    }
 
-    reader.readAsDataURL(file); // ✅ 读取为 Base64
-  });
+    // Mirrored into a thumbnail slot so it joins the detail carousel. Slots
+    // 0-2 are reserved, and `index` is 1-based, so ref image 1 lands on slot 3.
+    await uploadCaseThumbnail(machine_id, uuid, caseIntID, 2 + index, base64data);
+  } catch (err) {
+    console.error(`❌ Error uploading reference image ${image.name}:`, err);
+  }
 }
 
-// POST /additionalcasedetails — store the create-form's case instructions as the
-// case's `comments`. The case is brand new here, so there's no existing row to
-// merge with; the other columns are explicitly null and get filled in later by
-// the status/due-date writers. Non-fatal: a failure here must not fail the case
-// creation that already succeeded.
+// The case is brand new, so there is no row to merge with. Non-fatal: this must
+// never fail a case creation that already succeeded.
 async function saveCaseInstructions(machine_id, uuid, caseIntID, text) {
   const comments = (text || "").trim();
   if (!caseIntID || !comments) return;
@@ -1312,11 +1252,8 @@ async function saveCaseInstructions(machine_id, uuid, caseIntID, text) {
   }
 }
 
-// POST /thumbnails — save a thumbnail PNG into a specific slot for a case.
-// Body shape per API spec: [authData, caseData] where caseData carries the
-// integer case id, the slot index, and the base64 image payload (no data URL
-// prefix). slot 0 = composite 2D annotation, 1 = upper STL render,
-// 2 = lower STL render, 3+ = reference images.
+// caseData carries the integer case id, the slot, and bare base64 (no data URL
+// prefix). Slots: 0 = composite 2D, 1 = upper render, 2 = lower, 3+ = references.
 async function uploadCaseThumbnail(machine_id, uuid, caseIntID, slot, dataUrl) {
   if (!caseIntID || !dataUrl) return;
   const commaIdx = dataUrl.indexOf(",");
@@ -1352,11 +1289,8 @@ async function createCaseHistory({ machine_id, uuid, caseIntID, user_id, action 
     { user_id, action, datetime: Date.now() }   // 当前毫秒时间戳
   ];
 
-  // History is a side-write and must never block / undo a successful case
-  // creation. The previous implementation let network errors bubble up to the
-  // caller's catch, which then showed "Failed to create case" even though the
-  // case already existed on the server — making the user retry and create
-  // duplicates.
+  // A side-write that must never undo a successful creation: letting it throw
+  // showed "Failed to create case" for a case that existed, so users made duplicates.
   try {
     const res = await fetch(`${API_BASE}/casehistory`, {
       method: "POST",

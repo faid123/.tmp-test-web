@@ -1,9 +1,7 @@
 /**
- * Jaw-struct fetch/save wrappers — mirrors clinicalInfo.js / noticeboard.js:
- * same API base, MACHINE_ID, and [{machine_id, uuid, caseIntID}, {case_id, ...}]
- * payload. Both endpoints live: fetch POST /jawstruct/l2/getall, save POST
- * /jawstruct/l2 (returns {"successful":true}, upsert per case+type, verified).
- * The Save button drives the write.
+ * Jaw-struct fetch/save wrappers, mirroring clinicalInfo.js: same base, MACHINE_ID and
+ * [{machine_id, uuid, caseIntID}, {case_id, ...}] payload. Fetch is POST
+ * /jawstruct/l2/getall, save is POST /jawstruct/l2 (upsert per case+type).
  */
 import { encodeJawStructBase64 } from "./jawStructCodec.js";
 import { API_BASE, MACHINE_ID } from "../shared/api.js";
@@ -39,13 +37,11 @@ async function postJson(path, payload) {
 }
 
 /**
- * Fetch the jaw struct (upper + lower) for a case. Returns the raw API body on
- * success (caller decodes), or null when the request fails after retries.
+ * Fetch both jaws for a case, returning the raw body or null after retries.
  *
- * The first cross-origin POST on a fresh tab can fail transiently (cold TLS +
- * CORS preflight). Callers treat null/empty as "no server design" and reset to a
- * clean arch, so retry the read to avoid silently blanking a real design. A
- * successful (even empty) response is returned as-is and never retried.
+ * The first cross-origin POST on a fresh tab can fail transiently, and callers treat null
+ * as "no server design" and reset the arch — hence the retry. A successful response, even
+ * an empty one, is returned as-is and never retried.
  */
 export async function fetchJawStruct(caseIntID, uuid, { retries = 2, retryDelayMs = 600 } = {}) {
   const payload = buildPayload(caseIntID, uuid);

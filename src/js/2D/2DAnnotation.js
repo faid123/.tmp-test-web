@@ -1,27 +1,26 @@
 /**
- * 2D arch annotation — entry point. Also hosts shared 2D state + UI helpers.
- * Feature modules load via dynamic import during init to dodge circular-import
- * TDZ issues.
+ * 2D arch annotation entry point; also hosts shared 2D state and UI helpers.
+ * Feature modules load via dynamic import in init() to dodge circular-import TDZ.
  */
 
 import { lol } from "../shared/crypt.js";
 import { toggleChat } from "../shared/chat.js";
+import { returnToCaseList as goToCaseList } from "../shared/caseLinks.js";
 import { SVG_NS } from "./constants.js";
 import {
   COMPONENT_BY_ID,
   COMPONENT_CATALOG,
   COMPONENT_TABS,
+  getDefaultMeshIdForDesignMode,
+  isClaspComponent,
   isMeshComponent,
   isPlateComponentId,
+  meshSelectionContextFromState,
 } from "./components.js";
 import { fetchJawStruct as apiFetchJawStruct, saveJawStructFromState } from "./jawStructApi.js";
-import {
-  decodeJawStructResponse,
-  resolveJawStructDesign,
-  parseJawStructText,
-  safeAtob,
-} from "./jawStructCodec.js";
+import { decodeJawStructResponse, resolveJawStructDesign } from "./jawStructCodec.js";
 import { applyJawStructDesign } from "./jawStructApply.js";
+import { applyDesignProposal, buildDesignProposal } from "./JawDesignProposal.js";
 import { logApi } from "../shared/apiLog.js";
 import { toast, flashToast } from "../shared/toast.js";
 import { VIEWER_UUID } from "../shared/config.js";
@@ -61,12 +60,13 @@ export const state = {
   rangeMissingMode: false,
   rangeMissingStartToothId: null,
   /**
-   * Denture base material for the whole case, written to each jaw's
-   * "Jaw Material" field on encode. 0 = metal, 2 = full acrylic. null = not yet
-   * chosen (encodes as 0). Prompted when locking an empty design — see
-   * annotationLocks.maybePromptJawMaterial.
+   * Case-wide denture base, encoded as each jaw's "Jaw Material": 0 = metal,
+   * 2 = full acrylic, null = unchosen (encodes 0). Prompted on locking an empty design.
    */
   jawMaterial: null,
+  /** Per-jaw Kennedy classification, recomputed each time the dialog opens.
+   *  Session-only — derived from tooth presence, so nothing to persist. */
+  kennedy: { upper: null, lower: null },
 };
 
 /** Transient UI refs — mutated by other modules (avoids import-reassignment issues). */
@@ -187,7 +187,7 @@ async function refreshUiAfterHistoryRestore() {
     ]);
     catalog.renderComponentCatalog();
     locks.updateEditModeUI();
-  } catch (_) {}
+  } catch {}
   renderJaws();
 }
 
@@ -340,10 +340,8 @@ export function registerRender(fns) {
   if (fns.cloneArchTintDefs) cloneArchTintDefsImpl = fns.cloneArchTintDefs;
 }
 
-// The arch tint filters live in a shared <svg> outside the arch (annotationRender's
-// ensureArchTintDefs), so an arch serialized on its own carries no filter definitions and
-// every `filter: url(#…)` silently resolves to nothing — the jaw template and teeth come
-// out untinted, i.e. invisible. The screenshot/thumbnail path pastes this copy back in.
+// Tint filters live in a shared <svg> outside the arch, so a standalone serialized arch
+// resolves every `filter: url(#…)` to nothing and renders untinted. Paste this copy back.
 export function cloneArchTintDefs() {
   return cloneArchTintDefsImpl();
 }
@@ -357,9 +355,8 @@ export function renderJaws() {
   return renderJawsImpl();
 }
 
-// Reflect the case's denture-base material in the corner badge over the jaws.
-// Hidden until a material is chosen/loaded (null). Called from renderJaws, so it
-// stays fresh across placement, load, undo/redo and the material prompt.
+// Shows the denture-base material in the corner badge, hidden while null. Called from
+// renderJaws so it stays fresh across placement, load, undo/redo and the prompt.
 const JAW_MATERIAL_LABELS = { 0: "Metal", 2: "Full Acrylic" };
 export function updateJawMaterialBadge() {
   const badge = document.getElementById("jawMaterialBadge");
@@ -442,10 +439,8 @@ async function applyQuickPickSelection(tabId, componentId, options = {}) {
       }
     }
 
-    // Everything else defers to the catalog's click handler so each type gets its
-    // proper treatment (majors place parts on supported teeth, meshes join
-    // state.components, plates set up toggle suggestions). Selecting alone isn't
-    // enough — without a real placement the preview vanishes on the next click.
+    // Everything else defers to the catalog's click handler so each type is treated
+    // properly. Selecting alone isn't enough — the preview vanishes on the next click.
     const { handleDesignComponentSelect } = await import("./annotationCatalog.js");
     handleDesignComponentSelect(id);
   } catch (error) {
@@ -458,9 +453,8 @@ async function applyQuickPickSelection(tabId, componentId, options = {}) {
 }
 
 /**
- * Present-tooth quick picker: Rest / Bar / Recip / Clasp.
- * Touch → centered sheet with big tap targets; mouse → compact radial wheel at
- * the click point (the wheel's tiny labels are unusable with a finger).
+ * Present-tooth quick picker (Rest / Bar / Recip / Clasp). Touch gets a centred sheet;
+ * mouse gets the radial wheel, whose tiny labels are unusable with a finger.
  */
 export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
   closePresentToothRadialQuickPick();
@@ -484,9 +478,8 @@ export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
     { label: "BACK", menu: "main", pos: "bottom-right", icon: "../../back.png" },
   ];
 
-  // Mobile sheet: all COMPONENT_TABS categories (minus CASE NOTE form). Tap a
-  // category → its items → an item commits. Replaces the #componentTabs strip,
-  // hidden on touch (see 2Dannotation.css `@media (pointer: coarse)`).
+  // Mobile sheet: every COMPONENT_TABS category except the CASE NOTE form, drilling
+  // category -> items -> commit. Replaces the #componentTabs strip, hidden on touch.
   const sheetCategories = COMPONENT_TABS
     .filter((tab) => tab.kind !== "form")
     .map((tab) => ({
@@ -701,10 +694,8 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
       return;
     }
     for (const item of items) {
-      // Mesh icons are white silhouettes recolored with the violet mesh tint via CSS
-      // mask — except Mesh Flange, whose PNG is native full-color artwork (the pink
-      // acrylic flange). Masking it collapses the tile into a solid violet square, so
-      // render it as a plain <img>, matching the desktop catalog's `is-mesh-native`.
+      // Mesh icons are white silhouettes recoloured by CSS mask — except Mesh Flange, whose
+      // PNG is full-colour artwork that a mask collapses to a violet square.
       const tintMesh = isMeshComponent(item.id) && item.id !== "mesh-flange";
       grid.appendChild(
         buildTile(
@@ -734,8 +725,11 @@ export function closeRemoveComponentDialog() {
   }
 }
 
-function formatPlacementSurfaceForRemoveUi(surface) {
-  if (!surface) return "";
+// A tooth carries at most one clasp of each type (annotationPlacement enforces it), so the
+// corner tells the user nothing they need to pick the right row — unlike a rest seat, which
+// can legitimately sit on both sides of the same tooth.
+function formatPlacementSurfaceForRemoveUi(componentId, surface) {
+  if (!surface || isClaspComponent(componentId)) return "";
   return String(surface).replace(/_/g, " ");
 }
 
@@ -816,7 +810,7 @@ export async function openRemoveComponentPicker(toothId, jaw, anchorEvent) {
   visiblePlacements.forEach((entry) => {
     const def = COMPONENT_BY_ID.get(entry.componentId);
     const label = def?.label || entry.componentId;
-    const surf = formatPlacementSurfaceForRemoveUi(entry.surface);
+    const surf = formatPlacementSurfaceForRemoveUi(entry.componentId, entry.surface);
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "remove-component-item-btn";
@@ -894,11 +888,8 @@ function initializeCaseIds() {
   if (label) label.textContent = `Case: ${state.caseIntID ?? "Unknown"}`;
 }
 
-// Shared, memoized POST /case/get/:id. Reused by fetchCaseOwner and preview3D's
-// SET-SURVEY-ANGLE path (one request, not two). Started early in init() to overlap
-// module downloads. Resolves the detail object, or null on any failure.
-// `force` re-reads instead of returning the memoized copy — required before any
-// full-row PUT /case/:id write, which must not send stale/partial fields.
+// Shared memoized POST /case/get/:id, started early to overlap module downloads. `force`
+// re-reads, and is REQUIRED before any full-row PUT /case/:id.
 export function fetchCaseDetail({ force = false } = {}) {
   if (!force && state.__caseDetailPromise) return state.__caseDetailPromise;
   if (!state.caseIntID) return Promise.resolve(null);
@@ -941,7 +932,7 @@ async function fetchCaseOwner() {
     if (label) {
       label.textContent =
         caseIntId != null
-          ? `UID ${caseIntId} : ${detail.case_id}`
+          ? `${caseIntId} : ${detail.case_id}`
           : `Case: ${detail.case_id}`;
     }
   }
@@ -988,10 +979,8 @@ async function fetchJawStruct(recordsPromise = null) {
     }
     setMessage("Loaded 2D design from server.", false);
   } else {
-    // Backend is authoritative. With no server design, don't keep the localStorage
-    // one — it lacks raw desktop fields (bar side, reciprocating flag, Pr Config,
-    // the 16x16 minor grid), so a Save would emit defaults for them. Reset to a
-    // clean arch, which encodes correctly from scratch.
+    // The backend is authoritative. A localStorage-only design lacks the raw desktop
+    // fields, so Save would emit defaults — reset to a clean arch instead.
     await resetJawStructDesignToBaseline();
     // Fresh case with no prior design — leave the material unset so locking the
     // empty arch prompts for it (annotationLocks.maybePromptJawMaterial).
@@ -1014,9 +1003,8 @@ async function resetJawStructDesignToBaseline() {
   state.jawStructTail = {};
 }
 
-// Post the current 2D design (both jaws). Returns { upper, lower } per-jaw, or
-// { ok: false, reason } when it can't run (no case / not logged in). Endpoint
-// POST /jawstruct/l2 verified. Used by Save and the off-by-default autosave hook.
+// Posts both jaws to POST /jawstruct/l2, returning { upper, lower } or { ok:false, reason }
+// when there's no case or login. Used by Save and the off-by-default autosave hook.
 export async function postJawStructToServer() {
   if (!state.caseIntID) {
     console.warn("[2D-post] skipped — no caseIntID");
@@ -1047,173 +1035,188 @@ async function saveJawStructAutosave() {
 }
 registerAutosaveHook(saveJawStructAutosave);
 
-// ---- Load Template Jaw ----------------------------------------------------
-// Upload one or more Jaw Struct .txt files (the same format the backend stores),
-// decode them, and apply the design onto the arch. Each file's "Jaw Type" header
-// picks the side (0=upper, 1=lower), so the upper + lower files can be loaded at
-// once. Reuses the exact fetch/apply pipeline used for the server design.
+// ---- Kennedy design proposal ----------------------------------------------
+// Classifies each arch from the jaw struct as it stands (design on open plus any presence
+// edits since), picks the major connector its Kennedy class calls for, and previews the
+// placed result. Nothing lands on the arch until the user confirms.
 
-// A template file is normally plain text ("Start of Jaw Struct…"); tolerate a
-// base64-wrapped body too (matches what /jawstruct/l2/getall returns).
-function templateTextToParsed(rawText) {
-  const looksPlain = /Jaw Struct|Jaw Type:|Tooth \d+:/.test(rawText);
-  const text = looksPlain ? rawText : safeAtob(rawText) ?? rawText;
-  return parseJawStructText(text);
+// Restore point for the preview: the proposal is applied for real to render the thumbnails,
+// then rolled back so the arch behind the dialog is untouched until Place Design.
+function snapshotDesignState() {
+  return {
+    teeth: JSON.parse(JSON.stringify(state.teeth)),
+    archOverlayPalatalHoleActive: state.archOverlayPalatalHoleActive,
+    hideLowerPlateVisuals: state.hideLowerPlateVisuals,
+  };
 }
 
-// Read each file, resolve it into a design, and apply it. Undoable (records a
-// history checkpoint). Refreshes the catalog/edit-mode UI and repaints the jaws.
-async function loadTemplateJawFromFiles(files) {
-  const historyBefore = getHistoryStateSignature();
-  const applied = [];
-  let material = null;
+function restoreDesignState(snapshot) {
+  state.teeth = snapshot.teeth;
+  state.archOverlayPalatalHoleActive = snapshot.archOverlayPalatalHoleActive;
+  state.hideLowerPlateVisuals = snapshot.hideLowerPlateVisuals;
+}
 
-  for (const file of files) {
-    let parsed;
-    try {
-      parsed = templateTextToParsed(await file.text());
-    } catch (err) {
-      console.warn(`[loadTemplateJaw] could not read ${file.name}:`, err);
-      continue;
-    }
-    const design = resolveJawStructDesign(parsed);
-    // "Jaw Type" header sets the side; fall back to the filename if it's absent.
-    let side = design.jawSide;
-    if (!side) {
-      if (/upper/i.test(file.name)) side = "upper";
-      else if (/lower/i.test(file.name)) side = "lower";
-    }
-    if (!side) {
-      console.warn(`[loadTemplateJaw] skipped ${file.name}: unknown jaw side.`);
-      continue;
-    }
-    design.jawSide = side;
-    applyJawStructDesign(design, state);
-    applied.push(side);
+// Apply the proposal to the live arch. Deterministic from tooth presence + material, so
+// the preview pass and the confirmed pass produce the same design. Each render flag is
+// adopted only when its own jaw was in the proposal — a lower-only apply must not clear
+// an overlay the upper arch is still using.
+function applyKennedyProposal(proposal) {
+  const flags = applyDesignProposal(state.teeth, proposal);
+  if (proposal.jaws.upper) state.archOverlayPalatalHoleActive = flags.archOverlayPalatalHoleActive;
+  if (proposal.jaws.lower) state.hideLowerPlateVisuals = flags.hideLowerPlateVisuals;
+}
 
-    const m = Number(design.rawOther?.["Jaw Material"]);
-    if (Number.isFinite(m)) material = m;
+function buildCurrentProposal() {
+  return buildDesignProposal(state.teeth, {
+    material: state.jawMaterial,
+    meshId: getDefaultMeshIdForDesignMode(meshSelectionContextFromState(state), COMPONENT_BY_ID),
+  });
+}
+
+// A preview per jaw, each with its own checkbox. An arch Kennedy gives no class has
+// nothing to place, so its row is disabled rather than merely unchecked.
+function renderKennedyProposalPanel(panel, proposal, thumbnails) {
+  for (const row of panel.querySelectorAll(".kennedy-class-row")) {
+    const jaw = row.dataset.jaw;
+    const { classification, connector } = proposal.jaws[jaw];
+    state.kennedy[jaw] = classification;
+
+    row.classList.toggle("is-unclassified", !connector);
+    const checkbox = row.querySelector(".kennedy-jaw-checkbox");
+    checkbox.disabled = !connector;
+    checkbox.checked = Boolean(connector);
+
+    const img = row.querySelector(".kennedy-preview-img");
+    const src = connector ? thumbnails?.[jaw] : null;
+    if (src) img.setAttribute("src", src);
+    else img.removeAttribute("src");
   }
+}
 
-  if (!applied.length) {
-    setMessage("No valid Jaw Struct data found in the selected file(s).", true);
-    return false;
-  }
-  // Adopt the template's denture-base material so the badge + a later Save match.
-  if (material != null) state.jawMaterial = material;
-
-  // Rebuild the catalog + edit-mode UI (a loaded design can change what's placed),
-  // then repaint both arches.
+// Render the proposal, photograph both arches, then roll the arch back — the dialog shows
+// what the design WOULD look like while the live arch stays as the user left it.
+async function captureProposalThumbnails(proposal) {
+  const snapshot = snapshotDesignState();
   try {
-    const [catalog, locks] = await Promise.all([
-      import("./annotationCatalog.js"),
-      import("./annotationLocks.js"),
-    ]);
-    catalog.renderComponentCatalog();
-    locks.updateEditModeUI();
-  } catch (_) {}
-  renderJaws();
-
-  const label = applied.map(titleCase).join(" + ");
-  setMessage(`Loaded template design (${label}).`, false);
-  toast.success("Template jaw loaded");
-  recordHistoryIfChanged(historyBefore);
-  return true;
+    applyKennedyProposal(proposal);
+    renderJaws();
+    const locks = await import("./annotationLocks.js");
+    return await locks.captureArchThumbnails();
+  } catch (err) {
+    console.warn("[kennedyProposal] preview capture failed", err);
+    return null;
+  } finally {
+    restoreDesignState(snapshot);
+    renderJaws();
+  }
 }
 
-// Wire the "Load Template Jaw" button to its upload modal (markup in the HTML).
-function bindLoadTemplateJaw() {
+// Wire the "Load Template Jaw" button to the proposal modal (markup in the HTML).
+function bindKennedyProposalDialog() {
   const btn = document.getElementById("loadProposalBtn");
   const modal = document.getElementById("loadTemplateJawModal");
   const backdrop = modal?.querySelector(".load-template-backdrop");
-  const dropzone = document.getElementById("loadTemplateDropzone");
-  const fileInput = document.getElementById("loadTemplateFileInput");
-  const fileList = document.getElementById("loadTemplateFileList");
+  const panel = document.getElementById("kennedyClassPanel");
   const cancelBtn = document.getElementById("loadTemplateCancelBtn");
-  const loadBtn = document.getElementById("loadTemplateLoadBtn");
+  const applyBtn = document.getElementById("kennedyApplyBtn");
 
   if (!btn) return;
   // Modal markup missing — keep the button honest rather than silently dead.
-  if (!modal || !fileInput || !fileList || !cancelBtn || !loadBtn) {
+  if (!modal || !panel || !cancelBtn || !applyBtn) {
     btn.addEventListener("click", () =>
-      setMessage("Load Template Jaw is unavailable on this page.", true)
+      setMessage("The design proposal is unavailable on this page.", true)
     );
     return;
   }
 
-  /** @type {File[]} */
-  let selectedFiles = [];
+  /** The proposal currently on screen, re-applied on confirm for the checked jaws only. */
+  let pendingProposal = null;
 
-  const renderFileList = () => {
-    fileList.innerHTML = "";
-    for (const file of selectedFiles) {
-      const li = document.createElement("li");
-      li.className = "load-template-file-item";
-      li.textContent = file.name;
-      fileList.appendChild(li);
-    }
-    loadBtn.disabled = selectedFiles.length === 0;
+  /** The jaws the user left ticked, narrowed to the ones that have something to place. */
+  const selectedJaws = () =>
+    [...panel.querySelectorAll(".kennedy-jaw-checkbox")]
+      .filter((box) => box.checked && !box.disabled)
+      .map((box) => box.dataset.jaw);
+
+  const syncApplyButton = () => {
+    applyBtn.disabled = selectedJaws().length === 0;
   };
 
-  const setFiles = (fileArr) => {
-    selectedFiles = Array.from(fileArr || []).filter(
-      (f) => /\.txt$/i.test(f.name) || f.type === "text/plain"
-    );
-    renderFileList();
-  };
-
-  const openModal = () => {
-    selectedFiles = [];
-    fileInput.value = "";
-    renderFileList();
-    modal.classList.remove("is-hidden");
-    modal.setAttribute("aria-hidden", "false");
-  };
   const closeModal = () => {
     modal.classList.add("is-hidden");
     modal.setAttribute("aria-hidden", "true");
+    pendingProposal = null;
   };
 
-  btn.addEventListener("click", openModal);
+  const openModal = async () => {
+    // Rebuilt on every open so it tracks presence edits made since the last one.
+    pendingProposal = buildCurrentProposal();
+    const placeable = Object.values(pendingProposal.jaws).some((plan) => plan.connector);
+
+    const thumbnails = placeable ? await captureProposalThumbnails(pendingProposal) : null;
+    renderKennedyProposalPanel(panel, pendingProposal, thumbnails);
+    syncApplyButton();
+    modal.classList.remove("is-hidden");
+    modal.setAttribute("aria-hidden", "false");
+  };
+
+  const applyProposal = async () => {
+    const jaws = selectedJaws();
+    if (!pendingProposal || !jaws.length) return;
+    const historyBefore = getHistoryStateSignature();
+
+    // Narrow the proposal to the ticked arches; the other one is left untouched, mesh
+    // and all, since applyDesignProposal only ever walks the jaws it is handed.
+    applyKennedyProposal({
+      ...pendingProposal,
+      jaws: Object.fromEntries(jaws.map((jaw) => [jaw, pendingProposal.jaws[jaw]])),
+    });
+
+    // A new connector changes what the catalog offers and what the edit UI shows.
+    try {
+      const [catalog, locks] = await Promise.all([
+        import("./annotationCatalog.js"),
+        import("./annotationLocks.js"),
+      ]);
+      catalog.renderComponentCatalog();
+      locks.updateEditModeUI();
+    } catch (_) {}
+    renderJaws();
+
+    const placed = jaws
+      .map((jaw) => `${titleCase(jaw)}: ${pendingProposal.jaws[jaw].connector.label}`)
+      .join(", ");
+    closeModal();
+    setMessage(`Placed the proposed design (${placed}).`, false);
+    toast.success("Design placed");
+    recordHistoryIfChanged(historyBefore);
+  };
+
+  panel.addEventListener("change", (event) => {
+    if (event.target.classList.contains("kennedy-jaw-checkbox")) syncApplyButton();
+  });
+
+  btn.addEventListener("click", () => {
+    openModal().catch((err) => {
+      console.error("[kennedyProposal] could not build the proposal", err);
+      setMessage("Could not build a design proposal for this case.", true);
+    });
+  });
+  applyBtn.addEventListener("click", () => {
+    applyBtn.disabled = true;
+    applyProposal()
+      .catch((err) => {
+        console.error("[kennedyProposal] apply failed", err);
+        setMessage("Could not place the proposed design.", true);
+      })
+      .finally(() => {
+        applyBtn.disabled = false;
+      });
+  });
   cancelBtn.addEventListener("click", closeModal);
   backdrop?.addEventListener("click", closeModal);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !modal.classList.contains("is-hidden")) closeModal();
-  });
-
-  fileInput.addEventListener("change", () => setFiles(fileInput.files));
-
-  // Drag-and-drop onto the dropzone (the label already opens the picker on click).
-  if (dropzone) {
-    ["dragenter", "dragover"].forEach((evt) =>
-      dropzone.addEventListener(evt, (event) => {
-        event.preventDefault();
-        dropzone.classList.add("is-dragover");
-      })
-    );
-    ["dragleave", "drop"].forEach((evt) =>
-      dropzone.addEventListener(evt, (event) => {
-        event.preventDefault();
-        dropzone.classList.remove("is-dragover");
-      })
-    );
-    dropzone.addEventListener("drop", (event) => {
-      if (event.dataTransfer?.files?.length) setFiles(event.dataTransfer.files);
-    });
-  }
-
-  loadBtn.addEventListener("click", async () => {
-    if (!selectedFiles.length) return;
-    loadBtn.disabled = true;
-    try {
-      const ok = await loadTemplateJawFromFiles(selectedFiles);
-      if (ok) closeModal();
-    } catch (err) {
-      console.error("[loadTemplateJaw] failed", err);
-      setMessage("Could not load the template jaw. Check the file and console.", true);
-    } finally {
-      loadBtn.disabled = selectedFiles.length === 0;
-    }
   });
 }
 
@@ -1367,24 +1370,7 @@ function bindBackNavigationDialog(locks) {
     modal.setAttribute("aria-hidden", "true");
   };
 
-  // Always land on the MAIN case list. If opened from the case-list tab, refocus
-  // it and close this one (don't pile up editor tabs); otherwise navigate there.
-  const returnToCaseList = () => {
-    try {
-      if (
-        window.opener &&
-        !window.opener.closed &&
-        window.opener.location?.pathname?.includes("case_list")
-      ) {
-        window.opener.focus();
-        window.close();
-        return;
-      }
-    } catch {
-      // Cross-context opener.location access can throw; fall through to nav.
-    }
-    window.location.href = targetHref;
-  };
+  const returnToCaseList = () => goToCaseList(targetHref);
 
   const openModal = () => {
     modal.classList.remove("is-hidden");
@@ -1533,7 +1519,7 @@ function initAnnFooter() {
   });
 
   // Load Template Jaw: upload one or more Jaw Struct .txt files and apply them.
-  bindLoadTemplateJaw();
+  bindKennedyProposalDialog();
 
   initSidebar();
 
@@ -1556,15 +1542,12 @@ function init() {
   bindPreviewPanelToggle();
   bindPanelSplitter();
 
-  // Start the network work now, before the feature modules download, so requests
-  // run concurrently with the imports (avoids a module-load → fetch waterfall).
-  // They only need state.caseIntID + the user. Apply/render still happen in the
-  // Promise.all .then() below — only the network start is hoisted.
+  // Start the network work before the feature modules download, so requests overlap the
+  // imports instead of waterfalling. Only the START is hoisted; apply/render still wait.
   fetchCaseDetail(); // shared /case/get — also reused by preview3D
   const loggedInUser = getLoggedInUser();
-  // Guests (shared-link, no login) still need the design loaded, else the arch
-  // renders empty. Fall back to VIEWER_UUID (the 3D viewer's read-only identity);
-  // Save stays gated on loggedInUser.uuid, so guests remain read-only.
+  // Guests still need the design or the arch renders empty, so fall back to VIEWER_UUID.
+  // Save stays gated on loggedInUser.uuid, keeping them read-only.
   const designUuid = loggedInUser?.uuid || VIEWER_UUID;
   const jawStructRecordsPromise =
     state.caseIntID && designUuid
@@ -1606,9 +1589,8 @@ function init() {
           catalog.renderComponentCatalog();
         }
       });
-      // Load the live 2D design (authoritative): replaces local state + re-baselines
-      // history, or resets to a clean arch if the backend has none. Fire-and-forget
-      // so first paint isn't blocked; consumes the request started up top in init().
+      // Authoritative load: replaces local state and re-baselines history, or resets to a
+      // clean arch. Fire-and-forget so first paint isn't blocked.
       fetchJawStruct(jawStructRecordsPromise);
       locks.loadPreviewImage();
       locks.syncDesignModeWithLocks(false);

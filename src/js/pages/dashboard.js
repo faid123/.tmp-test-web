@@ -1,23 +1,17 @@
-// Case Dashboard — the "View Dashboard" view opened from the case list detail
-// pane. Recreates the SmartRPD desktop dashboard for the selected case: a left
-// column of process steps (per jaw), a centre "View Captures" area (2D upper /
-// 2D lower / 3D upper / 3D lower thumbnails from /thumbnails/get), and a right column with a
-// "Case Access" panel (roles) above a "Viewcaptures" gallery (the noticeboard
-// 3D viewcapture photos from /noticeboard/view/get).
-//
-// The overlay is built once on first open and reused; openCaseDashboard()
-// repopulates it from the selected case's detail, thumbnails, viewcaptures and
-// roles.
+// The "View Dashboard" view: per-jaw process steps, View Captures, Case Access
+// and a gallery. Built once, repopulated by openCaseDashboard() thereafter.
 
 import { toast } from "../shared/toast.js";
 import { logApi, statusLabel } from "../shared/apiLog.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
+import { toDateTimeText as formatDateTime } from "../shared/timestamps.js";
+import {
+  extractFilenamesFromBinaryFormatter as filenamesFromBinaryFormatter,
+  extractPngsFromBinaryFormatter as pngsFromBinaryFormatter,
+} from "../2D/dotnetBinaryFormatter.js";
 
-// Resolve an asset path relative to the app root (everything before "/src/"),
-// so icons load whether this shared module runs from a src/pages/ page
-// (case_list) or the deeper src/pages/admin/ one (admin_case_list). A fixed
-// "../../assets" only resolves correctly for the shallower page. Falls back to
-// the original relative path off-browser (jest/jsdom), preserving test output.
+// Resolved against the app root (everything before "/src/") so icons load from
+// both src/pages/ and the deeper src/pages/admin/, where a fixed path would not.
 function appAsset(relFromRoot) {
   const href = typeof window !== "undefined" && window.location ? window.location.href : "";
   const i = href.indexOf("/src/");
@@ -25,17 +19,11 @@ function appAsset(relFromRoot) {
 }
 const ICON_BASE = appAsset("assets/Dashboard_Icon");
 
-// Pipeline status progression. A jaw's `upper_status` / `lower_status` string
-// (from the backend `case_status` table — read-only here, written by the
-// desktop app; defaults to 0 when no row exists) names the furthest stage the
-// jaw has reached, so a stage is "done" when the jaw's status ranks at or above
-// that stage. Higher rank = further along.
+// A jaw's status names the furthest stage it reached, so a stage is done when
+// the jaw ranks at or above it. Written by the desktop app; read-only here.
 //
-// Exact strings are matched first. The only confirmed value is `jaw_prepared`
-// (rank 1, from a real payload); add more exact mappings here as they're
-// confirmed. Anything not matched exactly falls back to keyword inference below,
-// which keys off the stage's pipeline name (jaw_stls/six_points/segmentation/
-// polylines/surface) so it tolerates whatever exact wording the desktop writes.
+// `jaw_prepared` (rank 1) is the ONLY confirmed exact value — add others only
+// once seen in a real payload. The rest falls through to keyword inference.
 const STATUS_RANK = {
   jaw_prepared: 1, // stage 1 — 2D Jaw Preparation (confirmed)
 };
@@ -61,10 +49,8 @@ export function statusRank(status) {
   return 0;
 }
 
-// The five dashboard stages, in order. `rank` is the STATUS_RANK level at/above
-// which the jaw's part of the stage counts as done. `verb` is how a completed
-// stage reads ("... is complete" / "... is placed" / ...). `desc` is an optional
-// sub-line shown under the title.
+// The five stages in order. `rank` is the STATUS_RANK at/above which a jaw counts
+// as done, `verb` how a completed stage reads, `desc` an optional sub-line.
 const STAGES = [
   {
     icon: "2D_Jaw_Preparation.png",
@@ -114,26 +100,6 @@ function escapeHtml(value) {
   ));
 }
 
-// Format a timestamp as "YYYY-MM-DD HH:MM:SS" (matching the desktop dashboard),
-// or "N/A" for missing/epoch values.
-function formatDateTime(ts) {
-  if (ts == null || ts === "" || ts === 0 || ts === "0") return "N/A";
-  const n = Number(ts);
-  let ms;
-  if (Number.isFinite(n)) {
-    if (n <= 0) return "N/A";
-    ms = String(n).length >= 13 ? n : n * 1000;
-  } else {
-    const d = new Date(ts);
-    if (Number.isNaN(d.getTime())) return "N/A";
-    ms = d.getTime();
-  }
-  if (ms < 946684800000) return "N/A";
-  const d = new Date(ms);
-  const p = (x) => String(x).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-}
-
 // Slot of a /thumbnails/get row: 0 = 2D upper, 100 = 2D lower, 1 = 3D upper,
 // 2 = 3D lower (reference images take 3, 4, 5, …).
 function thumbnailSlot(row) {
@@ -142,10 +108,8 @@ function thumbnailSlot(row) {
   return Number.isFinite(n) ? n : null;
 }
 
-// Pure: compute the per-stage / per-jaw completion model for two jaw statuses.
-// Each stage is "done" for a jaw when that jaw's status ranks at or above the
-// stage. Exported (DOM-free) so the rank → step-text mapping can be unit-tested.
-// Returns [{ title, lines: [{ jaw, done, text }] }] in display order.
+// Pure: the per-stage/per-jaw completion model, as
+// [{ title, lines: [{ jaw, done, text }] }] in display order.
 export function computeSteps(upperStatus, lowerStatus) {
   const upperRank = statusRank(upperStatus);
   const lowerRank = statusRank(lowerStatus);
@@ -160,17 +124,13 @@ export function computeSteps(upperStatus, lowerStatus) {
   }));
 }
 
-// Pure: count stages where every jaw line is done (a stage is "complete" only
-// when both jaws have reached it). Exported for unit testing. Takes the
-// computeSteps() output.
+// Pure: stages where EVERY jaw line is done, over computeSteps() output.
 export function countCompletedStages(steps) {
   return (steps || []).filter((s) => s.lines.every((l) => l.done)).length;
 }
 
-// Pure: map /thumbnails/get rows to their capture slot (0 = 2D upper, 100 = 2D
-// lower, 1 = 3D upper, 2 = 3D lower). Rows without a slot tag (older cases) fall
-// back to positional order. Exported (DOM-free) for unit testing. Returns
-// Map<slot, base64data>.
+// Pure: /thumbnails/get rows to Map<slot, base64> (0 = 2D upper, 100 = 2D lower,
+// 1 = 3D upper, 2 = 3D lower). Untagged legacy rows fall back to positional order.
 export function resolveCaptureSlots(rows) {
   const bySlot = new Map();
   (rows || []).forEach((r) => {
@@ -184,12 +144,8 @@ export function resolveCaptureSlots(rows) {
   return bySlot;
 }
 
-// Case status (`new_status`) → display label + pill kind. Mirrors the case
-// list's mapping (apiStatusToValue/statusDisplayText/statusPillClass) compactly
-// so the dashboard doesn't have to import from caseManagement.js (which imports
-// this module — a cycle). Pure; exported for unit testing.
-// Exact status titles come from the shared apiLog.js (same source as the
-// case list and report). Re-exported as caseStatusLabel for existing callers.
+// Mirrored rather than imported: caseManagement.js imports this module, so an
+// import back would be a cycle. Titles still come from the shared apiLog.js.
 export function caseStatusLabel(apiStatus) {
   return statusLabel(apiStatus);
 }
@@ -203,9 +159,8 @@ export function caseStatusKind(apiStatus) {
   return "progress"; // in_production / out_for_delivery / *_drafted / *_approved
 }
 
-// Set every meta target carrying a matching [data-field] inside the overlay, so
-// one call paints both the desktop topbar meta and the mobile "Case Details"
-// panel (which mirror the same data under different layouts).
+// Sets every [data-field] target, so one call paints both the desktop topbar meta
+// and the mobile "Case Details" panel.
 function setField(field, value) {
   document
     .querySelectorAll(`#caseDashboardOverlay [data-field="${field}"]`)
@@ -322,9 +277,8 @@ function buildOverlay() {
     if (e.target === e.currentTarget) closeLightbox();
   });
 
-  // Collapsible sections (mobile only; lists start collapsed). The whole header
-  // bar is the tap target; the chevron button is just a visual affordance that
-  // rotates to point up when the list is open.
+  // Mobile-only, starting collapsed. The whole header bar is the tap target —
+  // the chevron is only an affordance.
   const wireCollapsible = (headerEl, panelEl, toggleBtn) => {
     if (!headerEl || !panelEl) return;
     const sync = () => {
@@ -436,11 +390,8 @@ function resetPreview() {
   clearActiveCaptures();
 }
 
-// Phones/tablets share the desktop's stacked single-column layout, where the
-// inline preview panel is hidden — captures pop full-screen instead.
-// matchMedia is browser-only; guard it so importing this module under jsdom/SSR
-// (e.g. the unit tests, which only use the pure functions below) doesn't throw.
-// Falls back to the desktop (non-mobile) layout.
+// Phones/tablets hide the inline preview panel, so captures pop full-screen.
+// matchMedia is browser-only, so guard it or importing this under jsdom throws.
 const MOBILE_MQ =
   typeof window !== "undefined" && typeof window.matchMedia === "function"
     ? window.matchMedia("(max-width: 1080px)")
@@ -464,9 +415,8 @@ function closeLightbox() {
   if (img) img.removeAttribute("src");
 }
 
-// Show a capture's image enlarged. `src` is a full <img> src (data: URL) so both
-// thumbnail tiles and viewcapture tiles can reuse this. On mobile/tablet the
-// inline preview is hidden, so the capture opens in a full-screen lightbox.
+// `src` is a full <img> src, so thumbnail and viewcapture tiles share this. On
+// mobile the inline preview is hidden and it opens as a full-screen lightbox.
 function showPreview(src, tileEl) {
   if (!src) return;
   clearActiveCaptures();
@@ -517,68 +467,8 @@ function renderCaptures(rows) {
   });
 }
 
-// atob that tolerates whitespace/URL-safe alphabets and missing padding.
-function safeAtob(b64) {
-  if (typeof b64 !== "string") return null;
-  try {
-    const cleaned = b64.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
-    const padded = cleaned + "=".repeat((4 - (cleaned.length % 4)) % 4);
-    return atob(padded);
-  } catch {
-    return null;
-  }
-}
-
-// Dig PNG data URLs out of a .NET BinaryFormatter blob (what the desktop client
-// AND — since the 2026-07-06 mirror change — the web app now write to the
-// view_capture table). Scans for raw PNG byte runs, falling back to embedded
-// base64-PNG strings. Mirrors extractPngsFromBinaryFormatter in noticeboard.js.
-function pngsFromBinaryFormatter(outerBase64) {
-  const decoded = safeAtob(outerBase64);
-  if (!decoded) return [];
-  const out = [];
-  const PNG_SIG = "\x89PNG\r\n\x1a\n";
-  const PNG_END = "IEND\xae\x42\x60\x82";
-  let i = 0;
-  while (true) {
-    const start = decoded.indexOf(PNG_SIG, i);
-    if (start === -1) break;
-    const endMarker = decoded.indexOf(PNG_END, start);
-    if (endMarker === -1) break;
-    const end = endMarker + PNG_END.length;
-    out.push("data:image/png;base64," + btoa(decoded.slice(start, end)));
-    i = end;
-  }
-  if (out.length) return out;
-  const B64_PNG_HEAD = "iVBORw0KGgo";
-  let j = 0;
-  while (true) {
-    const idx = decoded.indexOf(B64_PNG_HEAD, j);
-    if (idx === -1) break;
-    let k = idx;
-    while (k < decoded.length && /[A-Za-z0-9+/=]/.test(decoded[k])) k += 1;
-    const b64 = decoded.slice(idx, k).replace(/=+$/, "");
-    const pad = "=".repeat((4 - (b64.length % 4)) % 4);
-    out.push("data:image/png;base64," + b64 + pad);
-    j = k;
-  }
-  return out;
-}
-
-// Extract image filenames from a BinaryFormatter blob, in order.
-function filenamesFromBinaryFormatter(outerBase64) {
-  const decoded = safeAtob(outerBase64);
-  if (!decoded) return [];
-  const out = [];
-  const RE = /[A-Za-z0-9_\-\. ]{1,80}\.(?:png|jpe?g|gif|bmp)/gi;
-  let m;
-  while ((m = RE.exec(decoded)) !== null) out.push(m[0]);
-  return out;
-}
-
-// Desktop/web prefix instruction slides `2D_*`; viewcaptures are `3D_*` (or
-// unprefixed). Both buckets now share the one view_capture table, so the
-// dashboard classifies each slide by this prefix rather than dropping either.
+// Instruction slides are `2D_*`, viewcaptures `3D_*` or unprefixed. Both share
+// the one view_capture table, so the prefix is what separates them.
 function isInstructionFilename(name) {
   return /^\s*2d[_\-\.\s]/i.test(String(name || ""));
 }
@@ -594,12 +484,8 @@ function labelForCapture(name, kind, index) {
   return `${kind === "2D" ? "Instruction" : "Viewcapture"} ${index + 1}`;
 }
 
-// Pure: pull capture images out of a /noticeboard/view/get row, keeping BOTH the
-// 2D instruction slides and the 3D viewcaptures that share the table. Handles
-// both encodings of the `data`/`filenames` columns: the web's legacy JSON array
-// of preview strings, and the .NET BinaryFormatter byte[][] blob now written by
-// both desktop and web. Returns `{ src, kind, label }[]` (kind: "2D" | "3D").
-// Exported (DOM-free) for unit testing.
+// Pure: capture images from a /noticeboard/view/get row, keeping BOTH the 2D and
+// 3D buckets and either encoding (legacy JSON array, .NET BinaryFormatter blob).
 export function parseViewcaptureImages(row) {
   if (!row) return [];
 
@@ -646,9 +532,8 @@ function firstRow(apiResult) {
   return Array.isArray(apiResult) ? apiResult[0] || null : apiResult;
 }
 
-// Render the viewcapture photos (from /noticeboard/view/get) as clickable tiles
-// that enlarge into the shared central preview. Separate source from the three
-// thumbnail tiles above, which come from /thumbnails/get.
+// Viewcapture photos as tiles that enlarge into the shared preview. A different
+// source from the thumbnail tiles above, which come from /thumbnails/get.
 function renderViewcaptures(apiResult) {
   const host = document.getElementById("dashViewcaptures");
   if (!host) return;
@@ -715,9 +600,8 @@ async function postJson(url, payload, label) {
   return res.json();
 }
 
-// Open the dashboard for a case. `caseStub` (the row object from the list) is
-// used for the case name and as a fallback while the detail request is in
-// flight; pass null to rely entirely on the network.
+// `caseStub` (the list's row object) supplies the name and stands in while the
+// detail request is in flight; pass null to rely entirely on the network.
 export async function openCaseDashboard(caseId, caseStub = null) {
   const user = getLoggedInUser();
   if (!caseId || !user?.uuid) {
@@ -749,9 +633,8 @@ export async function openCaseDashboard(caseId, caseStub = null) {
         return caseStub || {};
       }
     ),
-    // Numeric case_int_id, not the case-name string — the backend's admin-path
-    // thumbnail lookup parses the payload id as caseIntID, so string names 404
-    // for admin accounts (non-admin path works either way).
+    // Numeric case_int_id, never the name string: the admin-path thumbnail lookup
+    // parses the payload id as caseIntID, so a name 404s for admin accounts.
     postJson(`${API_BASE}/thumbnails/get`, [auth, { case_int_id: caseId }], "POST /thumbnails/get").catch(
       (err) => {
         console.warn("[dashboard] thumbnails failed", err);
@@ -783,9 +666,8 @@ export async function openCaseDashboard(caseId, caseStub = null) {
   setField("createdBy", caseStub?.assigned_to || detail.assigned_to || detail.username || "—");
   setField("created", formatDateTime(detail.creation_date));
   setField("lastEdit", formatDateTime(detail.last_updated));
-  // Prefer the cached list row: /case/get/:id returns an unreliable new_status /
-  // expected_date (the case list overwrites them from the list row too), so the
-  // stub is authoritative and keeps the dashboard in sync with the case list.
+  // The cached list row wins: /case/get/:id's new_status/expected_date are
+  // unreliable, and the case list overwrites them from the row too.
   renderStatusPill(caseStub?.new_status ?? detail.new_status);
   renderRequestDate(
     caseStub?.expected_date ?? caseStub?.due_date ?? detail.expected_date ?? detail.due_date
@@ -805,9 +687,8 @@ export async function openCaseDashboard(caseId, caseStub = null) {
 document.addEventListener("DOMContentLoaded", () => {
   const btn = document.getElementById("viewDashboardBtn");
   btn?.addEventListener("click", () => {
-    // Pass the cached list row (stashed by the case list on selection) so the
-    // dashboard has the real new_status / expected_date — /case/get/:id omits
-    // them, so without this the status would always fall back to N/A.
+    // The row stashed on selection carries the real new_status/expected_date,
+    // which /case/get/:id omits — without it the status always reads N/A.
     openCaseDashboard(window.selectedCaseId, window.selectedCaseStub || null);
   });
 });

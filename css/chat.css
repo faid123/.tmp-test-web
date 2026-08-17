@@ -1,7 +1,5 @@
-/* Case chat (notes) — slide-in side panel that mirrors the app sidebar
-   pattern (full-screen overlay + backdrop that closes on outside click + a
-   panel that slides in via transform). Slides in from the right, where the
-   footer chat button lives. Toggled by chat.js. */
+/* Case chat (notes) — slide-in right-hand panel following the app sidebar
+   pattern (overlay + click-out backdrop + transform slide). Toggled by chat.js. */
 
 #chat-widget.chat-sidebar {
   position: fixed;
@@ -146,9 +144,8 @@
   color: #333;
 }
 
-/* Preserve line breaks from multi-line (Shift+Enter) messages — scoped to the
-   text node only, so surrounding markup whitespace never renders as blank
-   lines inside the bubble. */
+/* Preserve Shift+Enter line breaks. Scoped to the text node only, so markup
+   whitespace never renders as blank lines inside the bubble. */
 .chat-message .msg-text {
   white-space: pre-wrap;
   word-break: break-word;

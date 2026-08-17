@@ -271,9 +271,8 @@ const CLASP_CIRC_PLACEMENT_IMAGE_SIZE_BY_TOOTH = Object.freeze({
   },
 });
 /**
- * Nudge placed clasp art onto the suggestion anchor. `retainer-clasp` covers all four
- * surfaces; add per-surface keys to override. Template teeth only (11-18 / 41-48);
- * 21-28 / 31-38 mirror x unless given an explicit FDI row.
+ * Nudges placed clasp art onto the suggestion anchor. `retainer-clasp` covers all four
+ * surfaces; template teeth only, with Q2/Q3 mirroring x unless given an explicit row.
  */
 const CLASP_CIRC_POSITION_OFFSET_OVERRIDE_SEED_BY_TOOTH = Object.freeze({
 "11": {
@@ -376,54 +375,44 @@ const CLASP_CIRC_POSITION_OFFSET_OVERRIDE_SEED_BY_TOOTH = Object.freeze({
 
 const CLASP_CIRC_ALL_TOOTH_IDS = Object.freeze([...TOOTH_ORDER.upper, ...TOOTH_ORDER.lower]);
 
-function mirrorClaspOffsetSeedRow(row) {
+// Quadrant 1->2 and 4->3 are mirrored by negating x. `defaultKey` is the row's
+// whole-tooth entry ("retainer-clasp" / "ring-clasp"), used as the surface fallback.
+function mirrorClaspOffsetSeedRow(row, defaultKey) {
   const next = {};
-  if (row["retainer-clasp"]) {
-    const p = row["retainer-clasp"];
-    next["retainer-clasp"] = {
+  for (const key of [defaultKey, ...CLASP_CIRC_SURFACE_ORDER]) {
+    const p = row[key];
+    if (!p) continue;
+    next[key] = {
       x: Number.isFinite(p.x) ? -p.x : 0,
       y: Number.isFinite(p.y) ? p.y : 0,
     };
   }
-  for (const sur of CLASP_CIRC_SURFACE_ORDER) {
-    if (row[sur]) {
-      const p = row[sur];
-      next[sur] = {
-        x: Number.isFinite(p.x) ? -p.x : 0,
-        y: Number.isFinite(p.y) ? p.y : 0,
-      };
-    }
-  }
   return next;
 }
 
-function expandClaspOffsetSeed(seedByTooth) {
+function expandClaspOffsetSeed(seedByTooth, defaultKey) {
   const out = { ...seedByTooth };
   for (let u = 1; u <= 8; u += 1) {
     const s = String(u);
-    const k1 = `1${s}`;
-    const k2 = `2${s}`;
-    const k4 = `4${s}`;
-    const k3 = `3${s}`;
-    if (out[k1] && out[k2] === undefined) {
-      out[k2] = mirrorClaspOffsetSeedRow(out[k1]);
+    if (out[`1${s}`] && out[`2${s}`] === undefined) {
+      out[`2${s}`] = mirrorClaspOffsetSeedRow(out[`1${s}`], defaultKey);
     }
-    if (out[k4] && out[k3] === undefined) {
-      out[k3] = mirrorClaspOffsetSeedRow(out[k4]);
+    if (out[`4${s}`] && out[`3${s}`] === undefined) {
+      out[`3${s}`] = mirrorClaspOffsetSeedRow(out[`4${s}`], defaultKey);
     }
   }
   return out;
 }
 
-function buildRetainerClaspPositionOffsetByTooth(seedByTooth) {
-  const expanded = expandClaspOffsetSeed(seedByTooth);
+function buildClaspPositionOffsetByTooth(seedByTooth, defaultKey) {
+  const expanded = expandClaspOffsetSeed(seedByTooth, defaultKey);
   const result = {};
   for (const toothId of CLASP_CIRC_ALL_TOOTH_IDS) {
     const seedRow = expanded[toothId] || {};
-    const defaultCirc = seedRow["retainer-clasp"];
+    const dflt = seedRow[defaultKey];
     const fb = {
-      x: Number.isFinite(defaultCirc?.x) ? defaultCirc.x : 0,
-      y: Number.isFinite(defaultCirc?.y) ? defaultCirc.y : 0,
+      x: Number.isFinite(dflt?.x) ? dflt.x : 0,
+      y: Number.isFinite(dflt?.y) ? dflt.y : 0,
     };
     const surfaces = {};
     for (const sur of CLASP_CIRC_SURFACE_ORDER) {
@@ -438,8 +427,9 @@ function buildRetainerClaspPositionOffsetByTooth(seedByTooth) {
   return Object.freeze(result);
 }
 
-const CLASP_CIRC_POSITION_OFFSET_BY_TOOTH = buildRetainerClaspPositionOffsetByTooth(
-  CLASP_CIRC_POSITION_OFFSET_OVERRIDE_SEED_BY_TOOTH
+const CLASP_CIRC_POSITION_OFFSET_BY_TOOTH = buildClaspPositionOffsetByTooth(
+  CLASP_CIRC_POSITION_OFFSET_OVERRIDE_SEED_BY_TOOTH,
+  "retainer-clasp"
 );
 
 const CLASP_CIRC_RENDER_SCALE = 0.48;
@@ -744,70 +734,9 @@ const RING_CLASP_POSITION_OFFSET_OVERRIDE_BY_TOOTH = Object.freeze({
 },
 })
 
-function mirrorRingClaspOffsetSeedRow(row) {
-  const next = {};
-  if (row["ring-clasp"]) {
-    const p = row["ring-clasp"];
-    next["ring-clasp"] = {
-      x: Number.isFinite(p.x) ? -p.x : 0,
-      y: Number.isFinite(p.y) ? p.y : 0,
-    };
-  }
-  for (const sur of CLASP_CIRC_SURFACE_ORDER) {
-    if (row[sur]) {
-      const p = row[sur];
-      next[sur] = {
-        x: Number.isFinite(p.x) ? -p.x : 0,
-        y: Number.isFinite(p.y) ? p.y : 0,
-      };
-    }
-  }
-  return next;
-}
-
-function expandRingClaspOffsetSeed(seedByTooth) {
-  const out = { ...seedByTooth };
-  for (let u = 1; u <= 8; u += 1) {
-    const s = String(u);
-    const k1 = `1${s}`;
-    const k2 = `2${s}`;
-    const k4 = `4${s}`;
-    const k3 = `3${s}`;
-    if (out[k1] && out[k2] === undefined) {
-      out[k2] = mirrorRingClaspOffsetSeedRow(out[k1]);
-    }
-    if (out[k4] && out[k3] === undefined) {
-      out[k3] = mirrorRingClaspOffsetSeedRow(out[k4]);
-    }
-  }
-  return out;
-}
-
-function buildRingClaspPositionOffsetByTooth(seedByTooth) {
-  const expanded = expandRingClaspOffsetSeed(seedByTooth);
-  const result = {};
-  for (const toothId of CLASP_CIRC_ALL_TOOTH_IDS) {
-    const seedRow = expanded[toothId] || {};
-    const defaultRing = seedRow["ring-clasp"];
-    const fb = {
-      x: Number.isFinite(defaultRing?.x) ? defaultRing.x : 0,
-      y: Number.isFinite(defaultRing?.y) ? defaultRing.y : 0,
-    };
-    const surfaces = {};
-    for (const sur of CLASP_CIRC_SURFACE_ORDER) {
-      const spec = seedRow[sur];
-      surfaces[sur] = {
-        x: Number.isFinite(spec?.x) ? spec.x : fb.x,
-        y: Number.isFinite(spec?.y) ? spec.y : fb.y,
-      };
-    }
-    result[toothId] = surfaces;
-  }
-  return Object.freeze(result);
-}
-
-const RING_CLASP_POSITION_OFFSET_BY_TOOTH = buildRingClaspPositionOffsetByTooth(
-  RING_CLASP_POSITION_OFFSET_OVERRIDE_BY_TOOTH
+const RING_CLASP_POSITION_OFFSET_BY_TOOTH = buildClaspPositionOffsetByTooth(
+  RING_CLASP_POSITION_OFFSET_OVERRIDE_BY_TOOTH,
+  "ring-clasp"
 );
 
 export function getRingClaspPlacementImageSize(componentId, toothId, surface) {
