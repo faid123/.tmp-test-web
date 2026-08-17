@@ -107,6 +107,35 @@ export function loadCaseDueDate(caseIntID) {
   return lsGet(storageKey(DUE_DATE_PREFIX, caseIntID)) || "";
 }
 
+const COMMENT_PREFIX = "caseComment:";
+
+// Announce a saved comment to the other open tabs. The case list and the 2D page
+// are separate documents, so same-origin localStorage is the only channel: a
+// `storage` event fires in every OTHER tab when this key changes. The timestamp
+// keeps a repeat save of identical text firing the event.
+export function publishCaseComment(caseIntID, text) {
+  return lsSet(
+    storageKey(COMMENT_PREFIX, caseIntID),
+    JSON.stringify({ text: text ?? "", at: Date.now() })
+  );
+}
+
+// Call `cb(caseIntID, text)` when another tab publishes. Returns an unsubscribe.
+export function watchCaseComments(cb) {
+  const onStorage = (e) => {
+    if (!e.key?.startsWith(COMMENT_PREFIX) || !e.newValue) return;
+    const raw = e.key.slice(COMMENT_PREFIX.length);
+    const n = Number(raw);
+    try {
+      cb(raw !== "" && Number.isFinite(n) ? n : raw, JSON.parse(e.newValue).text ?? "");
+    } catch {
+      /* malformed payload — ignore */
+    }
+  };
+  window.addEventListener("storage", onStorage);
+  return () => window.removeEventListener("storage", onStorage);
+}
+
 // Convert an <input type="date"> value (`YYYY-MM-DD`) to the Unix *seconds*
 // timestamp the additionalcasedetails `due_date` field uses (parsed in local
 // time so the displayed day round-trips). Returns null for empty/invalid.
@@ -159,6 +188,26 @@ export async function updateCaseDueDate(caseIntID, isoDate, comment) {
   ]);
   return res?.ok ?? false;
 }
+
+// Write just the comment (case list's CASE INSTRUCTIONS). Same full-upsert rule:
+// read first, carry the rest forward. Leaves due_date alone — Approve owns that.
+export async function updateCaseComment(caseIntID, comment) {
+  const user = getLoggedInUser();
+  if (!user?.uuid || caseIntID == null) return false;
+  const { ok, detail } = await fetchAdditionalCaseDetails(caseIntID);
+  if (!ok) return false;
+  const res = await postJson("additionalcasedetails", [
+    { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID },
+    {
+      assigned_to: detail?.assigned_to ?? null,
+      due_date: detail?.due_date ?? null,
+      comments: comment?.trim() ? comment : null,
+      new_status: detail?.new_status ?? null,
+    },
+  ]);
+  return res?.ok ?? false;
+}
+
 // The status strings the backend stores for an approved design. Both are values
 // the case list already filters on (see its status <select>) — not new labels.
 export const STATUS_2D_DESIGN_APPROVED = "2D design approved";

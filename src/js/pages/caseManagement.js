@@ -5,7 +5,13 @@ import { logApi, statusLabel } from "../shared/apiLog.js";
 import { reportHtmlToDocxBytes } from "../shared/accessibility.js";
 import { setupAppSidebar } from "../shared/appSidebar.js";
 import { buildReportHtml } from "../2D/noticeboard.js";
-import { saveCaseDueDate, toDateInputValue, updateCaseDueDate } from "../2D/caseNote.js";
+import {
+  saveCaseDueDate,
+  toDateInputValue,
+  updateCaseDueDate,
+  publishCaseComment,
+  watchCaseComments,
+} from "../2D/caseNote.js";
 import {
   ENRICH_CONCURRENCY,
   caseIntIdOf,
@@ -528,6 +534,31 @@ async function fetchCaseStls(caseIntId, uuid) {
   return [];
 }
 
+// The four extra 3D slots (POST /stl/slot/), which /stl/get doesn't return. One
+// at a time and decoded as they arrive — an occupied slot returns tens of MB.
+async function fetchExtraStlSlots(caseIntId, uuid) {
+  const auth = { machine_id: MACHINE_ID, uuid, caseIntID: caseIntId };
+  const files = [];
+  for (const slotNumber of EXTRA_STL_SLOTS) {
+    try {
+      const res = await fetch(`${API_BASE}/stl/slot/get`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([auth, { slotNumber }]),
+      });
+      if (!res.ok) continue; // 404 = empty slot
+      const data = await res.json();
+      const item = Array.isArray(data) ? data[0] : data;
+      if (item?.data) {
+        files.push({ slotNumber, filename: item.filename, bytes: base64ToBytes(item.data) });
+      }
+    } catch (err) {
+      console.warn(`[case/download] extra 3D slot ${slotNumber} failed`, err);
+    }
+  }
+  return files;
+}
+
 function sniffImageExt(bytes) {
   if (!bytes || bytes.length < 4) return "";
   if (bytes[0] === 0x89 && bytes[1] === 0x50) return "png";
@@ -686,9 +717,9 @@ async function fetchCase2dJpegBytes(caseIntId, uuid) {
   }
 }
 
-// Action-column "Download files": bundle the case's STL files, its 2D design
-// JPEG, the reference images and the design report (.docx) into one zip. Each
-// part is best-effort — whatever's available goes in; only an empty result aborts.
+// Action-column "Download files": bundle the case's STL files, its extra 3D
+// uploads, the 2D design JPEG, the reference images and the design report
+// (.docx) into one zip. Each part is best-effort — only an empty result aborts.
 async function downloadCaseFiles(caseIntId, caseLabel, apiStatus) {
   const user = getLoggedInUser();
   if (!user?.uuid || caseIntId == null) {
@@ -747,7 +778,27 @@ async function downloadCaseFiles(caseIntId, caseLabel, apiStatus) {
     console.warn("[case/download] STL bundling failed", err);
   }
 
-  // 2) 2D design JPEG (thumbnail slot 0).
+  // 2) Extra 3D files, in their own folder so an uploaded name can't collide
+  //     with a jaw mesh at the zip root.
+  try {
+    const extras = await fetchExtraStlSlots(caseIntId, user.uuid);
+    const usedExtraNames = new Set();
+    extras.forEach(({ slotNumber, filename, bytes }) => {
+      let cleaned = String(filename || "").trim().replace(/[\\/:*?"<>|]+/g, "_");
+      // Stored names are upload names, but an extension-less one won't open.
+      if (cleaned && !/\.[a-z0-9]{2,5}$/i.test(cleaned)) cleaned += ".stl";
+      const name = uniqueDownloadName(
+        cleaned || `${base}_extra_${slotNumber}.stl`,
+        usedExtraNames
+      );
+      zip.file(`extra_3d/${name}`, bytes);
+      added += 1;
+    });
+  } catch (err) {
+    console.warn("[case/download] extra 3D files failed", err);
+  }
+
+  // 3) 2D design JPEG (thumbnail slot 0).
   try {
     const jpeg = await fetchCase2dJpegBytes(caseIntId, user.uuid);
     if (jpeg) {
@@ -758,7 +809,7 @@ async function downloadCaseFiles(caseIntId, caseLabel, apiStatus) {
     console.warn("[case/download] 2D JPEG failed", err);
   }
 
-  // 3) Reference images, kept in their own folder so they don't collide with
+  // 4) Reference images, kept in their own folder so they don't collide with
   //     the STL/report names at the zip root.
   try {
     const refFiles = await collectReferenceImageFiles(caseIntId, user.uuid, base);
@@ -770,7 +821,7 @@ async function downloadCaseFiles(caseIntId, caseLabel, apiStatus) {
     console.warn("[case/download] reference images failed", err);
   }
 
-  // 4) Design report as a Word .docx.
+  // 5) Design report as a Word .docx.
   try {
     const html = await buildReportHtml(caseIntId, { caseLabel, apiStatus });
     const docx = await reportHtmlToDocxBytes(html);
@@ -2420,8 +2471,8 @@ async function deleteSelectedCase() {
   }
 }
 
-// Download the selected case's files (STL/OFF, 2D JPEG, report .docx) as a zip —
-// the same bundle the user case-list row's download action produces.
+// Download the selected case's files (STL/OFF, extra 3D uploads, 2D JPEG, report
+// .docx) as a zip — the same bundle the case-list row's download action produces.
 function downloadSelectedCaseFiles() {
   const caseId = window.selectedCaseId;
   if (!caseId) {
@@ -2874,6 +2925,20 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
         setInstructionsStatus("");
       });
       instructionsBox.addEventListener("blur", () => saveCaseInstructions());
+      // Same field as the 2D page's Special Instruction box, edited in another
+      // tab: fold the save in so the row, the stub and the open pane all follow.
+      watchCaseComments((caseIntId, text) => {
+        const cached = currentCases.find(
+          (c) => String(c.id ?? c.case_int_id) === String(caseIntId)
+        );
+        if (cached) {
+          cached.comments = text || null;
+          scheduleEnrichCacheSave();
+        }
+        if (String(window.selectedCaseId) !== String(caseIntId)) return;
+        if (window.selectedCaseStub) window.selectedCaseStub.comments = text || null;
+        renderCaseInstructions(caseIntId, text);
+      });
       // Enter commits; Shift+Enter still inserts a newline for multi-line notes.
       // Blurring (rather than saving directly) keeps a single commit path and
       // stops the blur that follows from firing a second save.
@@ -4366,6 +4431,13 @@ let instructionsSavedValue = "";
 function renderCaseInstructions(caseIntId, comments) {
   const box = document.getElementById("caseInstructions");
   if (!box) return;
+  // Enrichment repaints the pane a moment after it opens — don't overwrite a
+  // note being typed. Keep the text, take the server value as the saved baseline.
+  const dirty = box.value.trim() !== instructionsSavedValue.trim();
+  if (instructionsLoadedFor === (caseIntId ?? null) && (document.activeElement === box || dirty)) {
+    instructionsSavedValue = comments ?? "";
+    return;
+  }
   instructionsLoadedFor = caseIntId ?? null;
   instructionsSavedValue = comments ?? "";
   box.value = instructionsSavedValue;
@@ -4481,6 +4553,10 @@ async function saveCaseInstructions() {
     );
     if (cached) cached.comments = text || null;
     if (window.selectedCaseStub) window.selectedCaseStub.comments = text || null;
+    // Persist it, or the next load's instant paint shows the pre-edit text.
+    if (cached) scheduleEnrichCacheSave();
+    // Tell the 2D page's Special Instruction box (another tab, same field).
+    publishCaseComment(caseIntId, text);
 
     // The user may have switched cases mid-request; only touch the box if it is
     // still showing the case we saved.

@@ -1238,15 +1238,12 @@ function bindPreviewPanelToggle() {
       if (restoreIcon) restoreIcon.style.display = "none";
     }
     shell._previewMode = mode;
-    // Restoring the split view is also how the 3D panel's extra-STL stage is
-    // dismissed: preview3D.js listens for this and puts the original jaws back.
     window.dispatchEvent(new CustomEvent("preview-panel-mode", { detail: { mode } }));
     window.dispatchEvent(new Event("resize"));
   };
 
-  // Every load starts split, showing the original jaws — the mode is deliberately
-  // NOT remembered, since the maximize is mostly driven by opening "Other 3D
-  // files" (and by survey aiming), not by a standing preference.
+  // Every load starts split — the mode is deliberately NOT remembered, since the
+  // maximize is mostly driven by survey aiming, not by a standing preference.
   applyMode("split");
 
   btn.addEventListener("click", () => {
@@ -1531,11 +1528,6 @@ function initAnnFooter() {
     el.addEventListener("click", () => caseNoteSheet.classList.add("is-hidden"))
   );
 
-  // "Upload other 3D files": open preview3D.js's upload modal (extra STL slots 1..4).
-  document.getElementById("footerUpload3dBtn")?.addEventListener("click", () => {
-    window.dispatchEvent(new CustomEvent("request-open-upload-3d"));
-  });
-
   document.getElementById("footerDownloadJawProfileBtn")?.addEventListener("click", () => {
     window.dispatchEvent(new CustomEvent("request-download-jaw-profile"));
   });
@@ -1592,9 +1584,9 @@ function init() {
     import("./annotationCatalog.js"),
     import("./noticeboard.js"),
     import("./clinicalInfo.js"),
-    import("./referenceImages.js"),
+    import("./previewTabs.js"),
   ])
-    .then(([, teethModel, locks, catalog, noticeboard, clinicalInfo, referenceImages]) => {
+    .then(([, teethModel, locks, catalog, noticeboard, clinicalInfo, previewTabs]) => {
       teethModel.initializeTeethState();
       locks.restoreAnnotationFromStorage();
       // Always enter the 2D editor in select (unlocked) mode, even if a locked
@@ -1623,7 +1615,7 @@ function init() {
       renderJaws();
       locks.updateEditModeUI();
       bindBackNavigationDialog(locks);
-      referenceImages.initReferenceImages();
+      previewTabs.initPreviewTabs();
       noticeboard.initNoticeboard();
       // Deep-link: ?view=noticeboard (from the 3D viewer's Annotate button) opens
       // the noticeboard directly instead of just the editor.

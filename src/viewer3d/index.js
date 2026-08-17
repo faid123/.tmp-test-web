@@ -4571,28 +4571,30 @@ function removeViewerLoadingScreen() {
     }
   }
 
-  /* Tablet toolbar: compact cluster at bottom-left above footer. */
+  /* Tablet toolbar: full-width bar across the bottom, above the footer. */
   @media (min-width: 769px) and (max-width: 1024px) {
 
     #viewer-right-nav {
       top: auto;
       left: 0;
-      right: auto;
+      right: 0;
       bottom: 0;
       width: auto;
       height: auto;
       flex-direction: row;
       align-items: center;
-      justify-content: flex-start;
+      justify-content: center;
       gap: 10px;
-      overflow: visible;
+      overflow-x: auto;
+      overflow-y: visible;
+      -webkit-overflow-scrolling: touch;
       padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px)) 14px;
       border-left: 0;
+      border-right: 0;
       border-top: 1px solid rgba(255, 255, 255, 0.2);
-      border-right: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 0 10px 0 0;
+      border-radius: 0;
       background: rgba(18, 18, 18, 0.92);
-      box-shadow: 2px -4px 20px rgba(0, 0, 0, 0.28);
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.28);
     }
 
     .twod-viewer-nav-block {
@@ -4923,28 +4925,30 @@ function removeViewerLoadingScreen() {
 
   }
 
-  /* Phone toolbar: compact cluster at bottom-left above footer. */
+  /* Phone toolbar: full-width bar across the bottom, above the footer. */
   @media (max-width: 768px) {
 
     #viewer-right-nav {
       top: auto;
       left: 0;
-      right: auto;
+      right: 0;
       bottom: 0;
       width: auto;
       height: auto;
       flex-direction: row;
       align-items: center;
-      justify-content: flex-start;
+      justify-content: center;
       gap: 8px;
-      overflow: visible;
+      overflow-x: auto;
+      overflow-y: visible;
+      -webkit-overflow-scrolling: touch;
       padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)) 12px;
       border-left: 0;
+      border-right: 0;
       border-top: 1px solid rgba(255, 255, 255, 0.2);
-      border-right: 1px solid rgba(255, 255, 255, 0.2);
-      border-radius: 0 10px 0 0;
+      border-radius: 0;
       background: rgba(18, 18, 18, 0.94);
-      box-shadow: 2px -4px 16px rgba(0, 0, 0, 0.28);
+      box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.28);
     }
 
     .twod-viewer-nav-block {
@@ -5581,14 +5585,24 @@ function removeViewerLoadingScreen() {
 
   const UNDERCUT_TAN = [208 / 255, 190 / 255, 141 / 255];
 
+  // Vertex-colour attributes are read as LINEAR by three.js, so the sRGB band colours
+  // below have to be converted here or they render washed out. Matches preview3D.js's
+  // srgbToLinear byte-for-byte — keep the two in sync. UNDERCUT_TAN is deliberately NOT
+  // converted, same as preview3D.js's DEFAULT_TOOTH_COLOR — do not "fix".
+  function srgbToLinear(c) {
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  }
+
   // Desktop's undercutColourMap, in the same raw-float convention the loaders use for the
-  // API's own heatmap RGBA.
+  // API's own heatmap RGBA. Thresholds/hex values match preview3D.js's colorForSurveyingValue.
   function slotUndercutColour(value) {
     if (!(value > 0)) return UNDERCUT_TAN;
-    if (value < 0.25) return [1, 210 / 255, 0]; // #FFD200
-    if (value < 0.5) return [253 / 255, 140 / 255, 0]; // #FD8C00
-    if (value < 0.75) return [254 / 255, 70 / 255, 0]; // #FE4600
-    return [170 / 255, 0, 3 / 255]; // #AA0003
+    let rgb;
+    if (value < 0.25) rgb = [1, 210 / 255, 0]; // #FFD200
+    else if (value < 0.5) rgb = [253 / 255, 140 / 255, 0]; // #FD8C00
+    else if (value < 0.75) rgb = [254 / 255, 70 / 255, 0]; // #FE4600
+    else rgb = [170 / 255, 0, 3 / 255]; // #AA0003
+    return rgb.map(srgbToLinear);
   }
 
   // The case stores each jaw's insertion vector already in the DLL/mesh frame; the only step

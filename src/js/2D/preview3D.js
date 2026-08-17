@@ -76,18 +76,21 @@ export const preview3DState = {
   // Removes the webglcontextlost/restored listeners (see bindPreviewContextLossRecovery).
   contextLossCleanup: null,
   resizeObserver: null,
+  // The observer's own callback, kept so returning to a 3D tab can re-anchor the
+  // controls to a canvas that was 0×0 while hidden.
+  resizePreview: null,
   mount: null,
   modelRoot: null,
   groups: { upper: null, lower: null },
   // Per-jaw sampled vertex fingerprint (see recordJawVertexKey), used to tell a real jaw copy
   // from a same-sized but differently ordered mesh before an extra slot borrows the heatmap.
   jawVertexKeys: {},
-  // Uploaded "other 3D files" (jaw_stls_extra_slot_1..4): occupiedSlots = backend-held, extraFileNames = slot→name, extraGroups = slot→{group,jaw}.
+  // Uploaded "extra 3D files" (jaw_stls_extra_slot_1..4): occupiedSlots = backend-held, extraFileNames = slot→name, extraGroups = slot→{group,jaw}.
   // A slot can be backend-occupied but removed from the panel (row trash = session-only; modal X = permanent delete).
   extraGroups: {},
   extraFileNames: {},
   occupiedSlots: null,
-  // Extras are hidden on page entry; opening the "Other 3D files" panel stages them
+  // Extras are hidden on page entry; opening the "Extra 3D" tab stages them
   // (maximize + jaws hidden) and that stage OUTLIVES the panel — closing it changes
   // nothing. extrasPrevStage = jaw visibility + camera to restore if the extras all go
   // away · stageHiddenJaws = jaws the stage is holding off screen.
@@ -95,20 +98,21 @@ export const preview3DState = {
   extrasPrevStage: null,
   stageHiddenJaws: new Set(),
   // On-demand extras load (see ensureExtraStlsLoaded): the in-flight promise doubles as
-  // the once-only latch · extrasLoading drives the panel's progress row · extrasLoadProgress
-  // caches the current phase so a re-rendered row can replay it into fresh element refs.
+  // the once-only latch · extrasLoading gates the slot list · extrasLoadProgress caches the
+  // current phase so a remounted card can replay it · extrasOverlay is that card.
   extrasLoadPromise: null,
   extrasLoading: false,
   extrasLoadProgress: null,
-  extrasProgressRefs: null,
-  // Slot currently uploading (drives that row's inline progress bar), plus the
-  // live progress-bar element refs for that row so setUpload3dBusy can update it.
-  uploadingSlot: null,
-  slotProgressRefs: null,
+  extrasOverlay: null,
+  // Slots currently uploading → { frac, refs }: the phase drives that row's inline
+  // progress bar, refs are its live elements (rebuilt on every list re-render).
+  // A Map, not one slot, so the other three stay uploadable during an upload.
+  uploadingSlots: new Map(),
   upload3dModal: null,
-  upload3dKeyHandler: null,
-  uploadCleanup: null,
-  panelModeCleanup: null,
+  // Whether the Extra 3D tab is the one on screen; survives scene rebuilds.
+  extrasTabOpen: false,
+  // Captures taken with the camera button on that tab, shown by the Request dialog.
+  approvalShots: { upper: null, lower: null },
   area: null,
   activeView: "both",
   surveyPrevVisibility: null,
@@ -132,7 +136,8 @@ export const preview3DState = {
   surveyDragCleanup: null,
   meshQuality: null,
   // HD/SD toggle: re-renders the jaws from the kept source files without a page reload.
-  // qualitySource = {kind,files,undercut} from the last load · qualityToggleEl = the control · qualityToggleBusy = re-render in flight.
+  // qualitySource = {kind,files,jaws,undercut} from the last load — `files` is released on
+  // the Extra 3D tab and re-fetched on demand, `jaws` says what it covers meanwhile.
   qualitySource: null,
   qualityToggleEl: null,
   qualityToggleBusy: false,
@@ -183,7 +188,12 @@ export async function loadInteractiveJawPreview(area) {
       try {
         await populateJawPreviewFromOFF(meshFiles, normalizedUndercut, meshQuality);
         await finishMeshQualityProgress();
-        preview3DState.qualitySource = { kind: "off", files: meshFiles, undercut: normalizedUndercut };
+        preview3DState.qualitySource = {
+          kind: "off",
+          files: meshFiles,
+          jaws: jawKeysOfFiles(meshFiles),
+          undercut: normalizedUndercut,
+        };
         updateQualityToggle();
         autoApplySavedSurveyAngles().catch((err) =>
           console.warn("[preview3D] saved survey auto-apply failed", err)
@@ -208,7 +218,12 @@ export async function loadInteractiveJawPreview(area) {
       try {
         await populateJawPreview(jawFiles, normalizedUndercut, meshQuality);
         await finishMeshQualityProgress();
-        preview3DState.qualitySource = { kind: "stl", files: jawFiles, undercut: normalizedUndercut };
+        preview3DState.qualitySource = {
+          kind: "stl",
+          files: jawFiles,
+          jaws: jawKeysOfFiles(jawFiles),
+          undercut: normalizedUndercut,
+        };
         updateQualityToggle();
         autoApplySavedSurveyAngles().catch((err) =>
           console.warn("[preview3D] saved survey auto-apply failed", err)
@@ -233,6 +248,9 @@ export async function loadInteractiveJawPreview(area) {
     return true;
   } finally {
     hidePreviewLoading(area);
+    // A rebuild (quality switch, context-loss reload) drops the docked panel and
+    // the staged extras; put them back when the Extra 3D tab is the one on screen.
+    if (isUpload3dModalOpen()) openUpload3dModal();
   }
 }
 
@@ -318,8 +336,8 @@ function init3DPreview(area) {
   });
   preview3DState.qualityToggleEl = qualityToggle;
 
-  // Download Jaw Profile lives in the footer, which dispatches `request-download-jaw-profile`;
-  // we open a two-option menu here. ("Upload other 3D files" dispatches `request-open-upload-3d`.)
+  // Download Jaw Profile lives in the footer, which dispatches
+  // `request-download-jaw-profile`; we open a two-option menu here.
   const handleDownloadJawProfileRequest = () => {
     openDownloadJawProfileMenu();
   };
@@ -327,29 +345,6 @@ function init3DPreview(area) {
   window.addEventListener("request-download-jaw-profile", handleDownloadJawProfileRequest);
   preview3DState.downloadJawCleanup = () => {
     window.removeEventListener("request-download-jaw-profile", handleDownloadJawProfileRequest);
-  };
-
-  // "Upload other 3D files" footer button opens the upload modal.
-  const handleOpenUpload3d = () => openUpload3dModal();
-  preview3DState.uploadCleanup?.();
-  window.addEventListener("request-open-upload-3d", handleOpenUpload3d);
-  preview3DState.uploadCleanup = () => {
-    window.removeEventListener("request-open-upload-3d", handleOpenUpload3d);
-  };
-
-  // Restoring the split view (2DAnnotation.js's maximize button) is the way OUT of
-  // the extra-STL stage: minimising puts the original jaws back on screen and
-  // closes the "Other 3D files" panel, so the whole interaction ends together.
-  const handlePanelMode = (e) => {
-    if (e.detail?.mode !== "split") return;
-    if (!preview3DState.extrasPrevStage) return; // nothing staged to undo
-    exitExtraStlStage();
-    closeUpload3dModal();
-  };
-  preview3DState.panelModeCleanup?.();
-  window.addEventListener("preview-panel-mode", handlePanelMode);
-  preview3DState.panelModeCleanup = () => {
-    window.removeEventListener("preview-panel-mode", handlePanelMode);
   };
 
   shell.appendChild(toolbar);
@@ -444,6 +439,13 @@ function init3DPreview(area) {
     if (preview3DState.capturing) return;
     preview3DState.capturing = true;
     try {
+      // On the Extra 3D tab the button feeds the Request dialog's thumbnails
+      // instead of the case thumbnail — that dialog no longer shoots its own.
+      if (isUpload3dModalOpen()) {
+        const arch = captureExtraSlotShot();
+        if (arch) toast.success(`Saved as the ${arch} 3D capture for the request.`);
+        return;
+      }
       renderer.render(scene, camera);
       const dataUrl = renderer.domElement.toDataURL("image/png");
       // Thumbnails only: upsert the upper/lower case-thumbnail slots from this render.
@@ -514,6 +516,10 @@ function init3DPreview(area) {
 
   const resize = () => {
     const rect = mount.getBoundingClientRect();
+    // A hidden panel (Reference Images tab) measures 0×0. Anchoring the controls to that
+    // leaves screen.width 0, and TrackballControls divides the pointer position by it —
+    // every drag after coming back is then garbage. Skip until it has a size again.
+    if (!rect.width || !rect.height) return;
     const w = Math.max(220, Math.floor(rect.width));
     const h = Math.max(220, Math.floor(rect.height));
     renderer.setSize(w, h, false);
@@ -524,6 +530,7 @@ function init3DPreview(area) {
     controls.handleResize?.();
   };
 
+  preview3DState.resizePreview = resize;
   preview3DState.resizeObserver = new ResizeObserver(resize);
   preview3DState.resizeObserver.observe(mount);
   resize();
@@ -561,6 +568,9 @@ export function setPreview3DRenderPaused(paused) {
   // A dead context draws nothing and the "Reload 3D view" notice already owns
   // that state — don't resurrect the loop on top of it.
   if (preview3DState.renderer?.getContext?.()?.isContextLost?.()) return;
+  // Re-anchor the controls to the canvas now that it has a size again: the panel was
+  // 0×0 while hidden, and TrackballControls keeps whatever it last measured.
+  requestAnimationFrame(() => preview3DState.resizePreview?.());
   startPreviewRenderLoop();
 }
 
@@ -641,6 +651,8 @@ export function teardown3DPreview() {
     preview3DState.resizeObserver.disconnect();
     preview3DState.resizeObserver = null;
   }
+  // Closes over the renderer/controls just dropped.
+  preview3DState.resizePreview = null;
   if (preview3DState.controls) {
     preview3DState.controls.dispose();
     preview3DState.controls = null;
@@ -687,13 +699,15 @@ export function teardown3DPreview() {
   preview3DState.extrasLoadPromise = null;
   preview3DState.extrasLoading = false;
   preview3DState.extrasLoadProgress = null;
-  preview3DState.extrasProgressRefs = null;
+  clearExtrasLoadingOverlay();
   preview3DState.extrasVisible = false;
   preview3DState.extrasPrevStage = null;
   preview3DState.stageHiddenJaws = new Set();
   preview3DState.area = null;
   preview3DState.topControls = null;
-  closeUpload3dModal();
+  // The panel lives in the shell just removed; extrasTabOpen is what a rebuild
+  // reads to put it back.
+  preview3DState.upload3dModal = null;
   closeDownloadJawProfileModal();
   preview3DState.caseData = null;
   clearMeshQualityProgress();
@@ -714,14 +728,6 @@ export function teardown3DPreview() {
   if (preview3DState.downloadJawCleanup) {
     preview3DState.downloadJawCleanup();
     preview3DState.downloadJawCleanup = null;
-  }
-  if (preview3DState.uploadCleanup) {
-    preview3DState.uploadCleanup();
-    preview3DState.uploadCleanup = null;
-  }
-  if (preview3DState.panelModeCleanup) {
-    preview3DState.panelModeCleanup();
-    preview3DState.panelModeCleanup = null;
   }
   preview3DState.capturing = false;
 }
@@ -887,12 +893,51 @@ function clearMeshQualityProgress() {
   preview3DState.meshQualityProgressJaw = null;
 }
 
+// Which jaws a set of source files covers. Kept on qualitySource so the rebuild
+// paths still know what to rebuild once the files themselves have been released.
+function jawKeysOfFiles(files) {
+  return (files || []).map((f) => getJawKeyFromFile(f)).filter(Boolean);
+}
+
+// Release the jaw STL source. The parsed meshes stay — only the base64 goes, which is
+// the single biggest hold on the page (~66MB on a case like 3008) and is needed by
+// nothing on screen. ensureJawSourceFiles fetches it again if a rebuild asks for it.
+function dropJawSourceFiles() {
+  const src = preview3DState.qualitySource;
+  if (src?.files) {
+    src.jaws = src.jaws?.length ? src.jaws : jawKeysOfFiles(src.files);
+    src.files = null;
+  }
+  // Same strings, second reference: both have to go or nothing is freed.
+  for (const jaw of ["upper", "lower"]) {
+    if (preview3DState.jawFiles?.[jaw]) preview3DState.jawFiles[jaw].data = null;
+  }
+}
+
+// The source files a rebuild needs, fetched again if they were released. Re-cached, so
+// a run of rebuilds costs one round trip; released again on the next Extra 3D open.
+async function ensureJawSourceFiles() {
+  const src = preview3DState.qualitySource;
+  if (!src) return [];
+  if (src.files?.length) return src.files;
+  const fetched = src.kind === "off" ? await fetchParameterisedMeshForCase() : await fetchJawFilesForCase();
+  // Jaws removed this session must not come back with the re-fetch.
+  const wanted = src.jaws?.length ? new Set(src.jaws) : null;
+  const files = wanted ? fetched.filter((f) => wanted.has(getJawKeyFromFile(f))) : fetched;
+  src.files = files;
+  for (const file of files) {
+    const jaw = getJawKeyFromFile(file);
+    if (jaw && preview3DState.jawFiles?.[jaw]) preview3DState.jawFiles[jaw].data = file.data;
+  }
+  return files;
+}
+
 // Sync the HD/SD badge: label = current quality, disabled while a switch is in flight,
-// hidden when there is nothing to re-render (no kept source files).
+// hidden when there is no jaw to re-render.
 function updateQualityToggle() {
   const el = preview3DState.qualityToggleEl;
   if (!el) return;
-  el.classList.toggle("is-hidden", !preview3DState.qualitySource?.files?.length);
+  el.classList.toggle("is-hidden", !preview3DState.qualitySource?.jaws?.length);
   const high = preview3DState.meshQuality === "high";
   el.textContent = high ? "HD" : "SD";
   el.title = high
@@ -901,15 +946,16 @@ function updateQualityToggle() {
   el.disabled = preview3DState.qualityToggleBusy;
 }
 
-// HD/SD toggle click: re-render the jaws from the kept source files at the
-// requested quality, reusing the same progress overlay as the initial load.
+// HD/SD toggle click: re-render the jaws at the requested quality, reusing the same
+// progress overlay as the initial load. The source is fetched here when it has been
+// released (see dropJawSourceFiles) — a rare, deliberate click can afford the wait.
 async function switchMeshQuality(quality) {
   const normalized = quality === "high" ? "high" : "low";
   if (preview3DState.qualityToggleBusy) return;
   if (preview3DState.meshQuality === normalized) return;
   const source = preview3DState.qualitySource;
   const mount = preview3DState.mount;
-  if (!source?.files?.length || !mount) return;
+  if (!source?.jaws?.length || !mount) return;
 
   preview3DState.qualityToggleBusy = true;
   preview3DState.meshQuality = normalized;
@@ -923,10 +969,12 @@ async function switchMeshQuality(quality) {
   await waitForPreviewPaint();
 
   try {
+    const files = await ensureJawSourceFiles();
+    if (!files.length) throw new Error("jaw source files unavailable");
     if (source.kind === "off") {
-      await populateJawPreviewFromOFF(source.files, source.undercut, normalized);
+      await populateJawPreviewFromOFF(files, source.undercut, normalized);
     } else {
-      await populateJawPreview(source.files, source.undercut, normalized);
+      await populateJawPreview(files, source.undercut, normalized);
     }
     // populate* clears the model root, which also drops the extra-slot meshes —
     // re-attach the still-alive groups (root.clear() detaches, never disposes).
@@ -1595,9 +1643,12 @@ async function renderJawStl(jaw, file) {
   const entry = { data: file.data, type: file.type, filename: file.filename };
   const src = preview3DState.qualitySource;
   if (src?.kind === "stl") {
-    src.files = src.files.filter((f) => getJawKeyFromFile(f) !== jaw).concat(entry);
+    // Only when the source is still held: a released one re-fetches, and this jaw
+    // is on the server too, so it comes back with it.
+    if (src.files) src.files = src.files.filter((f) => getJawKeyFromFile(f) !== jaw).concat(entry);
+    src.jaws = [...new Set([...(src.jaws || []), jaw])];
   } else if (!src) {
-    preview3DState.qualitySource = { kind: "stl", files: [entry], undercut: null };
+    preview3DState.qualitySource = { kind: "stl", files: [entry], jaws: [jaw], undercut: null };
   }
   updateQualityToggle();
   setJawRowMode(jaw, true);
@@ -1617,10 +1668,12 @@ function removeJawMesh(jaw) {
   }
   delete preview3DState.jawFiles[jaw];
   // Keep the HD/SD rebuild source in step, so toggling quality later doesn't
-  // resurrect a jaw the user removed this session.
+  // resurrect a jaw the user removed this session — `jaws` is also what a released
+  // source filters its re-fetch by.
   const src = preview3DState.qualitySource;
-  if (src?.files?.length) {
-    src.files = src.files.filter((f) => getJawKeyFromFile(f) !== jaw);
+  if (src) {
+    if (src.files?.length) src.files = src.files.filter((f) => getJawKeyFromFile(f) !== jaw);
+    if (src.jaws?.length) src.jaws = src.jaws.filter((key) => key !== jaw);
     updateQualityToggle();
   }
   setJawRowMode(jaw, false);
@@ -2039,20 +2092,25 @@ export async function applySurveyUndercutToPreview(nextUndercut) {
 
   const source = preview3DState.qualitySource;
   const quality = preview3DState.meshQuality || "low";
-  if (quality === "low" && source?.files?.length) {
+  // The SD mesh has to be rebuilt from source: decimation picks the most severe band
+  // per cluster, so a new survey changes which vertices survive.
+  const files = quality === "low" && source?.jaws?.length ? await ensureJawSourceFiles() : [];
+  if (files.length) {
     console.log("[preview3D] rebuilding low quality mesh with updated survey heatmap", {
       kind: source.kind,
       quality,
     });
     if (source.kind === "off") {
-      await populateJawPreviewFromOFF(source.files, nextUndercut, quality);
+      await populateJawPreviewFromOFF(files, nextUndercut, quality);
     } else {
-      await populateJawPreview(source.files, nextUndercut, quality);
+      await populateJawPreview(files, nextUndercut, quality);
     }
     // populate* clears the model root, taking the extra-slot meshes with it (they are
-    // detached, never disposed) — put them back or the "Other 3D files" stage goes empty.
+    // detached, never disposed) — put them back or the extras stage goes empty.
     reattachExtraGroups();
     applyJawVisibility();
+    // Fresh jaw groups land on the root; the Extra 3D tab wants them back off it.
+    if (isUpload3dModalOpen()) setJawMeshesOnStage(false);
     updateQualityToggle();
     repaintExtraJawHeatmaps();
     return;
@@ -2245,7 +2303,7 @@ function applyJawVisibility() {
   const view = preview3DState.activeView;
   if (upper) upper.visible = view === "both" || view === "upper";
   if (lower) lower.visible = view === "both" || view === "lower";
-  // Jaws the "Other 3D files" stage is holding off screen stay hidden through an HD/SD
+  // Jaws the extras stage is holding off screen stay hidden through an HD/SD
   // re-render; the jaw row icon is what takes a jaw back out of that set.
   for (const jaw of preview3DState.stageHiddenJaws || []) {
     const group = preview3DState.groups[jaw];
@@ -2682,7 +2740,7 @@ async function uploadJawStl(jaw, file) {
 // (POST /stlclosed/), then remove it from the preview. Confirms first.
 async function saveJawToClosed(jaw) {
   const file = preview3DState.jawFiles?.[jaw];
-  if (!file?.data) {
+  if (!file) {
     setMessage?.("No STL data available for this jaw.");
     return;
   }
@@ -2696,6 +2754,13 @@ async function saveJawToClosed(jaw) {
   });
   if (!confirmed) return;
   setMessage?.(`Saving ${jaw} jaw to closed...`);
+  // The STL itself is only held while the source is (dropJawSourceFiles releases it),
+  // so fetch it back for the upload rather than keeping ~33MB against this one click.
+  if (!file.data) await ensureJawSourceFiles();
+  if (!file.data) {
+    setMessage?.("No STL data available for this jaw.");
+    return;
+  }
   try {
     const res = await fetch(`${SMARTRPD_API_BASE}/stlclosed/`, {
       method: "POST",
@@ -2726,12 +2791,12 @@ const EXTRA_STL_SLOTS = [1, 2, 3, 4];
 
 const EXTRA_STL_SLOT_NAMES = {
   1: "Upper jaw",
-  2: "Upper metal RPD",
+  2: "Metal RPD",
   3: "Lower jaw",
-  4: "Lower metal RPD",
+  4: "Metal RPD",
 };
 
-// Per-slot icon, shown only on a populated slot row in "Other 3D files". Paths are relative to
+// Per-slot icon, shown only on a a populated Extra 3D slot row. Paths are relative to
 // src/js/2D/; `black: true` renders the image fully black via a CSS filter.
 const EXTRA_STL_SLOT_ICONS = {
   1: { src: "../../assets/Icon_UpperJaw_Occlusal.png", black: true },
@@ -2753,8 +2818,8 @@ const EXTRA_STL_SLOT_ICONS = {
 // construct at module scope.
 const extraJawColor = () => new THREE.Color(...DEFAULT_TOOTH_COLOR);
 
-// Metal-RPD slots (Upper/Lower metal RPD) render with a metallic finish instead
-// of the tan jaw colour.
+// Metal RPD slots (2 = upper arch, 4 = lower) render with a metallic finish
+// instead of the tan jaw colour.
 const METAL_RPD_SLOTS = new Set([2, 4]);
 
 // Jaw-scan slots borrow the matching jaw's undercut heatmap instead of being surveyed
@@ -2779,38 +2844,33 @@ function extraSlotAuth() {
   };
 }
 
-// Fetch every populated extra slot for the case. The backend returns one
-// object per slot ({ filename, data, slotNumber, ... }) or 404 when empty.
-async function fetchExtraStlsForCase() {
-  if (!state.caseIntID) return [];
-  const auth = extraSlotAuth();
-  const results = await Promise.all(
-    EXTRA_STL_SLOTS.map(async (slotNumber) => {
-      try {
-        const res = await fetch(`${SMARTRPD_API_BASE}/stl/slot/get`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify([auth, { slotNumber }]),
-        });
-        if (!res.ok) return null; // 404 = empty slot
-        const data = await res.json();
-        const item = Array.isArray(data) ? data[0] : data;
-        if (!item?.data) return null;
-        return { slotNumber, filename: item.filename || `slot${slotNumber}.stl`, data: item.data };
-      } catch (err) {
-        console.warn(`[preview3D] ✕ POST /stl/slot/get (slot ${slotNumber}) failed`, err);
-        return null;
-      }
-    })
-  );
-  return results.filter(Boolean);
+// One slot's file: the backend returns { filename, data, slotNumber, ... }, or 404 when
+// the slot is empty. Fetched, parsed and released one slot at a time by
+// loadExtraStlsIntoPreview — all four at once is ~133MB of base64 held simultaneously.
+async function fetchExtraStlSlot(slotNumber) {
+  if (!state.caseIntID) return null;
+  try {
+    const res = await fetch(`${SMARTRPD_API_BASE}/stl/slot/get`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([extraSlotAuth(), { slotNumber }]),
+    });
+    if (!res.ok) return null; // 404 = empty slot
+    const data = await res.json();
+    const item = Array.isArray(data) ? data[0] : data;
+    if (!item?.data) return null;
+    return { slotNumber, filename: item.filename || `slot${slotNumber}.stl`, data: item.data };
+  } catch (err) {
+    console.warn(`[preview3D] ✕ POST /stl/slot/get (slot ${slotNumber}) failed`, err);
+    return null;
+  }
 }
 
 // Fetch + parse the extra slots at most once, and only when something actually needs
 // them. They are NOT loaded on page entry: each slot is its own full-size scan (~33MB of
 // base64 apiece, ~133MB for all four on a case like 3008, on top of the ~66MB jaw pair),
 // and renderExtraStl creates every one of them `visible = false` — nothing is on screen
-// until the "Other 3D files" panel is opened. Downloading and STL-parsing all of that
+// until the "Extra 3D" tab is opened. Downloading and STL-parsing all of that
 // invisibly is what pushes an iPhone's content process over its memory ceiling, which
 // Safari reports as the tab reloading itself.
 //
@@ -2820,12 +2880,15 @@ async function fetchExtraStlsForCase() {
 function ensureExtraStlsLoaded() {
   if (!preview3DState.extrasLoadPromise) {
     preview3DState.extrasLoading = true;
+    showExtrasLoadingOverlay();
     preview3DState.extrasLoadPromise = loadExtraStlsIntoPreview()
       .then(() => {
         preview3DState.extrasLoading = false;
+        clearExtrasLoadingOverlay();
       })
       .catch((err) => {
         preview3DState.extrasLoading = false;
+        clearExtrasLoadingOverlay();
         preview3DState.extrasLoadPromise = null;
         throw err;
       });
@@ -2837,30 +2900,32 @@ async function loadExtraStlsIntoPreview() {
   preview3DState.extraGroups = {};
   preview3DState.extraFileNames = {};
   preview3DState.occupiedSlots = new Set();
-  setExtrasLoadProgress(0.05, "Loading…");
-  const extras = await fetchExtraStlsForCase();
-  let done = 0;
-  for (const extra of extras) {
-    setExtrasLoadProgress(0.25 + (done / extras.length) * 0.75, `Loading ${done + 1} of ${extras.length}…`);
-    done += 1;
-    preview3DState.occupiedSlots.add(extra.slotNumber);
-    preview3DState.extraFileNames[extra.slotNumber] = extra.filename;
+  setExtrasLoadProgress(0.05, "Fetching extra files");
+  let loaded = 0;
+  const total = EXTRA_STL_SLOTS.length;
+  for (let i = 0; i < total; i += 1) {
+    const slotNumber = EXTRA_STL_SLOTS[i];
+    setExtrasLoadProgress(0.05 + (i / total) * 0.95, `Loading slot ${i + 1} of ${total}`);
+    // Fetched, parsed and released a slot at a time: `extra` is the only base64 alive,
+    // and it goes out of scope before the next slot is asked for.
+    const extra = await fetchExtraStlSlot(slotNumber);
+    if (!extra) continue;
+    loaded += 1;
+    preview3DState.occupiedSlots.add(slotNumber);
+    preview3DState.extraFileNames[slotNumber] = extra.filename;
     // Isolate per-slot failures: a single corrupt/undecodable extra STL must not
     // abort the whole interactive preview (the jaws are already loaded by now).
     try {
       await renderExtraStl(extra);
     } catch (err) {
-      console.warn(
-        `[preview3D] ✕ extra STL slot ${extra.slotNumber} failed to render — skipping`,
-        err
-      );
+      console.warn(`[preview3D] ✕ extra STL slot ${slotNumber} failed to render — skipping`, err);
     }
   }
-  setExtrasLoadProgress(1, "Ready");
-  // Extras stay off the stage on page entry — they are only shown while the "Other 3D
-  // files" panel is open. Exception: with no jaw meshes at all, hiding them too would
-  // leave an empty viewport, so show them right away.
-  if (extras.length && !preview3DState.groups.upper && !preview3DState.groups.lower) {
+  setExtrasLoadProgress(1, "Extra 3D files ready");
+  // Extras stay off the stage on page entry — they are only shown while the
+  // Extra 3D tab is up. Exception: with no jaw meshes at all, hiding them too
+  // would leave an empty viewport, so show them right away.
+  if (loaded && !preview3DState.groups.upper && !preview3DState.groups.lower) {
     setExtraStlsVisible(true);
     centerRootOnCombinedBounds(preview3DState.modelRoot);
     fitPreviewCamera();
@@ -2868,15 +2933,52 @@ async function loadExtraStlsIntoPreview() {
   renderUpload3dList();
 }
 
-// Drive the panel's load progress bar. The refs are rebuilt whenever the list re-renders,
-// so the latest phase is cached here and replayed into a fresh row.
+// The extras load reuses the jaw load's card, centred in the stage, so both tabs
+// load the same way. Mounted here rather than in the panel; the panel just says
+// the slots aren't known yet.
+function showExtrasLoadingOverlay() {
+  const mount = preview3DState.mount;
+  if (!mount || !preview3DState.extrasLoading || preview3DState.extrasOverlay) return;
+  const overlay = document.createElement("div");
+  overlay.className = "jaw-preview-quality-prompt";
+  overlay.setAttribute("role", "status");
+  overlay.setAttribute("aria-label", "Loading extra 3D files");
+  overlay.innerHTML = `
+    <div class="jaw-preview-quality-panel jaw-preview-quality-panel-loading">
+      <div class="jaw-preview-quality-title">Loading Extra 3D Files</div>
+      <div class="jaw-preview-quality-status">Preparing extra files...</div>
+      <div class="jaw-preview-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="jaw-preview-progress-fill"></div>
+      </div>
+      <div class="jaw-preview-progress-meta">
+        <span class="jaw-preview-progress-jaw">Waiting for file data</span>
+        <span class="jaw-preview-progress-percent">0%</span>
+      </div>
+    </div>
+  `;
+  mount.appendChild(overlay);
+  preview3DState.extrasOverlay = overlay;
+  // Replay whatever phase the load already reached into the fresh card.
+  setExtrasLoadProgress();
+}
+
+function clearExtrasLoadingOverlay() {
+  preview3DState.extrasOverlay?.remove();
+  preview3DState.extrasOverlay = null;
+}
+
+// Drive that card. The phase is cached so a card mounted mid-load (tab opened after
+// the fetch started, or a stage rebuild) picks up where the load actually is.
 function setExtrasLoadProgress(frac, labelText) {
   if (frac != null) preview3DState.extrasLoadProgress = { frac, labelText };
+  const overlay = preview3DState.extrasOverlay;
   const phase = preview3DState.extrasLoadProgress;
-  const refs = preview3DState.extrasProgressRefs;
-  if (!refs || !phase) return;
-  refs.fill.style.width = `${Math.round(phase.frac * 100)}%`;
-  refs.label.textContent = phase.labelText;
+  if (!overlay || !phase) return;
+  const pct = Math.max(0, Math.min(100, Math.round(phase.frac * 100)));
+  overlay.querySelector(".jaw-preview-progress-fill").style.width = `${pct}%`;
+  overlay.querySelector(".jaw-preview-progress-percent").textContent = `${pct}%`;
+  overlay.querySelector(".jaw-preview-progress-jaw").textContent = phase.labelText;
+  overlay.querySelector(".jaw-preview-progress").setAttribute("aria-valuenow", String(pct));
 }
 
 // Colour a jaw-copy slot from the jaw's heatmap, looked up through the slot's nearest-jaw-vertex
@@ -2991,7 +3093,7 @@ async function renderExtraStl({ slotNumber, filename, data }) {
   mesh.userData.surveyJaw = jaw;
   const group = new THREE.Group();
   group.add(mesh);
-  // Follow the current stage: hidden unless the "Other 3D files" panel is showing extras.
+  // Follow the current stage: hidden unless the "Extra 3D" tab is showing extras.
   group.visible = !!preview3DState.extrasVisible;
   root.add(group);
 
@@ -3022,9 +3124,12 @@ function removeExtraStlMesh(slotNumber) {
   disposeObject3D(entry.group);
   delete preview3DState.extraGroups[slotNumber];
   if (preview3DState.modelRoot) centerRootOnCombinedBounds(preview3DState.modelRoot);
-  // Deleting the last extra would leave the staged view empty (jaws are hidden), so
-  // hand the stage back to the jaws.
-  if (!Object.keys(preview3DState.extraGroups).length) exitExtraStlStage();
+  // Deleting the last extra leaves the stage empty, which is what the Extra 3D tab
+  // should show: the jaws belong to the 3D Preview tab and come back when this one is
+  // left (closeUpload3dModal). Off-tab there is nothing else to show, so hand it back.
+  if (!Object.keys(preview3DState.extraGroups).length && !isUpload3dModalOpen()) {
+    exitExtraStlStage();
+  }
 }
 
 // Permanently delete an extra STL (modal X): frees the backend slot, then drops
@@ -3071,15 +3176,22 @@ async function uploadExtraStl(file, targetSlot = null) {
     /* slot occupancy unknown — fall through and let the backend reject a taken slot */
   }
   if (!preview3DState.occupiedSlots) preview3DState.occupiedSlots = new Set();
+  // A slot already uploading is taken too — the server only learns of it when that
+  // upload lands, so two parallel uploads would otherwise both claim it.
+  const uploading = preview3DState.uploadingSlots;
   let freeSlot;
   if (targetSlot != null) {
+    if (uploading.has(targetSlot)) {
+      setMessage?.(`${slotLabel(targetSlot)} is still uploading.`);
+      return;
+    }
     if (preview3DState.occupiedSlots.has(targetSlot)) {
       setMessage?.(`${slotLabel(targetSlot)} already has a file. Delete it first.`);
       return;
     }
     freeSlot = targetSlot;
   } else {
-    freeSlot = EXTRA_STL_SLOTS.find((n) => !preview3DState.occupiedSlots.has(n));
+    freeSlot = EXTRA_STL_SLOTS.find((n) => !preview3DState.occupiedSlots.has(n) && !uploading.has(n));
   }
   if (!freeSlot) {
     setMessage?.("All 4 extra 3D file slots are in use. Delete one first.");
@@ -3091,9 +3203,8 @@ async function uploadExtraStl(file, targetSlot = null) {
   }
 
   // Draw this slot's row as an inline progress bar, then start the upload.
-  preview3DState.uploadingSlot = freeSlot;
+  preview3DState.uploadingSlots.set(freeSlot, { frac: 0, refs: null });
   renderUpload3dList();
-  setUpload3dBusy(true, 0);
   setMessage?.(`Uploading ${file.name}...`);
   try {
     const base64 = await fileToBase64(file);
@@ -3110,7 +3221,7 @@ async function uploadExtraStl(file, targetSlot = null) {
         data: base64,
       },
     ]);
-    await uploadSlotXHR(payload, (frac) => setUpload3dBusy(true, frac));
+    await uploadSlotXHR(payload, (frac) => setSlotUploadProgress(freeSlot, frac));
     preview3DState.occupiedSlots.add(freeSlot);
     await renderExtraStl({ slotNumber: freeSlot, filename: file.name, data: base64 });
     // Uploads always come from the open panel, so stage the new file (this is what puts
@@ -3126,9 +3237,7 @@ async function uploadExtraStl(file, targetSlot = null) {
     console.error("[preview3D] ✕ extra STL upload failed", err);
     setMessage?.("Upload failed. Please try again.");
   } finally {
-    setUpload3dBusy(false);
-    preview3DState.uploadingSlot = null;
-    preview3DState.slotProgressRefs = null;
+    preview3DState.uploadingSlots.delete(freeSlot);
     renderUpload3dList();
   }
 }
@@ -3180,54 +3289,72 @@ function setJawVisible(jaw, visible) {
   preview3DState.topControls?.[rowKey]?.row?.classList.toggle("is-hidden-jaw", !visible);
 }
 
-// Opening the "Other 3D files" panel focuses the stage on the extras: maximize the preview,
-// hide the original jaws, reveal the extras and frame them. Idempotent — a first upload
-// re-enters to stage the newly rendered file. Deliberately NOT undone when the panel
-// closes: the maximized extras view stays up until the user changes it themselves
-// (jaw row icons, the maximize button, or deleting the last extra).
+// The jaw meshes come off the model root while the Extra 3D tab is up — detached,
+// never disposed, so the tab's stage holds the slot files alone and the camera
+// frames them without the jaws' bounds pulling on it.
+function setJawMeshesOnStage(onStage) {
+  const root = preview3DState.modelRoot;
+  if (!root) return;
+  for (const jaw of ["upper", "lower"]) {
+    const group = preview3DState.groups?.[jaw];
+    if (!group) continue;
+    if (onStage && group.parent !== root) root.add(group);
+    else if (!onStage && group.parent === root) root.remove(group);
+  }
+}
+
+// The "Extra 3D" tab focuses the stage on the extras: take the jaws off it, reveal
+// the extras and frame them. Idempotent — a first upload re-enters to stage the
+// newly rendered file. Undone by leaving the tab (exitExtraStlStage).
 function enterExtraStlStage() {
   const camera = preview3DState.camera;
   const controls = preview3DState.controls;
   if (!preview3DState.extrasPrevStage) {
     preview3DState.extrasPrevStage = {
-      // `undefined` = that jaw had no mesh when the panel opened; nothing to restore.
+      // `undefined` = that jaw had no mesh when the tab opened; nothing to restore.
       upper: preview3DState.groups?.upper?.visible,
       lower: preview3DState.groups?.lower?.visible,
+      heatmap: preview3DState.heatmapEnabled,
       camera:
         camera && controls
           ? { position: camera.position.clone(), up: camera.up.clone(), target: controls.target.clone() }
           : null,
     };
+    // Extras render plain: the tab opens with the undercut heatmap closed, and
+    // its own toggle is what turns it on.
+    setHeatmapEnabled(false);
   }
   for (const jaw of ["upper", "lower"]) {
     if (!preview3DState.groups?.[jaw]) continue;
     preview3DState.stageHiddenJaws.add(jaw);
     setJawVisible(jaw, false);
   }
+  setJawMeshesOnStage(false);
   setExtraStlsVisible(true);
-  const shell = document.querySelector(".annotation-shell");
-  if (shell && !shell.classList.contains("preview-maximized")) {
-    // Route through the maximize button so 2DAnnotation.js owns panel-mode state.
-    document.getElementById("preview3dMaximizeBtn")?.click();
-  }
   fitPreviewCamera({ visibleOnly: true });
 }
 
-// Hand the stage back to the jaws when the extras can no longer hold it (the last one was
-// deleted). The maximize is left alone — it's the user's now. Closing the panel does NOT
-// come through here.
+// Hand the stage back to the jaws — on leaving the tab, or when the extras can no
+// longer hold it (the last one was deleted).
 function exitExtraStlStage() {
   const prev = preview3DState.extrasPrevStage;
   // Extras go back off stage — unless there are no jaw meshes to hand it back to
   // (same fallback loadExtraStlsIntoPreview uses), which would leave a blank viewport.
   const hasJaws = !!(preview3DState.groups?.upper || preview3DState.groups?.lower);
+  setJawMeshesOnStage(true);
   setExtraStlsVisible(!hasJaws);
   preview3DState.stageHiddenJaws.clear();
   if (prev) {
     if (prev.upper !== undefined) setJawVisible("upper", !!prev.upper);
     if (prev.lower !== undefined) setJawVisible("lower", !!prev.lower);
+    setHeatmapEnabled(!!prev.heatmap);
   }
   preview3DState.extrasPrevStage = null;
+  // Deleting an extra re-centres the root on whatever is left, so by now the root's
+  // offset belongs to the extras, not the jaws. Re-centre before restoring the saved
+  // pose — that pose was taken against a jaw-centred root, and trackball rotation is
+  // about controls.target, so an offset root orbits around a point off the mesh.
+  centerRootOnCombinedBounds(preview3DState.modelRoot);
   const camera = preview3DState.camera;
   const controls = preview3DState.controls;
   if (prev?.camera && camera && controls) {
@@ -3235,6 +3362,8 @@ function exitExtraStlStage() {
     camera.up.copy(prev.camera.up);
     controls.target.copy(prev.camera.target);
     controls.update();
+  } else {
+    fitPreviewCamera();
   }
 }
 
@@ -3250,17 +3379,6 @@ const LOWER_EXTRA_SLOTS = [3, 4];
 // per message would be megabytes on the wire.
 const APPROVAL_SHOT_MAX_WIDTH = 900;
 
-// Camera angle per arch for the approval captures, as an explicit WORLD direction
-// ({ dir, up }); null keeps the default three-quarter view. modelRoot already lays
-// the occlusal plane flat, so +Y is straight up over the arch.
-const EXTRA_SHOT_VIEWS = {
-  upper: null,
-  // Straight down at 90°, looking at the occlusal surface. The three-quarter angle
-  // showed the lower arch edge-on. `up` is -Z so the arch's front faces the bottom
-  // of the frame, the way an occlusal photo is normally printed.
-  lower: { dir: [0, 1, 0], up: [0, 0, -1] },
-};
-
 // The current frame as a PNG data URL, scaled to APPROVAL_SHOT_MAX_WIDTH. Must be
 // called straight after renderer.render(): the renderer keeps no drawing buffer,
 // so both toDataURL and drawImage only see the frame within the same tick.
@@ -3275,55 +3393,32 @@ function renderedShotDataUrl(renderer) {
   return scaled.toDataURL("image/png");
 }
 
-// One PNG per arch, rendered off the live canvas: everything but that arch's
-// slots is hidden and the camera is fitted to what's left, so each panel shows
-// its files framed rather than a corner of the shared view. Visibility and camera
-// are restored before returning — the on-screen view must be untouched.
-// A `null` for an arch means it has no loaded 3D file.
-function captureExtraSlotShots() {
-  const { renderer, scene, camera, controls, modelRoot } = preview3DState;
-  if (!renderer || !scene || !camera || !modelRoot) return { upper: null, lower: null };
+// Which panel a capture taken on the Extra 3D tab belongs to: the arch whose slot
+// files are the ones on screen. With both arches (or neither) showing, it fills
+// the panel that is still empty, upper first.
+function captureArchForExtras() {
+  const shown = Object.entries(preview3DState.extraGroups || {})
+    .filter(([, entry]) => entry?.group?.visible)
+    .map(([slot]) => Number(slot));
+  const upper = shown.some((slot) => UPPER_EXTRA_SLOTS.includes(slot));
+  const lower = shown.some((slot) => LOWER_EXTRA_SLOTS.includes(slot));
+  if (upper && !lower) return "upper";
+  if (lower && !upper) return "lower";
+  return preview3DState.approvalShots?.upper ? "lower" : "upper";
+}
 
-  const staged = [
-    ...Object.values(preview3DState.groups || {}),
-    ...Object.values(preview3DState.extraGroups || {}).map((e) => e?.group),
-  ].filter(Boolean);
-  const prevVisible = new Map(staged.map((group) => [group, group.visible]));
-  const prevCam = {
-    position: camera.position.clone(),
-    up: camera.up.clone(),
-    target: controls?.target.clone() || null,
+// The camera button on the Extra 3D tab stores the view here instead of writing a
+// case thumbnail; the Request dialog shows whatever has been captured.
+function captureExtraSlotShot() {
+  const { renderer, scene, camera } = preview3DState;
+  if (!renderer || !scene || !camera) return null;
+  renderer.render(scene, camera);
+  const arch = captureArchForExtras();
+  preview3DState.approvalShots = {
+    ...(preview3DState.approvalShots || { upper: null, lower: null }),
+    [arch]: renderedShotDataUrl(renderer),
   };
-
-  const shoot = (slots, worldView) => {
-    const groups = slots
-      .map((slot) => preview3DState.extraGroups?.[slot]?.group)
-      .filter(Boolean);
-    if (!groups.length) return null;
-    for (const group of staged) group.visible = groups.includes(group);
-    fitPreviewCamera({ visibleOnly: true, worldView });
-    renderer.render(scene, camera);
-    return renderedShotDataUrl(renderer);
-  };
-
-  try {
-    return {
-      upper: shoot(UPPER_EXTRA_SLOTS, EXTRA_SHOT_VIEWS.upper),
-      lower: shoot(LOWER_EXTRA_SLOTS, EXTRA_SHOT_VIEWS.lower),
-    };
-  } catch (err) {
-    console.warn("[preview3D] extra slot capture failed", err);
-    return { upper: null, lower: null };
-  } finally {
-    for (const [group, visible] of prevVisible) group.visible = visible;
-    camera.position.copy(prevCam.position);
-    camera.up.copy(prevCam.up);
-    if (controls && prevCam.target) {
-      controls.target.copy(prevCam.target);
-      controls.update();
-    }
-    renderer.render(scene, camera);
-  }
+  return arch;
 }
 
 // Approve = flip the case status, exactly as the 2D Case Note's Approve does with
@@ -3337,11 +3432,13 @@ async function openPreview3DApproval(btn) {
   }
   if (btn) btn.disabled = true;
   try {
-    // Captured once: the dialog shows these, and comes back with what to attach —
-    // the renders left ticked there, plus anything uploaded in the dialog.
+    // The dialog shows whatever the camera button captured on this tab, and comes
+    // back with what to attach — the renders left ticked there, plus any uploads.
     const { confirmed, recipients, images } = await confirmPreview3DApproval({
       caseIntID: state.caseIntID,
-      shots: captureExtraSlotShots(),
+      shots: preview3DState.approvalShots,
+      caseName: preview3DState.caseData?.case_id || "",
+      ownerName: state.caseOwner || "",
     });
     if (!confirmed) return;
 
@@ -3399,54 +3496,42 @@ function uploadSlotXHR(payload, onProgress) {
   });
 }
 
-// ---- Upload 3D files modal -----------------------------------------------
+// ---- Extra 3D files panel -------------------------------------------------
 
-// The footer "Upload other 3D files" icon opens this as a drop-up popover anchored to the icon
-// (not a centered modal). Built lazily once; element refs cached on preview3DState.
+// Docked in the preview frame's lower-left under the "Extra 3D" tab, so the slot
+// rows sit beside the 3D view they toggle. Built lazily once; element refs
+// cached on preview3DState.
 function ensureUpload3dModal() {
-  if (preview3DState.upload3dModal) return preview3DState.upload3dModal;
+  const area = preview3DState.area || document.getElementById("imagePreviewArea");
+  if (!area) return null;
+  const shell = area.querySelector(".jaw-preview-shell");
+  const cached = preview3DState.upload3dModal;
+  if (cached) {
+    // Opened before the shell existed, or a rebuild replaced the shell it was in:
+    // drop the stray panel and build again in the right place.
+    if (!shell || cached.overlay.parentElement === shell) return cached;
+    cached.overlay.remove();
+    preview3DState.upload3dModal = null;
+  }
 
   const overlay = document.createElement("div");
   overlay.className = "upload3d-modal is-hidden";
   overlay.setAttribute("aria-hidden", "true");
 
-  // No backdrop: clicking the white space around the popover must not close it, and the
-  // 3D view behind it stays draggable. Close is the X or Esc only.
   const panel = document.createElement("div");
   panel.className = "upload3d-modal-panel";
-  panel.setAttribute("role", "dialog");
-  panel.setAttribute("aria-modal", "true");
-  panel.setAttribute("aria-labelledby", "upload3dModalTitle");
+  panel.setAttribute("role", "group");
+  panel.setAttribute("aria-label", "Extra 3D files");
 
-  const header = document.createElement("div");
-  header.className = "upload3d-modal-header";
-  const title = document.createElement("h2");
-  title.id = "upload3dModalTitle";
-  title.className = "upload3d-modal-title";
-  title.textContent = "Other 3D files";
-
-  // Request sits with the title (not out by the X) so it reads as an action on
-  // the listed files. Opens the same style of dialog as the 2D Case Note's.
+  // Request rides in the stage's upper-right corner, opposite the undercut
+  // toggle, so the panel row is nothing but the four slot cards.
   const approveBtn = document.createElement("button");
   approveBtn.type = "button";
   approveBtn.className = "upload3d-approve-btn";
   approveBtn.textContent = "Request";
   approveBtn.title = "Email the 3D files to the users on this case";
   approveBtn.addEventListener("click", () => openPreview3DApproval(approveBtn));
-
-  const heading = document.createElement("div");
-  heading.className = "upload3d-modal-heading";
-  heading.appendChild(title);
-  heading.appendChild(approveBtn);
-
-  const closeBtn = document.createElement("button");
-  closeBtn.type = "button";
-  closeBtn.className = "upload3d-modal-close";
-  closeBtn.setAttribute("aria-label", "Close");
-  closeBtn.innerHTML = '<i class="fa fa-xmark" aria-hidden="true"></i>';
-  closeBtn.addEventListener("click", closeUpload3dModal);
-  header.appendChild(heading);
-  header.appendChild(closeBtn);
+  (area.querySelector(".jaw-preview-3d-mount") || panel).appendChild(approveBtn);
 
   const card = document.createElement("div");
   card.className = "upload3d-card";
@@ -3455,99 +3540,100 @@ function ensureUpload3dModal() {
   list.className = "upload3d-list";
 
   card.appendChild(list);
-  panel.appendChild(header);
   panel.appendChild(card);
   overlay.appendChild(panel);
-  document.body.appendChild(overlay);
+  // Takes the jaw toolbar's place at the top of the shell (CSS hides that
+  // toolbar on this tab). Without a shell yet, the frame itself will do.
+  if (shell) shell.insertBefore(overlay, shell.firstChild);
+  else area.appendChild(overlay);
 
   preview3DState.upload3dModal = { overlay, panel, list };
   return preview3DState.upload3dModal;
 }
 
+// Tab state, not DOM state: the panel lives in the shell, which a rebuild
+// replaces wholesale.
 function isUpload3dModalOpen() {
-  const overlay = preview3DState.upload3dModal?.overlay;
-  return !!overlay && !overlay.classList.contains("is-hidden");
+  return !!preview3DState.extrasTabOpen;
 }
 
-function openUpload3dModal() {
+// Entering the "Extra 3D" tab. The extras are fetched here, not on page entry
+// (see ensureExtraStlsLoaded), so the tab's first open pays for them.
+export function openUpload3dModal() {
+  preview3DState.extrasTabOpen = true;
   const modal = ensureUpload3dModal();
-  // First open is what actually fetches the extras — they are deliberately not loaded on
-  // page entry (see ensureExtraStlsLoaded). Resolves immediately once they're in.
+  if (!modal) return;
+  // Free the jaws' STL source before the slots start downloading: this is the peak
+  // that OOMs an iPhone, and the jaw meshes on screen don't need it.
+  dropJawSourceFiles();
   const loaded = ensureExtraStlsLoaded().catch(() => {});
   renderUpload3dList();
   modal.overlay.classList.remove("is-hidden");
   modal.overlay.setAttribute("aria-hidden", "false");
+  // The jaws leave the stage right away, so the tab never shows them even while
+  // the slots are still downloading — the load card holds the empty stage.
+  enterExtraStlStage();
+  showExtrasLoadingOverlay();
   loaded.then(() => {
-    // The panel may have been closed again while the slots were downloading.
+    // The tab may have been left again while the slots were downloading.
     if (!isUpload3dModalOpen()) return;
     renderUpload3dList();
-    // Stage the extras only once there is something to show — with all four slots empty,
-    // hiding the jaws would just leave a blank viewport behind the panel.
-    if (Object.keys(preview3DState.extraGroups || {}).length) enterExtraStlStage();
-    positionUpload3dPanel();
+    enterExtraStlStage();
+    // The extras land plain. Forced here, not just on entry: the jaw load's own
+    // heatmap call (and the saved-survey auto-apply) can land mid-download.
+    setHeatmapEnabled(false);
   });
-  positionUpload3dPanel();
-  if (!preview3DState.upload3dKeyHandler) {
-    preview3DState.upload3dKeyHandler = (e) => {
-      if (e.key === "Escape") closeUpload3dModal();
-    };
-    document.addEventListener("keydown", preview3DState.upload3dKeyHandler);
-  }
-  // Keep the popover glued to the icon if the window resizes while it's open.
-  if (!preview3DState.upload3dRepositionHandler) {
-    preview3DState.upload3dRepositionHandler = () => positionUpload3dPanel();
-    window.addEventListener("resize", preview3DState.upload3dRepositionHandler);
-  }
 }
 
-// Pin the popover to the viewer's lower-left, just above the footer so it doesn't cover the
-// jaw view. Falls back to a fixed bottom margin if the footer icon isn't present.
-function positionUpload3dPanel() {
-  const modal = preview3DState.upload3dModal;
-  if (!modal) return;
-  const panel = modal.panel;
-  const margin = 12;
-  const gap = 10;
-  panel.style.left = `${margin}px`;
-  const anchor = document.getElementById("footerUpload3dBtn");
-  if (anchor) {
-    const r = anchor.getBoundingClientRect();
-    panel.style.bottom = `${Math.round(window.innerHeight - r.top + gap)}px`;
-  } else {
-    panel.style.bottom = `${margin}px`;
-  }
-}
-
-function closeUpload3dModal() {
+// Leaving the tab: put the jaw meshes back on the stage so the 3D Preview tab
+// shows what it always did, and free the slot meshes.
+export function closeUpload3dModal() {
+  preview3DState.extrasTabOpen = false;
   const modal = preview3DState.upload3dModal;
   if (modal) {
     modal.overlay.classList.add("is-hidden");
     modal.overlay.setAttribute("aria-hidden", "true");
   }
-  if (preview3DState.upload3dKeyHandler) {
-    document.removeEventListener("keydown", preview3DState.upload3dKeyHandler);
-    preview3DState.upload3dKeyHandler = null;
-  }
-  if (preview3DState.upload3dRepositionHandler) {
-    window.removeEventListener("resize", preview3DState.upload3dRepositionHandler);
-    preview3DState.upload3dRepositionHandler = null;
-  }
+  // Freed BEFORE handing the stage back: exitExtraStlStage re-centres the root on what
+  // is on it, and disposed extras must not still be counted in those bounds.
+  disposeExtraStls();
+  if (preview3DState.extrasPrevStage) exitExtraStlStage();
 }
 
-// Toggle the modal's busy (uploading) state and drive the progress bar.
-// `frac` is the 0..1 upload fraction; at 1 the server is still processing.
-function setUpload3dBusy(busy, frac) {
-  const modal = preview3DState.upload3dModal;
-  if (!modal) return;
-  // The `is-busy` class disables pointer events on the whole list, so every
-  // other slot's upload button / drop zone is blocked while an upload runs.
-  modal.overlay.classList.toggle("is-busy", !!busy);
-  const refs = preview3DState.slotProgressRefs;
-  if (busy && refs) {
-    const pct = Math.round((frac ?? 0) * 100);
-    refs.fill.style.width = `${pct}%`;
-    refs.label.textContent = pct >= 100 ? "Processing…" : `Uploading… ${pct}%`;
+// Drop every slot mesh and reset the load latch, so the extras only occupy memory
+// while their tab is up. Re-entering the tab fetches them again — the meshes are the
+// biggest thing in the scene and they are on screen far less often than the jaws.
+function disposeExtraStls() {
+  // With no jaw meshes the extras ARE the stage (same fallback the load uses);
+  // freeing them would leave an empty viewport for a case that has nothing else.
+  const hasJaws = !!(preview3DState.groups?.upper || preview3DState.groups?.lower);
+  if (!hasJaws) return;
+  // Never mid-upload: that slot's row and its rendered result belong to a live request.
+  if (preview3DState.uploadingSlots.size || preview3DState.extrasLoading) return;
+  for (const slot of Object.keys(preview3DState.extraGroups || {})) {
+    const entry = preview3DState.extraGroups[slot];
+    if (!entry?.group) continue;
+    preview3DState.modelRoot?.remove(entry.group);
+    disposeObject3D(entry.group);
   }
+  preview3DState.extraGroups = {};
+  preview3DState.extrasVisible = false;
+  // Drop the latch so the next open re-fetches; occupancy is re-read with it.
+  preview3DState.extrasLoadPromise = null;
+  preview3DState.extrasLoadProgress = null;
+}
+
+// Drive one slot's inline progress bar. `frac` is that upload's 0..1 fraction; at 1
+// the bytes are in and the server is still processing. Called with no frac to replay
+// the cached phase into a row the list just rebuilt.
+function setSlotUploadProgress(slot, frac) {
+  const phase = preview3DState.uploadingSlots.get(slot);
+  if (!phase) return;
+  if (frac != null) phase.frac = frac;
+  if (!phase.refs) return;
+  const pct = Math.max(0, Math.min(100, Math.round((phase.frac ?? 0) * 100)));
+  phase.refs.fill.style.width = `${pct}%`;
+  phase.refs.label.textContent = pct >= 100 ? "Processing…" : `Uploading… ${pct}%`;
 }
 
 // Always render all four named slots in order: an occupied slot shows its filename with
@@ -3558,16 +3644,14 @@ function renderUpload3dList() {
   const list = modal.list;
   list.innerHTML = "";
 
-  // Slot contents aren't known until the on-demand load finishes, so show the progress
-  // row rather than four "empty" slots the user could upload into.
-  if (preview3DState.extrasLoading) {
-    list.appendChild(buildUpload3dLoadingRow());
-    return;
-  }
+  // Slot contents aren't known until the on-demand load finishes, so the list stays
+  // empty rather than offering four "empty" slots to upload into. The stage's load
+  // card is what says a load is running.
+  if (preview3DState.extrasLoading) return;
 
   const occupied = preview3DState.occupiedSlots || new Set();
   EXTRA_STL_SLOTS.forEach((slot) => {
-    if (slot === preview3DState.uploadingSlot) {
+    if (preview3DState.uploadingSlots.has(slot)) {
       list.appendChild(buildUpload3dUploadingRow(slot));
     } else if (occupied.has(slot)) {
       const filename = preview3DState.extraFileNames[slot] || `slot${slot}.stl`;
@@ -3606,12 +3690,12 @@ function buildUpload3dFileRow(slot, filename) {
     }
   });
 
-  const xBtn = document.createElement("button");
-  xBtn.type = "button";
-  xBtn.className = "upload3d-row-delete";
-  xBtn.setAttribute("aria-label", `Delete ${filename}`);
-  xBtn.title = `Delete ${filename}`;
-  xBtn.innerHTML = '<i class="fa fa-xmark" aria-hidden="true"></i>';
+  // Same trash button as the jaw rows.
+  const xBtn = buildPreviewTrashButton({
+    ariaLabel: `Delete ${filename}`,
+    title: `Delete ${filename}`,
+  });
+  xBtn.classList.add("upload3d-row-delete");
   xBtn.addEventListener("click", () => deleteExtraStl(slot));
 
   const text = document.createElement("div");
@@ -3651,14 +3735,15 @@ function buildUpload3dSlotRow(slot) {
   slotName.textContent = slotLabel(slot);
   const status = document.createElement("span");
   status.className = "upload3d-row-name is-muted";
-  status.append("Drag & drop .stl or ");
+  // Just the link: the row is a drop zone either way, and the old "Drag & drop
+  // .stl or …" prefix cost the card a second line.
   const uploadLink = document.createElement("a");
   uploadLink.href = "#";
   uploadLink.className = "upload3d-upload-link";
-  uploadLink.textContent = "Upload";
+  uploadLink.textContent = "Upload .stl";
   uploadLink.setAttribute("role", "button");
   uploadLink.setAttribute("aria-label", `Upload ${slotLabel(slot)}`);
-  uploadLink.title = `Upload ${slotLabel(slot)}`;
+  uploadLink.title = `Drag & drop a .stl here, or click to upload ${slotLabel(slot)}`;
   uploadLink.addEventListener("click", (e) => {
     e.preventDefault();
     pickAndUploadExtraStl(slot);
@@ -3673,45 +3758,8 @@ function buildUpload3dSlotRow(slot) {
   return row;
 }
 
-// Shown in place of the slot list while the on-demand extras load runs (see
-// ensureExtraStlsLoaded). Same progress markup as the uploading row.
-function buildUpload3dLoadingRow() {
-  const row = document.createElement("div");
-  row.className = "upload3d-row upload3d-slot-row upload3d-uploading-row";
-
-  const icon = document.createElement("span");
-  icon.className = "upload3d-file-icon";
-  icon.innerHTML = '<i class="fa fa-cloud-arrow-down" aria-hidden="true"></i>';
-
-  const text = document.createElement("div");
-  text.className = "upload3d-row-text";
-  const name = document.createElement("span");
-  name.className = "upload3d-slot-name";
-  name.textContent = "Other 3D files";
-
-  const progress = document.createElement("div");
-  progress.className = "upload3d-progress";
-  const fill = document.createElement("div");
-  fill.className = "upload3d-progress-fill";
-  const label = document.createElement("span");
-  label.className = "upload3d-progress-label";
-  label.textContent = "Loading…";
-  progress.appendChild(fill);
-  progress.appendChild(label);
-
-  text.appendChild(name);
-  text.appendChild(progress);
-  row.appendChild(icon);
-  row.appendChild(text);
-
-  preview3DState.extrasProgressRefs = { fill, label };
-  // Replay whatever phase the load is already at into this freshly built bar.
-  setExtrasLoadProgress();
-  return row;
-}
-
-// A slot mid-upload: slot label + an inline progress bar. The bar's fill/label
-// refs are stashed on preview3DState so setUpload3dBusy can drive them live.
+// A slot mid-upload: slot label + an inline progress bar. The bar's fill/label refs
+// go on that slot's phase so setSlotUploadProgress can drive them live.
 function buildUpload3dUploadingRow(slot) {
   const row = document.createElement("div");
   row.className = "upload3d-row upload3d-slot-row upload3d-uploading-row";
@@ -3741,7 +3789,10 @@ function buildUpload3dUploadingRow(slot) {
   row.appendChild(icon);
   row.appendChild(text);
 
-  preview3DState.slotProgressRefs = { fill, label };
+  const phase = preview3DState.uploadingSlots.get(slot);
+  if (phase) phase.refs = { fill, label };
+  // Replay how far this upload already is into the freshly built bar.
+  setSlotUploadProgress(slot);
   return row;
 }
 
