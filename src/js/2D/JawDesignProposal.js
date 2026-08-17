@@ -15,6 +15,10 @@
  * T-bar and Y-bar are never proposed: their indications are the position of the undercut and
  * the shape of the survey line, and the 2D arch records neither. They stay manual picks.
  *
+ * All of that is the CAST METAL design. A full-acrylic case is a different prosthesis and
+ * gets a different, much simpler proposal: its own connector table, clasps only — no rests,
+ * no bars — placed by planAcrylicClasps.
+ *
  * Dimensional triggers throughout (floor-of-mouth depth, ridge resorption, tori, rest-seat
  * millimetres) are deliberately not modelled: the 2D arch measures no millimetres, so the
  * primary choice always wins. The alternatives that ARE knowable — a compromised abutment,
@@ -487,6 +491,81 @@ function withPlannedMesh(teeth, meshId) {
   return projected;
 }
 
+/** A space this long with teeth still standing behind it is clasped at both ends. */
+const ACRYLIC_BOTH_ENDS_MIN_SPAN = 4;
+
+/** The abutment on one side of the arch whose own `facing` surface meets the span. */
+const spanAbutmentOnSide = (span, side, facing) =>
+  span.abutments.find(
+    (abutment) => abutment.facingSurface === facing && sideOfToothId(abutment.fdi) === side
+  ) || null;
+
+/** The span reaching furthest back on this side — the only one acrylic clasps. */
+function posteriorMostSpanOnSide(spans, side) {
+  let best = null;
+  let bestUnit = -1;
+  for (const span of spans) {
+    if (!span.sides.includes(side)) continue;
+    const unit = Math.max(
+      ...span.fdis.filter((fdi) => sideOfToothId(fdi) === side).map(toothUnit)
+    );
+    if (unit > bestUnit) {
+      bestUnit = unit;
+      best = span;
+    }
+  }
+  return best;
+}
+
+/**
+ * An acrylic denture retains with plain wire clasps, so the proposal places clasps and
+ * nothing else: no rest seats to cut, and no cast bars (the material blocks the BARS tab
+ * anyway). Each clasp is a retainer reciprocated by the plate rather than by a second arm,
+ * which is what an acrylic case is normally built with.
+ *
+ * One clasp per side, on the tooth standing MESIAL to the most posterior space — the space
+ * further forward is carried by the base and gets none. Two exceptions: a space of four
+ * teeth or more that still has teeth behind it is held at both ends, and an anterior space
+ * has no mesial abutment at all, so its distal neighbour takes the clasp.
+ */
+function planAcrylicClasps(teeth, jaw, classification) {
+  const clasps = [];
+  const claimed = new Set();
+  const claim = (abutment) => {
+    if (!abutment || claimed.has(abutment.fdi)) return;
+    if (!teeth[abutment.fdi]?.isPresent) return;
+    claimed.add(abutment.fdi);
+    clasps.push({
+      fdi: abutment.fdi,
+      type: "acrylic",
+      placements: [
+        // The arm engages the corner AWAY from the space — the base already meets the tooth
+        // on the saddle side, so an arm there would sit on top of it. Same convention as the
+        // metal circlet and as the catalog's own circum macro.
+        {
+          componentId: "retainer-clasp",
+          surface: `${oppositeSurface(abutment.facingSurface)}_buccal`,
+        },
+        { componentId: DEFAULT_PLATE_ID, surface: null },
+      ],
+    });
+  };
+
+  for (const quadrantIds of quadrantsOf(jaw)) {
+    const side = sideOfToothId(quadrantIds[0]);
+    const span = posteriorMostSpanOnSide(classification.spans, side);
+    if (!span) continue;
+
+    // "distal" faces the span, so this abutment stands mesial to it — and vice versa.
+    const mesialAbutment = spanAbutmentOnSide(span, side, "distal");
+    const distalAbutment = spanAbutmentOnSide(span, side, "mesial");
+    claim(mesialAbutment || distalAbutment);
+    if (mesialAbutment && span.fdis.length >= ACRYLIC_BOTH_ENDS_MIN_SPAN) claim(distalAbutment);
+  }
+
+  return clasps;
+}
+
 /**
  * Every clasp the arch calls for, one retentive assembly per tooth. Each abutment is
  * claimed once — a terminal abutment beats an isolated molar beats a plain circlet — and
@@ -529,22 +608,29 @@ function planClasps(teeth, jaw, classification) {
  * `meshId` lets the caller pass the design-mode mesh the user already picked.
  */
 export function buildDesignProposal(teeth, { material = null, meshId = null } = {}) {
+  const isAcrylic = material === FULL_ACRYLIC_MATERIAL;
   const proposal = {
     material,
-    meshId: material === FULL_ACRYLIC_MATERIAL ? ACRYLIC_MESH_ID : meshId || ACRYLIC_MESH_ID,
+    meshId: isAcrylic ? ACRYLIC_MESH_ID : meshId || ACRYLIC_MESH_ID,
     jaws: {},
   };
-  const meshedTeeth = withPlannedMesh(teeth, proposal.meshId);
+  // The mesh projection exists for the metal path's bar surfaces; acrylic places no bars.
+  const meshedTeeth = isAcrylic ? teeth : withPlannedMesh(teeth, proposal.meshId);
   for (const jaw of Object.keys(TOOTH_ORDER)) {
     const classification = classifyArch(teeth, jaw);
     const connector = chooseMajorConnector(classification, teeth, { material });
-    const clasps = connector ? planClasps(meshedTeeth, jaw, classification) : [];
+    const clasps = !connector
+      ? []
+      : isAcrylic
+        ? planAcrylicClasps(teeth, jaw, classification)
+        : planClasps(meshedTeeth, jaw, classification);
     proposal.jaws[jaw] = {
       jaw,
       classification,
       connector,
-      // An arch with no class gets no design at all, so it gets no rests either.
-      rests: connector ? planRestSeats(teeth, classification, clasps) : [],
+      // An arch with no class gets no design at all, so it gets no rests either — and an
+      // acrylic case is clasps only, with nothing rigid to rest through.
+      rests: connector && !isAcrylic ? planRestSeats(teeth, classification, clasps) : [],
       clasps,
     };
   }

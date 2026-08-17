@@ -29,7 +29,7 @@ async function populateCaseName() {
     return;
   }
 
-  footerCaseName.textContent = `UID_${caseId}`;
+  footerCaseName.textContent = String(caseId);
   if (!user?.uuid) return;
 
   try {
@@ -46,7 +46,7 @@ async function populateCaseName() {
     });
     if (!response.ok) return;
     const detail = await response.json();
-    const label = detail?.case_id ? `UID_${caseId} : ${detail.case_id}` : `UID_${caseId}`;
+    const label = detail?.case_id ? `${caseId} : ${detail.case_id}` : String(caseId);
     footerCaseName.textContent = label;
   } catch (error) {
     console.warn("Failed to resolve viewer case label.", error);

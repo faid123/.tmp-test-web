@@ -4,14 +4,21 @@
  * The approval email's body (src/js/2D/caseNote.js): title, then the renders,
  * then the text. Order only holds while the images are inlined in the message.
  */
-import { caseEmailBody, emailImagesHtml } from "../src/js/2D/caseNote.js";
+import { caseEmailBody, emailImagesHtml, emailLinkHtml } from "../src/js/2D/caseNote.js";
 
 const PNG = "data:image/png;base64,iVBORw0KGgo=";
 const args = { recipient: { username: "shafik" }, link: "https://example.test/case" };
 
 beforeEach(() => {
   localStorage.clear();
+  document.body.innerHTML = "";
 });
+
+// The topbar the label is read off, rendered as "{id} : {name}".
+function topbar(text) {
+  document.body.innerHTML = '<span id="caseLabel"></span>';
+  document.getElementById("caseLabel").textContent = text;
+}
 
 test("the title leads the body", () => {
   const body = caseEmailBody(3008, args);
@@ -21,10 +28,56 @@ test("the title leads the body", () => {
 });
 
 test("the title names the case, and the text no longer repeats it", () => {
+  topbar("3008 : Swift upper");
   const body = caseEmailBody(3008, args);
 
-  expect(body).toMatch(/<h2[^>]*>3008<\/h2>/);
-  expect(body).not.toContain("Case: 3008");
+  expect(body).toMatch(/<h2[^>]*>Swift upper<\/h2>/);
+  expect(body).not.toContain("Case: Swift upper");
+});
+
+// The id identifies a row to the API; to the dentist receiving the mail it is
+// noise, and the case name already carries the lab's own code.
+describe("the numeric case id never leaves the building", () => {
+  test("stripped from the labelled topbar", () => {
+    topbar("3008 : Swift upper");
+    expect(caseEmailBody(3008, args)).not.toContain("3008");
+  });
+
+  test("an id-only topbar mails no id either", () => {
+    // The name lands async, so a send can race the label.
+    topbar("Case: 3008");
+    expect(caseEmailBody(3008, args)).not.toContain("3008");
+  });
+
+  test("a case genuinely named after another number keeps it", () => {
+    topbar("3008 : 2270 upper rebuild");
+    expect(caseEmailBody(3008, args)).toContain("2270 upper rebuild");
+  });
+});
+
+// Yahoo does not auto-linkify bare URLs, so the body has to carry the anchor.
+describe("the case link is a real anchor", () => {
+  test("the body links the URL rather than printing it", () => {
+    const body = caseEmailBody(3008, args);
+
+    expect(body).toContain(`<a href="${args.link}">${args.link}</a>`);
+  });
+
+  test("query separators survive into the href", () => {
+    // & is what an unescaped href would break on first.
+    const url = "https://example.test/v?id=ab&x=1";
+
+    expect(emailLinkHtml(url)).toBe(
+      '<a href="https://example.test/v?id=ab&amp;x=1">https://example.test/v?id=ab&amp;x=1</a>'
+    );
+  });
+
+  test("a non-http scheme is printed, never made clickable", () => {
+    const html = emailLinkHtml("javascript:alert(1)");
+
+    expect(html).not.toContain("<a");
+    expect(html).toContain("javascript:alert(1)"); // inert text, not an href
+  });
 });
 
 test("the renders sit between the title and the text", () => {
@@ -56,10 +109,10 @@ test("alt text can't open a tag or break out of the attribute", () => {
 
 test("a case name carrying markup is escaped inside the title", () => {
   // The label is read off the page's topbar, so it is whatever was rendered there.
-  document.body.innerHTML = '<span id="caseLabel"></span>';
-  document.getElementById("caseLabel").textContent = "Case: <b>Smith & Co</b>";
+  topbar("Case: <b>Smith & Co</b>");
   const body = caseEmailBody(1, args);
 
   expect(body).toContain("&lt;b&gt;Smith &amp; Co");
-  expect(body.match(/<(?!\/?h2|br)/g)).toBeNull();
+  // h2, br and the link anchor are the only tags the body may carry.
+  expect(body.match(/<(?!\/?h2|br|\/?a[ >])/g)).toBeNull();
 });

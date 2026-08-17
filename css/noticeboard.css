@@ -318,44 +318,6 @@
   color: var(--rose-800);
 }
 
-.noticeboard-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 28px;
-  border-top: 1px solid var(--line);
-  background: #fff;
-}
-
-.noticeboard-footer-btn {
-  background: #fff;
-  color: var(--rose-700);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 9px 22px;
-  font-weight: 700;
-  font-size: 0.78rem;
-  letter-spacing: 0.05em;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.noticeboard-footer-btn:hover {
-  background: var(--rose-050);
-  border-color: var(--rose-500);
-}
-
-.noticeboard-footer-btn-primary {
-  background: var(--rose-500);
-  color: #fff;
-  border-color: var(--rose-500);
-}
-
-.noticeboard-footer-btn-primary:hover {
-  background: var(--rose-600);
-  border-color: var(--rose-600);
-}
-
 /* ===== Instruction drawing editor ===== */
 .instruction-editor-modal {
   position: fixed;

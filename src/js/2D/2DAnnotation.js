@@ -12,6 +12,7 @@ import {
   COMPONENT_CATALOG,
   COMPONENT_TABS,
   getDefaultMeshIdForDesignMode,
+  isClaspComponent,
   isMeshComponent,
   isPlateComponentId,
   meshSelectionContextFromState,
@@ -724,8 +725,11 @@ export function closeRemoveComponentDialog() {
   }
 }
 
-function formatPlacementSurfaceForRemoveUi(surface) {
-  if (!surface) return "";
+// A tooth carries at most one clasp of each type (annotationPlacement enforces it), so the
+// corner tells the user nothing they need to pick the right row — unlike a rest seat, which
+// can legitimately sit on both sides of the same tooth.
+function formatPlacementSurfaceForRemoveUi(componentId, surface) {
+  if (!surface || isClaspComponent(componentId)) return "";
   return String(surface).replace(/_/g, " ");
 }
 
@@ -806,7 +810,7 @@ export async function openRemoveComponentPicker(toothId, jaw, anchorEvent) {
   visiblePlacements.forEach((entry) => {
     const def = COMPONENT_BY_ID.get(entry.componentId);
     const label = def?.label || entry.componentId;
-    const surf = formatPlacementSurfaceForRemoveUi(entry.surface);
+    const surf = formatPlacementSurfaceForRemoveUi(entry.componentId, entry.surface);
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "remove-component-item-btn";
@@ -928,7 +932,7 @@ async function fetchCaseOwner() {
     if (label) {
       label.textContent =
         caseIntId != null
-          ? `UID ${caseIntId} : ${detail.case_id}`
+          ? `${caseIntId} : ${detail.case_id}`
           : `Case: ${detail.case_id}`;
     }
   }

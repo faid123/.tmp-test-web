@@ -320,6 +320,84 @@ describe("clasps", () => {
   });
 });
 
+describe("acrylic clasps", () => {
+  const planFor = (jaw, missing) =>
+    buildDesignProposal(freshTeeth(missing), { material: FULL_ACRYLIC }).jaws[jaw];
+  const asRows = (clasps) =>
+    clasps.map((clasp) => [
+      clasp.fdi,
+      clasp.placements.map((p) => `${p.componentId}:${p.surface}`).join(" "),
+    ]);
+
+  // The arm engages the corner away from the space, so a tooth standing mesial to the space
+  // takes it on the mesial and one standing distal to it takes it on the distal.
+  const MESIAL_ARM = "retainer-clasp:mesial_buccal plate-prox:null";
+  const DISTAL_ARM = "retainer-clasp:distal_buccal plate-prox:null";
+
+  it("clasps only the most posterior space on a side", () => {
+    // 24 and 26 missing: the 26 space takes the clasp, on 25. The 24 space gets none.
+    expect(asRows(planFor("upper", ["24", "26"]).clasps)).toEqual([["25", MESIAL_ARM]]);
+  });
+
+  it("clasps each side independently", () => {
+    expect(asRows(planFor("upper", ["16", "26"]).clasps)).toEqual([
+      ["15", MESIAL_ARM],
+      ["25", MESIAL_ARM],
+    ]);
+  });
+
+  it("holds a long space at both ends when teeth still stand behind it", () => {
+    expect(asRows(planFor("upper", ["23", "24", "25", "26"]).clasps)).toEqual([
+      ["22", MESIAL_ARM],
+      ["27", DISTAL_ARM],
+    ]);
+  });
+
+  it("clasps a long free-end space at its mesial end only", () => {
+    // Nothing is left distal to hold: 28 is dropped by rule 2, so there is no far abutment.
+    expect(asRows(planFor("upper", ["25", "26", "27", "28"]).clasps)).toEqual([
+      ["24", MESIAL_ARM],
+    ]);
+  });
+
+  it("still clasps a short space that reaches the back of the arch", () => {
+    expect(asRows(planFor("lower", ["37", "38"]).clasps)).toEqual([["36", MESIAL_ARM]]);
+  });
+
+  it("gives an anterior space its distal neighbour, having no mesial one", () => {
+    expect(asRows(planFor("upper", CLASS_IV_UPPER).clasps)).toEqual([
+      ["13", DISTAL_ARM],
+      ["23", DISTAL_ARM],
+    ]);
+  });
+
+  it("plans no rests and no bars at all", () => {
+    for (const missing of [CLASS_I_LOWER, CLASS_II_UPPER, CLASS_III_UPPER, CLASS_IV_UPPER]) {
+      const jaw = missing === CLASS_I_LOWER ? "lower" : "upper";
+      const plan = planFor(jaw, missing);
+      expect(plan.rests).toEqual([]);
+      const ids = plan.clasps.flatMap((clasp) => clasp.placements.map((p) => p.componentId));
+      expect(ids.some((id) => id.startsWith("bar-"))).toBe(false);
+      expect(ids.some((id) => id === "reciprocating-clasp" || id === "ring-clasp")).toBe(false);
+    }
+  });
+
+  it("places the retainer and its plate, and nothing else, on the arch", () => {
+    const teeth = freshTeeth(["24", "26"]);
+    const proposal = buildDesignProposal(teeth, { material: FULL_ACRYLIC });
+    applyDesignProposal(teeth, proposal);
+
+    expect(rowsOn(teeth, "25")).toEqual(
+      expect.arrayContaining(["retainer-clasp:mesial_buccal", "plate-prox:null"])
+    );
+    for (const fdi of TOOTH_ORDER.upper) {
+      const ids = (teeth[fdi].componentPlacements || []).map((p) => p.componentId);
+      expect(ids).not.toContain("rest-seat");
+      expect(ids.some((id) => id.startsWith("bar-"))).toBe(false);
+    }
+  });
+});
+
 describe("applyDesignProposal", () => {
   /** Apply the proposal for `missing` and return the resulting teeth map. */
   function place(missing, options = {}) {

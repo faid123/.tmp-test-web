@@ -6,6 +6,7 @@
 // Send button — this dialog confirms with "Send", which mails the same people.
 
 import { confirmModal, toast } from "../shared/toast.js";
+import { getLoggedInUser } from "../shared/api.js";
 import { buildThreeDViewerUrl } from "../shared/caseLinks.js";
 import {
   buildAttachmentsSection,
@@ -19,6 +20,23 @@ import {
 // This dialog's subject line. The 2D approval sends the case on its own (see
 // sendCaseEmails' default); here the case is 3D-ready, and the mail says so.
 const subjectFor = (caseIntID) => `${resolveCaseLabel(caseIntID)} 3D Ready`;
+
+// Signs the message when the sender leaves From empty.
+const LAB_SIGNATURE = "TRI Dental";
+
+// One labelled text row appended to `parent`; returns the input to read later.
+function shareField(parent, labelText, placeholder, value) {
+  const row = el("label", "cn-share-field");
+  row.appendChild(el("span", null, labelText));
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "cn-share-field-input";
+  input.placeholder = placeholder;
+  input.value = value || "";
+  row.appendChild(input);
+  parent.appendChild(row);
+  return input;
+}
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -77,17 +95,15 @@ function buildSharePanel(caseIntID, shots, { caseName = "", ownerName = "" } = {
   }
   section.appendChild(thumbs);
 
-  // Who the message greets. Free text, because the person it goes to on WhatsApp
-  // is not necessarily one of the case's registered users.
-  const toRow = el("label", "cn-share-to");
-  toRow.appendChild(el("span", null, "To"));
-  const toInput = document.createElement("input");
-  toInput.type = "text";
-  toInput.className = "cn-share-to-input";
-  toInput.placeholder = "Dr name";
-  toInput.value = ownerName || "";
-  toRow.appendChild(toInput);
-  section.appendChild(toRow);
+  // Free text on both sides: neither the person it goes to on WhatsApp nor the
+  // one sending it is necessarily one of the case's registered users.
+  const toInput = shareField(section, "To", "Dr name", ownerName);
+  const fromInput = shareField(
+    section,
+    "From",
+    LAB_SIGNATURE,
+    getLoggedInUser()?.username || ""
+  );
 
   const formats = el("div", "cn-share-formats");
   for (const [value, label] of [["message", "Full message"], ["link", "Link only"]]) {
@@ -108,11 +124,12 @@ function buildSharePanel(caseIntID, shots, { caseName = "", ownerName = "" } = {
   const hint = el("p", "cn-share-hint");
   hint.setAttribute("aria-live", "polite");
 
-  const caseLabel = () => (caseName ? `UID ${caseIntID} : ${caseName}` : resolveCaseLabel(caseIntID));
+  const caseLabel = () => caseName || resolveCaseLabel(caseIntID);
 
   // The wording the lab sends by hand today.
   const messageLines = () => {
     const who = toInput.value.trim();
+    const from = fromInput.value.trim() || LAB_SIGNATURE;
     return [
       who ? `Hi Dr ${who},` : "Hi,",
       `Case: ${caseLabel()}`,
@@ -123,7 +140,7 @@ function buildSharePanel(caseIntID, shots, { caseName = "", ownerName = "" } = {
       "Ok to proceed?",
       "",
       "Thank you.",
-      "-TRI Dental",
+      `-${from}`,
     ];
   };
 

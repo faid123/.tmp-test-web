@@ -1059,7 +1059,7 @@ export async function buildReportHtml(
   const label =
     caseLabel ||
     (detail?.id != null && detail?.case_id
-      ? `UID ${detail.id} : ${detail.case_id}`
+      ? `${detail.id} : ${detail.case_id}`
       : caseIdStr ?? "Unknown");
 
   // The 2D preview exports at the editor's aspect ratio and letterboxes the design, so trim
@@ -1258,7 +1258,7 @@ export async function buildReportHtml(
 // "Generate Report" builds from live page state and opens a print window. The case-list
 // bulk download instead calls buildReportHtml directly and renders a PDF.
 async function generateReport() {
-  // Prefer the full "UID {id}:{name}" label rendered in the topbar so the
+  // Prefer the full "{id} : {name}" label rendered in the topbar so the
   // report matches what the user sees on screen.
   const topbarLabel = (document.getElementById("caseLabel")?.textContent || "")
     .replace(/^Case:\s*/i, "")
@@ -1397,16 +1397,6 @@ export function initNoticeboard() {
     ?.addEventListener("click", generateReport);
   document.getElementById("addInstructionBtn")?.addEventListener("click", addInstruction);
   document.getElementById("addViewcaptureBtn")?.addEventListener("click", addViewcapture);
-  document.getElementById("downloadJawProfileBtn")?.addEventListener("click", () => {
-    // Close the noticeboard so the download menu (STL / JPEG) isn't hidden
-    // behind it, then trigger the same flow as the footer button.
-    closeNoticeboard();
-    window.dispatchEvent(new CustomEvent("request-download-jaw-profile"));
-  });
-  document.getElementById("drawFromScratchModalBtn")?.addEventListener("click", () => {
-    closeNoticeboard();
-    document.getElementById("drawFromScratchBtn")?.click();
-  });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !getModal()?.classList.contains("is-hidden")) {
       closeNoticeboard();

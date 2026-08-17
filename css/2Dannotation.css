@@ -4593,7 +4593,8 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   font-size: 0.7rem;
 }
 
-.cn-share-to {
+/* One labelled row — To and From both use it. */
+.cn-share-field {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -4602,7 +4603,14 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   color: var(--muted, #528d7f);
 }
 
-.cn-share-to-input {
+/* Fixed label column, so the inputs start and end on the same edges. em-based
+   to hold at any font size. */
+.cn-share-field > span {
+  flex: 0 0 auto;
+  min-width: 3em;
+}
+
+.cn-share-field-input {
   flex: 1 1 auto;
   min-width: 0;
   max-width: 260px;
@@ -4614,7 +4622,7 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   color: var(--ink, #1a4d3f);
 }
 
-.cn-share-to-input:focus {
+.cn-share-field-input:focus {
   outline: none;
   border-color: var(--rose-500, #3bae95);
 }

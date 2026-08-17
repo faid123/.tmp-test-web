@@ -28,6 +28,7 @@ import {
   uploadWithProgress,
 } from "../shared/api.js";
 import { timestampToMs, toDayMidnight } from "../shared/timestamps.js";
+import { normalizeImageFile } from "../shared/imageFiles.js";
 import { recordCollaborators, reconcileCollaborators } from "../shared/userSuggest.js";
 import { confirmRemoveUserFromCase } from "../shared/caseRoles.js";
 
@@ -971,13 +972,10 @@ function populateTable(cases) {
       caseItem.expected_date ||
       caseItem.due_date ||
       computeDefaultDueDate(caseItem.creation_date);
-    const caseIntId = caseItem.id ?? caseItem.case_int_id;
+    // case_id IS the case name; the numeric UID stays on row.dataset.caseId for
+    // the click handlers rather than in the label.
     const caseName = caseItem.case_id ? truncateWords(caseItem.case_id, 10) : null;
-    const caseDisplayName = caseName
-      ? caseIntId != null
-        ? `UID_${caseIntId} : ${caseName}`
-        : caseName
-      : "N/A";
+    const caseDisplayName = caseName || "N/A";
 
     const pinned = pinnedSet.has(String(resolvedCaseId));
 
@@ -3597,6 +3595,8 @@ const UPLOAD_KINDS = {
     label: "reference images",
     rejected: "images only",
     thumbnails: true,
+    // Phones get the camera/gallery step first — see askSource.
+    sources: true,
     matches: (f) => /^image\//i.test(f.type || "") || IMAGE_FILE_RE.test(f.name),
     upload: (files) => uploadCaseReferenceImages(files),
   },
@@ -3614,6 +3614,9 @@ let uploadChooserEl = null;
 // The staged files awaiting the Upload button: { kind, files, urls }. `urls` are
 // object URLs for the image previews and have to be revoked when they go.
 let pendingUpload = null;
+// Which kind the camera/gallery step is picking for, so its two buttons and the
+// Back out of it know where they came from.
+let sourceStageKind = null;
 
 // Injected rather than written into the markup: this module drives both
 // case_list.html and admin_case_list.html, and one dialog can't drift.
@@ -3653,6 +3656,29 @@ function getUploadChooser() {
         </div>
       </div>
 
+      <div class="upload-stage hidden" data-stage="source">
+        <p class="upload-choice-sub">Where should the photos come from?</p>
+        <div class="upload-choice-grid">
+          <button type="button" class="upload-choice-card" data-upload-source="camera">
+            <i class="fa fa-camera" aria-hidden="true"></i>
+            <span class="upload-choice-title">Take a photo</span>
+            <span class="upload-choice-desc">
+              Opens the camera and attaches the shot you take.
+            </span>
+          </button>
+          <button type="button" class="upload-choice-card" data-upload-source="gallery">
+            <i class="fa-regular fa-images" aria-hidden="true"></i>
+            <span class="upload-choice-title">Choose from gallery</span>
+            <span class="upload-choice-desc">
+              Pick one or more photos already saved on this device.
+            </span>
+          </button>
+        </div>
+        <div class="modal-actions upload-choice-actions">
+          <button type="button" class="cm-btn cm-btn-secondary" data-upload-action="source-back">Back</button>
+        </div>
+      </div>
+
       <div class="upload-stage hidden" data-stage="preview">
         <p class="upload-choice-sub" id="uploadPreviewSub"></p>
         <ul class="upload-preview-list" id="uploadPreviewList"></ul>
@@ -3677,7 +3703,14 @@ function getUploadChooser() {
 
     const kind = e.target.closest("[data-upload-choice]")?.dataset.uploadChoice;
     if (kind) {
-      stagePickedFiles(kind);
+      beginPick(kind);
+      return;
+    }
+    const source = e.target.closest("[data-upload-source]")?.dataset.uploadSource;
+    if (source) {
+      stagePickedFiles(sourceStageKind, {
+        capture: source === "camera" ? "environment" : null,
+      });
       return;
     }
     const removeAt = e.target.closest("[data-remove-index]")?.dataset.removeIndex;
@@ -3691,7 +3724,11 @@ function getUploadChooser() {
         : e.target.closest("[data-upload-action]")?.dataset.uploadAction;
     if (action === "cancel") closeUploadChooser();
     else if (action === "back") showUploadStage("choose");
-    else if (action === "add-more") stagePickedFiles(pendingUpload?.kind);
+    // Backing out of the source step reached via "Add more" must not throw away
+    // what is already staged.
+    else if (action === "source-back")
+      showUploadStage(pendingUpload?.files.length ? "preview" : "choose");
+    else if (action === "add-more") beginPick(pendingUpload?.kind);
     else if (action === "upload") startPendingUpload();
   });
   document.addEventListener("keydown", (e) => {
@@ -3716,6 +3753,7 @@ function showUploadStage(stage) {
 function clearPendingUpload() {
   pendingUpload?.urls.forEach((url) => URL.revokeObjectURL(url));
   pendingUpload = null;
+  sourceStageKind = null;
 }
 
 function closeUploadChooser() {
@@ -3744,9 +3782,32 @@ function formatFileSize(bytes) {
   return kb < 1024 ? `${Math.round(kb)} KB` : `${(kb / 1024).toFixed(1)} MB`;
 }
 
+// Whether to offer "Take a photo" at all: `capture` is honoured on phones and
+// tablets and ignored on desktop, where both buttons would open the same file
+// dialog. Coarse pointer = touch is the primary input.
+function askSource() {
+  return window.matchMedia?.("(pointer: coarse)").matches === true;
+}
+
+// Entry point for every pick. Images on a touch device get the camera/gallery
+// step first: Chrome on Android 13+ routes an `image/*` input to the system photo
+// picker, which is gallery-only and never offers the camera, so `capture` has to
+// be set deliberately. (iOS Safari asks on its own, but the extra tap is the same
+// on both, and one path is one thing to keep working.)
+function beginPick(kind) {
+  const spec = UPLOAD_KINDS[kind];
+  if (!spec) return;
+  if (spec.sources && askSource()) {
+    sourceStageKind = kind;
+    showUploadStage("source");
+    return;
+  }
+  stagePickedFiles(kind);
+}
+
 // Open the picker for `kind` and stage what comes back for review. Nothing is
 // sent yet — the preview's Upload button is what commits.
-function stagePickedFiles(kind) {
+function stagePickedFiles(kind, { capture } = {}) {
   const spec = UPLOAD_KINDS[kind];
   if (!spec) return;
   pickFiles(spec.accept, (picked) => {
@@ -3771,7 +3832,7 @@ function stagePickedFiles(kind) {
     }
     renderUploadPreview();
     showUploadStage("preview");
-  });
+  }, { capture });
 }
 
 function removePendingFile(index) {
@@ -3967,12 +4028,16 @@ async function uploadCaseStlFiles(files) {
   }
 }
 
-// One-shot multi-select file picker, removed after the pick.
-function pickFiles(accept, onPick) {
+// One-shot multi-select file picker, removed after the pick. `capture` (mobile
+// only) forces the camera instead of the gallery; a capture is a single photo and
+// some Android builds ignore `capture` when `multiple` is also set, so it's one
+// or the other.
+function pickFiles(accept, onPick, { capture } = {}) {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = accept;
-  input.multiple = true;
+  if (capture) input.setAttribute("capture", capture);
+  else input.multiple = true;
   input.hidden = true;
   document.body.appendChild(input);
   input.addEventListener("change", () => {
@@ -3988,7 +4053,11 @@ function pickFiles(accept, onPick) {
 // images take everything after them.
 const REFERENCE_SLOT_START = 3;
 
-const IMAGE_FILE_RE = /\.(png|jpe?g|gif|bmp|webp)$/i;
+// Extension fallback for the Android providers that hand over a File with an
+// empty `type`. HEIC/HEIF are in the list deliberately: they are let through the
+// filter so the upload can explain why they can't be read, rather than silently
+// counting them as "skipped — images only".
+const IMAGE_FILE_RE = /\.(png|jpe?g|gif|bmp|webp|hei[cf])$/i;
 
 // `count` free slots at or above REFERENCE_SLOT_START, else null. A POST to an
 // occupied slot REPLACES it, so a failed lookup writes nothing rather than guess.
@@ -4014,19 +4083,11 @@ async function nextFreeThumbnailSlots(caseIntId, count) {
   return slots;
 }
 
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error || new Error("read failed"));
-    reader.readAsDataURL(file);
-  });
-}
-
 // Same as the create-case form: /referenceimages is the record, and the mirrored
 // thumbnail slot is what the carousel and the download fallback actually read.
-async function uploadReferenceImage(caseIntId, caseName, file, slot) {
-  const dataUrl = await readFileAsDataUrl(file);
+// `image` is already through normalizeImageFile — see uploadCaseReferenceImages.
+async function uploadReferenceImage(caseIntId, caseName, image, slot) {
+  const { dataUrl, name } = image;
   const auth = caseAuth(caseIntId);
 
   // case_id here is the case NAME — the referenceImages writer keys off the name
@@ -4036,7 +4097,7 @@ async function uploadReferenceImage(caseIntId, caseName, file, slot) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify([
       auth,
-      { case_id: caseName, image_name: file.name, image_data: dataUrl },
+      { case_id: caseName, image_name: name, image_data: dataUrl },
     ]),
   });
   logApi(refRes, "POST /referenceimages");
@@ -4070,20 +4131,36 @@ async function uploadCaseReferenceImages(files) {
     return;
   }
 
-  const images = files.slice();
-  if (!images.length) return;
+  const picked = files.slice();
+  if (!picked.length) return;
 
   const btn = document.getElementById("upload3dFileBtn");
   if (btn) btn.disabled = true;
   let done = 0;
+  let images = [];
   try {
+    // Re-encode BEFORE any network call: a camera capture is multi-MB, and it
+    // travels twice (the row, then the thumbnail slot). Anything that cannot be
+    // decoded at all is dropped here, with its own reason, rather than uploaded
+    // as bytes the carousel and the desktop app can't open.
+    if (picked.length > 1) toast.info(`Preparing ${picked.length} images…`);
+    for (const file of picked) {
+      try {
+        images.push(await normalizeImageFile(file));
+      } catch (err) {
+        console.warn("[refImages] skipped", file?.name, err);
+        toast.error(err.message);
+      }
+    }
+    if (!images.length) return;
+
     const slots = await nextFreeThumbnailSlots(caseIntId, images.length);
     if (!slots) {
       toast.error("Could not read the case's existing images. Please try again.");
       return;
     }
-    // Sequential on purpose: each image is a multi-MB base64 POST, and the
-    // backend burst-throttles (see the enrichment breaker).
+    // Sequential on purpose: each image is a base64 POST, and the backend
+    // burst-throttles (see the enrichment breaker).
     for (let i = 0; i < images.length; i++) {
       toast.info(`Uploading ${images[i].name} (${i + 1} of ${images.length})…`);
       await uploadReferenceImage(caseIntId, caseName, images[i], slots[i]);

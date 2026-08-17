@@ -372,16 +372,6 @@ export const PAGE_TOURS = {
       optional: true,
       topic: "noticeboard",
     },
-    {
-      title: "The board's own actions",
-      text: "Along the bottom: DOWNLOAD JAW PROFILE, the same download you saw in the footer, and DRAW FROM SCRATCH to start the design over. Closing the board brings you back to the arches.",
-      selector: "#downloadJawProfileBtn",
-      reveal: "#openNoticeboardBtn",
-      dismiss: "#noticeboardCloseBtn",
-      optional: true,
-      topic: "noticeboard",
-    },
-
     // ---- inside the Case Note -------------------------------------------
     // Same reveal/dismiss pairing as the Noticeboard, but re-clicking the reveal
     // here would rebuild the form and discard anything typed.

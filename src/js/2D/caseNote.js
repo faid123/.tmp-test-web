@@ -253,12 +253,27 @@ export function roleLabel(role) {
 
 // Joins email lines for the wire: the mailer renders the message as HTML, so breaks MUST
 // be <br> and text must be escaped first. Every custom email goes through here.
+// A { html } line is already markup (see emailLinkHtml) and passes through as-is.
 export function emailBodyHtml(lines) {
   return lines
     .map((line) =>
-      String(line).replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]))
+      line?.html != null
+        ? line.html
+        : String(line).replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]))
     )
     .join("<br>\n");
+}
+
+// A real anchor, because Yahoo does not auto-linkify bare URLs in message text.
+// Anything not http(s) is emitted as plain text rather than a clickable scheme.
+export function emailLinkHtml(url) {
+  const href = String(url ?? "").trim();
+  if (!/^https?:\/\//i.test(href)) return emailBodyHtml([href]);
+  const safe = href.replace(
+    /[&<>"]/g,
+    (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch])
+  );
+  return `<a href="${safe}">${safe}</a>`;
 }
 
 // /sendCustomEmail takes a FLAT body (no [{auth},{payload}], no uuid) and ONE address, so
@@ -360,13 +375,17 @@ export async function sendCaseApprovalAlerts(
 // deliberately independent of Approve/Cancel, so cancelling can't unsend mail.
 // ---------------------------------------------------------------------------
 
-// The topbar label ("Case: UID 12 : name") is what the user sees on screen, so
-// the email should carry the same string. Falls back to the numeric id.
+// The case NAME alone for outgoing mail and messages. The topbar renders
+// "12 : name", but the id is a transfer key the recipient can't use.
 export function resolveCaseLabel(caseIntID) {
   const topbarLabel = (document.getElementById("caseLabel")?.textContent || "")
     .replace(/^Case:\s*/i, "")
     .trim();
-  return topbarLabel || String(caseIntID ?? "Unknown");
+  // Anchored to the known id, so a case truly named "2270 : x" survives.
+  const name = /^\d+$/.test(String(caseIntID ?? ""))
+    ? topbarLabel.replace(new RegExp(`^${caseIntID}(\\s*:\\s*|$)`), "")
+    : topbarLabel;
+  return name || "Unknown";
 }
 
 function el(tag, className, text) {
@@ -707,7 +726,7 @@ export function caseEmailBody(caseIntID, { recipient, link, images } = {}) {
   if (recipient?.username) lines.push(`Hi ${recipient.username}`, "");
   lines.push(
     "Here is the:",
-    `${link}`,
+    { html: emailLinkHtml(link) },
     "",
     "Please confirm if it is ok to go on?",
     "",

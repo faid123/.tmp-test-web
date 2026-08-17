@@ -5,6 +5,7 @@ import { logApi } from "../shared/apiLog.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 import { attachUserSuggest, initialsFor } from "../shared/userSuggest.js";
 import { confirmRemoveUserFromCase } from "../shared/caseRoles.js";
+import { normalizeImageFile } from "../shared/imageFiles.js";
 
 // Resolved against the app root (everything before "/src/") so it loads from
 // both src/pages/ and the deeper src/pages/admin/, where a fixed path would not.
@@ -440,7 +441,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Insert ref image wrapper synchronously (with File attached) so Start-click
   // immediately after drop still sees it; fill the preview when FileReader finishes.
   const addRefImageFromFile = (file) => {
-    if (!file || !file.type.startsWith("image/")) return;
+    // Extension is checked too, not just the MIME type: some Android providers
+    // hand over a picked photo with `type` empty, and dropping it silently is
+    // indistinguishable from the picker doing nothing at all.
+    if (!file) return;
+    if (!file.type.startsWith("image/") && !/\.(png|jpe?g|gif|bmp|webp|hei[cf])$/i.test(file.name || "")) return;
 
     const wrapper = document.createElement("div");
     wrapper.className = "uploaded-model";
@@ -1166,57 +1171,58 @@ async function uploadReferenceImage(
   }
 
   const file = wrapperEl.file;
-  const reader = new FileReader();
 
-  return new Promise((resolve, reject) => {
-    reader.onload = async function (e) {
-      try {
-        const base64data = e.target.result;
+  // Re-encoded first: a phone capture is multi-MB, and it is posted twice below.
+  // A file that can't be decoded (HEIC on Android) is reported and skipped —
+  // never fatal, the case itself is already created by this point.
+  let image;
+  try {
+    image = await normalizeImageFile(file);
+  } catch (err) {
+    console.warn(`⚠️ Reference image skipped: ${file.name}`, err);
+    toast.error(err.message);
+    return;
+  }
+  const base64data = image.dataUrl;
 
-        const payload = [
-          {
-            machine_id,
-            uuid,
-            caseIntID,
-          },
-          {
-            case_id,
-            image_name: file.name || `ref_image_${index}.png`,
-            image_data: base64data,
-          },
-        ];
+  try {
+    const payload = [
+      {
+        machine_id,
+        uuid,
+        caseIntID,
+      },
+      {
+        case_id,
+        image_name: image.name || `ref_image_${index}.jpg`,
+        image_data: base64data,
+      },
+    ];
 
-        const res = await fetch(
-          `${API_BASE}/referenceimages`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          }
-        );
-        logApi(res, 'POST /referenceimages');
-        if (!res.ok) {
-          console.error(
-            `❌ Failed to upload reference image ${file.name}`,
-            res.status
-          );
-        } else {
-          console.log(`✅ Uploaded reference image: ${file.name}`);
-        }
-
-        // Mirrored into a thumbnail slot so it joins the detail carousel. Slots
-        // 0-2 are reserved, and `index` is 1-based, so ref image 1 lands on slot 3.
-        await uploadCaseThumbnail(machine_id, uuid, caseIntID, 2 + index, base64data);
-
-        resolve();
-      } catch (err) {
-        console.error(`❌ Error uploading reference image ${file.name}:`, err);
-        resolve();
+    const res = await fetch(
+      `${API_BASE}/referenceimages`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       }
-    };
+    );
+    logApi(res, 'POST /referenceimages');
+    if (!res.ok) {
+      console.error(
+        `❌ Failed to upload reference image ${image.name}`,
+        res.status
+      );
+    } else {
+      console.log(`✅ Uploaded reference image: ${image.name}`);
+    }
 
-    reader.readAsDataURL(file); // ✅ 读取为 Base64
-  });
+    // Mirrored into a thumbnail slot so it joins the detail carousel. Slots
+    // 0-2 are reserved, and `index` is 1-based, so ref image 1 lands on slot 3.
+    await uploadCaseThumbnail(machine_id, uuid, caseIntID, 2 + index, base64data);
+  } catch (err) {
+    console.error(`❌ Error uploading reference image ${image.name}:`, err);
+  }
 }
 
 // The case is brand new, so there is no row to merge with. Non-fatal: this must

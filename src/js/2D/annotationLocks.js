@@ -1005,10 +1005,10 @@ function getCaseLabelTextForExport() {
     return labelText.replace(/^Case:\s*/i, "");
   }
   if (state.caseIntID != null && state.caseName) {
-    return `UID ${state.caseIntID} : ${state.caseName}`;
+    return `${state.caseIntID} : ${state.caseName}`;
   }
   if (state.caseName) return state.caseName;
-  if (state.caseIntID != null) return `UID ${state.caseIntID}`;
+  if (state.caseIntID != null) return String(state.caseIntID);
   return "";
 }
 
