@@ -4116,6 +4116,12 @@ function removeViewerLoadingScreen() {
       box-shadow: 0 0 0 2px #38bdf8;
   }
 
+  /* Same "on" ring as the 3D/case toggle above, while the Objects panel this
+     button opens is showing. */
+  .smart-btn.objects-toggle.active {
+      box-shadow: 0 0 0 2px #38bdf8;
+  }
+
   .smart-btn.upload-slots img {
       filter: brightness(0) invert(1);
   }
@@ -5315,8 +5321,11 @@ function removeViewerLoadingScreen() {
   // exactly STLMeshLoader.mergeVertices' order (both weld at 1e-4, first-seen),
   // so this is a straight index lookup with nothing to match.
   //
-  // Nothing runs on landing — the survey costs a download plus ~10s in the DLL,
-  // so it waits for the slot's undercut button.
+  // Matches preview3D.js: the survey rides with the slot's own mesh load
+  // (ensureSlotUndercutGeometry, called right after addDesignSlotMesh) rather
+  // than waiting for the undercut button — the button only toggles between
+  // geometry variants that are already sitting in mesh.userData, same as the
+  // preview's heatmap-is-baked-in-before-display approach.
 
   const UNDERCUT_TAN = [208 / 255, 190 / 255, 141 / 255];
 
@@ -5362,8 +5371,9 @@ function removeViewerLoadingScreen() {
   // bar eases to the end of its phase and waits there rather than claiming done.
   const SLOT_SURVEY_EXPECTED_MS = 15000;
 
-  // The viewer's loading screen, driven across the two phases a slot survey has: downloading
-  // the upload (real bytes, reported by ApiClient) and the DLL call (no server-side progress).
+  // The viewer's loading screen, used only to cover a click that lands before the
+  // slot's eager survey (see ensureSlotUndercutGeometry) has resolved — the DLL
+  // call itself reports no server-side progress, so this eases across it on a timer.
   function beginSlotSurveyProgress(slotLabel) {
     const ownsScreen = !document.getElementById("viewer-loading-screen");
     if (ownsScreen) createViewerLoadingScreen();
@@ -5396,40 +5406,6 @@ function removeViewerLoadingScreen() {
     paint(0.02, `Reading ${slotLabel}…`);
 
     return {
-      // ApiClient writes bytes into window.viewerLoadingEls.progressBar, so swap in
-      // a stand-in. EVERY response must be wrapped or its readout leaks through.
-      trackDownload(from, to, label) {
-        if (label) paint(from, label);
-        const previous = window.viewerLoadingEls;
-        let max = 1;
-        let value = 0;
-        window.viewerLoadingEls = {
-          progressBar: {
-            style: {},
-            get max() {
-              return max;
-            },
-            set max(bytes) {
-              max = Number(bytes) || 1;
-            },
-            get value() {
-              return value;
-            },
-            set value(bytes) {
-              value = Number(bytes) || 0;
-              // Real bytes have taken over from any running estimate.
-              stopCreep();
-              paint(from + (to - from) * Math.min(value / max, 1));
-            },
-          },
-          // ApiClient also writes a percentage and a speed readout; ours are already painted.
-          percentage: { textContent: "" },
-          displayBox: { textContent: "" },
-        };
-        return () => {
-          window.viewerLoadingEls = previous;
-        };
-      },
       // The DLL answers in one go, so ease across its phase on a timer instead.
       startSurveyPhase(from, to, label) {
         paint(from, label);
@@ -5450,13 +5426,18 @@ function removeViewerLoadingScreen() {
     };
   }
 
-  // Survey this slot's own STL. Returns one undercut value per welded vertex, or null.
-  async function fetchSlotSurveyValues(slot, jawKey, progress) {
+  // Survey this slot's own STL (already in hand from the mesh load — never
+  // re-fetched). Returns one undercut value per welded vertex, or null.
+  async function computeSlotSurveyValues(slot, jawKey, stlDataBase64, progress) {
     const dir = slotSurveyDirection(jawKey);
     if (!dir) {
       console.warn(
         `[viewer3D] slot ${slot}: the case has no ${jawKey} insertion angle, so there is nothing to survey`
       );
+      return null;
+    }
+    if (!stlDataBase64) {
+      console.warn(`[viewer3D] slot ${slot}: no upload bytes to survey`);
       return null;
     }
 
@@ -5465,30 +5446,11 @@ function removeViewerLoadingScreen() {
       uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
       caseIntID: paramValue,
     };
-    // Re-fetched rather than retained: a slot scan is tens of MB, and holding all four for a
-    // toggle that may never be pressed is what pushes a phone's renderer over its memory limit.
-    const restoreProgress = progress?.trackDownload?.(0.05, 0.55, "Reading the uploaded scan…");
-    let slotResponse;
-    try {
-      slotResponse = await apiClient.post(
-        "/stl/slot/get",
-        [authPayload, { slotNumber: slot }],
-        false,
-        `Slot ${slot} scan`
-      );
-    } finally {
-      restoreProgress?.();
-    }
-    const item = Array.isArray(slotResponse) ? slotResponse[0] : slotResponse;
-    if (!item?.data) {
-      console.warn(`[viewer3D] slot ${slot}: could not re-read the upload for surveying`);
-      return null;
-    }
 
     const startedAt = performance.now();
-    // Paced estimate while the DLL works, handed over to real bytes when it answers.
-    progress?.startSurveyPhase?.(0.55, 0.85, "Surveying undercut…");
-    const restoreSurveyProgress = progress?.trackDownload?.(0.85, 0.98);
+    // Paced estimate while the DLL works — there is no download phase any more,
+    // the bytes rode in with the slot's own mesh load.
+    progress?.startSurveyPhase?.(0.1, 0.95, "Surveying undercut…");
     let response;
     try {
       response = await apiClient.post(
@@ -5500,7 +5462,7 @@ function removeViewerLoadingScreen() {
             type: jawKey === "upper" ? 1 : 2,
             // The mesh to survey travels with the request, so this is the upload's own
             // undercut rather than the case scan's.
-            stl_data: item.data,
+            stl_data: stlDataBase64,
             dir,
             printFullSurveying: true,
             returnSurveyingBase64: true,
@@ -5510,7 +5472,7 @@ function removeViewerLoadingScreen() {
         `Slot ${slot} undercut`
       );
     } finally {
-      restoreSurveyProgress?.();
+      progress?.set?.(0.95);
     }
     const base64 = response?.surveying_values_base64;
     if (!base64) {
@@ -5524,6 +5486,33 @@ function removeViewerLoadingScreen() {
       )}ms`
     );
     return values;
+  }
+
+  // Kicks off this slot's undercut survey as soon as its mesh lands (initial
+  // load or a re-upload) instead of waiting for the undercut button — mirrors
+  // preview3D.js, where the heatmap rides with the mesh fetch. Fire-and-forget:
+  // callers don't await this, so a slow slot's survey never holds up the
+  // others' downloads. Idempotent — a second call while one is in flight
+  // (or already resolved) reuses the same promise rather than re-surveying.
+  function ensureSlotUndercutGeometry(slot, stlDataBase64) {
+    if (METAL_RPD_SLOTS.has(slot)) return null; // metal-RPD slots carry no undercut
+    const mesh = designSlotMeshes.find((m) => m.userData?.designSlot === slot);
+    if (!mesh) return null;
+    if (mesh.userData.undercutSurveyPromise) return mesh.userData.undercutSurveyPromise;
+
+    const jawKey = mesh.userData?.jaw_type === "lower" ? "lower" : "upper";
+    const promise = computeSlotSurveyValues(slot, jawKey, stlDataBase64)
+      .then((values) => {
+        mesh.userData.undercutGeometry = values ? buildSlotUndercutGeometry(mesh, values) : null;
+        return mesh.userData.undercutGeometry;
+      })
+      .catch((error) => {
+        console.warn(`[viewer3D] slot ${slot}: eager undercut survey failed`, error);
+        mesh.userData.undercutGeometry = null;
+        return null;
+      });
+    mesh.userData.undercutSurveyPromise = promise;
+    return promise;
   }
 
   // The slot's undercut geometry variant: its own mesh, coloured by its own survey.
@@ -5560,8 +5549,12 @@ function removeViewerLoadingScreen() {
     );
   }
 
-  // Async because the first switch surveys the upload; the result is kept for the
-  // session. Returns the resulting state, so an unsurveyable slot falls back.
+  // The survey itself already ran when this slot's mesh landed
+  // (ensureSlotUndercutGeometry) — this only ever toggles between the two
+  // geometry variants that are already sitting in mesh.userData, so pressing
+  // the button never starts a network call of its own. Still async because a
+  // fast click can land before that eager survey has resolved, in which case
+  // this just waits on it rather than firing a second one.
   async function setDesignSlotUndercut(slot, enabled) {
     const mesh = designSlotMeshes.find((m) => m.userData?.designSlot === slot);
     if (!mesh) return false;
@@ -5574,17 +5567,13 @@ function removeViewerLoadingScreen() {
       return false;
     }
 
-    if (!mesh.userData.undercutGeometry) {
-      const jawKey = mesh.userData?.jaw_type === "lower" ? "lower" : "upper";
+    if (mesh.userData.undercutGeometry === undefined && mesh.userData.undercutSurveyPromise) {
       const progress = beginSlotSurveyProgress(
         `Slot ${slot}: ${EXTRA_STL_SLOT_NAMES[slot] || "3D file"}`
       );
+      progress.set(0.5, "Finishing undercut survey…");
       try {
-        const values = await fetchSlotSurveyValues(slot, jawKey, progress);
-        progress.set(0.97, "Applying undercut…");
-        mesh.userData.undercutGeometry = values
-          ? buildSlotUndercutGeometry(mesh, values)
-          : null;
+        await mesh.userData.undercutSurveyPromise;
         progress.set(1, "Done");
       } finally {
         progress.end();
@@ -5630,8 +5619,9 @@ function removeViewerLoadingScreen() {
       label: `Slot ${slot}: ${EXTRA_STL_SLOT_NAMES[slot]}`,
       iconPath: `${basePath}/assets/${EXTRA_STL_SLOT_ICONS[slot]}`,
       mesh: designSlotMeshes.find((m) => m.userData?.designSlot === slot) || null,
-      // Only the jaw slots can borrow a jaw's heatmap — the metal-RPD slots are a
-      // different mesh. Undercut starts off; the first press loads the case assets.
+      // Only the jaw slots get their own survey — the metal-RPD slots are a
+      // different mesh with no undercut data. Undercut display starts off, but
+      // the survey itself already ran when the mesh loaded (ensureSlotUndercutGeometry).
       supportsUndercut: !METAL_RPD_SLOTS.has(slot),
       getUndercut: () => isDesignSlotUndercutOn(slot),
       setUndercut: (enabled) => setDesignSlotUndercut(slot, enabled),
@@ -5805,6 +5795,8 @@ function removeViewerLoadingScreen() {
       // Parsing blocks the main thread, so let the tile paint "Preparing…" first.
       await new Promise((resolve) => requestAnimationFrame(resolve));
       addDesignSlotMesh(slot, file.name, atob(base64));
+      // Same as the initial load: survey rides with the mesh, not the button.
+      ensureSlotUndercutGeometry(slot, base64);
       activateDesignView();
       statusEl.textContent = `${file.name} uploaded.`;
     } catch (error) {
@@ -6318,6 +6310,9 @@ function removeViewerLoadingScreen() {
           await new Promise((resolve) => requestAnimationFrame(resolve));
 
           addDesignSlotMesh(slot, slotItem.filename, atob(slotItem.data));
+          // Fire the undercut survey now, alongside the mesh — not gated behind
+          // the undercut button (see ensureSlotUndercutGeometry).
+          ensureSlotUndercutGeometry(slot, slotItem.data);
 
           console.log(`✅ Loaded STL from slot ${slot}`);
           anyLoaded = true;
@@ -6566,15 +6561,45 @@ function removeViewerLoadingScreen() {
   // Instantiate the OFFLoader
   // Load the OFF file
 
+  // ---- Viewer background theme (dark/light canvas) ------------------------
+  // Toggled from the footer (viewerShell.js's footerThemeBtn) and persisted so
+  // it "sticks" across reloads. Light is the default/current look: an opaque
+  // white clear colour, at a cost in silhouette contrast (tan crowns measure
+  // 2.6:1 on white vs 5.6:1 on slate). Dark clears to fully transparent
+  // instead of a second hardcoded colour, so #container3D's own dark radial
+  // gradient (already authored in style.css, normally hidden behind the
+  // opaque canvas) shows through unchanged.
+  const VIEWER_THEME_STORAGE_KEY = "smartrpd_viewer_theme";
+
+  function getStoredViewerBackgroundTheme() {
+    try {
+      return localStorage.getItem(VIEWER_THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
+    } catch {
+      return "light";
+    }
+  }
+
+  function applyViewerBackgroundTheme(theme) {
+    try {
+      if (theme === "dark") renderer.setClearColor(0x000000, 0);
+      else renderer.setClearColor(0xffffff, 1);
+    } catch {
+      // The renderer doesn't exist yet — a stray call during the earliest page load.
+    }
+  }
+
+  // The footer button writes localStorage itself (so the next load starts in
+  // the same theme via getStoredViewerBackgroundTheme above) and calls this to
+  // apply the change immediately, without a reload.
+  window.setViewerBackgroundTheme = applyViewerBackgroundTheme;
+
   window.finished = true; // window property (declared at top) — a bare `finished` only resolves through it
   // antialias on: fissures are sub-pixel at normal zoom and alias into noise.
   // Do NOT add setPixelRatio — resizeViewerStage() calls setSize(w, h, false), so
   // the canvas has no CSS size and is laid out at its INTRINSIC size; a ratio of
   // 2 then doubles the stage and pushes the jaw off-screen.
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-  // White by choice, at a cost in silhouette contrast (tan crowns measure 2.6:1 on
-  // white vs 5.6:1 on slate). Keep #container3D's background-color in step.
-  renderer.setClearColor(0xffffff, 1);
+  applyViewerBackgroundTheme(getStoredViewerBackgroundTheme());
   resizeViewerStage(renderer);
 
   // Add the renderer to the DOM
@@ -6737,6 +6762,38 @@ function removeViewerLoadingScreen() {
     return target?.clone?.() || null;
   });
   createPresetViewControls();
+
+  // Yellow "Objects" toggle, back in the black toolbar alongside reset — a
+  // second, always-on-screen path to the same Show/Hide panel the persistent
+  // top-left eye icon opens (newControls.js's #component-panel-toggle), at
+  // every screen size including desktop, not just mobile/tablet. A fresh
+  // button rather than a relocated one: the old footer twin this used to be
+  // is gone, and this one only ever needs to live in the toolbar.
+  const objectsToolbarBtn = document.createElement("button");
+  objectsToolbarBtn.type = "button";
+  objectsToolbarBtn.id = "toolbar-objects-button";
+  objectsToolbarBtn.className = "smart-btn objects-toggle";
+  objectsToolbarBtn.style.order = "30"; // the slot lock-rotation-button used to hold
+  objectsToolbarBtn.setAttribute("aria-label", "Objects");
+  objectsToolbarBtn.title = "Objects";
+  objectsToolbarBtn.setAttribute("aria-pressed", "false");
+  objectsToolbarBtn.innerHTML = `<img src="${basePath}/assets/Icon_objects3.png" alt="Objects" style="width:30px;height:30px;object-fit:contain;display:block;margin:auto;pointer-events:none;">`;
+  objectsToolbarBtn.addEventListener("click", () => {
+    if (window.viewerPanelManager) {
+      window.viewerPanelManager.toggle("objects-panel");
+      return;
+    }
+    // Fallback for a click landing before the panel has registered itself:
+    // the top-left toggle drives the same panel once it exists.
+    document.getElementById("component-panel-toggle")?.click();
+  });
+  window.addEventListener("viewerobjectspanelchange", (event) => {
+    const open = Boolean(event.detail?.open);
+    objectsToolbarBtn.classList.toggle("active", open);
+    objectsToolbarBtn.setAttribute("aria-pressed", String(open));
+    objectsToolbarBtn.title = open ? "Close objects panel" : "Objects";
+  });
+  getViewerNavToolbar().appendChild(objectsToolbarBtn);
   //console.log(camera)
 
   // Start the 3D rendering

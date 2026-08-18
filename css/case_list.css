@@ -766,6 +766,12 @@ button {
 
 .cm-row {
   cursor: pointer;
+  /* Same fix as .notification-item in notification.css: without this, two
+     quick taps on a row (a plausible re-tap while its detail fetch is in
+     flight) read as a double-tap and iOS Safari zooms into it, same as
+     tapping any other plain element twice. `manipulation` keeps the
+     single-tap select working and just drops that gesture. */
+  touch-action: manipulation;
 }
 .cm-row.is-active:hover { background: #e6f5ef; }
 
@@ -842,7 +848,11 @@ button {
 
 .cm-status-inline {
   font: inherit;
-  font-size: 13px;
+  /* Below 16px, focusing this <select> (openStatusEditor calls .focus() on tap
+     — caseManagement.js) makes iOS Safari zoom the whole page in to make the
+     text legible, and it doesn't zoom back out on its own. 16px is the
+     documented threshold that keeps that from firing. */
+  font-size: 16px;
   color: var(--ink);
   background: var(--panel);
   border: 1px solid var(--primary);
@@ -2027,7 +2037,10 @@ button {
 #renameCaseModal .modal-input {
   width: 100%;
   padding: 11px 14px;
-  font-size: 14px;
+  /* Same 16px floor as .cm-status-inline above — this gets .focus()ed as soon
+     as the rename modal opens (caseManagement.js), and a smaller size here
+     triggers the same iOS zoom-on-focus. */
+  font-size: 16px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel);

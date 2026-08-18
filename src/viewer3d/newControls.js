@@ -16,12 +16,18 @@ style.textContent = `
     width: 56px;
     height: 56px;
     padding: 0;
-    border: 0;
-    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 14px;
+    /* A visible chip, not just a bare white-on-transparent icon — the icon is
+       white (inverted) so it needs its own backing to read against a light
+       canvas, same glass as the panel it opens. */
+    background: rgba(56, 58, 64, 0.55);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
     color: #ffffff;
     font: 700 13px Arial, sans-serif;
     cursor: pointer;
-    box-shadow: none;
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.34);
     pointer-events: auto;
     transition: opacity 0.15s, filter 0.15s, transform 0.15s;
   }
@@ -40,7 +46,7 @@ style.textContent = `
     position: absolute;
     left: 16px;
     top: 16px;
-    transform: none;
+    transform-origin: top left;
     z-index: 1002;
     display: flex;
     flex-direction: column;
@@ -57,23 +63,39 @@ style.textContent = `
     box-shadow: 0 16px 38px rgba(0, 0, 0, 0.34);
     font-family: "Montserrat", Arial, sans-serif;
     pointer-events: auto;
+    opacity: 1;
+    transform: scaleY(1);
+    transition: opacity 0.16s ease, transform 0.16s ease;
   }
 
+  /* Closes by collapsing upward into the toggle button (anchored at the
+     panel's own top-left corner via transform-origin above) at every screen
+     size — same behaviour on phone/tablet as desktop now, replacing the old
+     "slide the whole panel off to the right" tablet/phone treatment. */
   .component-panel.hidden {
-    display: none;
+    opacity: 0;
+    transform: scaleY(0);
+    pointer-events: none;
   }
 
-  /* Dims the canvas behind the panel once it becomes a full-height sidebar
-     (see the max-width: 1024px block at the bottom) — desktop never shows it. */
+  /* Invisible full-screen click-catcher behind the open panel, at every screen
+     size — lets a tap/click anywhere else on the canvas close the popup, the
+     way a dropdown normally would. No dimming: the panel is a small top-left
+     popup now, not a sidebar, so darkening the whole canvas behind it would
+     read as its own (wrong) UI state. */
   .component-panel-backdrop {
     display: none;
     position: absolute;
     inset: 0;
     z-index: 1001;
-    background: rgba(0, 0, 0, 0.45);
+    background: transparent;
     border: 0;
     padding: 0;
-    cursor: pointer;
+    cursor: default;
+  }
+
+  .component-panel-backdrop:not(.hidden) {
+    display: block;
   }
 
   /* "Show / Hide" bar: a chevron that folds the list away, plus the close X. */
@@ -142,6 +164,25 @@ style.textContent = `
 
   .component-panel-close:hover {
     background: rgba(255, 255, 255, 0.24);
+  }
+
+  /* The rotation-lock button (resetButton.js) is moved into this header — see
+     createComponentPanel. Its own rules size it for the black toolbar
+     (var(--toolbar-btn-size), 46-58px); this overrides that down to match the
+     header's other controls. The extra class in the selector outweighs
+     resetButton.js's bare #lock-rotation-button on specificity, so this wins
+     regardless of which <style> tag landed in <head> first. */
+  .component-panel-header #lock-rotation-button {
+    order: 0;
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+  }
+
+  .component-panel-header #lock-icon {
+    width: 15px;
+    height: 15px;
+    margin-bottom: 0;
   }
 
   .component-row.unavailable {
@@ -486,7 +527,6 @@ style.textContent = `
     .component-panel {
       left: 16px;
       top: 16px;
-      transform: none;
       width: min(260px, calc(100vw - 280px));
       max-height: min(260px, calc(100% - 32px));
     }
@@ -497,7 +537,6 @@ style.textContent = `
       left: 16px;
       top: 16px;
       bottom: auto;
-      transform: none;
       max-width: calc(100vw - 20px);
     }
 
@@ -538,45 +577,6 @@ style.textContent = `
     }
   }
 
-  /* Objects panel as a full-height right sidebar on tablet/phone, opened by the
-     footer hamburger instead of the floating toggle (hidden here). Both drive
-     the same viewerPanelManager entry, so either trigger works.
-     !important beats this file's narrower rules and style.css's older top-sheet
-     ones without depending on load order. */
-  @media (max-width: 1024px) {
-    .component-panel-toggle {
-      display: none !important;
-    }
-
-    .component-panel {
-      display: flex !important;
-      top: 0 !important;
-      left: auto !important;
-      right: 0 !important;
-      bottom: 0 !important;
-      /* ~60% of the screen rather than the near-full width min(300px, 84vw)
-         gave; the floor/ceiling only cover the extremes. */
-      width: clamp(220px, 60vw, 420px) !important;
-      max-width: none !important;
-      height: 100% !important;
-      max-height: none !important;
-      border-radius: 0 !important;
-      border-top: 0 !important;
-      border-right: 0 !important;
-      border-bottom: 0 !important;
-      box-shadow: -14px 0 34px rgba(0, 0, 0, 0.4) !important;
-      transform: translateX(100%) !important;
-      transition: transform 0.25s ease !important;
-    }
-
-    .component-panel:not(.hidden) {
-      transform: translateX(0) !important;
-    }
-
-    .component-panel-backdrop:not(.hidden) {
-      display: block;
-    }
-  }
 `;
 document.head.appendChild(style);
 
@@ -703,10 +703,13 @@ function createComponentPanel(groups) {
   toggle.id = "component-panel-toggle";
   toggle.className = "component-panel-toggle";
   toggle.type = "button";
-  toggle.setAttribute("aria-label", "Objects");
-  toggle.title = "Objects";
+  toggle.setAttribute("aria-label", "Show/Hide");
+  toggle.title = "Show/Hide";
   toggle.setAttribute("aria-expanded", "false");
-  toggle.innerHTML = `<img src="${basePath}/assets/Icon_objects3.png" alt="Objects" style="width:36px;height:36px;object-fit:contain;display:block;margin:auto;pointer-events:none;">`;
+  // Eye/visibility icon, not the case's own "Objects" cube — this button's job
+  // is showing/hiding components, so it reads as that action at a glance.
+  // Persists top-left at every screen size (see the toggle rules above).
+  toggle.innerHTML = `<img src="${basePath}/assets/visible.png" alt="Show/Hide" style="width:32px;height:32px;object-fit:contain;display:block;margin:auto;pointer-events:none;filter:brightness(0) invert(1);">`;
 
   const panel = document.createElement("div");
   panel.id = "component-panel";
@@ -737,6 +740,16 @@ function createComponentPanel(groups) {
 
   header.appendChild(collapseButton);
   header.appendChild(title);
+
+  // The rotation-lock button lives in the black mobile/tablet toolbar's own
+  // DOM (built once by resetButton.js, whose closure holds the locked/unlocked
+  // state) — move that same node in here rather than recreate it, so its click
+  // handler and state survive every rebuild of this panel. Sized for the
+  // header via the .component-panel-header #lock-rotation-button override
+  // above, which beats resetButton.js's own (toolbar) sizing on specificity.
+  const lockButton = document.getElementById("lock-rotation-button");
+  if (lockButton) header.appendChild(lockButton);
+
   header.appendChild(closeButton);
 
   const body = document.createElement("div");
@@ -1038,8 +1051,8 @@ function createComponentPanel(groups) {
     }
   });
 
-  // Only exists to be dimmed/clicked-through on the mobile/tablet sidebar
-  // (display:none at desktop widths — see the max-width: 1024px block above).
+  // Invisible click-catcher so tapping anywhere else on the canvas closes the
+  // panel, same as a dropdown — see the .component-panel-backdrop rule above.
   const backdrop = document.createElement("div");
   backdrop.id = "component-panel-backdrop";
   backdrop.className = "component-panel-backdrop hidden";
@@ -1049,8 +1062,8 @@ function createComponentPanel(groups) {
     else closePanel();
   });
 
-  // The panel takes the toggle's corner on desktop and slides in over a backdrop
-  // on tablet/phone, so only one of the two triggers is ever on screen.
+  // The panel takes the toggle's own corner while open, so only one of the two
+  // triggers is ever on screen — the toggle reappears once the panel collapses.
   const openPanel = () => {
     panel.classList.remove("hidden");
     backdrop.classList.remove("hidden");
@@ -1086,7 +1099,8 @@ function createComponentPanel(groups) {
   syncShowHideButton();
 
   // Open on load, since the objects list is the viewer's primary control —
-  // except on tablet/phone, where the sidebar would cover the model every time.
+  // except on tablet/phone, where the popup would cover meaningful screen
+  // real estate every time on a small viewport.
   const opensOnLoad = !window.matchMedia("(max-width: 1024px)").matches;
   if (opensOnLoad) {
     if (window.viewerPanelManager) window.viewerPanelManager.open("objects-panel");
@@ -1096,8 +1110,17 @@ function createComponentPanel(groups) {
 
 function removeVisibilityAndTransparencyControls() {
   clearAllWireframeOverlays();
+  const panel = document.getElementById("component-panel");
+  // The rotation-lock button (built once in resetButton.js, its state living in
+  // that closure) is adopted into the panel header below — rescue it before the
+  // panel is torn down, or the next rebuild's re-adopt finds nothing in the
+  // document to move and the button is gone for the rest of the session.
+  const lockButton = document.getElementById("lock-rotation-button");
+  if (lockButton && panel?.contains(lockButton)) {
+    document.body.appendChild(lockButton);
+  }
   document.getElementById("component-panel-backdrop")?.remove();
-  document.getElementById("component-panel")?.remove();
+  panel?.remove();
   document.getElementById("component-panel-toggle")?.remove();
   document.getElementById("viewer-undercut-legend")?.remove();
 }

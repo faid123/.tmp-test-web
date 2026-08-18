@@ -4,6 +4,7 @@ import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 import { returnToCaseList as goToCaseList } from "../shared/caseLinks.js";
 
 const NOTES_STORAGE_KEY = "smartrpd_clinical_notes";
+const THEME_STORAGE_KEY = "smartrpd_viewer_theme";
 
 function getBasePath() {
   return window.location.hostname.includes("github.io") ? "/.tmp-test-web" : "";
@@ -99,32 +100,48 @@ function wireRightNavButton() {
   });
 }
 
-// Mobile/tablet only (#footerObjectsBtn is display:none above 1024px), where the
-// Objects panel becomes a right-side sidebar and this replaces the top sheet.
-function wireObjectsPanelButton() {
-  const btn = document.getElementById("footerObjectsBtn");
-  if (!btn) return;
+// Background of the 3D canvas only (light = current default white clear
+// colour; dark reveals #container3D's own dark radial gradient — see
+// index.js's applyViewerBackgroundTheme). Persisted so the choice survives a
+// reload; read directly off localStorage rather than caching it in a module
+// variable since index.js's own init reads the same key independently and the
+// two must never disagree.
+function getStoredViewerTheme() {
+  try {
+    return localStorage.getItem(THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
 
-  const syncButton = (open) => {
-    const label = open ? "Close objects panel" : "Objects";
+function wireThemeToggle() {
+  const btn = document.getElementById("footerThemeBtn");
+  const icon = document.getElementById("footerThemeIcon");
+  if (!btn || !icon) return;
+
+  const syncButton = (theme) => {
+    const isDark = theme === "dark";
+    icon.className = isDark ? "fa fa-sun" : "fa fa-moon";
+    const label = isDark ? "Switch to light background" : "Switch to dark background";
     btn.setAttribute("aria-label", label);
     btn.dataset.tooltip = label;
-    btn.setAttribute("aria-pressed", String(Boolean(open)));
+    btn.setAttribute("aria-pressed", String(isDark));
   };
-  syncButton(false);
+  syncButton(getStoredViewerTheme());
 
   btn.addEventListener("click", () => {
-    if (window.viewerPanelManager) {
-      window.viewerPanelManager.toggle("objects-panel");
-      return;
+    const next = getStoredViewerTheme() === "dark" ? "light" : "dark";
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      // Private browsing / storage disabled — the toggle still works for this load,
+      // it just won't be remembered next time.
     }
-    // Fallback while the WebGL workspace loads: the floating toggle is hidden, not
-    // removed, so its own handler still drives the same panel.
-    document.getElementById("component-panel-toggle")?.click();
-  });
-
-  window.addEventListener("viewerobjectspanelchange", (event) => {
-    syncButton(Boolean(event.detail?.open));
+    syncButton(next);
+    // The 3D module may still be loading (it owns the renderer this drives) —
+    // its own init reads the same localStorage key, so a click that lands
+    // before it's ready still takes effect on that first paint.
+    window.setViewerBackgroundTheme?.(next);
   });
 }
 
@@ -265,7 +282,7 @@ document.addEventListener("DOMContentLoaded", () => {
   populateCaseName();
   wireChatButton();
   wireRightNavButton();
-  wireObjectsPanelButton();
+  wireThemeToggle();
   wireSidebarVersionHistory();
   wireSidebarReturn();
   setupAppSidebar({
