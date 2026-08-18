@@ -103,6 +103,35 @@ function caseStatusGroup(caseItem) {
 let currentThumbnails = [];
 let currentImageIndex = 0;
 window.selectedCaseId = null;
+let caseListScrollTopBeforeDetails = 0;
+
+function isMobileDetailLayout() {
+  return window.matchMedia?.("(max-width: 860px)").matches || window.innerWidth <= 860;
+}
+
+function openMobileCaseDetails() {
+  const page = document.querySelector(".cm-page");
+  if (!page) return;
+  const list = document.getElementById("caseList");
+  caseListScrollTopBeforeDetails = list?.scrollTop || 0;
+  page.classList.add("show-details");
+  document.body.classList.add("show-details");
+}
+
+function closeMobileCaseDetails() {
+  const page = document.querySelector(".cm-page");
+  const detail = document.querySelector(".cm-detail");
+  const active = document.activeElement;
+  if (detail?.contains(active) && typeof active.blur === "function") {
+    active.blur();
+  }
+  page?.classList.remove("show-details");
+  document.body.classList.remove("show-details");
+  requestAnimationFrame(() => {
+    const list = document.getElementById("caseList");
+    if (list) list.scrollTop = caseListScrollTopBeforeDetails;
+  });
+}
 // 获取用户的病例列表
 async function fetchCases() {
   const loggedInUser = getLoggedInUser();
@@ -1197,9 +1226,7 @@ async function handleRowClick(caseId) {
 
   // Must match case_list.css's @media max-width: 860px, where the detail pane
   // goes off-canvas and stays hidden until .show-details is added.
-  if (window.innerWidth <= 860) {
-    document.querySelector(".cm-page")?.classList.add("show-details");
-  }
+  if (isMobileDetailLayout()) openMobileCaseDetails();
 
 }
 
@@ -2654,10 +2681,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       headWrap.addEventListener("scroll", () => sync(headWrap, bodyWrap));
     }
 
-    document.getElementById("backToListBtn")?.addEventListener("click", () => {
-      document.querySelector(".cm-page")?.classList.remove("show-details");
-      document.body.classList.remove("show-details");
-    });
+    document.getElementById("backToListBtn")?.addEventListener("click", closeMobileCaseDetails);
 
     const filterSel = document.getElementById("filter-status");
 if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
