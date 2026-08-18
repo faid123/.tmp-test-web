@@ -1437,6 +1437,8 @@ button.upload3d-row {
 }
 
 .jaw-preview-undercut {
+  --jaw-preview-heatmap-icon-size: 35px;
+  --jaw-preview-heatmap-gap: 7px;
   position: absolute;
   left: 8px;
   top: 8px;
@@ -1444,14 +1446,14 @@ button.upload3d-row {
 }
 
 .jaw-preview-occlusion {
-  left: 50px;
+  left: calc(8px + var(--jaw-preview-heatmap-icon-size) + var(--jaw-preview-heatmap-gap));
 }
 
 /* Undercut icon button — the legend dropdown's anchor in the corner. */
 .jaw-preview-undercut-icon {
   display: block;
-  width: 35px;
-  height: 35px;
+  width: var(--jaw-preview-heatmap-icon-size);
+  height: var(--jaw-preview-heatmap-icon-size);
   padding: 0;
   border: 0;
   background: none;
@@ -3534,8 +3536,14 @@ button.upload3d-row {
   }
 
   .jaw-preview-undercut {
+    --jaw-preview-heatmap-icon-size: clamp(30px, 9vw, 35px);
+    --jaw-preview-heatmap-gap: clamp(6px, 2vw, 9px);
     left: 10px;
     top: 10px;
+  }
+
+  .jaw-preview-occlusion {
+    left: calc(10px + var(--jaw-preview-heatmap-icon-size) + var(--jaw-preview-heatmap-gap));
   }
 
   .jaw-preview-undercut-panel {
