@@ -1443,6 +1443,10 @@ button.upload3d-row {
   z-index: 8;
 }
 
+.jaw-preview-occlusion {
+  left: 50px;
+}
+
 /* Undercut icon button — the legend dropdown's anchor in the corner. */
 .jaw-preview-undercut-icon {
   display: block;
@@ -1465,6 +1469,18 @@ button.upload3d-row {
 }
 .jaw-preview-undercut-icon:active {
   transform: scale(0.96);
+}
+.jaw-preview-undercut-icon:disabled {
+  cursor: progress;
+  opacity: 0.65;
+}
+.jaw-preview-occlusion-icon.is-loading img {
+  animation: jawPreviewHeatmapPulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes jawPreviewHeatmapPulse {
+  from { opacity: 0.45; }
+  to { opacity: 1; }
 }
 
 /* The legend dropdown: borderless by design; the shadow alone lifts it off the mesh. */
