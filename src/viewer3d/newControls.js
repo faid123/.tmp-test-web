@@ -5,11 +5,37 @@ const wireframeOverlays = new Set();
 
 const style = document.createElement("style");
 style.textContent = `
-  .component-panel-toggle {
+  /* Holds the round expand toggle plus one small icon per ACTIVE component —
+     the "hidden" state now, replacing what used to be just the bare toggle
+     with empty space around it. Hides as one unit while the full panel is
+     open (see .hidden below), same corner the panel itself opens from. A
+     column of two lines: the toggle on its own, the icon row below (capped,
+     so it doesn't sprawl across the canvas) — inactive components have no
+     icon here at all, only the toggle re-opens the full list for those. */
+  .component-panel-mini {
     position: absolute;
     left: 16px;
     top: 16px;
     z-index: 1003;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    pointer-events: auto;
+  }
+
+  .component-panel-mini.hidden {
+    display: none;
+  }
+
+  .component-panel-mini-icons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .component-panel-toggle {
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -37,9 +63,58 @@ style.textContent = `
     transform: scale(1.06);
   }
 
-  /* The panel takes over the toggle's corner, so the toggle hides while open. */
-  .component-panel-toggle.is-hidden {
+  /* One quick per-component visibility toggle, shown alongside the round
+     expand button whenever the full menu is hidden — icon-only (the
+     component's own row icon), toggling that component on/off without
+     reopening the full list. A component the case doesn't actually have
+     (an empty slot, say) gets no icon at all (see .is-absent) — but one
+     that exists and is just switched off still gets an icon, dimmed with a
+     slash, and clicking it turns it back on right there. */
+  .component-mini-eye {
+    position: relative;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 10px;
+    background-color: rgba(56, 58, 64, 0.55);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 18px 18px;
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    transition: opacity 0.15s, filter 0.15s;
+  }
+
+  .component-mini-eye:hover {
+    filter: brightness(1.15);
+  }
+
+  .component-mini-eye.is-absent {
     display: none;
+  }
+
+  .component-mini-eye.hidden-state {
+    opacity: 0.55;
+  }
+
+  .component-mini-eye-slash {
+    display: none;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 26px;
+    height: 1.5px;
+    background: #ef9a9a;
+    transform: translate(-50%, -50%) rotate(-38deg);
+    border-radius: 999px;
+  }
+
+  .component-mini-eye.hidden-state .component-mini-eye-slash {
+    display: block;
   }
 
   .component-panel {
@@ -442,6 +517,36 @@ style.textContent = `
     display: none;
   }
 
+  /* Transient explanation for why an undercut toggle didn't turn on (missing
+     insertion angle, stale survey, etc.) — otherwise the button just quietly
+     reverts with no feedback. Centered at the bottom so it never competes
+     with the (left-anchored) legend or (top-left) mini strip/panel. */
+  .component-panel-note {
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    z-index: 1004;
+    max-width: min(280px, calc(100vw - 32px));
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 12px;
+    background: rgba(56, 58, 64, 0.92);
+    color: #ffffff;
+    font: 600 12px "Montserrat", Arial, sans-serif;
+    line-height: 1.4;
+    text-align: center;
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.34);
+    opacity: 0;
+    transform: translate(-50%, 6px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    pointer-events: none;
+  }
+
+  .component-panel-note.visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
   /* Undercut colour key, shown only while an undercut view is on. Palette
      matches preview3D.js's colorForSurveyingValue byte-for-byte. */
   .viewer-undercut-legend {
@@ -561,11 +666,29 @@ style.textContent = `
   }
 
   @media (max-width: 768px) {
-    .component-panel-toggle {
+    .component-panel-mini {
       left: 12px;
       top: 12px;
+      gap: 6px;
+    }
+
+    .component-panel-mini-icons {
+      /* "Try not to take too much screen space, maybe 30% of the mobile top
+         left space" — caps the icon row's footprint; it wraps to more rows
+         rather than growing wider once it hits this. */
+      max-width: 34vw;
+      gap: 6px;
+    }
+
+    .component-panel-toggle {
       width: 52px;
       height: 52px;
+    }
+
+    .component-mini-eye {
+      width: 30px;
+      height: 30px;
+      background-size: 16px 16px;
     }
 
     .component-panel {
@@ -711,6 +834,22 @@ function createComponentPanel(groups) {
   // Persists top-left at every screen size (see the toggle rules above).
   toggle.innerHTML = `<img src="${basePath}/assets/visible.png" alt="Show/Hide" style="width:32px;height:32px;object-fit:contain;display:block;margin:auto;pointer-events:none;filter:brightness(0) invert(1);">`;
 
+  // Holds the toggle plus one mini eye per component — see openPanel/closePanel
+  // below, which show/hide this whole thing opposite the full panel.
+  const miniWrap = document.createElement("div");
+  miniWrap.id = "component-panel-mini";
+  miniWrap.className = "component-panel-mini";
+
+  miniWrap.appendChild(toggle);
+
+  // One mini eye per ACTIVE (visible) component goes here — inactive/hidden
+  // ones are omitted rather than shown dimmed, so the collapsed strip only
+  // ever shows what's actually on screen. Appended as each row is built
+  // below; each button's own display is then gated by isVisible in sync().
+  const miniIcons = document.createElement("div");
+  miniIcons.className = "component-panel-mini-icons";
+  miniWrap.appendChild(miniIcons);
+
   const panel = document.createElement("div");
   panel.id = "component-panel";
   panel.className = "component-panel hidden";
@@ -768,6 +907,7 @@ function createComponentPanel(groups) {
   // Set once the legend is mounted, below — read fresh each sync so the
   // panel-construction order above doesn't matter.
   let undercutLegend = null;
+  let componentNote = null;
 
   const areAllGroupsVisible = () =>
     groups.every((g) => g.hasContent?.() === false || (g.getVisible?.() ?? true));
@@ -866,6 +1006,27 @@ function createComponentPanel(groups) {
 
     buttonsRow.appendChild(visibilityButton);
 
+    // The mini strip's copy of this same toggle — same action, shown instead
+    // of the full row whenever the menu is collapsed. Icon-only (the row's
+    // own icon), so it still reads as "which component" with no label.
+    // Present whenever the component itself is (see .is-absent in sync()
+    // below) — a component that's just switched off still gets an icon here,
+    // dimmed, and clicking it turns it back on.
+    const miniButton = document.createElement("button");
+    miniButton.type = "button";
+    miniButton.className = "component-mini-eye";
+    if (group.iconPath) miniButton.style.backgroundImage = `url(${group.iconPath})`;
+    miniButton.title = `Toggle ${group.label} visibility`;
+    miniButton.setAttribute("aria-label", `Toggle ${group.label} visibility`);
+    const miniSlash = document.createElement("span");
+    miniSlash.className = "component-mini-eye-slash";
+    miniButton.appendChild(miniSlash);
+    miniButton.addEventListener("click", () => {
+      group.setVisible?.(!(group.getVisible?.() ?? true));
+      syncAllRows();
+    });
+    miniIcons.appendChild(miniButton);
+
     let undercutButton = null;
     let occlusionButton = null;
     // Slot rows offer undercut only (borrowed from the case jaw); the case's own jaws
@@ -885,6 +1046,14 @@ function createComponentPanel(groups) {
           undercutButton.disabled = true;
           undercutButton.classList.add("is-busy");
           result
+            .then((appliedMode) => {
+              // Turning ON didn't take — say why, instead of the button just
+              // quietly reverting with no explanation.
+              if (next === "undercut" && appliedMode !== "undercut") {
+                const reason = group.getUndercutUnavailableReason?.();
+                componentNote?.show(reason || `Couldn't turn on undercut for ${group.label}.`);
+              }
+            })
             .catch((error) => console.warn("Undercut switch failed:", error))
             .finally(() => {
               undercutButton.disabled = false;
@@ -1017,6 +1186,13 @@ function createComponentPanel(groups) {
         visibilityButton.title = hasContent
           ? `${isVisible ? "Hide" : "Show"} ${group.label}`
           : `${group.label} unavailable`;
+        // Present whenever the component is (not when it's just switched off
+        // — see .is-absent) — dimmed and re-clickable to turn back on.
+        miniButton.classList.toggle("is-absent", !hasContent);
+        miniButton.classList.toggle("hidden-state", !isVisible);
+        miniButton.title = hasContent
+          ? `${isVisible ? "Hide" : "Show"} ${group.label}`
+          : `${group.label} unavailable`;
         const opacityValue = Math.round((group.getOpacity?.() ?? 1) * 100);
         opacitySlider.value = String(opacityValue);
         opacitySlider.disabled = !hasContent;
@@ -1062,19 +1238,21 @@ function createComponentPanel(groups) {
     else closePanel();
   });
 
-  // The panel takes the toggle's own corner while open, so only one of the two
-  // triggers is ever on screen — the toggle reappears once the panel collapses.
+  // The panel takes the mini strip's own corner while open, so only one of
+  // the two is ever on screen — the mini strip (toggle + per-component
+  // icons) reappears once the panel collapses, instead of the corner going
+  // empty the way it used to when only the bare toggle lived there.
   const openPanel = () => {
     panel.classList.remove("hidden");
     backdrop.classList.remove("hidden");
-    toggle.classList.add("is-hidden");
+    miniWrap.classList.add("hidden");
     toggle.setAttribute("aria-expanded", "true");
     window.dispatchEvent(new CustomEvent("viewerobjectspanelchange", { detail: { open: true } }));
   };
   const closePanel = () => {
     panel.classList.add("hidden");
     backdrop.classList.add("hidden");
-    toggle.classList.remove("is-hidden");
+    miniWrap.classList.remove("hidden");
     toggle.setAttribute("aria-expanded", "false");
     window.dispatchEvent(new CustomEvent("viewerobjectspanelchange", { detail: { open: false } }));
   };
@@ -1088,11 +1266,12 @@ function createComponentPanel(groups) {
     window.getViewerRightNav?.()?.parentElement ||
     document.body;
   panelHost.appendChild(backdrop);
-  panelHost.appendChild(toggle);
+  panelHost.appendChild(miniWrap);
   panelHost.appendChild(panel);
   // Bottom-left of the same host, so it never fights the (top-left) objects
   // panel or the (right-side) polyline panel for space.
   undercutLegend = createUndercutLegend(panelHost);
+  componentNote = createComponentNote(panelHost);
   window.viewerPanelManager?.register("objects-panel", toggle, openPanel, closePanel);
   window.syncComponentPanelRows = syncAllRows;
   syncAllRows();
@@ -1121,8 +1300,32 @@ function removeVisibilityAndTransparencyControls() {
   }
   document.getElementById("component-panel-backdrop")?.remove();
   panel?.remove();
-  document.getElementById("component-panel-toggle")?.remove();
+  // Removes the toggle and every mini per-component eye with it — they're
+  // both children of this wrapper.
+  document.getElementById("component-panel-mini")?.remove();
   document.getElementById("viewer-undercut-legend")?.remove();
+  document.getElementById("component-panel-note")?.remove();
+}
+
+// Built once per panel; the undercut button's click handler calls .show()
+// when a toggle-on attempt didn't actually turn undercut on, so the user
+// gets an explanation instead of the button just quietly reverting.
+function createComponentNote(panelHost) {
+  const note = document.createElement("div");
+  note.id = "component-panel-note";
+  note.className = "component-panel-note";
+  note.setAttribute("role", "status");
+  panelHost.appendChild(note);
+
+  let hideTimer = null;
+  return {
+    show(message) {
+      note.textContent = message;
+      note.classList.add("visible");
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => note.classList.remove("visible"), 4500);
+    },
+  };
 }
 
 // Undercut colour key, byte-for-byte the same palette as preview3D.js's
@@ -1189,6 +1392,9 @@ function buildDesignSlotGroups(designSlots) {
         const applied = await entry.setUndercut?.(mode === "undercut");
         return applied ? "undercut" : "normal";
       },
+      // Why the undercut toggle didn't turn on, when it didn't — shown by the
+      // undercut button's click handler below.
+      getUndercutUnavailableReason: () => entry.getUndercutUnavailableReason?.() ?? null,
       hasContent: () => meshes.length > 0,
       getVisible: () => areAnyVisible(meshes),
       setVisible: (isVisible) => setMeshGroupVisible(meshes, isVisible),

@@ -4,7 +4,6 @@ import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 import { returnToCaseList as goToCaseList } from "../shared/caseLinks.js";
 
 const NOTES_STORAGE_KEY = "smartrpd_clinical_notes";
-const THEME_STORAGE_KEY = "smartrpd_viewer_theme";
 
 function getBasePath() {
   return window.location.hostname.includes("github.io") ? "/.tmp-test-web" : "";
@@ -100,19 +99,13 @@ function wireRightNavButton() {
   });
 }
 
-// Background of the 3D canvas only (light = current default white clear
-// colour; dark reveals #container3D's own dark radial gradient — see
-// index.js's applyViewerBackgroundTheme). Persisted so the choice survives a
-// reload; read directly off localStorage rather than caching it in a module
-// variable since index.js's own init reads the same key independently and the
-// two must never disagree.
-function getStoredViewerTheme() {
-  try {
-    return localStorage.getItem(THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
-  } catch {
-    return "light";
-  }
-}
+// Background of the 3D canvas only (dark = default, reveals #container3D's
+// own dark radial gradient; light = opaque white clear colour — see index.js's
+// applyViewerBackgroundTheme). NOT persisted — every fresh load starts dark
+// regardless of what was toggled last time; this only tracks the CURRENT
+// session's choice, kept here (not localStorage) since index.js's own init
+// also just hardcodes "dark" and the two no longer need to agree on anything.
+let currentViewerTheme = "dark";
 
 function wireThemeToggle() {
   const btn = document.getElementById("footerThemeBtn");
@@ -127,21 +120,15 @@ function wireThemeToggle() {
     btn.dataset.tooltip = label;
     btn.setAttribute("aria-pressed", String(isDark));
   };
-  syncButton(getStoredViewerTheme());
+  syncButton(currentViewerTheme);
 
   btn.addEventListener("click", () => {
-    const next = getStoredViewerTheme() === "dark" ? "light" : "dark";
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, next);
-    } catch {
-      // Private browsing / storage disabled — the toggle still works for this load,
-      // it just won't be remembered next time.
-    }
-    syncButton(next);
+    currentViewerTheme = currentViewerTheme === "dark" ? "light" : "dark";
+    syncButton(currentViewerTheme);
     // The 3D module may still be loading (it owns the renderer this drives) —
-    // its own init reads the same localStorage key, so a click that lands
-    // before it's ready still takes effect on that first paint.
-    window.setViewerBackgroundTheme?.(next);
+    // a click that lands before it's ready still takes effect once index.js's
+    // own init runs, since that init starts from the same "dark" default.
+    window.setViewerBackgroundTheme?.(currentViewerTheme);
   });
 }
 

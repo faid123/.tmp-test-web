@@ -4216,7 +4216,8 @@ function removeViewerLoadingScreen() {
     position: relative;
     width: 196px;
     height: 214px;
-    margin: 0 0 0 auto;
+    /* Centered in the sidebar's content column, not pinned to its right edge. */
+    margin: 0 auto;
   }
 
   .preset-view-current-wrap {
@@ -5427,18 +5428,24 @@ function removeViewerLoadingScreen() {
   }
 
   // Survey this slot's own STL (already in hand from the mesh load — never
-  // re-fetched). Returns one undercut value per welded vertex, or null.
+  // re-fetched). `values` is one undercut value per welded vertex; `reason` is
+  // set (and values null) whenever the survey couldn't run at all, so the
+  // panel can tell the user WHY the toggle didn't turn on instead of just
+  // silently reverting — see ensureSlotUndercutGeometry/buildSlotUndercutGeometry.
   async function computeSlotSurveyValues(slot, jawKey, stlDataBase64, progress) {
     const dir = slotSurveyDirection(jawKey);
     if (!dir) {
       console.warn(
         `[viewer3D] slot ${slot}: the case has no ${jawKey} insertion angle, so there is nothing to survey`
       );
-      return null;
+      return {
+        values: null,
+        reason: `No saved insertion angle for the ${jawKey} jaw — set the survey angle first, then re-open this file.`,
+      };
     }
     if (!stlDataBase64) {
       console.warn(`[viewer3D] slot ${slot}: no upload bytes to survey`);
-      return null;
+      return { values: null, reason: "No upload data to survey." };
     }
 
     const authPayload = {
@@ -5477,7 +5484,7 @@ function removeViewerLoadingScreen() {
     const base64 = response?.surveying_values_base64;
     if (!base64) {
       console.warn(`[viewer3D] slot ${slot}: the surveying call returned no values`, response);
-      return null;
+      return { values: null, reason: "The undercut survey returned no data — try again." };
     }
     const values = base64ToFloat32Array(base64);
     console.log(
@@ -5485,7 +5492,7 @@ function removeViewerLoadingScreen() {
         performance.now() - startedAt
       )}ms`
     );
-    return values;
+    return { values, reason: null };
   }
 
   // Kicks off this slot's undercut survey as soon as its mesh lands (initial
@@ -5502,13 +5509,20 @@ function removeViewerLoadingScreen() {
 
     const jawKey = mesh.userData?.jaw_type === "lower" ? "lower" : "upper";
     const promise = computeSlotSurveyValues(slot, jawKey, stlDataBase64)
-      .then((values) => {
+      .then(({ values, reason }) => {
         mesh.userData.undercutGeometry = values ? buildSlotUndercutGeometry(mesh, values) : null;
+        // buildSlotUndercutGeometry sets its own (more specific) reason when values
+        // exist but still fail to apply — only fall back to the survey-level one
+        // when there were no values to try in the first place.
+        if (!mesh.userData.undercutGeometry && !mesh.userData.undercutUnavailableReason) {
+          mesh.userData.undercutUnavailableReason = reason;
+        }
         return mesh.userData.undercutGeometry;
       })
       .catch((error) => {
         console.warn(`[viewer3D] slot ${slot}: eager undercut survey failed`, error);
         mesh.userData.undercutGeometry = null;
+        mesh.userData.undercutUnavailableReason = "The undercut survey failed — try again.";
         return null;
       });
     mesh.userData.undercutSurveyPromise = promise;
@@ -5516,9 +5530,16 @@ function removeViewerLoadingScreen() {
   }
 
   // The slot's undercut geometry variant: its own mesh, coloured by its own survey.
+  // Sets slotMesh.userData.undercutUnavailableReason on failure (cleared on success)
+  // so the panel can explain why the toggle didn't turn on, instead of it just
+  // silently reverting — see ensureSlotUndercutGeometry above and the undercut
+  // button's click handler in newControls.js.
   function buildSlotUndercutGeometry(slotMesh, values) {
     const base = all_mesh_mat[slotMesh.name]?.[0];
-    if (!base || !values?.length) return null;
+    if (!base || !values?.length) {
+      slotMesh.userData.undercutUnavailableReason = "No base mesh to colour.";
+      return null;
+    }
 
     const geometry = base.clone();
     const count = geometry.attributes.position.count;
@@ -5528,8 +5549,11 @@ function removeViewerLoadingScreen() {
       console.warn(
         `[viewer3D] ${slotMesh.name}: survey returned ${values.length} values for ${count} vertices — undercut not applied`
       );
+      slotMesh.userData.undercutUnavailableReason =
+        "This file changed after it was surveyed — re-upload it to refresh the undercut view.";
       return null;
     }
+    slotMesh.userData.undercutUnavailableReason = null;
 
     const colors = new Float32Array(count * 3);
     for (let v = 0; v < count; v += 1) {
@@ -5625,6 +5649,11 @@ function removeViewerLoadingScreen() {
       supportsUndercut: !METAL_RPD_SLOTS.has(slot),
       getUndercut: () => isDesignSlotUndercutOn(slot),
       setUndercut: (enabled) => setDesignSlotUndercut(slot, enabled),
+      // Why the toggle didn't turn on, when it didn't — set by
+      // ensureSlotUndercutGeometry/buildSlotUndercutGeometry above.
+      getUndercutUnavailableReason: () =>
+        designSlotMeshes.find((m) => m.userData?.designSlot === slot)?.userData
+          ?.undercutUnavailableReason ?? null,
     }));
   }
 
@@ -6562,23 +6591,13 @@ function removeViewerLoadingScreen() {
   // Load the OFF file
 
   // ---- Viewer background theme (dark/light canvas) ------------------------
-  // Toggled from the footer (viewerShell.js's footerThemeBtn) and persisted so
-  // it "sticks" across reloads. Light is the default/current look: an opaque
-  // white clear colour, at a cost in silhouette contrast (tan crowns measure
-  // 2.6:1 on white vs 5.6:1 on slate). Dark clears to fully transparent
-  // instead of a second hardcoded colour, so #container3D's own dark radial
-  // gradient (already authored in style.css, normally hidden behind the
-  // opaque canvas) shows through unchanged.
-  const VIEWER_THEME_STORAGE_KEY = "smartrpd_viewer_theme";
-
-  function getStoredViewerBackgroundTheme() {
-    try {
-      return localStorage.getItem(VIEWER_THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
-    } catch {
-      return "light";
-    }
-  }
-
+  // Toggled from the footer (viewerShell.js's footerThemeBtn). NOT persisted —
+  // every fresh load starts dark regardless of what was toggled last time; the
+  // button only changes it for the current viewing session. Dark clears to
+  // fully transparent instead of a hardcoded colour, so #container3D's own
+  // dark radial gradient (already authored in style.css) shows through
+  // unchanged, and it beats light on silhouette contrast (tan crowns measure
+  // 5.6:1 on slate vs 2.6:1 on white).
   function applyViewerBackgroundTheme(theme) {
     try {
       if (theme === "dark") renderer.setClearColor(0x000000, 0);
@@ -6588,9 +6607,8 @@ function removeViewerLoadingScreen() {
     }
   }
 
-  // The footer button writes localStorage itself (so the next load starts in
-  // the same theme via getStoredViewerBackgroundTheme above) and calls this to
-  // apply the change immediately, without a reload.
+  // The footer button calls this to apply its change immediately, without a
+  // reload — see viewerShell.js's wireThemeToggle.
   window.setViewerBackgroundTheme = applyViewerBackgroundTheme;
 
   window.finished = true; // window property (declared at top) — a bare `finished` only resolves through it
@@ -6599,7 +6617,7 @@ function removeViewerLoadingScreen() {
   // the canvas has no CSS size and is laid out at its INTRINSIC size; a ratio of
   // 2 then doubles the stage and pushes the jaw off-screen.
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-  applyViewerBackgroundTheme(getStoredViewerBackgroundTheme());
+  applyViewerBackgroundTheme("dark");
   resizeViewerStage(renderer);
 
   // Add the renderer to the DOM
