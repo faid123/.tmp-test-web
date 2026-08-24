@@ -28,7 +28,17 @@ style.textContent = `
     display: none;
   }
 
+  /* One child row per jawGroup (see getMiniIconRow in createComponentPanel) —
+     stacked in a column, so upper-jaw icons and lower-jaw icons are always in
+     genuinely separate flex rows, not just wrapped by width. A row a group
+     has no jawGroup for (e.g. design-slot rows) shares one fallback row. */
   .component-panel-mini-icons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .component-panel-mini-icons-row {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
@@ -173,7 +183,8 @@ style.textContent = `
     display: block;
   }
 
-  /* "Show / Hide" bar: a chevron that folds the list away, plus the close X. */
+  /* "Show / Hide" bar: a chevron that minimizes the panel down to the eye
+     icon (same action as the close X), plus the close X itself. */
   .component-panel-header {
     flex: 0 0 auto;
     display: flex;
@@ -192,7 +203,6 @@ style.textContent = `
     background: transparent;
     color: #ffffff;
     cursor: pointer;
-    transition: transform 0.18s ease;
   }
 
   .component-panel-collapse::before {
@@ -204,10 +214,6 @@ style.textContent = `
     border-left: 2px solid currentColor;
     border-top: 2px solid currentColor;
     transform: rotate(45deg);
-  }
-
-  .component-panel.is-collapsed .component-panel-collapse {
-    transform: rotate(180deg);
   }
 
   .component-panel-title {
@@ -291,11 +297,6 @@ style.textContent = `
   .component-panel-body::-webkit-scrollbar-thumb {
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.3);
-  }
-
-  .component-panel.is-collapsed .component-panel-body,
-  .component-panel.is-collapsed .component-panel-footer {
-    display: none;
   }
 
   /* One tinted block per object. --row-tint comes from the object's own
@@ -674,9 +675,12 @@ style.textContent = `
 
     .component-panel-mini-icons {
       /* "Try not to take too much screen space, maybe 30% of the mobile top
-         left space" — caps the icon row's footprint; it wraps to more rows
+         left space" — caps each jaw row's footprint; it wraps to more rows
          rather than growing wider once it hits this. */
       max-width: 34vw;
+    }
+
+    .component-panel-mini-icons-row {
       gap: 6px;
     }
 
@@ -846,9 +850,25 @@ function createComponentPanel(groups) {
   // ones are omitted rather than shown dimmed, so the collapsed strip only
   // ever shows what's actually on screen. Appended as each row is built
   // below; each button's own display is then gated by isVisible in sync().
+  // A column of per-jaw rows (see getMiniIconRow below) — genuinely separate
+  // lines for the upper jaw's icons and the lower jaw's, not just a single
+  // wrapping row that happens to break where width runs out.
   const miniIcons = document.createElement("div");
   miniIcons.className = "component-panel-mini-icons";
   miniWrap.appendChild(miniIcons);
+
+  const miniIconRows = new Map();
+  const getMiniIconRow = (jawGroupKey) => {
+    const rowKey = jawGroupKey ?? "__default";
+    let row = miniIconRows.get(rowKey);
+    if (!row) {
+      row = document.createElement("div");
+      row.className = "component-panel-mini-icons-row";
+      miniIcons.appendChild(row);
+      miniIconRows.set(rowKey, row);
+    }
+    return row;
+  };
 
   const panel = document.createElement("div");
   panel.id = "component-panel";
@@ -860,15 +880,14 @@ function createComponentPanel(groups) {
   const collapseButton = document.createElement("button");
   collapseButton.type = "button";
   collapseButton.className = "component-panel-collapse";
-  collapseButton.title = "Collapse";
-  collapseButton.setAttribute("aria-label", "Collapse the object list");
-  collapseButton.setAttribute("aria-expanded", "true");
+  collapseButton.title = "Minimize";
+  collapseButton.setAttribute("aria-label", "Minimize the object list to the eye icon");
 
   const title = document.createElement("button");
   title.type = "button";
   title.className = "component-panel-title";
   title.textContent = "Show / Hide";
-  title.title = "Collapse the object list";
+  title.title = "Minimize the object list to the eye icon";
 
   const closeButton = document.createElement("button");
   closeButton.type = "button";
@@ -952,13 +971,17 @@ function createComponentPanel(groups) {
     syncAllRows();
   });
 
-  const toggleCollapsed = () => {
-    const collapsed = panel.classList.toggle("is-collapsed");
-    collapseButton.setAttribute("aria-expanded", String(!collapsed));
-    collapseButton.title = collapsed ? "Expand" : "Collapse";
+  // Both the chevron and the "Show / Hide" label fully minimize the panel
+  // down to the round eye icon (+ active-component mini icons) — the same
+  // action as the close X, not an in-place collapse. Defined as a closure
+  // over closePanel/viewerPanelManager (declared further below): it's only
+  // ever invoked from a later click, by which point both exist.
+  const minimizeToTray = () => {
+    if (window.viewerPanelManager) window.viewerPanelManager.close("objects-panel");
+    else closePanel();
   };
-  collapseButton.addEventListener("click", toggleCollapsed);
-  title.addEventListener("click", toggleCollapsed);
+  collapseButton.addEventListener("click", minimizeToTray);
+  title.addEventListener("click", minimizeToTray);
 
   groups.forEach((group) => {
     const row = document.createElement("div");
@@ -1025,7 +1048,7 @@ function createComponentPanel(groups) {
       group.setVisible?.(!(group.getVisible?.() ?? true));
       syncAllRows();
     });
-    miniIcons.appendChild(miniButton);
+    getMiniIconRow(group.jawGroup).appendChild(miniButton);
 
     let undercutButton = null;
     let occlusionButton = null;
@@ -1376,6 +1399,8 @@ function buildDesignSlotGroups(designSlots) {
     const meshes = entry.mesh ? [entry.mesh] : [];
     return {
       key: `design-slot-${entry.slot}`,
+      // Groups the mini icon strip's per-jaw rows — see getMiniIconRow.
+      jawGroup: entry.jawGroup,
       label: entry.label,
       type: "overlay",
       iconPath: entry.iconPath,
@@ -1454,6 +1479,9 @@ function addVisibilityAndTransparencyControls(
 
     groups.push({
       key: `${jawKey}-jaw`,
+      // Groups the mini icon strip's line breaks (see createComponentPanel) —
+      // not read anywhere else.
+      jawGroup: jawKey,
       label: `${titlePrefix} jaw`,
       type: "mesh",
       iconPath: `${basePath}/assets/Icon_${titlePrefix}Jaw_Occlusal.png`,
@@ -1477,6 +1505,7 @@ function addVisibilityAndTransparencyControls(
 
     groups.push({
       key: `${jawKey}-surface`,
+      jawGroup: jawKey,
       label: `${titlePrefix} Mesh`,
       type: "mesh",
       iconPath: `${basePath}/assets/Icon_${titlePrefix}Jaw.png`,
@@ -1494,6 +1523,7 @@ function addVisibilityAndTransparencyControls(
 
     groups.push({
       key: `${jawKey}-polyline`,
+      jawGroup: jawKey,
       label: `${titlePrefix} polylines`,
       type: "overlay",
       iconPath: `${basePath}/assets/Icon_Hide_SkeletalPrev.png`,
@@ -1509,6 +1539,7 @@ function addVisibilityAndTransparencyControls(
 
     groups.push({
       key: `${jawKey}-artificial-teeth`,
+      jawGroup: jawKey,
       label: `${titlePrefix} artificial teeth`,
       type: "overlay",
       iconPath: `${basePath}/assets/Icon_ArtificialTeeth.png`,

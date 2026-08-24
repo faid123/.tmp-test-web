@@ -5642,6 +5642,10 @@ function removeViewerLoadingScreen() {
       slot,
       label: `Slot ${slot}: ${EXTRA_STL_SLOT_NAMES[slot]}`,
       iconPath: `${basePath}/assets/${EXTRA_STL_SLOT_ICONS[slot]}`,
+      // Lets the mini icon tray split into an upper row and a lower row (see
+      // buildDesignSlotGroups/getMiniIconRow in newControls.js) the same way
+      // the plain case view's jaw/mesh/polyline/teeth groups do.
+      jawGroup: EXTRA_STL_SLOT_JAW[slot],
       mesh: designSlotMeshes.find((m) => m.userData?.designSlot === slot) || null,
       // Only the jaw slots get their own survey — the metal-RPD slots are a
       // different mesh with no undercut data. Undercut display starts off, but
