@@ -1,0 +1,43 @@
+' SmartRPD_Documentation.docx — Appendix use-case diagram, "Case Chat" (docx heading
+' "Collaboration Overlays").
+' Transcribed 2026-08-24 as a plain-text source for the existing (unchanged) diagram — content was
+' re-checked against current src/js/*/chat.js, notifications.js, appSidebar.js, viewerShell.js on
+' 2026-08-24 and found still accurate, so the embedded image in the .docx was NOT replaced.
+' Render via the PlantUML server (see build script) or any local PlantUML install.
+@startuml
+left to right direction
+skinparam backgroundColor white
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 15
+skinparam ArrowColor #333333
+skinparam ArrowFontColor #333333
+skinparam usecase {
+  BorderColor #5b84b8
+  FontColor #16212b
+}
+skinparam rectangle {
+  BorderColor #666666
+  FontColor #16212b
+  FontStyle bold
+}
+
+actor "Team Member" as TeamMember
+actor "User" as User
+
+rectangle "Collaboration Overlays (chat.js, notifications.js, appSidebar.js,\nviewerShell.js)" {
+  usecase "Open case chat overlay" as UC_Chat #DAE8FC
+  usecase "Check notification bell" as UC_Bell #DAE8FC
+
+  usecase "Send text message" as UC_Text #D5E8D4
+  usecase "Send image message" as UC_Image #D5E8D4
+  usecase "Receive notifications" as UC_Notify #D5E8D4
+}
+
+TeamMember -- UC_Chat
+User -- UC_Chat
+User -- UC_Bell
+
+UC_Text ..> UC_Chat : <<extend>>
+UC_Image ..> UC_Chat : <<extend>>
+UC_Bell ..> UC_Notify : <<include>>
+@enduml

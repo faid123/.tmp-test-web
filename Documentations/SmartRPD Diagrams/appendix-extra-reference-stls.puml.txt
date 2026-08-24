@@ -1,0 +1,43 @@
+' SmartRPD_Documentation.docx — Appendix use-case diagram, "Extra Reference STLs" (docx heading
+' "Add STL Files").
+' Rebuilt 2026-08-24: the previous version named the list/load function fetchExtraStlsForCase(),
+' which does not exist in src/js/2D/preview3D.js. The real per-case bulk load is
+' loadExtraStlsIntoPreview() (which fetches each of the 4 slots via fetchExtraStlSlot()). Fixed the
+' one label; uploadExtraStl(), toggleExtraStlVisibility(), deleteExtraStl(), and renderExtraStl()
+' were all re-confirmed present and unchanged.
+' Render via the PlantUML server (see build script) or any local PlantUML install.
+@startuml
+left to right direction
+skinparam backgroundColor white
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 15
+skinparam ArrowColor #333333
+skinparam ArrowFontColor #333333
+skinparam usecase {
+  BorderColor #5b84b8
+  FontColor #16212b
+}
+skinparam rectangle {
+  BorderColor #666666
+  FontColor #16212b
+  FontStyle bold
+}
+
+actor "User" as User
+
+rectangle "Extra Reference STLs (preview3D.js,\njaw_stls_extra_slot_1..4)" {
+  usecase "Upload extra STL (max 4) —\nuploadExtraStl()" as UC_Upload #DAE8FC
+  usecase "List attached extra STLs —\nloadExtraStlsIntoPreview()" as UC_List #DAE8FC
+  usecase "Show/hide each STL\nindependently —\ntoggleExtraStlVisibility()" as UC_Toggle #DAE8FC
+  usecase "Delete extra STL —\ndeleteExtraStl()" as UC_Delete #DAE8FC
+
+  usecase "Render in embedded 3D preview\n— renderExtraStl()" as UC_Render #D5E8D4
+}
+
+User -- UC_Upload
+User -- UC_List
+User -- UC_Toggle
+User -- UC_Delete
+
+UC_List ..> UC_Render : <<include>>
+@enduml

@@ -23,7 +23,7 @@ its footer/modals:
 | **Noticeboard** | Gallery of instruction screenshots + 3D view captures, synced with the desktop app | — |
 | **Clinical Info** | A *second*, independent per-tooth chart for clinical condition (mobility, decay, crowns, etc.) | The main RPD design chart — different data, different backend endpoint |
 | **Case Note** | Small per-case form (owner, due date, shade, work category, comment) | Mostly `localStorage`-only; see below |
-| 3D preview panel | Live embedded Three.js viewer of the case's jaw STL files | — |
+| 3D preview panel | 3 tabs sharing one WebGL frame: live Three.js jaw-STL view (including survey-angle targeting for undercuts), Extra 3D (upload/view extra STL slots), Reference Images | — |
 | Chat / Version History | Case comments and save-history side panels | Separate, simpler features |
 
 It's reached by opening a case from the case list: `2DAnnotation.html?id=<encrypted-case-id>`
@@ -43,8 +43,9 @@ It's reached by opening a case from the case list: `2DAnnotation.html?id=<encryp
   encoders, "preserve this raw field we can't regenerate"), that's almost always why — see
   [The jawstruct L2 format](#the-jawstruct-l2-format) below.
 - **The tests are the best spec of the trickiest behavior.** `__tests__/jawStruct.test.mjs`
-  (round-trip + bar/plate switch) and `__tests__/placementRules.test.mjs` encode real, hard-won
-  rules as executable examples — reading them is often faster than reading the prose comments.
+  (round-trip + bar/plate switch), `__tests__/placementRules.test.mjs`, and
+  `__tests__/assemblies.test.mjs` encode real, hard-won rules as executable examples — reading them
+  is often faster than reading the prose comments.
 - Console logs are prefixed by module for a reason: `[jawStructApi]`, `[jawStructApply]`,
   `[2D-post]`, `[annotationCatalog]`, etc. Filter the DevTools console by these when debugging.
 
@@ -87,12 +88,12 @@ It's reached by opening a case from the case list: `2DAnnotation.html?id=<encryp
 
 ## Codebase map
 
-29 files under `src/js/2D/` (~21k lines). Grouped by what they do:
+34 files under `src/js/2D/` (~26.5k lines). Grouped by what they do:
 
 **Orchestration**
 | File | Size | Purpose |
 |---|---|---|
-| `2DAnnotation.js` | 53KB | Entry point. Owns `state`, undo/redo history, tooth click-popup, remove-component dialog, save/load orchestration, panel layout, sidebar/footer wiring. Read this *last* — it's the glue. |
+| `2DAnnotation.js` | 64KB | Entry point. Owns `state`, undo/redo history, tooth click-popup, remove-component dialog, save/load orchestration (including Load Proposed Design — see below), panel layout, sidebar/footer wiring. Read this *last* — it's the glue. |
 
 **Canvas core** (tooth state, validation, rendering)
 | File | Size | Purpose |
@@ -105,7 +106,13 @@ It's reached by opening a case from the case list: `2DAnnotation.html?id=<encryp
 | `annotationPlacement.js` | 25KB | The placement engine — one function per component family, plus the assembly recipes and auto-reciprocation rule. |
 | `annotationRender.js` | 19KB | Draws both arches; owns the tooth click/right-click/double-click DOM listeners. |
 | `annotationVisuals.js` | 66KB | Pure SVG-fragment builders (icons, markers, overlays) — no events, no fetch. Only used by `annotationRender.js`. |
-| `annotationLocks.js` | 42KB | Lock/design-mode toggle, save-to-localStorage, JPEG/PNG export + thumbnail upload, bridges to the 3D preview. |
+| `annotationLocks.js` | 46KB | Lock/design-mode toggle, save-to-localStorage, JPEG/PNG export + thumbnail upload, bridges to the 3D preview. |
+
+**Kennedy classification & design proposal** (backs "Load Proposed Design" — see above)
+| File | Size | Purpose |
+|---|---|---|
+| `JawDesign.js` | 5.9KB | `classifyArch()` — Kennedy classification from tooth presence alone, pure function (Applegate rules). Used both to gate DLL-proposal eligibility and by the fallback picker. |
+| `JawDesignProposal.js` | 29KB | Derives a design proposal from each arch's Kennedy class — major connector + rest seats, per the metal/acrylic selection matrices (`chooseMajorConnector`, `buildDesignProposal`, `applyDesignProposal`). |
 
 **RPD component types** (geometry + per-family helpers, funneled through one barrel)
 | File | Size | Purpose |
@@ -126,20 +133,24 @@ It's reached by opening a case from the case list: `2DAnnotation.html?id=<encryp
 | `jawStructCodes.js` | 4KB | Int-enum ↔ web-componentId lookup tables mirroring the desktop's C# enums. |
 | `jawStructApply.js` | 5KB | Replays a decoded design onto live `state` using the real placement primitives. |
 | `jawStructApi.js` | 4KB | HTTP layer: `POST /jawstruct/l2/getall` (load) and `POST /jawstruct/l2` (save). |
-| `dotnetBinaryFormatter.js` | 6KB | Byte-level .NET BinaryFormatter encoder, used by `noticeboard.js` only. |
+| `dotnetBinaryFormatter.js` | 8KB | Byte-level .NET BinaryFormatter encoder, used by `noticeboard.js` only. |
 
 **Adjacent modal features** (embedded in the same page)
 | File | Size | Purpose |
 |---|---|---|
-| `noticeboard.js` | 63KB | Instruction/screenshot gallery + printable case-report generator. Most API-heavy file here. Exports the pure `mergeInstructions()` (local+server dedupe) for its unit test. |
-| `instructionEditor.js` | 83KB | The actual canvas image-annotation modal (crop/sticker/text/pencil). Self-contained, one export. |
-| `clinicalInfo.js` | 24KB | The separate clinical-condition tooth chart. |
-| `caseNote.js` | 6KB | Data-only (no UI) helpers for the Case Note fields; the form itself lives in `annotationCatalog.js`. |
+| `noticeboard.js` | 58KB | Instruction/screenshot gallery + printable case-report generator. Most API-heavy file here. Exports the pure `mergeInstructions()` (local+server dedupe) for its unit test. |
+| `instructionEditor.js` | 85KB | The actual canvas image-annotation modal (crop/sticker/text/pencil). Self-contained, one export. |
+| `clinicalInfo.js` | 23KB | The separate clinical-condition tooth chart. |
+| `caseNote.js` | 36KB | Case Note fields (owner, due date, shade, work category, comment) — grown well past "data-only" since the last pass through this doc; the form itself still lives in `annotationCatalog.js`, but skim this file directly rather than trusting that split. |
 
 **3D preview**
 | File | Size | Purpose |
 |---|---|---|
-| `preview3D.js` | 126KB | The largest file by far. Only 3 exports (`loadInteractiveJawPreview`, `capture3DPreviewDataUrl`, `teardown3DPreview`); wired in via `annotationLocks.js` and `noticeboard.js`, not directly by `2DAnnotation.js`. |
+| `preview3D.js` | 173KB | The largest file by far. Only 3 exports (`loadInteractiveJawPreview`, `capture3DPreviewDataUrl`, `teardown3DPreview`); wired in via `annotationLocks.js` and `noticeboard.js`, not directly by `2DAnnotation.js`. |
+| `preview3DSurvey.js` | 38KB | Set Survey Angle: aim, save and apply jaw insertion angles for undercut surveying (`.jaw-preview-survey-btn`). Imports `state` from `2DAnnotation.js` and a chunk of `preview3D.js`'s internals (THREE, `preview3DState`, the undercut-surface builders); `preview3D.js` imports its entry points back (`handleSurveyButtonClick`, `exitSurveyAiming`, `autoApplySavedSurveyAngles`) — a call-time-only circular pair by design, the file's own top comment says so explicitly. |
+| `preview3DApproval.js` | 11KB | The Extra 3D panel's Request-confirmation dialog — reuses `caseNote.js`'s approval dialog almost entirely; differs only in capture source (the tab's camera button), mail target (3D viewer link), and a single "Send" button. |
+| `previewTabs.js` | 2KB | The preview panel's folder tabs. Both 3D tabs share one WebGL frame (Extra 3D just stages files into it, so the context is never torn down); Reference Images pauses it. |
+| `referenceImages.js` | 12KB | The Reference Images pane: gallery + full-pane view of the case's reference images. Its tab lives in `previewTabs.js`. |
 
 ## Architecture patterns worth understanding before you get confused
 
@@ -183,6 +194,19 @@ on case+type).
 `resolveJawStructDesign()` (`jawStructCodec.js`) → `applyJawStructDesign()`
 (`jawStructApply.js`, replays onto `state.teeth` via the same `addPlacement`/`hasPlacement`
 primitives so a loaded design behaves like a hand-placed one) → `renderJaws()`.
+
+**Loading a proposed design** (`tryLoadDllProposedDesign()` in `2DAnnotation.js`, new): the "Load
+Proposed Design" button (`#loadProposalBtn`) calls the jaw-occlusion DLL via
+`generateDentureDesignSelect()` for whichever jaws are eligible (`classifyArch()` reports a
+Kennedy class, i.e. partially edentulous), passing the case's current `jawMaterial` and
+`caseIntID`. The DLL response is decoded with the same `decodeJawStructResponse()` used for
+server loads, then applied per jaw through the *exact* `resolveJawStructDesign()` →
+`applyJawStructDesign()` pipeline the server-load path uses (above) — a DLL-proposed design
+behaves like a hand-placed one, not a special case. If the DLL call fails, no eligible jaw exists,
+or nothing decodes, `bindKennedyProposalDialog()` falls back to a Kennedy-classification picker
+modal (`#loadTemplateJawModal` / `#kennedyClassPanel`) so the user can confirm which jaw(s) to
+apply to — then it re-renders the component catalog/edit-mode UI and both jaws, and records one
+undo step.
 
 ## The jawstruct L2 format
 
@@ -250,6 +274,10 @@ assume a fix in one encoder applies to the other.
   jaw STL files, embedded in the left panel and resizable via a splitter. Huge file, tiny public
   surface (3 exports) — treat it as a black box unless you're specifically working on 3D
   rendering.
+- **Survey angle targeting** (`preview3DSurvey.js`, new) — lets the user aim, save and apply
+  jaw insertion angles for undercut surveying from within the embedded 3D preview (gesture-drag
+  aiming, a placement arrow, saved-angle auto-apply on load). Shares `preview3D.js`'s state
+  rather than owning its own — read it alongside `preview3D.js`, not as a standalone module.
 
 ## Suggested reading order
 
@@ -262,11 +290,12 @@ assume a fix in one encoder applies to the other.
    save/load pipeline, in dependency order.
 6. `2DAnnotation.js` — now that you know what it's wiring together, the orchestrator makes sense.
 7. Whichever adjacent modal you actually need to touch (`noticeboard.js`, `clinicalInfo.js`,
-   `instructionEditor.js`, `preview3D.js`, `caseNote.js`).
+   `instructionEditor.js`, `preview3D.js`, `preview3DSurvey.js`, `caseNote.js`).
 
-Alongside the code, skim `__tests__/jawStruct.test.mjs`, `__tests__/placementRules.test.mjs`,
-and `__tests__/assemblies.test.mjs` — they're concrete, runnable examples of the rules
-described above.
+Alongside the code, skim `__tests__/jawStruct.test.mjs`, `__tests__/placementRules.test.mjs`, and
+`__tests__/assemblies.test.mjs` — they're concrete, runnable examples of the rules described
+above.
 
-See also [Documentations/setup/](../setup/README.md) for environment/deployment setup, and the
-existing `Documentations/Maintenance and Operational Runbook.docx` for release/incident process.
+See also [Documentations/setup/](README.md) for environment/deployment setup (this file now lives
+alongside those, moved from `Documentations/onboarding/` on 2026-08-21), and the existing
+`Documentations/Maintenance and Operational Runbook.docx` for release/incident process.

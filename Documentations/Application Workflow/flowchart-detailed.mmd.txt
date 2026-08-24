@@ -1,0 +1,170 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#eaf6f3', 'primaryBorderColor': '#0d7d6c', 'primaryTextColor': '#16212b', 'lineColor': '#56626d', 'tertiaryColor': '#ffffff', 'fontFamily': 'Segoe UI, Helvetica, Arial, sans-serif', 'fontSize': '17px' }, 'flowchart': { 'curve': 'basis', 'nodeSpacing': 40, 'rankSpacing': 65, 'htmlLabels': true } } }%%
+%% SmartRPD — Detailed Application Flowchart (full, combined reference)
+%% DRAFT — needs re-verification against a real git-archive extraction before this replaces the
+%% published diagram (see chat, 2026-08-21 mermaid review). Not yet re-rendered to .png.
+%% This is the whole app on one canvas, which Mermaid auto-lays-out quite wide.
+%% For a readable image, use the split flowchart-01..04-*.mmd.txt files instead —
+%% same content, one screen-area per file. This one is best pasted into
+%% https://mermaid.live and read by zooming into one area at a time.
+
+flowchart TD
+    classDef screen fill:#eaf6f3,stroke:#0d7d6c,stroke-width:1.5px,color:#16212b;
+    classDef decision fill:#fff4e0,stroke:#d69b3f,stroke-width:1.5px,color:#16212b;
+    classDef danger fill:#fdeceb,stroke:#c94f3d,stroke-width:1px,color:#7a2418;
+    classDef pipe fill:#fdf8e3,stroke:#d69b3f,stroke-width:1px,color:#16212b;
+
+    Start(["Visitor opens the app"]) --> Login["Login page — index.html"]
+
+    subgraph AUTH["AUTHENTICATION"]
+        direction TB
+        Login --> LoginChoice{"Existing account?"}
+        LoginChoice -->|"Sign in"| LoginSubmit["Enter username + password, Sign In"]
+        LoginChoice -->|"No account"| Signup["Sign Up view: username + email"]
+        LoginChoice -->|"Forgot password"| ForgotStage1["Forgot Password, Stage 1: enter registered email"]
+
+        Signup -->|"POST /user/register/request"| PendingApproval[["Request queued, awaiting admin approval (Admin > Users)"]]
+        PendingApproval -.->|"Admin approves"| EmailedPassword["User emailed a link to set their password"]
+        EmailedPassword --> LoginChoice
+
+        ForgotStage1 -->|"POST /user/reqpwreset"| ForgotStage2["Stage 2: enter emailed key + new password"]
+        ForgotStage2 -->|"POST /user/resetpw"| LoginChoice
+
+        LoginSubmit --> LoginCheck{"Credentials valid?"}
+        LoginCheck -->|"No"| LoginError["Show inline error"]
+        LoginError --> LoginChoice
+        LoginCheck -->|"Yes"| OTPNote["OTP screen exists in the DOM but is currently bypassed (TEMP flag in login.js) — falls straight through"]
+        OTPNote --> RoleRoute{"loggedInUser.isAdmin === 1 ?"}
+    end
+
+    RoleRoute -->|"No, regular user"| CaseList
+    RoleRoute -->|"Yes, admin"| AdminCaseList
+
+    CaseList -.->|"sidebar: Change Password (signed-in)"| ChangePwd["Change Password modal — reuses the emailed-key reset flow, not the current password"]
+    AdminCaseList -.->|"sidebar: Change Password (signed-in)"| ChangePwd
+
+    subgraph USERFLOW["CASE LIST & CASE LIFECYCLE — case_list.html"]
+        direction TB
+        CaseList["Case List"] --> StatCards["Stage filter cards: All / Preparation / Delivery / Completed (click to filter)"]
+        CaseList --> SearchFilter["Search by name or date, status filter, sort"]
+        CaseList --> Notif["Notifications popup (unread badge, mark all read)"]
+        CaseList -->|"Create Case button"| CreateCase
+
+        subgraph CREATE["Create Case (inline pane, not a separate page)"]
+            direction TB
+            CreateCase["Case name, request date, instructions"] --> InviteCollab["Invite collaborators (search + add)"]
+            InviteCollab --> UploadSTL["Upload jaw STL files (upper / lower)"]
+            UploadSTL --> UploadRef["Upload reference images"]
+            UploadRef --> SaveCase["Save, case is created"]
+        end
+        SaveCase --> CaseList
+
+        CaseList -->|"Click a case row"| CaseDetail["Case Detail pane opens (image gallery + status pill)"]
+
+        subgraph DETAIL["Case Detail actions (⋮ dropdown)"]
+            direction TB
+            CaseDetail --> DDMenu{"⋮ menu"}
+            DDMenu --> ViewDash["View Dashboard"]
+            DDMenu --> Rename["Rename"]
+            DDMenu --> EditAccess["Edit User Access (collaborators / roles)"]
+            DDMenu --> ViewVersions["View Version History"]
+            DDMenu --> DownloadRefs["Download References"]
+            DDMenu --> Duplicate["Duplicate case"]
+            DDMenu --> Delete["Delete case (confirm dialog)"]
+            CaseDetail --> StatusSelect["Change status (see pipeline below)"]
+            CaseDetail --> Open2D["Open case for design"]
+            CaseDetail --> View3DLink["View 3D"]
+        end
+
+        ViewDash --> Dashboard
+        ViewVersions --> VersionHistoryPanel["Version History panel (saved jawstruct versions, restore)"]
+        VersionHistoryPanel --> CaseDetail
+        Delete --> CaseList
+        Duplicate --> CaseList
+        Rename --> CaseDetail
+        EditAccess --> CaseDetail
+        DownloadRefs --> CaseDetail
+
+        subgraph DASH["Case Dashboard overlay"]
+            direction TB
+            Dashboard["Per-jaw pipeline steps (read-only, written by the desktop app): jaw_prepared, six_points, segmentation, polylines, surface"] --> Captures["View Captures: 2D upper/lower, 3D upper/lower (/thumbnails/get)"]
+            Dashboard --> CaseAccess["Case Access panel (roles)"]
+            Dashboard --> ViewcapturesGallery["Viewcaptures gallery (/noticeboard/view/get)"]
+        end
+        Dashboard --> CaseDetail
+    end
+
+    Open2D -->|"navigate: 2DAnnotation.html?id=(encrypted case id)"| TwoD
+
+    subgraph TWOD["2D ANNOTATION — RPD design workspace (2DAnnotation.html)"]
+        direction TB
+        TwoD["Tooth chart (odontogram): mark present / missing / abutment / compromised"] --> Components["Place framework components: mesh, clasp, bar, plate, rest, minor / major connectors — Save button posts to /jawstruct/l2"]
+
+        TwoD -->|"Load Proposed Design button"| LoadProposed{"Eligible partial-edentulous jaw(s) found?"}
+        LoadProposed -->|"Yes — call DLL"| DllCall["POST /dll/compute-denture-design-select"]
+        DllCall -->|"design returned"| Components
+        DllCall -->|"DLL fails / no eligible jaw"| KennedyPicker["Kennedy-classification picker (fallback modal)"]
+        LoadProposed -->|"No eligible jaw"| KennedyPicker
+        KennedyPicker -->|"Apply"| Components
+
+        TwoD --> InstrEditor["Instruction Editor — freehand annotate a screenshot (crop / sticker / text / pencil)"]
+        TwoD --> Noticeboard["Noticeboard — gallery of instruction shots + 3D view captures, synced with desktop app"]
+        InstrEditor --> Noticeboard
+        TwoD --> ClinicalInfo["Clinical Info — separate per-tooth clinical chart (mobility, decay, crowns)"]
+        TwoD --> CaseNote["Case Note — owner / due date / shade / category (mostly localStorage), case-comment field synced live with Case List"]
+
+        TwoD --> PreviewTabs["Preview panel — 3 tabs sharing one WebGL frame"]
+        PreviewTabs --> Preview3D["3D Preview tab — live Three.js view of jaw STL"]
+        PreviewTabs --> ExtraSTL["Extra 3D tab — upload/view other 3D files (extra STL slots 1-4)"]
+        PreviewTabs --> RefImages["Reference Images tab — gallery + full-pane view of the case's reference images"]
+        Preview3D --> SurveyAngle["Survey-angle targeting for undercuts (gesture controls)"]
+        Preview3D -->|"Approve for lab"| ApprovalOverlay["Preview approval overlay [For Lab Only]"]
+        ApprovalOverlay -->|"Send"| ApprovalEmail["Email captured images to recipients"]
+
+        TwoD --> ChatPanel["Chat panel — case comments, image attachments (polls while open)"]
+        TwoD --> VersionHistoryEmbedded["Version History side panel"]
+        TwoD -->|"Back"| CaseList
+    end
+
+    View3DLink --> ThreeDViewer
+
+    subgraph THREED["3D VIEWER — standalone (ThreeDViewer.html)"]
+        direction TB
+        ThreeDViewer["Full Three.js viewer (webpack bundle dist/bundle.js) for the case's jaw STL(s)"] -->|"Back to case list"| CaseList
+    end
+
+    subgraph ADMINFLOW["ADMIN CONSOLE"]
+        direction TB
+        AdminCaseList["Admin Case List — admin/admin_case_list.html (same case UI, admin-scoped)"] --> AdminSidebar["Sidebar: language menu, Admin Users, Machine IDs, Logout"]
+        AdminSidebar --> AdminUsers["Admin > Users (admin_users.html)"]
+        AdminSidebar --> AdminMachine["Admin > Machine IDs (admin_machineid.html)"]
+
+        AdminUsers --> ApproveSignup["Approve / deny pending signup requests (bell badge shows pending count)"]
+        AdminUsers --> RegisterUser["Register new user manually (POST /user/register)"]
+        AdminUsers --> ModifyUser["Edit / deactivate / reactivate user (POST /user/modify)"]
+        ApproveSignup -.-> EmailedPassword
+
+        AdminMachine --> MachineCRUD["Add / edit comment / delete machine IDs"]
+
+        AdminCaseList -->|"open a case"| Open2D
+        AdminCaseList -->|"View 3D"| View3DLink
+    end
+
+    CaseList -.->|"role-guard: isAdmin, redirect"| AdminCaseList
+    AdminCaseList -.->|"role-guard: not admin, redirect"| CaseList
+
+    subgraph PIPELINE["Case status pipeline (status dropdown / stat filter groups)"]
+        direction LR
+        P1["draft"] --> P2["2d_design_pending"] --> P3["2d_design_drafted"] --> P4["2d_design_approved"] --> P5["3d_design_pending"] --> P6["3d_design_drafted"] --> P7["3d_design_approved"] --> P8["in_production"] --> P9["out_for_delivery"] --> P10["delivered"] --> P11["completed"]
+    end
+    StatusSelect -.-> PIPELINE
+
+    subgraph CROSS["CROSS-CUTTING (present on most pages)"]
+        direction LR
+        HelpBot["Help Bot — contextual AI assistant, can open containers + highlight UI elements"]
+        SidebarShared["App Sidebar — language switch, admin links (if isAdmin), logout"]
+    end
+
+    class Login,CaseList,AdminCaseList,TwoD,Noticeboard,ThreeDViewer,AdminUsers,AdminMachine,Dashboard screen;
+    class LoginChoice,LoginCheck,RoleRoute,DDMenu,LoadProposed decision;
+    class Delete danger;
+    class P1,P2,P3,P4,P5,P6,P7,P8,P9,P10,P11 pipe;

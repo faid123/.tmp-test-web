@@ -47,3 +47,8 @@ Feature branch → merged into an integration branch → integration branch's ti
 `nyunt/dev-deploy` → that push triggers the deploy pipeline. The full mechanics (and how to point
 this at different branches) are in
 [03 — CI/CD and deployment setup](03-cicd-and-deployment-setup.md).
+
+That same push also refreshes `Documentations/AutoTest Results/` on `dev-deploy-documentation` —
+test counts, coverage, and dependency audit re-run against whatever the deploy just shipped. This
+step is merged and live in `deploy.yml` on `nyunt/dev-deploy` (confirmed 2026-08-20). See
+[Deploy Documentation Review](../DEPLOY_DOC_REVIEW.md) for how that works.

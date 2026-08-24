@@ -33,6 +33,21 @@ Trigger: push to **`nyunt/dev-deploy`**, or manual `workflow_dispatch` from the 
    back if you need to roll back.
 10. Explicitly `POST /repos/{repo}/pages/builds` — pushes made with the built-in `GITHUB_TOKEN`
     don't auto-trigger GitHub's legacy Pages build, so this call is required, not optional.
+11. Check out the documentation branch (`dev-deploy-documentation`) into a separate path, full
+    history (needed for the alignment check in the next step).
+12. `npm ci`, then `node tools/deploy-review.mjs` inside that checkout — confirms the commit
+    just deployed is still an ancestor of the docs branch, re-runs the real Jest suite and
+    `npm audit`, and rewrites the raw data under `Documentations/AutoTest Results/`.
+13. Commit and push only `Documentations/AutoTest Results/` back to `dev-deploy-documentation`,
+    if anything actually changed.
+
+Steps 11–13 are an event-driven replacement for a `schedule:` trigger, which GitHub Actions only
+reads from the repository's default branch (`main` here, not this one, so a cron would never
+fire). They refresh raw test/audit data only — narrative `.docx` documents are never touched by
+this step; see [Documentations/DEPLOY_DOC_REVIEW.md](../DEPLOY_DOC_REVIEW.md) for the full split
+between what's automatic and what needs a manual/AI-assisted pass. **Documentations/ itself is now
+maintained directly on `nyunt/dev-W7.1` (as of 2026-08-20)** — `dev-deploy-documentation` is a
+mirrored backup, pushed by hand alongside this branch, not the primary copy.
 
 Auth is the built-in `GITHUB_TOKEN` (`permissions: contents: write, pages: write` in the
 workflow) — no personal access token needed for the pipeline itself. A `concurrency` group

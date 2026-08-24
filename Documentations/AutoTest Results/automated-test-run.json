@@ -1,68 +1,14 @@
 {
-  "runAt": "2026-07-29T09:08:10.099Z",
+  "runAt": "2026-08-24T01:41:34.294Z",
   "command": "npx jest --ci --coverage --coverageReporters=json-summary --verbose --testLocationInResults --json",
   "commandFailed": false,
-  "numTotalTestSuites": 13,
-  "numPassedTestSuites": 13,
+  "numTotalTestSuites": 19,
+  "numPassedTestSuites": 19,
   "numFailedTestSuites": 0,
-  "numTotalTests": 221,
-  "numPassedTests": 221,
+  "numTotalTests": 582,
+  "numPassedTests": 582,
   "numFailedTests": 0,
-  "testsByCategory": {
-    "real": 221
-  },
-  "categoryLegend": {
-    "real": "Real (imports the actual src/ module under test)",
-    "copy": "Copy (reimplements the logic locally; does not import src/)",
-    "stub": "Stub (hardcoded placeholder assertion; no source under test)"
-  },
   "suites": [
-    {
-      "file": "mergeInstructions.test.mjs",
-      "status": "passed",
-      "tests": 5,
-      "pass": 5,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 1288,
-      "uat": [
-        "UAT-06"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real src/js/2D/mergeInstructions.js.",
-      "failureMessages": []
-    },
-    {
-      "file": "crypt.test.mjs",
-      "status": "passed",
-      "tests": 3,
-      "pass": 3,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 1289,
-      "uat": [],
-      "category": "real",
-      "crossCutting": true,
-      "note": "Imports real src/js/shared/crypt.js. Case-ID URL obfuscation used across case list, chat, viewer, version history, annotation and create-case links -- cross-cutting, not tied to one workflow.",
-      "failureMessages": []
-    },
-    {
-      "file": "caseEnrichment.test.mjs",
-      "status": "passed",
-      "tests": 13,
-      "pass": 13,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 1337,
-      "uat": [
-        "UAT-02"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real src/js/shared/caseEnrichment.js. Case-detail and co-owner request/fold layer behind the case list.",
-      "failureMessages": []
-    },
     {
       "file": "importResolution.test.mjs",
       "status": "passed",
@@ -70,7 +16,7 @@
       "pass": 3,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1360,
+      "durationMs": 1416,
       "uat": [],
       "category": "real",
       "crossCutting": true,
@@ -84,43 +30,113 @@
       "pass": 22,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1397,
+      "durationMs": 1567,
       "uat": [
         "UAT-01"
       ],
       "category": "real",
       "crossCutting": false,
-      "note": "Imports real src/js/shared/passwordReset.js. New change-password/reset-password feature -- an extension of the Login & Authentication workflow.",
+      "note": "Imports real src/js/shared/passwordReset.js. Change-password/reset-password feature -- an extension of the Login & Authentication workflow.",
       "failureMessages": []
     },
     {
-      "file": "reciprocatingExclusivity.test.mjs",
+      "file": "caseEnrichment.test.mjs",
       "status": "passed",
-      "tests": 9,
-      "pass": 9,
+      "tests": 24,
+      "pass": 24,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1428,
+      "durationMs": 1553,
       "uat": [
-        "UAT-06"
+        "UAT-02"
       ],
       "category": "real",
       "crossCutting": false,
-      "note": "Imports real src/js/2D/criteria.js, components.js and annotationTeethModel.js.",
+      "note": "Imports real src/js/shared/caseEnrichment.js. Case-detail and co-owner request/fold layer behind the case list.",
       "failureMessages": []
     },
     {
       "file": "helpBot.test.mjs",
       "status": "passed",
-      "tests": 94,
-      "pass": 94,
+      "tests": 87,
+      "pass": 87,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1564,
+      "durationMs": 1740,
       "uat": [],
       "category": "real",
       "crossCutting": false,
-      "note": "Imports real src/js/shared/helpMatcher.js and helpTopics.js (AI-powered help assistant). New feature with no standing UAT-xx case yet -- needs one added to the 12-case set rather than being force-mapped to an existing workflow.",
+      "note": "Imports real src/js/shared/helpMatcher.js and helpTopics.js (AI-powered help assistant). No standing UAT-xx case yet -- see Traceability_Document.docx.",
+      "failureMessages": []
+    },
+    {
+      "file": "imageFiles.test.mjs",
+      "status": "passed",
+      "tests": 19,
+      "pass": 19,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 161,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
+      "failureMessages": []
+    },
+    {
+      "file": "JawDesignProposal.test.mjs",
+      "status": "passed",
+      "tests": 57,
+      "pass": 57,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 1682,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
+      "failureMessages": []
+    },
+    {
+      "file": "JawDesign.test.mjs",
+      "status": "passed",
+      "tests": 20,
+      "pass": 20,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 223,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
+      "failureMessages": []
+    },
+    {
+      "file": "crypt.test.mjs",
+      "status": "passed",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 108,
+      "uat": [],
+      "category": "real",
+      "crossCutting": true,
+      "note": "Imports real src/js/shared/crypt.js. Case-ID URL obfuscation used across case list, chat, viewer, version history, annotation and create-case links -- cross-cutting, not tied to one workflow.",
+      "failureMessages": []
+    },
+    {
+      "file": "placementRules.test.mjs",
+      "status": "passed",
+      "tests": 52,
+      "pass": 52,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 1910,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
       "failureMessages": []
     },
     {
@@ -130,7 +146,7 @@
       "pass": 28,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1721,
+      "durationMs": 2019,
       "uat": [
         "UAT-07",
         "UAT-08"
@@ -141,29 +157,13 @@
       "failureMessages": []
     },
     {
-      "file": "dashboard.test.mjs",
-      "status": "passed",
-      "tests": 21,
-      "pass": 21,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 1038,
-      "uat": [
-        "UAT-04"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real dashboard.js pipeline functions.",
-      "failureMessages": []
-    },
-    {
       "file": "clinicalInfoCodec.test.mjs",
       "status": "passed",
       "tests": 13,
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1053,
+      "durationMs": 1405,
       "uat": [
         "UAT-06"
       ],
@@ -173,51 +173,119 @@
       "failureMessages": []
     },
     {
-      "file": "jawStructRoundTrip.test.mjs",
+      "file": "userSuggest.test.mjs",
       "status": "passed",
-      "tests": 2,
-      "pass": 2,
+      "tests": 12,
+      "pass": 12,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1169,
-      "uat": [
-        "UAT-06"
-      ],
+      "durationMs": 1449,
+      "uat": [],
       "category": "real",
       "crossCutting": false,
-      "note": "Imports real src/js/2D/jawStructApply.js against fixture desktop files.",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
       "failureMessages": []
     },
     {
-      "file": "jawStructLingualPlate.test.mjs",
+      "file": "dashboard.test.mjs",
       "status": "passed",
-      "tests": 4,
-      "pass": 4,
+      "tests": 19,
+      "pass": 19,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1171,
+      "durationMs": 1340,
       "uat": [
-        "UAT-06"
+        "UAT-04"
       ],
       "category": "real",
       "crossCutting": false,
-      "note": "Imports real src/js/2D/jawStructApply.js against fixture desktop files.",
+      "note": "Imports real dashboard.js pipeline functions.",
       "failureMessages": []
     },
     {
-      "file": "jawStructMajorSwitch.test.mjs",
+      "file": "caseEmailBody.test.mjs",
       "status": "passed",
-      "tests": 4,
-      "pass": 4,
+      "tests": 13,
+      "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1187,
+      "durationMs": 1383,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
+      "failureMessages": []
+    },
+    {
+      "file": "caseComment.test.mjs",
+      "status": "passed",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 161,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
+      "failureMessages": []
+    },
+    {
+      "file": "jawStruct.test.mjs",
+      "status": "passed",
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 1670,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
+      "failureMessages": []
+    },
+    {
+      "file": "assemblies.test.mjs",
+      "status": "passed",
+      "tests": 70,
+      "pass": 70,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 1657,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
+      "failureMessages": []
+    },
+    {
+      "file": "mergeInstructions.test.mjs",
+      "status": "passed",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 1789,
       "uat": [
         "UAT-06"
       ],
       "category": "real",
       "crossCutting": false,
-      "note": "Imports real src/js/2D/jawStructApply.js.",
+      "note": "Imports real src/js/2D/mergeInstructions.js.",
+      "failureMessages": []
+    },
+    {
+      "file": "pageTour.test.mjs",
+      "status": "passed",
+      "tests": 114,
+      "pass": 114,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 5243,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
       "failureMessages": []
     }
   ],
@@ -239,8 +307,8 @@
       "suites": [
         "caseEnrichment.test.mjs"
       ],
-      "tests": 13,
-      "pass": 13,
+      "tests": 24,
+      "pass": 24,
       "fail": 0,
       "automationConfidence": "Real source coverage"
     },
@@ -259,8 +327,8 @@
       "suites": [
         "dashboard.test.mjs"
       ],
-      "tests": 21,
-      "pass": 21,
+      "tests": 19,
+      "pass": 19,
       "fail": 0,
       "automationConfidence": "Real source coverage"
     },
@@ -277,15 +345,11 @@
       "id": "UAT-06",
       "name": "2D Annotation",
       "suites": [
-        "mergeInstructions.test.mjs",
-        "reciprocatingExclusivity.test.mjs",
         "clinicalInfoCodec.test.mjs",
-        "jawStructRoundTrip.test.mjs",
-        "jawStructLingualPlate.test.mjs",
-        "jawStructMajorSwitch.test.mjs"
+        "mergeInstructions.test.mjs"
       ],
-      "tests": 37,
-      "pass": 37,
+      "tests": 18,
+      "pass": 18,
       "fail": 0,
       "automationConfidence": "Real source coverage"
     },
@@ -302,7 +366,7 @@
     },
     {
       "id": "UAT-08",
-      "name": "3D Viewer (standalone)",
+      "name": "3D Viewer",
       "suites": [
         "artificialTeethDecode.test.mjs"
       ],
@@ -348,16 +412,6 @@
       "automationConfidence": "No automated coverage"
     }
   ],
-  "crossCuttingSuites": [
-    {
-      "file": "crypt.test.mjs",
-      "note": "Imports real src/js/shared/crypt.js. Case-ID URL obfuscation used across case list, chat, viewer, version history, annotation and create-case links -- cross-cutting, not tied to one workflow."
-    },
-    {
-      "file": "importResolution.test.mjs",
-      "note": "Walks src/, __tests__/ and the HTML pages checking every relative import/script-src resolves. Repo-wide build-integrity check, not tied to one workflow."
-    }
-  ],
   "uatWorkflowsWithNoAutomatedCoverage": [
     "UAT-03 Case Creation",
     "UAT-05 Collaboration (Chat/Notifications)",
@@ -369,769 +423,79 @@
   "suitesForFeaturesWithNoStandingUatCase": [
     {
       "file": "helpBot.test.mjs",
-      "note": "Imports real src/js/shared/helpMatcher.js and helpTopics.js (AI-powered help assistant). New feature with no standing UAT-xx case yet -- needs one added to the 12-case set rather than being force-mapped to an existing workflow."
+      "note": "Imports real src/js/shared/helpMatcher.js and helpTopics.js (AI-powered help assistant). No standing UAT-xx case yet -- see Traceability_Document.docx."
+    },
+    {
+      "file": "imageFiles.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "JawDesignProposal.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "JawDesign.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "placementRules.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "userSuggest.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "caseEmailBody.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "caseComment.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "jawStruct.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "assemblies.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "pageTour.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
     }
   ],
   "coverageTotal": {
     "lines": {
-      "total": 4630,
-      "covered": 1226,
+      "total": 12734,
+      "covered": 2592,
       "skipped": 0,
-      "pct": 26.47
+      "pct": 20.35
     },
     "statements": {
-      "total": 5310,
-      "covered": 1384,
+      "total": 14531,
+      "covered": 2923,
       "skipped": 0,
-      "pct": 26.06
+      "pct": 20.11
     },
     "functions": {
-      "total": 888,
-      "covered": 209,
+      "total": 2104,
+      "covered": 503,
       "skipped": 0,
-      "pct": 23.53
+      "pct": 23.9
     },
     "branches": {
-      "total": 4381,
-      "covered": 862,
+      "total": 9345,
+      "covered": 1823,
       "skipped": 0,
-      "pct": 19.67
+      "pct": 19.5
     },
     "branchesTrue": {
       "total": 0,
       "covered": 0,
       "skipped": 0,
       "pct": 100
-    }
-  },
-  "coverageByFile": {
-    "src/js/2D/annotationTeethModel.js": {
-      "lines": {
-        "total": 82,
-        "covered": 14,
-        "skipped": 0,
-        "pct": 17.07
-      },
-      "functions": {
-        "total": 27,
-        "covered": 7,
-        "skipped": 0,
-        "pct": 25.92
-      },
-      "statements": {
-        "total": 91,
-        "covered": 14,
-        "skipped": 0,
-        "pct": 15.38
-      },
-      "branches": {
-        "total": 67,
-        "covered": 5,
-        "skipped": 0,
-        "pct": 7.46
-      }
-    },
-    "src/js/2D/caseNote.js": {
-      "lines": {
-        "total": 61,
-        "covered": 7,
-        "skipped": 0,
-        "pct": 11.47
-      },
-      "functions": {
-        "total": 16,
-        "covered": 2,
-        "skipped": 0,
-        "pct": 12.5
-      },
-      "statements": {
-        "total": 75,
-        "covered": 8,
-        "skipped": 0,
-        "pct": 10.66
-      },
-      "branches": {
-        "total": 64,
-        "covered": 0,
-        "skipped": 0,
-        "pct": 0
-      }
-    },
-    "src/js/2D/clinicalInfo.js": {
-      "lines": {
-        "total": 354,
-        "covered": 78,
-        "skipped": 0,
-        "pct": 22.03
-      },
-      "functions": {
-        "total": 57,
-        "covered": 18,
-        "skipped": 0,
-        "pct": 31.57
-      },
-      "statements": {
-        "total": 391,
-        "covered": 84,
-        "skipped": 0,
-        "pct": 21.48
-      },
-      "branches": {
-        "total": 272,
-        "covered": 50,
-        "skipped": 0,
-        "pct": 18.38
-      }
-    },
-    "src/js/2D/components.bar.js": {
-      "lines": {
-        "total": 144,
-        "covered": 38,
-        "skipped": 0,
-        "pct": 26.38
-      },
-      "functions": {
-        "total": 18,
-        "covered": 4,
-        "skipped": 0,
-        "pct": 22.22
-      },
-      "statements": {
-        "total": 170,
-        "covered": 41,
-        "skipped": 0,
-        "pct": 24.11
-      },
-      "branches": {
-        "total": 170,
-        "covered": 28,
-        "skipped": 0,
-        "pct": 16.47
-      }
-    },
-    "src/js/2D/components.clasp.js": {
-      "lines": {
-        "total": 166,
-        "covered": 96,
-        "skipped": 0,
-        "pct": 57.83
-      },
-      "functions": {
-        "total": 24,
-        "covered": 10,
-        "skipped": 0,
-        "pct": 41.66
-      },
-      "statements": {
-        "total": 179,
-        "covered": 99,
-        "skipped": 0,
-        "pct": 55.3
-      },
-      "branches": {
-        "total": 157,
-        "covered": 42,
-        "skipped": 0,
-        "pct": 26.75
-      }
-    },
-    "src/js/2D/components.js": {
-      "lines": {
-        "total": 4,
-        "covered": 4,
-        "skipped": 0,
-        "pct": 100
-      },
-      "functions": {
-        "total": 1,
-        "covered": 1,
-        "skipped": 0,
-        "pct": 100
-      },
-      "statements": {
-        "total": 5,
-        "covered": 5,
-        "skipped": 0,
-        "pct": 100
-      },
-      "branches": {
-        "total": 0,
-        "covered": 0,
-        "skipped": 0,
-        "pct": 100
-      }
-    },
-    "src/js/2D/components.major.js": {
-      "lines": {
-        "total": 480,
-        "covered": 104,
-        "skipped": 0,
-        "pct": 21.66
-      },
-      "functions": {
-        "total": 72,
-        "covered": 11,
-        "skipped": 0,
-        "pct": 15.27
-      },
-      "statements": {
-        "total": 511,
-        "covered": 107,
-        "skipped": 0,
-        "pct": 20.93
-      },
-      "branches": {
-        "total": 504,
-        "covered": 78,
-        "skipped": 0,
-        "pct": 15.47
-      }
-    },
-    "src/js/2D/components.mesh.js": {
-      "lines": {
-        "total": 164,
-        "covered": 31,
-        "skipped": 0,
-        "pct": 18.9
-      },
-      "functions": {
-        "total": 29,
-        "covered": 2,
-        "skipped": 0,
-        "pct": 6.89
-      },
-      "statements": {
-        "total": 171,
-        "covered": 31,
-        "skipped": 0,
-        "pct": 18.12
-      },
-      "branches": {
-        "total": 133,
-        "covered": 17,
-        "skipped": 0,
-        "pct": 12.78
-      }
-    },
-    "src/js/2D/components.minor.js": {
-      "lines": {
-        "total": 34,
-        "covered": 8,
-        "skipped": 0,
-        "pct": 23.52
-      },
-      "functions": {
-        "total": 7,
-        "covered": 0,
-        "skipped": 0,
-        "pct": 0
-      },
-      "statements": {
-        "total": 38,
-        "covered": 8,
-        "skipped": 0,
-        "pct": 21.05
-      },
-      "branches": {
-        "total": 28,
-        "covered": 0,
-        "skipped": 0,
-        "pct": 0
-      }
-    },
-    "src/js/2D/components.plate.js": {
-      "lines": {
-        "total": 95,
-        "covered": 28,
-        "skipped": 0,
-        "pct": 29.47
-      },
-      "functions": {
-        "total": 17,
-        "covered": 6,
-        "skipped": 0,
-        "pct": 35.29
-      },
-      "statements": {
-        "total": 98,
-        "covered": 29,
-        "skipped": 0,
-        "pct": 29.59
-      },
-      "branches": {
-        "total": 103,
-        "covered": 21,
-        "skipped": 0,
-        "pct": 20.38
-      }
-    },
-    "src/js/2D/components.rest.js": {
-      "lines": {
-        "total": 88,
-        "covered": 11,
-        "skipped": 0,
-        "pct": 12.5
-      },
-      "functions": {
-        "total": 15,
-        "covered": 0,
-        "skipped": 0,
-        "pct": 0
-      },
-      "statements": {
-        "total": 107,
-        "covered": 11,
-        "skipped": 0,
-        "pct": 10.28
-      },
-      "branches": {
-        "total": 113,
-        "covered": 0,
-        "skipped": 0,
-        "pct": 0
-      }
-    },
-    "src/js/2D/constants.js": {
-      "lines": {
-        "total": 30,
-        "covered": 26,
-        "skipped": 0,
-        "pct": 86.66
-      },
-      "functions": {
-        "total": 2,
-        "covered": 0,
-        "skipped": 0,
-        "pct": 0
-      },
-      "statements": {
-        "total": 30,
-        "covered": 26,
-        "skipped": 0,
-        "pct": 86.66
-      },
-      "branches": {
-        "total": 0,
-        "covered": 0,
-        "skipped": 0,
-        "pct": 100
-      }
-    },
-    "src/js/2D/criteria.js": {
-      "lines": {
-        "total": 60,
-        "covered": 29,
-        "skipped": 0,
-        "pct": 48.33
-      },
-      "functions": {
-        "total": 11,
-        "covered": 6,
-        "skipped": 0,
-        "pct": 54.54
-      },
-      "statements": {
-        "total": 62,
-        "covered": 30,
-        "skipped": 0,
-        "pct": 48.38
-      },
-      "branches": {
-        "total": 62,
-        "covered": 23,
-        "skipped": 0,
-        "pct": 37.09
-      }
-    },
-    "src/js/2D/jawStructApply.js": {
-      "lines": {
-        "total": 52,
-        "covered": 49,
-        "skipped": 0,
-        "pct": 94.23
-      },
-      "functions": {
-        "total": 5,
-        "covered": 5,
-        "skipped": 0,
-        "pct": 100
-      },
-      "statements": {
-        "total": 67,
-        "covered": 61,
-        "skipped": 0,
-        "pct": 91.04
-      },
-      "branches": {
-        "total": 55,
-        "covered": 40,
-        "skipped": 0,
-        "pct": 72.72
-      }
-    },
-    "src/js/2D/jawStructCodec.js": {
-      "lines": {
-        "total": 331,
-        "covered": 284,
-        "skipped": 0,
-        "pct": 85.8
-      },
-      "functions": {
-        "total": 43,
-        "covered": 38,
-        "skipped": 0,
-        "pct": 88.37
-      },
-      "statements": {
-        "total": 413,
-        "covered": 336,
-        "skipped": 0,
-        "pct": 81.35
-      },
-      "branches": {
-        "total": 315,
-        "covered": 200,
-        "skipped": 0,
-        "pct": 63.49
-      }
-    },
-    "src/js/2D/jawStructCodes.js": {
-      "lines": {
-        "total": 14,
-        "covered": 14,
-        "skipped": 0,
-        "pct": 100
-      },
-      "functions": {
-        "total": 1,
-        "covered": 1,
-        "skipped": 0,
-        "pct": 100
-      },
-      "statements": {
-        "total": 16,
-        "covered": 16,
-        "skipped": 0,
-        "pct": 100
-      },
-      "branches": {
-        "total": 4,
-        "covered": 3,
-        "skipped": 0,
-        "pct": 75
-      }
-    },
-    "src/js/2D/mergeInstructions.js": {
-      "lines": {
-        "total": 10,
-        "covered": 10,
-        "skipped": 0,
-        "pct": 100
-      },
-      "functions": {
-        "total": 2,
-        "covered": 2,
-        "skipped": 0,
-        "pct": 100
-      },
-      "statements": {
-        "total": 13,
-        "covered": 13,
-        "skipped": 0,
-        "pct": 100
-      },
-      "branches": {
-        "total": 12,
-        "covered": 11,
-        "skipped": 0,
-        "pct": 91.66
-      }
-    },
-    "src/js/2D/toothUtils.js": {
-      "lines": {
-        "total": 3,
-        "covered": 3,
-        "skipped": 0,
-        "pct": 100
-      },
-      "functions": {
-        "total": 1,
-        "covered": 1,
-        "skipped": 0,
-        "pct": 100
-      },
-      "statements": {
-        "total": 4,
-        "covered": 4,
-        "skipped": 0,
-        "pct": 100
-      },
-      "branches": {
-        "total": 4,
-        "covered": 3,
-        "skipped": 0,
-        "pct": 75
-      }
-    },
-    "src/js/pages/dashboard.js": {
-      "lines": {
-        "total": 311,
-        "covered": 43,
-        "skipped": 0,
-        "pct": 13.82
-      },
-      "functions": {
-        "total": 80,
-        "covered": 19,
-        "skipped": 0,
-        "pct": 23.75
-      },
-      "statements": {
-        "total": 375,
-        "covered": 55,
-        "skipped": 0,
-        "pct": 14.66
-      },
-      "branches": {
-        "total": 258,
-        "covered": 40,
-        "skipped": 0,
-        "pct": 15.5
-      }
-    },
-    "src/js/shared/apiLog.js": {
-      "lines": {
-        "total": 13,
-        "covered": 8,
-        "skipped": 0,
-        "pct": 61.53
-      },
-      "functions": {
-        "total": 3,
-        "covered": 1,
-        "skipped": 0,
-        "pct": 33.33
-      },
-      "statements": {
-        "total": 16,
-        "covered": 9,
-        "skipped": 0,
-        "pct": 56.25
-      },
-      "branches": {
-        "total": 10,
-        "covered": 4,
-        "skipped": 0,
-        "pct": 40
-      }
-    },
-    "src/js/shared/caseEnrichment.js": {
-      "lines": {
-        "total": 29,
-        "covered": 29,
-        "skipped": 0,
-        "pct": 100
-      },
-      "functions": {
-        "total": 8,
-        "covered": 8,
-        "skipped": 0,
-        "pct": 100
-      },
-      "statements": {
-        "total": 32,
-        "covered": 32,
-        "skipped": 0,
-        "pct": 100
-      },
-      "branches": {
-        "total": 34,
-        "covered": 32,
-        "skipped": 0,
-        "pct": 94.11
-      }
-    },
-    "src/js/shared/config.js": {
-      "lines": {
-        "total": 3,
-        "covered": 3,
-        "skipped": 0,
-        "pct": 100
-      },
-      "functions": {
-        "total": 0,
-        "covered": 0,
-        "skipped": 0,
-        "pct": 100
-      },
-      "statements": {
-        "total": 3,
-        "covered": 3,
-        "skipped": 0,
-        "pct": 100
-      },
-      "branches": {
-        "total": 0,
-        "covered": 0,
-        "skipped": 0,
-        "pct": 100
-      }
-    },
-    "src/js/shared/crypt.js": {
-      "lines": {
-        "total": 21,
-        "covered": 20,
-        "skipped": 0,
-        "pct": 95.23
-      },
-      "functions": {
-        "total": 3,
-        "covered": 3,
-        "skipped": 0,
-        "pct": 100
-      },
-      "statements": {
-        "total": 23,
-        "covered": 22,
-        "skipped": 0,
-        "pct": 95.65
-      },
-      "branches": {
-        "total": 7,
-        "covered": 6,
-        "skipped": 0,
-        "pct": 85.71
-      }
-    },
-    "src/js/shared/helpMatcher.js": {
-      "lines": {
-        "total": 55,
-        "covered": 54,
-        "skipped": 0,
-        "pct": 98.18
-      },
-      "functions": {
-        "total": 22,
-        "covered": 21,
-        "skipped": 0,
-        "pct": 95.45
-      },
-      "statements": {
-        "total": 67,
-        "covered": 64,
-        "skipped": 0,
-        "pct": 95.52
-      },
-      "branches": {
-        "total": 58,
-        "covered": 49,
-        "skipped": 0,
-        "pct": 84.48
-      }
-    },
-    "src/js/shared/helpTopics.js": {
-      "lines": {
-        "total": 7,
-        "covered": 7,
-        "skipped": 0,
-        "pct": 100
-      },
-      "functions": {
-        "total": 1,
-        "covered": 1,
-        "skipped": 0,
-        "pct": 100
-      },
-      "statements": {
-        "total": 8,
-        "covered": 8,
-        "skipped": 0,
-        "pct": 100
-      },
-      "branches": {
-        "total": 0,
-        "covered": 0,
-        "skipped": 0,
-        "pct": 100
-      }
-    },
-    "src/js/shared/passwordReset.js": {
-      "lines": {
-        "total": 37,
-        "covered": 37,
-        "skipped": 0,
-        "pct": 100
-      },
-      "functions": {
-        "total": 8,
-        "covered": 7,
-        "skipped": 0,
-        "pct": 87.5
-      },
-      "statements": {
-        "total": 47,
-        "covered": 46,
-        "skipped": 0,
-        "pct": 97.87
-      },
-      "branches": {
-        "total": 36,
-        "covered": 35,
-        "skipped": 0,
-        "pct": 97.22
-      }
-    },
-    "src/js/shared/toast.js": {
-      "lines": {
-        "total": 195,
-        "covered": 13,
-        "skipped": 0,
-        "pct": 6.66
-      },
-      "functions": {
-        "total": 47,
-        "covered": 1,
-        "skipped": 0,
-        "pct": 2.12
-      },
-      "statements": {
-        "total": 220,
-        "covered": 14,
-        "skipped": 0,
-        "pct": 6.36
-      },
-      "branches": {
-        "total": 106,
-        "covered": 3,
-        "skipped": 0,
-        "pct": 2.83
-      }
-    },
-    "src/viewer3d/artificialTeeth.js": {
-      "lines": {
-        "total": 1787,
-        "covered": 178,
-        "skipped": 0,
-        "pct": 9.96
-      },
-      "functions": {
-        "total": 368,
-        "covered": 34,
-        "skipped": 0,
-        "pct": 9.23
-      },
-      "statements": {
-        "total": 2078,
-        "covered": 208,
-        "skipped": 0,
-        "pct": 10
-      },
-      "branches": {
-        "total": 1809,
-        "covered": 172,
-        "skipped": 0,
-        "pct": 9.5
-      }
     }
   }
 }

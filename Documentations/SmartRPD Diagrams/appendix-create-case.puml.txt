@@ -1,0 +1,42 @@
+' SmartRPD_Documentation.docx — Appendix use-case diagram, "Create Case".
+' Transcribed 2026-08-24 as a plain-text source for the existing (unchanged) diagram — content was
+' re-checked against current src/js/pages/createCase.js, css/createCase.css on 2026-08-24 and found
+' still accurate, so the embedded image in the .docx was NOT replaced.
+' Render via the PlantUML server (see build script) or any local PlantUML install.
+@startuml
+left to right direction
+skinparam backgroundColor white
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 15
+skinparam ArrowColor #333333
+skinparam ArrowFontColor #333333
+skinparam usecase {
+  BorderColor #5b84b8
+  FontColor #16212b
+}
+skinparam rectangle {
+  BorderColor #666666
+  FontColor #16212b
+  FontStyle bold
+}
+
+actor "User" as User
+actor "Team Member" as TeamMember
+
+rectangle "Case Creation (createCase.js, createCase.css)" {
+  usecase "Create new case" as UC_Create #DAE8FC
+  usecase "Add team members to invite list\n(pendingInvites, addInvite)" as UC_Invite #DAE8FC
+
+  usecase "Upload upper/lower jaw STL" as UC_Stl #D5E8D4
+  usecase "Upload reference images" as UC_Ref #D5E8D4
+  usecase "Send invitations" as UC_Send #D5E8D4
+}
+
+User -- UC_Create
+User -- UC_Invite
+
+UC_Create ..> UC_Stl : <<include>>
+UC_Create ..> UC_Ref : <<extend>> [optional]
+UC_Invite ..> UC_Send : <<include>>
+UC_Send -- TeamMember
+@enduml

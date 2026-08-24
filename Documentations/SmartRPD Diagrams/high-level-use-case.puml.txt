@@ -1,0 +1,67 @@
+' SmartRPD_Documentation.docx — "High-Level Use Case Diagram".
+' Transcribed 2026-08-24 as a plain-text source for the existing (unchanged) diagram — content was
+' re-checked against current src/ on 2026-08-24 and found still accurate, so the embedded image in
+' the .docx was NOT replaced. This file exists purely so the diagram has a maintainable source like
+' its siblings; see Documentations/SmartRPD Diagrams/ README context in workflow-diagram.mmd.txt.
+' Render via the PlantUML server (see build script) or any local PlantUML install.
+@startuml
+left to right direction
+skinparam backgroundColor white
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 15
+skinparam ArrowColor #333333
+skinparam ArrowFontColor #333333
+skinparam usecase {
+  BorderColor #5b84b8
+  FontColor #16212b
+}
+skinparam rectangle {
+  BorderColor #666666
+  FontColor #16212b
+  FontStyle bold
+}
+
+actor "Clinician / User" as User
+actor "Team Member" as TeamMember
+actor "External Viewer" as ExtViewer
+
+rectangle "SmartRPD System" {
+  usecase "Log In & Authenticate" as UC_Login #DAE8FC
+  usecase "Manage Case List" as UC_CaseList #DAE8FC
+  usecase "Create Case" as UC_Create #DAE8FC
+  usecase "View Case Dashboard" as UC_Dashboard #DAE8FC
+  usecase "Collaborate (Chat &\nNotifications)" as UC_Collab #DAE8FC
+  usecase "Annotate & Design in 2D" as UC_2D #DAE8FC
+  usecase "Inspect Case in 3D" as UC_3D #DAE8FC
+  usecase "Manage Extra STL Files" as UC_Extra #DAE8FC
+  usecase "Review Version History" as UC_Version #DAE8FC
+  usecase "Download / Export / Share" as UC_Export #DAE8FC
+}
+
+User -- UC_Login
+User -- UC_CaseList
+User -- UC_Create
+User -- UC_Dashboard
+User -- UC_Collab
+User -- UC_2D
+User -- UC_3D
+User -- UC_Extra
+User -- UC_Version
+User -- UC_Export
+
+TeamMember -- UC_Login
+TeamMember -- UC_CaseList
+TeamMember -- UC_Create
+TeamMember -- UC_Dashboard
+TeamMember -- UC_Collab
+TeamMember -- UC_2D
+TeamMember -- UC_3D
+TeamMember -- UC_Extra
+TeamMember -- UC_Version
+TeamMember -- UC_Export
+
+UC_3D -- ExtViewer
+
+UC_CaseList ..> UC_Login : <<include>>
+UC_3D ..> UC_2D : <<include>>
+@enduml

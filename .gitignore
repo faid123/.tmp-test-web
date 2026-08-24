@@ -1,3 +1,6 @@
+# Office lock/temp files (created while a .docx/.xlsx/.pptx is open for editing)
+~$*
+
 # Node.js dependencies
 node_modules/
 

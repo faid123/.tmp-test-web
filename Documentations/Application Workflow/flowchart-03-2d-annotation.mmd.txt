@@ -1,0 +1,52 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#eaf6f3', 'primaryBorderColor': '#0d7d6c', 'primaryTextColor': '#16212b', 'lineColor': '#56626d', 'tertiaryColor': '#ffffff', 'fontFamily': 'Segoe UI, Helvetica, Arial, sans-serif', 'fontSize': '17px' }, 'flowchart': { 'curve': 'basis', 'nodeSpacing': 40, 'rankSpacing': 65, 'htmlLabels': true } } }%%
+%% SmartRPD — Detailed Application Flowchart, section 3 of 4: 2D Annotation (RPD design workspace)
+%% DRAFT — needs re-verification against a real git-archive extraction before this replaces the
+%% published diagram (see chat, 2026-08-21 mermaid review). Not yet re-rendered to .png.
+%% Colour key: teal = screen/page, dashed blue = network/API call, amber diamond = decision point
+%% Paste into https://mermaid.live to view/edit.
+
+flowchart TD
+    classDef screen fill:#eaf6f3,stroke:#0d7d6c,stroke-width:1.5px,color:#16212b;
+    classDef api fill:#eef2ff,stroke:#6b8fd6,stroke-width:1px,color:#16212b,stroke-dasharray:3 2;
+    classDef decision fill:#fff4e0,stroke:#d69b3f,stroke-width:1.5px,color:#16212b;
+
+    Open2D["Open case for design (from section 2)"] -->|"navigate: 2DAnnotation.html?id=&lt;encrypted case id&gt;"| TwoD
+
+    TwoD["2D Annotation — RPD design workspace"] --> Components["Tooth chart: mark present / missing / abutment / compromised, then place framework components (mesh, clasp, bar, plate, rest, connectors)"]
+    Components -->|"Save → POST /jawstruct/l2"| Components
+
+    TwoD -->|"Load Proposed Design button"| LoadProposed{"Eligible partial-edentulous jaw(s) found?"}
+    LoadProposed -->|"Yes — call DLL"| DllCall["POST /dll/compute-denture-design-select (jaw material + current jaw-struct)"]
+    DllCall -->|"DLL returns a design"| Components
+    DllCall -->|"DLL fails / no eligible jaw"| KennedyPicker["Kennedy-classification picker (fallback modal) — pick jaw(s), confirm"]
+    LoadProposed -->|"No eligible jaw"| KennedyPicker
+    KennedyPicker -->|"Apply"| Components
+
+    TwoD --> InstrEditor["Instruction Editor — freehand annotate a screenshot (crop / sticker / text / pencil)"]
+    TwoD --> Noticeboard["Noticeboard — gallery of instruction shots + 3D view captures, synced with desktop app"]
+    InstrEditor --> Noticeboard
+
+    TwoD --> ClinicalInfo["Clinical Info — separate per-tooth clinical chart (mobility, decay, crowns)"]
+    TwoD --> CaseNote["Case Note — owner / due date / shade / category (mostly localStorage), case-comment field synced live with Case List"]
+
+    TwoD --> PreviewTabs["Preview panel — 3 tabs sharing one WebGL frame"]
+
+    subgraph PREVIEW["Preview tabs"]
+        direction TB
+        PreviewTabs --> Preview3D["3D Preview tab — live Three.js view of jaw STL"]
+        PreviewTabs --> ExtraSTL["Extra 3D tab — upload/view other 3D files (extra STL slots 1-4)"]
+        PreviewTabs --> RefImages["Reference Images tab — gallery + full-pane view of the case's reference images"]
+        Preview3D --> SurveyAngle["Survey-angle targeting for undercuts (gesture controls)"]
+        Preview3D -->|"Approve for lab"| ApprovalOverlay["Preview approval overlay [For Lab Only]"]
+        ApprovalOverlay -->|"Send"| ApprovalEmail["Email captured images to recipients"]
+    end
+
+    TwoD --> ChatPanel["Chat panel — case comments, image attachments (polls while open)"]
+    TwoD --> VersionHistoryEmbedded["Version History side panel"]
+    TwoD -.->|"available on most pages"| HelpBot["Help Bot — contextual AI assistant (see cross-cutting, section summary)"]
+
+    TwoD -->|"Back"| CaseList["← Case List (section 2)"]
+
+    class TwoD,Noticeboard,CaseList screen;
+    class Components api;
+    class LoadProposed decision;

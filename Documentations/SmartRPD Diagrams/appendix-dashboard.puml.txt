@@ -1,0 +1,38 @@
+' SmartRPD_Documentation.docx — Appendix use-case diagram, "Dashboard".
+' Transcribed 2026-08-24 as a plain-text source for the existing (unchanged) diagram — content was
+' re-checked against current src/js/pages/dashboard.js on 2026-08-24 and found still accurate, so
+' the embedded image in the .docx was NOT replaced.
+' Render via the PlantUML server (see build script) or any local PlantUML install.
+@startuml
+left to right direction
+skinparam backgroundColor white
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 15
+skinparam ArrowColor #333333
+skinparam ArrowFontColor #333333
+skinparam usecase {
+  BorderColor #5b84b8
+  FontColor #16212b
+}
+skinparam rectangle {
+  BorderColor #666666
+  FontColor #16212b
+  FontStyle bold
+}
+
+actor "User" as User
+
+rectangle "Dashboard (dashboard.js, buildOverlay)" {
+  usecase "View production overview overlay" as UC_View #DAE8FC
+
+  usecase "View process-step progress\n(computeSteps,\ncountCompletedStages)" as UC_Steps #D5E8D4
+  usecase "View captured views\n(resolveCaptureSlots)" as UC_Captured #D5E8D4
+  usecase "View team roles" as UC_Roles #D5E8D4
+}
+
+User -- UC_View
+
+UC_View ..> UC_Steps : <<include>>
+UC_View ..> UC_Captured : <<include>>
+UC_View ..> UC_Roles : <<include>>
+@enduml

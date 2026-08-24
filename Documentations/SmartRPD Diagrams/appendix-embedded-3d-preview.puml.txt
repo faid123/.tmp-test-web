@@ -1,0 +1,61 @@
+' SmartRPD_Documentation.docx — Appendix use-case diagram, "Embedded 3D Preview".
+' Rebuilt 2026-08-24: the previous version showed only the 3D-preview capabilities, predating the
+' 3-tab preview-panel restructure (previewTabs.js — initPreviewTabs()/showPreviewTab(); confirmed
+' 2026-08-24 against src/js/2D/previewTabs.js, preview3D.js, referenceImages.js). Added the tab
+' switcher and the two sibling tabs as entry points, in the same "«extend» [entry point]" style
+' already used by the sibling "3D Viewer" appendix diagram. The six original capabilities are
+' unchanged and now sit under the "3D Preview tab" entry point.
+' Render via the PlantUML server (see build script) or any local PlantUML install.
+@startuml
+left to right direction
+skinparam backgroundColor white
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 15
+skinparam ArrowColor #333333
+skinparam ArrowFontColor #333333
+skinparam usecase {
+  BorderColor #5b84b8
+  FontColor #16212b
+}
+skinparam rectangle {
+  BorderColor #666666
+  FontColor #16212b
+  FontStyle bold
+}
+
+actor "User" as User
+
+rectangle "Embedded 3D Preview (preview3D.js, previewTabs.js\ninside 2D Annotation)" {
+  usecase "Switch preview panel tab\n(initPreviewTabs, showPreviewTab)" as UC_Tabs #DAE8FC
+
+  usecase "3D Preview tab (default)" as UC_TabPreview #D5E8D4
+  usecase "Extra 3D tab — see the\nExtra Reference STLs appendix" as UC_TabExtra #D5E8D4
+  usecase "Reference Images tab\n(loadReferenceImages, closeViewer)" as UC_TabRefs #D5E8D4
+
+  usecase "Inspect jaw geometry" as UC_Inspect #DAE8FC
+  usecase "Review design overlays" as UC_Overlays #DAE8FC
+  usecase "Review artificial-teeth placement" as UC_Teeth #DAE8FC
+  usecase "Toggle per-component\nundercut analysis" as UC_Undercut #DAE8FC
+  usecase "Toggle per-component\nocclusion analysis" as UC_Occlusion #DAE8FC
+  usecase "Toggle high/low-quality mesh" as UC_Mesh #DAE8FC
+}
+
+User -- UC_Tabs
+User -- UC_Inspect
+User -- UC_Overlays
+User -- UC_Teeth
+User -- UC_Undercut
+User -- UC_Occlusion
+User -- UC_Mesh
+
+UC_Tabs ..> UC_TabPreview : <<extend>> [entry point]
+UC_Tabs ..> UC_TabExtra : <<extend>> [entry point]
+UC_Tabs ..> UC_TabRefs : <<extend>> [entry point]
+
+UC_TabPreview ..> UC_Inspect : <<include>>
+UC_TabPreview ..> UC_Overlays : <<include>>
+UC_TabPreview ..> UC_Teeth : <<include>>
+UC_TabPreview ..> UC_Undercut : <<include>>
+UC_TabPreview ..> UC_Occlusion : <<include>>
+UC_TabPreview ..> UC_Mesh : <<include>>
+@enduml
