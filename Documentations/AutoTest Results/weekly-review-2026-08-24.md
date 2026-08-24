@@ -1,14 +1,16 @@
 # Weekly Documentation Review -- 2026-08-24
 
-Branch: `nyunt/dev-W7.1` @ `9bebf47`
+Branch: `dev-deploy-documentation` @ `96a55f8`
 
 ## Live-branch alignment
 
-_Alignment with the live branch could not be checked (no remote access)._
+⚠️ **This branch has diverged from `nyunt/dev-W7.1`.** The deployed commit `9b0ecd9` is not an ancestor of HEAD. Everything below reflects this branch's code, which is not what's currently live -- find and review from whichever branch actually contains that commit before trusting this report, or treat this as the signal to re-run the branch-retargeting pass done on 2026-07-31.
+
+✅ `nyunt/dev-deploy` matches what's live -- no deploy pending.
 
 ## Test suite
 
-19 suites / 582 tests -> 19 suites / 582 tests
+19 suites / 582 tests -> 13 suites / 221 tests
 
 ## Dependency audit (npm audit)
 
