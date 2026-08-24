@@ -1,6 +1,8 @@
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#eaf6f3', 'primaryBorderColor': '#0d7d6c', 'primaryTextColor': '#16212b', 'lineColor': '#56626d', 'tertiaryColor': '#ffffff', 'fontFamily': 'Segoe UI, Helvetica, Arial, sans-serif', 'fontSize': '17px' }, 'flowchart': { 'curve': 'basis', 'nodeSpacing': 40, 'rankSpacing': 65, 'htmlLabels': true } } }%%
 %% SmartRPD — Detailed Application Flowchart, section 4 of 4: 3D Viewer + Admin Console
-%% Source: live deployed commit d5d5121f12287c45b91d7a0d62acf017d6d98c64 (see README.md)
+%% Reviewed 2026-08-21: no structural inaccuracy found against current src/viewer3d/ and
+%% src/pages/admin/ (internal viewer/controls changes since the diagrams' original source commit
+%% were implementation refactors, not new user-facing flows). Not re-rendered; header/date only.
 %% Colour key: teal = screen/page, dashed blue = network/API call, dotted grey = role-guard redirect
 %% Paste into https://mermaid.live to view/edit.
 

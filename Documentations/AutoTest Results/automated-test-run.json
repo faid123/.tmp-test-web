@@ -1,58 +1,26 @@
 {
-  "runAt": "2026-08-17T08:04:34.320Z",
+  "runAt": "2026-08-24T01:41:34.294Z",
   "command": "npx jest --ci --coverage --coverageReporters=json-summary --verbose --testLocationInResults --json",
   "commandFailed": false,
-  "numTotalTestSuites": 13,
-  "numPassedTestSuites": 13,
+  "numTotalTestSuites": 19,
+  "numPassedTestSuites": 19,
   "numFailedTestSuites": 0,
-  "numTotalTests": 221,
-  "numPassedTests": 221,
+  "numTotalTests": 582,
+  "numPassedTests": 582,
   "numFailedTests": 0,
   "suites": [
     {
-      "file": "helpBot.test.mjs",
+      "file": "importResolution.test.mjs",
       "status": "passed",
-      "tests": 94,
-      "pass": 94,
+      "tests": 3,
+      "pass": 3,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2439,
+      "durationMs": 1416,
       "uat": [],
       "category": "real",
-      "crossCutting": false,
-      "note": "Imports real src/js/shared/helpMatcher.js and helpTopics.js (AI-powered help assistant). No standing UAT-xx case yet -- see Traceability_Document.docx.",
-      "failureMessages": []
-    },
-    {
-      "file": "clinicalInfoCodec.test.mjs",
-      "status": "passed",
-      "tests": 13,
-      "pass": 13,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 2694,
-      "uat": [
-        "UAT-06"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real src/js/2D/clinicalInfo.js (.NET-compatible clinical-info envelope codec).",
-      "failureMessages": []
-    },
-    {
-      "file": "caseEnrichment.test.mjs",
-      "status": "passed",
-      "tests": 13,
-      "pass": 13,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 432,
-      "uat": [
-        "UAT-02"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real src/js/shared/caseEnrichment.js. Case-detail and co-owner request/fold layer behind the case list.",
+      "crossCutting": true,
+      "note": "Walks src/, __tests__/ and the HTML pages checking every relative import/script-src resolves. Repo-wide build-integrity check, not tied to one workflow.",
       "failureMessages": []
     },
     {
@@ -62,7 +30,7 @@
       "pass": 22,
       "fail": 0,
       "skip": 0,
-      "durationMs": 525,
+      "durationMs": 1567,
       "uat": [
         "UAT-01"
       ],
@@ -72,19 +40,103 @@
       "failureMessages": []
     },
     {
-      "file": "dashboard.test.mjs",
+      "file": "caseEnrichment.test.mjs",
       "status": "passed",
-      "tests": 21,
-      "pass": 21,
+      "tests": 24,
+      "pass": 24,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1346,
+      "durationMs": 1553,
       "uat": [
-        "UAT-04"
+        "UAT-02"
       ],
       "category": "real",
       "crossCutting": false,
-      "note": "Imports real dashboard.js pipeline functions.",
+      "note": "Imports real src/js/shared/caseEnrichment.js. Case-detail and co-owner request/fold layer behind the case list.",
+      "failureMessages": []
+    },
+    {
+      "file": "helpBot.test.mjs",
+      "status": "passed",
+      "tests": 87,
+      "pass": 87,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 1740,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "Imports real src/js/shared/helpMatcher.js and helpTopics.js (AI-powered help assistant). No standing UAT-xx case yet -- see Traceability_Document.docx.",
+      "failureMessages": []
+    },
+    {
+      "file": "imageFiles.test.mjs",
+      "status": "passed",
+      "tests": 19,
+      "pass": 19,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 161,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
+      "failureMessages": []
+    },
+    {
+      "file": "JawDesignProposal.test.mjs",
+      "status": "passed",
+      "tests": 57,
+      "pass": 57,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 1682,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
+      "failureMessages": []
+    },
+    {
+      "file": "JawDesign.test.mjs",
+      "status": "passed",
+      "tests": 20,
+      "pass": 20,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 223,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
+      "failureMessages": []
+    },
+    {
+      "file": "crypt.test.mjs",
+      "status": "passed",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 108,
+      "uat": [],
+      "category": "real",
+      "crossCutting": true,
+      "note": "Imports real src/js/shared/crypt.js. Case-ID URL obfuscation used across case list, chat, viewer, version history, annotation and create-case links -- cross-cutting, not tied to one workflow.",
+      "failureMessages": []
+    },
+    {
+      "file": "placementRules.test.mjs",
+      "status": "passed",
+      "tests": 52,
+      "pass": 52,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 1910,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
       "failureMessages": []
     },
     {
@@ -94,7 +146,7 @@
       "pass": 28,
       "fail": 0,
       "skip": 0,
-      "durationMs": 6535,
+      "durationMs": 2019,
       "uat": [
         "UAT-07",
         "UAT-08"
@@ -105,79 +157,105 @@
       "failureMessages": []
     },
     {
-      "file": "jawStructLingualPlate.test.mjs",
+      "file": "clinicalInfoCodec.test.mjs",
       "status": "passed",
-      "tests": 4,
-      "pass": 4,
+      "tests": 13,
+      "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 3503,
+      "durationMs": 1405,
       "uat": [
         "UAT-06"
       ],
       "category": "real",
       "crossCutting": false,
-      "note": "Imports real src/js/2D/jawStructApply.js against fixture desktop files.",
+      "note": "Imports real src/js/2D/clinicalInfo.js (.NET-compatible clinical-info envelope codec).",
       "failureMessages": []
     },
     {
-      "file": "jawStructMajorSwitch.test.mjs",
+      "file": "userSuggest.test.mjs",
       "status": "passed",
-      "tests": 4,
-      "pass": 4,
+      "tests": 12,
+      "pass": 12,
       "fail": 0,
       "skip": 0,
-      "durationMs": 3340,
-      "uat": [
-        "UAT-06"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real src/js/2D/jawStructApply.js.",
-      "failureMessages": []
-    },
-    {
-      "file": "jawStructRoundTrip.test.mjs",
-      "status": "passed",
-      "tests": 2,
-      "pass": 2,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 568,
-      "uat": [
-        "UAT-06"
-      ],
-      "category": "real",
-      "crossCutting": false,
-      "note": "Imports real src/js/2D/jawStructApply.js against fixture desktop files.",
-      "failureMessages": []
-    },
-    {
-      "file": "importResolution.test.mjs",
-      "status": "passed",
-      "tests": 3,
-      "pass": 3,
-      "fail": 0,
-      "skip": 0,
-      "durationMs": 135,
+      "durationMs": 1449,
       "uat": [],
       "category": "real",
-      "crossCutting": true,
-      "note": "Walks src/, __tests__/ and the HTML pages checking every relative import/script-src resolves. Repo-wide build-integrity check, not tied to one workflow.",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
       "failureMessages": []
     },
     {
-      "file": "crypt.test.mjs",
+      "file": "dashboard.test.mjs",
       "status": "passed",
-      "tests": 3,
-      "pass": 3,
+      "tests": 19,
+      "pass": 19,
       "fail": 0,
       "skip": 0,
-      "durationMs": 79,
+      "durationMs": 1340,
+      "uat": [
+        "UAT-04"
+      ],
+      "category": "real",
+      "crossCutting": false,
+      "note": "Imports real dashboard.js pipeline functions.",
+      "failureMessages": []
+    },
+    {
+      "file": "caseEmailBody.test.mjs",
+      "status": "passed",
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 1383,
       "uat": [],
       "category": "real",
-      "crossCutting": true,
-      "note": "Imports real src/js/shared/crypt.js. Case-ID URL obfuscation used across case list, chat, viewer, version history, annotation and create-case links -- cross-cutting, not tied to one workflow.",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
+      "failureMessages": []
+    },
+    {
+      "file": "caseComment.test.mjs",
+      "status": "passed",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 161,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
+      "failureMessages": []
+    },
+    {
+      "file": "jawStruct.test.mjs",
+      "status": "passed",
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 1670,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
+      "failureMessages": []
+    },
+    {
+      "file": "assemblies.test.mjs",
+      "status": "passed",
+      "tests": 70,
+      "pass": 70,
+      "fail": 0,
+      "skip": 0,
+      "durationMs": 1657,
+      "uat": [],
+      "category": "real",
+      "crossCutting": false,
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
       "failureMessages": []
     },
     {
@@ -187,7 +265,7 @@
       "pass": 5,
       "fail": 0,
       "skip": 0,
-      "durationMs": 107,
+      "durationMs": 1789,
       "uat": [
         "UAT-06"
       ],
@@ -197,19 +275,17 @@
       "failureMessages": []
     },
     {
-      "file": "reciprocatingExclusivity.test.mjs",
+      "file": "pageTour.test.mjs",
       "status": "passed",
-      "tests": 9,
-      "pass": 9,
+      "tests": 114,
+      "pass": 114,
       "fail": 0,
       "skip": 0,
-      "durationMs": 169,
-      "uat": [
-        "UAT-06"
-      ],
+      "durationMs": 5243,
+      "uat": [],
       "category": "real",
       "crossCutting": false,
-      "note": "Imports real src/js/2D/criteria.js, components.js and annotationTeethModel.js.",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)",
       "failureMessages": []
     }
   ],
@@ -231,8 +307,8 @@
       "suites": [
         "caseEnrichment.test.mjs"
       ],
-      "tests": 13,
-      "pass": 13,
+      "tests": 24,
+      "pass": 24,
       "fail": 0,
       "automationConfidence": "Real source coverage"
     },
@@ -251,8 +327,8 @@
       "suites": [
         "dashboard.test.mjs"
       ],
-      "tests": 21,
-      "pass": 21,
+      "tests": 19,
+      "pass": 19,
       "fail": 0,
       "automationConfidence": "Real source coverage"
     },
@@ -270,14 +346,10 @@
       "name": "2D Annotation",
       "suites": [
         "clinicalInfoCodec.test.mjs",
-        "jawStructLingualPlate.test.mjs",
-        "jawStructMajorSwitch.test.mjs",
-        "jawStructRoundTrip.test.mjs",
-        "mergeInstructions.test.mjs",
-        "reciprocatingExclusivity.test.mjs"
+        "mergeInstructions.test.mjs"
       ],
-      "tests": 37,
-      "pass": 37,
+      "tests": 18,
+      "pass": 18,
       "fail": 0,
       "automationConfidence": "Real source coverage"
     },
@@ -352,32 +424,72 @@
     {
       "file": "helpBot.test.mjs",
       "note": "Imports real src/js/shared/helpMatcher.js and helpTopics.js (AI-powered help assistant). No standing UAT-xx case yet -- see Traceability_Document.docx."
+    },
+    {
+      "file": "imageFiles.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "JawDesignProposal.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "JawDesign.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "placementRules.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "userSuggest.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "caseEmailBody.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "caseComment.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "jawStruct.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "assemblies.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
+    },
+    {
+      "file": "pageTour.test.mjs",
+      "note": "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)"
     }
   ],
   "coverageTotal": {
     "lines": {
-      "total": 4630,
-      "covered": 1226,
+      "total": 12734,
+      "covered": 2592,
       "skipped": 0,
-      "pct": 26.47
+      "pct": 20.35
     },
     "statements": {
-      "total": 5310,
-      "covered": 1384,
+      "total": 14531,
+      "covered": 2923,
       "skipped": 0,
-      "pct": 26.06
+      "pct": 20.11
     },
     "functions": {
-      "total": 888,
-      "covered": 209,
+      "total": 2104,
+      "covered": 503,
       "skipped": 0,
-      "pct": 23.53
+      "pct": 23.9
     },
     "branches": {
-      "total": 4381,
-      "covered": 862,
+      "total": 9345,
+      "covered": 1823,
       "skipped": 0,
-      "pct": 19.67
+      "pct": 19.5
     },
     "branchesTrue": {
       "total": 0,

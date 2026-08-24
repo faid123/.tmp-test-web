@@ -1,8 +1,7 @@
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#eaf6f3', 'primaryBorderColor': '#0d7d6c', 'primaryTextColor': '#16212b', 'lineColor': '#56626d', 'tertiaryColor': '#ffffff', 'fontFamily': 'Segoe UI, Helvetica, Arial, sans-serif', 'fontSize': '17px' }, 'flowchart': { 'curve': 'basis', 'nodeSpacing': 40, 'rankSpacing': 65, 'htmlLabels': true } } }%%
 %% SmartRPD — Detailed Application Flowchart (full, combined reference)
-%% Source: actual LIVE deployed commit d5d5121f12287c45b91d7a0d62acf017d6d98c64
-%%   (nyunt/dev-deploy, deployed 2026-08-06T08:55:00Z to nyunt/dev-W7.1 / https://faid123.github.io/.tmp-test-web/)
-%% NOT the dev-deploy-documentation branch — see README.md in this folder for why that matters.
+%% DRAFT — needs re-verification against a real git-archive extraction before this replaces the
+%% published diagram (see chat, 2026-08-21 mermaid review). Not yet re-rendered to .png.
 %% This is the whole app on one canvas, which Mermaid auto-lays-out quite wide.
 %% For a readable image, use the split flowchart-01..04-*.mmd.txt files instead —
 %% same content, one screen-area per file. This one is best pasted into
@@ -39,6 +38,9 @@ flowchart TD
 
     RoleRoute -->|"No, regular user"| CaseList
     RoleRoute -->|"Yes, admin"| AdminCaseList
+
+    CaseList -.->|"sidebar: Change Password (signed-in)"| ChangePwd["Change Password modal — reuses the emailed-key reset flow, not the current password"]
+    AdminCaseList -.->|"sidebar: Change Password (signed-in)"| ChangePwd
 
     subgraph USERFLOW["CASE LIST & CASE LIFECYCLE — case_list.html"]
         direction TB
@@ -96,16 +98,28 @@ flowchart TD
     subgraph TWOD["2D ANNOTATION — RPD design workspace (2DAnnotation.html)"]
         direction TB
         TwoD["Tooth chart (odontogram): mark present / missing / abutment / compromised"] --> Components["Place framework components: mesh, clasp, bar, plate, rest, minor / major connectors — Save button posts to /jawstruct/l2"]
+
+        TwoD -->|"Load Proposed Design button"| LoadProposed{"Eligible partial-edentulous jaw(s) found?"}
+        LoadProposed -->|"Yes — call DLL"| DllCall["POST /dll/compute-denture-design-select"]
+        DllCall -->|"design returned"| Components
+        DllCall -->|"DLL fails / no eligible jaw"| KennedyPicker["Kennedy-classification picker (fallback modal)"]
+        LoadProposed -->|"No eligible jaw"| KennedyPicker
+        KennedyPicker -->|"Apply"| Components
+
         TwoD --> InstrEditor["Instruction Editor — freehand annotate a screenshot (crop / sticker / text / pencil)"]
         TwoD --> Noticeboard["Noticeboard — gallery of instruction shots + 3D view captures, synced with desktop app"]
         InstrEditor --> Noticeboard
         TwoD --> ClinicalInfo["Clinical Info — separate per-tooth clinical chart (mobility, decay, crowns)"]
-        TwoD --> CaseNote["Case Note — owner / due date / shade / category (mostly localStorage)"]
-        TwoD --> EmbeddedPreview["Embedded 3D Preview — live Three.js view of jaw STL"]
-        EmbeddedPreview --> SurveyAngle["Survey-angle targeting for undercuts (gesture controls)"]
-        EmbeddedPreview --> UploadExtraSTL["Upload other 3D files (extra STL slots 1-4)"]
-        EmbeddedPreview -->|"Approve for lab"| ApprovalOverlay["Preview approval overlay [For Lab Only]"]
+        TwoD --> CaseNote["Case Note — owner / due date / shade / category (mostly localStorage), case-comment field synced live with Case List"]
+
+        TwoD --> PreviewTabs["Preview panel — 3 tabs sharing one WebGL frame"]
+        PreviewTabs --> Preview3D["3D Preview tab — live Three.js view of jaw STL"]
+        PreviewTabs --> ExtraSTL["Extra 3D tab — upload/view other 3D files (extra STL slots 1-4)"]
+        PreviewTabs --> RefImages["Reference Images tab — gallery + full-pane view of the case's reference images"]
+        Preview3D --> SurveyAngle["Survey-angle targeting for undercuts (gesture controls)"]
+        Preview3D -->|"Approve for lab"| ApprovalOverlay["Preview approval overlay [For Lab Only]"]
         ApprovalOverlay -->|"Send"| ApprovalEmail["Email captured images to recipients"]
+
         TwoD --> ChatPanel["Chat panel — case comments, image attachments (polls while open)"]
         TwoD --> VersionHistoryEmbedded["Version History side panel"]
         TwoD -->|"Back"| CaseList
@@ -151,6 +165,6 @@ flowchart TD
     end
 
     class Login,CaseList,AdminCaseList,TwoD,Noticeboard,ThreeDViewer,AdminUsers,AdminMachine,Dashboard screen;
-    class LoginChoice,LoginCheck,RoleRoute,DDMenu decision;
+    class LoginChoice,LoginCheck,RoleRoute,DDMenu,LoadProposed decision;
     class Delete danger;
     class P1,P2,P3,P4,P5,P6,P7,P8,P9,P10,P11 pipe;

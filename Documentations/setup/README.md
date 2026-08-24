@@ -37,13 +37,15 @@ a live API at `https://live.api.smartrpdai.com/api/smartrpd`.
 If you're setting this up for the first time, read them in order (1 → 4). If you already have
 the project running and just need one specific thing, jump straight to the relevant doc.
 
-## See also
+Once your environment is running, **[2D Annotation architecture](05-2d-annotation.md)** covers
+the codebase itself — architecture and feature deep-dives, starting with 2D Annotation (the RPD
+framework design workspace). It's numbered 5 for folder ordering, not because it's a setup step —
+read 1 → 4 to get running, then 5 whenever you're ready to dig into the code. *(Moved here from
+`Documentations/onboarding/` on 2026-08-21 — that folder no longer exists.)*
 
-Once your environment is running, [Documentations/onboarding/](../onboarding/2d-annotation.md)
-covers the codebase itself — architecture and feature deep-dives, starting with 2D Annotation
-(the RPD framework design workspace).
+## See also
 
 The `.docx` documents in `Documentations/` (UAT reports, security protocol, traceability, etc.)
 are kept current by an automated check — refreshed on every deploy, plus available on demand —
-rather than by memory. See [Weekly Documentation Review](../WEEKLY_DOC_REVIEW.md) for how that
+rather than by memory. See [Deploy Documentation Review](../DEPLOY_DOC_REVIEW.md) for how that
 works and what to do with its reports.

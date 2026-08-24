@@ -1,8 +1,7 @@
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#eaf6f3', 'primaryBorderColor': '#0d7d6c', 'primaryTextColor': '#16212b', 'lineColor': '#56626d', 'tertiaryColor': '#fdf8e3', 'fontFamily': 'Segoe UI, Helvetica, Arial, sans-serif', 'fontSize': '18px' }, 'flowchart': { 'curve': 'basis', 'nodeSpacing': 45, 'rankSpacing': 75, 'htmlLabels': true } } }%%
 %% SmartRPD — Summary Application Flowchart
-%% Source: actual LIVE deployed commit d5d5121f12287c45b91d7a0d62acf017d6d98c64
-%%   (nyunt/dev-deploy, deployed 2026-08-06T08:55:00Z to nyunt/dev-W7.1 / https://faid123.github.io/.tmp-test-web/)
-%% NOT the dev-deploy-documentation branch — see README.md in this folder for why that matters.
+%% DRAFT — needs re-verification against a real git-archive extraction before this replaces the
+%% published diagram (see chat, 2026-08-21 mermaid review). Not yet re-rendered to .png.
 %% Paste into https://mermaid.live (or any Mermaid renderer) to view.
 
 flowchart TD
@@ -30,6 +29,9 @@ flowchart TD
 
     C -->|"approve signups, manage users / machine IDs"| C
     C -.->|"open a case"| F
+
+    D -.->|"available on most signed-in pages"| HelpBot["Help Bot — contextual AI assistant"]
+    G -.->|"Load Proposed Design (Kennedy-classification-driven, DLL-backed)"| G
 
     subgraph PIPE["Case status pipeline"]
         direction LR

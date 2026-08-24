@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// Weekly documentation review — see Documentations/WEEKLY_DOC_REVIEW.md for the full process.
+// Deploy-triggered documentation review — see Documentations/DEPLOY_DOC_REVIEW.md for the full
+// process. (Renamed 2026-08-21 from weekly-doc-review.mjs -- the refresh runs on every deploy,
+// not a calendar schedule, so the old name was misleading.)
 //
 // What this script does:
 //   1. Verifies this branch's HEAD still contains the commit actually deployed to
@@ -9,7 +11,7 @@
 //      (Documentations/AutoTest Results/automated-test-run.json + -log.txt).
 //   3. Runs `npm audit` and stores the raw result
 //      (Documentations/AutoTest Results/npm-audit-run.json + .txt).
-//   4. Diffs against the last recorded review (.weekly-review-state.json) to list what
+//   4. Diffs against the last recorded review (.deploy-review-state.json) to list what
 //      commits landed since then, and heuristically flags which narrative .docx files
 //      likely need a manual/AI-assisted update as a result.
 //   5. Writes a dated report (Documentations/AutoTest Results/weekly-review-<date>.md)
@@ -18,7 +20,7 @@
 // What this script deliberately does NOT do: it does not edit the narrative .docx
 // documents itself. Editing prose that requires judgment (security findings, TSK
 // triage, UAT case text) is a human/AI-assisted step guided by the report this script
-// produces — see the "How to act on a report" section in WEEKLY_DOC_REVIEW.md.
+// produces — see the "How to act on a report" section in DEPLOY_DOC_REVIEW.md.
 
 import { execSync, spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -27,7 +29,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const AUTOTEST_DIR = path.join(ROOT, "Documentations", "AutoTest Results");
-const STATE_PATH = path.join(AUTOTEST_DIR, ".weekly-review-state.json");
+const STATE_PATH = path.join(AUTOTEST_DIR, ".deploy-review-state.json");
 const LIVE_BRANCH = process.env.LIVE_BRANCH || "nyunt/dev-W7.1";
 const PAGES_TRIGGER_BRANCH = process.env.TRIGGER_BRANCH || "nyunt/dev-deploy";
 
@@ -189,7 +191,7 @@ function runTestsWithLog() {
 function buildRollup(parsed) {
   const suites = parsed.testResults.map((tr) => {
     const file = path.basename(tr.name);
-    const meta = SUITE_META[file] || { uat: [], crossCutting: false, note: "(no metadata registered for this suite in tools/weekly-doc-review.mjs -- add an entry to SUITE_META)" };
+    const meta = SUITE_META[file] || { uat: [], crossCutting: false, note: "(no metadata registered for this suite in tools/deploy-review.mjs -- add an entry to SUITE_META)" };
     const tests = tr.assertionResults.length;
     const pass = tr.assertionResults.filter((a) => a.status === "passed").length;
     const fail = tr.assertionResults.filter((a) => a.status === "failed").length;
@@ -327,14 +329,14 @@ const DOC_FLAG_RULES = [
     why: "How to Setup.docx is regenerated from Documentations/setup/*.md and mirrors deploy.yml's pipeline steps -- keep it in sync with whichever changed",
   },
   {
-    // Self-referential on purpose: WEEKLY_DOC_REVIEW.md describes this script's
+    // Self-referential on purpose: DEPLOY_DOC_REVIEW.md describes this script's
     // schedule, its DOC_FLAG_RULES/SUITE_META mapping, and (since the deploy.yml
     // change) the deploy-triggered path -- so changes to any of those three should
     // prompt someone to re-read whether that description is still accurate, the
     // same way any other logic change here flags a doc that describes it.
-    test: (f) => f === "tools/weekly-doc-review.mjs" || f === ".github/workflows/weekly-doc-review.yml" || f === ".github/workflows/deploy.yml",
-    docs: ["Documentations/WEEKLY_DOC_REVIEW.md"],
-    why: "changes the weekly-doc-review process itself -- re-read WEEKLY_DOC_REVIEW.md to keep its description of the process in sync",
+    test: (f) => f === "tools/deploy-review.mjs" || f === "Documentations/deploy-review.mjs" || f === ".github/workflows/deploy-review.yml" || f === ".github/workflows/deploy.yml",
+    docs: ["Documentations/DEPLOY_DOC_REVIEW.md"],
+    why: "changes the weekly-doc-review process itself -- re-read DEPLOY_DOC_REVIEW.md to keep its description of the process in sync",
   },
   {
     // Catch-all: only meant to fire when none of the more specific rules above
@@ -460,13 +462,13 @@ ${flaggedSection}
 - \`Documentations/AutoTest Results/npm-audit-run.txt\`
 - \`Documentations/AutoTest Results/DOCS_TO_UPDATE.md\` (same alignment status + checklist as this report, at a fixed filename)
 
-See [Documentations/WEEKLY_DOC_REVIEW.md](../WEEKLY_DOC_REVIEW.md) for what to do with this report.
+See [Documentations/DEPLOY_DOC_REVIEW.md](../DEPLOY_DOC_REVIEW.md) for what to do with this report.
 `;
 
   writeFileSync(path.join(AUTOTEST_DIR, `weekly-review-${date}.md`), report);
 
   // A second, non-dated copy of just the actionable bits -- overwritten every run,
-  // unlike weekly-review-<date>.md which is kept as history (see WEEKLY_DOC_REVIEW.md).
+  // unlike weekly-review-<date>.md which is kept as history (see DEPLOY_DOC_REVIEW.md).
   // The dated file requires knowing "which date is latest"; this one has a fixed name,
   // so it's the thing to open when browsing the repo and wondering "does anything need
   // updating right now" without digging through a list of dated reports first.
@@ -482,13 +484,13 @@ Last checked: ${date} — branch \`${branch}\` @ \`${headSha.slice(0, 7)}\`
 
 ${alignmentNote}${deployPendingNote}
 ${flaggedSection || "\n## Docs likely needing a manual/AI-assisted update\n\n_No prior review state to diff against yet -- this is the first recorded run._\n"}
-See [Documentations/WEEKLY_DOC_REVIEW.md](../WEEKLY_DOC_REVIEW.md) for the full process.
+See [Documentations/DEPLOY_DOC_REVIEW.md](../DEPLOY_DOC_REVIEW.md) for the full process.
 `;
   writeFileSync(path.join(AUTOTEST_DIR, "DOCS_TO_UPDATE.md"), docsToUpdate);
 
   // Surface the same report directly on the GitHub Actions run page -- whichever
   // workflow called this (the deploy-triggered step in deploy.yml, or a manual run
-  // of weekly-doc-review.yml), $GITHUB_STEP_SUMMARY is already set by the runner, so
+  // of deploy-review.yml), $GITHUB_STEP_SUMMARY is already set by the runner, so
   // this needs no per-workflow YAML wiring to stay in sync. Without this, the only
   // way to learn a doc needs updating was to go find and open the dated report file.
   if (process.env.GITHUB_STEP_SUMMARY) {

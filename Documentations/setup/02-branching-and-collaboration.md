@@ -48,8 +48,7 @@ Feature branch → merged into an integration branch → integration branch's ti
 this at different branches) are in
 [03 — CI/CD and deployment setup](03-cicd-and-deployment-setup.md).
 
-That same push is also meant to refresh `Documentations/AutoTest Results/` on
-`dev-deploy-documentation` — test counts, coverage, and dependency audit re-run against whatever
-the deploy just shipped. *(Pending: that step lives on the `ci/deploy-doc-refresh` branch, not yet
-merged into `nyunt/dev-deploy`.)* See [Weekly Documentation Review](../WEEKLY_DOC_REVIEW.md) for
-how that works.
+That same push also refreshes `Documentations/AutoTest Results/` on `dev-deploy-documentation` —
+test counts, coverage, and dependency audit re-run against whatever the deploy just shipped. This
+step is merged and live in `deploy.yml` on `nyunt/dev-deploy` (confirmed 2026-08-20). See
+[Deploy Documentation Review](../DEPLOY_DOC_REVIEW.md) for how that works.

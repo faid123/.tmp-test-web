@@ -34,4 +34,4 @@ None of the changed files matched a known flag rule.
 - `Documentations/AutoTest Results/npm-audit-run.txt`
 - `Documentations/AutoTest Results/DOCS_TO_UPDATE.md` (same alignment status + checklist as this report, at a fixed filename)
 
-See [Documentations/WEEKLY_DOC_REVIEW.md](../WEEKLY_DOC_REVIEW.md) for what to do with this report.
+See [Documentations/DEPLOY_DOC_REVIEW.md](../DEPLOY_DOC_REVIEW.md) for what to do with this report.

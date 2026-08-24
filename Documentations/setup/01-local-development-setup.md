@@ -59,28 +59,30 @@ npm test          # Jest, local/watch-friendly
 npm run test:ci   # Jest --ci --coverage — what CI actually runs before it will deploy
 ```
 
-As of this writing: **13 suites / 221 tests**, all passing, and every suite imports the real
+As of 2026-08-20: **19 suites / 582 tests**, all passing, and every suite imports the real
 `src/` module it claims to test (no hardcoded-placeholder or hand-copied-logic suites in the
-current tree). Covers login/password-reset, dashboard, case enrichment, 2D annotation (jaw-struct
-codec, clinical info, reciprocating-component rules), the artificial-teeth 3D decode layer, the
-help assistant, and a repo-wide import-resolution check. It does **not** yet cover case creation,
-chat/notifications, STL upload, version history, download/export, or responsive layout — those
-rely on manual UAT for now.
+current tree). Covers login/password-reset, dashboard, case enrichment (including case-comment
+sync and approval-email body generation), 2D annotation (jaw-struct codec, clinical info,
+reciprocating-component rules, Kennedy classification and the DLL-backed design-proposal flow),
+image-upload utilities, the guided page tour, the shared-cases invite roster, the artificial-teeth
+3D decode layer, the help assistant, and a repo-wide import-resolution check. It does **not** yet
+cover case creation, chat/notifications, STL upload, version history, download/export, or
+responsive layout — those rely on manual UAT for now.
 
 To get a suite-by-suite breakdown mapped against the app's 12 standing UAT workflow cases (which
 suites are real vs. placeholder, which UAT workflows have zero automated coverage), run:
 
 ```bash
-node tools/weekly-doc-review.mjs
+node tools/deploy-review.mjs
 ```
 
 This branch does not carry a `tools/run-uat-automated-tests.mjs` wrapper script (some other
-branches do) — `weekly-doc-review.mjs` invokes the underlying Jest/`npm audit` commands directly
+branches do) — `deploy-review.mjs` invokes the underlying Jest/`npm audit` commands directly
 and regenerates `Documentations/AutoTest Results/automated-test-run.json` (structured),
 `automated-test-run-log.txt` (full Jest output), and an `npm-audit-run.json`/`.txt` pair. It also
 writes a dated review report (`Documentations/AutoTest Results/weekly-review-YYYY-MM-DD.md`)
 flagging which of the narrative `.docx` documents likely need a manual update given what changed
-since the last run — see [Documentations/WEEKLY_DOC_REVIEW.md](../WEEKLY_DOC_REVIEW.md) for the
+since the last run — see [Documentations/DEPLOY_DOC_REVIEW.md](../DEPLOY_DOC_REVIEW.md) for the
 full process. `UAT_Report.docx` §2 (the UAT-mapped automated rollup) and the other narrative
 reports are authored separately, not auto-generated — re-run the script, read its report, then
 update the relevant `.docx` files (by hand, or by asking whoever/whatever last built them to redo
@@ -109,13 +111,3 @@ live site (see [03](03-cicd-and-deployment-setup.md)). A few things worth knowin
 npm run build
 npm start   # npx serve, serves the repo root including dist/bundle.js
 ```
-
-Or, closer to a real static host (this is **not** how the live site is actually hosted — see
-[03](03-cicd-and-deployment-setup.md) — but useful for sanity-checking nginx-style serving):
-
-```bash
-docker build -t smartrpd-web .
-docker run --rm -p 8080:80 smartrpd-web
-```
-
-Then open http://localhost:8080.

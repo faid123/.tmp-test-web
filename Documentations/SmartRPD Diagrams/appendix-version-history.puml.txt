@@ -1,0 +1,39 @@
+' SmartRPD_Documentation.docx — Appendix use-case diagram, "Version History".
+' Transcribed 2026-08-24 as a plain-text source for the existing (unchanged) diagram — content was
+' re-checked against current src/pages/VersionHistory.html, src/js/pages/versionHistory.js on
+' 2026-08-24 and found still accurate (both files confirmed present), so the embedded image in the
+' .docx was NOT replaced.
+' Render via the PlantUML server (see build script) or any local PlantUML install.
+@startuml
+left to right direction
+skinparam backgroundColor white
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 15
+skinparam ArrowColor #333333
+skinparam ArrowFontColor #333333
+skinparam usecase {
+  BorderColor #5b84b8
+  FontColor #16212b
+}
+skinparam rectangle {
+  BorderColor #666666
+  FontColor #16212b
+  FontStyle bold
+}
+
+actor "User" as User
+
+rectangle "Version History (VersionHistory.html, versionHistory.js)" {
+  usecase "Review past design iterations" as UC_Review #DAE8FC
+  usecase "Compare versions" as UC_Compare #DAE8FC
+
+  usecase "Open as standalone page" as UC_Standalone #D5E8D4
+  usecase "Open as modal overlay" as UC_Modal #D5E8D4
+}
+
+User -- UC_Review
+User -- UC_Compare
+
+UC_Review ..> UC_Standalone : <<extend>> [page entry]
+UC_Review ..> UC_Modal : <<extend>> [overlay entry]
+@enduml

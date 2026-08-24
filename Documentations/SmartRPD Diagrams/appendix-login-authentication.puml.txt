@@ -1,0 +1,41 @@
+' SmartRPD_Documentation.docx — Appendix use-case diagram, "Login & Authentication".
+' Transcribed 2026-08-24 as a plain-text source for the existing (unchanged) diagram — content was
+' re-checked against current src/js/pages/login.js, authGuard.js on 2026-08-24 and found still
+' accurate, so the embedded image in the .docx was NOT replaced. This file exists purely so the
+' diagram has a maintainable source like its siblings.
+' Render via the PlantUML server (see build script) or any local PlantUML install.
+@startuml
+left to right direction
+skinparam backgroundColor white
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 15
+skinparam ArrowColor #333333
+skinparam ArrowFontColor #333333
+skinparam usecase {
+  BorderColor #5b84b8
+  FontColor #16212b
+}
+skinparam rectangle {
+  BorderColor #666666
+  FontColor #16212b
+  FontStyle bold
+}
+
+actor "User" as User
+
+rectangle "Authentication (index.html, login.js, authGuard.js)" {
+  usecase "Log in with password" as UC_Login #DAE8FC
+  usecase "Access protected page" as UC_Access #DAE8FC
+
+  usecase "Verify OTP" as UC_OTP #D5E8D4
+  usecase "Check loggedInUser session" as UC_Session #D5E8D4
+  usecase "Redirect to login page" as UC_Redirect #D5E8D4
+}
+
+User -- UC_Login
+User -- UC_Access
+
+UC_Login ..> UC_OTP : <<include>>
+UC_Access ..> UC_Session : <<include>>
+UC_Redirect ..> UC_Session : <<extend>> [no session]
+@enduml

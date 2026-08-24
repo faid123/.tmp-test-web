@@ -44,8 +44,13 @@ someone with admin on `faid123/.tmp-test-web`.
 `main` is stale/diverged — see [02 — Branching and collaboration](02-branching-and-collaboration.md).
 Check the latest `nyunt/integration_N` branch instead.
 
-**`Documentations/AutoTest Results/` on `dev-deploy-documentation` looks stale after a deploy**
-Either the deploy-triggered refresh step (in `deploy.yml`) hasn't been merged yet — check whether
-`ci/deploy-doc-refresh` has landed on `nyunt/dev-deploy` — or it ran but found nothing changed
-(`npm audit`/test output can be identical between two deploys). Run it manually to force a check:
-`node tools/weekly-doc-review.mjs`. See [Weekly Documentation Review](../WEEKLY_DOC_REVIEW.md).
+**`Documentations/AutoTest Results/` looks stale after a deploy**
+The deploy-triggered refresh step is merged and live in `deploy.yml` (confirmed 2026-08-20), so
+first check whether it actually ran (Actions tab, the deploy run's last few steps) — a failed
+alignment check or `npm ci` error there would skip the rest silently-ish. If it ran clean, it may
+just have found nothing changed (`npm audit`/test output can be identical between two deploys —
+that's not a bug). Run it manually to force a check: `node tools/deploy-review.mjs` from a
+`dev-deploy-documentation` checkout. Remember: this only refreshes `AutoTest Results/`'s raw data,
+never the narrative `.docx` documents — and since 2026-08-20, `Documentations/` itself lives on
+`nyunt/dev-W7.1` as the primary copy, with `dev-deploy-documentation` as a mirrored backup, not
+the source of truth. See [Deploy Documentation Review](../DEPLOY_DOC_REVIEW.md).

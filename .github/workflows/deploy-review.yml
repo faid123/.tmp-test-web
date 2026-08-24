@@ -1,8 +1,8 @@
-name: Weekly Documentation Review
+name: Deploy Documentation Review (Manual Trigger)
 
 # Manual/on-demand only. The automatic path is the deploy-triggered step at the end of
 # .github/workflows/deploy.yml, which reruns this same review after every successful
-# deploy — see Documentations/WEEKLY_DOC_REVIEW.md. This workflow stays around as the
+# deploy — see Documentations/DEPLOY_DOC_REVIEW.md. This workflow stays around as the
 # "Run workflow" button for triggering a review without waiting on a deploy (e.g. to
 # pick up an npm-audit-only change with no code change behind it).
 #
@@ -10,12 +10,15 @@ name: Weekly Documentation Review
 # it never actually fired: GitHub Actions only reads `schedule:` from workflow files on
 # the repository's default branch (main), and this file has only ever lived on
 # dev-deploy-documentation.
+#
+# Renamed 2026-08-24 from weekly-doc-review.yml -- same reasoning as the underlying
+# tools/deploy-review.mjs rename: the refresh is deploy-triggered, not calendar-scheduled.
 on:
   workflow_dispatch:
 
 # Serialize runs so two reviews never race and commit conflicting artifacts.
 concurrency:
-  group: weekly-doc-review
+  group: deploy-review-manual
   cancel-in-progress: false
 
 permissions:
@@ -43,14 +46,14 @@ jobs:
       - name: Install (deterministic, from lockfile)
         run: npm ci
 
-      - name: Run weekly doc review
-        run: node tools/weekly-doc-review.mjs
+      - name: Run deploy review
+        run: node tools/deploy-review.mjs
 
       - name: Archive coverage evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: weekly-review-coverage
+          name: deploy-review-coverage
           path: coverage/
           if-no-files-found: ignore
 
@@ -61,13 +64,13 @@ jobs:
             echo "ℹ️ No changes to commit — data was already current."
           else
             git -c user.email='ci@smartrpd.local' -c user.name='SmartRPD CI' \
-              commit -m "Weekly doc review: refresh AutoTest results ($(date -u +%Y-%m-%d))"
+              commit -m "Deploy doc review: refresh AutoTest results ($(date -u +%Y-%m-%d))"
             git push origin "HEAD:${REVIEW_BRANCH}"
           fi
 
-      # tools/weekly-doc-review.mjs already appends the full report -- including the
+      # tools/deploy-review.mjs already appends the full report -- including the
       # "Docs likely needing a manual/AI-assisted update" checklist -- straight into
-      # $GITHUB_STEP_SUMMARY during the "Run weekly doc review" step above, so it's
+      # $GITHUB_STEP_SUMMARY during the "Run deploy review" step above, so it's
       # visible on this run's Summary tab with no extra wiring here. This step only
       # exists as a fallback for when that step never got that far (e.g. Jest crashed
       # before the report was built) -- if: always() means it still shows something.
@@ -76,4 +79,4 @@ jobs:
         run: |
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "---" >> "$GITHUB_STEP_SUMMARY"
-          echo "_If no report appears above, \`node tools/weekly-doc-review.mjs\` didn't complete -- check the \"Run weekly doc review\" step's log. See \`Documentations/WEEKLY_DOC_REVIEW.md\` for the full process._" >> "$GITHUB_STEP_SUMMARY"
+          echo "_If no report appears above, \`node tools/deploy-review.mjs\` didn't complete -- check the \"Run deploy review\" step's log. See \`Documentations/DEPLOY_DOC_REVIEW.md\` for the full process._" >> "$GITHUB_STEP_SUMMARY"

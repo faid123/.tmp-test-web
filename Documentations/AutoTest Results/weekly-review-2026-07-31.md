@@ -25,4 +25,4 @@ _No prior review state found -- this is the first run, so there's nothing to dif
 - `Documentations/AutoTest Results/npm-audit-run.json`
 - `Documentations/AutoTest Results/npm-audit-run.txt`
 
-See [Documentations/WEEKLY_DOC_REVIEW.md](../WEEKLY_DOC_REVIEW.md) for what to do with this report.
+See [Documentations/DEPLOY_DOC_REVIEW.md](../DEPLOY_DOC_REVIEW.md) for what to do with this report.

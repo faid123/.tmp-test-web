@@ -1,6 +1,7 @@
 %%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#eaf6f3', 'primaryBorderColor': '#0d7d6c', 'primaryTextColor': '#16212b', 'lineColor': '#56626d', 'tertiaryColor': '#ffffff', 'fontFamily': 'Segoe UI, Helvetica, Arial, sans-serif', 'fontSize': '17px' }, 'flowchart': { 'curve': 'basis', 'nodeSpacing': 40, 'rankSpacing': 65, 'htmlLabels': true } } }%%
 %% SmartRPD — Detailed Application Flowchart, section 2 of 4: Case List & Case Lifecycle (case_list.html)
-%% Source: live deployed commit d5d5121f12287c45b91d7a0d62acf017d6d98c64 (see README.md)
+%% DRAFT — needs re-verification against a real git-archive extraction before this replaces the
+%% published diagram (see chat, 2026-08-21 mermaid review). Not yet re-rendered to .png.
 %% Colour key: teal = screen/page, amber diamond = decision point, red = destructive action, dashed blue = network/API call
 %% Paste into https://mermaid.live to view/edit.
 
@@ -31,7 +32,7 @@ flowchart TD
         CaseDetail --> DDMenu{"⋮ menu"}
         DDMenu --> ViewDash["View Dashboard"]
         DDMenu --> Rename["Rename"]
-        DDMenu --> EditAccess["Edit User Access"]
+        DDMenu --> EditAccess["Edit User Access — collaborator search now suggests/autocompletes from the shared-cases roster"]
         DDMenu --> ViewVersions["View Version History"]
         DDMenu --> DownloadRefs["Download References"]
         DDMenu --> Duplicate["Duplicate case"]

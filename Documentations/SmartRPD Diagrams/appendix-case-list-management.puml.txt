@@ -1,0 +1,46 @@
+' SmartRPD_Documentation.docx — Appendix use-case diagram, "Case List Management".
+' Transcribed 2026-08-24 as a plain-text source for the existing (unchanged) diagram — content was
+' re-checked against current src/pages/case_list.html, src/js/pages/caseManagement.js on 2026-08-24
+' and found still accurate, so the embedded image in the .docx was NOT replaced.
+' Render via the PlantUML server (see build script) or any local PlantUML install.
+@startuml
+left to right direction
+skinparam backgroundColor white
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 15
+skinparam ArrowColor #333333
+skinparam ArrowFontColor #333333
+skinparam usecase {
+  BorderColor #5b84b8
+  FontColor #16212b
+}
+skinparam rectangle {
+  BorderColor #666666
+  FontColor #16212b
+  FontStyle bold
+}
+
+actor "User" as User
+
+rectangle "Case Management (case_list.html, caseManagement.js)" {
+  usecase "Browse case list" as UC_Browse #DAE8FC
+  usecase "Change workflow status inline\n(valueToApiStatus)" as UC_Status #DAE8FC
+  usecase "Duplicate case" as UC_Dup #DAE8FC
+  usecase "Rename case" as UC_Rename #DAE8FC
+  usecase "Delete case" as UC_Delete #DAE8FC
+  usecase "Open case" as UC_Open #DAE8FC
+
+  usecase "Search / filter\n(applyClientFilters)" as UC_Search #D5E8D4
+  usecase "Sort cases" as UC_Sort #D5E8D4
+}
+
+User -- UC_Browse
+User -- UC_Status
+User -- UC_Dup
+User -- UC_Rename
+User -- UC_Delete
+User -- UC_Open
+
+UC_Search ..> UC_Browse : <<extend>>
+UC_Sort ..> UC_Browse : <<extend>>
+@enduml
