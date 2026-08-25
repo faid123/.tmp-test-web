@@ -311,7 +311,7 @@ export const PAGE_TOURS = {
     },
     {
       title: "Propose a design, or start from scratch",
-      text: "Load Proposed Design sends the current tooth presence, jaw type, and material to the design DLL. If the DLL is unavailable, the local Kennedy proposal preview opens before anything is placed. Draw from Scratch clears the arch so you build the design up yourself. Both sit beside the Clear buttons and, like them, only appear in design mode.",
+      text: "Load Template Jaw sends the current tooth presence, jaw type, and material to the design DLL and previews what comes back — nothing is placed until you press Place Design. If the DLL is unavailable, the local Kennedy proposal preview opens instead. Draw from Scratch clears the arch so you build the design up yourself. Both sit beside the Clear buttons and, like them, only appear in design mode.",
       selector: "#loadProposalBtn",
       reveal: "#jawLockToggleBtn",
       optional: true,
