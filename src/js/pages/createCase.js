@@ -1,6 +1,6 @@
 // 顶部引入模块
 import { lol } from "../shared/crypt.js";
-import { toast, flashToast, attachThemedCalendar } from "../shared/toast.js";
+import { toast, flashToast, attachThemedCalendar, calIsoFromDate } from "../shared/toast.js";
 import { logApi } from "../shared/apiLog.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 import { attachUserSuggest, initialsFor } from "../shared/userSuggest.js";
