@@ -1226,9 +1226,7 @@ async function handleRowClick(caseId) {
 
   // Must match case_list.css's @media max-width: 860px, where the detail pane
   // goes off-canvas and stays hidden until .show-details is added.
-  if (window.innerWidth <= 860) {
-    document.querySelector(".cm-page")?.classList.add("show-details");
-  }
+  if (isMobileDetailLayout()) openMobileCaseDetails();
 
 }
 
@@ -4364,7 +4362,11 @@ async function saveCaseInstructions() {
 
 // The stored additionalcasedetails row, or null when there is none. THROWS on a
 // refusal, so a caller about to overwrite can abort rather than guess.
-async function readCaseDetails(caseIntID, uuid) {
+// Exported for testing only — deliberately NOT the same helper as caseNote.js's
+// fetchAdditionalCaseDetails: this one throws instead of returning {ok, detail},
+// and postNewStatus below leans on that to fall back to caseObj's in-memory
+// fields rather than caseNote.js's always-null fallback.
+export async function readCaseDetails(caseIntID, uuid) {
   const res = await fetch(
     `${API_BASE}/additionalcasedetails/getall`,
     {
@@ -4381,7 +4383,8 @@ async function readCaseDetails(caseIntID, uuid) {
   return (Array.isArray(rows) ? rows.at(-1) : null) || null;
 }
 
-async function postNewStatus(caseObj, newStatus) {
+// Exported for testing only.
+export async function postNewStatus(caseObj, newStatus) {
   const uuid = getLoggedInUser().uuid;
   const caseIntID = caseObj.id || caseObj.case_int_id;
 
