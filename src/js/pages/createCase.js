@@ -1,12 +1,11 @@
 // 顶部引入模块
 import { lol } from "../shared/crypt.js";
-import { toast, flashToast, attachThemedCalendar, calIsoFromDate } from "../shared/toast.js";
+import { toast, flashToast, attachThemedCalendar } from "../shared/toast.js";
 import { logApi } from "../shared/apiLog.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 import { attachUserSuggest, initialsFor } from "../shared/userSuggest.js";
 import { confirmRemoveUserFromCase } from "../shared/caseRoles.js";
 import { normalizeImageFile } from "../shared/imageFiles.js";
-import { updateCaseDueDate } from "../2D/caseNote.js";
 
 // Resolved against the app root (everything before "/src/") so it loads from
 // both src/pages/ and the deeper src/pages/admin/, where a fixed path would not.
@@ -728,12 +727,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       caseIntID = data.id;
       const user_id = loggedInUser.username || "";
       await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
-      // Carries the Request Date through as the case's real due_date and the
-      // instructions box through as its comment — same write the case list's
-      // own due-date/comment editors use. Request Date used to only default
-      // and display here without ever being saved, so the case list fell
-      // back to its own +14-day guess instead of what was actually picked.
-      await updateCaseDueDate(caseIntID, requestDateInput?.value ?? "", instructionsInput?.value ?? "");
+      await saveCaseInstructions(machine_id, uuid, caseIntID, instructionsInput?.value ?? "");
       advance(hasUpperPre ? "Uploading upper jaw…" : hasLowerPre ? "Uploading lower jaw…" : "Saving…");
     } catch (err) {
       console.error("❌ Failed to create case", err);
@@ -1231,6 +1225,33 @@ async function uploadReferenceImage(
     await uploadCaseThumbnail(machine_id, uuid, caseIntID, 2 + index, base64data);
   } catch (err) {
     console.error(`❌ Error uploading reference image ${image.name}:`, err);
+  }
+}
+
+// The case is brand new, so there is no row to merge with. Non-fatal: this must
+// never fail a case creation that already succeeded.
+async function saveCaseInstructions(machine_id, uuid, caseIntID, text) {
+  const comments = (text || "").trim();
+  if (!caseIntID || !comments) return;
+  const payload = [
+    { machine_id, uuid, caseIntID },
+    { assigned_to: null, due_date: null, new_status: null, comments },
+  ];
+  try {
+    const res = await fetch(
+      `${API_BASE}/additionalcasedetails`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
+    logApi(res, "POST /additionalcasedetails");
+    if (!res.ok) {
+      console.error("❌ Failed to save case instructions:", res.status);
+    }
+  } catch (err) {
+    console.error("❌ Error saving case instructions:", err);
   }
 }
 

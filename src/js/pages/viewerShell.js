@@ -99,36 +99,32 @@ function wireRightNavButton() {
   });
 }
 
-// Background of the 3D canvas only (dark = default, reveals #container3D's
-// own dark radial gradient; light = opaque white clear colour — see index.js's
-// applyViewerBackgroundTheme). NOT persisted — every fresh load starts dark
-// regardless of what was toggled last time; this only tracks the CURRENT
-// session's choice, kept here (not localStorage) since index.js's own init
-// also just hardcodes "dark" and the two no longer need to agree on anything.
-let currentViewerTheme = "dark";
+// Mobile/tablet only (#footerObjectsBtn is display:none above 1024px), where the
+// Objects panel becomes a right-side sidebar and this replaces the top sheet.
+function wireObjectsPanelButton() {
+  const btn = document.getElementById("footerObjectsBtn");
+  if (!btn) return;
 
-function wireThemeToggle() {
-  const btn = document.getElementById("footerThemeBtn");
-  const icon = document.getElementById("footerThemeIcon");
-  if (!btn || !icon) return;
-
-  const syncButton = (theme) => {
-    const isDark = theme === "dark";
-    icon.className = isDark ? "fa fa-sun" : "fa fa-moon";
-    const label = isDark ? "Switch to light background" : "Switch to dark background";
+  const syncButton = (open) => {
+    const label = open ? "Close objects panel" : "Objects";
     btn.setAttribute("aria-label", label);
     btn.dataset.tooltip = label;
-    btn.setAttribute("aria-pressed", String(isDark));
+    btn.setAttribute("aria-pressed", String(Boolean(open)));
   };
-  syncButton(currentViewerTheme);
+  syncButton(false);
 
   btn.addEventListener("click", () => {
-    currentViewerTheme = currentViewerTheme === "dark" ? "light" : "dark";
-    syncButton(currentViewerTheme);
-    // The 3D module may still be loading (it owns the renderer this drives) —
-    // a click that lands before it's ready still takes effect once index.js's
-    // own init runs, since that init starts from the same "dark" default.
-    window.setViewerBackgroundTheme?.(currentViewerTheme);
+    if (window.viewerPanelManager) {
+      window.viewerPanelManager.toggle("objects-panel");
+      return;
+    }
+    // Fallback while the WebGL workspace loads: the floating toggle is hidden, not
+    // removed, so its own handler still drives the same panel.
+    document.getElementById("component-panel-toggle")?.click();
+  });
+
+  window.addEventListener("viewerobjectspanelchange", (event) => {
+    syncButton(Boolean(event.detail?.open));
   });
 }
 
@@ -269,7 +265,7 @@ document.addEventListener("DOMContentLoaded", () => {
   populateCaseName();
   wireChatButton();
   wireRightNavButton();
-  wireThemeToggle();
+  wireObjectsPanelButton();
   wireSidebarVersionHistory();
   wireSidebarReturn();
   setupAppSidebar({

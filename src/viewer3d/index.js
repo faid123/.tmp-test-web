@@ -5407,6 +5407,40 @@ function removeViewerLoadingScreen() {
     paint(0.02, `Reading ${slotLabel}…`);
 
     return {
+      // ApiClient writes bytes into window.viewerLoadingEls.progressBar, so swap in
+      // a stand-in. EVERY response must be wrapped or its readout leaks through.
+      trackDownload(from, to, label) {
+        if (label) paint(from, label);
+        const previous = window.viewerLoadingEls;
+        let max = 1;
+        let value = 0;
+        window.viewerLoadingEls = {
+          progressBar: {
+            style: {},
+            get max() {
+              return max;
+            },
+            set max(bytes) {
+              max = Number(bytes) || 1;
+            },
+            get value() {
+              return value;
+            },
+            set value(bytes) {
+              value = Number(bytes) || 0;
+              // Real bytes have taken over from any running estimate.
+              stopCreep();
+              paint(from + (to - from) * Math.min(value / max, 1));
+            },
+          },
+          // ApiClient also writes a percentage and a speed readout; ours are already painted.
+          percentage: { textContent: "" },
+          displayBox: { textContent: "" },
+        };
+        return () => {
+          window.viewerLoadingEls = previous;
+        };
+      },
       // The DLL answers in one go, so ease across its phase on a timer instead.
       startSurveyPhase(from, to, label) {
         paint(from, label);
@@ -5427,12 +5461,8 @@ function removeViewerLoadingScreen() {
     };
   }
 
-  // Survey this slot's own STL (already in hand from the mesh load — never
-  // re-fetched). `values` is one undercut value per welded vertex; `reason` is
-  // set (and values null) whenever the survey couldn't run at all, so the
-  // panel can tell the user WHY the toggle didn't turn on instead of just
-  // silently reverting — see ensureSlotUndercutGeometry/buildSlotUndercutGeometry.
-  async function computeSlotSurveyValues(slot, jawKey, stlDataBase64, progress) {
+  // Survey this slot's own STL. Returns one undercut value per welded vertex, or null.
+  async function fetchSlotSurveyValues(slot, jawKey, progress) {
     const dir = slotSurveyDirection(jawKey);
     if (!dir) {
       console.warn(
@@ -5453,11 +5483,30 @@ function removeViewerLoadingScreen() {
       uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
       caseIntID: paramValue,
     };
+    // Re-fetched rather than retained: a slot scan is tens of MB, and holding all four for a
+    // toggle that may never be pressed is what pushes a phone's renderer over its memory limit.
+    const restoreProgress = progress?.trackDownload?.(0.05, 0.55, "Reading the uploaded scan…");
+    let slotResponse;
+    try {
+      slotResponse = await apiClient.post(
+        "/stl/slot/get",
+        [authPayload, { slotNumber: slot }],
+        false,
+        `Slot ${slot} scan`
+      );
+    } finally {
+      restoreProgress?.();
+    }
+    const item = Array.isArray(slotResponse) ? slotResponse[0] : slotResponse;
+    if (!item?.data) {
+      console.warn(`[viewer3D] slot ${slot}: could not re-read the upload for surveying`);
+      return null;
+    }
 
     const startedAt = performance.now();
-    // Paced estimate while the DLL works — there is no download phase any more,
-    // the bytes rode in with the slot's own mesh load.
-    progress?.startSurveyPhase?.(0.1, 0.95, "Surveying undercut…");
+    // Paced estimate while the DLL works, handed over to real bytes when it answers.
+    progress?.startSurveyPhase?.(0.55, 0.85, "Surveying undercut…");
+    const restoreSurveyProgress = progress?.trackDownload?.(0.85, 0.98);
     let response;
     try {
       response = await apiClient.post(
@@ -5469,7 +5518,7 @@ function removeViewerLoadingScreen() {
             type: jawKey === "upper" ? 1 : 2,
             // The mesh to survey travels with the request, so this is the upload's own
             // undercut rather than the case scan's.
-            stl_data: stlDataBase64,
+            stl_data: item.data,
             dir,
             printFullSurveying: true,
             returnSurveyingBase64: true,
@@ -5479,7 +5528,7 @@ function removeViewerLoadingScreen() {
         `Slot ${slot} undercut`
       );
     } finally {
-      progress?.set?.(0.95);
+      restoreSurveyProgress?.();
     }
     const base64 = response?.surveying_values_base64;
     if (!base64) {
