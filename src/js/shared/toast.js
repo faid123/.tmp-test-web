@@ -248,8 +248,10 @@ function onCalKeydown(e) {
   if (e.key === "Escape") closeThemedCalendar();
 }
 
-// Local-time YYYY-MM-DD (avoids the UTC off-by-one of toISOString()).
-function calIsoFromDate(d) {
+// Local-time YYYY-MM-DD (avoids the UTC off-by-one of toISOString()). Exported
+// for other date-math call sites (e.g. createCase.js's request-date default)
+// that need the same local-day formatting the calendar widget uses.
+export function calIsoFromDate(d) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${m}-${day}`;
