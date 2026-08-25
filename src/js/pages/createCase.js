@@ -1,6 +1,6 @@
 // 顶部引入模块
 import { lol } from "../shared/crypt.js";
-import { toast, flashToast, attachThemedCalendar } from "../shared/toast.js";
+import { toast, flashToast, attachThemedCalendar, calIsoFromDate } from "../shared/toast.js";
 import { logApi } from "../shared/apiLog.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 import { attachUserSuggest, initialsFor } from "../shared/userSuggest.js";
@@ -99,10 +99,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   };
 
   // Format `today + days` as YYYY-MM-DD (for <input type="date"> values).
+  // calIsoFromDate reads the local date fields — toISOString() converts to
+  // UTC first, which silently shows the wrong day for anyone east of UTC
+  // (e.g. Singapore, UTC+8) during the early hours of the local day.
   const formatTodayPlusDays = (days) => {
     const d = new Date();
     d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0, 10);
+    return calIsoFromDate(d);
   };
 
   const showInlineView = () => {

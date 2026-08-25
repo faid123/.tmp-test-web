@@ -123,6 +123,11 @@ export async function fetchAdditionalCaseDetails(caseIntID) {
   const res = await postJson("additionalcasedetails/getall", [
     { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID },
   ]);
+  // 404 = this case has no row yet, which is a valid starting point — a brand
+  // new case (createCase.js's post-creation due-date/comment write) always
+  // hits this on its first save. Without this, patchAdditionalCaseDetails
+  // below reads it as a failure and silently refuses to write at all.
+  if (res?.status === 404) return { ok: true, detail: null };
   if (!res?.ok) return { ok: false, detail: null };
   try {
     const arr = await res.json();

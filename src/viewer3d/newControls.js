@@ -5,23 +5,65 @@ const wireframeOverlays = new Set();
 
 const style = document.createElement("style");
 style.textContent = `
-  .component-panel-toggle {
+  /* Holds the round expand toggle plus one small icon per ACTIVE component —
+     the "hidden" state now, replacing what used to be just the bare toggle
+     with empty space around it. Hides as one unit while the full panel is
+     open (see .hidden below), same corner the panel itself opens from. A
+     column of two lines: the toggle on its own, the icon row below (capped,
+     so it doesn't sprawl across the canvas) — inactive components have no
+     icon here at all, only the toggle re-opens the full list for those. */
+  .component-panel-mini {
     position: absolute;
     left: 16px;
     top: 16px;
     z-index: 1003;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    pointer-events: auto;
+  }
+
+  .component-panel-mini.hidden {
+    display: none;
+  }
+
+  /* One child row per jawGroup (see getMiniIconRow in createComponentPanel) —
+     stacked in a column, so upper-jaw icons and lower-jaw icons are always in
+     genuinely separate flex rows, not just wrapped by width. A row a group
+     has no jawGroup for (e.g. design-slot rows) shares one fallback row. */
+  .component-panel-mini-icons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .component-panel-mini-icons-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .component-panel-toggle {
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
     width: 56px;
     height: 56px;
     padding: 0;
-    border: 0;
-    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 14px;
+    /* A visible chip, not just a bare white-on-transparent icon — the icon is
+       white (inverted) so it needs its own backing to read against a light
+       canvas, same glass as the panel it opens. */
+    background: rgba(56, 58, 64, 0.55);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
     color: #ffffff;
     font: 700 13px Arial, sans-serif;
     cursor: pointer;
-    box-shadow: none;
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.34);
     pointer-events: auto;
     transition: opacity 0.15s, filter 0.15s, transform 0.15s;
   }
@@ -31,16 +73,65 @@ style.textContent = `
     transform: scale(1.06);
   }
 
-  /* The panel takes over the toggle's corner, so the toggle hides while open. */
-  .component-panel-toggle.is-hidden {
+  /* One quick per-component visibility toggle, shown alongside the round
+     expand button whenever the full menu is hidden — icon-only (the
+     component's own row icon), toggling that component on/off without
+     reopening the full list. A component the case doesn't actually have
+     (an empty slot, say) gets no icon at all (see .is-absent) — but one
+     that exists and is just switched off still gets an icon, dimmed with a
+     slash, and clicking it turns it back on right there. */
+  .component-mini-eye {
+    position: relative;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 10px;
+    background-color: rgba(56, 58, 64, 0.55);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 18px 18px;
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    transition: opacity 0.15s, filter 0.15s;
+  }
+
+  .component-mini-eye:hover {
+    filter: brightness(1.15);
+  }
+
+  .component-mini-eye.is-absent {
     display: none;
+  }
+
+  .component-mini-eye.hidden-state {
+    opacity: 0.55;
+  }
+
+  .component-mini-eye-slash {
+    display: none;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 26px;
+    height: 1.5px;
+    background: #ef9a9a;
+    transform: translate(-50%, -50%) rotate(-38deg);
+    border-radius: 999px;
+  }
+
+  .component-mini-eye.hidden-state .component-mini-eye-slash {
+    display: block;
   }
 
   .component-panel {
     position: absolute;
     left: 16px;
     top: 16px;
-    transform: none;
+    transform-origin: top left;
     z-index: 1002;
     display: flex;
     flex-direction: column;
@@ -57,26 +148,43 @@ style.textContent = `
     box-shadow: 0 16px 38px rgba(0, 0, 0, 0.34);
     font-family: "Montserrat", Arial, sans-serif;
     pointer-events: auto;
+    opacity: 1;
+    transform: scaleY(1);
+    transition: opacity 0.16s ease, transform 0.16s ease;
   }
 
+  /* Closes by collapsing upward into the toggle button (anchored at the
+     panel's own top-left corner via transform-origin above) at every screen
+     size — same behaviour on phone/tablet as desktop now, replacing the old
+     "slide the whole panel off to the right" tablet/phone treatment. */
   .component-panel.hidden {
-    display: none;
+    opacity: 0;
+    transform: scaleY(0);
+    pointer-events: none;
   }
 
-  /* Dims the canvas behind the panel once it becomes a full-height sidebar
-     (see the max-width: 1024px block at the bottom) — desktop never shows it. */
+  /* Invisible full-screen click-catcher behind the open panel, at every screen
+     size — lets a tap/click anywhere else on the canvas close the popup, the
+     way a dropdown normally would. No dimming: the panel is a small top-left
+     popup now, not a sidebar, so darkening the whole canvas behind it would
+     read as its own (wrong) UI state. */
   .component-panel-backdrop {
     display: none;
     position: absolute;
     inset: 0;
     z-index: 1001;
-    background: rgba(0, 0, 0, 0.45);
+    background: transparent;
     border: 0;
     padding: 0;
-    cursor: pointer;
+    cursor: default;
   }
 
-  /* "Show / Hide" bar: a chevron that folds the list away, plus the close X. */
+  .component-panel-backdrop:not(.hidden) {
+    display: block;
+  }
+
+  /* "Show / Hide" bar: a chevron that minimizes the panel down to the eye
+     icon (same action as the close X), plus the close X itself. */
   .component-panel-header {
     flex: 0 0 auto;
     display: flex;
@@ -95,7 +203,6 @@ style.textContent = `
     background: transparent;
     color: #ffffff;
     cursor: pointer;
-    transition: transform 0.18s ease;
   }
 
   .component-panel-collapse::before {
@@ -107,10 +214,6 @@ style.textContent = `
     border-left: 2px solid currentColor;
     border-top: 2px solid currentColor;
     transform: rotate(45deg);
-  }
-
-  .component-panel.is-collapsed .component-panel-collapse {
-    transform: rotate(180deg);
   }
 
   .component-panel-title {
@@ -144,6 +247,25 @@ style.textContent = `
     background: rgba(255, 255, 255, 0.24);
   }
 
+  /* The rotation-lock button (resetButton.js) is moved into this header — see
+     createComponentPanel. Its own rules size it for the black toolbar
+     (var(--toolbar-btn-size), 46-58px); this overrides that down to match the
+     header's other controls. The extra class in the selector outweighs
+     resetButton.js's bare #lock-rotation-button on specificity, so this wins
+     regardless of which <style> tag landed in <head> first. */
+  .component-panel-header #lock-rotation-button {
+    order: 0;
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+  }
+
+  .component-panel-header #lock-icon {
+    width: 15px;
+    height: 15px;
+    margin-bottom: 0;
+  }
+
   .component-row.unavailable {
     opacity: 0.45;
   }
@@ -175,11 +297,6 @@ style.textContent = `
   .component-panel-body::-webkit-scrollbar-thumb {
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.3);
-  }
-
-  .component-panel.is-collapsed .component-panel-body,
-  .component-panel.is-collapsed .component-panel-footer {
-    display: none;
   }
 
   /* One tinted block per object. --row-tint comes from the object's own
@@ -401,6 +518,36 @@ style.textContent = `
     display: none;
   }
 
+  /* Transient explanation for why an undercut toggle didn't turn on (missing
+     insertion angle, stale survey, etc.) — otherwise the button just quietly
+     reverts with no feedback. Centered at the bottom so it never competes
+     with the (left-anchored) legend or (top-left) mini strip/panel. */
+  .component-panel-note {
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    z-index: 1004;
+    max-width: min(280px, calc(100vw - 32px));
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 12px;
+    background: rgba(56, 58, 64, 0.92);
+    color: #ffffff;
+    font: 600 12px "Montserrat", Arial, sans-serif;
+    line-height: 1.4;
+    text-align: center;
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.34);
+    opacity: 0;
+    transform: translate(-50%, 6px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    pointer-events: none;
+  }
+
+  .component-panel-note.visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
   /* Undercut colour key, shown only while an undercut view is on. Palette
      matches preview3D.js's colorForSurveyingValue byte-for-byte. */
   .viewer-undercut-legend {
@@ -486,7 +633,6 @@ style.textContent = `
     .component-panel {
       left: 16px;
       top: 16px;
-      transform: none;
       width: min(260px, calc(100vw - 280px));
       max-height: min(260px, calc(100% - 32px));
     }
@@ -497,7 +643,6 @@ style.textContent = `
       left: 16px;
       top: 16px;
       bottom: auto;
-      transform: none;
       max-width: calc(100vw - 20px);
     }
 
@@ -522,11 +667,32 @@ style.textContent = `
   }
 
   @media (max-width: 768px) {
-    .component-panel-toggle {
+    .component-panel-mini {
       left: 12px;
       top: 12px;
+      gap: 6px;
+    }
+
+    .component-panel-mini-icons {
+      /* "Try not to take too much screen space, maybe 30% of the mobile top
+         left space" — caps each jaw row's footprint; it wraps to more rows
+         rather than growing wider once it hits this. */
+      max-width: 34vw;
+    }
+
+    .component-panel-mini-icons-row {
+      gap: 6px;
+    }
+
+    .component-panel-toggle {
       width: 52px;
       height: 52px;
+    }
+
+    .component-mini-eye {
+      width: 30px;
+      height: 30px;
+      background-size: 16px 16px;
     }
 
     .component-panel {
@@ -538,45 +704,6 @@ style.textContent = `
     }
   }
 
-  /* Objects panel as a full-height right sidebar on tablet/phone, opened by the
-     footer hamburger instead of the floating toggle (hidden here). Both drive
-     the same viewerPanelManager entry, so either trigger works.
-     !important beats this file's narrower rules and style.css's older top-sheet
-     ones without depending on load order. */
-  @media (max-width: 1024px) {
-    .component-panel-toggle {
-      display: none !important;
-    }
-
-    .component-panel {
-      display: flex !important;
-      top: 0 !important;
-      left: auto !important;
-      right: 0 !important;
-      bottom: 0 !important;
-      /* ~60% of the screen rather than the near-full width min(300px, 84vw)
-         gave; the floor/ceiling only cover the extremes. */
-      width: clamp(220px, 60vw, 420px) !important;
-      max-width: none !important;
-      height: 100% !important;
-      max-height: none !important;
-      border-radius: 0 !important;
-      border-top: 0 !important;
-      border-right: 0 !important;
-      border-bottom: 0 !important;
-      box-shadow: -14px 0 34px rgba(0, 0, 0, 0.4) !important;
-      transform: translateX(100%) !important;
-      transition: transform 0.25s ease !important;
-    }
-
-    .component-panel:not(.hidden) {
-      transform: translateX(0) !important;
-    }
-
-    .component-panel-backdrop:not(.hidden) {
-      display: block;
-    }
-  }
 `;
 document.head.appendChild(style);
 
@@ -703,10 +830,45 @@ function createComponentPanel(groups) {
   toggle.id = "component-panel-toggle";
   toggle.className = "component-panel-toggle";
   toggle.type = "button";
-  toggle.setAttribute("aria-label", "Objects");
-  toggle.title = "Objects";
+  toggle.setAttribute("aria-label", "Show/Hide");
+  toggle.title = "Show/Hide";
   toggle.setAttribute("aria-expanded", "false");
-  toggle.innerHTML = `<img src="${basePath}/assets/Icon_objects3.png" alt="Objects" style="width:36px;height:36px;object-fit:contain;display:block;margin:auto;pointer-events:none;">`;
+  // Eye/visibility icon, not the case's own "Objects" cube — this button's job
+  // is showing/hiding components, so it reads as that action at a glance.
+  // Persists top-left at every screen size (see the toggle rules above).
+  toggle.innerHTML = `<img src="${basePath}/assets/visible.png" alt="Show/Hide" style="width:32px;height:32px;object-fit:contain;display:block;margin:auto;pointer-events:none;filter:brightness(0) invert(1);">`;
+
+  // Holds the toggle plus one mini eye per component — see openPanel/closePanel
+  // below, which show/hide this whole thing opposite the full panel.
+  const miniWrap = document.createElement("div");
+  miniWrap.id = "component-panel-mini";
+  miniWrap.className = "component-panel-mini";
+
+  miniWrap.appendChild(toggle);
+
+  // One mini eye per ACTIVE (visible) component goes here — inactive/hidden
+  // ones are omitted rather than shown dimmed, so the collapsed strip only
+  // ever shows what's actually on screen. Appended as each row is built
+  // below; each button's own display is then gated by isVisible in sync().
+  // A column of per-jaw rows (see getMiniIconRow below) — genuinely separate
+  // lines for the upper jaw's icons and the lower jaw's, not just a single
+  // wrapping row that happens to break where width runs out.
+  const miniIcons = document.createElement("div");
+  miniIcons.className = "component-panel-mini-icons";
+  miniWrap.appendChild(miniIcons);
+
+  const miniIconRows = new Map();
+  const getMiniIconRow = (jawGroupKey) => {
+    const rowKey = jawGroupKey ?? "__default";
+    let row = miniIconRows.get(rowKey);
+    if (!row) {
+      row = document.createElement("div");
+      row.className = "component-panel-mini-icons-row";
+      miniIcons.appendChild(row);
+      miniIconRows.set(rowKey, row);
+    }
+    return row;
+  };
 
   const panel = document.createElement("div");
   panel.id = "component-panel";
@@ -718,15 +880,14 @@ function createComponentPanel(groups) {
   const collapseButton = document.createElement("button");
   collapseButton.type = "button";
   collapseButton.className = "component-panel-collapse";
-  collapseButton.title = "Collapse";
-  collapseButton.setAttribute("aria-label", "Collapse the object list");
-  collapseButton.setAttribute("aria-expanded", "true");
+  collapseButton.title = "Minimize";
+  collapseButton.setAttribute("aria-label", "Minimize the object list to the eye icon");
 
   const title = document.createElement("button");
   title.type = "button";
   title.className = "component-panel-title";
   title.textContent = "Show / Hide";
-  title.title = "Collapse the object list";
+  title.title = "Minimize the object list to the eye icon";
 
   const closeButton = document.createElement("button");
   closeButton.type = "button";
@@ -737,6 +898,16 @@ function createComponentPanel(groups) {
 
   header.appendChild(collapseButton);
   header.appendChild(title);
+
+  // The rotation-lock button lives in the black mobile/tablet toolbar's own
+  // DOM (built once by resetButton.js, whose closure holds the locked/unlocked
+  // state) — move that same node in here rather than recreate it, so its click
+  // handler and state survive every rebuild of this panel. Sized for the
+  // header via the .component-panel-header #lock-rotation-button override
+  // above, which beats resetButton.js's own (toolbar) sizing on specificity.
+  const lockButton = document.getElementById("lock-rotation-button");
+  if (lockButton) header.appendChild(lockButton);
+
   header.appendChild(closeButton);
 
   const body = document.createElement("div");
@@ -755,6 +926,7 @@ function createComponentPanel(groups) {
   // Set once the legend is mounted, below — read fresh each sync so the
   // panel-construction order above doesn't matter.
   let undercutLegend = null;
+  let componentNote = null;
 
   const areAllGroupsVisible = () =>
     groups.every((g) => g.hasContent?.() === false || (g.getVisible?.() ?? true));
@@ -799,13 +971,17 @@ function createComponentPanel(groups) {
     syncAllRows();
   });
 
-  const toggleCollapsed = () => {
-    const collapsed = panel.classList.toggle("is-collapsed");
-    collapseButton.setAttribute("aria-expanded", String(!collapsed));
-    collapseButton.title = collapsed ? "Expand" : "Collapse";
+  // Both the chevron and the "Show / Hide" label fully minimize the panel
+  // down to the round eye icon (+ active-component mini icons) — the same
+  // action as the close X, not an in-place collapse. Defined as a closure
+  // over closePanel/viewerPanelManager (declared further below): it's only
+  // ever invoked from a later click, by which point both exist.
+  const minimizeToTray = () => {
+    if (window.viewerPanelManager) window.viewerPanelManager.close("objects-panel");
+    else closePanel();
   };
-  collapseButton.addEventListener("click", toggleCollapsed);
-  title.addEventListener("click", toggleCollapsed);
+  collapseButton.addEventListener("click", minimizeToTray);
+  title.addEventListener("click", minimizeToTray);
 
   groups.forEach((group) => {
     const row = document.createElement("div");
@@ -853,6 +1029,27 @@ function createComponentPanel(groups) {
 
     buttonsRow.appendChild(visibilityButton);
 
+    // The mini strip's copy of this same toggle — same action, shown instead
+    // of the full row whenever the menu is collapsed. Icon-only (the row's
+    // own icon), so it still reads as "which component" with no label.
+    // Present whenever the component itself is (see .is-absent in sync()
+    // below) — a component that's just switched off still gets an icon here,
+    // dimmed, and clicking it turns it back on.
+    const miniButton = document.createElement("button");
+    miniButton.type = "button";
+    miniButton.className = "component-mini-eye";
+    if (group.iconPath) miniButton.style.backgroundImage = `url(${group.iconPath})`;
+    miniButton.title = `Toggle ${group.label} visibility`;
+    miniButton.setAttribute("aria-label", `Toggle ${group.label} visibility`);
+    const miniSlash = document.createElement("span");
+    miniSlash.className = "component-mini-eye-slash";
+    miniButton.appendChild(miniSlash);
+    miniButton.addEventListener("click", () => {
+      group.setVisible?.(!(group.getVisible?.() ?? true));
+      syncAllRows();
+    });
+    getMiniIconRow(group.jawGroup).appendChild(miniButton);
+
     let undercutButton = null;
     let occlusionButton = null;
     // Slot rows offer undercut only (borrowed from the case jaw); the case's own jaws
@@ -872,6 +1069,14 @@ function createComponentPanel(groups) {
           undercutButton.disabled = true;
           undercutButton.classList.add("is-busy");
           result
+            .then((appliedMode) => {
+              // Turning ON didn't take — say why, instead of the button just
+              // quietly reverting with no explanation.
+              if (next === "undercut" && appliedMode !== "undercut") {
+                const reason = group.getUndercutUnavailableReason?.();
+                componentNote?.show(reason || `Couldn't turn on undercut for ${group.label}.`);
+              }
+            })
             .catch((error) => console.warn("Undercut switch failed:", error))
             .finally(() => {
               undercutButton.disabled = false;
@@ -1004,6 +1209,13 @@ function createComponentPanel(groups) {
         visibilityButton.title = hasContent
           ? `${isVisible ? "Hide" : "Show"} ${group.label}`
           : `${group.label} unavailable`;
+        // Present whenever the component is (not when it's just switched off
+        // — see .is-absent) — dimmed and re-clickable to turn back on.
+        miniButton.classList.toggle("is-absent", !hasContent);
+        miniButton.classList.toggle("hidden-state", !isVisible);
+        miniButton.title = hasContent
+          ? `${isVisible ? "Hide" : "Show"} ${group.label}`
+          : `${group.label} unavailable`;
         const opacityValue = Math.round((group.getOpacity?.() ?? 1) * 100);
         opacitySlider.value = String(opacityValue);
         opacitySlider.disabled = !hasContent;
@@ -1038,8 +1250,8 @@ function createComponentPanel(groups) {
     }
   });
 
-  // Only exists to be dimmed/clicked-through on the mobile/tablet sidebar
-  // (display:none at desktop widths — see the max-width: 1024px block above).
+  // Invisible click-catcher so tapping anywhere else on the canvas closes the
+  // panel, same as a dropdown — see the .component-panel-backdrop rule above.
   const backdrop = document.createElement("div");
   backdrop.id = "component-panel-backdrop";
   backdrop.className = "component-panel-backdrop hidden";
@@ -1049,19 +1261,21 @@ function createComponentPanel(groups) {
     else closePanel();
   });
 
-  // The panel takes the toggle's corner on desktop and slides in over a backdrop
-  // on tablet/phone, so only one of the two triggers is ever on screen.
+  // The panel takes the mini strip's own corner while open, so only one of
+  // the two is ever on screen — the mini strip (toggle + per-component
+  // icons) reappears once the panel collapses, instead of the corner going
+  // empty the way it used to when only the bare toggle lived there.
   const openPanel = () => {
     panel.classList.remove("hidden");
     backdrop.classList.remove("hidden");
-    toggle.classList.add("is-hidden");
+    miniWrap.classList.add("hidden");
     toggle.setAttribute("aria-expanded", "true");
     window.dispatchEvent(new CustomEvent("viewerobjectspanelchange", { detail: { open: true } }));
   };
   const closePanel = () => {
     panel.classList.add("hidden");
     backdrop.classList.add("hidden");
-    toggle.classList.remove("is-hidden");
+    miniWrap.classList.remove("hidden");
     toggle.setAttribute("aria-expanded", "false");
     window.dispatchEvent(new CustomEvent("viewerobjectspanelchange", { detail: { open: false } }));
   };
@@ -1075,18 +1289,20 @@ function createComponentPanel(groups) {
     window.getViewerRightNav?.()?.parentElement ||
     document.body;
   panelHost.appendChild(backdrop);
-  panelHost.appendChild(toggle);
+  panelHost.appendChild(miniWrap);
   panelHost.appendChild(panel);
   // Bottom-left of the same host, so it never fights the (top-left) objects
   // panel or the (right-side) polyline panel for space.
   undercutLegend = createUndercutLegend(panelHost);
+  componentNote = createComponentNote(panelHost);
   window.viewerPanelManager?.register("objects-panel", toggle, openPanel, closePanel);
   window.syncComponentPanelRows = syncAllRows;
   syncAllRows();
   syncShowHideButton();
 
   // Open on load, since the objects list is the viewer's primary control —
-  // except on tablet/phone, where the sidebar would cover the model every time.
+  // except on tablet/phone, where the popup would cover meaningful screen
+  // real estate every time on a small viewport.
   const opensOnLoad = !window.matchMedia("(max-width: 1024px)").matches;
   if (opensOnLoad) {
     if (window.viewerPanelManager) window.viewerPanelManager.open("objects-panel");
@@ -1096,10 +1312,43 @@ function createComponentPanel(groups) {
 
 function removeVisibilityAndTransparencyControls() {
   clearAllWireframeOverlays();
+  const panel = document.getElementById("component-panel");
+  // The rotation-lock button (built once in resetButton.js, its state living in
+  // that closure) is adopted into the panel header below — rescue it before the
+  // panel is torn down, or the next rebuild's re-adopt finds nothing in the
+  // document to move and the button is gone for the rest of the session.
+  const lockButton = document.getElementById("lock-rotation-button");
+  if (lockButton && panel?.contains(lockButton)) {
+    document.body.appendChild(lockButton);
+  }
   document.getElementById("component-panel-backdrop")?.remove();
-  document.getElementById("component-panel")?.remove();
-  document.getElementById("component-panel-toggle")?.remove();
+  panel?.remove();
+  // Removes the toggle and every mini per-component eye with it — they're
+  // both children of this wrapper.
+  document.getElementById("component-panel-mini")?.remove();
   document.getElementById("viewer-undercut-legend")?.remove();
+  document.getElementById("component-panel-note")?.remove();
+}
+
+// Built once per panel; the undercut button's click handler calls .show()
+// when a toggle-on attempt didn't actually turn undercut on, so the user
+// gets an explanation instead of the button just quietly reverting.
+function createComponentNote(panelHost) {
+  const note = document.createElement("div");
+  note.id = "component-panel-note";
+  note.className = "component-panel-note";
+  note.setAttribute("role", "status");
+  panelHost.appendChild(note);
+
+  let hideTimer = null;
+  return {
+    show(message) {
+      note.textContent = message;
+      note.classList.add("visible");
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => note.classList.remove("visible"), 4500);
+    },
+  };
 }
 
 // Undercut colour key, byte-for-byte the same palette as preview3D.js's
@@ -1150,6 +1399,8 @@ function buildDesignSlotGroups(designSlots) {
     const meshes = entry.mesh ? [entry.mesh] : [];
     return {
       key: `design-slot-${entry.slot}`,
+      // Groups the mini icon strip's per-jaw rows — see getMiniIconRow.
+      jawGroup: entry.jawGroup,
       label: entry.label,
       type: "overlay",
       iconPath: entry.iconPath,
@@ -1166,6 +1417,9 @@ function buildDesignSlotGroups(designSlots) {
         const applied = await entry.setUndercut?.(mode === "undercut");
         return applied ? "undercut" : "normal";
       },
+      // Why the undercut toggle didn't turn on, when it didn't — shown by the
+      // undercut button's click handler below.
+      getUndercutUnavailableReason: () => entry.getUndercutUnavailableReason?.() ?? null,
       hasContent: () => meshes.length > 0,
       getVisible: () => areAnyVisible(meshes),
       setVisible: (isVisible) => setMeshGroupVisible(meshes, isVisible),
@@ -1225,6 +1479,9 @@ function addVisibilityAndTransparencyControls(
 
     groups.push({
       key: `${jawKey}-jaw`,
+      // Groups the mini icon strip's line breaks (see createComponentPanel) —
+      // not read anywhere else.
+      jawGroup: jawKey,
       label: `${titlePrefix} jaw`,
       type: "mesh",
       iconPath: `${basePath}/assets/Icon_${titlePrefix}Jaw_Occlusal.png`,
@@ -1248,6 +1505,7 @@ function addVisibilityAndTransparencyControls(
 
     groups.push({
       key: `${jawKey}-surface`,
+      jawGroup: jawKey,
       label: `${titlePrefix} Mesh`,
       type: "mesh",
       iconPath: `${basePath}/assets/Icon_${titlePrefix}Jaw.png`,
@@ -1265,6 +1523,7 @@ function addVisibilityAndTransparencyControls(
 
     groups.push({
       key: `${jawKey}-polyline`,
+      jawGroup: jawKey,
       label: `${titlePrefix} polylines`,
       type: "overlay",
       iconPath: `${basePath}/assets/Icon_Hide_SkeletalPrev.png`,
@@ -1280,6 +1539,7 @@ function addVisibilityAndTransparencyControls(
 
     groups.push({
       key: `${jawKey}-artificial-teeth`,
+      jawGroup: jawKey,
       label: `${titlePrefix} artificial teeth`,
       type: "overlay",
       iconPath: `${basePath}/assets/Icon_ArtificialTeeth.png`,

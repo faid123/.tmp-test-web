@@ -161,7 +161,12 @@ export function addResetButton(camera, clone, controls, getResetTarget = null) {
     // Initial setup for the button's background image and text
     updateLockRotationButtonImage();
 
-    // Add lock button into the same top row as reset
+    // Starts in the same top row as reset, same as before — but newControls.js's
+    // Show/Hide panel adopts this exact node into its header as soon as it first
+    // builds (see createComponentPanel), so in practice this only holds the
+    // button for the instant before that panel exists. Built here rather than
+    // there because the locked/unlocked state below needs to survive that panel
+    // being torn down and rebuilt on every case/view switch.
     topRow.appendChild(lockRotationButton);
 
     // Define the lock/unlock rotation function

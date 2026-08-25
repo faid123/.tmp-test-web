@@ -1,0 +1,82 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#eaf3ea', 'primaryBorderColor': '#4a7a4a', 'primaryTextColor': '#16212b', 'lineColor': '#56626d', 'tertiaryColor': '#ffffff', 'fontFamily': 'Segoe UI, Helvetica, Arial, sans-serif', 'fontSize': '16px' }, 'flowchart': { 'curve': 'basis', 'nodeSpacing': 35, 'rankSpacing': 55, 'htmlLabels': true } } }%%
+%% SmartRPD_Documentation.docx — "Workflow Diagram" (section referenced as "last updated" caption).
+%% Rebuilt 2026-08-24 to add the "Load Proposed Design" step (Kennedy classification / DLL —
+%% tryLoadDllProposedDesign(), bindKennedyProposalDialog() in src/js/2D/2DAnnotation.js) inside the
+%% 2D Annotation lane, which the previous version (18 July) predated and omitted. Everything else
+%% carried forward from the previous version unchanged after a re-check against current src/.
+%% Paste into https://mermaid.live to view/edit.
+
+flowchart TD
+    classDef page fill:#dbe7f7,stroke:#5b84b8,stroke-width:1.5px,color:#16212b;
+    classDef dash fill:#d6ecdb,stroke:#4a7a4a,stroke-width:1.5px,color:#16212b;
+    classDef decision fill:#fdeecb,stroke:#c9922e,stroke-width:1.5px,color:#16212b;
+    classDef endstate fill:#f7dada,stroke:#b85b5b,stroke-width:1.5px,color:#16212b;
+
+    Start([Start]) --> LoginPage[Login Page]
+    LoginPage --> SessionCheck{Existing valid session?}
+    SessionCheck -->|"No (new login)"| Creds[Enter Username / Password]
+    Creds --> OTP[OTP Verification]
+    OTP -->|authenticated| Dashboard[[Case List Dashboard]]
+    SessionCheck -->|"Yes (restore session)"| Dashboard
+
+    Dashboard --> SearchSort[Search / Sort / Filter Cases]
+    Dashboard --> CreateNew[Create New Case]
+    Dashboard --> DupRename[Duplicate / Rename / Delete Case]
+    Dashboard --> OpenExisting[Open Existing Case]
+    Dashboard --> Download[Download Files STL/OFF, reports]
+    Dashboard --> Notif[Notifications / Version History]
+    Dashboard --> Share[Share / Export Viewer QR Code]
+
+    CreateNew --> c1a
+    OpenExisting -->|case status| c2a
+    Download -.->|inspect / 3D| c3a
+    Share -.->|"shared viewer link (VIEWER_UUID)"| c3a
+
+    subgraph C1["1. CREATE CASE"]
+      direction TB
+      c1a[Enter case details patient, case ID, dentist, description] --> c1b[/Upload upper/lower STL + optional reference images/]
+      c1b --> c1c[Assign users / roles pendingInvites, addInvite]
+      c1c --> c1d[Create case record]
+      c1d --> c1e[/Upload raw / renderable STL records/]
+      c1e --> c1f[/Save thumbnails / history/]
+      c1f --> c1n{Next step?}
+    end
+
+    subgraph C2["2. 2D ANNOTATION"]
+      direction TB
+      c2a[Load case detail, clinical info, notes + jaw-structure data] --> c2p["Load Proposed Design (Kennedy classification, DLL) — optional"]
+      c2p --> c2b[Select RPD component catalog annotationCatalog.js]
+      c2a --> c2b
+      c2b --> c2c[Place / edit rests, clasps, bars, meshes, plates, connectors]
+      c2c --> c2d[/Save jaw structure jawStructApi/Codec/]
+      c2d --> c2e[/Generate thumbnails / report data/]
+      c2e --> c2n{Next step?}
+    end
+
+    subgraph C3["3. 3D VIEWER"]
+      direction TB
+      c3a[Establish API session] --> c3b[/Load case metadata/]
+      c3b --> c3c[/Load jaw meshes / surface meshes in parallel/]
+      c3c --> c3d[Render base jaw]
+      c3d --> c3e[Load polylines, artificial teeth, undercut/occlusion, extra STL slots]
+      c3e --> c3f[Review with camera / visibility controls]
+      c3f --> c3g[Collaborate via chat / notes]
+      c3g --> c3n{Next step?}
+    end
+
+    c1n -->|Return to case list| End
+    c1n -->|Open 2D annotation| End
+    c2n -->|Open 3D preview| End
+    c2n -->|Open full 3D viewer| End
+    c3n -->|Return to 2D annotation| End
+    c3n -->|Return to case list| End
+
+    End["END STATES — case data saved; design overlays reviewable; STL / OFF / 2D drawings / reports / viewer links available where backend records exist"]
+
+    class LoginPage,Dashboard,SearchSort,CreateNew,DupRename,OpenExisting,Download,Notif,Share page;
+    class SessionCheck,c1n,c2n,c3n decision;
+    class End endstate;
+    style C1 fill:#e3edfb,stroke:#5b84b8,stroke-width:1.5px;
+    style C2 fill:#efe3f5,stroke:#8a5bb8,stroke-width:1.5px;
+    style C3 fill:#dcf0ec,stroke:#3f9482,stroke-width:1.5px;
+    style c2p fill:#fdeecb,stroke:#c9922e,stroke-width:1.5px,color:#16212b;

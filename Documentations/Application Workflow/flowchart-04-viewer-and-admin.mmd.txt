@@ -1,0 +1,41 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#eaf6f3', 'primaryBorderColor': '#0d7d6c', 'primaryTextColor': '#16212b', 'lineColor': '#56626d', 'tertiaryColor': '#ffffff', 'fontFamily': 'Segoe UI, Helvetica, Arial, sans-serif', 'fontSize': '17px' }, 'flowchart': { 'curve': 'basis', 'nodeSpacing': 40, 'rankSpacing': 65, 'htmlLabels': true } } }%%
+%% SmartRPD — Detailed Application Flowchart, section 4 of 4: 3D Viewer + Admin Console
+%% Reviewed 2026-08-21: no structural inaccuracy found against current src/viewer3d/ and
+%% src/pages/admin/ (internal viewer/controls changes since the diagrams' original source commit
+%% were implementation refactors, not new user-facing flows). Not re-rendered; header/date only.
+%% Colour key: teal = screen/page, dashed blue = network/API call, dotted grey = role-guard redirect
+%% Paste into https://mermaid.live to view/edit.
+
+flowchart TD
+    classDef screen fill:#eaf6f3,stroke:#0d7d6c,stroke-width:1.5px,color:#16212b;
+    classDef api fill:#eef2ff,stroke:#6b8fd6,stroke-width:1px,color:#16212b,stroke-dasharray:3 2;
+
+    View3DLink["View 3D (from section 2)"] --> ThreeDViewer
+
+    subgraph THREED["3D Viewer — standalone (ThreeDViewer.html)"]
+        direction TB
+        ThreeDViewer["Full Three.js viewer (webpack bundle dist/bundle.js) for the case's jaw STL(s)"] -->|"Back to case list"| CaseList
+    end
+
+    subgraph ADMINFLOW["Admin Console"]
+        direction TB
+        AdminCaseList["Admin Case List — admin/admin_case_list.html (same case UI, admin-scoped)"] --> AdminSidebar["Sidebar: language menu, Admin Users, Machine IDs, Logout"]
+        AdminSidebar --> AdminUsers["Admin > Users (admin_users.html)"]
+        AdminSidebar --> AdminMachine["Admin > Machine IDs (admin_machineid.html)"]
+
+        AdminUsers -->|"GET /user/getall"| ApproveSignup["Approve / deny pending signup requests (bell badge shows pending count)"]
+        AdminUsers -->|"POST /user/register"| RegisterUser["Register new user manually"]
+        AdminUsers -->|"POST /user/modify"| ModifyUser["Edit / deactivate / reactivate user"]
+        ApproveSignup -.->|"triggers"| EmailedPassword["User emailed a link to set their password"]
+
+        AdminMachine -->|"machineid / machineid/comments / machineid/delete"| MachineCRUD["Add / edit comment / delete machine IDs"]
+
+        AdminCaseList -->|"open a case"| Open2D["Open case for design (section 3)"]
+        AdminCaseList -->|"View 3D"| View3DLink
+    end
+
+    CaseList["Case List (section 2)"] -.->|"role-guard: isAdmin → redirect"| AdminCaseList
+    AdminCaseList -.->|"role-guard: not admin → redirect"| CaseList
+
+    class CaseList,ThreeDViewer,AdminCaseList,AdminUsers,AdminMachine screen;
+    class RegisterUser,ModifyUser,MachineCRUD api;

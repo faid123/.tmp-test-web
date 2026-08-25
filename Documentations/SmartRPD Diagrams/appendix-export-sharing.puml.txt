@@ -1,0 +1,46 @@
+' SmartRPD_Documentation.docx — Appendix use-case diagram, "Download/Export/Share" (docx heading;
+' diagram title reads "Export & Sharing").
+' Transcribed 2026-08-24 as a plain-text source for the existing (unchanged) diagram — content was
+' re-checked against current src/js/*/noticeboard.js, accessibility.js, crypt.js, config.js on
+' 2026-08-24 and found still accurate, so the embedded image in the .docx was NOT replaced.
+' Render via the PlantUML server (see build script) or any local PlantUML install.
+@startuml
+left to right direction
+skinparam backgroundColor white
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 15
+skinparam ArrowColor #333333
+skinparam ArrowFontColor #333333
+skinparam usecase {
+  BorderColor #5b84b8
+  FontColor #16212b
+}
+skinparam rectangle {
+  BorderColor #666666
+  FontColor #16212b
+  FontStyle bold
+}
+
+actor "User" as User
+actor "External Viewer" as ExtViewer
+
+rectangle "Export & Sharing (noticeboard.js, accessibility.js, crypt.js, config.js)" {
+  usecase "Download raw OFF/STL files\n(downloadCaseFiles,\ntriggerBlobDownload)" as UC_Download #DAE8FC
+  usecase "Generate compiled report\n(buildReportHtml /\ngenerateReport)" as UC_Report #DAE8FC
+  usecase "Build shared 3D viewer link\n(VIEWER_UUID)" as UC_Link #DAE8FC
+  usecase "Open shared 3D viewer link" as UC_Open #DAE8FC
+
+  usecase "Convert report to .docx\n(reportHtmlToDocxBytes)" as UC_Docx #D5E8D4
+  usecase "Obfuscate case ID —\nXOR+Base64 (crypt.js lol())" as UC_Obfuscate #D5E8D4
+  usecase "Show QR code\n(showThreeDViewerQr, qrcodejs)" as UC_Qr #D5E8D4
+}
+
+User -- UC_Download
+User -- UC_Report
+User -- UC_Link
+UC_Open -- ExtViewer
+
+UC_Report ..> UC_Docx : <<include>>
+UC_Link ..> UC_Obfuscate : <<include>>
+UC_Qr ..> UC_Link : <<extend>> [share as QR]
+@enduml

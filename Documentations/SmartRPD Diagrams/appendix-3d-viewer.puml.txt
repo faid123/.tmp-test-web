@@ -1,0 +1,43 @@
+' SmartRPD_Documentation.docx — Appendix use-case diagram, "3D Viewer".
+' Transcribed 2026-08-24 as a plain-text source for the existing (unchanged) diagram — content was
+' re-checked against current src/pages/ThreeDViewer.html, src/viewer3d/index.js, newControls.js,
+' src/js/2D/preview3D.js on 2026-08-24 and found still accurate, so the embedded image in the .docx
+' was NOT replaced.
+' Render via the PlantUML server (see build script) or any local PlantUML install.
+@startuml
+left to right direction
+skinparam backgroundColor white
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 15
+skinparam ArrowColor #333333
+skinparam ArrowFontColor #333333
+skinparam usecase {
+  BorderColor #5b84b8
+  FontColor #16212b
+}
+skinparam rectangle {
+  BorderColor #666666
+  FontColor #16212b
+  FontStyle bold
+}
+
+actor "User" as User
+actor "External Viewer" as ExtViewer
+
+rectangle "3D Viewer (ThreeDViewer.html, index.js, newControls.js, preview3D.js)" {
+  usecase "Inspect jaw geometry" as UC_Inspect #DAE8FC
+  usecase "Review design overlays &\nartificial teeth" as UC_Overlays #DAE8FC
+  usecase "Toggle undercut / occlusion\nanalysis modes" as UC_Toggle #DAE8FC
+
+  usecase "Open standalone viewer from\ncase management" as UC_Standalone #D5E8D4
+  usecase "Open embedded preview inside\n2D workflow" as UC_Embedded #D5E8D4
+}
+
+User -- UC_Inspect
+User -- UC_Overlays
+User -- UC_Toggle
+
+UC_Inspect ..> UC_Standalone : <<extend>> [entry point]
+UC_Inspect ..> UC_Embedded : <<extend>> [entry point]
+UC_Standalone -- ExtViewer
+@enduml

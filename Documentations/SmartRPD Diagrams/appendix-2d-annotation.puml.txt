@@ -1,0 +1,53 @@
+' SmartRPD_Documentation.docx — Appendix use-case diagram, "2D Annotation".
+' Rebuilt 2026-08-24: added the "Load proposed design" use case (Kennedy classification / DLL —
+' tryLoadDllProposedDesign(), bindKennedyProposalDialog() in src/js/2D/2DAnnotation.js), which the
+' previous version predated and omitted entirely. Everything else carried forward unchanged after
+' a re-check of the function names against current src/js/2D/*.
+' Render via the PlantUML server (see build script) or any local PlantUML install.
+@startuml
+left to right direction
+skinparam backgroundColor white
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 15
+skinparam ArrowColor #333333
+skinparam ArrowFontColor #333333
+skinparam usecase {
+  BorderColor #5b84b8
+  FontColor #16212b
+}
+skinparam rectangle {
+  BorderColor #666666
+  FontColor #16212b
+  FontStyle bold
+}
+
+actor "User" as User
+
+rectangle "2D Annotation (2DAnnotation.html, src/js/2D/*)" {
+  usecase "Record clinical information\n(clinicalInfo.js)" as UC_Clinical #DAE8FC
+  usecase "Write case notes\n(caseNote.js)" as UC_Notes #DAE8FC
+  usecase "Freehand-mark instructions\n(instructionEditor.js)" as UC_Freehand #DAE8FC
+  usecase "Load proposed design (new)\n(Kennedy classification, DLL)\n(tryLoadDllProposedDesign,\nbindKennedyProposalDialog)" as UC_Load #DAE8FC
+  usecase "Design RPD components on\njaw diagrams" as UC_Design #DAE8FC
+  usecase "Save jaw-structure data\n(jawStructApi/Apply/Codec/Codes.js)" as UC_Save #DAE8FC
+
+  usecase "Pick component from catalog\n(annotationCatalog.js)" as UC_Pick #D5E8D4
+  usecase "Validate legal placement\n(annotationPlacement.js, criteria.js)" as UC_Validate #D5E8D4
+  usecase "Drag / lock components\n(annotationLocks.js)" as UC_Drag #D5E8D4
+  usecase "Render component visuals\n(annotationRender/Visuals.js)" as UC_Render #D5E8D4
+}
+
+User -- UC_Clinical
+User -- UC_Notes
+User -- UC_Freehand
+User -- UC_Load
+User -- UC_Design
+User -- UC_Save
+
+UC_Design ..> UC_Pick : <<include>>
+UC_Design ..> UC_Validate : <<include>>
+UC_Design ..> UC_Drag : <<include>>
+UC_Design ..> UC_Render : <<include>>
+UC_Save ..> UC_Design : <<extend>> [on save]
+UC_Load ..> UC_Design : <<extend>> [auto-populate]
+@enduml

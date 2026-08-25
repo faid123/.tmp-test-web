@@ -1,0 +1,82 @@
+name: Deploy Documentation Review (Manual Trigger)
+
+# Manual/on-demand only. The automatic path is the deploy-triggered step at the end of
+# .github/workflows/deploy.yml, which reruns this same review after every successful
+# deploy — see Documentations/DEPLOY_DOC_REVIEW.md. This workflow stays around as the
+# "Run workflow" button for triggering a review without waiting on a deploy (e.g. to
+# pick up an npm-audit-only change with no code change behind it).
+#
+# There used to be a `schedule:` trigger here (Friday 01:00 UTC). It was removed because
+# it never actually fired: GitHub Actions only reads `schedule:` from workflow files on
+# the repository's default branch (main), and this file has only ever lived on
+# dev-deploy-documentation.
+#
+# Renamed 2026-08-24 from weekly-doc-review.yml -- same reasoning as the underlying
+# tools/deploy-review.mjs rename: the refresh is deploy-triggered, not calendar-scheduled.
+on:
+  workflow_dispatch:
+
+# Serialize runs so two reviews never race and commit conflicting artifacts.
+concurrency:
+  group: deploy-review-manual
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  REVIEW_BRANCH: dev-deploy-documentation
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout review branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.REVIEW_BRANCH }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install (deterministic, from lockfile)
+        run: npm ci
+
+      - name: Run deploy review
+        run: node tools/deploy-review.mjs
+
+      - name: Archive coverage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-review-coverage
+          path: coverage/
+          if-no-files-found: ignore
+
+      - name: Commit and push refreshed data + report
+        run: |
+          git add "Documentations/AutoTest Results"
+          if git diff --cached --quiet; then
+            echo "ℹ️ No changes to commit — data was already current."
+          else
+            git -c user.email='ci@smartrpd.local' -c user.name='SmartRPD CI' \
+              commit -m "Deploy doc review: refresh AutoTest results ($(date -u +%Y-%m-%d))"
+            git push origin "HEAD:${REVIEW_BRANCH}"
+          fi
+
+      # tools/deploy-review.mjs already appends the full report -- including the
+      # "Docs likely needing a manual/AI-assisted update" checklist -- straight into
+      # $GITHUB_STEP_SUMMARY during the "Run deploy review" step above, so it's
+      # visible on this run's Summary tab with no extra wiring here. This step only
+      # exists as a fallback for when that step never got that far (e.g. Jest crashed
+      # before the report was built) -- if: always() means it still shows something.
+      - name: Fallback note if the report above is missing
+        if: always()
+        run: |
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "_If no report appears above, \`node tools/deploy-review.mjs\` didn't complete -- check the \"Run deploy review\" step's log. See \`Documentations/DEPLOY_DOC_REVIEW.md\` for the full process._" >> "$GITHUB_STEP_SUMMARY"
