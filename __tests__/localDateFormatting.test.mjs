@@ -7,11 +7,11 @@
  * which converts to UTC first and silently shows the wrong day for anyone east
  * of UTC (e.g. Singapore, UTC+8) during the early hours of the local day.
  *
- * The two toISOString() assertions below only hold east of UTC, so the zone is
- * pinned to Asia/Singapore in jest.config.cjs. It cannot be pinned from here:
- * V8 caches the zone before a test body (or setupFiles) can change it, so an
- * assignment in this file silently no-ops on a UTC runner.
+ * Forces TZ=Asia/Singapore so this regression reproduces on any CI machine,
+ * not just one that happens to run east of UTC already.
  */
+process.env.TZ = "Asia/Singapore";
+
 import { calIsoFromDate } from "../src/js/shared/toast.js";
 
 test("formats a plain local date as YYYY-MM-DD", () => {
