@@ -108,12 +108,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/builds" || echo "⚠️ Pages build request failed — a build may already be queued"
 
-      # Event-driven replacement for the cron that used to live in what is now
-      # deploy-review.yml (it could never fire — GitHub only reads `schedule:` from
-      # the default branch, and this repo's default branch is `main`, not this one).
-      # Refreshing right after a real deploy is more accurate anyway: it checks
-      # docs-branch/live-branch alignment at the moment code actually goes live,
-      # instead of guessing on a fixed weekly clock.
+      # Event-driven replacement for weekly-doc-review.yml's cron (which can never fire —
+      # GitHub only reads `schedule:` from the default branch, and this repo's default
+      # branch is `main`, not this one). Refreshing right after a real deploy is more
+      # accurate anyway: it checks docs-branch/live-branch alignment at the moment code
+      # actually goes live, instead of guessing on a fixed weekly clock.
       - name: Checkout documentation branch
         uses: actions/checkout@v4
         with:
@@ -123,11 +122,11 @@ jobs:
           # which needs more than the default shallow (depth-1) checkout.
           fetch-depth: 0
 
-      - name: Refresh documentation (deploy-review)
+      - name: Refresh documentation (weekly-doc-review)
         working-directory: .docs-branch
         run: |
           npm ci
-          node tools/deploy-review.mjs
+          node tools/weekly-doc-review.mjs
 
       - name: Commit and push refreshed documentation
         working-directory: .docs-branch
