@@ -1784,8 +1784,17 @@ button {
   /* Edit pencils go with the actions (editing happens in the detail pane), and
      the urgency bar goes too — the due date already carries that colour. */
   .cm-inline-edit,
-  .cm-due-edit,
   .cm-due-bar { display: none; }
+
+  /* The due date is the exception: the detail pane has no field for it, so this
+     card is the only place it can be changed. Kept visible rather than
+     hover-revealed — touch has no hover. */
+  .cm-due-edit {
+    opacity: 1;
+    margin-left: 0;
+    padding: 2px;
+    font-size: 11px;
+  }
 
   /* Exactly two lines: name spans both columns, status and due date share the
      next. A grid, not wrapped flex, so a long status can't force a third line. */
@@ -1827,6 +1836,12 @@ button {
     justify-self: end;
     white-space: nowrap;
     font-size: 12px;
+    /* Flex row (label, date, pencil) with a min-height, so the tap target for
+       the due-date editor is the whole cell and not just the pencil glyph. */
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 28px;
   }
   .cm-td-date.cm-due-date::before {
     content: "Due ";

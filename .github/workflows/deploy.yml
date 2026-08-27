@@ -39,6 +39,12 @@ jobs:
         run: npm run lint
 
       - name: Test (fail-closed gate)
+        # Runners are UTC. localDateFormatting.test.mjs asserts the local-vs-UTC
+        # off-by-one it guards against, which only reproduces east of UTC — and
+        # V8 caches the zone before a test body can set it, so it must be set
+        # here, before Node starts.
+        env:
+          TZ: Asia/Singapore
         run: npm run test:ci
 
       - name: Archive coverage evidence

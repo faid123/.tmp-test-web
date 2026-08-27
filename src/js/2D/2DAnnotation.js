@@ -69,9 +69,6 @@ export const state = {
    * 2 = full acrylic, null = unchosen (encodes 0). Prompted on locking an empty design.
    */
   jawMaterial: null,
-  /** Per-jaw Kennedy classification, recomputed each time the dialog opens.
-   *  Session-only — derived from tooth presence, so nothing to persist. */
-  kennedy: { upper: null, lower: null },
 };
 
 /** Transient UI refs — mutated by other modules (avoids import-reassignment issues). */
@@ -1042,37 +1039,12 @@ registerAutosaveHook(saveJawStructAutosave);
 
 // ---- Kennedy design proposal ----------------------------------------------
 // Classifies each arch from the jaw struct as it stands (design on open plus any presence
-// edits since), picks the major connector its Kennedy class calls for, and previews the
-// placed result. Nothing lands on the arch until the user confirms.
+// edits since), picks the major connector its Kennedy class calls for, and places it.
+// Load Proposed Design applies straight to the arch — undo is the way back.
 
-// Restore point for the preview: the proposal is applied for real to render the thumbnails,
-// then rolled back so the arch behind the dialog is untouched until Place Design.
-// jawStructTail and jawMaterial are in here for the DLL preview specifically — a Kennedy
-// proposal never writes them, but applyJawStructDesign rewrites the tail and the DLL
-// answer carries its own material, so leaving either out would let a cancelled preview
-// bleed into the next Save.
-function snapshotDesignState() {
-  return {
-    teeth: JSON.parse(JSON.stringify(state.teeth)),
-    archOverlayPalatalHoleActive: state.archOverlayPalatalHoleActive,
-    hideLowerPlateVisuals: state.hideLowerPlateVisuals,
-    jawStructTail: JSON.parse(JSON.stringify(state.jawStructTail || {})),
-    jawMaterial: state.jawMaterial,
-  };
-}
-
-function restoreDesignState(snapshot) {
-  state.teeth = snapshot.teeth;
-  state.archOverlayPalatalHoleActive = snapshot.archOverlayPalatalHoleActive;
-  state.hideLowerPlateVisuals = snapshot.hideLowerPlateVisuals;
-  state.jawStructTail = snapshot.jawStructTail;
-  state.jawMaterial = snapshot.jawMaterial;
-}
-
-// Apply the proposal to the live arch. Deterministic from tooth presence + material, so
-// the preview pass and the confirmed pass produce the same design. Each render flag is
-// adopted only when its own jaw was in the proposal — a lower-only apply must not clear
-// an overlay the upper arch is still using.
+// Apply the proposal to the live arch. Deterministic from tooth presence + material. Each
+// render flag is adopted only when its own jaw was in the proposal — a lower-only apply
+// must not clear an overlay the upper arch is still using.
 function applyKennedyProposal(proposal) {
   const flags = applyDesignProposal(state.teeth, proposal);
   if (proposal.jaws.upper) state.archOverlayPalatalHoleActive = flags.archOverlayPalatalHoleActive;
@@ -1084,44 +1056,6 @@ function buildCurrentProposal() {
     material: state.jawMaterial,
     meshId: getDefaultMeshIdForDesignMode(meshSelectionContextFromState(state), COMPONENT_BY_ID),
   });
-}
-
-// A preview per jaw, each with its own checkbox. An arch Kennedy gives no class has
-// nothing to place, so its row is disabled rather than merely unchecked.
-function renderKennedyProposalPanel(panel, proposal, thumbnails) {
-  for (const row of panel.querySelectorAll(".kennedy-class-row")) {
-    const jaw = row.dataset.jaw;
-    const { classification, connector } = proposal.jaws[jaw];
-    state.kennedy[jaw] = classification;
-
-    row.classList.toggle("is-unclassified", !connector);
-    const checkbox = row.querySelector(".kennedy-jaw-checkbox");
-    checkbox.disabled = !connector;
-    checkbox.checked = Boolean(connector);
-
-    const img = row.querySelector(".kennedy-preview-img");
-    const src = connector ? thumbnails?.[jaw] : null;
-    if (src) img.setAttribute("src", src);
-    else img.removeAttribute("src");
-  }
-}
-
-// Render the proposal, photograph both arches, then roll the arch back — the dialog shows
-// what the design WOULD look like while the live arch stays as the user left it.
-async function captureProposalThumbnails(proposal) {
-  const snapshot = snapshotDesignState();
-  try {
-    applyKennedyProposal(proposal);
-    renderJaws();
-    const locks = await import("./annotationLocks.js");
-    return await locks.captureArchThumbnails();
-  } catch (err) {
-    console.warn("[kennedyProposal] preview capture failed", err);
-    return null;
-  } finally {
-    restoreDesignState(snapshot);
-    renderJaws();
-  }
 }
 
 function firstArray(...values) {
@@ -1225,161 +1159,65 @@ function applyDllProposedDesign(pending, jaws) {
   return applied;
 }
 
-// The dialog rows only need, per arch, a Kennedy classification to show and something
-// truthy meaning "this arch has a design to place" — for a DLL answer that is simply
-// whether the DLL returned a struct for that jaw.
-function dllProposalPanelView(pending) {
-  const jaws = {};
-  for (const jaw of ["upper", "lower"]) {
-    jaws[jaw] = {
-      classification: classifyArch(state.teeth, jaw),
-      connector: pending.decoded[jaw] ? { label: "DLL proposal" } : null,
-    };
-  }
-  return { jaws };
-}
-
-// Same preview trick as captureProposalThumbnails, for a DLL design: apply it for real,
-// photograph both arches, then roll the arch back so nothing has landed yet.
-async function captureDllProposalThumbnails(pending, jaws) {
-  const snapshot = snapshotDesignState();
-  try {
-    applyDllProposedDesign(pending, jaws);
-    renderJaws();
-    const locks = await import("./annotationLocks.js");
-    return await locks.captureArchThumbnails();
-  } catch (err) {
-    console.warn("[proposedDesign] preview capture failed", err);
-    return null;
-  } finally {
-    restoreDesignState(snapshot);
-    renderJaws();
-  }
-}
-
-// Wire the "Load Template Jaw" button to the DLL, then the fallback proposal. Either way
-// the result is previewed in the modal and only placed once the user confirms.
-function bindKennedyProposalDialog() {
+// Wire the "Load Proposed Design" button to the DLL, falling back to the local Kennedy
+// proposal when the DLL can't answer. Either way the design goes straight onto the arch —
+// there is no confirmation step, so undo is the way back.
+function bindProposedDesignButton() {
   const btn = document.getElementById("loadProposalBtn");
-  const modal = document.getElementById("loadTemplateJawModal");
-  const backdrop = modal?.querySelector(".load-template-backdrop");
-  const panel = document.getElementById("kennedyClassPanel");
-  const cancelBtn = document.getElementById("loadTemplateCancelBtn");
-  const applyBtn = document.getElementById("kennedyApplyBtn");
-
   if (!btn) return;
-  // Modal markup missing — keep the button honest rather than silently dead.
-  if (!modal || !panel || !cancelBtn || !applyBtn) {
-    btn.addEventListener("click", () =>
-      setMessage("The design proposal is unavailable on this page.", true)
-    );
-    return;
-  }
 
-  /** The design currently previewed, re-applied on confirm for the checked jaws only.
-   *  `kind` is "dll" or "kennedy"; `view` is what the rows render from either way. */
-  let pendingDesign = null;
-
-  /** The jaws the user left ticked, narrowed to the ones that have something to place. */
-  const selectedJaws = () =>
-    [...panel.querySelectorAll(".kennedy-jaw-checkbox")]
-      .filter((box) => box.checked && !box.disabled)
-      .map((box) => box.dataset.jaw);
-
-  const syncApplyButton = () => {
-    applyBtn.disabled = selectedJaws().length === 0;
-  };
-
-  const closeModal = () => {
-    modal.classList.add("is-hidden");
-    modal.setAttribute("aria-hidden", "true");
-    pendingDesign = null;
-  };
-
-  // Ask the DLL first and preview what it returns; only if it can't answer do we fall back
-  // to the local Kennedy proposal. Both routes end at the same preview-then-confirm dialog,
-  // so the arch is never written to behind the user's back.
-  const buildPendingDesign = async () => {
+  // Ask the DLL first; only if it can't answer do we fall back to the local Kennedy
+  // proposal. Returns the jaws actually written and a label per jaw for the message.
+  const placeProposedDesign = async () => {
     try {
       const dll = await fetchDllProposedDesign();
       const jaws = ["upper", "lower"].filter((jaw) => dll.decoded[jaw]);
-      const thumbnails = await captureDllProposalThumbnails(dll, jaws);
-      setMessage("Proposed design ready — review it, then press Place Design.", false);
-      return { kind: "dll", dll, view: dllProposalPanelView(dll), thumbnails };
+      applyDllProposedDesign(dll, jaws);
+      return jaws.map((jaw) => `${titleCase(jaw)}: DLL proposal`);
     } catch (err) {
-      console.warn("[proposedDesign] DLL unavailable; showing fallback proposal", err);
-      setMessage("DLL proposed design unavailable; showing fallback proposal.", false);
-      // Rebuilt on every open so it tracks presence edits made since the last one.
+      console.warn("[proposedDesign] DLL unavailable; placing fallback proposal", err);
+      // Rebuilt on every click so it tracks presence edits made since the last one.
       const proposal = buildCurrentProposal();
-      const placeable = Object.values(proposal.jaws).some((plan) => plan.connector);
-      const thumbnails = placeable ? await captureProposalThumbnails(proposal) : null;
-      return { kind: "kennedy", proposal, view: proposal, thumbnails };
+      const jaws = ["upper", "lower"].filter((jaw) => proposal.jaws[jaw]?.connector);
+      if (!jaws.length) return [];
+      // Narrowed to the jaws with something to place: applyKennedyProposal adopts a
+      // render flag only for the jaws it is handed.
+      applyKennedyProposal({
+        ...proposal,
+        jaws: Object.fromEntries(jaws.map((jaw) => [jaw, proposal.jaws[jaw]])),
+      });
+      return jaws.map((jaw) => `${titleCase(jaw)}: ${proposal.jaws[jaw].connector.label}`);
     }
   };
 
-  const openModal = async () => {
-    setMessage("Generating proposed design...", false);
-    pendingDesign = await buildPendingDesign();
-    renderKennedyProposalPanel(panel, pendingDesign.view, pendingDesign.thumbnails);
-    syncApplyButton();
-    modal.classList.remove("is-hidden");
-    modal.setAttribute("aria-hidden", "false");
-  };
-
-  const applyProposal = async () => {
-    const jaws = selectedJaws();
-    if (!pendingDesign || !jaws.length) return;
+  const loadProposedDesign = async () => {
     const historyBefore = getHistoryStateSignature();
+    setMessage("Generating proposed design...", false);
 
-    // Either way, only the ticked arches are written: applyDesignProposal walks just the
-    // jaws it is handed, and applyDllProposedDesign just the ones it is passed.
-    if (pendingDesign.kind === "dll") {
-      applyDllProposedDesign(pendingDesign.dll, jaws);
-    } else {
-      applyKennedyProposal({
-        ...pendingDesign.proposal,
-        jaws: Object.fromEntries(jaws.map((jaw) => [jaw, pendingDesign.proposal.jaws[jaw]])),
-      });
+    const placed = await placeProposedDesign();
+    if (!placed.length) {
+      setMessage("No proposed design is available for this case.", true);
+      return;
     }
 
     // A new connector changes what the catalog offers and what the edit UI shows.
     await refreshDesignUiAfterJawStructApply();
     renderJaws();
-
-    const placed = jaws
-      .map((jaw) => `${titleCase(jaw)}: ${pendingDesign.view.jaws[jaw].connector.label}`)
-      .join(", ");
-    closeModal();
-    setMessage(`Placed the proposed design (${placed}).`, false);
+    setMessage(`Placed the proposed design (${placed.join(", ")}).`, false);
     toast.success("Design placed");
     recordHistoryIfChanged(historyBefore);
   };
 
-  panel.addEventListener("change", (event) => {
-    if (event.target.classList.contains("kennedy-jaw-checkbox")) syncApplyButton();
-  });
-
   btn.addEventListener("click", () => {
-    openModal().catch((err) => {
-      console.error("[kennedyProposal] could not build the proposal", err);
-      setMessage("Could not build a design proposal for this case.", true);
-    });
-  });
-  applyBtn.addEventListener("click", () => {
-    applyBtn.disabled = true;
-    applyProposal()
+    btn.disabled = true;
+    loadProposedDesign()
       .catch((err) => {
-        console.error("[kennedyProposal] apply failed", err);
-        setMessage("Could not place the proposed design.", true);
+        console.error("[proposedDesign] could not place the proposal", err);
+        setMessage("Could not build a design proposal for this case.", true);
       })
       .finally(() => {
-        applyBtn.disabled = false;
+        btn.disabled = false;
       });
-  });
-  cancelBtn.addEventListener("click", closeModal);
-  backdrop?.addEventListener("click", closeModal);
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !modal.classList.contains("is-hidden")) closeModal();
   });
 }
 
@@ -1681,8 +1519,8 @@ function initAnnFooter() {
     window.dispatchEvent(new CustomEvent("request-download-jaw-profile"));
   });
 
-  // Load Proposed Design: call the DLL first, then fall back to the local proposal modal.
-  bindKennedyProposalDialog();
+  // Load Proposed Design: call the DLL first, then fall back to the local proposal.
+  bindProposedDesignButton();
 
   initSidebar();
 

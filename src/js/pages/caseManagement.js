@@ -109,6 +109,12 @@ function isMobileDetailLayout() {
   return window.matchMedia?.("(max-width: 860px)").matches || window.innerWidth <= 860;
 }
 
+// The narrower breakpoint at which case_list.css turns table rows into phone
+// cards — where hover-revealed row controls have to become tap targets.
+function isPhoneCardLayout() {
+  return window.matchMedia?.("(max-width: 640px)").matches || window.innerWidth <= 640;
+}
+
 function openMobileCaseDetails() {
   const page = document.querySelector(".cm-page");
   if (!page) return;
@@ -1114,13 +1120,23 @@ function populateTable(cases) {
     // Inline "Edit due date" straight from the list (user feedback: allow
     // editing the Due Date on the main case-management page).
     const dueTd = row.querySelector(".cm-due-date");
+    // Recomputed at click time: lazy enrichment may have patched the case's
+    // due date after this row was rendered.
+    const freshDue = () =>
+      caseItem.expected_date || caseItem.due_date || computeDefaultDueDate(caseItem.creation_date);
     row.querySelector('[data-action="edit-due"]')?.addEventListener("click", (e) => {
       e.stopPropagation();
-      // Recompute at click time: lazy enrichment may have patched the case's
-      // due date after this row was rendered.
-      const freshDue =
-        caseItem.expected_date || caseItem.due_date || computeDefaultDueDate(caseItem.creation_date);
-      openDueDateEditor(dueTd, caseItem, resolvedCaseId, freshDue);
+      openDueDateEditor(dueTd, caseItem, resolvedCaseId, freshDue());
+    });
+
+    // On the phone card the pencil is a 12px target next to the date, so the
+    // whole Due cell opens the editor too. Wider layouts fall through to the
+    // row's own click (select the case), as does admin — its writes to
+    // additionalcasedetails fail, which is why the pencil is hidden there.
+    dueTd?.addEventListener("click", (e) => {
+      if (!isPhoneCardLayout() || isCurrentUserAdmin()) return;
+      e.stopPropagation();
+      openDueDateEditor(dueTd, caseItem, resolvedCaseId, freshDue());
     });
 
     // STATUS, which until now could only be changed from the detail pane after
