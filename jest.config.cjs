@@ -1,8 +1,3 @@
-// Pin the clock east of UTC so the local-vs-UTC date regression tests
-// (localDateFormatting.test.mjs) reproduce on any machine, incl. UTC CI runners.
-// Must live here: V8 caches the zone before setupFiles or a test body runs.
-process.env.TZ = 'Asia/Singapore';
-
 module.exports = {
   transform: {
     '^.+\\.m?[jt]s$': 'babel-jest' // ✅ 支持 .js 和 .mjs（甚至 .ts）
