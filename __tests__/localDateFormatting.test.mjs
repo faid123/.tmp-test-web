@@ -7,11 +7,11 @@
  * which converts to UTC first and silently shows the wrong day for anyone east
  * of UTC (e.g. Singapore, UTC+8) during the early hours of the local day.
  *
- * Forces TZ=Asia/Singapore so this regression reproduces on any CI machine,
- * not just one that happens to run east of UTC already.
+ * The two toISOString() assertions below only hold east of UTC. The zone cannot
+ * be pinned from here — V8 caches it before a test body (or setupFiles) runs —
+ * so CI sets TZ=Asia/Singapore on the test step in .github/workflows/deploy.yml.
+ * Running locally from a UTC machine needs the same: TZ=Asia/Singapore npm test.
  */
-process.env.TZ = "Asia/Singapore";
-
 import { calIsoFromDate } from "../src/js/shared/toast.js";
 
 test("formats a plain local date as YYYY-MM-DD", () => {

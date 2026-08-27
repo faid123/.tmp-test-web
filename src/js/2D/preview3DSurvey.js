@@ -7,8 +7,6 @@ import {
   THREE,
   preview3DState,
   PREVIEW3D_MOUSE_BUTTONS,
-  srgbToLinear,
-  colorForSurveyingValue,
   buildDllUndercutSurface,
   applySurveyUndercutToPreview,
   setHeatmapEnabled,
@@ -206,8 +204,9 @@ function createSurveyRayLight(metrics, root) {
   return light;
 }
 
-// Shadowed pixels are tinted the heatmap's deepest-undercut red, sourced from the
-// palette so the two can't drift.
+// Shadowed pixels are tinted light green while aiming - deliberately off the heatmap
+// palette, so the live aim doesn't read as a finished undercut result.
+const SURVEY_AIM_TINT_COLOR =0x3BAE95;
 const SURVEY_TINT_UNIFORMS = {
   uSurveyTintColor: { value: null },
   uSurveyTintAmount: { value: 0.85 },
@@ -215,15 +214,13 @@ const SURVEY_TINT_UNIFORMS = {
 
 function surveyTintColor() {
   if (!SURVEY_TINT_UNIFORMS.uSurveyTintColor.value) {
-    const [r, g, b] = colorForSurveyingValue(1);
-    SURVEY_TINT_UNIFORMS.uSurveyTintColor.value = new THREE.Color(
-      srgbToLinear(r), srgbToLinear(g), srgbToLinear(b)
-    );
+    SURVEY_TINT_UNIFORMS.uSurveyTintColor.value =
+      new THREE.Color(SURVEY_AIM_TINT_COLOR).convertSRGBToLinear();
   }
   return SURVEY_TINT_UNIFORMS.uSurveyTintColor.value;
 }
 
-// Shader patch: tint pixels shadowed by the survey light red. Compiles out when no
+// Shader patch: tint pixels shadowed by the survey light. Compiles out when no
 // shadow caster is in the scene, so it never needs unpatching.
 function applySurveyShadowTint(material) {
   if (!material || material.userData.surveyTintPatched) return;

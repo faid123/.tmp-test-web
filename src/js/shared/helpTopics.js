@@ -685,9 +685,9 @@ export const HELP_TOPICS = [
     ],
     phrases: ["what kennedy class is this case", "how do i draw from scratch"],
     answer:
-      "Load Template Jaw sends the current tooth presence, jaw type, and material to the design DLL. You see a preview of both arches first and nothing is placed until you press Place Design. If the DLL is unavailable, the page falls back to the local Kennedy proposal preview instead. Draw from Scratch clears the arches so you build the case up yourself.",
+      "Load Proposed Design sends the current tooth presence, jaw type, and material to the design DLL and places what comes back on the arch straight away. If the DLL is unavailable, the local Kennedy proposal is placed instead. Draw from Scratch clears the arches so you build the case up yourself.",
     steps: [
-      "Select Load Template Jaw to preview the proposed design, then Place Design to accept it.",
+      "Select Load Proposed Design to place it on both arches.",
       "Undo reverses it if you change your mind.",
       "Or pick Draw from Scratch to start empty.",
     ],

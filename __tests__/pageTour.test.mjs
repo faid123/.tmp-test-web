@@ -392,7 +392,7 @@ describe("the 2D design's Components step", () => {
       <button id="jawLockToggleBtn">Lock</button>
       <div id="editModePanel"><div id="componentTabs"></div></div>
       <button id="clearUpperComponentsBtn">Clear Top</button>
-      <button id="loadProposalBtn">Load Template Jaw</button>
+      <button id="loadProposalBtn">Load Proposed Design</button>
       <button id="footerCaseNoteBtn">Note</button>
       <button id="openClinicalInfoBtn">Clinical</button>
       <button id="openNoticeboardBtn">Board</button>
