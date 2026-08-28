@@ -480,10 +480,11 @@ export function updateEditModeUI() {
   if (eraser) {
     eraser.classList.toggle("is-hidden", !active);
     eraser.disabled = !active;
-    eraser.setAttribute("aria-pressed", state.removeComponentMode ? "true" : "false");
-    if (!active) {
-      eraser.classList.remove("is-active");
-    }
+    // Look and state both follow removeComponentMode, which a history restore moves on
+    // its own — a stale class left remove mode live while the button read as off.
+    const removing = active && state.removeComponentMode;
+    eraser.classList.toggle("is-active", removing);
+    eraser.setAttribute("aria-pressed", removing ? "true" : "false");
   }
 }
 

@@ -1283,15 +1283,17 @@ async function fetchCaseRow(caseId, user) {
 // A no-op PUT re-sending the case's own fields, purely so the backend bumps
 // last_updated — what the "recent" sort keys on.
 //
-// PUT /case/:id is a FULL-ROW write whose `case_id` is the case NAME. Always
-// read fresh first; the open case list can be stale while an editor tab works.
-async function fireLastOpenedBump(caseId, user) {
+// PUT /case/:id is a FULL-ROW write whose `case_id` is the case NAME: a missing
+// `detail` blanks it, a stale one renames the case. Skip rather than write a default.
+async function fireLastOpenedBump(caseId, detail, user) {
   const auth = {
     machine_id: MACHINE_ID,
     uuid: user.uuid,
     caseIntID: caseId,
   };
-  const row = await fetchCaseRow(caseId, user);
+  const isThisCase =
+    detail != null && String(caseIntIdOf(detail) ?? "") === String(caseId);
+  const row = isThisCase ? detail : await fetchCaseRow(caseId, user);
   if (!row?.case_id) {
     console.warn(
       `[caseManagement] last-opened bump skipped for case ${caseId}: case row unavailable`
@@ -2841,7 +2843,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
       const loggedInUser = getLoggedInUser();
       if (loggedInUser) {
         bumpLocalLastUpdated(caseId);
-        fireLastOpenedBump(caseId, loggedInUser).catch(
+        fireLastOpenedBump(caseId, window.selectedCaseStub, loggedInUser).catch(
           (err) => {
             console.warn("[caseManagement] last-opened bump failed:", err);
           }

@@ -1406,19 +1406,11 @@ function bindBackNavigationDialog(locks) {
     } catch {
       saved = false;
     }
-    let surveyPosted;
-    try {
-      const { commitPendingSurveyAngle } = await import("./preview3DSurvey.js");
-      surveyPosted = await commitPendingSurveyAngle();
-    } catch (err) {
-      surveyPosted = false;
-      console.warn("[save] pending survey angle post failed", err);
-    }
     // Post the 2D design to the backend — same as the main Save button.
-    let jawStructPosted = false;
+    let posted = false;
     try {
       const res = await postJawStructToServer();
-      jawStructPosted = !!(res?.upper?.ok && res?.lower?.ok);
+      posted = !!(res?.upper?.ok && res?.lower?.ok);
     } catch (err) {
       console.warn("[save] jawstruct post failed", err);
     }
@@ -1429,7 +1421,6 @@ function bindBackNavigationDialog(locks) {
     } catch (err) {
       console.warn("[save] thumbnail upload failed", err);
     }
-    const posted = surveyPosted && jawStructPosted;
     return { saved, posted };
   };
   window.__ann2dSaveCurrent = saveCurrent;

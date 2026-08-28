@@ -801,13 +801,6 @@ export function handleSurveyButtonClick(jaw, btn) {
   enterSurveyAiming(jaw, btn);
 }
 
-export async function commitPendingSurveyAngle() {
-  const aiming = preview3DState.surveyAiming;
-  if (!aiming?.jaw) return true;
-  setSurveyCancelState(aiming.jaw, { disabled: true });
-  return saveSurveyAngle(aiming.jaw, aiming.btn);
-}
-
 function setSurveyJawVisible(jaw, visible) {
   const group = preview3DState.groups?.[jaw];
   if (!group) return;
@@ -830,7 +823,7 @@ function setSurveyCancelState(jaw, { visible, disabled } = {}) {
 async function saveSurveyAngle(jaw, btn) {
   const camera = preview3DState.camera;
   const controls = preview3DState.controls;
-  if (!camera || !controls || !state.caseIntID) return false;
+  if (!camera || !controls || !state.caseIntID) return;
 
   // Capture the aim before any awaits so a slow read can't pick up a moved arrow.
   // Survey what the arrow points at; fall back to the camera direction.
@@ -861,7 +854,7 @@ async function saveSurveyAngle(jaw, btn) {
       btn.disabled = false;
       btn.textContent = "SET";
     }
-    return false;
+    return;
   }
   const updated = { ...current };
   if (jaw === "upper") {
@@ -909,7 +902,7 @@ async function saveSurveyAngle(jaw, btn) {
     if (!res.ok) {
       // A rejected write (an expired session 401s here) must not look like a save.
       toast?.error?.(`Survey angle not saved (HTTP ${res.status}).`);
-      return false;
+      return;
     }
     preview3DState.caseData = updated;
 
@@ -928,11 +921,9 @@ async function saveSurveyAngle(jaw, btn) {
     // Reveal the heatmap — the point of the angle is seeing the undercuts.
     setHeatmapEnabled(true);
     toast?.success?.(`${jaw === "upper" ? "Upper" : "Lower"} survey angle applied.`);
-    return true;
   } catch (err) {
     console.error(`[preview3D] ✕ PUT ${path} failed`, err);
     toast?.error?.(`Survey angle failed. ${err.message || err}`);
-    return false;
   } finally {
     // Drops the placement arrow and resets the button back to SET SURVEY ANGLE.
     exitSurveyAiming({ preserveStage: true });

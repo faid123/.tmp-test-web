@@ -3148,9 +3148,9 @@ const EXTRA_STL_SLOTS = [1, 2, 3, 4];
 
 const EXTRA_STL_SLOT_NAMES = {
   1: "Upper jaw",
-  2: "Metal RPD",
+  2: "Monoblock",
   3: "Lower jaw",
-  4: "Metal RPD",
+  4: "Monoblock",
 };
 
 // Per-slot icon, shown only on a a populated Extra 3D slot row. Paths are relative to

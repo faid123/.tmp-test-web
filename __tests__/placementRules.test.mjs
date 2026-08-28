@@ -359,11 +359,12 @@ describe("full acrylic places a major exactly as metal does", () => {
 });
 
 /**
- * A major connector is a continuous span, so reciprocation added beside a run END pulls
- * that tooth in: a connector stopping at 16 reaches 17 the moment 17 is plated, instead of
- * making the dentist re-pick the connector to redraw the span.
+ * The connector follows the tooth the dentist changed, and only that tooth. A plate or mesh
+ * they placed themselves beside a run END joins the run; the plate-prox a clasp/bar/rest
+ * auto-adds as reciprocation does NOT — that used to make an I-bar on a bare 17 sprout a
+ * horseshoe plate there unasked. Nothing beyond the changed tooth is ever re-derived.
  */
-describe("a run grows onto a tooth that gains reciprocation", () => {
+describe("the connector follows the changed tooth only", () => {
   /** Plates on 16/26, everything else bare — the connector stops at 16 and 26. */
   function archEndingAtSixes() {
     const teeth = {};
@@ -376,8 +377,9 @@ describe("a run grows onto a tooth that gains reciprocation", () => {
 
   const hasMajorOn = (teeth, id) =>
     teeth[id].componentPlacements.some((e) => e.componentId === "major-upper-horseshoe");
+  const runIn = (teeth) => TOOTH_ORDER.upper.filter((id) => hasMajorOn(teeth, id));
 
-  it("plating 17 next to a run ending at 16 extends the connector to 17", () => {
+  it("plating a bare 17 beside a run ending at 16 extends it onto 17", () => {
     const teeth = archEndingAtSixes();
     expect(hasMajorOn(teeth, "17")).toBe(false);
 
@@ -385,26 +387,37 @@ describe("a run grows onto a tooth that gains reciprocation", () => {
     expect(hasMajorOn(teeth, "17")).toBe(true);
   });
 
-  it("a reciprocating clasp does it too", () => {
+  it("meshing a missing 17 beside the run extends it onto 17", () => {
     const teeth = archEndingAtSixes();
-    place("reciprocating-clasp", "17", "distal_lingual");
+    teeth["17"] = tooth([], { isPresent: false, toothId: "17" });
+
+    place("mesh-hole", "17");
+    expect(teeth["17"].components).toContain("mesh-hole");
     expect(hasMajorOn(teeth, "17")).toBe(true);
   });
 
-  it("a retainer clasp does it through the plate it auto-adds", () => {
+  /** The bug report: the plate is reciprocation for the retentive element, not a decision
+   *  to grow the connector, so 17 gains plate-prox but no horseshoe. */
+  it.each([
+    ["bar-i", "mesial"],
+    ["rest-seat", "mesial"],
+    ["retainer-clasp", "distal_buccal"],
+    ["ring-clasp", "distal_buccal"],
+    ["reciprocating-clasp", "distal_lingual"],
+  ])("%s on a bare 17 leaves it connector-free despite the plate it auto-adds", (componentId, surface) => {
     const teeth = archEndingAtSixes();
-    place("retainer-clasp", "17", "distal_buccal");
-    expect(teeth["17"].components).toContain("plate-prox");
-    expect(hasMajorOn(teeth, "17")).toBe(true);
+    place(componentId, "17", surface);
+    expect(teeth["17"].components).toContain(componentId);
+    expect(hasMajorOn(teeth, "17")).toBe(false);
   });
 
-  it("takes the anchored teeth beyond it in the same move", () => {
+  it("does not walk past the changed tooth onto an already-plated 18", () => {
     const teeth = archEndingAtSixes();
     addPlacement(teeth["18"], "plate-prox", null);
     syncToothComponentsFromPlacements(teeth["18"]);
 
     place("plate-prox", "17");
-    expect([hasMajorOn(teeth, "17"), hasMajorOn(teeth, "18")]).toEqual([true, true]);
+    expect([hasMajorOn(teeth, "17"), hasMajorOn(teeth, "18")]).toEqual([true, false]);
   });
 
   it("does not jump a bare tooth: plating 18 alone leaves 17 and 18 out", () => {
@@ -419,47 +432,11 @@ describe("a run grows onto a tooth that gains reciprocation", () => {
     place("plate-prox", "17");
     expect(TOOTH_ORDER.lower.some((id) => teeth[id].componentPlacements.length)).toBe(false);
   });
-});
 
-/**
- * Mesh is the missing tooth's anchor, so a meshed saddle beside a run pulls the connector
- * over exactly as a plate does on a present tooth.
- */
-describe("a run grows onto a meshed saddle too", () => {
-  /** Plates on 16/26 anchor the run; 17 is MISSING and bare, so the run stops at 16. */
-  function archWithMissingSeven() {
-    const teeth = {};
-    for (const id of TOOTH_ORDER.upper) teeth[id] = tooth([], { toothId: id });
-    for (const id of ["16", "26"]) teeth[id] = tooth(["plate-prox"], { toothId: id });
-    teeth["17"] = tooth([], { isPresent: false, toothId: "17" });
-    state.teeth = teeth;
-    switchMajorIn(teeth, "major-upper-horseshoe", "upper");
-    return teeth;
-  }
-
-  const hasMajorOn = (teeth, id) =>
-    teeth[id].componentPlacements.some((e) => e.componentId === "major-upper-horseshoe");
-
-  it("meshing the missing 17 extends the connector onto it", () => {
-    const teeth = archWithMissingSeven();
-    expect(hasMajorOn(teeth, "17")).toBe(false);
-
-    place("mesh-hole", "17");
-    expect(teeth["17"].components).toContain("mesh-hole");
-    expect(hasMajorOn(teeth, "17")).toBe(true);
-  });
-
-  it("a bare missing tooth still holds the run back", () => {
-    const teeth = archWithMissingSeven();
-    expect(hasMajorOn(teeth, "17")).toBe(false);
-    expect(hasMajorOn(teeth, "18")).toBe(false);
-  });
-
-  it("carries on to an already-meshed 18 in the same move", () => {
-    const teeth = archWithMissingSeven();
-    teeth["18"] = tooth(["mesh-hole"], { isPresent: false, toothId: "18" });
-
-    place("mesh-hole", "17");
-    expect([hasMajorOn(teeth, "17"), hasMajorOn(teeth, "18")]).toEqual([true, true]);
+  it("changes nothing anywhere else in the arch", () => {
+    const teeth = archEndingAtSixes();
+    const before = runIn(teeth);
+    place("plate-prox", "17");
+    expect(runIn(teeth)).toEqual([...before, "17"].sort((a, b) => TOOTH_ORDER.upper.indexOf(a) - TOOTH_ORDER.upper.indexOf(b)));
   });
 });
