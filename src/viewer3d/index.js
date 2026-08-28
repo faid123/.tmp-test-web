@@ -5204,15 +5204,15 @@ function removeViewerLoadingScreen() {
   let designViewActive = false;
 
   // Fixed slot layout, mirroring EXTRA_STL_SLOT_NAMES in 2D/preview3D.js:
-  // 1 upper jaw, 2 upper metal RPD, 3 lower jaw, 4 lower metal RPD.
+  // 1 upper jaw, 2 upper monoblock, 3 lower jaw, 4 lower monoblock.
   const EXTRA_STL_SLOT_JAW = { 1: "upper", 2: "upper", 3: "lower", 4: "lower" };
   const METAL_RPD_SLOTS = new Set([2, 4]);
   // Row label + icon per slot, same as the 3D preview panel's "Other 3D files".
   const EXTRA_STL_SLOT_NAMES = {
     1: "Upper jaw",
-    2: "Upper metal RPD",
+    2: "Upper monoblock",
     3: "Lower jaw",
-    4: "Lower metal RPD",
+    4: "Lower monoblock",
   };
   const EXTRA_STL_SLOT_ICONS = {
     1: "Icon_UpperJaw_Occlusal.png",
