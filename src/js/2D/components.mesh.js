@@ -540,7 +540,22 @@ export function meshSelectionContextFromState(state) {
  * @property {() => void} redrawJaws
  * @property {(jaw: string) => void} redrawJaw
  * @property {(toothId: string, placementContext: null) => void} placeSelectedOnTooth
+ * @property {(toothIds: string[]) => void} [extendMajorConnectorsOntoTeeth]
  */
+
+/** Every tooth currently carrying a mesh, in arch order. */
+function toothIdsWithMesh(teeth) {
+  const ids = [];
+  for (const jaw of Object.keys(TOOTH_ORDER)) {
+    for (const toothId of TOOTH_ORDER[jaw]) {
+      const placements = teeth?.[toothId]?.componentPlacements;
+      if (Array.isArray(placements) && placements.some((e) => isMeshComponent(e.componentId))) {
+        ids.push(toothId);
+      }
+    }
+  }
+  return ids;
+}
 
 /** Double-click mesh catalog icon: set every mesh site to this type. */
 export function handleMeshCatalogDoubleClickApplyAll(env, componentId) {
@@ -554,10 +569,14 @@ export function handleMeshCatalogDoubleClickApplyAll(env, componentId) {
   }
   // Re-type any existing mesh sites to this mesh, then fill every missing tooth
   // that has no mesh yet (18/28/38/48 are excluded by ensureMesh…MissingTeeth).
+  const meshedBefore = toothIdsWithMesh(env.state.teeth);
   migrateAllMeshPlacementsToMeshId(env.state.teeth, componentId, env.componentById);
   ensureMeshPlacementsOnMissingTeeth(env.state.teeth, componentId, env.componentById);
-  // Every saddle just became an anchor, so any connector run beside one grows onto it.
-  env.extendMajorConnectors?.();
+  // Bulk mesh writes straight to the teeth, so it has to ask for the connector follow-on the
+  // placement engine does on its own — for the saddles this fill added, and no others.
+  env.extendMajorConnectorsOntoTeeth?.(
+    toothIdsWithMesh(env.state.teeth).filter((toothId) => !meshedBefore.includes(toothId))
+  );
   env.state.selectedComponentId = componentId;
   env.state.components = env.state.components.filter((id) => !isMeshComponent(id));
   if (!env.state.components.includes(componentId)) {

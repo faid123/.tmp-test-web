@@ -898,52 +898,44 @@ function canToothCarryMajorConnector(majorComponentId, toothId, jawKey) {
 }
 
 /**
- * A tooth that gains an anchor beside a connector run joins it: a major ending at 16 reaches
- * 17 once the dentist plates 17, and reaches a meshed saddle the same way — the tooth the
- * span walk would have started from had the anchor been there first. Growth repeats until it
- * stops, so a run also takes the anchored teeth beyond the one just placed.
+ * The connector follows a change onto the tooth that changed: plate or mesh 17 beside a run
+ * ending at 16 and 17 joins the run, so the design grows where the dentist worked instead of
+ * the whole arch being re-derived. ONE tooth, from an immediate neighbour only — it never
+ * walks on to teeth the dentist did not touch.
  *
- * Placement-time only. The renderer must NEVER re-derive this, or removing a run's end
- * tooth (the one removal the UI allows) would be undone on the next frame.
+ * Callers must only pass a tooth whose plate/mesh the dentist placed themselves. A
+ * plate-prox auto-added as reciprocation must never reach here, or a clasp/bar/rest would
+ * sprout a connector nobody asked for. Placement-time only: the renderer must NEVER
+ * re-derive this, or removing a run's end tooth (the one removal the UI allows) would be
+ * undone on the next frame.
  */
-export function extendMajorConnectorToAnchoredNeighboursInJaw(teeth, componentById, jawKey) {
+export function extendMajorConnectorOntoTooth(teeth, componentById, jawKey, toothId) {
   const order = TOOTH_ORDER && Array.isArray(TOOTH_ORDER[jawKey]) ? TOOTH_ORDER[jawKey] : null;
   if (!teeth || typeof teeth !== "object" || !order) {
     return;
   }
+  const id = String(toothId);
+  const index = order.indexOf(id);
+  if (index < 0) {
+    return;
+  }
+  const tooth = teeth[id];
+  // Present via plate/clasp, missing via mesh — the same anchor test the span walk uses.
+  if (!tooth || toothHasMajorConnectorPlacement(tooth) || !toothAnchorsMajorConnector(tooth, componentById)) {
+    return;
+  }
 
-  const majorIdOn = (toothId) => {
-    const entry = (teeth[toothId]?.componentPlacements || []).find((e) =>
+  const majorIdOn = (neighbourId) => {
+    const entry = (teeth[neighbourId]?.componentPlacements || []).find((e) =>
       isMajorConnectorComponent(e.componentId)
     );
     return entry ? String(entry.componentId) : null;
   };
-  const majorByToothId = new Map(order.map((toothId) => [toothId, majorIdOn(toothId)]));
-
-  // Each pass can only place on a tooth next to the run as it stood, so a run that has to
-  // grow several teeth needs several passes. Every pass but the last places at least one.
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (let i = 0; i < order.length; i += 1) {
-      const toothId = order[i];
-      const tooth = teeth[toothId];
-      if (!tooth || majorByToothId.get(toothId)) {
-        continue;
-      }
-      // Present via plate/clasp, missing via mesh — the same anchor test the span walk uses.
-      if (!toothAnchorsMajorConnector(tooth, componentById)) {
-        continue;
-      }
-      const majorComponentId = majorByToothId.get(order[i - 1]) || majorByToothId.get(order[i + 1]);
-      if (!majorComponentId || !canToothCarryMajorConnector(majorComponentId, toothId, jawKey)) {
-        continue;
-      }
-      placeMajorConnectorOnce(tooth, majorComponentId);
-      majorByToothId.set(toothId, majorComponentId);
-      grew = true;
-    }
+  const majorComponentId = majorIdOn(order[index - 1]) || majorIdOn(order[index + 1]);
+  if (!majorComponentId || !canToothCarryMajorConnector(majorComponentId, id, jawKey)) {
+    return;
   }
+  placeMajorConnectorOnce(tooth, majorComponentId);
 }
 
 /** Per-tooth placement for posterior-only majors (bar/strap): place on every eligible

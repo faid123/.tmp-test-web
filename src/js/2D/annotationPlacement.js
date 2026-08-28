@@ -3,7 +3,7 @@ import {
   ASSEMBLY_REST_SUGGESTION_IDS,
   COMPONENT_BY_ID,
   getBarPlacementSurfaceForTooth,
-  extendMajorConnectorToAnchoredNeighboursInJaw,
+  extendMajorConnectorOntoTooth,
   getMajorConnectorAssetReference,
   getMajorConnectorSpanTeeth,
   majorConnectorRunsToMidline,
@@ -75,19 +75,24 @@ function jawOfToothId(toothId) {
 }
 
 /**
- * Run after any placement that can add reciprocation: a connector ending at 16 grows onto
- * 17 once 17 is plated. Never called from the renderer — see the rule's own comment.
+ * A plate or mesh the dentist placed themselves lets the connector follow onto that tooth.
+ * The reciprocation plate a clasp/bar/rest brings with it is excluded on purpose: it is a
+ * side effect of the retentive element, not a decision to extend the connector.
  */
-function extendMajorConnectorAfterPlacement(toothId) {
+function extendMajorConnectorAfterDeliberatePlacement(toothId, selectedComponent) {
+  if (!isPlateComponentId(selectedComponent.id) && !isMeshComponent(selectedComponent)) return;
   const jaw = jawOfToothId(toothId);
   if (!jaw) return;
-  extendMajorConnectorToAnchoredNeighboursInJaw(state.teeth, COMPONENT_BY_ID, jaw);
+  extendMajorConnectorOntoTooth(state.teeth, COMPONENT_BY_ID, jaw, toothId);
 }
 
-/** Both arches at once — for bulk mesh placement, which fills every saddle in the mouth. */
-export function extendMajorConnectorsInAllJaws() {
-  for (const jaw of ["upper", "lower"]) {
-    extendMajorConnectorToAnchoredNeighboursInJaw(state.teeth, COMPONENT_BY_ID, jaw);
+/** Bulk mesh placement writes straight to the teeth, so it asks for the follow-on itself —
+ *  for the saddles it just filled only. */
+export function extendMajorConnectorsOntoTeeth(toothIds) {
+  for (const toothId of toothIds || []) {
+    const jaw = jawOfToothId(toothId);
+    if (!jaw) continue;
+    extendMajorConnectorOntoTooth(state.teeth, COMPONENT_BY_ID, jaw, toothId);
   }
 }
 
@@ -370,7 +375,7 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
   if (criteriaResult.pass) {
     addPlacement(tooth, selectedComponent.id, targetSurface);
     autoPlaceDefaultReciprocatingElement(tooth, selectedComponent);
-    extendMajorConnectorAfterPlacement(toothId);
+    extendMajorConnectorAfterDeliberatePlacement(toothId, selectedComponent);
     setMessage(
       `Placed ${selectedComponent.label}${targetSurface ? ` (${targetSurface})` : ""} on tooth ${toothId}.`,
       false
@@ -388,7 +393,7 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
     removePlacementsByComponentIds(tooth, failureData.conflictingComponents || []);
     addPlacement(tooth, selectedComponent.id, targetSurface);
     autoPlaceDefaultReciprocatingElement(tooth, selectedComponent);
-    extendMajorConnectorAfterPlacement(toothId);
+    extendMajorConnectorAfterDeliberatePlacement(toothId, selectedComponent);
     setMessage(
       `Replaced conflict and placed ${selectedComponent.label}${targetSurface ? ` (${targetSurface})` : ""} on tooth ${toothId}.`,
       false
@@ -440,7 +445,6 @@ export function placeSimpleCircumAssemblyOnTooth(toothId, restSurface) {
   addPlacement(tooth, "retainer-clasp", mapped.retainer);
   addPlacement(tooth, "reciprocating-clasp", mapped.reciprocating);
   syncToothComponentsFromPlacements(tooth);
-  extendMajorConnectorAfterPlacement(id);
 
   setMessage(
     `Placed Simple Circum Assembly on tooth ${id} (${mapped.rest} rest, ${mapped.retainer} retainer, ${mapped.reciprocating} reciprocating).`,
@@ -483,7 +487,6 @@ export function placeBackActionAssemblyOnTooth(toothId, restSurface) {
   addPlacement(tooth, "retainer-clasp", clasp);
   addPlacement(tooth, "reciprocating-clasp", reciprocating);
   syncToothComponentsFromPlacements(tooth);
-  extendMajorConnectorAfterPlacement(id);
 
   setMessage(
     `Placed Back-action Clasps on tooth ${id} (${rest} rest, ${clasp} clasp, ${reciprocating} reciprocating).`,
@@ -640,7 +643,6 @@ export function placeEmbrasureCircumAssemblyOnTooth(toothId, jaw, restSurface) {
     else placeCombineClaspOutwardBundle(rec, target.side);
     syncToothComponentsFromPlacements(rec);
   }
-  extendMajorConnectorAfterPlacement(id);
 
   const summary = targets.map((t) => `${t.toothId} (${t.side})`).join(", ");
   setMessage(`Placed Combine Clasps on ${summary}.`, false);
@@ -703,7 +705,6 @@ export function placeMultiCircumAssemblyOnTooth(toothId, jaw, restSurface) {
 
   syncToothComponentsFromPlacements(tooth);
   syncToothComponentsFromPlacements(neighborTooth);
-  extendMajorConnectorAfterPlacement(id);
 
   setMessage(
     `Placed Continuous Clasps on teeth ${id} (${clicked} rest) and ${neighborToothId}.`,
@@ -745,7 +746,6 @@ export function placeHalfAndHalfAssemblyOnTooth(toothId, restSurface) {
   }
 
   syncToothComponentsFromPlacements(tooth);
-  extendMajorConnectorAfterPlacement(id);
   setMessage(`Placed Half & Half on tooth ${id} (mesial + distal rests).`, false);
   return true;
 }
@@ -843,7 +843,6 @@ function placeRpxAssemblyOnTooth(toothId, jaw, restSurface, config) {
   addPlacement(tooth, "plate-prox", null);
 
   syncToothComponentsFromPlacements(tooth);
-  extendMajorConnectorAfterPlacement(id);
   setMessage(`Placed ${config.label} on tooth ${id} (mesial rest, proximal plate, ${config.retentiveLabel}).`, false);
   return true;
 }
