@@ -3321,20 +3321,8 @@ function removeViewerLoadingScreen() {
     jaw_type: 2,
     caseIntID: paramValue,
   };
-  // this for the undercut lower
-  const data2 = {
-    machine_id: MACHINE_ID,
-    // Fallback UUID keeps direct/shared viewer URLs able to load case assets.
-    // Prefer loggedInUser.uuid if this viewer is later wired to authenticated sessions.
-    uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
-    //uuid: 'eOqJe2FpjqdECy25l0KuJkH2cPQm', // dev server acc uuid
-    case_int_id: paramValue,
-    jaw_type: 1,
-    caseIntID: paramValue,
-  };
   const caseInfoEndpoint = "/case/get/" + paramValue;
   const thumbnailEndpoint = "/thumbnails/get";
-  const heatmapEndpoint = "/undercutheatmap/get";
   let positionData;
   const caseInfoPromise = apiClient.post(
     caseInfoEndpoint,
@@ -3594,43 +3582,244 @@ function removeViewerLoadingScreen() {
   // to get the undercut and occulsion values
   let undercut_values = [];
 
+  function heatmapJawType(jawKey) {
+    return jawKey === "upper" ? "upper_jaw" : "lower_jaw";
+  }
+
+  function dllJawDbType(jawKey) {
+    // Same convention as the 2D jaw preview DLL calls.
+    return jawKey === "upper" ? 1 : 2;
+  }
+
+  function savedSurveyDirection(jawKey) {
+    const raw = ["x", "y", "z"].map((axis) =>
+      Number(positionData?.[`${jawKey}_insertion_angle_${axis}`])
+    );
+    if (raw.some((value) => !Number.isFinite(value))) return null;
+    const [x, y, z] =
+      jawKey === "upper" ? [-raw[0], -raw[1], raw[2]] : [raw[0], raw[1], -raw[2]];
+    const length = Math.hypot(x, y, z);
+    if (length < 1e-4) return null;
+    return [x / length, y / length, z / length].map((value) =>
+      Number(Number(value).toFixed(8))
+    );
+  }
+
+  function colorForSurveyingValue(value) {
+    const v = Math.max(0, Number(value) || 0);
+    if (v <= 0) return [1, 1, 1];
+    if (v < 0.25) return [1, 210 / 255, 0];
+    if (v < 0.5) return [253 / 255, 140 / 255, 0];
+    if (v < 0.75) return [254 / 255, 70 / 255, 0];
+    return [170 / 255, 0, 3 / 255];
+  }
+
+  function colorForOcclusionValue(value) {
+    const v = Number(value);
+    if (!Number.isFinite(v) || v <= 0) return [1, 1, 1];
+    if (v <= 0.1) return [0.5411765, 0, 0.8352942];
+    if (v <= 0.25) return [0.027450982, 0, 0.6117647];
+    if (v <= 0.4) return [0.29803923, 0.8588236, 1];
+    if (v <= 0.5) return [0, 0.91372555, 0.18823531];
+    return [1, 1, 1];
+  }
+
+  function floatValuesFromDllResponse(response, base64Key, arrayKey, previewKey) {
+    if (response?.[base64Key]) {
+      return base64ToFloat32Array(response[base64Key]);
+    }
+    if (Array.isArray(response?.[arrayKey])) {
+      return response[arrayKey];
+    }
+    return response?.[previewKey] ?? null;
+  }
+
+  function buildRuntimeHeatmapSurface(jawKey, values, colorForValue, fieldName, meta = {}) {
+    if (!values?.length) return null;
+    const heatmap = new Float32Array(values.length * 4);
+    for (let i = 0; i < values.length; i += 1) {
+      const [r, g, b] = colorForValue(values[i]);
+      heatmap[i * 4] = r;
+      heatmap[i * 4 + 1] = g;
+      heatmap[i * 4 + 2] = b;
+      heatmap[i * 4 + 3] = 1;
+    }
+    const surface = {
+      jaw_type: heatmapJawType(jawKey),
+      point_size: meta.pointSize || values.length,
+      [fieldName]: {
+        data: Array.from(new Uint8Array(heatmap.buffer)),
+      },
+    };
+    if (meta.source) surface.source = meta.source;
+    if (meta.surveyingDirection) surface.surveying_direction = meta.surveyingDirection;
+    return surface;
+  }
+
+  function mergeHeatmapSurfaces(...surfaces) {
+    const merged = {};
+    surfaces.filter(Boolean).forEach((surface) => {
+      if (surface.jaw_type) merged.jaw_type = surface.jaw_type;
+      if (surface.point_size && !merged.point_size) merged.point_size = surface.point_size;
+      if (surface.source) {
+        merged.source = merged.source ? `${merged.source}+${surface.source}` : surface.source;
+      }
+      if (surface.surveying_direction) merged.surveying_direction = surface.surveying_direction;
+      if (surface.surveying_values) merged.surveying_values = surface.surveying_values;
+      if (surface.occlusion_values) merged.occlusion_values = surface.occlusion_values;
+    });
+    return merged.surveying_values || merged.occlusion_values ? merged : null;
+  }
+
+  function buildRuntimeUndercutSurface(jawKey, response) {
+    const values = floatValuesFromDllResponse(
+      response,
+      "surveying_values_base64",
+      "surveying_values",
+      "surveying_values_preview"
+    );
+    return buildRuntimeHeatmapSurface(
+      jawKey,
+      values,
+      colorForSurveyingValue,
+      "surveying_values",
+      {
+        pointSize: response?.surveying_count,
+        source: "dll_compute_surveying_no_pd",
+        surveyingDirection: response?.surveying_direction,
+      }
+    );
+  }
+
+  function normalizeOcclusionJaw(record) {
+    const raw = record?.jaw ?? record?.type ?? record?.jaw_type ?? record?.db_type;
+    if (raw === 1 || raw === "1") return "upper";
+    if (raw === 2 || raw === "2") return "lower";
+    const value = String(raw || "").toLowerCase();
+    if (value.includes("upper")) return "upper";
+    if (value.includes("lower")) return "lower";
+    return null;
+  }
+
+  function buildRuntimeOcclusionSurface(jawKey, response) {
+    const record = Array.isArray(response?.records)
+      ? response.records.find((item) => normalizeOcclusionJaw(item) === jawKey)
+      : response;
+    const values = floatValuesFromDllResponse(
+      record,
+      "occlusion_values_base64",
+      "occlusion_values",
+      "occlusion_values_preview"
+    );
+    return buildRuntimeHeatmapSurface(
+      jawKey,
+      values,
+      colorForOcclusionValue,
+      "occlusion_values",
+      {
+        pointSize: record?.occlusion_count || record?.point_size,
+        source: "dll_compute_occlusion",
+      }
+    );
+  }
+
+  async function computeRuntimeUndercutSurface(jawKey) {
+    const direction = savedSurveyDirection(jawKey);
+    if (!direction) {
+      console.log("[viewer3D] saved survey auto-apply skipped: insertion angles missing", {
+        jaw: jawKey,
+        case_id: paramValue,
+      });
+      return null;
+    }
+
+    console.log("[viewer3D] auto-applying saved survey direction", {
+      jaw: jawKey,
+      case_id: paramValue,
+      direction,
+    });
+
+    const response = await apiClient.post(
+      "/dll/compute-surveying-no-pd",
+      [
+        {
+          machine_id: MACHINE_ID,
+          uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
+          caseIntID: paramValue,
+        },
+        {
+          case_id: paramValue,
+          type: dllJawDbType(jawKey),
+          dir: direction,
+          printFullSurveying: true,
+          returnSurveyingBase64: true,
+        },
+      ],
+      false,
+      `${jawKey} undercut`
+    );
+    return buildRuntimeUndercutSurface(jawKey, response);
+  }
+
+  async function computeRuntimeOcclusionSurfaces() {
+    const response = await apiClient.post(
+      "/dll/compute-occlusion",
+      [
+        {
+          machine_id: MACHINE_ID,
+          uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
+          caseIntID: paramValue,
+        },
+        {
+          case_id: paramValue,
+          caseIntID: paramValue,
+          includeFullOcclusion: true,
+          returnOcclusionBase64: true,
+        },
+      ],
+      false,
+      "Occlusion"
+    );
+    return {
+      upper: buildRuntimeOcclusionSurface("upper", response),
+      lower: buildRuntimeOcclusionSurface("lower", response),
+    };
+  }
+
   // Per-vertex RGBA arrays, megabytes on a real case, so they ride loadCaseAssets
   // and never load on entry. Uploads fall back to the loaders' "stl" sentinel.
   async function fetchUndercutHeatmaps() {
-  try {
-    // Call the post method and wait for the response
+    try {
+      const [upperUndercut, lowerUndercut, occlusion] = await Promise.all([
+        computeRuntimeUndercutSurface("upper").catch((error) => {
+          console.warn("[viewer3D] upper runtime undercut failed", error);
+          return null;
+        }),
+        computeRuntimeUndercutSurface("lower").catch((error) => {
+          console.warn("[viewer3D] lower runtime undercut failed", error);
+          return null;
+        }),
+        computeRuntimeOcclusionSurfaces().catch((error) => {
+          console.warn("[viewer3D] runtime occlusion failed", error);
+          return { upper: null, lower: null };
+        }),
+      ]);
 
-    const [undercut_value, undercut_value1] = await Promise.all([
-      apiClient.post(heatmapEndpoint, data, false, "Heatmap lower"),
-      apiClient.post(heatmapEndpoint, data2, false, "Heatmap upper"),
-    ]);
+      const upperHeat = mergeHeatmapSurfaces(upperUndercut, occlusion.upper);
+      const lowerHeat = mergeHeatmapSurfaces(lowerUndercut, occlusion.lower);
+      // Downstream convention: undercut_values[0]=lower, [1]=upper.
+      undercut_values = [lowerHeat, upperHeat];
 
-    // Pair each heatmap by the RESPONSE's jaw_type, NEVER request order — that
-    // swapped the jaws' colours. Case 2437: jaw_type=1 answers "upper_jaw".
-    // Downstream convention: undercut_values[0]=lower, [1]=upper.
-    let upperHeat = null;
-    let lowerHeat = null;
-    [undercut_value, undercut_value1].forEach((heatmap) => {
-      const label = String(heatmap?.jaw_type ?? "").toLowerCase();
-      if (label.includes("upper")) upperHeat = heatmap;
-      else if (label.includes("lower")) lowerHeat = heatmap;
-    });
-    // Fallback if a response ever omits jaw_type: the jaw_type=2 request
-    // (data) serves the lower heatmap, jaw_type=1 (data2) the upper one.
-    undercut_values = [
-      lowerHeat ?? undercut_value,
-      upperHeat ?? undercut_value1,
-    ];
-
-    [undercut_value, undercut_value1].forEach((heatmap) => {
-      undercut_type[heatmap.jaw_type] = [
-        Boolean(heatmap.surveying_values),
-        Boolean(heatmap.occlusion_values),
-      ];
-    });
-  } catch (error) {
-    console.error("Error:", error);
-  }
+      [lowerHeat, upperHeat].forEach((heatmap) => {
+        if (!heatmap?.jaw_type) return;
+        undercut_type[heatmap.jaw_type] = [
+          Boolean(heatmap.surveying_values),
+          Boolean(heatmap.occlusion_values),
+        ];
+      });
+    } catch (error) {
+      console.error("Error:", error);
+    }
   }
 
   //Processing mesh
@@ -5351,14 +5540,7 @@ function removeViewerLoadingScreen() {
   // Insertion vectors are already stored in the DLL/mesh frame; the only step to
   // the DLL's `dir` is desktop's per-jaw flip. (0,0,0) means never surveyed.
   function slotSurveyDirection(jawKey) {
-    const raw = ["x", "y", "z"].map((axis) =>
-      Number(positionData?.[`${jawKey}_insertion_angle_${axis}`])
-    );
-    if (raw.some((value) => !Number.isFinite(value))) return null;
-    const [x, y, z] = jawKey === "upper" ? [-raw[0], -raw[1], raw[2]] : [raw[0], raw[1], -raw[2]];
-    const length = Math.hypot(x, y, z);
-    if (length < 1e-4) return null;
-    return [x / length, y / length, z / length];
+    return savedSurveyDirection(jawKey);
   }
 
   function base64ToFloat32Array(base64) {

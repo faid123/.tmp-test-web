@@ -5,6 +5,7 @@ import {
   setPreview3DRenderPaused,
   openUpload3dModal,
   closeUpload3dModal,
+  canOpenUpload3dModal,
 } from "./preview3D.js";
 import { loadReferenceImages, closeViewer } from "./referenceImages.js";
 
@@ -34,6 +35,10 @@ export function showPreviewTab(name) {
   if (!frame || !refsPane) return;
   const refs = name === "refs";
   const extras = name === "extras";
+
+  if (extras && !canOpenUpload3dModal({ notify: true })) {
+    return;
+  }
 
   // The maximize/restore control lives inside the 3D frame, so leaving for the
   // gallery while maximized would strand the user with no way back.

@@ -35,8 +35,8 @@ class STLMeshLoader {
         if (surface != 'stl') {
             if (surface?.occlusion_values?.data) {
                 colors = occlusionColorArray(vertexCount, surface.occlusion_values.data);
-                setColors(colors);
             }
+            setColors(colors);
             if ('surveying_values' in surface) {
                 colors = surveyColorArray(vertexCount, surface.surveying_values.data);
             }
