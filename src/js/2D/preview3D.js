@@ -118,6 +118,7 @@ export const preview3DState = {
   area: null,
   activeView: "both",
   surveyPrevVisibility: null,
+  surveyPrevCamera: null,
   surveyAutoMaximized: false,
   topControls: null,
   caseData: null,
@@ -568,6 +569,9 @@ function init3DPreview(area) {
     // TrackballControls maps screen coords to arcball math, so it must be re-anchored on
     // canvas resize — otherwise rotation feels off after a layout change.
     controls.handleResize?.();
+    if (preview3DState.surveyAiming) {
+      requestAnimationFrame(() => focusPreviewOnSurveyJaw());
+    }
   };
 
   preview3DState.resizePreview = resize;
@@ -733,6 +737,7 @@ export function teardown3DPreview() {
   preview3DState.stageHiddenJaws = new Set();
   preview3DState.area = null;
   preview3DState.topControls = null;
+  preview3DState.surveyPrevCamera = null;
   // The panel lives in the shell just removed; extrasTabOpen is what a rebuild
   // reads to put it back.
   preview3DState.upload3dModal = null;
@@ -2815,6 +2820,12 @@ function fitPreviewCamera({ visibleOnly = false, worldView = null } = {}) {
   controls.update();
   // Call only if present (TrackballControls has no saveState).
   controls.saveState?.();
+}
+
+export function focusPreviewOnSurveyJaw() {
+  const jaw = preview3DState.surveyAiming?.jaw;
+  if (!jaw || !preview3DState.groups?.[jaw]?.visible) return;
+  fitPreviewCamera({ visibleOnly: true });
 }
 
 // Camera offset + up per snap, in the MODEL's local frame (Z-up: +Z = occlusal); modelRoot is
