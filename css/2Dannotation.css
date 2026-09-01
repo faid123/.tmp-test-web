@@ -966,6 +966,19 @@ button.upload3d-row {
   color: var(--rose-600, #e03131);
 }
 
+.upload3d-upload-cancel {
+  color: var(--rose-600, #e03131);
+}
+
+.upload3d-upload-cancel:hover {
+  background: var(--rose-050, #fff0f3);
+}
+
+.upload3d-upload-cancel:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .upload3d-row-name {
   color: #3f5168;
   font-size: 0.71rem;

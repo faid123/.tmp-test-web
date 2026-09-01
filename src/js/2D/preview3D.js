@@ -107,7 +107,7 @@ export const preview3DState = {
   extrasLoading: false,
   extrasLoadProgress: null,
   extrasOverlay: null,
-  // Uploading slots → { frac, refs } driving each row's inline progress bar. A Map, not
+  // Uploading slots → { frac, refs, controller, fileName } driving each row's inline progress bar. A Map, not
   // a single slot, so the other three stay uploadable during an upload.
   uploadingSlots: new Map(),
   upload3dModal: null,
@@ -726,6 +726,10 @@ export function teardown3DPreview() {
   preview3DState.extraGroups = {};
   preview3DState.extraFileNames = {};
   preview3DState.occupiedSlots = null;
+  for (const phase of preview3DState.uploadingSlots.values()) {
+    phase.controller?.abort();
+  }
+  preview3DState.uploadingSlots.clear();
   // Drop the load latch with the scene it populated, so the next case fetches its own
   // slots instead of inheriting this one's.
   preview3DState.extrasLoadPromise = null;
@@ -3815,11 +3819,20 @@ async function uploadExtraStl(file, targetSlot = null) {
   }
 
   // Draw this slot's row as an inline progress bar, then start the upload.
-  preview3DState.uploadingSlots.set(freeSlot, { frac: 0, refs: null });
+  const controller = new AbortController();
+  preview3DState.uploadingSlots.set(freeSlot, {
+    frac: 0,
+    refs: null,
+    controller,
+    fileName: file.name,
+  });
   renderUpload3dList();
   setMessage?.(`Uploading ${file.name}...`);
   try {
     const base64 = await fileToBase64(file);
+    if (controller.signal.aborted) {
+      throw new DOMException("Upload canceled", "AbortError");
+    }
     // case_id belongs in the DATA object, not the auth one (same as POST /stl). Without it
     // the insert 500s with no CORS header, surfacing as a bare "Failed to fetch".
     const payload = JSON.stringify([
@@ -3831,7 +3844,24 @@ async function uploadExtraStl(file, targetSlot = null) {
         data: base64,
       },
     ]);
-    await uploadWithProgress("stl/slot/", payload, (frac) => setSlotUploadProgress(freeSlot, frac));
+    await uploadWithProgress(
+      "stl/slot/",
+      payload,
+      (frac) => setSlotUploadProgress(freeSlot, frac),
+      { signal: controller.signal }
+    );
+    if (controller.signal.aborted) {
+      throw new DOMException("Upload canceled", "AbortError");
+    }
+    const phase = preview3DState.uploadingSlots.get(freeSlot);
+    if (phase) {
+      phase.controller = null;
+      if (phase.refs?.label) phase.refs.label.textContent = "Preparing preview...";
+      if (phase.refs?.cancelBtn) {
+        phase.refs.cancelBtn.disabled = true;
+        phase.refs.cancelBtn.title = "Upload completed";
+      }
+    }
     preview3DState.occupiedSlots.add(freeSlot);
     await renderExtraStl({ slotNumber: freeSlot, filename: file.name, data: base64 });
     // Uploads always come from the open panel, so stage the new file (this is what puts
@@ -3844,12 +3874,25 @@ async function uploadExtraStl(file, targetSlot = null) {
     }
     setMessage?.(`${file.name} uploaded.`);
   } catch (err) {
+    if (err?.name === "AbortError") {
+      setMessage?.(`${file.name} upload canceled.`);
+      return;
+    }
     console.error("[preview3D] ✕ extra STL upload failed", err);
     setMessage?.("Upload failed. Please try again.");
   } finally {
     preview3DState.uploadingSlots.delete(freeSlot);
     renderUpload3dList();
   }
+}
+
+function cancelExtraStlUpload(slot) {
+  const phase = preview3DState.uploadingSlots.get(slot);
+  if (!phase) return;
+  if (!phase.controller) return;
+  phase.controller?.abort();
+  if (phase.refs?.label) phase.refs.label.textContent = "Canceling...";
+  if (phase.refs?.cancelBtn) phase.refs.cancelBtn.disabled = true;
 }
 
 function pickAndUploadExtraStl(slot) {
@@ -4343,6 +4386,13 @@ function buildUpload3dUploadingRow(slot) {
   icon.className = "upload3d-file-icon";
   icon.innerHTML = '<i class="fa fa-cloud-arrow-up" aria-hidden="true"></i>';
 
+  const cancelBtn = buildPreviewTrashButton({
+    ariaLabel: `Cancel ${slotLabel(slot)} upload`,
+    title: `Cancel ${slotLabel(slot)} upload`,
+  });
+  cancelBtn.classList.add("upload3d-row-delete", "upload3d-upload-cancel");
+  cancelBtn.addEventListener("click", () => cancelExtraStlUpload(slot));
+
   const text = document.createElement("div");
   text.className = "upload3d-row-text";
   const slotName = document.createElement("span");
@@ -4362,10 +4412,17 @@ function buildUpload3dUploadingRow(slot) {
   text.appendChild(slotName);
   text.appendChild(progress);
   row.appendChild(icon);
+  row.appendChild(cancelBtn);
   row.appendChild(text);
 
   const phase = preview3DState.uploadingSlots.get(slot);
-  if (phase) phase.refs = { fill, label };
+  if (phase) {
+    phase.refs = { fill, label, cancelBtn };
+    if (!phase.controller) {
+      cancelBtn.disabled = true;
+      cancelBtn.title = "Upload completed";
+    }
+  }
   // Replay how far this upload already is into the freshly built bar.
   setSlotUploadProgress(slot);
   return row;

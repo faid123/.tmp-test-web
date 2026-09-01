@@ -85,19 +85,43 @@ export async function fileToBase64(file) {
 
 // XHR rather than fetch so upload progress is reportable — STLs are large enough
 // that a silent multi-second wait reads as a hang. `onProgress` gets a 0..1 fraction.
-export function uploadWithProgress(path, payload, onProgress) {
+export function uploadWithProgress(path, payload, onProgress, options = {}) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    const signal = options?.signal;
+    const abortError = () =>
+      typeof DOMException === "function"
+        ? new DOMException("Upload canceled", "AbortError")
+        : Object.assign(new Error("Upload canceled"), { name: "AbortError" });
+
+    if (signal?.aborted) {
+      reject(abortError());
+      return;
+    }
+
+    const onAbort = () => xhr.abort();
+    signal?.addEventListener?.("abort", onAbort, { once: true });
+
+    const cleanup = () => signal?.removeEventListener?.("abort", onAbort);
     xhr.open("POST", apiUrl(path));
     xhr.setRequestHeader("Content-Type", "application/json");
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
     };
-    xhr.onload = () =>
+    xhr.onload = () => {
+      cleanup();
       xhr.status >= 200 && xhr.status < 300
         ? resolve(xhr.responseText)
         : reject(new Error(`HTTP ${xhr.status}`));
-    xhr.onerror = () => reject(new Error("network error"));
+    };
+    xhr.onerror = () => {
+      cleanup();
+      reject(new Error("network error"));
+    };
+    xhr.onabort = () => {
+      cleanup();
+      reject(abortError());
+    };
     xhr.send(payload);
   });
 }
