@@ -27,13 +27,15 @@ import { applyJawStructDesign } from "./jawStructApply.js";
 import { applyDesignProposal, buildDesignProposal } from "./JawDesignProposal.js";
 import { classifyArch } from "./JawDesign.js";
 import { logApi } from "../shared/apiLog.js";
-import { toast, flashToast } from "../shared/toast.js";
+import { toast, flashToast, confirmModal } from "../shared/toast.js";
 import { VIEWER_UUID } from "../shared/config.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 
 /** Autosave on every edit (history hook). Off by default: Save button is the
  *  trigger, avoids a POST per placement. POST /jawstruct/l2 verified. */
 const ENABLE_JAW_STRUCT_AUTOSAVE = false;
+const LOCAL_DRAFT_VERSION = 1;
+const LOCAL_DRAFT_AUTOSAVE_MS = 4000;
 
 /** Calibrated tooth-image scale (SVG tooth-local units). */
 export const TOOTH_SCALE_BASE = 0.24;
@@ -160,10 +162,130 @@ function pushHistorySnapshot(snapshot) {
   return true;
 }
 
+let savedStateSignature = "";
+let hasUnsavedDesignChanges = false;
+let localDraftTimer = null;
+let saveInFlight = false;
+let suppressLeaveWarning = false;
+
+function currentDraftStorageKey() {
+  if (!state.caseIntID) return "";
+  const user = getLoggedInUser();
+  const userKey = user?.uuid || VIEWER_UUID || "viewer";
+  return `ann2d.localDraft.v${LOCAL_DRAFT_VERSION}.${userKey}.${state.caseIntID}`;
+}
+
+function readLocalDraft() {
+  const key = currentDraftStorageKey();
+  if (!key) return null;
+  try {
+    const draft = JSON.parse(localStorage.getItem(key) || "null");
+    if (!draft || draft.version !== LOCAL_DRAFT_VERSION || !draft.snapshot) return null;
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalDraft(reason = "edit") {
+  if (!hasUnsavedDesignChanges) return;
+  const key = currentDraftStorageKey();
+  if (!key) return;
+  try {
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        version: LOCAL_DRAFT_VERSION,
+        caseIntID: state.caseIntID,
+        caseName: state.caseName || "",
+        userUuid: getLoggedInUser()?.uuid || "",
+        reason,
+        updatedAt: Date.now(),
+        snapshot: cloneStateForHistory(),
+      })
+    );
+  } catch (err) {
+    console.warn("[2D-draft] local draft save failed:", err);
+  }
+}
+
+function clearLocalDraft() {
+  const key = currentDraftStorageKey();
+  if (!key) return;
+  try { localStorage.removeItem(key); } catch {}
+}
+
+function setSaveIndicator(mode, text) {
+  const el = document.getElementById("annSaveState");
+  if (!el) return;
+  el.classList.remove("is-saved", "is-dirty", "is-saving", "is-error");
+  el.classList.add(`is-${mode}`);
+  const icon =
+    mode === "dirty" ? "fa-triangle-exclamation" :
+    mode === "saving" ? "fa-circle-notch" :
+    mode === "error" ? "fa-circle-exclamation" :
+    "fa-circle-check";
+  el.innerHTML = `<i class="fa ${icon}" aria-hidden="true"></i><span>${text}</span>`;
+}
+
+function setSaveButtonsBusy(busy) {
+  saveInFlight = busy;
+  ["stickySaveBtn", "stickySaveReturnBtn", "sidebarSaveBtn", "backConfirmSaveBack"].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (btn) btn.disabled = busy;
+  });
+}
+
+function refreshUnsavedState({ persistDraft = false } = {}) {
+  if (!savedStateSignature) savedStateSignature = getHistoryStateSignature();
+  hasUnsavedDesignChanges = getHistoryStateSignature() !== savedStateSignature;
+  if (hasUnsavedDesignChanges) {
+    setSaveIndicator("dirty", "Unsaved changes");
+    if (persistDraft) writeLocalDraft("edit");
+  } else {
+    setSaveIndicator("saved", "Saved");
+    clearLocalDraft();
+  }
+}
+
+function markDesignClean({ clearDraft = false } = {}) {
+  savedStateSignature = getHistoryStateSignature();
+  hasUnsavedDesignChanges = false;
+  if (clearDraft) clearLocalDraft();
+  setSaveIndicator("saved", "Saved");
+}
+
+function markDesignSaveFailed() {
+  hasUnsavedDesignChanges = true;
+  setSaveIndicator("error", "Save failed");
+  writeLocalDraft("save-failed");
+}
+
+function startLocalDraftAutosave() {
+  if (localDraftTimer) return;
+  localDraftTimer = setInterval(() => {
+    if (hasUnsavedDesignChanges) writeLocalDraft("interval");
+  }, LOCAL_DRAFT_AUTOSAVE_MS);
+}
+
+function noteDesignChanged() {
+  refreshUnsavedState({ persistDraft: true });
+}
+registerAutosaveHook(noteDesignChanged);
+
+function bindBrowserLeaveWarning() {
+  window.addEventListener("beforeunload", (event) => {
+    if (!hasUnsavedDesignChanges || suppressLeaveWarning) return;
+    event.preventDefault();
+    event.returnValue = "You have unsaved changes. Leave without saving?";
+  });
+}
+
 export function recordHistoryCheckpoint() {
   if (history.restoring) return false;
   const changed = pushHistorySnapshot(cloneStateForHistory());
   updateUndoRedoButtons();
+  if (changed) runAutosaveHooks();
   return changed;
 }
 
@@ -222,6 +344,7 @@ export async function undoWorkflow() {
   }
   await refreshUiAfterHistoryRestore();
   updateUndoRedoButtons();
+  noteDesignChanged();
   setMessage("Undo applied.", false);
 }
 
@@ -240,6 +363,7 @@ export async function redoWorkflow() {
   }
   await refreshUiAfterHistoryRestore();
   updateUndoRedoButtons();
+  noteDesignChanged();
   setMessage("Redo applied.", false);
 }
 
@@ -992,9 +1116,12 @@ async function fetchJawStruct(recordsPromise = null) {
 
   renderJaws();
   // This load is the working baseline — re-seed undo history so it isn't undoable.
-  history.past = [cloneStateForHistory()];
+  const serverSnapshot = cloneStateForHistory();
+  history.past = [serverSnapshot];
   history.future = [];
   updateUndoRedoButtons();
+  markDesignClean();
+  await maybePromptRestoreLocalDraft(serverSnapshot);
 }
 
 // Reset to a clean baseline (all teeth present, no components/raw fields/tail).
@@ -1003,6 +1130,39 @@ async function resetJawStructDesignToBaseline() {
   const teethModel = await import("./annotationTeethModel.js");
   teethModel.initializeTeethState();
   state.jawStructTail = {};
+}
+
+async function maybePromptRestoreLocalDraft(serverSnapshot) {
+  const draft = readLocalDraft();
+  if (!draft?.snapshot) return;
+
+  const restore = await confirmModal({
+    title: "Unsaved draft found",
+    message: "A local draft from your last editing session is available for this case. Restore it instead of the server version?",
+    confirmText: "Restore draft",
+    cancelText: "Discard",
+    variant: "warning",
+  });
+
+  if (!restore) {
+    clearLocalDraft();
+    markDesignClean();
+    return;
+  }
+
+  history.restoring = true;
+  try {
+    applyHistorySnapshot(draft.snapshot);
+  } finally {
+    history.restoring = false;
+  }
+  await refreshUiAfterHistoryRestore();
+  history.past = [serverSnapshot, cloneStateForHistory()];
+  history.future = [];
+  updateUndoRedoButtons();
+  noteDesignChanged();
+  setMessage("Restored unsaved local draft. Save to update the server version.", false);
+  toast.info("Unsaved draft restored.");
 }
 
 // Posts both jaws to POST /jawstruct/l2, returning { upper, lower } or { ok:false, reason }
@@ -1371,7 +1531,10 @@ function bindBackNavigationDialog(locks) {
     modal.setAttribute("aria-hidden", "true");
   };
 
-  const returnToCaseList = () => goToCaseList(targetHref);
+  const returnToCaseList = () => {
+    suppressLeaveWarning = true;
+    goToCaseList(targetHref);
+  };
 
   const openModal = () => {
     modal.classList.remove("is-hidden");
@@ -1379,17 +1542,22 @@ function bindBackNavigationDialog(locks) {
     cancelBtn.focus();
   };
 
+  const requestReturn = () => {
+    if (hasUnsavedDesignChanges) openModal();
+    else returnToCaseList();
+  };
+
   if (backLink) {
     backLink.addEventListener("click", (event) => {
       event.preventDefault();
-      openModal();
+      requestReturn();
     });
   }
   if (sidebarReturnBtn) {
     sidebarReturnBtn.addEventListener("click", () => {
       // Close the sidebar first so the modal isn't competing with it.
       document.getElementById("appSidebar")?.querySelector("[data-sidebar-close]")?.click();
-      openModal();
+      requestReturn();
     });
   }
 
@@ -1400,48 +1568,100 @@ function bindBackNavigationDialog(locks) {
   // Save locally + post to backend + upload the jaw thumbnail. Returns { saved,
   // posted }; thumbnail failures only log. Shared by the modal and sidebar Save.
   const saveCurrent = async () => {
-    let saved = true;
+    if (saveInFlight) return { saved: false, posted: false, busy: true };
+    setSaveButtonsBusy(true);
+    setSaveIndicator("saving", "Saving...");
+    setMessage("Saving 2D design...", false);
     try {
-      localStorage.setItem(locks.getStorageKey(), JSON.stringify(locks.buildPayload()));
-    } catch {
-      saved = false;
-    }
-    let surveyPosted;
-    try {
-      const { commitPendingSurveyAngle } = await import("./preview3DSurvey.js");
-      surveyPosted = await commitPendingSurveyAngle();
+      let saved = true;
+      try {
+        localStorage.setItem(locks.getStorageKey(), JSON.stringify(locks.buildPayload()));
+      } catch {
+        saved = false;
+      }
+      let surveyPosted;
+      try {
+        const { commitPendingSurveyAngle } = await import("./preview3DSurvey.js");
+        surveyPosted = await commitPendingSurveyAngle();
+      } catch (err) {
+        surveyPosted = false;
+        console.warn("[save] pending survey angle post failed", err);
+      }
+      // Post the 2D design to the backend — same as the main Save button.
+      let jawStructPosted = false;
+      try {
+        const res = await postJawStructToServer();
+        jawStructPosted = !!(res?.upper?.ok && res?.lower?.ok);
+      } catch (err) {
+        console.warn("[save] jawstruct post failed", err);
+      }
+      try {
+        setMessage("Uploading thumbnail…", false);
+        const ok = await locks.uploadJawPngThumbnail();
+        if (!ok) setMessage("Thumbnail upload failed (see console).", true);
+      } catch (err) {
+        console.warn("[save] thumbnail upload failed", err);
+      }
+      const posted = surveyPosted && jawStructPosted;
+      if (posted) {
+        markDesignClean({ clearDraft: true });
+        setMessage("Saved successfully.", false);
+      } else {
+        markDesignSaveFailed();
+        setMessage("Server save failed. Your local draft is still available.", true);
+      }
+      return { saved, posted };
     } catch (err) {
-      surveyPosted = false;
-      console.warn("[save] pending survey angle post failed", err);
+      console.warn("[save] unexpected save failure", err);
+      markDesignSaveFailed();
+      setMessage("Server save failed. Your local draft is still available.", true);
+      return { saved: false, posted: false };
+    } finally {
+      setSaveButtonsBusy(false);
     }
-    // Post the 2D design to the backend — same as the main Save button.
-    let jawStructPosted = false;
-    try {
-      const res = await postJawStructToServer();
-      jawStructPosted = !!(res?.upper?.ok && res?.lower?.ok);
-    } catch (err) {
-      console.warn("[save] jawstruct post failed", err);
-    }
-    try {
-      setMessage("Uploading thumbnail…", false);
-      const ok = await locks.uploadJawPngThumbnail();
-      if (!ok) setMessage("Thumbnail upload failed (see console).", true);
-    } catch (err) {
-      console.warn("[save] thumbnail upload failed", err);
-    }
-    const posted = surveyPosted && jawStructPosted;
-    return { saved, posted };
   };
   window.__ann2dSaveCurrent = saveCurrent;
 
   saveBackBtn.addEventListener("click", async () => {
-    saveBackBtn.disabled = true;
     const { saved, posted } = await saveCurrent();
     // flashToast survives the navigation below and shows on the next page.
-    if (posted) flashToast("Saved successfully", "success");
-    else if (saved) flashToast("Saved locally; server save failed — see console.", "warning");
-    else flashToast("Could not save. Going back anyway.", "warning");
-    returnToCaseList();
+    if (posted) {
+      flashToast("Saved successfully", "success");
+      returnToCaseList();
+    } else if (saved) {
+      toast.warning("Saved as local draft; server save failed. Please try again.");
+    } else {
+      toast.error("Could not save. Please try again.");
+    }
+  });
+
+  document.getElementById("stickySaveBtn")?.addEventListener("click", async () => {
+    const { saved, posted } = await saveCurrent();
+    if (posted) toast.success("Saved successfully");
+    else if (saved) toast.warning("Saved as local draft; server save failed.");
+    else toast.error("Save failed.");
+  });
+
+  document.getElementById("stickySaveReturnBtn")?.addEventListener("click", async () => {
+    const { saved, posted } = await saveCurrent();
+    if (posted) {
+      flashToast("Saved successfully", "success");
+      returnToCaseList();
+    } else if (saved) {
+      toast.warning("Saved as local draft; server save failed. Please try again.");
+    } else {
+      toast.error("Could not save. Please try again.");
+    }
+  });
+
+  document.addEventListener("keydown", async (event) => {
+    const key = String(event.key || "").toLowerCase();
+    if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || key !== "s") return;
+    event.preventDefault();
+    const { saved, posted } = await saveCurrent();
+    if (posted) toast.success("Saved successfully");
+    else if (saved) toast.warning("Saved as local draft; server save failed.");
+    else toast.error("Save failed.");
   });
 
   modal.addEventListener("click", (event) => {
@@ -1462,6 +1682,9 @@ function start() {
   if (!document.querySelector(".annotation-shell")) return;
   ui.hasInitialized = true;
   initAnnFooter();
+  bindBrowserLeaveWarning();
+  startLocalDraftAutosave();
+  markDesignClean();
   init();
 }
 
