@@ -100,6 +100,15 @@ function getWorldSurveyDirection() {
 // Drag sensitivity for swinging the arrow, in radians per pixel.
 const SURVEY_AIM_DRAG_SPEED = 0.009;
 
+// Two-finger jaw orbit is coarse framing, not the precision aim — keep it gentler
+// than the arrow so a small hand movement doesn't whip the model round.
+const SURVEY_JAW_ORBIT_SPEED = SURVEY_AIM_DRAG_SPEED * 0.5;
+
+// Pinch zoom is a ratio of finger separation, so a fixed fingertip wobble is
+// amplified by 1/gap — with fingers close together it swamps the rotation. Ignore
+// separation changes under this many px; must exceed the wobble of two fingers.
+const PINCH_DEAD_ZONE_PX = 8;
+
 
 // The aim is tracked in world space; the arrow is positioned in the model's frame.
 function surveyAimWorldDirection() {
@@ -437,9 +446,9 @@ function attachSurveyAimDrag() {
     const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
     const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
     const spin = new THREE.Quaternion()
-      .setFromAxisAngle(up, -dx * SURVEY_AIM_DRAG_SPEED)
+      .setFromAxisAngle(up, -dx * SURVEY_JAW_ORBIT_SPEED)
       .multiply(
-        new THREE.Quaternion().setFromAxisAngle(right, -dy * SURVEY_AIM_DRAG_SPEED)
+        new THREE.Quaternion().setFromAxisAngle(right, -dy * SURVEY_JAW_ORBIT_SPEED)
       );
     const offset = camera.position.clone().sub(controls.target).applyQuaternion(spin);
     camera.up.applyQuaternion(spin);
@@ -568,9 +577,15 @@ function attachSurveyAimDrag() {
       tLastX = c.x;
       tLastY = c.y;
 
+      // Zoom only once the separation clears the dead zone, and re-anchor short of
+      // it so the slop is paid once per gesture instead of on every move event.
       const next = pinchDistance();
-      zoomCamera(pinchDist / next); // spread fingers → zoom in
-      pinchDist = next;
+      const moved = next - pinchDist;
+      if (Math.abs(moved) > PINCH_DEAD_ZONE_PX) {
+        const anchor = next - Math.sign(moved) * PINCH_DEAD_ZONE_PX;
+        zoomCamera(pinchDist / anchor); // spread fingers → zoom in
+        pinchDist = anchor;
+      }
     }
   };
 

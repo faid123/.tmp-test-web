@@ -174,11 +174,11 @@ async function finalizeJawLoad(populate, kind, files, normalizedUndercut) {
       occlusion: preview3DState.occlusion,
     };
     updateQualityToggle();
+    preview3DState.preview3DReadyForExtras = true;
     autoApplySavedSurveyAngles().catch((err) =>
       console.warn("[preview3D] saved survey auto-apply failed", err)
     );
-    await precomputeOcclusionForExtras();
-    preview3DState.preview3DReadyForExtras = true;
+    queueOcclusionPrecompute();
   } catch (err) {
     clearMeshQualityProgress();
     throw err;
@@ -1017,16 +1017,6 @@ async function switchMeshQuality(quality) {
       centerRootOnCombinedBounds(preview3DState.modelRoot);
       fitPreviewCamera();
     }
-    for (const entry of Object.values(preview3DState.extraGroups || {})) {
-      invalidateExtraHeatmapCache(entry, "occlusion");
-    }
-    precomputeExtraOcclusionColorCaches();
-    if (hasAnyOcclusionSurface(preview3DState.occlusion)) {
-      reapplyOcclusion(preview3DState.occlusion);
-    }
-    if (preview3DState.heatmapMode === "occlusion") {
-      await repaintExtraJawHeatmaps();
-    }
     await finishMeshQualityProgress();
   } catch (err) {
     console.error("[preview3D] mesh quality switch failed", err);
@@ -1374,8 +1364,6 @@ async function handleOcclusionToggle() {
     return;
   }
 
-  if (preview3DState.occlusionLoading) return;
-
   if (!hasAnyOcclusionSurface(preview3DState.occlusion)) {
     try {
       await ensureOcclusionHeatmap();
@@ -1404,20 +1392,11 @@ function queueOcclusionPrecompute() {
   if (preview3DState.occlusionLoadPromise) return;
 
   window.setTimeout(() => {
-    precomputeOcclusionForExtras();
+    if (!preview3DState.groups?.upper || !preview3DState.groups?.lower) return;
+    ensureOcclusionHeatmap().catch((err) => {
+      console.warn("[preview3D] occlusion heatmap precompute skipped/failed", err);
+    });
   }, 0);
-}
-
-async function precomputeOcclusionForExtras() {
-  if (!preview3DState.groups?.upper || !preview3DState.groups?.lower) return false;
-  if (hasAnyOcclusionSurface(preview3DState.occlusion)) return true;
-  try {
-    await ensureOcclusionHeatmap();
-    return hasAnyOcclusionSurface(preview3DState.occlusion);
-  } catch (err) {
-    console.warn("[preview3D] occlusion heatmap precompute skipped/failed", err);
-    return false;
-  }
 }
 
 async function ensureOcclusionHeatmap() {
@@ -2282,13 +2261,6 @@ export function setHeatmapMode(mode) {
         const surface = normalized === "occlusion"
           ? obj.userData?.occlusionSurface
           : obj.userData?.heatmapSurface;
-        if (
-          normalized === "occlusion" &&
-          !obj.geometry?.userData?.extraHeatmapColorCache?.occlusion
-        ) {
-          obj.material = flat;
-          return;
-        }
         if (!applyExtraJawHeatmap(obj.geometry, jaw, normalized, surface)) {
           obj.material = flat;
           return;
@@ -2404,14 +2376,6 @@ export function applyOcclusionToPreview(nextOcclusion) {
   };
   updateSurfaceRefs(preview3DState.groups.upper, "upper");
   updateSurfaceRefs(preview3DState.groups.lower, "lower");
-  for (const entry of Object.values(preview3DState.extraGroups || {})) {
-    invalidateExtraHeatmapCache(entry, "occlusion");
-    entry?.group?.traverse((obj) => {
-      if (!obj.isMesh) return;
-      obj.userData.occlusionSurface = preview3DState.occlusion?.[entry.jaw] || null;
-    });
-  }
-  precomputeExtraOcclusionColorCaches();
 
   if (preview3DState.heatmapMode === "occlusion") {
     reapplyOcclusion(preview3DState.occlusion);
@@ -2487,17 +2451,6 @@ function applyMappedHeatmapColors(geometry, heatmap, normalizeColor, options = {
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 }
 
-function applyBaseVertexColors(geometry, color = DEFAULT_TOOTH_COLOR) {
-  const vertexCount = geometry?.attributes?.position?.count || 0;
-  const colors = new Float32Array(vertexCount * 3);
-  for (let i = 0; i < vertexCount; i += 1) {
-    colors[i * 3] = color[0];
-    colors[i * 3 + 1] = color[1];
-    colors[i * 3 + 2] = color[2];
-  }
-  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-}
-
 function applyUndercutVertexColors(geometry, surface, options = {}) {
   // surveying_values is the undercut heatmap (yellow to red). Channels of (1,1,1) mark
   // "no undercut" — the API uses that as a sentinel, so we keep the default color there.
@@ -2516,31 +2469,6 @@ function applyOcclusionVertexColors(geometry, surface, options = {}) {
     normalizeOcclusionColor,
     options
   );
-}
-
-function cacheGeometryHeatmapColors(geometry, mode) {
-  const colorAttr = geometry?.getAttribute?.("color");
-  if (!colorAttr?.array) return;
-  geometry.userData.extraHeatmapColorCache = {
-    ...(geometry.userData.extraHeatmapColorCache || {}),
-    [mode]: new Float32Array(colorAttr.array),
-  };
-}
-
-function applyCachedGeometryHeatmapColors(geometry, mode) {
-  const cached = geometry?.userData?.extraHeatmapColorCache?.[mode];
-  if (!cached?.length) return false;
-  const attr = new THREE.BufferAttribute(new Float32Array(cached), 3);
-  attr.needsUpdate = true;
-  geometry.setAttribute("color", attr);
-  return true;
-}
-
-function invalidateExtraHeatmapCache(entry, mode) {
-  entry?.group?.traverse((obj) => {
-    const cache = obj?.geometry?.userData?.extraHeatmapColorCache;
-    if (cache) delete cache[mode];
-  });
 }
 
 function collectPreviewJawColorSamples(jaw, mode = "occlusion") {
@@ -2628,7 +2556,6 @@ function paintExtraOcclusionFromPreview(geometry, jaw) {
   }
 
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  cacheGeometryHeatmapColors(geometry, "occlusion");
   console.log("[preview3D] extra jaw occlusion copied from 3D Preview by position", {
     jaw,
     matched,
@@ -3518,7 +3445,6 @@ function geometryHeatmapSourceCount(geometry) {
 }
 
 function applyExtraJawHeatmap(geometry, jaw, mode, surfaceOverride = null) {
-  if (applyCachedGeometryHeatmapColors(geometry, mode)) return true;
   const surface = surfaceOverride || getExtraJawSurface(jaw, mode);
   if (!surface) return false;
   const field = mode === "occlusion" ? "occlusion_values" : "surveying_values";
@@ -3538,26 +3464,7 @@ function applyExtraJawHeatmap(geometry, jaw, mode, surfaceOverride = null) {
   }
   applyUndercutVertexColors(geometry, surface);
   snapVertexColorBands(geometry, 2);
-  const painted = hasUndercutSurface(surface);
-  if (painted) cacheGeometryHeatmapColors(geometry, "undercut");
-  return painted;
-}
-
-function precomputeExtraOcclusionColorCaches() {
-  for (const entry of Object.values(preview3DState.extraGroups || {})) {
-    const jaw = entry?.jaw;
-    if (!jaw) continue;
-    entry.group?.traverse((obj) => {
-      if (!obj.isMesh || !obj.geometry || !obj.userData?.heatmapMaterial) return;
-      if (obj.geometry.userData?.extraHeatmapColorCache?.occlusion) return;
-      paintExtraOcclusionFromPreview(obj.geometry, jaw);
-      if (preview3DState.heatmapMode === "undercut") {
-        applyExtraJawHeatmap(obj.geometry, jaw, "undercut", entry.undercutSurface || null);
-      } else if (preview3DState.heatmapMode !== "occlusion") {
-        applyBaseVertexColors(obj.geometry, DEFAULT_TOOTH_COLOR);
-      }
-    });
-  }
+  return hasUndercutSurface(surface);
 }
 
 async function computeExtraJawUndercutSurface(jaw, stlDataBase64, label) {
@@ -3627,10 +3534,8 @@ function buildExtraJawGeometry(rawGeometry, jaw, mode, label, surfaceOverride = 
   let geometry = mergeStlVertices(rawGeometry);
   geometry = getDisplayGeometryForQuality(geometry, label);
   const surface = surfaceOverride || getExtraJawSurface(jaw, mode);
-  if (surface) applyExtraJawHeatmap(geometry, jaw, mode, surface);
-  paintExtraOcclusionFromPreview(geometry, jaw);
-  if (mode === "undercut" && surface) applyExtraJawHeatmap(geometry, jaw, mode, surface);
-  else if (mode === "normal") applyBaseVertexColors(geometry, DEFAULT_TOOTH_COLOR);
+  if (mode === "occlusion") paintExtraOcclusionFromPreview(geometry, jaw);
+  else if (surface) applyExtraJawHeatmap(geometry, jaw, mode, surface);
   return geometry;
 }
 
@@ -3644,7 +3549,6 @@ async function renderExtraStl({ slotNumber, filename, data }) {
   const label = filename || `slot ${slotNumber}`;
   const loader = new STLLoader();
   const jaw = EXTRA_SLOT_JAW[slotNumber] || null;
-  if (jaw) await precomputeOcclusionForExtras();
   const mode = getExtraJawHeatmapMode(jaw) || "undercut";
   let geometry = loader.parse(base64ToArrayBuffer(data));
   const extraUndercutSurface = jaw
@@ -3672,7 +3576,7 @@ async function renderExtraStl({ slotNumber, filename, data }) {
       })
     : null;
   const activeModeSurface = preview3DState.heatmapMode === "occlusion"
-    ? !!geometry.userData?.extraHeatmapColorCache?.occlusion
+    ? false
     : preview3DState.heatmapMode === "undercut" && hasUndercutSurface(extraUndercutSurface);
 
   const mesh = new THREE.Mesh(
@@ -3715,7 +3619,6 @@ async function repaintExtraJawHeatmaps() {
         entry.data,
         entry.filename || `slot ${entry.slotNumber || ""}`.trim()
       );
-      invalidateExtraHeatmapCache(entry, "undercut");
     }
     const surface = jaw && mode === "undercut" ? entry.undercutSurface : null;
     if (!entry?.group || (mode === "undercut" && !surface)) continue;
@@ -3723,6 +3626,19 @@ async function repaintExtraJawHeatmaps() {
       if (!obj.isMesh || !obj.geometry || !obj.userData?.heatmapMaterial) return;
       obj.userData.heatmapSurface = entry.undercutSurface || null;
       obj.userData.occlusionSurface = preview3DState.occlusion?.[jaw] || null;
+      if (entry.data && STLLoader) {
+        const loader = new STLLoader();
+        const nextGeometry = buildExtraJawGeometry(
+          loader.parse(base64ToArrayBuffer(entry.data)),
+          jaw,
+          mode,
+          entry.filename || `slot ${entry.slotNumber || ""}`.trim(),
+          surface
+        );
+        nextGeometry.computeVertexNormals();
+        obj.geometry.dispose?.();
+        obj.geometry = nextGeometry;
+      }
       applyExtraJawHeatmap(obj.geometry, jaw, mode, surface);
       if (preview3DState.heatmapMode !== "normal") obj.material = obj.userData.heatmapMaterial;
     });
@@ -4120,9 +4036,7 @@ export function canOpenUpload3dModal({ notify = false } = {}) {
   const ready = Boolean(
     preview3DState.preview3DReadyForExtras &&
       !preview3DState.meshQualityOverlay &&
-      !preview3DState.qualityToggleBusy &&
-      !preview3DState.occlusionLoading &&
-      !preview3DState.occlusionLoadPromise
+      !preview3DState.qualityToggleBusy
   );
   if (!ready && notify) {
     setMessage?.("Please wait for the 3D preview to finish loading before opening Extra 3D.");

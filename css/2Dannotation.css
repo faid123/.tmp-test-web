@@ -2591,9 +2591,23 @@ button.upload3d-row {
   max-width: 100%;
 }
 
+/* Selected component. This rule used to clear the border and shadow, so the armed tool
+   looked exactly like every other row; the filled tint plus the left bar is the only
+   thing telling you which component a tooth tap will place. */
 .component-item.is-active {
-  border-color: transparent;
-  box-shadow: none;
+  background: var(--rose-100);
+  border-color: var(--rose-500);
+  box-shadow: inset 0 0 0 var(--rose-600);
+}
+
+.component-item.is-active .component-label {
+  color: var(--rose-800);
+  font-weight: 700;
+}
+
+.component-item.is-active .component-icon {
+  background: rgba(59, 174, 149, 0.3);
+  box-shadow: 0 0 0 1px rgba(47, 144, 121, 0.45) inset;
 }
 
 /* Blocked by material rule (palatal A-P strap & bar on a full acrylic case). */
@@ -2640,10 +2654,18 @@ button.upload3d-row {
   filter: none;
 }
 
-.component-item:hover .component-icon,
 .component-item:focus-visible .component-icon {
   background: rgba(59, 174, 149, 0.14);
   box-shadow: 0 0 0 1px rgba(59, 174, 149, 0.32) inset;
+}
+
+/* Skipped on touch, which never un-hovers: a stuck hover on the last-tapped row would
+   compete with the selected highlight for the same meaning. */
+@media (hover: hover) {
+  .component-item:hover:not(.is-active) .component-icon {
+    background: rgba(59, 174, 149, 0.14);
+    box-shadow: 0 0 0 1px rgba(59, 174, 149, 0.32) inset;
+  }
 }
 
 .component-icon-img {
@@ -2660,8 +2682,9 @@ button.upload3d-row {
 .component-label {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 0.68rem;
-  line-height: 1.25;
+  /* Was 0.68rem (~11px) and reported as too small to read on a phone. */
+  font-size: 0.78rem;
+  line-height: 1.3;
   text-align: left;
   color: var(--rose-700);
   white-space: normal;
@@ -2751,8 +2774,12 @@ button.upload3d-row {
   cursor: pointer;
 }
 
-.plate-suggestion-visual:hover .plate-image {
-  opacity: 0.34;
+/* Hover affordances are gated on a real hovering pointer: touch has no un-hover, so a
+   tap leaves the suggestion stuck in its hover look and it reads as a placed component. */
+@media (hover: hover) {
+  .plate-suggestion-visual:hover .plate-image {
+    opacity: 0.34;
+  }
 }
 
 .plate-suggestion-visual.is-selected .plate-image {
@@ -2767,8 +2794,10 @@ button.upload3d-row {
   pointer-events: all;
 }
 
-.rest-suggestion-point:hover {
-  fill: #3dd4b3;
+@media (hover: hover) {
+  .rest-suggestion-point:hover {
+    fill: #3dd4b3;
+  }
 }
 
 .rest-suggestion-point.is-selected {
@@ -2787,8 +2816,13 @@ button.upload3d-row {
   filter: url(#tint-rose);
 }
 
-.rest-suggestion-image:hover {
-  opacity: 1;
+/* A small lift only. A placed rest sits at 0.95-1, so the hover must stay well clear of it
+   or the ghost reads as already placed — which is how "clicking it made the rest darker"
+   started. Gated on a hovering pointer because touch never un-hovers. */
+@media (hover: hover) {
+  .rest-suggestion-group:hover .rest-suggestion-image {
+    opacity: 0.5;
+  }
 }
 
 /* Circumferential clasp: light green (distinct from rest rose / mesh teal) */
@@ -2800,16 +2834,20 @@ button.upload3d-row {
   pointer-events: all;
 }
 
-.clasp-suggestion-point:hover {
-  fill: #7dce7d;
+@media (hover: hover) {
+  .clasp-suggestion-point:hover {
+    fill: #7dce7d;
+  }
 }
 
 .clasp-suggestion-point.rpc-suggestion-point {
   fill: #7ec8ff;
 }
 
-.clasp-suggestion-point.rpc-suggestion-point:hover {
-  fill: #63b8f5;
+@media (hover: hover) {
+  .clasp-suggestion-point.rpc-suggestion-point:hover {
+    fill: #63b8f5;
+  }
 }
 
 /* Outward-pointing chevron rendered inside each suggestion circle */
@@ -4330,8 +4368,10 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
   border-radius: 10px;
   transition: background 0.15s ease, box-shadow 0.15s ease;
 }
-.component-item:hover {
-  background: rgba(59, 174, 149, 0.06);
+@media (hover: hover) {
+  .component-item:hover:not(.is-active) {
+    background: rgba(59, 174, 149, 0.06);
+  }
 }
 
 /* ---- Bottom action buttons ---- */
