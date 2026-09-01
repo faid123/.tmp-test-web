@@ -1,5 +1,5 @@
 {
-  "runAt": "2026-08-25T10:58:54.527Z",
+  "runAt": "2026-09-01T05:41:38.583Z",
   "command": "npx jest --ci --coverage --coverageReporters=json-summary --verbose --testLocationInResults --json",
   "commandFailed": false,
   "numTotalTestSuites": 13,
@@ -16,7 +16,7 @@
       "pass": 94,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2378,
+      "durationMs": 2401,
       "uat": [],
       "category": "real",
       "crossCutting": false,
@@ -30,7 +30,7 @@
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 2704,
+      "durationMs": 2658,
       "uat": [
         "UAT-06"
       ],
@@ -46,7 +46,7 @@
       "pass": 13,
       "fail": 0,
       "skip": 0,
-      "durationMs": 475,
+      "durationMs": 454,
       "uat": [
         "UAT-02"
       ],
@@ -62,7 +62,7 @@
       "pass": 22,
       "fail": 0,
       "skip": 0,
-      "durationMs": 427,
+      "durationMs": 492,
       "uat": [
         "UAT-01"
       ],
@@ -78,7 +78,7 @@
       "pass": 21,
       "fail": 0,
       "skip": 0,
-      "durationMs": 1185,
+      "durationMs": 1364,
       "uat": [
         "UAT-04"
       ],
@@ -94,7 +94,7 @@
       "pass": 28,
       "fail": 0,
       "skip": 0,
-      "durationMs": 6135,
+      "durationMs": 6436,
       "uat": [
         "UAT-07",
         "UAT-08"
@@ -111,7 +111,7 @@
       "pass": 4,
       "fail": 0,
       "skip": 0,
-      "durationMs": 3597,
+      "durationMs": 3277,
       "uat": [
         "UAT-06"
       ],
@@ -127,7 +127,7 @@
       "pass": 4,
       "fail": 0,
       "skip": 0,
-      "durationMs": 3628,
+      "durationMs": 3083,
       "uat": [
         "UAT-06"
       ],
@@ -143,7 +143,7 @@
       "pass": 2,
       "fail": 0,
       "skip": 0,
-      "durationMs": 985,
+      "durationMs": 462,
       "uat": [
         "UAT-06"
       ],
@@ -159,7 +159,7 @@
       "pass": 3,
       "fail": 0,
       "skip": 0,
-      "durationMs": 128,
+      "durationMs": 115,
       "uat": [],
       "category": "real",
       "crossCutting": true,
@@ -173,7 +173,7 @@
       "pass": 3,
       "fail": 0,
       "skip": 0,
-      "durationMs": 86,
+      "durationMs": 53,
       "uat": [],
       "category": "real",
       "crossCutting": true,
@@ -187,7 +187,7 @@
       "pass": 5,
       "fail": 0,
       "skip": 0,
-      "durationMs": 113,
+      "durationMs": 102,
       "uat": [
         "UAT-06"
       ],
@@ -203,7 +203,7 @@
       "pass": 9,
       "fail": 0,
       "skip": 0,
-      "durationMs": 210,
+      "durationMs": 182,
       "uat": [
         "UAT-06"
       ],
