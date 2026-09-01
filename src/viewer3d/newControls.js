@@ -40,7 +40,7 @@ style.textContent = `
 
   .component-panel-mini-icons-row {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 8px;
   }
 
@@ -674,13 +674,11 @@ style.textContent = `
     }
 
     .component-panel-mini-icons {
-      /* "Try not to take too much screen space, maybe 30% of the mobile top
-         left space" — caps each jaw row's footprint; it wraps to more rows
-         rather than growing wider once it hits this. */
-      max-width: 34vw;
+      max-width: none;
     }
 
     .component-panel-mini-icons-row {
+      flex-wrap: nowrap;
       gap: 6px;
     }
 

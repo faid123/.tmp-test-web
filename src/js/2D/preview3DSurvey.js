@@ -10,6 +10,7 @@ import {
   buildDllUndercutSurface,
   applySurveyUndercutToPreview,
   setHeatmapEnabled,
+  focusPreviewOnSurveyJaw,
   fetchCaseData,
   getLoggedInUser,
   PREVIEW_MACHINE_ID,
@@ -694,6 +695,11 @@ function enterSurveyAiming(jaw, btn) {
     upper: preview3DState.groups?.upper?.visible,
     lower: preview3DState.groups?.lower?.visible,
   };
+  const camera = preview3DState.camera;
+  preview3DState.surveyPrevCamera =
+    camera && controls
+      ? { position: camera.position.clone(), up: camera.up.clone(), target: controls.target.clone() }
+      : null;
   setSurveyJawVisible(jaw, true);
   setSurveyJawVisible(jaw === "upper" ? "lower" : "upper", false);
   const shell = document.querySelector(".annotation-shell");
@@ -702,6 +708,11 @@ function enterSurveyAiming(jaw, btn) {
     document.getElementById("preview3dMaximizeBtn")?.click();
     preview3DState.surveyAutoMaximized = true;
   }
+  requestAnimationFrame(() => {
+    preview3DState.resizePreview?.();
+    focusPreviewOnSurveyJaw();
+    requestAnimationFrame(focusPreviewOnSurveyJaw);
+  });
   // Lock out the other jaw while aiming.
   const otherRow = jaw === "upper" ? "rowLower" : "rowUpper";
   preview3DState.topControls?.[otherRow]?.surveyBtn?.setAttribute("disabled", "true");
@@ -768,6 +779,7 @@ export function exitSurveyAiming({ preserveStage = false } = {}) {
 
   // Cancel/Esc restores the stage; a successful SET keeps the maximized view.
   const prevVis = preview3DState.surveyPrevVisibility;
+  const prevCamera = preview3DState.surveyPrevCamera;
   if (!preserveStage && prevVis) {
     if (prevVis.upper !== undefined) setSurveyJawVisible("upper", !!prevVis.upper);
     if (prevVis.lower !== undefined) setSurveyJawVisible("lower", !!prevVis.lower);
@@ -780,6 +792,13 @@ export function exitSurveyAiming({ preserveStage = false } = {}) {
     }
   }
   preview3DState.surveyAutoMaximized = false;
+  if (!preserveStage && prevCamera && preview3DState.camera && preview3DState.controls) {
+    preview3DState.camera.position.copy(prevCamera.position);
+    preview3DState.camera.up.copy(prevCamera.up);
+    preview3DState.controls.target.copy(prevCamera.target);
+    preview3DState.controls.update();
+  }
+  preview3DState.surveyPrevCamera = null;
 
   preview3DState.surveyHint?.classList.remove("is-on");
 

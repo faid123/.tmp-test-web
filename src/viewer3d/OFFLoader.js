@@ -68,8 +68,8 @@ export class OFFLoader {
 
           if (surface?.occlusion_values?.data) {
             colors = occlusionColorArray(vertexCount, surface.occlusion_values.data);
-            setColors(colors);
           }
+          setColors(colors);
 
           // `surface` is the string 'stl' when the case carries no survey, and
           // `in` throws on a primitive — hence the guard before it.
