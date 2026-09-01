@@ -120,6 +120,18 @@
             >
               <i class="fa fa-plus" aria-hidden="true"></i>
             </button>
+            <button
+              id="mobileNeedsActionBtn"
+              class="cm-bell cm-mobile-only cm-mobile-action"
+              type="button"
+              data-status-group="needs_action"
+              aria-label="Show cases needing action"
+              aria-pressed="false"
+              title="Needs action"
+            >
+              <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+              <span class="cm-mobile-action-count" id="statNeedsActionMobileCount">0</span>
+            </button>
             <!-- Refresh sits between the search box and the notification bell.
                  Desktop-only (kept out of the crowded phone header, same as
                  before when it lived in the now-hidden toolbar). -->
@@ -200,6 +212,19 @@
                 <span class="cm-stat-filter-sub">Draft &rarr; 3D approved</span>
               </span>
               <span class="cm-stat-filter-count" id="statPreparationCount">0</span>
+            </button>
+
+            <button
+              type="button"
+              class="cm-stat-filter cm-stat-filter-action"
+              data-status-group="needs_action"
+              aria-pressed="false"
+              title="2D design pending, 2D design drafted, and 3D design drafted"
+            >
+              <span class="cm-stat-filter-text">
+                <span class="cm-stat-filter-label">Needs action</span>
+              </span>
+              <span class="cm-stat-filter-count" id="statNeedsActionCount">0</span>
             </button>
 
             <button
