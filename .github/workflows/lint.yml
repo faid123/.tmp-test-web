@@ -1,8 +1,8 @@
 name: Lint
 
-# The deploy workflow already lints, but only on pushes to nyunt/dev-deploy —
-# by then the code is on its way to the test site. This gates every branch and
-# PR so a no-undef (typo'd global / missing import) is caught at push time.
+# The deploy workflow lints too, but only when someone runs a deploy — by then
+# the code is on its way to the test site. This gates every branch and PR so a
+# no-undef (typo'd global / missing import) is caught at push time.
 on:
   push:
     # nyunt/dev-W7.1 and dev-deploy-documentation are written by the deploy

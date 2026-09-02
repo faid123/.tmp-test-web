@@ -20,7 +20,7 @@ a live API at `https://live.api.smartrpdai.com/api/smartrpd`.
 | Live/UAT site | `https://faid123.github.io/.tmp-test-web/` |
 | Local dev server | `npm run dev` → `http://localhost:8089/index.html` |
 | Node version | 22 (matches CI) |
-| Deploy trigger branch | `nyunt/dev-deploy` |
+| Deploy staging branch | `nyunt/dev-deploy` (deploy is manual, not push-triggered) |
 | Pages source branch | `nyunt/dev-W7.1` (root) |
 
 ## Scenarios covered

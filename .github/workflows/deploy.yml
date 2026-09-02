@@ -1,8 +1,8 @@
 name: Deploy Test Site
 
+# Manual only. Pushing to nyunt/dev-deploy no longer deploys on its own — run this
+# workflow from the Actions tab ("Run workflow") when a deploy is actually wanted.
 on:
-  push:
-    branches: [nyunt/dev-deploy]
   workflow_dispatch:
 
 # Serialize deploys so two runs never push the Pages branch concurrently.
