@@ -507,6 +507,7 @@ export function syncDesignModeWithLocks(notify) {
     state.suppressArchPlacementSuggestions = false;
   }
   if (next) {
+    state.removeComponentMode = false;
     state.rangeMissingMode = false;
     state.rangeMissingStartToothId = null;
     refreshRangeMissingButton();
