@@ -14,6 +14,11 @@ jest.mock("../src/js/2D/2DAnnotation.js", () => ({
   setMessage: () => {},
   getHistoryStateSignature: () => "",
   recordHistoryIfChanged: () => {},
+  // The real module owns the material gate the catalog imports; keep it faithful so the
+  // full-acrylic cases below still exercise the real blocking rules.
+  isFullAcrylic: () => state.jawMaterial === 2,
+  isTabBlockedByMaterial: (tabId) =>
+    state.jawMaterial === 2 && ["bars", "rests"].includes(tabId),
 }));
 
 import {
@@ -438,5 +443,85 @@ describe("the connector follows the changed tooth only", () => {
     const before = runIn(teeth);
     place("plate-prox", "17");
     expect(runIn(teeth)).toEqual([...before, "17"].sort((a, b) => TOOTH_ORDER.upper.indexOf(a) - TOOTH_ORDER.upper.indexOf(b)));
+  });
+});
+
+/**
+ * A clasp is not a seat for the major connector — only a plate (present) or mesh (missing)
+ * is. This bites on the reciprocating clasp specifically: it owns the tooth's reciprocating
+ * slot, so unlike a retainer/ring clasp no plate-prox is auto-added behind it, and the run
+ * used to fill onto a tooth with nothing under it. Clicking one on by hand still works.
+ */
+describe("only a plate or mesh anchors the major connector", () => {
+  /** Plates on 15/25 anchor the run; 16/26 carry the component under test. */
+  function upperArchWithSixes(sixComponents, { isPresent = true } = {}) {
+    const teeth = {};
+    for (const id of TOOTH_ORDER.upper) teeth[id] = tooth([], { toothId: id });
+    for (const id of ["15", "25"]) teeth[id] = tooth(["plate-prox"], { toothId: id });
+    for (const id of ["16", "26"]) {
+      teeth[id] = tooth(sixComponents, { isPresent, toothId: id });
+    }
+    state.teeth = teeth;
+    state.designMode = true;
+    return teeth;
+  }
+
+  const MAJOR = "major-upper-horseshoe";
+  const hasMajorOn = (teeth, id) =>
+    teeth[id].componentPlacements.some((e) => e.componentId === MAJOR);
+
+  it("a reciprocating clasp alone does NOT auto-fill the connector onto its tooth", () => {
+    const teeth = upperArchWithSixes(["reciprocating-clasp"]);
+    switchMajorIn(teeth, MAJOR, "upper");
+    expect(hasMajorOn(teeth, "16")).toBe(false);
+    expect(hasMajorOn(teeth, "26")).toBe(false);
+    // ...and the run it did place still reaches the plated teeth behind them.
+    expect(hasMajorOn(teeth, "15")).toBe(true);
+  });
+
+  it.each(["retainer-clasp", "ring-clasp"])(
+    "a %s does not anchor on its own either",
+    (claspId) => {
+      const teeth = upperArchWithSixes([claspId]);
+      switchMajorIn(teeth, MAJOR, "upper");
+      expect(hasMajorOn(teeth, "16")).toBe(false);
+    }
+  );
+
+  it.each(["plate-prox", "plate-crossmesh"])("a %s anchors it", (plateId) => {
+    const teeth = upperArchWithSixes([plateId]);
+    switchMajorIn(teeth, MAJOR, "upper");
+    expect(hasMajorOn(teeth, "16")).toBe(true);
+  });
+
+  it("a clasp backed by a plate anchors it through the plate", () => {
+    const teeth = upperArchWithSixes(["reciprocating-clasp", "plate-prox"]);
+    switchMajorIn(teeth, MAJOR, "upper");
+    expect(hasMajorOn(teeth, "16")).toBe(true);
+  });
+
+  it("mesh on a missing tooth anchors it", () => {
+    const teeth = upperArchWithSixes(["mesh-hole"], { isPresent: false });
+    switchMajorIn(teeth, MAJOR, "upper");
+    expect(hasMajorOn(teeth, "16")).toBe(true);
+  });
+
+  it("the follow-the-change rule does not fill onto a new reciprocating clasp", () => {
+    const teeth = upperArchWithSixes([]);
+    switchMajorIn(teeth, MAJOR, "upper");
+    expect(hasMajorOn(teeth, "16")).toBe(false);
+
+    place("reciprocating-clasp", "16", "distal_lingual");
+    expect(idsOn(teeth["16"])).toContain("reciprocating-clasp");
+    expect(hasMajorOn(teeth, "16")).toBe(false);
+  });
+
+  it("a reci-clasped tooth can still be given the connector by hand", () => {
+    const teeth = upperArchWithSixes(["reciprocating-clasp"]);
+    switchMajorIn(teeth, MAJOR, "upper");
+    expect(toothSupportsMajorConnectorOverlay(teeth["16"], "16", MAJOR, teeth)).toBe(true);
+
+    place(MAJOR, "16");
+    expect(hasMajorOn(teeth, "16")).toBe(true);
   });
 });
