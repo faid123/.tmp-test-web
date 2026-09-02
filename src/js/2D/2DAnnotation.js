@@ -792,6 +792,7 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
       tile.disabled = true;
       tile.classList.add("is-disabled");
       tile.setAttribute("aria-disabled", "true");
+      if (options.disabledTitle) tile.title = options.disabledTitle;
     }
     if (iconPath) {
       if (options.iconAsMask) {
@@ -853,16 +854,26 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
       grid.appendChild(empty);
       return;
     }
+    // Same material gate the desktop catalog applies to its items — the upper palatal
+    // majors, mesh and bars are dead in a full-acrylic case.
+    const blockedByMaterial = meshAnnotationEnv()?.isComponentBlockedByMaterial;
     for (const item of items) {
       // Mesh icons are white silhouettes recoloured by CSS mask — except Mesh Flange, whose
       // PNG is full-colour artwork that a mask collapses to a violet square.
       const tintMesh = isMeshComponent(item.id) && item.id !== "mesh-flange";
+      const blocked = Boolean(blockedByMaterial?.(item.id));
+      const opts = { disabled: blocked };
+      if (blocked) opts.disabledTitle = `${item.label} — not available for a full acrylic case`;
+      if (tintMesh) {
+        opts.iconAsMask = true;
+        opts.tileClass = "tooth-quickpick-tile--mesh";
+      }
       grid.appendChild(
         buildTile(
           item.label,
           item.icon,
           () => commit({ tab: item.tab, componentId: item.id, label: item.label }),
-          tintMesh ? { iconAsMask: true, tileClass: "tooth-quickpick-tile--mesh" } : undefined
+          opts
         )
       );
     }
