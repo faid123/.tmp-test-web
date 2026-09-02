@@ -506,6 +506,31 @@ button {
   color: #fff;
 }
 .cm-mobile-create:hover { background: var(--primary-stronger); }
+.cm-mobile-action {
+  color: #b45309;
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+.cm-mobile-action:hover,
+.cm-mobile-action.is-active {
+  background: #fef3c7;
+  color: #92400e;
+}
+.cm-mobile-action-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 18px;
+  box-shadow: 0 0 0 2px var(--panel);
+}
 /* Pressed state for the search toggle, so it reads as on while the bar is open. */
 .cm-mobile-only[aria-expanded="true"] {
   background: var(--primary-strong);
@@ -777,7 +802,21 @@ button {
 .cm-row {
   cursor: pointer;
 }
+.cm-row.is-pending-action {
+  background: #fffbeb;
+  box-shadow: inset 4px 0 0 #f59e0b;
+}
+.cm-row.is-pending-action:hover {
+  background: #fef3c7;
+}
+.cm-row.is-pending-action.is-active {
+  background: #fff7d6;
+  box-shadow:
+    inset 4px 0 0 #f59e0b,
+    inset 7px 0 0 var(--primary);
+}
 .cm-row.is-active:hover { background: #e6f5ef; }
+.cm-row.is-pending-action.is-active:hover { background: #fff7d6; }
 
 .cm-td-name { min-width: 160px; max-width: 240px; position: relative; }
 /* Name + rename pencil + pin flag on one baseline. Flex, not inline flow, so a
@@ -824,6 +863,31 @@ button {
 /* Give the status pill room to stay on one line (e.g. "3D design pending"). */
 .cm-td-status { min-width: 150px; }
 .cm-td-status .cm-pill { white-space: nowrap; }
+.cm-status-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.cm-action-icon {
+  color: #d97706;
+  font-size: 14px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.cm-action-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: inset 0 0 0 1px rgba(146, 64, 14, 0.12);
+}
 
 /* The status pill is the editor's trigger, swapped in place for a <select>.
    Table only — the detail pane's pill has its own overlay and stays a label. */
@@ -1812,6 +1876,25 @@ button {
     padding: 12px 14px;
     margin-bottom: 8px;
   }
+  .cm-table tr.cm-row.is-pending-action {
+    grid-template-areas:
+      "name name"
+      "status due";
+  }
+  .cm-table tr.cm-row.is-pending-action .cm-td-name::before {
+    content: "Needs action";
+    display: inline-flex;
+    width: fit-content;
+    margin: 0 0 6px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #f59e0b;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
 
   .cm-table tbody td { padding: 0 !important; border: none; }
   .cm-table tbody tr:last-child td { border: none; }
@@ -1828,6 +1911,13 @@ button {
   /* Clips rather than shoves the date off-card if a status label runs long on a
      very narrow phone. */
   .cm-td-status { grid-area: status; min-width: 0; overflow: hidden; }
+  .cm-status-row {
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .cm-action-badge {
+    display: none;
+  }
 
   /* Due date at the end of the status line, coloured by urgency — grey overdue,
      red due today, blue within 3 days, green within 10, plain beyond that. */
@@ -2529,6 +2619,7 @@ body.is-admin .cm-admin-stats:not([hidden]) {
 
 /* Per-stage palette. */
 .cm-stat-filter-prep { --stat-accent: #d97706; --stat-soft: #fef3c7; }
+.cm-stat-filter-action { --stat-accent: #f59e0b; --stat-soft: #fffbeb; }
 .cm-stat-filter-delivery { --stat-accent: #2563eb; --stat-soft: #dbeafe; }
 .cm-stat-filter-completed { --stat-accent: #16a34a; --stat-soft: #dcfce7; }
 
@@ -2970,6 +3061,20 @@ body,
   background: #ecf8f3;
   box-shadow: inset 3px 0 0 var(--primary);
 }
+.cm-row.is-pending-action {
+  background: #fffbeb;
+  box-shadow: inset 4px 0 0 #f59e0b;
+}
+.cm-row.is-pending-action:hover {
+  background: #fef3c7;
+}
+.cm-row.is-pending-action.is-active {
+  background: #fff7d6;
+  box-shadow:
+    inset 4px 0 0 #f59e0b,
+    inset 7px 0 0 var(--primary);
+}
+.cm-row.is-pending-action.is-active:hover { background: #fff7d6; }
 .cm-table-wrap::-webkit-scrollbar-thumb { background: #cbd5e1; }
 .cm-table-wrap::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
@@ -3085,8 +3190,20 @@ body,
 @media (max-width: 640px) {
   /* The wrap loses its panel chrome — each card carries its own. */
   .cm-table-wrap { box-shadow: none; }
+  .cm-table tr.cm-row.is-pending-action {
+    background: #fffbeb;
+    border: 1px solid #fbbf24;
+    box-shadow: 0 1px 2px rgba(180, 83, 9, 0.12), inset 4px 0 0 #f59e0b;
+  }
   /* Cards, not table rows. `.cm-table tr.cm-row` above is (0,2,1), so the
      active fill has to match that specificity to land; plain `.cm-row:hover`
      is already neutralised by it and needs no rule of its own. */
   .cm-table tr.cm-row.is-active { background: #f0faf7; }
+  .cm-table tr.cm-row.is-pending-action.is-active {
+    background: #fff7d6;
+    box-shadow:
+      0 1px 2px rgba(180, 83, 9, 0.12),
+      inset 4px 0 0 #f59e0b,
+      inset 7px 0 0 var(--primary);
+  }
 }

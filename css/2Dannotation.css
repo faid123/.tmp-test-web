@@ -966,6 +966,19 @@ button.upload3d-row {
   color: var(--rose-600, #e03131);
 }
 
+.upload3d-upload-cancel {
+  color: var(--rose-600, #e03131);
+}
+
+.upload3d-upload-cancel:hover {
+  background: var(--rose-050, #fff0f3);
+}
+
+.upload3d-upload-cancel:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .upload3d-row-name {
   color: #3f5168;
   font-size: 0.71rem;
@@ -2296,7 +2309,95 @@ button.upload3d-row {
   color: #616161;
 }
 
-.save-message.error { color: #22b08a; }
+.save-message.error { color: #dc2626; }
+
+.ann-save-dock {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  right: calc(14px + env(safe-area-inset-right, 0px));
+  z-index: 900;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 16px 34px -24px rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(8px);
+}
+
+.ann-save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.ann-save-state.is-dirty {
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.ann-save-state.is-saving {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.ann-save-state.is-error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.ann-save-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ann-save-btn {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ann-save-btn:hover {
+  background: #f8fafc;
+}
+
+.ann-save-btn-primary {
+  border-color: #25735f;
+  background: #25735f;
+  color: #fff;
+}
+
+.ann-save-btn-primary:hover {
+  background: #1f604f;
+}
+
+.ann-save-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
 
 .tools-panel {
   gap: 16px;
@@ -3904,7 +4005,51 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
    space or the last controls are clipped by it. env() adds any notch inset. */
 @media (max-width: 1200px) {
   body.has-ann-footer .annotation-shell {
-    padding-bottom: calc(40px + 20px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(104px + 20px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-width: 1200px) {
+  .ann-save-dock {
+    top: auto;
+    right: max(10px, env(safe-area-inset-right, 0px));
+    bottom: calc(42px + env(safe-area-inset-bottom, 0px));
+    left: max(10px, env(safe-area-inset-left, 0px));
+    width: calc(100vw - 20px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+    max-width: calc(100vw - 20px);
+    justify-content: space-between;
+    gap: 8px;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .ann-save-actions {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+
+  .ann-save-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 170px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ann-save-dock {
+    padding: 7px;
+  }
+
+  .ann-save-state {
+    min-height: 30px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .ann-save-btn {
+    min-height: 32px;
+    padding: 0 8px;
+    font-size: 11px;
   }
 }
 
@@ -3917,6 +4062,42 @@ body.has-ann-footer .annotation-shell { min-height: calc(100vh - 35px); }
     /* Clip at the shell: the lower arch spills below its canvas box, and
        transformed overflow still extends the page's scroll area. */
     overflow: hidden;
+  }
+
+  .ann-save-dock {
+    top: auto;
+    right: calc(168px + env(safe-area-inset-right, 0px));
+    bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+    z-index: 7;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .ann-save-state {
+    min-height: 30px;
+    background: rgba(220, 252, 231, 0.96);
+  }
+
+  .ann-save-state.is-dirty {
+    background: rgba(255, 251, 235, 0.96);
+  }
+
+  .ann-save-state.is-saving {
+    background: rgba(219, 234, 254, 0.96);
+  }
+
+  .ann-save-state.is-error {
+    background: rgba(254, 226, 226, 0.96);
+  }
+
+  .ann-save-btn {
+    min-height: 30px;
+    border-color: rgba(255, 255, 255, 0.45);
+    box-shadow: none;
   }
 }
 /* ---- footer Case Note button (mobile only) ---- */

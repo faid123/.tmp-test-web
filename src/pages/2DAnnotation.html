@@ -288,6 +288,23 @@
     </section>
   </main>
 
+  <div class="ann-save-dock" aria-label="2D design save controls">
+    <span id="annSaveState" class="ann-save-state is-saved" role="status" aria-live="polite">
+      <i class="fa fa-circle-check" aria-hidden="true"></i>
+      <span>Saved</span>
+    </span>
+    <div class="ann-save-actions">
+      <button type="button" id="stickySaveBtn" class="ann-save-btn" title="Save (Ctrl+S)">
+        <i class="fa fa-floppy-disk" aria-hidden="true"></i>
+        <span>Save</span>
+      </button>
+      <button type="button" id="stickySaveReturnBtn" class="ann-save-btn ann-save-btn-primary" title="Save and return">
+        <i class="fa fa-arrow-left" aria-hidden="true"></i>
+        <span>Save &amp; Return</span>
+      </button>
+    </div>
+  </div>
+
   <footer class="ann-footer" aria-label="Application status bar">
     <div class="ann-footer-left">
       <button type="button" class="ann-footer-btn" id="footerMenuBtn" aria-label="Menu" data-tooltip="Menu">
@@ -517,11 +534,11 @@
 
   <div id="backConfirmModal" class="back-confirm-modal is-hidden" aria-hidden="true">
     <div class="back-confirm-panel" role="dialog" aria-modal="true" aria-labelledby="backConfirmTitle">
-      <h3 id="backConfirmTitle">Leave this page?</h3>
-      <p>Your latest edits may be unsaved.</p>
+      <h3 id="backConfirmTitle">You have unsaved changes</h3>
+      <p>Leave without saving your 2D design changes?</p>
       <div class="back-confirm-actions">
         <button id="backConfirmCancel" type="button">Cancel</button>
-        <button id="backConfirmBack" type="button">Return</button>
+        <button id="backConfirmBack" type="button">Leave without saving</button>
         <button id="backConfirmSaveBack" type="button">Save &amp; Return</button>
       </div>
     </div>

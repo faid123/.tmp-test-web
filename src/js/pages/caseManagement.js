@@ -64,6 +64,7 @@ function loadCachedCases() {
 
 let currentSortColumn = "recent";
 let currentSortOrder = "desc";
+let userSelectedSort = false;
 let currentCases = [];
 let existingUsers = [];
 
@@ -86,6 +87,14 @@ const STATUS_GROUPS = {
   completed: new Set(["completed"]),
 };
 
+const PENDING_ACTION_STATUS_VALUES = new Set([
+  "2d_design_pending",
+  "2d_design_drafted",
+  "3d_design_drafted",
+]);
+
+STATUS_GROUPS.needs_action = PENDING_ACTION_STATUS_VALUES;
+
 // Which stat card is active ("all" = no stage filter). Toggled by clicking a
 // card; a second click on the active card clears back to "all".
 let activeStatusFilter = "all";
@@ -98,6 +107,14 @@ function caseStatusGroup(caseItem) {
     if (set.has(v)) return group;
   }
   return null;
+}
+
+function isPendingUserActionStatus(apiStatus) {
+  return PENDING_ACTION_STATUS_VALUES.has(apiStatusToValue(apiStatus));
+}
+
+function pendingActionSortValue(caseItem) {
+  return isPendingUserActionStatus(caseItem?.new_status) ? 0 : 1;
 }
 
 let currentThumbnails = [];
@@ -960,6 +977,12 @@ function populateTable(cases) {
     // Pinned cases always group above unpinned, regardless of the active sort.
     const pinDiff = Number(pinnedSet.has(bId)) - Number(pinnedSet.has(aId));
     if (pinDiff !== 0) return pinDiff;
+    // The default list view groups cases that need the user's next action at
+    // the top. Once the user chooses a sort, that explicit order takes over.
+    if (!userSelectedSort) {
+      const actionDiff = pendingActionSortValue(a) - pendingActionSortValue(b);
+      if (actionDiff !== 0) return actionDiff;
+    }
     // Within each pin group, order by the chosen column. "recent" (the default)
     // floats the case you just opened, and follows you across devices.
     const av = sortValue(a, currentSortColumn);
@@ -1017,6 +1040,7 @@ function populateTable(cases) {
     const row = document.createElement("tr");
     row.className = "cm-row";
     if (pinned) row.classList.add("is-pinned");
+    if (isPendingUserActionStatus(caseItem.new_status)) row.classList.add("is-pending-action");
     // Admins receive soft-deleted cases too (server sets hideDeleted = !is_admin),
     // so flag them struck-through to give "Retrieve the Case" a target.
     if (isCaseDeleted(caseItem)) row.classList.add("cm-row-deleted");
@@ -1047,7 +1071,11 @@ function populateTable(cases) {
         </div>${dueBarHtml}
       </td>
       <td class="cm-td-status">
-        <span class="cm-pill ${statusPillClass(caseItem.new_status)}" data-action="edit-status" role="button" tabindex="0" title="Change status">${statusPillInner(caseItem.new_status)}</span>
+        <span class="cm-status-row">
+          ${isPendingUserActionStatus(caseItem.new_status) ? '<i class="fa-solid fa-circle-exclamation cm-action-icon" title="Needs action" aria-label="Needs action"></i>' : ""}
+          <span class="cm-pill ${statusPillClass(caseItem.new_status)}" data-action="edit-status" role="button" tabindex="0" title="Change status">${statusPillInner(caseItem.new_status)}</span>
+          ${isPendingUserActionStatus(caseItem.new_status) ? '<span class="cm-action-badge">Needs action</span>' : ""}
+        </span>
       </td>
       <td class="cm-td-date" data-label="Created">${formatDateTime(caseItem.creation_date)}</td>
       <td class="cm-td-date cm-due-date ${dueInd ? dueInd.cls : ""}" data-label="Due">
@@ -1501,22 +1529,27 @@ function applyClientFilters() {
 // Counts cover the WHOLE list and don't shrink as you filter, so the cards stay
 // a stable overview.
 function updateStatFilterCounts() {
-  const counts = { all: 0, preparation: 0, delivery: 0, completed: 0 };
+  const counts = { all: 0, preparation: 0, needs_action: 0, delivery: 0, completed: 0 };
   for (const item of currentCases) {
     if (isCaseDeleted(item)) continue;
     counts.all += 1;
     const group = caseStatusGroup(item);
     if (group && group in counts) counts[group] += 1;
+    if (isPendingUserActionStatus(item.new_status)) counts.needs_action += 1;
   }
   const ids = {
     all: "statAllCount",
     preparation: "statPreparationCount",
+    needs_action: ["statNeedsActionCount", "statNeedsActionMobileCount"],
     delivery: "statDeliveryCount",
     completed: "statCompletedCount",
   };
-  for (const [group, id] of Object.entries(ids)) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = String(counts[group]);
+  for (const [group, idOrIds] of Object.entries(ids)) {
+    const targets = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
+    for (const id of targets) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = String(counts[group]);
+    }
   }
 }
 
@@ -2741,6 +2774,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
     sortableHeaders.forEach((th) => {
       th.addEventListener("click", () => {
         const col = th.dataset.sort;
+        userSelectedSort = true;
         if (currentSortColumn === col) {
           currentSortOrder = currentSortOrder === "asc" ? "desc" : "asc";
         } else {
@@ -2755,6 +2789,7 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
     sortSelectMobile?.addEventListener("change", () => {
       const [col, dir] = sortSelectMobile.value.split("|");
       if (!col || !dir) return;
+      userSelectedSort = true;
       currentSortColumn = col;
       currentSortOrder = dir;
       syncSortUi();
@@ -3503,11 +3538,26 @@ function patchRowInPlace(caseObj) {
   const id = String(caseObj.id ?? caseObj.case_int_id);
   const row = document.querySelector(`#caseTableBody tr[data-case-id="${CSS.escape(id)}"]`);
   if (!row) return; // filtered out / re-rendered away — caseObj already holds the data
+  row.classList.toggle("is-pending-action", isPendingUserActionStatus(caseObj.new_status));
 
-  const pill = row.querySelector(".cm-td-status .cm-pill");
-  if (pill) {
-    pill.className = `cm-pill ${statusPillClass(caseObj.new_status)}`;
-    pill.innerHTML = statusPillInner(caseObj.new_status);
+  const statusCell = row.querySelector(".cm-td-status");
+  const statusRow = statusCell?.querySelector(".cm-status-row");
+  const pendingAction = isPendingUserActionStatus(caseObj.new_status);
+  if (statusRow) {
+    statusRow.querySelector(".cm-action-icon")?.remove();
+    statusRow.querySelector(".cm-action-badge")?.remove();
+    const pill = statusRow.querySelector(".cm-pill");
+    if (pill) {
+      pill.className = `cm-pill ${statusPillClass(caseObj.new_status)}`;
+      pill.innerHTML = statusPillInner(caseObj.new_status);
+    }
+    if (pendingAction) {
+      statusRow.insertAdjacentHTML(
+        "afterbegin",
+        '<i class="fa-solid fa-circle-exclamation cm-action-icon" title="Needs action" aria-label="Needs action"></i>'
+      );
+      statusRow.insertAdjacentHTML("beforeend", '<span class="cm-action-badge">Needs action</span>');
+    }
   }
 
   const dueDate =
@@ -3560,6 +3610,7 @@ function patchRowInPlace(caseObj) {
   }
 
   // Status may have just resolved from enrichment — refresh the admin counters.
+  updateStatFilterCounts();
   scheduleAdminStats();
 }
 
