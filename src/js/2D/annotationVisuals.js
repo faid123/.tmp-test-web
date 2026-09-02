@@ -88,7 +88,6 @@ import {
   TOOTH_IMAGE_HALF_WIDTH,
   TOOTH_IMAGE_HEIGHT,
   TOOTH_IMAGE_WIDTH,
-  TOOTH_ORDER,
   TOOTH_SCALE_OVERRIDE,
 } from "./constants.js";
 import {
@@ -114,7 +113,6 @@ import {
   placeSelectedComponentOnTooth,
   placeSimpleCircumAssemblyOnTooth,
   resolveMajorConnectorAnchorComponentId,
-  toothSupportsMajorConnectorOverlay,
 } from "./annotationPlacement.js";
 import {
   ensureToothPlacementState,
@@ -156,14 +154,6 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
     shouldShowPalatalBarArchOverlay() &&
     PALATAL_BAR_CONNECTOR_TOOTH_IDS.has(String(toothId));
 
-  const jawOrder = TOOTH_ORDER[jaw] || [];
-  const toothIndexInJaw = jawOrder.indexOf(String(toothId));
-  const prevToothId = toothIndexInJaw > 0 ? jawOrder[toothIndexInJaw - 1] : null;
-  const nextToothId =
-    toothIndexInJaw >= 0 && toothIndexInJaw < jawOrder.length - 1
-      ? jawOrder[toothIndexInJaw + 1]
-      : null;
-
   const majorIds = [];
   for (const { id, def } of catalogEntries) {
     if (!isMajorConnectorComponent(def)) {
@@ -187,37 +177,8 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
     }
   }
 
-  const selectedMajor = COMPONENT_BY_ID.get(state.selectedComponentId || "");
-  if (
-    selectedMajor &&
-    isMajorConnectorComponent(selectedMajor) &&
-    selectedMajor.section === jaw &&
-    !isMajorConnectorToothExcluded(selectedMajor.id, toothId)
-  ) {
-    const supportsSelectedMajor = toothSupportsMajorConnectorOverlay(tooth, toothId, selectedMajor.id);
-    const prevHasMajor = Boolean(
-      prevToothId && state.teeth[prevToothId]?.componentPlacements?.some((e) => isMajorConnectorComponent(e.componentId))
-    );
-    const nextHasMajor = Boolean(
-      nextToothId && state.teeth[nextToothId]?.componentPlacements?.some((e) => isMajorConnectorComponent(e.componentId))
-    );
-    const hasAdjacentPlacedMajor = prevHasMajor || nextHasMajor;
-    if (
-      supportsSelectedMajor &&
-      hasAdjacentPlacedMajor &&
-      !(
-        jaw === "upper" &&
-        shouldShowPalatalBarArchOverlay() &&
-        PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS.has(String(toothId))
-      )
-    ) {
-      if (!(showPalatalBarSegment && !isPalatalBarMajorComponent(selectedMajor.id))) {
-        if (!majorIds.includes(selectedMajor.id)) {
-          majorIds.push(selectedMajor.id);
-        }
-      }
-    }
-  }
+  // The arch draws placed connectors only. Selecting one in the catalog used to also
+  // preview it on the teeth beside a run, which read as artwork already placed there.
 
   for (const majorId of majorIds) {
     // Lingual plate = band PLUS a per-tooth fill on each PRESENT tooth; the fill IS the

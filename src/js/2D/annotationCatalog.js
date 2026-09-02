@@ -25,6 +25,8 @@ import {
   state,
   DEFAULT_COMPONENT_ID,
   getHistoryStateSignature,
+  isFullAcrylic,
+  isTabBlockedByMaterial,
   recordHistoryIfChanged,
   setMessage,
   renderJaws,
@@ -58,18 +60,8 @@ import { toast, attachThemedCalendar } from "../shared/toast.js";
 // ── Material restrictions ────────────────────────────────────────────────────
 // Full-acrylic (jawMaterial === 2) carries no metal framework: the BARS tab, metal mesh and
 // the open palatal majors are disabled. Plate, Horseshoe and the flange stay.
-const ACRYLIC_BLOCKED_TABS = new Set(["bars"]);
-
 /** Components that stay available in a full-acrylic case despite their tab/family. */
 const ACRYLIC_ALLOWED_COMPONENT_IDS = new Set(["mesh-flange"]);
-
-function isFullAcrylic() {
-  return state.jawMaterial === 2;
-}
-
-export function isTabBlockedByMaterial(tabId) {
-  return isFullAcrylic() && ACRYLIC_BLOCKED_TABS.has(tabId);
-}
 
 export function isComponentBlockedByMaterial(componentId) {
   if (!isFullAcrylic()) return false;

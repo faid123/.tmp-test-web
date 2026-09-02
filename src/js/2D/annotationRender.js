@@ -27,7 +27,7 @@ import {
   showPresentToothRadialQuickPick,
   openRemoveComponentPicker,
 } from "./2DAnnotation.js";
-import { renderComponentCatalog } from "./annotationCatalog.js";
+import { isComponentBlockedByMaterial, renderComponentCatalog } from "./annotationCatalog.js";
 import {
   extendMajorConnectorsOntoTeeth,
   placeSelectedComponentOnTooth,
@@ -665,4 +665,7 @@ registerMeshAnnotationEnv(() => ({
   redrawJaw: renderJaw,
   placeSelectedOnTooth: placeSelectedComponentOnTooth,
   extendMajorConnectorsOntoTeeth,
+  // The quick-pick sheet lists catalog items but cannot import the catalog (cycle), so the
+  // material gate reaches it through here.
+  isComponentBlockedByMaterial,
 }));

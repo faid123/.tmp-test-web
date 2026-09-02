@@ -411,6 +411,9 @@ export const COMPONENT_CATALOG = [
     icon: "../../assets/menu-icon/Connectors/Lower/MC_lingual_kennedy.png",
     section: "lower",
     tab: "major",
+    // Off the catalog, but still defined: jawStructCodes maps code 8 to it, so a saved
+    // design that carries one still decodes and renders.
+    hidden: true,
     requiresPresence: true,
     requiresMissing: false,
     conflictsWith: [],

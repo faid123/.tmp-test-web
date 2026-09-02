@@ -73,6 +73,18 @@ export const state = {
   jawMaterial: null,
 };
 
+/** Tabs a full-acrylic case cannot use. Lives beside `state` so the catalog strip and the
+ *  present-tooth quick pick — which cannot import the catalog without a cycle — gate alike. */
+const ACRYLIC_BLOCKED_TABS = new Set(["bars", "rests"]);
+
+export function isFullAcrylic() {
+  return state.jawMaterial === 2;
+}
+
+export function isTabBlockedByMaterial(tabId) {
+  return isFullAcrylic() && ACRYLIC_BLOCKED_TABS.has(tabId);
+}
+
 /** Transient UI refs — mutated by other modules (avoids import-reassignment issues). */
 export const ui = {
   /** @type {HTMLElement | null} */
@@ -526,6 +538,15 @@ function firstCatalogIdForTab(tabId) {
   return row?.id || null;
 }
 
+/** Flag the quick-pick entries whose tab the current material forbids. Kept as a flag
+ *  rather than a filter so the wheel holds its 2x2 layout. */
+function withMaterialBlock(entries) {
+  return entries.map((entry) => ({
+    ...entry,
+    disabled: Boolean(entry.tab && isTabBlockedByMaterial(entry.tab)),
+  }));
+}
+
 async function applyQuickPickSelection(tabId, componentId, options = {}) {
   const historyBefore = getHistoryStateSignature();
   try {
@@ -586,12 +607,14 @@ export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
   closePresentToothRadialQuickPick();
 
   // Desktop radial: 4 hand-curated quick-picks + a RECIP submenu, anchored at the click.
-  const radialMain = [
+  // The wheel is a shortcut into the catalog, so a tab the material forbids is dead here
+  // too — otherwise acrylic keeps a way in to the very tabs the strip disables.
+  const radialMain = withMaterialBlock([
     { label: "REST", tab: "rests", componentId: "rest-seat", pos: "top-left" },
     { label: "BAR", tab: "bars", componentId: "bar-i", pos: "top-right" },
     { label: "RECIP", menu: "recip", pos: "bottom-left" },
     { label: "CLASP", tab: "clasps", componentId: "retainer-clasp", pos: "bottom-right" },
-  ];
+  ]);
   const radialRecip = [
     {
       label: "RECIP CLASP",
@@ -612,6 +635,7 @@ export function showPresentToothRadialQuickPick(toothId, clientX, clientY) {
       label: tab.label,
       tabId: tab.id,
       icon: COMPONENT_BY_ID.get(firstCatalogIdForTab(tab.id))?.icon || null,
+      disabled: isTabBlockedByMaterial(tab.id),
     }));
 
   // `(pointer: coarse)` = touch/stylus primary input; mouse keeps the radial wheel.
@@ -690,6 +714,11 @@ function buildToothRadialPanel(toothId, mainActions, recipActions, runActionOrNa
       button.className = `tooth-radial-option ${action.pos}`;
       button.setAttribute("aria-label", action.label);
       button.setAttribute("data-tooltip", action.label);
+      if (action.disabled) {
+        button.disabled = true;
+        button.classList.add("is-disabled");
+        button.setAttribute("aria-disabled", "true");
+      }
       const iconPath =
         action.icon || (action.componentId ? COMPONENT_BY_ID.get(action.componentId)?.icon : null);
       if (iconPath) {
@@ -759,6 +788,12 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
     tile.className = "tooth-quickpick-tile";
     if (options.tileClass) tile.classList.add(options.tileClass);
     tile.setAttribute("aria-label", label);
+    if (options.disabled) {
+      tile.disabled = true;
+      tile.classList.add("is-disabled");
+      tile.setAttribute("aria-disabled", "true");
+      if (options.disabledTitle) tile.title = options.disabledTitle;
+    }
     if (iconPath) {
       if (options.iconAsMask) {
         const maskEl = document.createElement("span");
@@ -798,8 +833,8 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
       // Mesh icon is black/transparent PNG — mask it to pick up the violet mesh tint.
       const opts =
         cat.tabId === "mesh"
-          ? { iconAsMask: true, tileClass: "tooth-quickpick-tile--mesh" }
-          : undefined;
+          ? { iconAsMask: true, tileClass: "tooth-quickpick-tile--mesh", disabled: cat.disabled }
+          : { disabled: cat.disabled };
       grid.appendChild(buildTile(cat.label, cat.icon, () => renderItems(cat), opts));
     }
   };
@@ -819,16 +854,26 @@ function buildToothQuickPickSheet(toothId, categories, commit) {
       grid.appendChild(empty);
       return;
     }
+    // Same material gate the desktop catalog applies to its items — the upper palatal
+    // majors, mesh and bars are dead in a full-acrylic case.
+    const blockedByMaterial = meshAnnotationEnv()?.isComponentBlockedByMaterial;
     for (const item of items) {
       // Mesh icons are white silhouettes recoloured by CSS mask — except Mesh Flange, whose
       // PNG is full-colour artwork that a mask collapses to a violet square.
       const tintMesh = isMeshComponent(item.id) && item.id !== "mesh-flange";
+      const blocked = Boolean(blockedByMaterial?.(item.id));
+      const opts = { disabled: blocked };
+      if (blocked) opts.disabledTitle = `${item.label} — not available for a full acrylic case`;
+      if (tintMesh) {
+        opts.iconAsMask = true;
+        opts.tileClass = "tooth-quickpick-tile--mesh";
+      }
       grid.appendChild(
         buildTile(
           item.label,
           item.icon,
           () => commit({ tab: item.tab, componentId: item.id, label: item.label }),
-          tintMesh ? { iconAsMask: true, tileClass: "tooth-quickpick-tile--mesh" } : undefined
+          opts
         )
       );
     }

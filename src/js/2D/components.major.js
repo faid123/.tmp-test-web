@@ -844,8 +844,9 @@ export function majorConnectorRunsToMidline(componentId) {
 }
 
 /**
- * Whether a tooth can anchor a major-connector run: present via plate/clasp, missing via
- * mesh. The desktop start test, narrowed to web-modeled components.
+ * Whether a tooth can anchor a major-connector run: present via any plate, missing via mesh.
+ * A clasp is not a seat for the connector — a reciprocating clasp owns the tooth's
+ * reciprocating slot instead of a plate, so it is the one that used to auto-fill unbacked.
  */
 function toothAnchorsMajorConnector(tooth, componentById) {
   if (!tooth || !Array.isArray(tooth.componentPlacements)) {
@@ -857,12 +858,7 @@ function toothAnchorsMajorConnector(tooth, componentById) {
       return false;
     }
     if (tooth.isPresent) {
-      // Plate or any clasp anchors the connector (matches the desktop anchor test), so
-      // a clasped terminal molar (38/48) starts the span and is covered.
-      return (
-        String(componentId).startsWith("plate-") ||
-        String(componentId).endsWith("-clasp")
-      );
+      return String(componentId).startsWith("plate-");
     }
     return def.tab === "mesh" || String(componentId).startsWith("mesh-");
   });

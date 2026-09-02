@@ -16,9 +16,10 @@ staging step in front of something else — it's the thing itself.
 
 ### The pipeline, step by step
 
-Trigger: push to **`nyunt/dev-deploy`**, or manual `workflow_dispatch` from the Actions tab.
+Trigger: **manual `workflow_dispatch` only.** Pushing to `nyunt/dev-deploy` no longer deploys on
+its own — the `on.push` trigger was removed, so a deploy happens when someone runs the workflow.
 
-1. Checkout the pushed commit.
+1. Checkout the commit at the ref the run was dispatched against.
 2. Set up Node 22.
 3. `npm ci` (deterministic install from `package-lock.json`).
 4. `npm run test:ci` — **fail-closed gate**. If tests fail, the job stops here; nothing deploys.
@@ -43,13 +44,20 @@ GitHub Pages' **source branch/path is set in repo Settings → Pages** (`nyunt/d
 
 ### How to trigger a deploy
 
-Push (or fast-forward) your integration branch's tip onto `nyunt/dev-deploy`:
+Stage the revision you want live by pushing (or fast-forwarding) your integration branch's tip
+onto `nyunt/dev-deploy`:
 
 ```bash
 git push origin nyunt/integration_3:nyunt/dev-deploy
 ```
 
-Or go to Actions → "Deploy Test Site" → Run workflow.
+That push no longer deploys by itself. Go to Actions → "Deploy Test Site" → Run workflow and pick
+the branch to deploy.
+
+> **Caveat:** GitHub only offers "Run workflow" for workflows that exist on the repository's
+> **default branch** (`main`). `deploy.yml` currently lives only on `nyunt/dev-deploy`, so the
+> button won't appear until the workflow file is also on `main`. Until then there is no working
+> deploy trigger at all.
 
 ## Pointing the pipeline at different branches
 
@@ -57,7 +65,6 @@ If `nyunt/dev-deploy` or `nyunt/dev-W7.1` ever need to change (retired, renamed,
 up a second, independent deploy target):
 
 1. Edit `.github/workflows/deploy.yml`:
-   - `on.push.branches` — the trigger branch (currently `[nyunt/dev-deploy]`).
    - `env.PAGES_BRANCH` — the branch GitHub Pages actually serves (currently `nyunt/dev-W7.1`).
    - `env.SITE_URL` — cosmetic, goes into `manifest.json`.
 2. Make sure the new Pages branch exists. If it doesn't yet:
@@ -69,7 +76,7 @@ up a second, independent deploy target):
    ```
 3. Update **Settings → Pages → Build and deployment → source branch** to match (needs admin
    access on the repo — see note below).
-4. Push a commit to the new trigger branch and confirm the Action runs green end-to-end.
+4. Run the workflow against the new branch and confirm the Action goes green end-to-end.
 
 Pushing changes to `.github/workflows/*.yml` yourself requires a git credential with the
 `workflow` OAuth scope — see [Troubleshooting](04-troubleshooting.md) if that push is rejected.
