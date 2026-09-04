@@ -2041,6 +2041,178 @@ button {
   margin-top: 22px;
 }
 
+/* --- slots stage: the case's four extra 3D slots, one .stl each --- */
+/* Mirrors the 2D page's Extra 3D panel (.upload3d-* in 2Dannotation.css): every
+   slot is always drawn, in one of three states — filled, uploading, or empty. */
+.upload-slot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.upload-slot-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+/* Drop-zone affordance for empty slots (mirrors the create-case jaw tiles). */
+.upload-slot-row.is-dragover {
+  border-color: var(--primary);
+  border-style: dashed;
+  background: #f0faf7;
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+.upload-slot-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--line-soft);
+  color: var(--primary);
+  font-size: 20px;
+}
+.upload-slot-row.is-empty .upload-slot-icon { color: var(--muted); }
+/* The rendered STL preview fills its tile; click it for the full-size render. */
+.upload-slot-icon.has-thumb {
+  background: #fff;
+  border: 1px solid var(--line);
+  cursor: pointer;
+  padding: 0;
+}
+.upload-slot-icon.has-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.upload-slot-icon.has-thumb:hover,
+.upload-slot-icon.has-thumb:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 174, 149, 0.18);
+}
+/* min-width:0 so a long filename ellipsises instead of pushing the row's button
+   off the card. */
+.upload-slot-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.upload-slot-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-slot-file {
+  font-size: 12px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-slot-link {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.upload-slot-link:hover { color: var(--ink); }
+.upload-slot-action {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.upload-slot-action:hover { background: var(--status-danger-bg); color: var(--danger); }
+.upload-slot-action:disabled { opacity: 0.45; cursor: default; background: none; }
+.upload-slot-cancel { color: var(--danger); }
+
+/* Per-slot upload progress: track + fill + centred label. */
+.upload-slot-progress {
+  position: relative;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+.upload-slot-progress-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: var(--primary);
+  transition: width 0.12s ease;
+}
+.upload-slot-progress-label {
+  position: relative;
+  display: block;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 18px;
+  color: var(--ink);
+}
+/* Probe status and the "couldn't check every slot" warning span both columns. */
+.upload-slot-loading,
+.upload-slot-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.upload-slot-note { color: var(--danger); }
+#uploadChoiceModal .upload-slot-actions { margin-top: 18px; gap: 10px; }
+
+/* Full-size view of one slot's render. Above the upload modal, which is the only
+   thing that can open it. */
+.slot-thumb-overlay {
+  position: fixed;
+  inset: 0;
+  /* Above the upload modal (1000) and the carousel lightbox (4000). */
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5vh 5vw;
+  background: rgba(15, 23, 42, 0.72);
+}
+.slot-thumb-overlay.hidden { display: none; }
+.slot-thumb-full {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
+}
+.slot-thumb-close {
+  position: absolute;
+  top: 18px;
+  right: 22px;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+}
+.slot-thumb-close:hover { background: #fff; }
+
 /* --- preview stage: picked files, reviewed before anything is sent --- */
 .upload-preview-list {
   list-style: none;

@@ -72,15 +72,22 @@ export async function apiPost(path, payload, label) {
   return data;
 }
 
-// Read a File as base64, chunked so a large STL doesn't blow the call stack.
-export async function fileToBase64(file) {
-  const bytes = new Uint8Array(await file.arrayBuffer());
+// Base64 of an ArrayBuffer, chunked so a large STL doesn't blow the call stack.
+// Split out of fileToBase64 for callers that already hold the bytes — reading a
+// multi-MB File twice doubles peak memory for nothing.
+export function bufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
   let binary = "";
   const CHUNK = 0x8000;
   for (let i = 0; i < bytes.length; i += CHUNK) {
     binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
   }
   return btoa(binary);
+}
+
+// Read a File as base64.
+export async function fileToBase64(file) {
+  return bufferToBase64(await file.arrayBuffer());
 }
 
 // XHR rather than fetch so upload progress is reportable — STLs are large enough

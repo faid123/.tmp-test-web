@@ -22,8 +22,8 @@ import {
 import {
   API_BASE,
   MACHINE_ID,
+  bufferToBase64,
   callerIdentity,
-  fileToBase64,
   getLoggedInUser,
   uploadWithProgress,
 } from "../shared/api.js";
@@ -3670,19 +3670,16 @@ const UPLOAD_KINDS = {
     accept: "image/*",
     label: "reference images",
     rejected: "images only",
-    thumbnails: true,
     // Phones get the camera/gallery step first — see askSource.
     sources: true,
     matches: (f) => /^image\//i.test(f.type || "") || IMAGE_FILE_RE.test(f.name),
     upload: (files) => uploadCaseReferenceImages(files),
   },
+  // No staged batch: an extra 3D file is picked for a named slot and sent right
+  // away, so this kind opens the slots stage instead of the file picker.
   stl: {
     accept: ".stl",
-    label: "3D files",
-    rejected: ".stl only",
-    thumbnails: false,
-    matches: (f) => /\.stl$/i.test(f.name),
-    upload: (files) => uploadCaseStlFiles(files),
+    stage: "slots",
   },
 };
 
@@ -3723,7 +3720,7 @@ function getUploadChooser() {
             <i class="fa fa-cube" aria-hidden="true"></i>
             <span class="upload-choice-title">Extra 3D files</span>
             <span class="upload-choice-desc">
-              .stl files, into the case's four extra 3D slots. Select up to 4 at once.
+              .stl files, one per slot. Pick the slot each file goes into.
             </span>
           </button>
         </div>
@@ -3752,6 +3749,18 @@ function getUploadChooser() {
         </div>
         <div class="modal-actions upload-choice-actions">
           <button type="button" class="cm-btn cm-btn-secondary" data-upload-action="source-back">Back</button>
+        </div>
+      </div>
+
+      <div class="upload-stage hidden" data-stage="slots">
+        <p class="upload-choice-sub">
+          Extra 3D files for <strong id="uploadSlotsCaseName"></strong>. Each slot holds
+          one .stl — drop a file on a slot or use its Upload link.
+        </p>
+        <div class="upload-slot-list" id="uploadSlotList"></div>
+        <div class="modal-actions upload-choice-actions upload-slot-actions">
+          <button type="button" class="cm-btn cm-btn-secondary" data-upload-action="back">Back</button>
+          <button type="button" class="cm-btn cm-btn-primary" data-upload-action="cancel">Done</button>
         </div>
       </div>
 
@@ -3873,6 +3882,10 @@ function askSource() {
 function beginPick(kind) {
   const spec = UPLOAD_KINDS[kind];
   if (!spec) return;
+  if (spec.stage === "slots") {
+    openSlotStage();
+    return;
+  }
   if (spec.sources && askSource()) {
     sourceStageKind = kind;
     showUploadStage("source");
@@ -3943,18 +3956,12 @@ function renderUploadPreview() {
 
     const thumb = document.createElement("span");
     thumb.className = "upload-preview-thumb";
-    if (spec.thumbnails) {
-      const url = URL.createObjectURL(file);
-      pendingUpload.urls.push(url);
-      const img = document.createElement("img");
-      img.src = url;
-      img.alt = "";
-      thumb.appendChild(img);
-    } else {
-      // An STL has no cheap preview — parsing one to render it would cost more
-      // than the upload itself.
-      thumb.innerHTML = '<i class="fa fa-cube" aria-hidden="true"></i>';
-    }
+    const url = URL.createObjectURL(file);
+    pendingUpload.urls.push(url);
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = "";
+    thumb.appendChild(img);
 
     const meta = document.createElement("span");
     meta.className = "upload-preview-meta";
@@ -4011,109 +4018,621 @@ async function startPendingUpload() {
   }
 }
 
-// The lowest free extra slots, probed one at a time and only until `count` are
-// found: an occupied slot returns its whole base64 STL, so probing all four is MBs.
-async function findFreeStlSlots(caseIntId, count) {
-  const auth = caseAuth(caseIntId);
-  const free = [];
-  for (const slotNumber of EXTRA_STL_SLOTS) {
-    if (free.length >= count) break;
-    try {
-      const res = await fetch(`${API_BASE}/stl/slot/get`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([auth, { slotNumber }]),
-      });
-      if (!res.ok) {
-        free.push(slotNumber); // 404 = empty slot
-        continue;
-      }
-      const data = await res.json();
-      const item = Array.isArray(data) ? data[0] : data;
-      if (!item?.data) free.push(slotNumber);
-    } catch (err) {
-      console.warn(`⚠️ /stl/slot/get probe failed for slot ${slotNumber}`, err);
-      free.push(slotNumber); // treat an unreachable probe as free and let the POST decide
-    }
-  }
-  return free;
+// --- Extra 3D file slots ---------------------------------------------------
+// The four named slots the 2D page's Extra 3D tab shows, so a file uploaded here
+// lands where that panel expects it. The number is the backend key; the name is a
+// display label only — the backend slots are not semantically typed.
+const EXTRA_STL_SLOT_NAMES = {
+  1: "Upper jaw",
+  2: "Monoblock",
+  3: "Lower jaw",
+  4: "Monoblock",
+};
+
+// Display label for a slot, e.g. "Slot 1: Upper jaw".
+function slotLabel(slot) {
+  return `Slot ${slot}: ${EXTRA_STL_SLOT_NAMES[slot] || "3D file"}`;
 }
 
-// `files` arrives already filtered to .stl by the preview stage.
-async function uploadCaseStlFiles(files) {
+// What the slots stage is showing: the case it was probed for, the backend's
+// occupancy, and the uploads in flight. `uploading` is a Map, not a single slot,
+// so one slot's upload leaves the other three usable.
+const slotPanel = {
+  caseIntId: null,
+  loading: false,
+  failed: false,
+  occupied: new Set(),
+  filenames: {},
+  uploading: new Map(),
+};
+
+// --- Slot STL preview images -----------------------------------------------
+// A slot row shows a render of its mesh instead of a generic icon, the same
+// preview the create-case page draws for a picked jaw STL. Rendered from the
+// bytes we already hold at upload time — /stl/slot/get has no thumbnail, and
+// re-downloading a multi-MB scan to draw a 56px image is not worth it, so a slot
+// filled elsewhere keeps the icon until something is uploaded into it from here.
+
+let THREE;
+let STLLoader;
+
+// Bare specifiers resolve both ways this ships (page importmap, webpack), and the
+// import is lazy so the case list itself never pulls three in.
+async function loadThreeDeps() {
+  if (THREE && STLLoader) return;
+  const [threeMod, loaderMod] = await Promise.all([
+    import(/* webpackMode: "eager" */ "three"),
+    import(/* webpackMode: "eager" */ "three/addons/loaders/STLLoader.js"),
+  ]);
+  THREE = threeMod;
+  STLLoader = loaderMod.STLLoader;
+}
+
+// Render an STL to a PNG data URL, or "" if it can't be parsed. Same scene, lights
+// and framing as createCase.js's jaw preview so both pages draw a mesh alike.
+async function renderStlThumbnail(buffer) {
+  let renderer = null;
+  try {
+    await loadThreeDeps();
+    const geometry = new STLLoader().parse(buffer);
+    const mesh = new THREE.Mesh(
+      geometry,
+      new THREE.MeshStandardMaterial({ color: new THREE.Color(197 / 255, 173 / 255, 137 / 255) })
+    );
+    const scene = new THREE.Scene();
+    scene.add(new THREE.AmbientLight(0xffffff, 1));
+    for (const [x, y, z] of [[0, 0, 1], [0, 0, -1], [-1, 0, 0], [1, 0, 0]]) {
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(x, y, z);
+      scene.add(light);
+    }
+    scene.add(mesh);
+
+    geometry.computeBoundingSphere();
+    const bounds = geometry.boundingSphere;
+    mesh.position.sub(bounds.center);
+
+    // Framed off the mesh's own bounding sphere, from three-quarters above.
+    // Both matter: slot files range from a whole arch to a small RPD framework,
+    // so a fixed distance leaves one a speck and clips the other; and a slot STL
+    // lies flat in the XZ plane, which a camera straight down +Z catches
+    // edge-on as a sliver.
+    const fov = 45;
+    const camera = new THREE.PerspectiveCamera(fov, 1, 0.1, 100000);
+    const distance = ((bounds.radius || 1) / Math.sin((fov * Math.PI) / 360)) * 1.05;
+    camera.position
+      .set(0.55, 0.62, 0.56)
+      .normalize()
+      .multiplyScalar(distance);
+    camera.lookAt(0, 0, 0);
+
+    // 512² so the enlarged view is crisp; the row image is CSS-sized down.
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(512, 512);
+    renderer.setClearColor(0xffffff);
+    renderer.render(scene, camera);
+    const dataUrl = renderer.domElement.toDataURL("image/png");
+    geometry.dispose();
+    return dataUrl;
+  } catch (err) {
+    console.warn("⚠️ Could not render an STL preview", err);
+    return "";
+  } finally {
+    // Browsers cap live WebGL contexts (~16); four slots across repeated opens
+    // would exhaust them and start killing the oldest.
+    renderer?.dispose();
+  }
+}
+
+// Previews persist per browser so reopening the panel (or the page) still shows
+// what was uploaded. Keyed by case + slot + filename so a replaced file can never
+// show its predecessor's picture.
+const SLOT_THUMB_STORE = "caseSlotStlThumbs";
+const SLOT_THUMB_LIMIT = 40;
+
+function slotThumbKey(caseIntId, slot, filename) {
+  return `${caseIntId}:${slot}:${filename || ""}`;
+}
+
+function readSlotThumbStore() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SLOT_THUMB_STORE) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function getSlotThumb(caseIntId, slot, filename) {
+  return readSlotThumbStore()[slotThumbKey(caseIntId, slot, filename)] || "";
+}
+
+// Oldest-out once the store is full: these are ~10 KB each and localStorage is
+// shared with the case-list cache, so the panel must not be able to fill it.
+function saveSlotThumb(caseIntId, slot, filename, dataUrl) {
+  if (!dataUrl) return;
+  try {
+    const store = readSlotThumbStore();
+    store[slotThumbKey(caseIntId, slot, filename)] = dataUrl;
+    const keys = Object.keys(store);
+    for (const stale of keys.slice(0, Math.max(0, keys.length - SLOT_THUMB_LIMIT))) {
+      delete store[stale];
+    }
+    localStorage.setItem(SLOT_THUMB_STORE, JSON.stringify(store));
+  } catch {
+    // A full quota just costs the preview on the next open, never the upload.
+    try {
+      localStorage.removeItem(SLOT_THUMB_STORE);
+    } catch { /* ignore */ }
+  }
+}
+
+function forgetSlotThumb(caseIntId, slot, filename) {
+  try {
+    const store = readSlotThumbStore();
+    delete store[slotThumbKey(caseIntId, slot, filename)];
+    localStorage.setItem(SLOT_THUMB_STORE, JSON.stringify(store));
+  } catch { /* ignore */ }
+}
+
+// Click a slot's preview to see it full size.
+function openSlotThumbPreview(src, label) {
+  let overlay = document.getElementById("slotThumbOverlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "slotThumbOverlay";
+    overlay.className = "slot-thumb-overlay hidden";
+    overlay.innerHTML =
+      '<button type="button" class="slot-thumb-close" aria-label="Close preview">&times;</button>' +
+      '<img class="slot-thumb-full" alt="" />';
+    document.body.appendChild(overlay);
+    const close = () => overlay.classList.add("hidden");
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+    overlay.querySelector(".slot-thumb-close").addEventListener("click", close);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") close();
+    });
+  }
+  const img = overlay.querySelector(".slot-thumb-full");
+  img.src = src;
+  img.alt = label;
+  overlay.classList.remove("hidden");
+}
+
+// How much of an occupied slot's response to read before dropping the transfer.
+// Enough to see the `data` field and, when it comes first, the filename.
+const SLOT_PROBE_HEAD_BYTES = 64 * 1024;
+
+// Read only the first `maxBytes` of a response, then cancel the rest.
+async function readResponseHead(res, maxBytes) {
+  const reader = res.body?.getReader?.();
+  if (!reader) return (await res.text()).slice(0, maxBytes);
+  const decoder = new TextDecoder();
+  let head = "";
+  let read = 0;
+  try {
+    while (read < maxBytes) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      read += value.byteLength;
+      head += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+  return head;
+}
+
+// The filename out of a probe's response head. Empty when the row put `data`
+// first and pushed the name past the cut — the slot label still names the row.
+function filenameFromHead(head) {
+  const raw = head.match(/"filename"\s*:\s*"((?:[^"\\]|\\.)*)"/)?.[1];
+  if (!raw) return "";
+  try {
+    return JSON.parse(`"${raw}"`);
+  } catch {
+    return raw;
+  }
+}
+
+// One slot's occupancy. /stl/slot/get has no existence check — a taken slot
+// streams back its whole base64 STL — so this reads the head and drops the rest,
+// which makes probing all four cost KB instead of tens of MB.
+async function probeStlSlot(caseIntId, slotNumber) {
+  const res = await fetch(`${API_BASE}/stl/slot/get`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([caseAuth(caseIntId), { slotNumber }]),
+  });
+  if (!res.ok) return { occupied: false }; // 404 = empty slot
+  const head = await readResponseHead(res, SLOT_PROBE_HEAD_BYTES);
+  // A 200 carrying no `data` is an empty row, not a file.
+  if (!/"data"\s*:\s*"[^"]/.test(head)) return { occupied: false };
+  return { occupied: true, filename: filenameFromHead(head) };
+}
+
+// Entering the slots stage. Occupancy is re-probed on every entry so a file added
+// or deleted from the 2D page's Extra 3D tab shows up here.
+function openSlotStage() {
   const caseIntId = window.selectedCaseId;
   if (caseIntId == null) {
     toast.warning("Please select a case first.");
     return;
   }
+  const modal = getUploadChooser();
+  const nameEl = modal.querySelector("#uploadSlotsCaseName");
+  if (nameEl) nameEl.textContent = selectedCaseName() || "this case";
+  showUploadStage("slots");
+  // An upload in flight owns the panel's state — re-probing under it would
+  // clobber the row it is drawing into.
+  if (slotPanel.uploading.size) {
+    renderSlotList();
+    return;
+  }
+  refreshSlotOccupancy(caseIntId);
+}
 
-  const stls = files.slice();
-  if (!stls.length) return;
+async function refreshSlotOccupancy(caseIntId) {
+  slotPanel.caseIntId = caseIntId;
+  slotPanel.loading = true;
+  slotPanel.failed = false;
+  slotPanel.occupied = new Set();
+  slotPanel.filenames = {};
+  renderSlotList();
 
-  const btn = document.getElementById("upload3dFileBtn");
-  if (btn) btn.disabled = true;
-  let done = 0;
+  // Sequential: the backend burst-throttles (see the enrichment breaker), and a
+  // throttled reply arrives without CORS headers, reading as a network error.
+  for (const slot of EXTRA_STL_SLOTS) {
+    try {
+      const probe = await probeStlSlot(caseIntId, slot);
+      // The stage was re-opened on another case while this probe was in flight.
+      if (slotPanel.caseIntId !== caseIntId) return;
+      if (probe.occupied) {
+        slotPanel.occupied.add(slot);
+        slotPanel.filenames[slot] = probe.filename || "3D file";
+      }
+    } catch (err) {
+      console.warn(`⚠️ /stl/slot/get probe failed for slot ${slot}`, err);
+      // An unreachable probe leaves the slot shown as free and lets the POST decide.
+      slotPanel.failed = true;
+    }
+  }
+  if (slotPanel.caseIntId !== caseIntId) return;
+  slotPanel.loading = false;
+  renderSlotList();
+}
+
+// Always draws all four named slots: occupied → filename with a delete; uploading
+// → an inline progress bar with a cancel; empty → its own upload link and drop zone.
+function renderSlotList() {
+  const list = uploadChooserEl?.querySelector("#uploadSlotList");
+  if (!list) return;
+  list.innerHTML = "";
+
+  // Slot contents are unknown until the probe finishes, so the list stays empty
+  // rather than offering four false "empty" slots.
+  if (slotPanel.loading) {
+    const loading = document.createElement("p");
+    loading.className = "upload-slot-loading";
+    loading.textContent = "Checking which slots are free…";
+    list.appendChild(loading);
+    return;
+  }
+
+  EXTRA_STL_SLOTS.forEach((slot) => {
+    if (slotPanel.uploading.has(slot)) list.appendChild(buildSlotUploadingRow(slot));
+    else if (slotPanel.occupied.has(slot)) list.appendChild(buildSlotFileRow(slot));
+    else list.appendChild(buildSlotEmptyRow(slot));
+  });
+
+  if (slotPanel.failed) {
+    const note = document.createElement("p");
+    note.className = "upload-slot-note";
+    note.textContent =
+      "Some slots could not be checked — one shown as free may already hold a file.";
+    list.appendChild(note);
+  }
+
+  // Dismissing the dialog mid-upload would leave the user with no idea what
+  // landed, so an upload in flight owns it (same rule as the preview stage).
+  uploadChooserEl.classList.toggle("is-uploading", slotPanel.uploading.size > 0);
+}
+
+// Icon | label | (action) shell every slot row shares, so all four line up
+// whatever state they are in.
+function buildSlotRow(slot, modifier) {
+  const row = document.createElement("div");
+  row.className = `upload-slot-row${modifier ? ` ${modifier}` : ""}`;
+
+  const icon = document.createElement("span");
+  icon.className = "upload-slot-icon";
+
+  const text = document.createElement("div");
+  text.className = "upload-slot-text";
+  const name = document.createElement("span");
+  name.className = "upload-slot-name";
+  name.textContent = slotLabel(slot);
+  text.appendChild(name);
+
+  row.append(icon, text);
+  return { row, icon, text };
+}
+
+// A taken slot: its preview image (or the icon, for a file uploaded elsewhere),
+// its filename, plus a delete that frees the slot for a new file.
+function buildSlotFileRow(slot) {
+  const filename = slotPanel.filenames[slot] || "3D file";
+  const { row, icon, text } = buildSlotRow(slot, "is-filled");
+  const thumb = getSlotThumb(slotPanel.caseIntId, slot, filename);
+  if (thumb) {
+    icon.classList.add("has-thumb");
+    icon.setAttribute("role", "button");
+    icon.setAttribute("tabindex", "0");
+    icon.title = `View ${filename}`;
+    icon.setAttribute("aria-label", `View the 3D preview of ${filename}`);
+    const img = document.createElement("img");
+    img.src = thumb;
+    img.alt = `3D preview of ${filename}`;
+    icon.appendChild(img);
+    const open = () => openSlotThumbPreview(thumb, `3D preview of ${filename}`);
+    icon.addEventListener("click", open);
+    icon.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        open();
+      }
+    });
+  } else {
+    icon.innerHTML = '<i class="fa fa-cube" aria-hidden="true"></i>';
+  }
+
+  const file = document.createElement("span");
+  file.className = "upload-slot-file";
+  file.textContent = filename;
+  file.title = filename;
+  text.appendChild(file);
+
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "upload-slot-action upload-slot-delete";
+  del.title = `Delete ${filename}`;
+  del.setAttribute("aria-label", `Delete ${filename} from ${slotLabel(slot)}`);
+  del.innerHTML = '<i class="fa fa-trash-can" aria-hidden="true"></i>';
+  del.addEventListener("click", () => deleteCaseStlSlot(slot));
+  row.appendChild(del);
+  return row;
+}
+
+// An empty slot: an upload link that targets exactly this slot, and the row
+// itself as a drop zone for the same.
+function buildSlotEmptyRow(slot) {
+  const { row, icon, text } = buildSlotRow(slot, "is-empty");
+  icon.innerHTML = '<i class="fa fa-cube" aria-hidden="true"></i>';
+
+  const link = document.createElement("button");
+  link.type = "button";
+  link.className = "upload-slot-link";
+  link.textContent = "Upload .stl";
+  link.title = `Drag & drop a .stl here, or click to upload ${slotLabel(slot)}`;
+  link.setAttribute("aria-label", `Upload a 3D file to ${slotLabel(slot)}`);
+  link.addEventListener("click", () => pickAndUploadSlotStl(slot));
+  text.appendChild(link);
+
+  enableSlotDropZone(row, slot);
+  return row;
+}
+
+// A slot mid-upload: an inline progress bar and a cancel. The bar's refs go on
+// the slot's phase so setSlotUploadProgress can drive them without a re-render.
+function buildSlotUploadingRow(slot) {
+  const { row, icon, text } = buildSlotRow(slot, "is-busy");
+  icon.innerHTML = '<i class="fa fa-cloud-arrow-up" aria-hidden="true"></i>';
+
+  const progress = document.createElement("div");
+  progress.className = "upload-slot-progress";
+  progress.setAttribute("role", "progressbar");
+  progress.setAttribute("aria-valuemin", "0");
+  progress.setAttribute("aria-valuemax", "100");
+  const fill = document.createElement("div");
+  fill.className = "upload-slot-progress-fill";
+  const label = document.createElement("span");
+  label.className = "upload-slot-progress-label";
+  progress.append(fill, label);
+  text.appendChild(progress);
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "upload-slot-action upload-slot-cancel";
+  cancel.title = `Cancel ${slotLabel(slot)} upload`;
+  cancel.setAttribute("aria-label", `Cancel the upload to ${slotLabel(slot)}`);
+  cancel.innerHTML = '<i class="fa fa-xmark" aria-hidden="true"></i>';
+  cancel.addEventListener("click", () => cancelSlotUpload(slot));
+  row.appendChild(cancel);
+
+  const phase = slotPanel.uploading.get(slot);
+  if (phase) {
+    phase.refs = { progress, fill, label, cancel };
+    if (!phase.controller) {
+      cancel.disabled = true;
+      cancel.title = "Upload completed";
+    }
+  }
+  // Replay how far this upload already is into the freshly built bar.
+  setSlotUploadProgress(slot);
+  return row;
+}
+
+// Drives one slot's inline bar; `frac` is 0..1, and 1 means the bytes are in but
+// the server is still writing them. Called with no frac to replay into a rebuilt row.
+function setSlotUploadProgress(slot, frac) {
+  const phase = slotPanel.uploading.get(slot);
+  if (!phase) return;
+  if (frac != null) phase.frac = frac;
+  if (!phase.refs) return;
+  const pct = Math.max(0, Math.min(100, Math.round((phase.frac ?? 0) * 100)));
+  phase.refs.fill.style.width = `${pct}%`;
+  phase.refs.progress.setAttribute("aria-valuenow", String(pct));
+  phase.refs.label.textContent = pct >= 100 ? "Processing…" : `Uploading… ${pct}%`;
+}
+
+function pickAndUploadSlotStl(slot) {
+  pickFiles(UPLOAD_KINDS.stl.accept, (files) => uploadSlotStl(files[0], slot), {
+    multiple: false,
+  });
+}
+
+// Send one .stl into one named slot. Each upload keeps its own phase, so the
+// other three slots can be started while this one runs.
+async function uploadSlotStl(file, slot) {
+  const caseIntId = slotPanel.caseIntId ?? window.selectedCaseId;
+  if (caseIntId == null) {
+    toast.warning("Please select a case first.");
+    return;
+  }
+  if (!file) return;
+  if (!/\.stl$/i.test(file.name)) {
+    toast.warning(`${file.name} skipped — .stl only.`);
+    return;
+  }
+  if (slotPanel.uploading.has(slot)) {
+    toast.warning(`${slotLabel(slot)} is still uploading.`);
+    return;
+  }
+  if (slotPanel.occupied.has(slot)) {
+    toast.warning(`${slotLabel(slot)} already has a file. Delete it first.`);
+    return;
+  }
+
+  // Draw this slot's row as a progress bar, then start the upload.
+  const controller = new AbortController();
+  slotPanel.uploading.set(slot, { frac: 0, refs: null, controller, fileName: file.name });
+  renderSlotList();
   try {
-    const slots = await findFreeStlSlots(caseIntId, stls.length);
-    if (!slots.length) {
-      toast.warning("All 4 extra 3D file slots are in use. Delete one first.");
+    // Read the File once: a 30 MB scan through fileToBase64 AND arrayBuffer would
+    // hold the bytes twice, and the preview render wants the same buffer.
+    const buffer = await file.arrayBuffer();
+    const data = bufferToBase64(buffer);
+    if (controller.signal.aborted) {
+      throw new DOMException("Upload canceled", "AbortError");
+    }
+    // case_id must ride in THIS object, not the auth one (same as POST /stl).
+    // Without it the insert 500s with no CORS header, surfacing as "Failed to fetch".
+    await uploadWithProgress(
+      "stl/slot/",
+      JSON.stringify([
+        caseAuth(caseIntId),
+        { case_id: caseIntId, slotNumber: slot, filename: file.name, data },
+      ]),
+      (frac) => setSlotUploadProgress(slot, frac),
+      { signal: controller.signal }
+    );
+    // The bytes are in — the slot is committed, so the cancel goes dead.
+    const phase = slotPanel.uploading.get(slot);
+    if (phase) {
+      phase.controller = null;
+      if (phase.refs?.cancel) {
+        phase.refs.cancel.disabled = true;
+        phase.refs.cancel.title = "Upload completed";
+      }
+      if (phase.refs?.label) phase.refs.label.textContent = "Rendering preview…";
+    }
+    // Rendered here, not before the POST: parsing a multi-MB mesh blocks the main
+    // thread, and doing it up front would freeze the progress bar it sits under.
+    saveSlotThumb(caseIntId, slot, file.name, await renderStlThumbnail(buffer));
+    slotPanel.occupied.add(slot);
+    slotPanel.filenames[slot] = file.name;
+    toast.success(`${file.name} uploaded to ${slotLabel(slot)}.`);
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      toast.info(`${file.name} upload canceled.`);
       return;
     }
-    // Partial fit: take what the free slots allow rather than failing outright,
-    // and say which files were left behind.
-    if (slots.length < stls.length) {
-      toast.warning(
-        `Only ${slots.length} of the 4 extra 3D slots ${slots.length === 1 ? "is" : "are"} free — ` +
-          `uploading the first ${slots.length} of ${stls.length} files.`
-      );
-      stls.length = slots.length;
-    }
-
-    // Sequential: an STL is a multi-MB base64 POST, and the backend
-    // burst-throttles (see the enrichment breaker).
-    for (let i = 0; i < stls.length; i++) {
-      const file = stls[i];
-      toast.info(
-        stls.length > 1
-          ? `Uploading ${file.name} (${i + 1} of ${stls.length})…`
-          : `Uploading ${file.name}…`
-      );
-      const data = await fileToBase64(file);
-      // case_id must ride in THIS object, not the auth one (same as POST /stl).
-      // Without it the insert 500s with no CORS header, surfacing as "Failed to fetch".
-      await uploadWithProgress("stl/slot/", 
-        JSON.stringify([
-          caseAuth(caseIntId),
-          { case_id: caseIntId, slotNumber: slots[i], filename: file.name, data },
-        ])
-      );
-      done++;
-    }
-    toast.success(
-      done > 1 ? `${done} 3D files uploaded.` : `${stls[0].name} uploaded.`
-    );
-  } catch (err) {
     console.error("❌ 3D file upload failed", err);
-    toast.error(
-      done
-        ? `Uploaded ${done} of ${stls.length}; the rest failed.`
-        : "Upload failed. Please try again."
-    );
+    toast.error(`${file.name} failed to upload. Please try again.`);
   } finally {
-    if (btn) btn.disabled = false;
+    slotPanel.uploading.delete(slot);
+    renderSlotList();
   }
 }
 
-// One-shot multi-select file picker, removed after the pick. `capture` (mobile
-// only) forces the camera instead of the gallery; a capture is a single photo and
-// some Android builds ignore `capture` when `multiple` is also set, so it's one
-// or the other.
-function pickFiles(accept, onPick, { capture } = {}) {
+function cancelSlotUpload(slot) {
+  const phase = slotPanel.uploading.get(slot);
+  if (!phase?.controller) return;
+  phase.controller.abort();
+  if (phase.refs?.label) phase.refs.label.textContent = "Canceling…";
+  if (phase.refs?.cancel) phase.refs.cancel.disabled = true;
+}
+
+// Frees a slot so a new file can go in. No confirmation, matching the 2D page's
+// Extra 3D panel.
+async function deleteCaseStlSlot(slot) {
+  const caseIntId = slotPanel.caseIntId ?? window.selectedCaseId;
+  if (caseIntId == null) return;
+  const filename = slotPanel.filenames[slot] || "3D file";
+  try {
+    const res = await fetch(`${API_BASE}/stl/slot/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // Same contract as the upload: the case id has to be in this object.
+      body: JSON.stringify([caseAuth(caseIntId), { case_id: caseIntId, slotNumber: slot }]),
+    });
+    logApi(res, "POST /stl/slot/delete");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    slotPanel.occupied.delete(slot);
+    delete slotPanel.filenames[slot];
+    forgetSlotThumb(caseIntId, slot, filename);
+    renderSlotList();
+    toast.success(`${filename} deleted from ${slotLabel(slot)}.`);
+  } catch (err) {
+    console.error(`❌ /stl/slot/delete failed for slot ${slot}`, err);
+    toast.error("Failed to delete the 3D file. Please try again.");
+  }
+}
+
+// True when a drag event carries files (mirrors createCase.js).
+function dragEventHasFiles(e) {
+  const types = e?.dataTransfer?.types;
+  return types ? Array.from(types).some((t) => t === "Files") : false;
+}
+
+// Wire an empty slot row as a .stl drop zone that uploads into `slot` (same
+// affordance the 2D page's Extra 3D rows have).
+function enableSlotDropZone(el, slot) {
+  el.addEventListener("dragenter", (e) => {
+    if (!dragEventHasFiles(e)) return;
+    e.preventDefault();
+    el.classList.add("is-dragover");
+  });
+  el.addEventListener("dragover", (e) => {
+    if (!dragEventHasFiles(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    el.classList.add("is-dragover");
+  });
+  el.addEventListener("dragleave", (e) => {
+    if (el.contains(e.relatedTarget)) return;
+    el.classList.remove("is-dragover");
+  });
+  el.addEventListener("drop", (e) => {
+    el.classList.remove("is-dragover");
+    if (!dragEventHasFiles(e)) return;
+    e.preventDefault();
+    uploadSlotStl(e.dataTransfer.files[0], slot);
+  });
+}
+
+// One-shot file picker, removed after the pick. Multi-select unless `multiple` is
+// false (a slot takes one file). `capture` (mobile only) forces the camera instead
+// of the gallery; a capture is a single photo and some Android builds ignore
+// `capture` when `multiple` is also set, so it's one or the other.
+function pickFiles(accept, onPick, { capture, multiple = true } = {}) {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = accept;
   if (capture) input.setAttribute("capture", capture);
-  else input.multiple = true;
+  else input.multiple = multiple;
   input.hidden = true;
   document.body.appendChild(input);
   input.addEventListener("change", () => {
