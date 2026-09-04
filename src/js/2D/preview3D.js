@@ -8,6 +8,9 @@ import {
   updateSurveyPlacementArrow,
   autoApplySavedSurveyAngles,
   savedSurveyDirectionForJaw,
+  refreshSurveyAngleLock,
+  syncSurveyAngleLockUi,
+  toggleSurveyAngleLock,
 } from "./preview3DSurvey.js";
 import {
   API_BASE,
@@ -285,6 +288,8 @@ function init3DPreview(area) {
   const toolbar = document.createElement("div");
   toolbar.className = "jaw-preview-toolbar";
 
+  const surveyLockBtn = buildSurveyAngleLockButton();
+
   const rows = document.createElement("div");
   rows.className = "jaw-preview-rows";
 
@@ -304,6 +309,7 @@ function init3DPreview(area) {
 
   rows.appendChild(rowUpper.row);
   rows.appendChild(rowLower.row);
+  toolbar.appendChild(surveyLockBtn);
   toolbar.appendChild(rows);
 
   // The top-left icon IS the heatmap toggle; the legend below shows only while it's on.
@@ -471,6 +477,13 @@ function init3DPreview(area) {
   );
   rowUpper.cancelBtn.addEventListener("click", () => exitSurveyAiming());
   rowLower.cancelBtn.addEventListener("click", () => exitSurveyAiming());
+  surveyLockBtn.addEventListener("click", () => {
+    toggleSurveyAngleLock().catch((err) => {
+      console.error("[preview3D] survey angle lock toggle failed", err);
+      toast.error("Survey angle lock could not be updated.");
+      syncSurveyAngleLockUi();
+    });
+  });
 
   // The footer camera button dispatches `request-3d-capture`; the render+upload runs here.
   // preview3DState.capturing is a single-flight guard so rapid clicks don't double-upload.
@@ -545,7 +558,11 @@ function init3DPreview(area) {
   preview3DState.groups = { upper: null, lower: null };
   preview3DState.activeView = "both";
   preview3DState.preview3DReadyForExtras = false;
-  preview3DState.topControls = { rowUpper, rowLower };
+  preview3DState.topControls = { rowUpper, rowLower, surveyLockBtn };
+  syncSurveyAngleLockUi();
+  refreshSurveyAngleLock().catch((err) =>
+    console.warn("[preview3D] survey angle lock refresh failed", err)
+  );
   preview3DState.heatmapEnabled = false;
   preview3DState.heatmapMode = "normal";
   preview3DState.heatmapToggleBtn = heatmapToggleBtn;
@@ -4632,6 +4649,19 @@ function buildPreviewTrashButton({ ariaLabel, title }) {
   btn.title = title;
   btn.innerHTML =
     '<svg viewBox="0 -960 960 960" width="15" height="15" aria-hidden="true"><path d="M261-120q-24.75 0-42.37-17.63Q201-155.25 201-180v-570h-41v-60h188v-30h264v30h188v60h-41v570q0 24-18 42t-42 18H261Zm438-630H261v570h438v-570ZM367-266h60v-399h-60v399Zm166 0h60v-399h-60v399ZM261-750v570-570Z" fill="currentColor"/></svg>';
+  return btn;
+}
+
+function buildSurveyAngleLockButton() {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "jaw-preview-survey-lock-btn";
+  btn.setAttribute("aria-label", "Lock survey angle changes");
+  btn.setAttribute("aria-pressed", "false");
+  btn.title = "Lock survey angle changes for this case";
+  btn.innerHTML =
+    '<img class="jaw-preview-survey-lock-icon" src="../../assets/unlock.png" alt="" width="15" height="15" />' +
+    '<span class="jaw-preview-survey-lock-label">LOCK SURVEY ANGLE</span>';
   return btn;
 }
 

@@ -69,8 +69,16 @@ export const state = {
   /**
    * Case-wide denture base, encoded as each jaw's "Jaw Material": 0 = metal,
    * 2 = full acrylic, null = unchosen (encodes 0). Prompted on locking an empty design.
-   */
+  */
   jawMaterial: null,
+  /** Case-wide guard for changing saved insertion/survey angles. */
+  surveyAngleLock: {
+    locked: false,
+    lockedAt: null,
+    lockedBy: null,
+    loaded: false,
+    busy: false,
+  },
 };
 
 /** Tabs a full-acrylic case cannot use. Lives beside `state` so the catalog strip and the

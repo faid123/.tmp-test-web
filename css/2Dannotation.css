@@ -1125,6 +1125,54 @@ button.upload3d-row {
   gap: 8px;
 }
 
+.jaw-preview-survey-lock-btn {
+  align-self: start;
+  justify-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 32px;
+  border: 1px solid rgba(59, 174, 149, 0.45);
+  background: #ffffff;
+  color: #0f766e;
+  border-radius: 8px;
+  padding: 0 12px;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, opacity 120ms ease;
+}
+
+.jaw-preview-survey-lock-btn:hover:not(:disabled) {
+  background: #edfdf8;
+  border-color: #0f766e;
+}
+
+.jaw-preview-survey-lock-btn.is-locked {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #ffffff;
+}
+
+.jaw-preview-survey-lock-btn.is-locked:hover:not(:disabled) {
+  background: #115e56;
+  border-color: #115e56;
+}
+
+.jaw-preview-survey-lock-btn:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.jaw-preview-survey-lock-icon {
+  display: block;
+  flex: 0 0 auto;
+}
+
 /* Secondary action next to SET: quiet outline, red on hover. Hidden until a
    jaw is armed. */
 .jaw-preview-survey-cancel-btn {

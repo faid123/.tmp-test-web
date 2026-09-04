@@ -18,6 +18,9 @@ import {
   SMARTRPD_API_BASE,
 } from "./preview3D.js";
 
+const SURVEY_LOCK_GET_PATH = "/case/survey-angle-lock/get";
+const SURVEY_LOCK_UPDATE_PATH = "/case/survey-angle-lock/update";
+
 // Read a jaw's stored *_insertion_angle_{x,y,z} fields as a vector; null if unset.
 export function savedSurveyVectorForJaw(caseData, jaw) {
   if (!caseData) return null;
@@ -822,10 +825,15 @@ export function exitSurveyAiming({ preserveStage = false } = {}) {
     preview3DState.surveyKeyHandler = null;
   }
   preview3DState.surveyAiming = null;
+  syncSurveyAngleLockUi();
 }
 
 // Two-step control: first click arms the jaw, second (labelled SET) commits.
 export function handleSurveyButtonClick(jaw, btn) {
+  if (state.surveyAngleLock?.locked) {
+    toast?.warning?.("Survey angle is locked for this case.");
+    return;
+  }
   if (preview3DState.surveyAiming?.jaw === jaw) {
     // Lock cancel out during save so it can't null the aim mid-read.
     setSurveyCancelState(jaw, { disabled: true });
@@ -838,6 +846,11 @@ export function handleSurveyButtonClick(jaw, btn) {
 export async function commitPendingSurveyAngle() {
   const aiming = preview3DState.surveyAiming;
   if (!aiming?.jaw) return true;
+  if (state.surveyAngleLock?.locked) {
+    toast?.warning?.("Survey angle is locked for this case.");
+    exitSurveyAiming();
+    return false;
+  }
   setSurveyCancelState(aiming.jaw, { disabled: true });
   return saveSurveyAngle(aiming.jaw, aiming.btn);
 }
@@ -865,6 +878,11 @@ async function saveSurveyAngle(jaw, btn) {
   const camera = preview3DState.camera;
   const controls = preview3DState.controls;
   if (!camera || !controls || !state.caseIntID) return false;
+  if (state.surveyAngleLock?.locked) {
+    toast?.warning?.("Survey angle is locked for this case.");
+    exitSurveyAiming();
+    return false;
+  }
 
   // Capture the aim before any awaits so a slow read can't pick up a moved arrow.
   // Survey what the arrow points at; fall back to the camera direction.
@@ -881,14 +899,15 @@ async function saveSurveyAngle(jaw, btn) {
     btn.textContent = "SAVING…";
   }
 
-  // PUT /case/:id replaces the WHOLE row, so read fresh and abort rather than write
-  // defaults — no case_id renames the case to "", and stale values clobber saved angles.
+  // Existing survey-angle save path: PUT /case/:id replaces the whole row, so
+  // read fresh and abort rather than write defaults that can rename the case or
+  // clobber the other jaw.
   const fresh = await fetchCaseData({ force: true });
   if (fresh?.case_id) preview3DState.caseData = fresh;
   const current = preview3DState.caseData;
   if (!current?.case_id) {
     console.warn("[preview3D] survey angle not saved: case row unavailable", current);
-    toast?.error?.("Couldn't read this case's details — survey angle not saved.");
+    toast?.error?.("Couldn't read this case's details - survey angle not saved.");
     // Stay armed so the aim isn't lost; re-enable the cancel the click disabled.
     setSurveyCancelState(jaw, { disabled: false });
     if (btn) {
@@ -908,15 +927,9 @@ async function saveSurveyAngle(jaw, btn) {
     updated.lower_insertion_angle_z = z;
   }
 
-  const user = getLoggedInUser();
-  const uuid = user?.uuid || PREVIEW_FALLBACK_UUID;
-  const auth = {
-    machine_id: PREVIEW_MACHINE_ID,
-    uuid,
-    caseIntID: state.caseIntID,
-  };
+  const auth = surveyLockAuth();
   const caseBody = {
-    // The case's name. Never defaulted — an empty string here wipes it (guarded above).
+    // The case's name. Never defaulted - an empty string here wipes it (guarded above).
     case_id: updated.case_id,
     upper_insertion_angle_x: Number(updated.upper_insertion_angle_x) || 0,
     upper_insertion_angle_y: Number(updated.upper_insertion_angle_y) || 0,
@@ -974,6 +987,144 @@ async function saveSurveyAngle(jaw, btn) {
       btn.disabled = false;
       btn.textContent = "SET SURVEY ANGLE";
     }
+  }
+}
+
+function surveyLockAuth() {
+  const user = getLoggedInUser();
+  const uuid = user?.uuid || PREVIEW_FALLBACK_UUID;
+  return {
+    machine_id: PREVIEW_MACHINE_ID,
+    uuid,
+    caseIntID: state.caseIntID,
+  };
+}
+
+function normalizeSurveyLockPayload(payload) {
+  const row = Array.isArray(payload) ? payload[0] : payload;
+  return {
+    locked: Boolean(
+      row?.survey_angle_locked === true ||
+      row?.survey_angle_locked === 1 ||
+      row?.survey_angle_locked === "1"
+    ),
+    lockedAt: row?.survey_angle_locked_at ?? null,
+    lockedBy: row?.survey_angle_locked_by ?? null,
+  };
+}
+
+function applySurveyAngleLock(lockInfo) {
+  state.surveyAngleLock.locked = Boolean(lockInfo?.locked);
+  state.surveyAngleLock.lockedAt = lockInfo?.lockedAt ?? null;
+  state.surveyAngleLock.lockedBy = lockInfo?.lockedBy ?? null;
+  state.surveyAngleLock.loaded = true;
+}
+
+async function postSurveyAngleLock(path, payload) {
+  if (!state.caseIntID) throw new Error("Case ID unavailable");
+  const res = await fetch(`${SMARTRPD_API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([
+      surveyLockAuth(),
+      { case_int_id: state.caseIntID, caseIntID: state.caseIntID, ...payload },
+    ]),
+  });
+  const tag = res.ok ? "✓" : "✕";
+  console.log(`[preview3D] ${tag} POST ${path} status=${res.status}`);
+  let json = null;
+  try {
+    json = await res.json();
+  } catch {
+    json = null;
+  }
+  if (!res.ok) {
+    const err = new Error(json?.serverErrorMessage || json?.sqlMessage || `HTTP ${res.status}`);
+    err.status = res.status;
+    err.data = json;
+    throw err;
+  }
+  return json;
+}
+
+export function syncSurveyAngleLockUi() {
+  const lock = state.surveyAngleLock || {};
+  const locked = Boolean(lock.locked);
+  const busy = Boolean(lock.busy);
+  const btn = preview3DState.topControls?.surveyLockBtn;
+  if (btn) {
+    btn.classList.toggle("is-locked", locked);
+    btn.classList.toggle("is-busy", busy);
+    btn.disabled = busy || !state.caseIntID;
+    btn.setAttribute("aria-pressed", locked ? "true" : "false");
+    btn.setAttribute(
+      "aria-label",
+      locked ? "Unlock survey angle changes" : "Lock survey angle changes"
+    );
+    btn.title = locked
+      ? "Unlock survey angle changes for this case"
+      : "Lock survey angle changes for this case";
+    const icon = btn.querySelector(".jaw-preview-survey-lock-icon");
+    if (icon) icon.src = locked ? "../../assets/lock.png" : "../../assets/unlock.png";
+    const label = btn.querySelector(".jaw-preview-survey-lock-label");
+    if (label) label.textContent = busy
+      ? "UPDATING..."
+      : locked
+        ? "SURVEY ANGLE LOCKED"
+        : "LOCK SURVEY ANGLE";
+  }
+
+  for (const key of ["rowUpper", "rowLower"]) {
+    const surveyBtn = preview3DState.topControls?.[key]?.surveyBtn;
+    if (!surveyBtn) continue;
+    if (locked && !preview3DState.surveyAiming) {
+      surveyBtn.disabled = true;
+      surveyBtn.title = "Survey angle is locked for this case";
+    } else if (!preview3DState.surveyAiming) {
+      surveyBtn.disabled = false;
+      surveyBtn.removeAttribute("title");
+    }
+  }
+}
+
+export async function refreshSurveyAngleLock() {
+  if (!state.caseIntID) return null;
+  try {
+    const json = await postSurveyAngleLock(SURVEY_LOCK_GET_PATH);
+    const lockInfo = normalizeSurveyLockPayload(json);
+    applySurveyAngleLock(lockInfo);
+    syncSurveyAngleLockUi();
+    return lockInfo;
+  } catch (err) {
+    state.surveyAngleLock.loaded = false;
+    syncSurveyAngleLockUi();
+    console.warn("[preview3D] survey angle lock endpoint unavailable", err);
+    return null;
+  }
+}
+
+export async function toggleSurveyAngleLock() {
+  if (!state.caseIntID) return null;
+  if (preview3DState.surveyAiming) exitSurveyAiming();
+  state.surveyAngleLock.busy = true;
+  syncSurveyAngleLockUi();
+  const nextLocked = !state.surveyAngleLock.locked;
+  try {
+    const json = await postSurveyAngleLock(SURVEY_LOCK_UPDATE_PATH, {
+      survey_angle_locked: nextLocked,
+    });
+    const lockInfo = normalizeSurveyLockPayload(json);
+    applySurveyAngleLock(lockInfo);
+    toast?.success?.(
+      lockInfo.locked ? "Survey angle locked for this case." : "Survey angle unlocked."
+    );
+    return lockInfo;
+  } catch (err) {
+    toast?.error?.(`Survey angle lock not updated. ${err.message || err}`);
+    throw err;
+  } finally {
+    state.surveyAngleLock.busy = false;
+    syncSurveyAngleLockUi();
   }
 }
 
