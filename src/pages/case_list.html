@@ -334,6 +334,10 @@
               <label class="input-label" for="requestDate">Case Request Date</label>
               <input type="date" id="requestDate" class="modal-input" />
             </div>
+            <div class="cc-field">
+              <label class="input-label" for="ccToothShade">Tooth Shade</label>
+              <input type="text" id="ccToothShade" class="modal-input" placeholder="e.g. A2" maxlength="64" />
+            </div>
             <div class="cc-field cc-field-full">
               <label class="input-label" for="ccInviteInput">Invite Users</label>
               <div class="cc-invite-row">
@@ -509,6 +513,22 @@
           <div class="cm-field">
             <div class="cm-field-label">DATE CREATED</div>
             <div class="cm-field-value" id="date-created">—</div>
+          </div>
+
+          <div class="cm-field">
+            <div class="cm-field-label">
+              <label for="caseToothShade">TOOTH SHADE</label>
+            </div>
+            <div class="cm-tooth-shade-wrap">
+              <input
+                type="text"
+                id="caseToothShade"
+                class="cm-tooth-shade"
+                placeholder="e.g. A2"
+                maxlength="64"
+              />
+              <span class="cm-instructions-status" id="caseToothShadeStatus" role="status"></span>
+            </div>
           </div>
 
           <div class="cm-field">

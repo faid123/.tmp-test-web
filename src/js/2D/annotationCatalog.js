@@ -52,8 +52,13 @@ import {
   updateCaseDueDate,
   updateCaseStatus,
   updateCaseComment,
+  updateCaseToothShade,
   publishCaseComment,
   watchCaseComments,
+  publishCaseToothShade,
+  watchCaseToothShade,
+  loadCaseToothShadeDraft,
+  saveCaseToothShadeDraft,
 } from "./caseNote.js";
 import { toast, attachThemedCalendar } from "../shared/toast.js";
 
@@ -560,9 +565,25 @@ function watchCommentAcrossTabs() {
   });
 }
 
+let toothShadeWatchWired = false;
+function watchToothShadeAcrossTabs() {
+  if (toothShadeWatchWired) return;
+  toothShadeWatchWired = true;
+  watchCaseToothShade((caseIntID, text) => {
+    if (String(caseIntID) !== String(state.caseIntID)) return;
+    for (const input of document.querySelectorAll("#case-note-shade")) {
+      if (input === document.activeElement) continue;
+      if ((input.value || "").trim() !== (input.dataset.savedToothShade ?? "").trim()) continue;
+      input.value = text;
+      input.dataset.savedToothShade = text;
+    }
+  });
+}
+
 // Build the Case Note form (renders inside the catalog area when the case-note tab is active).
 export function createCaseNoteForm() {
   watchCommentAcrossTabs();
+  watchToothShadeAcrossTabs();
   const saved = loadCaseNote(state.caseIntID);
 
   const form = document.createElement("form");
@@ -593,10 +614,17 @@ export function createCaseNoteForm() {
     userTouchedDate = true;
   });
 
-  const shadeInput = buildInputRow("Tooth Shade", "text", "case-note-shade", saved.toothShade || "", {
+  const shadeDraft = loadCaseToothShadeDraft(state.caseIntID);
+  const shadeInput = buildInputRow("Tooth Shade", "text", "case-note-shade", saved.toothShade || shadeDraft || "", {
     placeholder: "e.g. A2",
+    maxlength: "64",
   });
   form.appendChild(shadeInput.row);
+  let userTouchedShade = false;
+  shadeInput.input.dataset.savedToothShade = shadeInput.input.value;
+  shadeInput.input.addEventListener("input", () => {
+    userTouchedShade = true;
+  });
 
   const autoCategory = workCategoryForJawMaterial(state.jawMaterial);
   const categorySelect = buildSelectRow(
@@ -641,6 +669,12 @@ export function createCaseNoteForm() {
       commentField.input.value = liveComment;
       commentField.input.dataset.savedComment = liveComment;
     }
+    const liveShade = detail?.tooth_shade ?? "";
+    if (!userTouchedShade && liveShade !== shadeInput.input.value) {
+      shadeInput.input.value = liveShade;
+      shadeInput.input.dataset.savedToothShade = liveShade;
+      saveCaseToothShadeDraft(state.caseIntID, liveShade);
+    }
   });
 
   const actions = document.createElement("div");
@@ -658,6 +692,31 @@ export function createCaseNoteForm() {
   // Special Instruction commits on its own when focus leaves, like the case
   // list's box — no need to approve the design to get the note to the technician.
   let pendingCommentSave = null;
+  let pendingToothShadeSave = null;
+  shadeInput.input.addEventListener("blur", () => {
+    const text = shadeInput.input.value.trim();
+    const savedText = shadeInput.input.dataset.savedToothShade ?? "";
+    if (state.caseIntID == null || text === savedText.trim()) return;
+    status.textContent = "Saving...";
+    status.classList.remove("is-error");
+    pendingToothShadeSave = updateCaseToothShade(state.caseIntID, text).then((ok) => {
+      if (ok) {
+        shadeInput.input.value = text;
+        shadeInput.input.dataset.savedToothShade = text;
+        publishCaseToothShade(state.caseIntID, text);
+        const note = loadCaseNote(state.caseIntID);
+        saveCaseNote(state.caseIntID, { ...note, toothShade: text, updatedAt: new Date().toISOString() });
+        status.textContent = "Saved.";
+        setTimeout(() => {
+          if (status.textContent === "Saved.") status.textContent = "";
+        }, 2000);
+      } else {
+        status.textContent = "Couldn't save - try again.";
+        status.classList.add("is-error");
+      }
+      pendingToothShadeSave = null;
+    });
+  });
   commentField.input.addEventListener("blur", () => {
     const text = commentField.input.value;
     const savedText = commentField.input.dataset.savedComment ?? "";
@@ -722,6 +781,7 @@ export function createCaseNoteForm() {
     // Clicking Approve blurs the comment box first, so let that write land —
     // all three are full upserts of one row and must not overlap.
     await pendingCommentSave;
+    await pendingToothShadeSave;
 
     // Both are full upserts of the SAME row, so they must stay sequential — the status
     // write re-reads what the first wrote. Skipped if the first fails.
@@ -821,6 +881,7 @@ function buildInputRow(labelText, type, id, value, opts = {}) {
   input.className = "case-note-input";
   input.value = value;
   if (opts.placeholder) input.placeholder = opts.placeholder;
+  if (opts.maxlength) input.maxLength = Number(opts.maxlength);
   row.appendChild(label);
   row.appendChild(input);
   return { row, input };

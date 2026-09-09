@@ -1293,7 +1293,30 @@ button {
 
 /* Case instructions — free text in additionalcasedetails.comments. No Save
    button: it commits on Enter or blur (caseManagement.js), with a status chip. */
+.cm-tooth-shade-wrap,
 .cm-instructions-wrap { position: relative; }
+
+.cm-tooth-shade {
+  display: block;
+  width: min(180px, 100%);
+  box-sizing: border-box;
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.cm-tooth-shade:focus {
+  outline: none;
+  border-color: var(--primary, #3bae95);
+}
+.cm-tooth-shade:disabled {
+  background: var(--line-soft);
+  color: var(--muted);
+}
 
 .cm-instructions {
   display: block;

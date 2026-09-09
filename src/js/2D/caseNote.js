@@ -1,5 +1,5 @@
-// Per-case "Case Note" helpers: mostly localStorage `caseNote:<caseIntID>`, except "Date
-// Required", which IS the backend additionalcasedetails.due_date.
+// Per-case "Case Note" helpers: mostly localStorage `caseNote:<caseIntID>`, except
+// Date Required / Tooth Shade / Special Instruction, which live in additionalcasedetails.
 
 import { confirmModal, toast } from "../shared/toast.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
@@ -81,6 +81,7 @@ export function loadCaseDueDate(caseIntID) {
 }
 
 const COMMENT_PREFIX = "caseComment:";
+const TOOTH_SHADE_PREFIX = "caseToothShade:";
 
 // Announces a saved comment to other tabs — `storage` fires in every OTHER document, the
 // only same-origin channel. The timestamp keeps a repeat save of identical text firing.
@@ -101,6 +102,42 @@ export function watchCaseComments(cb) {
       cb(raw !== "" && Number.isFinite(n) ? n : raw, JSON.parse(e.newValue).text ?? "");
     } catch {
       /* malformed payload — ignore */
+    }
+  };
+  window.addEventListener("storage", onStorage);
+  return () => window.removeEventListener("storage", onStorage);
+}
+
+export function saveCaseToothShadeDraft(caseIntID, toothShade) {
+  return lsSet(storageKey(TOOTH_SHADE_PREFIX, caseIntID), toothShade?.trim() || "");
+}
+
+export function loadCaseToothShadeDraft(caseIntID) {
+  const raw = lsGet(storageKey(TOOTH_SHADE_PREFIX, caseIntID)) || "";
+  try {
+    return JSON.parse(raw)?.text ?? "";
+  } catch {
+    return raw;
+  }
+}
+
+export function publishCaseToothShade(caseIntID, toothShade) {
+  return lsSet(
+    storageKey(TOOTH_SHADE_PREFIX, caseIntID),
+    JSON.stringify({ text: toothShade ?? "", at: Date.now() })
+  );
+}
+
+export function watchCaseToothShade(cb) {
+  const onStorage = (e) => {
+    if (!e.key?.startsWith(TOOTH_SHADE_PREFIX) || !e.newValue) return;
+    const raw = e.key.slice(TOOTH_SHADE_PREFIX.length);
+    const n = Number(raw);
+    try {
+      const parsed = JSON.parse(e.newValue);
+      cb(raw !== "" && Number.isFinite(n) ? n : raw, parsed.text ?? "");
+    } catch {
+      cb(raw !== "" && Number.isFinite(n) ? n : raw, e.newValue ?? "");
     }
   };
   window.addEventListener("storage", onStorage);
@@ -152,6 +189,7 @@ async function patchAdditionalCaseDetails(caseIntID, changes) {
       due_date: detail?.due_date ?? null,
       comments: detail?.comments ?? null,
       new_status: detail?.new_status ?? null,
+      tooth_shade: detail?.tooth_shade ?? null,
       ...changes,
     },
   ]);
@@ -168,6 +206,25 @@ export async function updateCaseDueDate(caseIntID, isoDate, comment) {
 // The case list's CASE INSTRUCTIONS box. Leaves due_date alone — Approve owns it.
 export async function updateCaseComment(caseIntID, comment) {
   return patchAdditionalCaseDetails(caseIntID, { comments: comment?.trim() ? comment : null });
+}
+
+export async function updateCaseToothShade(caseIntID, toothShade) {
+  const value = toothShade?.trim() ? toothShade.trim() : null;
+  const user = getLoggedInUser();
+  if (!user?.uuid || caseIntID == null) return false;
+
+  try {
+    const res = await postJson("additionalcasedetails/toothshade", [
+      { machine_id: MACHINE_ID, uuid: user.uuid, caseIntID },
+      { case_int_id: caseIntID, tooth_shade: value },
+    ]);
+    if (res?.ok) return true;
+    if (res && ![404, 405].includes(Number(res.status))) return false;
+  } catch {
+    // Fall back to the full-row merge below for older local servers.
+  }
+
+  return patchAdditionalCaseDetails(caseIntID, { tooth_shade: value });
 }
 
 // The status strings the backend stores for an approved design. Both are values

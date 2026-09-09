@@ -49,6 +49,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const caseNameInput = document.getElementById("caseName");
   const requestDateInput = document.getElementById("requestDate");
+  const toothShadeInput = document.getElementById("ccToothShade");
   const instructionsInput = document.getElementById("ccCaseInstructions");
   // Grows with its content instead of taking a drag handle. Height is cleared so
   // it can shrink, and the border added back on top of scrollHeight, which omits it.
@@ -326,6 +327,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const resetCreateCaseForm = () => {
     if (caseNameInput) caseNameInput.value = "";
     if (requestDateInput) requestDateInput.value = "";
+    if (toothShadeInput) toothShadeInput.value = "";
     if (instructionsInput) {
       instructionsInput.value = "";
       // Drop the inline height the auto-grow set, or the box stays expanded to
@@ -727,7 +729,13 @@ document.addEventListener("DOMContentLoaded", async () => {
       caseIntID = data.id;
       const user_id = loggedInUser.username || "";
       await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
-      await saveCaseInstructions(machine_id, uuid, caseIntID, instructionsInput?.value ?? "");
+      await saveCaseInstructions(
+        machine_id,
+        uuid,
+        caseIntID,
+        instructionsInput?.value ?? "",
+        toothShadeInput?.value ?? ""
+      );
       advance(hasUpperPre ? "Uploading upper jaw…" : hasLowerPre ? "Uploading lower jaw…" : "Saving…");
     } catch (err) {
       console.error("❌ Failed to create case", err);
@@ -1230,12 +1238,13 @@ async function uploadReferenceImage(
 
 // The case is brand new, so there is no row to merge with. Non-fatal: this must
 // never fail a case creation that already succeeded.
-async function saveCaseInstructions(machine_id, uuid, caseIntID, text) {
+async function saveCaseInstructions(machine_id, uuid, caseIntID, text, toothShade = "") {
   const comments = (text || "").trim();
-  if (!caseIntID || !comments) return;
+  const shade = (toothShade || "").trim();
+  if (!caseIntID || (!comments && !shade)) return;
   const payload = [
     { machine_id, uuid, caseIntID },
-    { assigned_to: null, due_date: null, new_status: null, comments },
+    { assigned_to: null, due_date: null, new_status: null, comments: comments || null, tooth_shade: shade || null },
   ];
   try {
     const res = await fetch(

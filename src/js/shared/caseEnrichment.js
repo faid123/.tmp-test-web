@@ -58,6 +58,7 @@ export async function applyEnrichmentResponses(caseObj, detailRes, rolesRes, log
             new_status: item.new_status,
             assigned_to: item.assigned_to,
             comments: item.comments,
+            tooth_shade: item.tooth_shade,
           });
         }
       } catch {

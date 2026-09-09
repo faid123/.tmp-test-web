@@ -11,6 +11,10 @@ import {
   updateCaseDueDate,
   publishCaseComment,
   watchCaseComments,
+  saveCaseToothShadeDraft,
+  updateCaseToothShade,
+  publishCaseToothShade,
+  watchCaseToothShade,
 } from "../2D/caseNote.js";
 import {
   ENRICH_CONCURRENCY,
@@ -293,6 +297,7 @@ async function deleteCaseById(caseId, { skipConfirm = false } = {}) {
       const avatar = document.getElementById("assigneeAvatar");
       if (avatar) avatar.textContent = "·";
       renderSharedWith([]);
+      renderCaseToothShade(null, "");
       renderCaseInstructions(null, "");
       currentThumbnails = [];
       currentImageIndex = 0;
@@ -1239,6 +1244,7 @@ async function handleRowClick(caseId) {
         expected_date: extra.expected_date,
         assigned_to: extra.assigned_to,
         comments: extra.comments,
+        tooth_shade: extra.tooth_shade,
         co_owners: extra.co_owners,
       });
     }
@@ -1438,6 +1444,7 @@ function displayCaseDetails(data) {
   document.getElementById("date-created").textContent = formatDateTime(data.creation_date);
   document.getElementById("last-edited").textContent = formatDateTime(data.last_updated);
 
+  renderCaseToothShade(caseIntId, data.tooth_shade);
   renderCaseInstructions(caseIntId, data.comments);
 
   const statusSel = document.getElementById("status");
@@ -2586,7 +2593,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       for (const c of cases) {
         const prev = cachedByKey.get(String(c.id ?? c.case_int_id));
         if (!prev) continue;
-        for (const k of ["expected_date", "new_status", "assigned_to", "comments", "co_owners"]) {
+        for (const k of ["expected_date", "new_status", "assigned_to", "comments", "tooth_shade", "co_owners"]) {
           if (c[k] === undefined && prev[k] !== undefined) c[k] = prev[k];
         }
       }
@@ -2845,6 +2852,29 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
           e.preventDefault();
           instructionsBox.blur();
         }
+      });
+    }
+    const toothShadeInput = document.getElementById("caseToothShade");
+    if (toothShadeInput) {
+      toothShadeInput.addEventListener("input", () => setToothShadeStatus(""));
+      toothShadeInput.addEventListener("blur", () => saveCaseToothShadeFromDetails());
+      toothShadeInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          toothShadeInput.blur();
+        }
+      });
+      watchCaseToothShade((caseIntId, text) => {
+        const cached = currentCases.find(
+          (c) => String(c.id ?? c.case_int_id) === String(caseIntId)
+        );
+        if (cached) {
+          cached.tooth_shade = text || null;
+          scheduleEnrichCacheSave();
+        }
+        if (String(window.selectedCaseId) !== String(caseIntId)) return;
+        if (window.selectedCaseStub) window.selectedCaseStub.tooth_shade = text || null;
+        renderCaseToothShade(caseIntId, text);
       });
     }
   }
@@ -3624,6 +3654,7 @@ function syncDetailPaneIfSelected(caseObj) {
     expected_date: caseObj.expected_date,
     assigned_to: caseObj.assigned_to,
     comments: caseObj.comments,
+    tooth_shade: caseObj.tooth_shade,
     co_owners: caseObj.co_owners,
   });
   displayCaseDetails(window.selectedCaseStub);
@@ -4800,6 +4831,31 @@ function collapseInstructions(box) {
 // and so Save only enables on a real edit.
 let instructionsLoadedFor = null;
 let instructionsSavedValue = "";
+let toothShadeLoadedFor = null;
+let toothShadeSavedValue = "";
+
+function renderCaseToothShade(caseIntId, toothShade) {
+  const input = document.getElementById("caseToothShade");
+  if (!input) return;
+  const nextValue = toothShade ?? "";
+  const dirty = input.value.trim() !== toothShadeSavedValue.trim();
+  if (toothShadeLoadedFor === (caseIntId ?? null) && (document.activeElement === input || dirty)) {
+    toothShadeSavedValue = nextValue;
+    return;
+  }
+  toothShadeLoadedFor = caseIntId ?? null;
+  toothShadeSavedValue = nextValue;
+  input.value = nextValue;
+  input.disabled = caseIntId == null;
+  setToothShadeStatus("");
+}
+
+function setToothShadeStatus(text, isError = false) {
+  const status = document.getElementById("caseToothShadeStatus");
+  if (!status) return;
+  status.textContent = text;
+  status.classList.toggle("is-error", !!isError);
+}
 
 function renderCaseInstructions(caseIntId, comments) {
   const box = document.getElementById("caseInstructions");
@@ -4906,6 +4962,7 @@ async function saveCaseInstructions() {
             due_date: detail?.due_date ?? null,
             new_status: detail?.new_status ?? null,
             comments: text || null,
+            tooth_shade: detail?.tooth_shade ?? window.selectedCaseStub?.tooth_shade ?? null,
           },
         ]),
       }
@@ -4941,6 +4998,43 @@ async function saveCaseInstructions() {
   } catch (err) {
     console.error("❌ Failed to save case instructions:", err);
     setInstructionsStatus("Couldn't save — try again.", true);
+  }
+}
+
+async function saveCaseToothShadeFromDetails() {
+  const input = document.getElementById("caseToothShade");
+  const caseIntId = toothShadeLoadedFor;
+  if (!input || caseIntId == null) return;
+
+  const text = input.value.trim();
+  if (text === toothShadeSavedValue.trim()) return;
+
+  setToothShadeStatus("Saving...");
+  const ok = await updateCaseToothShade(caseIntId, text);
+  if (!ok) {
+    setToothShadeStatus("Couldn't save - try again.", true);
+    return;
+  }
+
+  const cached = currentCases.find(
+    (c) => String(c.id ?? c.case_int_id) === String(caseIntId)
+  );
+  if (cached) {
+    cached.tooth_shade = text || null;
+    scheduleEnrichCacheSave();
+  }
+  if (window.selectedCaseStub) window.selectedCaseStub.tooth_shade = text || null;
+  publishCaseToothShade(caseIntId, text);
+  saveCaseToothShadeDraft(caseIntId, text);
+
+  if (toothShadeLoadedFor === caseIntId) {
+    toothShadeSavedValue = text;
+    input.value = text;
+    setToothShadeStatus("Saved.");
+    setTimeout(() => {
+      const status = document.getElementById("caseToothShadeStatus");
+      if (status?.textContent === "Saved.") setToothShadeStatus("");
+    }, 2000);
   }
 }
 
@@ -4986,6 +5080,7 @@ export async function postNewStatus(caseObj, newStatus) {
       assigned_to: stored?.assigned_to ?? caseObj.assigned_to ?? null,
       due_date: stored?.due_date ?? caseObj.expected_date ?? null, // 你的 clean 已改名
       comments: stored?.comments ?? caseObj.comments ?? null,
+      tooth_shade: stored?.tooth_shade ?? caseObj.tooth_shade ?? null,
       new_status: newStatus,
     },
   ];
