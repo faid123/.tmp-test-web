@@ -114,6 +114,7 @@ export function initComponentCatalog() {
       button.type = "button";
       const kindClass = tab.kind === "form" ? " is-form-tab" : "";
       button.className = `component-tab${kindClass} ${state.selectedTab === tab.id ? "is-active" : ""}`;
+      button.dataset.tab = tab.id;
       button.textContent = tab.label;
       button.addEventListener("click", () => {
         if (isTabBlockedByMaterial(tab.id)) {

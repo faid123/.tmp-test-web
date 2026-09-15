@@ -51,6 +51,13 @@ const CREATE_CASE = "#createCaseBtn";
 // of the time — including while the help panel itself is open.
 const APP_MENU = "#footerMenuBtn";
 
+// The Components panel is display:none until the arches are locked, so topics
+// about anything in it name the padlock as their `reveal` — the same hand-off
+// the tour's Components step makes.
+const LOCK_ARCHES = "#jawLockToggleBtn";
+
+const COMPONENT_TAB = (id) => `#componentTabs .component-tab[data-tab="${id}"]`;
+
 export const HELP_TOPICS = [
   // ---------------------------------------------------------------- account
   {
@@ -560,6 +567,7 @@ export const HELP_TOPICS = [
     title: "The Components tabs",
     page: "annotation_2d",
     selector: "#componentTabs",
+    reveal: LOCK_ARCHES,
     keywords: ["component", "tab", "mesh", "assembly", "rests", "clasps", "bars", "plate", "major", "connector", "catalog", "palette"],
     phrases: ["what are the component tabs", "where do i find clasps", "what is in the components panel"],
     answer:
@@ -575,7 +583,8 @@ export const HELP_TOPICS = [
     id: "clasps",
     title: "Place a clasp",
     page: "annotation_2d",
-    selector: "#componentTabs",
+    selector: COMPONENT_TAB("clasps"),
+    reveal: LOCK_ARCHES,
     keywords: ["clasp", "retainer", "reciprocal", "reciprocating", "buccal", "lingual", "place", "arm"],
     phrases: ["how do i add a clasp", "how do i place a retainer"],
     answer:
@@ -591,7 +600,8 @@ export const HELP_TOPICS = [
     id: "bars",
     title: "Place a bar",
     page: "annotation_2d",
-    selector: "#componentTabs",
+    selector: COMPONENT_TAB("bars"),
+    reveal: LOCK_ARCHES,
     keywords: ["bar", "connector", "lingual", "palatal", "place", "minor"],
     phrases: ["how do i add a bar", "how do i place a bar"],
     answer:
@@ -607,7 +617,8 @@ export const HELP_TOPICS = [
     id: "major-connector",
     title: "Choose the major connector",
     page: "annotation_2d",
-    selector: "#componentTabs",
+    selector: COMPONENT_TAB("major"),
+    reveal: LOCK_ARCHES,
     keywords: ["major", "connector", "plate", "strap", "palatal", "lingual", "bar", "horseshoe"],
     phrases: ["how do i add a major connector", "how do i change the major connector"],
     answer:
@@ -623,7 +634,8 @@ export const HELP_TOPICS = [
     id: "plates",
     title: "Place plating",
     page: "annotation_2d",
-    selector: "#componentTabs",
+    selector: COMPONENT_TAB("plate"),
+    reveal: LOCK_ARCHES,
     keywords: ["plate", "plating", "proximal", "coverage", "place"],
     phrases: ["how do i add a plate", "how do i plate a tooth"],
     answer:
@@ -639,13 +651,21 @@ export const HELP_TOPICS = [
     id: "remove-component",
     title: "Remove a placed component",
     page: "annotation_2d",
-    keywords: ["remove", "delete", "undo", "clear", "component", "mistake", "wrong", "erase"],
-    phrases: ["how do i remove a component", "i placed the wrong component", "how do i undo"],
+    keywords: ["remove", "delete", "undo", "clear", "component", "mistake", "wrong", "erase", "eraser", "right"],
+    phrases: [
+      "how do i remove a component",
+      "i placed the wrong component",
+      "how do i undo",
+      "right click to remove",
+      "remove a clasp",
+      "delete a clasp",
+    ],
     answer:
-      "Select a tooth that already carries components to open the Remove component dialog and pick what to take off. The undo button beside the padlock steps back through recent changes, and Clear Top / Clear Bottom strips every component from one jaw.",
+      "With a mouse, right-click the tooth that carries the component — left-click always adds, right-click opens the Remove component list for that tooth. On a touch screen there is no right-click: tap the eraser beside the padlock to switch to remove mode, then tap the tooth. Either way, pick what to take off from the list. The undo button beside the padlock steps back through recent changes, and Clear Top / Clear Bottom strips every component from one jaw.",
     steps: [
-      "Select the tooth that carries the component.",
-      "Choose the component to remove in the dialog.",
+      "Mouse: right-click the tooth that carries the component (left-click adds, right-click removes).",
+      "In Mobile: tap the eraser beside the padlock, then tap the tooth.",
+      "Choose the component to remove from the list that opens.",
       "Or use undo beside the padlock, or Clear Top / Clear Bottom for a whole jaw.",
     ],
     related: ["component-tabs", "clear-arch", "save-2d"],

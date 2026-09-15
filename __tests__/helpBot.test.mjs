@@ -19,6 +19,7 @@ import {
   MIN_SCORE,
 } from "../src/js/shared/helpMatcher.js";
 import { HELP_TOPICS, TOPIC_BY_ID, PAGE_LABELS, PAGE_PATHS } from "../src/js/shared/helpTopics.js";
+import { COMPONENT_TABS } from "../src/js/2D/components.js";
 import { undefinedSelectorParts } from "./helpers/appSources.mjs";
 
 const idsOf = (matches) => matches.map((m) => m.topic.id);
@@ -268,6 +269,37 @@ describe("Show me points at the control, not at what opens it", () => {
   test("every field inside the create-case view knows how to open it", () => {
     for (const id of ["upload-jaw-scans", "reference-images", "invite-during-create"]) {
       expect(TOPIC_BY_ID.get(id).reveal).toBe("#createCaseBtn");
+    }
+  });
+
+  // "How do I place a clasp" used to spotlight the whole Components tab strip.
+  // Each per-tab topic now names its own tab, and the tab id it names must be
+  // one the catalog actually renders (data-tab is set from COMPONENT_TABS).
+  test.each([
+    ["clasps", "clasps"],
+    ["bars", "bars"],
+    ["major-connector", "major"],
+    ["plates", "plate"],
+  ])("%s points at the %s tab, not the whole strip", (id, tabId) => {
+    expect(TOPIC_BY_ID.get(id).selector).toBe(`#componentTabs .component-tab[data-tab="${tabId}"]`);
+    expect(COMPONENT_TABS.some((t) => t.id === tabId)).toBe(true);
+  });
+
+  test("only the topic about the tab strip itself targets the whole strip", () => {
+    const onStrip = HELP_TOPICS.filter((t) => t.selector === "#componentTabs").map((t) => t.id);
+    expect(onStrip).toEqual(["component-tabs"]);
+  });
+
+  // The Components panel is display:none until the arches are locked, so with
+  // no reveal these answers lost their "Show me" button in select mode — the
+  // state a user asking "how do I place a clasp" is most likely in.
+  test("every topic inside the Components panel locks the arches to reveal it", () => {
+    const inPanel = HELP_TOPICS.filter((t) => /^#componentTabs/.test(t.selector || ""));
+    expect(inPanel.map((t) => t.id)).toEqual(
+      expect.arrayContaining(["component-tabs", "clasps", "bars", "major-connector", "plates"])
+    );
+    for (const topic of inPanel) {
+      expect(topic.reveal).toBe("#jawLockToggleBtn");
     }
   });
 
