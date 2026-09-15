@@ -19,6 +19,7 @@ import {
   isMeshComponent,
   isPalatalBarMajorComponent,
   isPalatalHoleMajorComponent,
+  isPalatalStrapMajorComponent,
   isPlateComponentId,
   isRestComponent,
   PALATAL_BAR_CONNECTOR_TOOTH_IDS,
@@ -42,6 +43,10 @@ import { assessPlacementCriteria } from "./criteria.js";
 function isAnteriorToothId(toothId) {
   const unit = Number(toothId) % 10;
   return Number.isFinite(unit) && unit >= 1 && unit <= 3;
+}
+
+function isUpperAnteriorToothId(toothId) {
+  return ["11", "12", "13", "21", "22", "23"].includes(String(toothId));
 }
 
 // Default reciprocating element for a retentive placement: the proximal (reciprocating)
@@ -104,7 +109,7 @@ export function applyRemovalSideEffectsForTooth(tooth, removedEntry) {
     const remainingPlate = tooth.componentPlacements.some((e) => isPlateComponentId(e.componentId));
     if (!remainingPlate) {
       tooth.componentPlacements = tooth.componentPlacements.filter(
-        (e) => !isClaspComponent(e.componentId)
+        (e) => !isClaspComponent(e.componentId) && !isMajorConnectorComponent(e.componentId)
       );
       syncToothComponentsFromPlacements(tooth);
     }
@@ -318,10 +323,16 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
   if (hasPlacement(tooth, selectedComponent.id, targetSurface)) {
     removePlacement(tooth, selectedComponent.id, targetSurface);
     if (isPlateComponentId(selectedComponent.id)) {
+      if (selectedComponent.id === "plate-prox" && isUpperAnteriorToothId(toothId)) {
+        tooth.componentPlacements = tooth.componentPlacements.filter(
+          (e) => !isPalatalStrapMajorComponent(e.componentId)
+        );
+        syncToothComponentsFromPlacements(tooth);
+      }
       const remainingPlate = tooth.componentPlacements.some((e) => isPlateComponentId(e.componentId));
       if (!remainingPlate) {
         tooth.componentPlacements = tooth.componentPlacements.filter(
-          (e) => !isClaspComponent(e.componentId)
+          (e) => !isClaspComponent(e.componentId) && !isMajorConnectorComponent(e.componentId)
         );
         syncToothComponentsFromPlacements(tooth);
       }
@@ -885,6 +896,9 @@ export function resolveMajorConnectorAnchorComponentId(tooth) {
 
 export function shouldBlockMajorConnectorRemoval(toothId, placementEntry, teeth) {
   if (!placementEntry || !isMajorConnectorComponent(placementEntry.componentId)) {
+    return false;
+  }
+  if (isPalatalStrapMajorComponent(placementEntry.componentId)) {
     return false;
   }
   const id = String(toothId);

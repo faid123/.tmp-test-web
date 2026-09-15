@@ -1570,14 +1570,22 @@ function roundedPolygonPath(pts, r) {
 // Editable attachment map for palatal strap control points.
 // Values are OFFSETS from each associated tooth center.
 const PALATAL_STRAP_ATTACHED_POINTS = Object.freeze([
+  { toothId: "11", dx: 8, dy: 34 },
+  { toothId: "12", dx: 26, dy: 26 },
+  { toothId: "13", dx: 38, dy: 18 },
   { toothId: "14", dx: 45, dy: 10 },
   { toothId: "15", dx: 37, dy: 35 },
   { toothId: "16", dx: 35, dy: 45 },
   { toothId: "17", dx: 40, dy: 45 },
+  { toothId: "18", dx: 42, dy: 40 },
+  { toothId: "28", dx: -42, dy: 40 },
   { toothId: "27", dx: -40, dy: 45 },
   { toothId: "26", dx: -35, dy: 45 },
   { toothId: "25", dx: -37, dy: 35 },
   { toothId: "24", dx: -45, dy: 10 },
+  { toothId: "23", dx: -38, dy: 18 },
+  { toothId: "22", dx: -26, dy: 26 },
+  { toothId: "21", dx: -8, dy: 34 },
 ]);
 
 const PALATAL_STRAP_CENTER_POINTS = Object.freeze({
@@ -1607,7 +1615,6 @@ function getPalatalStrapPointsFromAttachments() {
     return Array.isArray(placements)
       && placements.some((entry) => entry.componentId === PALATAL_STRAP_MAJOR_COMPONENT_ID);
   };
-
   const resolveAttachedPoint = (toothId, fallbackIds) => {
     const slotCfg = cfgByToothId.get(toothId);
     if (!slotCfg) return pointByToothId.get(toothId);
@@ -1632,8 +1639,10 @@ function getPalatalStrapPointsFromAttachments() {
   const p14 = resolveAttachedPoint("14", ["15", "16", "17"]);
   const p15 = resolveAttachedPoint("15", ["16", "14", "17"]);
   const p16 = resolveAttachedPoint("16", ["15", "17", "14"]);
-  const p17 = resolveAttachedPoint("17", ["16", "15", "14"]);
-  const p27 = resolveAttachedPoint("27", ["26", "25", "24"]);
+  const p17 = resolveAttachedPoint("17", ["16", "18", "15", "14"]);
+  const p18 = hasStrapOnTooth("18") ? resolveAttachedPoint("18", ["17", "16", "15", "14"]) : null;
+  const p28 = hasStrapOnTooth("28") ? resolveAttachedPoint("28", ["27", "26", "25", "24"]) : null;
+  const p27 = resolveAttachedPoint("27", ["26", "28", "25", "24"]);
   const p26 = resolveAttachedPoint("26", ["25", "27", "24"]);
   const p25 = resolveAttachedPoint("25", ["26", "24", "27"]);
   const p24 = resolveAttachedPoint("24", ["25", "26", "27"]);
@@ -1642,18 +1651,29 @@ function getPalatalStrapPointsFromAttachments() {
     return PALATAL_STRAP_ARCH_POLYGON;
   }
 
+  const pointForTooth = {
+    "14": p14,
+    "15": p15,
+    "16": p16,
+    "17": p17,
+    "18": p18,
+    "24": p24,
+    "25": p25,
+    "26": p26,
+    "27": p27,
+    "28": p28,
+  };
   const pickActivePoint = (ids, fallbackPoint) => {
     for (const id of ids) {
       if (hasStrapOnTooth(id)) {
-        const pt = ({ "14": p14, "15": p15, "16": p16, "17": p17, "24": p24, "25": p25, "26": p26, "27": p27 })[id];
+        const pt = pointForTooth[id];
         if (pt) return pt;
       }
     }
     return fallbackPoint;
   };
-
-  const leftDeepPoint = pickActivePoint(["17", "16", "15", "14"], p17);
-  const rightDeepPoint = pickActivePoint(["27", "26", "25", "24"], p27);
+  const leftDeepPoint = pickActivePoint(["18", "17", "16", "15", "14"], p17);
+  const rightDeepPoint = pickActivePoint(["28", "27", "26", "25", "24"], p27);
   const topMidX = (p16.x + p26.x) / 2;
   const topMidY = (p16.y + p26.y) / 2;
   const bottomMidX = (leftDeepPoint.x + rightDeepPoint.x) / 2;
@@ -1666,19 +1686,14 @@ function getPalatalStrapPointsFromAttachments() {
     x: bottomMidX + PALATAL_STRAP_CENTER_POINTS.bottom.dx,
     y: centerTop.y + PALATAL_STRAP_FIXED_CENTER_Y_GAP,
   };
-
-  return [
-    p14,
-    p15,
-    p16,
-    p17,
-    centerBottom,
-    p27,
-    p26,
-    p25,
-    p24,
-    centerTop,
-  ];
+  const points = [];
+  points.push(p14, p15, p16, p17);
+  if (p18) points.push(p18);
+  points.push(centerBottom);
+  if (p28) points.push(p28);
+  points.push(p27, p26, p25, p24);
+  points.push(centerTop);
+  return points;
 }
 
 function appendPalatalStrapArchOverlay(svg) {

@@ -23,6 +23,7 @@ jest.mock("../src/js/2D/2DAnnotation.js", () => ({
 
 import {
   placeSelectedComponentOnTooth,
+  shouldBlockMajorConnectorRemoval,
   toothSupportsMajorConnectorOverlay,
 } from "../src/js/2D/annotationPlacement.js";
 import {
@@ -35,6 +36,7 @@ import {
   ACTION_UPON_FAILURE,
   ASSEMBLY_REST_SUGGESTION_IDS,
   COMPONENT_BY_ID,
+  computePalatalStrapPolygonPoints,
   ensureMajorConnectorPlacementsOnSupportedTeethInJaws,
   isMajorConnectorComponent,
   pruneInvalidMajorConnectorPlacementsInJaw,
@@ -382,6 +384,8 @@ describe("the connector follows the changed tooth only", () => {
 
   const hasMajorOn = (teeth, id) =>
     teeth[id].componentPlacements.some((e) => e.componentId === "major-upper-horseshoe");
+  const hasMajorIdOn = (teeth, id, majorId) =>
+    teeth[id].componentPlacements.some((e) => e.componentId === majorId);
   const runIn = (teeth) => TOOTH_ORDER.upper.filter((id) => hasMajorOn(teeth, id));
 
   it("plating a bare 17 beside a run ending at 16 extends it onto 17", () => {
@@ -444,6 +448,79 @@ describe("the connector follows the changed tooth only", () => {
     place("plate-prox", "17");
     expect(runIn(teeth)).toEqual([...before, "17"].sort((a, b) => TOOTH_ORDER.upper.indexOf(a) - TOOTH_ORDER.upper.indexOf(b)));
   });
+
+  it("switching to Palatal Strap keeps a newly extended third molar endpoint", () => {
+    const teeth = archEndingAtSixes();
+    place("plate-prox", "17");
+    place("plate-prox", "18");
+
+    switchMajorIn(teeth, "major-upper-palatal-strap", "upper");
+
+    expect(hasMajorIdOn(teeth, "18", "major-upper-palatal-strap")).toBe(true);
+    expect(hasMajorIdOn(teeth, "17", "major-upper-palatal-strap")).toBe(true);
+    expect(hasMajorIdOn(teeth, "13", "major-upper-palatal-strap")).toBe(false);
+
+    const points = computePalatalStrapPolygonPoints(teeth);
+    expect(points[6].y).toBeGreaterThan(320);
+  });
+
+  it("switching to Palatal Strap connects a manually added canine proximal plate", () => {
+    const teeth = archEndingAtSixes();
+    addPlacement(teeth["23"], "plate-prox", null);
+    syncToothComponentsFromPlacements(teeth["23"]);
+
+    switchMajorIn(teeth, "major-upper-palatal-strap", "upper");
+
+    expect(idsOn(teeth["23"])).toContain("plate-prox");
+    expect(hasMajorIdOn(teeth, "23", "major-upper-palatal-strap")).toBe(true);
+    expect(hasMajorIdOn(teeth, "22", "major-upper-palatal-strap")).toBe(false);
+  });
+
+  it.each(["11", "12", "21", "22"])(
+    "switching to Palatal Strap connects a manually added incisor proximal plate on %s",
+    (toothId) => {
+      const teeth = archEndingAtSixes();
+      addPlacement(teeth[toothId], "plate-prox", null);
+      syncToothComponentsFromPlacements(teeth[toothId]);
+
+      switchMajorIn(teeth, "major-upper-palatal-strap", "upper");
+
+      expect(idsOn(teeth[toothId])).toContain("plate-prox");
+      expect(hasMajorIdOn(teeth, toothId, "major-upper-palatal-strap")).toBe(true);
+    }
+  );
+
+  it("allows removing an interior Palatal Strap segment after anterior extension", () => {
+    const teeth = archEndingAtSixes();
+    for (const toothId of ["11", "12", "21", "22"]) {
+      addPlacement(teeth[toothId], "plate-prox", null);
+      syncToothComponentsFromPlacements(teeth[toothId]);
+    }
+    switchMajorIn(teeth, "major-upper-palatal-strap", "upper");
+
+    expect(
+      shouldBlockMajorConnectorRemoval(
+        "12",
+        { componentId: "major-upper-palatal-strap", surface: null },
+        teeth
+      )
+    ).toBe(false);
+  });
+
+  it.each(["11", "12", "13", "21", "22", "23"])(
+    "removing an anterior proximal plate removes its Palatal Strap segment too on %s",
+    (toothId) => {
+    const teeth = archEndingAtSixes();
+      addPlacement(teeth[toothId], "plate-prox", null);
+      syncToothComponentsFromPlacements(teeth[toothId]);
+    switchMajorIn(teeth, "major-upper-palatal-strap", "upper");
+
+      place("plate-prox", toothId);
+
+      expect(idsOn(teeth[toothId])).not.toContain("plate-prox");
+      expect(hasMajorIdOn(teeth, toothId, "major-upper-palatal-strap")).toBe(false);
+    }
+  );
 });
 
 /**

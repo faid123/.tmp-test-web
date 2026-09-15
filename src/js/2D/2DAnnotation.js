@@ -583,6 +583,8 @@ async function applyQuickPickSelection(tabId, componentId, options = {}) {
             entry.componentId !== "plate-crossmesh"
         );
         teethModel.addPlacement(tooth, id, null);
+        const placement = await import("./annotationPlacement.js");
+        placement.extendMajorConnectorsOntoTeeth([placeOnToothId]);
         teethModel.syncToothComponentsFromPlacements(tooth);
         const label = COMPONENT_BY_ID.get(id)?.label || id;
         setMessage(`Placed ${label} on tooth ${placeOnToothId}.`, false);

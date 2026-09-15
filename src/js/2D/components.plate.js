@@ -1,7 +1,11 @@
 import { isAutoMeshPlacementExcludedToothId, TOOTH_ORDER } from "./constants.js";
 import { COMPONENT_ASSET_BASE, getComponentTemplateToothId } from "./components.mesh.js";
 import { isReciprocatingClaspComponent } from "./components.clasp.js";
-import { PALATAL_BAR_MAJOR_COMPONENT_ID } from "./components.major.js";
+import {
+  isMajorConnectorToothExcluded,
+  PALATAL_BAR_MAJOR_COMPONENT_ID,
+  PALATAL_STRAP_MAJOR_COMPONENT_ID,
+} from "./components.major.js";
 
 /** Major connectors that are BARS (band-only) — they plate no teeth. */
 const BAR_MAJOR_CONNECTOR_IDS = Object.freeze(
@@ -276,6 +280,8 @@ export function ensurePlatePlacementsOnPresentTeeth(teeth, plateComponentId, com
  * Keeps each tooth's `plate-prox` (Reciprocating.Tooth Type = 2) in step after a connector
  * switch, which is what makes plating data-driven and removable:
  *  - PLATE / strap / horseshoe give every covered present tooth an erasable `plate-prox`.
+ *  - Palatal Strap keeps manually placed anterior proximal plates even though the strap
+ *    itself does not carry anterior connector segments.
  *  - the LOWER lingual BAR CLEARS them all, or it re-encodes Type = 2 and "comes back as
  *    a plate" on reopen.
  *  - the UPPER PALATAL BAR neither adds nor removes any — its plates are user-managed.
@@ -309,9 +315,16 @@ export function syncReciprocatingPlatesToMajorConnector(teeth, majorComponentId,
         tooth.isPresent &&
         tooth.componentPlacements.some((e) => e.componentId === majorComponentId) &&
         !tooth.componentPlacements.some((e) => isReciprocatingClaspComponent(e.componentId));
+      const preserveExcludedStrapPlate =
+        String(majorComponentId) === PALATAL_STRAP_MAJOR_COMPONENT_ID &&
+        isMajorConnectorToothExcluded(majorComponentId, toothId);
       if (covered && !hasPlate) {
-        tooth.componentPlacements.push({ componentId: "plate-prox", surface: null });
-      } else if (!covered && hasPlate) {
+        tooth.componentPlacements.push({
+          componentId: "plate-prox",
+          surface: null,
+          source: "major-connector",
+        });
+      } else if (!covered && hasPlate && !preserveExcludedStrapPlate) {
         tooth.componentPlacements = tooth.componentPlacements.filter(
           (e) => e.componentId !== "plate-prox"
         );

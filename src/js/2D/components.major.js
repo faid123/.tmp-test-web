@@ -7,10 +7,10 @@ const BAR_MAJOR_CONNECTOR_IDS = Object.freeze(
   new Set(["major-lower-lingual-bar", "major-upper-palatal-bar"])
 );
 
-// Every connector may span the third molars (*8) when those teeth anchor it. The only
-// exclusion left is the palatal strap's anterior teeth (11-13 / 21-23).
+// Every connector may span the third molars (*8) when those teeth anchor it. The palatal
+// strap can also connect to any manually plated anterior tooth for flexible editing.
 const MAJOR_CONNECTOR_EXCLUDED_TOOTH_IDS_BY_COMPONENT = Object.freeze({
-  "major-upper-palatal-strap": Object.freeze(new Set(["11", "12", "13", "21", "22", "23"])),
+  "major-upper-palatal-strap": Object.freeze(new Set([])),
   "major-upper-horseshoe": Object.freeze(new Set([])),
   "major-upper-palatal-hole": Object.freeze(new Set([])),
   "major-upper-palatal-plate": Object.freeze(new Set([])),
@@ -61,8 +61,8 @@ export function hasPalatalStrapPlacementOnUpperArch(teeth) {
 
 const STRAP_PALATAL_OFFSET = 32;
 const STRAP_BUCCAL_OFFSET = 22;
-const LEFT_STRAP_TEETH = ["14", "15", "16", "17"];  // anterior → posterior
-const RIGHT_STRAP_TEETH = ["24", "25", "26", "27"]; // anterior → posterior
+const LEFT_STRAP_TEETH = ["11", "12", "13", "14", "15", "16", "17", "18"];  // anterior -> posterior
+const RIGHT_STRAP_TEETH = ["21", "22", "23", "24", "25", "26", "27", "28"]; // anterior -> posterior
 const LEFT_STRAP_DEFAULTS = ["15", "16"];
 const RIGHT_STRAP_DEFAULTS = ["25", "26"];
 
@@ -848,16 +848,31 @@ export function majorConnectorRunsToMidline(componentId) {
  * A clasp is not a seat for the connector — a reciprocating clasp owns the tooth's
  * reciprocating slot instead of a plate, so it is the one that used to auto-fill unbacked.
  */
-function toothAnchorsMajorConnector(tooth, componentById) {
+function isPalatalStrapAnteriorTooth(majorComponentId, toothId) {
+  return (
+    String(majorComponentId) === PALATAL_STRAP_MAJOR_COMPONENT_ID &&
+    ["11", "12", "13", "21", "22", "23"].includes(String(toothId))
+  );
+}
+
+function isConnectorGeneratedPlatePlacement(entry) {
+  return entry?.componentId === "plate-prox" && entry?.source === "major-connector";
+}
+
+function toothAnchorsMajorConnector(tooth, componentById, majorComponentId = null, toothId = null) {
   if (!tooth || !Array.isArray(tooth.componentPlacements)) {
     return false;
   }
-  return tooth.componentPlacements.some(({ componentId }) => {
+  return tooth.componentPlacements.some((entry) => {
+    const { componentId } = entry;
     const def = componentById?.get?.(componentId);
     if (!def) {
       return false;
     }
     if (tooth.isPresent) {
+      if (isPalatalStrapAnteriorTooth(majorComponentId, toothId) && isConnectorGeneratedPlatePlacement(entry)) {
+        return false;
+      }
       return String(componentId).startsWith("plate-");
     }
     return def.tab === "mesh" || String(componentId).startsWith("mesh-");
@@ -943,7 +958,7 @@ function placeMajorConnectorPerTooth(teeth, majorComponentId, componentById, jaw
     if (isMajorConnectorToothExcluded(majorComponentId, toothId)) continue;
     const tooth = teeth[toothId];
     if (!tooth) continue;
-    if (!toothAnchorsMajorConnector(tooth, componentById)) continue;
+    if (!toothAnchorsMajorConnector(tooth, componentById, majorComponentId, toothId)) continue;
     placeMajorConnectorOnce(tooth, majorComponentId);
   }
 }
@@ -982,7 +997,7 @@ export function getMajorConnectorSpanTeeth(
         // The run begins at the first anchor tooth that can carry the major.
         if (excluded || !hasArt) continue;
         if (
-          !toothAnchorsMajorConnector(tooth, componentById) &&
+          !toothAnchorsMajorConnector(tooth, componentById, majorComponentId, toothId) &&
           !(startsAtExistingRun && toothHasMajorConnectorPlacement(tooth))
         ) continue;
         started = true;
@@ -1069,12 +1084,18 @@ export function switchMajorConnectorInJaws(teeth, majorComponentId, componentByI
   // Re-cover whatever the outgoing connector reached but the anchor scan missed. The new
   // connector's own exclusions still apply (a strap never takes the anteriors).
   for (const jawKey of jawKeys) {
+    const previousSpan = previousSpanByJaw[jawKey].filter((toothId) => {
+      if (!isPalatalStrapAnteriorTooth(majorComponentId, toothId)) {
+        return true;
+      }
+      return toothAnchorsMajorConnector(teeth[toothId], componentById, majorComponentId, toothId);
+    });
     placeMajorConnectorOnExactTeeth(
       teeth,
       majorComponentId,
       componentById,
       jawKey,
-      previousSpanByJaw[jawKey]
+      previousSpan
     );
   }
 }
