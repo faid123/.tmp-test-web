@@ -22,7 +22,11 @@ import {
   generateDentureDesignSelect,
   saveJawStructFromState,
 } from "./jawStructApi.js";
-import { decodeJawStructResponse, resolveJawStructDesign } from "./jawStructCodec.js";
+import {
+  decodeJawStructResponse,
+  decodedJawMaterial,
+  resolveJawStructDesign,
+} from "./jawStructCodec.js";
 import { applyJawStructDesign } from "./jawStructApply.js";
 import { applyDesignProposal, buildDesignProposal } from "./JawDesignProposal.js";
 import { classifyArch } from "./JawDesign.js";
@@ -504,7 +508,13 @@ export function renderJaws() {
 // Shows the denture-base material in the corner badge, hidden while null. Called from
 // renderJaws so it stays fresh across placement, load, undo/redo and the prompt.
 const JAW_MATERIAL_LABELS = { 0: "Metal", 2: "Full Acrylic" };
+let lastNotifiedJawMaterial;
 export function updateJawMaterialBadge() {
+  // Other panels label by material too (the Extra 3D slot rows); told once per change.
+  if (state.jawMaterial !== lastNotifiedJawMaterial) {
+    lastNotifiedJawMaterial = state.jawMaterial;
+    window.dispatchEvent(new CustomEvent("jaw-material-change"));
+  }
   const badge = document.getElementById("jawMaterialBadge");
   if (!badge) return;
   const label = JAW_MATERIAL_LABELS[state.jawMaterial];
@@ -1142,11 +1152,7 @@ async function fetchJawStruct(recordsPromise = null) {
     window.__jawStruct = decoded.raw;
     // A design exists on the server — preserve its saved denture-base material
     // (default metal/0 if the field is absent) so a re-save doesn't lose it.
-    const savedMaterial = Number(
-      decoded.upper?.other?.["Jaw Material"] ??
-        decoded.lower?.other?.["Jaw Material"]
-    );
-    state.jawMaterial = Number.isFinite(savedMaterial) ? savedMaterial : 0;
+    state.jawMaterial = decodedJawMaterial(decoded) ?? 0;
     // Apply each jaw independently so one failing doesn't skip the other.
     try {
       if (decoded.upper) applyJawStructDesign(resolveJawStructDesign(decoded.upper), state);
@@ -1348,12 +1354,7 @@ async function fetchDllProposedDesign() {
   if (!decoded.upper && !decoded.lower) {
     throw new Error("DLL response could not be decoded for either jaw.");
   }
-  const savedMaterial = Number(
-    decoded.upper?.other?.["Jaw Material"] ??
-      decoded.lower?.other?.["Jaw Material"] ??
-      material
-  );
-  return { decoded, material: Number.isFinite(savedMaterial) ? savedMaterial : material };
+  return { decoded, material: decodedJawMaterial(decoded) ?? material };
 }
 
 // Apply a fetched DLL design to the ticked arches only — the counterpart of

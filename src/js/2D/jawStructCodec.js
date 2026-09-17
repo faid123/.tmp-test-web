@@ -120,6 +120,15 @@ export function decodeJawStructResponse(records) {
   return out;
 }
 
+/** The denture-base material a decoded design was saved with (either jaw carries it):
+ *  0 = metal, 2 = full acrylic, or null when neither jaw has the field. */
+export function decodedJawMaterial(decoded) {
+  const value = Number(
+    decoded?.upper?.other?.[JAW_MATERIAL_KEY] ?? decoded?.lower?.other?.[JAW_MATERIAL_KEY]
+  );
+  return Number.isFinite(value) ? value : null;
+}
+
 /** Derive FDI tooth id from a parsed tooth record. Returns string or null. */
 function fdiFromTooth(tooth) {
   const major = Number(tooth?.fields?.[MAJOR_INDEX_FIELD]);

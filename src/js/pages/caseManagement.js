@@ -5,6 +5,9 @@ import { logApi, statusLabel } from "../shared/apiLog.js";
 import { reportHtmlToDocxBytes } from "../shared/accessibility.js";
 import { setupAppSidebar } from "../shared/appSidebar.js";
 import { buildReportHtml } from "../2D/noticeboard.js";
+import { fetchJawStruct } from "../2D/jawStructApi.js";
+import { decodeJawStructResponse, decodedJawMaterial } from "../2D/jawStructCodec.js";
+import { FULL_ACRYLIC_MATERIAL } from "../2D/JawDesignProposal.js";
 import {
   saveCaseDueDate,
   toDateInputValue,
@@ -4055,21 +4058,29 @@ async function startPendingUpload() {
 // display label only — the backend slots are not semantically typed.
 const EXTRA_STL_SLOT_NAMES = {
   1: "Upper jaw",
-  2: "Monoblock",
   3: "Lower jaw",
-  4: "Monoblock",
 };
 
-// Display label for a slot, e.g. "Slot 1: Upper jaw".
+// The framework slots (2 = upper arch, 4 = lower) are named by the case's
+// denture-base material — the same rule the 2D page's slotLabel applies.
+const FRAMEWORK_SLOTS = new Set([2, 4]);
+
+// Display label for a slot, e.g. "Slot 1: Upper jaw". Framework slots read
+// "Metal RPD", or "Monoblock" on a full-acrylic case.
 function slotLabel(slot) {
-  return `Slot ${slot}: ${EXTRA_STL_SLOT_NAMES[slot] || "3D file"}`;
+  const name = FRAMEWORK_SLOTS.has(slot)
+    ? slotPanel.material === FULL_ACRYLIC_MATERIAL ? "Monoblock" : "Metal RPD"
+    : EXTRA_STL_SLOT_NAMES[slot] || "3D file";
+  return `Slot ${slot}: ${name}`;
 }
 
-// What the slots stage is showing: the case it was probed for, the backend's
-// occupancy, and the uploads in flight. `uploading` is a Map, not a single slot,
-// so one slot's upload leaves the other three usable.
+// What the slots stage is showing: the case it was probed for, its saved
+// denture-base material, the backend's occupancy, and the uploads in flight.
+// `uploading` is a Map, not a single slot, so one slot's upload leaves the other
+// three usable.
 const slotPanel = {
   caseIntId: null,
+  material: null,
   loading: false,
   failed: false,
   occupied: new Set(),
@@ -4305,13 +4316,31 @@ function openSlotStage() {
   refreshSlotOccupancy(caseIntId);
 }
 
+// The material the case's saved 2D design carries, which names the framework
+// slots. null when the case has no design yet or the fetch fails (metal labels).
+async function fetchCaseJawMaterial(caseIntId) {
+  const uuid = getLoggedInUser()?.uuid;
+  if (!uuid) return null;
+  try {
+    const records = await fetchJawStruct(caseIntId, uuid, { retries: 1 });
+    return decodedJawMaterial(decodeJawStructResponse(records));
+  } catch (err) {
+    console.warn("⚠️ /jawstruct/l2/getall failed — framework slots labelled as metal", err);
+    return null;
+  }
+}
+
 async function refreshSlotOccupancy(caseIntId) {
   slotPanel.caseIntId = caseIntId;
+  slotPanel.material = null;
   slotPanel.loading = true;
   slotPanel.failed = false;
   slotPanel.occupied = new Set();
   slotPanel.filenames = {};
   renderSlotList();
+
+  // One request alongside the probes; the rows aren't drawn until both are in.
+  const materialPromise = fetchCaseJawMaterial(caseIntId);
 
   // Sequential: the backend burst-throttles (see the enrichment breaker), and a
   // throttled reply arrives without CORS headers, reading as a network error.
@@ -4330,7 +4359,9 @@ async function refreshSlotOccupancy(caseIntId) {
       slotPanel.failed = true;
     }
   }
+  const material = await materialPromise;
   if (slotPanel.caseIntId !== caseIntId) return;
+  slotPanel.material = material;
   slotPanel.loading = false;
   renderSlotList();
 }

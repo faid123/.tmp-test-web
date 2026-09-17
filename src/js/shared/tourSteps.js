@@ -255,7 +255,7 @@ export const PAGE_TOURS = {
     },
     {
       title: "Extra 3D files",
-      text: "Beyond the two jaw scans, a case has four named STL slots — an Upper jaw and Lower jaw, each with a Monoblock beside it. This tab lists them over the 3D view: upload one and it takes the stage, a file's icon hides it in the view and the trash button removes it.",
+      text: "Beyond the two jaw scans, a case has four named STL slots — an Upper jaw and Lower jaw, each with a framework slot beside it, named Metal RPD or Monoblock after the case's material. This tab lists them over the 3D view: upload one and it takes the stage, a file's icon hides it in the view and the trash button removes it.",
       selector: "#previewTabExtras",
       topic: "extra-reference-stl",
     },

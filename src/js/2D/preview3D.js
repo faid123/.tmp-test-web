@@ -1,4 +1,4 @@
-import { state, setMessage, fetchCaseDetail } from "./2DAnnotation.js";
+import { state, setMessage, fetchCaseDetail, isFullAcrylic } from "./2DAnnotation.js";
 import { saveAsJpeg } from "./annotationLocks.js";
 import { toast, confirmModal } from "../shared/toast.js";
 // Survey-angle logic; shares this module's state and helpers via its exports.
@@ -3352,11 +3352,10 @@ async function saveJawToClosed(jaw) {
 // display label only — the backend slots are not semantically typed.
 const EXTRA_STL_SLOTS = [1, 2, 3, 4];
 
+// Slots 2 & 4 are named by the case material — see slotLabel.
 const EXTRA_STL_SLOT_NAMES = {
   1: "Upper jaw",
-  2: "Monoblock",
   3: "Lower jaw",
-  4: "Monoblock",
 };
 
 // Per-slot icon, shown only on a a populated Extra 3D slot row. Paths are relative to
@@ -3372,19 +3371,31 @@ const EXTRA_STL_SLOT_ICONS = {
 // read as sRGB and lands much darker. A function, not a constant: THREE loads on demand.
 const extraJawColor = () => new THREE.Color(...DEFAULT_TOOTH_COLOR);
 
-// Metal RPD slots (2 = upper arch, 4 = lower) render with a metallic finish
-// instead of the tan jaw colour.
-const METAL_RPD_SLOTS = new Set([2, 4]);
+// Framework slots (2 = upper arch, 4 = lower) follow the case's denture-base material
+// in name and finish: cast metal, or acrylic gum on a full-acrylic case.
+const FRAMEWORK_SLOTS = new Set([2, 4]);
 
 // Jaw-scan slots borrow the matching jaw's heatmap rather than being surveyed — the file is
-// a copy, so the DLL values already describe it. Metal-RPD slots never borrow one.
+// a copy, so the DLL values already describe it. Framework slots never borrow one.
 const EXTRA_SLOT_JAW = { 1: "upper", 3: "lower" };
 
 const METAL_RPD_COLOR = 0xd6dadf; // brushed cobalt-chrome / stainless
+const ACRYLIC_RPD_COLOR = 0xd9928a; // acrylic denture base: warm salmon-rose, not pastel pink
 
-// Display label for a slot, e.g. "Slot 1: Upper jaw".
+// Surface of a framework slot under the current material.
+function frameworkFinish() {
+  return isFullAcrylic()
+    ? { color: ACRYLIC_RPD_COLOR, metalness: 0.05, roughness: 0.55 }
+    : { color: METAL_RPD_COLOR, metalness: 0.85, roughness: 0.32 };
+}
+
+// Display label for a slot, e.g. "Slot 1: Upper jaw". The framework slots follow the
+// case's denture-base material: "Metal RPD", or "Monoblock" on a full-acrylic case.
 function slotLabel(slot) {
-  return `Slot ${slot}: ${EXTRA_STL_SLOT_NAMES[slot] || "3D file"}`;
+  const name = FRAMEWORK_SLOTS.has(slot)
+    ? isFullAcrylic() ? "Monoblock" : "Metal RPD"
+    : EXTRA_STL_SLOT_NAMES[slot] || "3D file";
+  return `Slot ${slot}: ${name}`;
 }
 
 function extraSlotAuth() {
@@ -3655,8 +3666,9 @@ function buildExtraJawGeometry(rawGeometry, jaw, mode, label, surfaceOverride = 
   return geometry;
 }
 
-// Parse a base64 STL into the model root: jaw slots in jaw tan, metal-RPD slots (2 & 4)
-// metallic. Jaw slots apply the same runtime DLL heatmap surfaces as the main preview.
+// Parse a base64 STL into the model root: jaw slots in jaw tan, framework slots (2 & 4) in
+// the material's finish. Jaw slots apply the same runtime DLL heatmap surfaces as the main
+// preview.
 async function renderExtraStl({ slotNumber, filename, data }) {
   if (!(await ensureThreeDeps())) return;
   const root = preview3DState.modelRoot;
@@ -3677,11 +3689,10 @@ async function renderExtraStl({ slotNumber, filename, data }) {
     : getDisplayGeometryForQuality(mergeStlVertices(geometry), label);
   geometry.computeVertexNormals();
 
-  const isMetal = METAL_RPD_SLOTS.has(slotNumber);
   const flatMaterial = new THREE.MeshStandardMaterial({
-    color: isMetal ? METAL_RPD_COLOR : extraJawColor(),
-    metalness: isMetal ? 0.85 : 0.05,
-    roughness: isMetal ? 0.32 : 0.6,
+    ...(FRAMEWORK_SLOTS.has(slotNumber)
+      ? frameworkFinish()
+      : { color: extraJawColor(), metalness: 0.05, roughness: 0.6 }),
     side: THREE.DoubleSide,
   });
   // Extra jaw slots carry both materials so the heatmap toggle can flip them like the jaws do.
@@ -4295,6 +4306,27 @@ function renderUpload3dList() {
       list.appendChild(buildUpload3dSlotRow(slot));
     }
   });
+}
+
+// The framework slots' labels and finish follow the case material, which can change
+// while the tab is up (the material prompt, undo/redo, reset).
+window.addEventListener("jaw-material-change", () => {
+  restyleFrameworkSlots();
+  if (isUpload3dModalOpen()) renderUpload3dList();
+});
+
+// Re-finish the framework meshes already on stage; the render loop picks it up.
+function restyleFrameworkSlots() {
+  const finish = frameworkFinish();
+  for (const slot of FRAMEWORK_SLOTS) {
+    preview3DState.extraGroups?.[slot]?.group?.traverse((obj) => {
+      const material = obj.userData?.flatMaterial;
+      if (!material) return;
+      material.color.set(finish.color);
+      material.metalness = finish.metalness;
+      material.roughness = finish.roughness;
+    });
+  }
 }
 
 // One populated file row: file icon w/ slot number (click to show/hide just
