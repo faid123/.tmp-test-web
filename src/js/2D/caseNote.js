@@ -4,6 +4,7 @@
 import { confirmModal, toast } from "../shared/toast.js";
 import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 import { toDateInputValue } from "../shared/timestamps.js";
+import { createCaseHistory } from "../shared/caseHistory.js";
 
 // getLoggedInUser rather than ApiClient.js's shared VIEWER_UUID: these case
 // endpoints authenticate as the signed-in user.
@@ -233,7 +234,9 @@ export const STATUS_2D_DESIGN_APPROVED = "2D design approved";
 export const STATUS_3D_DESIGN_APPROVED = "3D design approved";
 
 export async function updateCaseStatus(caseIntID, newStatus) {
-  return patchAdditionalCaseDetails(caseIntID, { new_status: newStatus });
+  const updated = await patchAdditionalCaseDetails(caseIntID, { new_status: newStatus });
+  if (updated) await createCaseHistory(caseIntID, newStatus);
+  return updated;
 }
 
 export function loadCaseNote(caseIntID) {

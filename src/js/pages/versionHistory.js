@@ -84,15 +84,30 @@ async function fetchUserIndexForCase(caseIntID, uuid) {
   }
 }
 
-async function fetchCaseHistory(caseIntID, uuid) {
+export async function fetchCaseHistory(caseIntID, uuid) {
   const res = await fetch(`${API_BASE}/casehistory/getall`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify([{ machine_id: MACHINE_ID, uuid, caseIntID }])
+    // Match Unity's JsonifyData(authData, CaseHistoryData) request shape. The
+    // second object is required by some deployed API revisions, especially for
+    // admin users selecting a case other than their current auth context.
+    body: JSON.stringify([
+      { machine_id: MACHINE_ID, uuid, caseIntID },
+      { case_int_id: caseIntID },
+    ])
   });
   logApi(res, "POST /casehistory/getall");
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    // Preserve the HTTP status below when the API returns an empty/non-JSON body.
+  }
+  if (!res.ok) {
+    const detail =
+      data?.serverErrorMessage || data?.sqlMessage || data?.message || data?.code || "";
+    throw new Error(`HTTP ${res.status}${detail ? `: ${detail}` : ""}`);
+  }
   return Array.isArray(data) ? data : [];
 }
 
@@ -142,7 +157,10 @@ function renderVersionList(items, userIndex) {
   listEl.innerHTML = items.map(it => {
     const key    = actionToKey(it.action || "");
     const icon   = TYPE_ICON[key] || TYPE_ICON.other;
-    const actor  = resolveActor(userIndex, it.user_id);
+    const actorName = String(it.username || "").trim();
+    const actor = actorName
+      ? { name: actorName, initials: initialsFrom(actorName) }
+      : resolveActor(userIndex, it.user_id);
     const timeTx = formatMs(it.datetime);
 
     return `

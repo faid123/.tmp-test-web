@@ -39,6 +39,7 @@ import { timestampToMs, toDayMidnight } from "../shared/timestamps.js";
 import { normalizeImageFile } from "../shared/imageFiles.js";
 import { recordCollaborators, reconcileCollaborators } from "../shared/userSuggest.js";
 import { confirmRemoveUserFromCase } from "../shared/caseRoles.js";
+import { createCaseHistory } from "../shared/caseHistory.js";
 
 // Per-user cache of the last case list, painted instantly while
 // /case/user/findall/get is in flight. Keyed by uuid so lists never cross accounts.
@@ -5109,6 +5110,7 @@ export async function postNewStatus(caseObj, newStatus) {
   );
   logApi(res, 'POST /additionalcasedetails');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  await createCaseHistory(caseIntID, newStatus);
   /* ★★★ 这三行是新加的 ★★★ */
 await createStatusAlerts(
   caseObj,

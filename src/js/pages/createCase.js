@@ -6,6 +6,7 @@ import { API_BASE, MACHINE_ID, getLoggedInUser } from "../shared/api.js";
 import { attachUserSuggest, initialsFor } from "../shared/userSuggest.js";
 import { confirmRemoveUserFromCase } from "../shared/caseRoles.js";
 import { normalizeImageFile } from "../shared/imageFiles.js";
+import { createCaseHistory } from "../shared/caseHistory.js";
 
 // Resolved against the app root (everything before "/src/") so it loads from
 // both src/pages/ and the deeper src/pages/admin/, where a fixed path would not.
@@ -14,7 +15,6 @@ function appAsset(relFromRoot) {
   const i = href.indexOf("/src/");
   return i !== -1 ? href.slice(0, i + 1) + relFromRoot : "../../" + relFromRoot;
 }
-
 let THREE;
 let STLLoader;
 
@@ -727,8 +727,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       const data = await res.json();
       caseIntID = data.id;
-      const user_id = loggedInUser.username || "";
-      await createCaseHistory({ machine_id, uuid, caseIntID, user_id });
+      await createCaseHistory(caseIntID, "Case created");
       await saveCaseInstructions(
         machine_id,
         uuid,
@@ -1291,28 +1290,5 @@ async function uploadCaseThumbnail(machine_id, uuid, caseIntID, slot, dataUrl) {
     }
   } catch (err) {
     console.error(`❌ Error uploading thumbnail slot ${slot}:`, err);
-  }
-}
-
-// === 写入 Case History：Created case ===
-async function createCaseHistory({ machine_id, uuid, caseIntID, user_id, action = "Created case" }) {
-  const payload = [
-    { machine_id, uuid, caseIntID },
-    { user_id, action, datetime: Date.now() }   // 当前毫秒时间戳
-  ];
-
-  // A side-write that must never undo a successful creation: letting it throw
-  // showed "Failed to create case" for a case that existed, so users made duplicates.
-  try {
-    const res = await fetch(`${API_BASE}/casehistory`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    let body = "";
-    try { body = await res.text(); } catch {}
-    console.log("[casehistory][POST]", res.status, body);
-  } catch (err) {
-    console.warn("[casehistory][POST] network error (non-fatal):", err);
   }
 }
