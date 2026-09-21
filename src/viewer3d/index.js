@@ -21,6 +21,8 @@ import {
 } from "./newControls.js";
 import { createArtificialTeethRenderer } from "./artificialTeeth.js";
 import { API_BASE, MACHINE_ID } from "../js/shared/api.js";
+import { decodeJawStructResponse, decodedJawMaterial } from "../js/2D/jawStructCodec.js";
+import { FULL_ACRYLIC_MATERIAL } from "../js/2D/JawDesignProposal.js";
 
 const LOG_VIEWER_LOAD_TIMINGS_TO_CONSOLE = false;
 const LOG_VIEWER_OBJECT_COUNTS_TO_CONSOLE = false;
@@ -5393,15 +5395,15 @@ function removeViewerLoadingScreen() {
   let designViewActive = false;
 
   // Fixed slot layout, mirroring EXTRA_STL_SLOT_NAMES in 2D/preview3D.js:
-  // 1 upper jaw, 2 upper monoblock, 3 lower jaw, 4 lower monoblock.
+  // 1 upper jaw, 2 upper framework, 3 lower jaw, 4 lower framework.
   const EXTRA_STL_SLOT_JAW = { 1: "upper", 2: "upper", 3: "lower", 4: "lower" };
-  const METAL_RPD_SLOTS = new Set([2, 4]);
+  // Framework slots follow the case's denture-base material in name and finish
+  // (slotDisplayName / frameworkFinish), as the 2D page's Extra 3D tab does.
+  const FRAMEWORK_SLOTS = new Set([2, 4]);
   // Row label + icon per slot, same as the 3D preview panel's "Other 3D files".
   const EXTRA_STL_SLOT_NAMES = {
     1: "Upper jaw",
-    2: "Upper monoblock",
     3: "Lower jaw",
-    4: "Lower monoblock",
   };
   const EXTRA_STL_SLOT_ICONS = {
     1: "Icon_UpperJaw_Occlusal.png",
@@ -5417,6 +5419,53 @@ function removeViewerLoadingScreen() {
   // instead is read as sRGB and converted, landing a much darker brown.
   const EXTRA_STL_JAW_COLOR = new THREE.Color(208 / 255, 190 / 255, 141 / 255);
   const METAL_RPD_COLOR = 0xd6dadf; // brushed cobalt-chrome / stainless
+  const ACRYLIC_RPD_COLOR = 0xd9928a; // acrylic denture base: warm salmon-rose
+
+  // The saved 2D design's "Jaw Material" (0 = metal, 2 = full acrylic). null until
+  // fetched, or when the case has no design yet — both read as metal.
+  let caseJawMaterial = null;
+  const isFullAcrylicCase = () => caseJawMaterial === FULL_ACRYLIC_MATERIAL;
+
+  // Label per slot. Framework slots keep their arch prefix: the upload tiles show
+  // the name alone, so two bare "Monoblock" tiles would be indistinguishable.
+  function slotDisplayName(slot) {
+    if (FRAMEWORK_SLOTS.has(slot)) {
+      const arch = EXTRA_STL_SLOT_JAW[slot] === "lower" ? "Lower" : "Upper";
+      return `${arch} ${isFullAcrylicCase() ? "Monoblock" : "Metal RPD"}`;
+    }
+    return EXTRA_STL_SLOT_NAMES[slot] || "3D file";
+  }
+
+  // Surface of a framework slot under the case material — same values as preview3D.
+  function frameworkFinish() {
+    return isFullAcrylicCase()
+      ? { color: ACRYLIC_RPD_COLOR, metalness: 0.05, roughness: 0.55 }
+      : { color: METAL_RPD_COLOR, metalness: 0.85, roughness: 0.32 };
+  }
+
+  // One small request per slot load. apiClient.post hands back the string "stl" on
+  // a 404/500, which decodes to no material — i.e. metal.
+  async function loadCaseJawMaterial() {
+    try {
+      const records = await apiClient.post(
+        "/jawstruct/l2/getall",
+        [
+          {
+            machine_id: MACHINE_ID,
+            uuid: "AC4gRQXZJoNz9EhhW36Q8jMJXBsf",
+            caseIntID: paramValue,
+          },
+          { case_id: paramValue },
+        ],
+        false,
+        "Case material"
+      );
+      caseJawMaterial = decodedJawMaterial(decodeJawStructResponse(records));
+    } catch (error) {
+      console.warn("[viewer3D] jawstruct fetch failed — framework slots read as metal", error);
+      caseJawMaterial = null;
+    }
+  }
 
   function disposeDesignSlotMesh(mesh) {
     parentObject.remove(mesh);
@@ -5444,19 +5493,18 @@ function removeViewerLoadingScreen() {
     }
 
     // Same finish the 3D preview panel gives these files: jaw uploads in the jaw
-    // tan, metal-RPD slots in brushed cobalt-chrome.
-    const isMetalRpd = METAL_RPD_SLOTS.has(slot);
+    // tan, framework slots in the case material's finish.
     const slotMaterial = new THREE.MeshStandardMaterial({
       // Passing a Color copies it into the material's own instance, so the shared
       // jaw constant above is never mutated by a slot.
-      color: isMetalRpd ? new THREE.Color(METAL_RPD_COLOR) : EXTRA_STL_JAW_COLOR,
+      ...(FRAMEWORK_SLOTS.has(slot)
+        ? frameworkFinish()
+        : { color: EXTRA_STL_JAW_COLOR, metalness: 0.05, roughness: 0.6 }),
       opacity: 1,
       transparent: false,
       side: THREE.DoubleSide,
       depthTest: true,
       depthWrite: true,
-      metalness: isMetalRpd ? 0.85 : 0.05,
-      roughness: isMetalRpd ? 0.32 : 0.6,
     });
 
     // Jaw side comes from the SLOT NUMBER, never the filename — uploads are named
@@ -5684,7 +5732,7 @@ function removeViewerLoadingScreen() {
   // others' downloads. Idempotent — a second call while one is in flight
   // (or already resolved) reuses the same promise rather than re-surveying.
   function ensureSlotUndercutGeometry(slot, stlDataBase64) {
-    if (METAL_RPD_SLOTS.has(slot)) return null; // metal-RPD slots carry no undercut
+    if (FRAMEWORK_SLOTS.has(slot)) return null; // framework slots carry no undercut
     const mesh = designSlotMeshes.find((m) => m.userData?.designSlot === slot);
     if (!mesh) return null;
     if (mesh.userData.undercutSurveyPromise) return mesh.userData.undercutSurveyPromise;
@@ -5775,7 +5823,7 @@ function removeViewerLoadingScreen() {
 
     if (mesh.userData.undercutGeometry === undefined && mesh.userData.undercutSurveyPromise) {
       const progress = beginSlotSurveyProgress(
-        `Slot ${slot}: ${EXTRA_STL_SLOT_NAMES[slot] || "3D file"}`
+        `Slot ${slot}: ${slotDisplayName(slot)}`
       );
       progress.set(0.5, "Finishing undercut survey…");
       try {
@@ -5822,17 +5870,17 @@ function removeViewerLoadingScreen() {
     if (!designViewActive || !designSlotMeshes.length) return [];
     return [1, 2, 3, 4].map((slot) => ({
       slot,
-      label: `Slot ${slot}: ${EXTRA_STL_SLOT_NAMES[slot]}`,
+      label: `Slot ${slot}: ${slotDisplayName(slot)}`,
       iconPath: `${basePath}/assets/${EXTRA_STL_SLOT_ICONS[slot]}`,
       // Lets the mini icon tray split into an upper row and a lower row (see
       // buildDesignSlotGroups/getMiniIconRow in newControls.js) the same way
       // the plain case view's jaw/mesh/polyline/teeth groups do.
       jawGroup: EXTRA_STL_SLOT_JAW[slot],
       mesh: designSlotMeshes.find((m) => m.userData?.designSlot === slot) || null,
-      // Only the jaw slots get their own survey — the metal-RPD slots are a
+      // Only the jaw slots get their own survey — the framework slots are a
       // different mesh with no undercut data. Undercut display starts off, but
       // the survey itself already ran when the mesh loaded (ensureSlotUndercutGeometry).
-      supportsUndercut: !METAL_RPD_SLOTS.has(slot),
+      supportsUndercut: !FRAMEWORK_SLOTS.has(slot),
       getUndercut: () => isDesignSlotUndercutOn(slot),
       setUndercut: (enabled) => setDesignSlotUndercut(slot, enabled),
       // Why the toggle didn't turn on, when it didn't — set by
@@ -6155,7 +6203,7 @@ function removeViewerLoadingScreen() {
     prompt.querySelectorAll(".dup-slot-wrap").forEach((wrap) => {
       const slot = Number(wrap.dataset.slot);
       const filename = getUploadedSlotName(slot);
-      const label = EXTRA_STL_SLOT_NAMES[slot];
+      const label = slotDisplayName(slot);
       const tile = wrap.querySelector(".dup-slot");
       const deleteBtn = wrap.querySelector(".dup-slot-delete");
 
@@ -6217,7 +6265,7 @@ function removeViewerLoadingScreen() {
   async function deleteSlotFile(slot, statusEl) {
     const filename = getUploadedSlotName(slot);
     if (!filename) return;
-    const label = EXTRA_STL_SLOT_NAMES[slot];
+    const label = slotDisplayName(slot);
     if (!window.confirm(`Delete "${filename}" from ${label}?`)) return;
 
     setUploadPromptBusy(true);
@@ -6482,6 +6530,10 @@ function removeViewerLoadingScreen() {
 
     let anyLoaded = false;
 
+    // Rides alongside slot 1's download; awaited before any mesh is finished so the
+    // framework slots land in the right material, and the tiles re-label once known.
+    const materialReady = loadCaseJawMaterial().then(refreshUploadPromptSlots);
+
     // A throttled burst returns without CORS headers, so the browser reports a CORS
     // failure, not a status. Pause and retry before dropping a slot.
     const fetchSlot = async (payload, slot) => {
@@ -6524,6 +6576,7 @@ function removeViewerLoadingScreen() {
           setSlotTileBusy(slot, "Preparing");
           await new Promise((resolve) => requestAnimationFrame(resolve));
 
+          await materialReady;
           addDesignSlotMesh(slot, slotItem.filename, atob(slotItem.data));
           // Fire the undercut survey now, alongside the mesh — not gated behind
           // the undercut button (see ensureSlotUndercutGeometry).
