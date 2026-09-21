@@ -889,8 +889,8 @@ button {
   box-shadow: inset 0 0 0 1px rgba(146, 64, 14, 0.12);
 }
 
-/* The status pill is the editor's trigger, swapped in place for a <select>.
-   Table only — the detail pane's pill has its own overlay and stays a label. */
+/* The status pill is the trigger for the themed status menu (.tsel-pop in
+   toast.css), which opens on the first click, anchored to the pill. */
 .cm-td-status .cm-pill[data-action="edit-status"] {
   cursor: pointer;
   gap: 6px;
@@ -904,8 +904,10 @@ button {
   transition: opacity 0.15s ease;
 }
 .cm-td-status .cm-pill:hover .cm-pill-pencil,
-.cm-td-status .cm-pill:focus-visible .cm-pill-pencil { opacity: 1; }
-.cm-td-status .cm-pill[data-action="edit-status"]:hover {
+.cm-td-status .cm-pill:focus-visible .cm-pill-pencil,
+.cm-td-status .cm-pill[aria-expanded="true"] .cm-pill-pencil { opacity: 1; }
+.cm-td-status .cm-pill[data-action="edit-status"]:hover,
+.cm-td-status .cm-pill[data-action="edit-status"][aria-expanded="true"] {
   filter: brightness(0.96);
   box-shadow: 0 0 0 1px var(--line);
 }
@@ -913,18 +915,6 @@ button {
   outline: none;
   box-shadow: 0 0 0 2px rgba(59, 174, 149, 0.45);
 }
-
-.cm-status-inline {
-  font: inherit;
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--panel);
-  border: 1px solid var(--primary);
-  border-radius: 8px;
-  padding: 3px 6px;
-  max-width: 100%;
-}
-.cm-status-inline:focus { outline: none; box-shadow: 0 0 0 2px rgba(59, 174, 149, 0.35); }
 
 .cm-td-date { white-space: nowrap; }
 
@@ -1024,59 +1014,42 @@ button {
    preparation-stage statuses: 3D design drafted / approved). */
 .cm-pill-prep { background: #fef3c7; color: #b45309; }
 
-/* Status: read-only pill + pencil, mirroring the Due column. The native
-   <select> is kept but overlaid invisibly, so the commit logic is untouched. */
+/* Status: a pill + pencil button that opens the themed status menu (.tsel-pop
+   in toast.css), mirroring the Due column's pencil affordance. */
 .cm-status-control {
-  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   width: fit-content;       /* don't stretch to the parent flex column */
+  padding: 0;
+  border-radius: 10px;
 }
 
 .cm-status-control .cm-pill {
   font-size: 13px;
   white-space: nowrap;
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+.cm-status-control:hover .cm-pill,
+.cm-status-control[aria-expanded="true"] .cm-pill {
+  filter: brightness(0.96);
+  box-shadow: 0 0 0 1px var(--line);
 }
 
+/* Revealed on hover/focus/open only, like the Due column's pencil. */
 .cm-status-edit {
-  border: none;
-  background: none;
-  cursor: pointer;
   color: var(--muted);
-  padding: 2px 4px;
-  border-radius: 6px;
   font-size: 12px;
   opacity: 0;
-  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition: opacity 0.15s ease;
 }
-/* Reveal the pencil only on hover/focus of the status control (mirrors the Due
-   column's hover-to-reveal edit affordance). */
 .cm-status-control:hover .cm-status-edit,
-.cm-status-control:focus-within .cm-status-edit {
+.cm-status-control:focus-visible .cm-status-edit,
+.cm-status-control[aria-expanded="true"] .cm-status-edit {
   opacity: 1;
 }
-.cm-status-edit:hover { background: var(--line); color: var(--ink); }
-
-/* Invisible native select overlaid on the pill + pencil. */
-.cm-status-select {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  border: none;
-  opacity: 0;
-  cursor: pointer;
-  font: inherit;
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-}
-/* Keyboard focus ring on the pill area when the overlaid select is focused. */
-.cm-status-control:focus-within {
-  border-radius: 10px;
+.cm-status-control:focus-visible {
+  outline: none;
   box-shadow: 0 0 0 2px rgba(59, 174, 149, 0.35);
 }
 
@@ -2337,9 +2310,8 @@ button {
 #renameCaseModal .modal-input {
   width: 100%;
   padding: 11px 14px;
-  /* Same 16px floor as .cm-status-inline above — this gets .focus()ed as soon
-     as the rename modal opens (caseManagement.js), and a smaller size here
-     triggers the same iOS zoom-on-focus. */
+  /* 16px floor: this gets .focus()ed as soon as the rename modal opens
+     (caseManagement.js), and a smaller size triggers iOS zoom-on-focus. */
   font-size: 16px;
   border: 1px solid var(--line);
   border-radius: 10px;

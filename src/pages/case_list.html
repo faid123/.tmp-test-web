@@ -463,31 +463,19 @@
 
           <div class="cm-field">
             <div class="cm-field-label">STATUS</div>
-            <div class="cm-status-control">
-              <button
-                type="button"
-                class="cm-status-edit"
-                aria-label="Edit status"
-                title="Edit status"
-              >
-                <i class="fa-regular fa-pen-to-square" aria-hidden="true"></i>
-              </button>
+            <!-- Opens the themed status menu (options: STATUS_LABELS in apiLog.js). -->
+            <button
+              type="button"
+              class="cm-status-control"
+              id="statusMenuBtn"
+              aria-label="Change status"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+              title="Change status"
+            >
               <span class="cm-pill cm-pill-na" id="statusPillText">N/A</span>
-              <select id="status" class="cm-status-select" aria-label="Change status">
-                <option value="na">N/A</option>
-                <option value="draft">Draft</option>
-                <option value="2d_design_pending">2D design pending</option>
-                <option value="2d_design_drafted">2D design drafted</option>
-                <option value="2d_design_approved">2D design approved</option>
-                <option value="3d_design_pending">3D design pending</option>
-                <option value="3d_design_drafted">3D design drafted</option>
-                <option value="3d_design_approved">3D design approved</option>
-                <option value="in_production">In production</option>
-                <option value="out_for_delivery">Out for delivery</option>
-                <option value="delivered">Delivered</option>
-                <option value="completed">Completed</option>
-              </select>
-            </div>
+              <i class="fa-regular fa-pen-to-square cm-status-edit" aria-hidden="true"></i>
+            </button>
             <span id="status-text" hidden></span>
           </div>
 

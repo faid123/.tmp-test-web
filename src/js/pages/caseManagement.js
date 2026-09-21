@@ -1,7 +1,8 @@
 import { lol } from "../shared/crypt.js";
 import { buildThreeDViewerUrl } from "../shared/caseLinks.js";
 import { toast, confirmModal, openThemedCalendar, attachThemedCalendar } from "../shared/toast.js";
-import { logApi, statusLabel } from "../shared/apiLog.js";
+import { openSelectMenu, closeSelectMenu, isSelectMenuOpenFor } from "../shared/selectMenu.js";
+import { logApi, statusLabel, STATUS_LABELS } from "../shared/apiLog.js";
 import { reportHtmlToDocxBytes } from "../shared/accessibility.js";
 import { setupAppSidebar } from "../shared/appSidebar.js";
 import { buildReportHtml } from "../2D/noticeboard.js";
@@ -926,13 +927,37 @@ function statusPillInner(apiStatus) {
   );
 }
 
-// Paints the detail pane's read-only STATUS pill. The native <select> survives
-// only as the invisible editing control.
-function applyStatusPillToSelect(apiStatus) {
+// Paints the detail pane's STATUS pill (its button opens the status menu).
+function paintDetailStatusPill(apiStatus) {
   const pill = document.getElementById("statusPillText");
   if (!pill) return;
   pill.className = `cm-pill ${statusPillClass(apiStatus)}`;
   pill.textContent = statusDisplayText(apiStatus);
+}
+
+// Every status, in stage order, swatched with the class that colours its pill.
+function statusMenuItems() {
+  return Object.entries(STATUS_LABELS).map(([value, label]) => ({
+    value,
+    label,
+    tone: statusPillClass(value),
+  }));
+}
+
+// Opens the themed status menu on `anchor` (a second click closes it) and
+// hands the pick to onChange(apiValue).
+function openStatusMenu(anchor, apiStatus, onChange) {
+  if (!anchor) return;
+  if (isSelectMenuOpenFor(anchor)) {
+    closeSelectMenu();
+    return;
+  }
+  openSelectMenu(anchor, {
+    label: "Change status",
+    items: statusMenuItems(),
+    value: apiStatusToValue(apiStatus),
+    onPick: (value) => onChange(valueToApiStatus(value)),
+  });
 }
 
 function initialsFor(name) {
@@ -1081,7 +1106,7 @@ function populateTable(cases) {
       <td class="cm-td-status">
         <span class="cm-status-row">
           ${isPendingUserActionStatus(caseItem.new_status) ? '<i class="fa-solid fa-circle-exclamation cm-action-icon" title="Needs action" aria-label="Needs action"></i>' : ""}
-          <span class="cm-pill ${statusPillClass(caseItem.new_status)}" data-action="edit-status" role="button" tabindex="0" title="Change status">${statusPillInner(caseItem.new_status)}</span>
+          <span class="cm-pill ${statusPillClass(caseItem.new_status)}" data-action="edit-status" role="button" tabindex="0" aria-haspopup="listbox" aria-expanded="false" title="Change status">${statusPillInner(caseItem.new_status)}</span>
           ${isPendingUserActionStatus(caseItem.new_status) ? '<span class="cm-action-badge">Needs action</span>' : ""}
         </span>
       </td>
@@ -1177,11 +1202,10 @@ function populateTable(cases) {
 
     // STATUS, which until now could only be changed from the detail pane after
     // selecting the case. The pill is the control itself — no separate pencil.
-    const statusTd = row.querySelector(".cm-td-status");
     const statusPill = row.querySelector('[data-action="edit-status"]');
     statusPill?.addEventListener("click", (e) => {
       e.stopPropagation();
-      openStatusEditor(statusTd, caseItem, resolvedCaseId);
+      openRowStatusMenu(statusPill, caseItem, resolvedCaseId);
     });
     // The row itself answers Enter/Space by selecting the case, so the pill has
     // to claim those keys before they bubble.
@@ -1189,7 +1213,7 @@ function populateTable(cases) {
       if (e.key !== "Enter" && e.key !== " ") return;
       e.preventDefault();
       e.stopPropagation();
-      openStatusEditor(statusTd, caseItem, resolvedCaseId);
+      openRowStatusMenu(statusPill, caseItem, resolvedCaseId);
     });
 
     body.appendChild(row);
@@ -1450,11 +1474,7 @@ function displayCaseDetails(data) {
   renderCaseToothShade(caseIntId, data.tooth_shade);
   renderCaseInstructions(caseIntId, data.comments);
 
-  const statusSel = document.getElementById("status");
-  if (statusSel) {
-    statusSel.value = apiStatusToValue(data.new_status);
-    applyStatusPillToSelect(data.new_status);
-  }
+  paintDetailStatusPill(data.new_status);
   const statusText = document.getElementById("status-text");
   if (statusText) statusText.textContent = data.new_status || "-";
 
@@ -1665,72 +1685,47 @@ function openDueDateEditor(anchorTd, caseItem, caseId, currentDue) {
   });
 }
 
-// Swaps the row's STATUS pill for a <select>, built on demand (a permanent one
-// per row is 12 options per case). Cloned from #status so the two can't drift.
-function openStatusEditor(anchorTd, caseItem, caseId) {
-  if (!anchorTd || anchorTd.querySelector(".cm-status-inline")) return;
-  const template = document.getElementById("status");
-  if (!template) return;
+// A status painted everywhere it shows: the model, the detail pane (stub
+// included, so a later repaint can't bring the old one back) and the list,
+// whose pill, stage counts and row order all follow it.
+function paintCaseStatus(caseObj, apiValue) {
+  caseObj.new_status = apiValue;
+  syncDetailPaneIfSelected(caseObj);
+  applyClientFilters();
+}
 
-  const pill = anchorTd.querySelector(".cm-pill");
-  const select = document.createElement("select");
-  select.className = "cm-status-inline";
-  select.setAttribute("aria-label", "Change status");
-  select.innerHTML = template.innerHTML;
-  select.value = apiStatusToValue(caseItem.new_status);
+// Commits a status pick: painted at once, written after, and painted back if
+// the write fails. `paint(caseObj, status)` is the control's own repaint.
+async function commitStatusPick(caseObj, apiValue, paint) {
+  const previous = caseObj.new_status;
+  paint(caseObj, apiValue);
+  try {
+    // postNewStatus re-reads the stored record and merges, so this is safe on
+    // a row lazy enrichment hasn't reached yet.
+    await postNewStatus(caseObj, apiValue);
+    toast.success("Status updated.");
+  } catch (err) {
+    console.error("Status update failed:", err);
+    paint(caseObj, previous);
+    toast.error("Failed to update status.");
+  }
+}
 
-  // Leave the row's own click handler alone — selecting a case out from under
-  // the open editor would repaint the table and drop it.
-  select.addEventListener("click", (e) => e.stopPropagation());
+// The row's status menu. The list repaint drops the row that had focus, so
+// focus goes back to the same case's pill (if it is still listed).
+function openRowStatusMenu(pill, caseItem, caseId) {
+  openStatusMenu(pill, caseItem.new_status, (apiValue) =>
+    commitStatusPick(caseItem, apiValue, (obj, status) => {
+      paintCaseStatus(obj, status);
+      rowStatusPill(caseId)?.focus({ preventScroll: true });
+    })
+  );
+}
 
-  let done = false;
-  // `refocus` only for a deliberate cancel (Escape): on blur the user has
-  // already clicked or tabbed elsewhere, and pulling focus back would fight them.
-  const close = ({ refocus = false } = {}) => {
-    if (done) return;
-    done = true;
-    select.remove();
-    if (pill) {
-      pill.hidden = false;
-      if (refocus) pill.focus();
-    }
-  };
-
-  select.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      e.stopPropagation();
-      close({ refocus: true });
-    }
-  });
-  // Dismissing without choosing (click away, Tab out) restores the pill.
-  select.addEventListener("blur", () => close());
-
-  select.addEventListener("change", async () => {
-    const apiValue = valueToApiStatus(select.value);
-    const previous = caseItem.new_status;
-    done = true;                 // the repaint below removes the row entirely
-    select.disabled = true;
-
-    try {
-      // postNewStatus re-reads the stored record and merges, so this is safe on
-      // a row lazy enrichment hasn't reached yet.
-      await postNewStatus(caseItem, apiValue);
-      caseItem.new_status = apiValue;
-      syncDetailPaneIfSelected(caseItem);
-      toast.success("Status updated.");
-    } catch (err) {
-      console.error("Status update failed:", err);
-      caseItem.new_status = previous;
-      toast.error("Failed to update status.");
-    }
-    // Repaint from the model: the pill, the stage filter counts and this row's
-    // place in them all follow the status.
-    applyClientFilters();
-  });
-
-  if (pill) pill.hidden = true;
-  anchorTd.appendChild(select);
-  select.focus();
+function rowStatusPill(caseId) {
+  return document.querySelector(
+    `#caseTableBody tr[data-case-id="${CSS.escape(String(caseId))}"] [data-action="edit-status"]`
+  );
 }
 
 // Default due date: 14 days after creation.
@@ -3229,39 +3224,27 @@ if (filterSel) filterSel.addEventListener("change", () => applyClientFilters());
     }
   });
 
-    /* ===== 状态下拉框保存 ===== */
-  const statusSel = document.getElementById("status");
-  if (statusSel) {
-  statusSel.addEventListener("change", async (e) => {
-    const newVal   = e.target.value;           // 下划线或 "na"
-    const apiValue = valueToApiStatus(newVal); // 空格或 ""
-
+  /* ===== Detail-pane STATUS: the pill button opens the status menu ===== */
+  const statusMenuBtn = document.getElementById("statusMenuBtn");
+  statusMenuBtn?.addEventListener("click", () => {
     const caseId = window.selectedCaseId;
-    const user   = getLoggedInUser();
+    const user = getLoggedInUser();
     if (!caseId || !user?.uuid) {
       toast.warning("Please select a case first.");
-      e.target.value = "na";
       return;
     }
-
-    const caseObj = currentCases.find(
-      (c) => c.id === caseId || c.case_int_id === caseId
-    );
+    const caseObj = currentCases.find((c) => c.id === caseId || c.case_int_id === caseId);
     if (!caseObj) return;
 
-    try {
-      await postNewStatus(caseObj, apiValue);   // ← 发送空格写法
-      caseObj.new_status = apiValue;            // 本地同步
-      applyStatusPillToSelect(apiValue);        // recolor the select pill
-      applyClientFilters();
-    } catch (err) {
-      console.error("Status update failed:", err);
-      toast.error("Failed to update status.");
-      e.target.value = apiStatusToValue(caseObj.new_status);
-      applyStatusPillToSelect(caseObj.new_status);
-    }
+    // The pane's own pill is painted directly too: the stub that the shared
+    // repaint goes through only exists once /case/get has answered.
+    openStatusMenu(statusMenuBtn, caseObj.new_status, (apiValue) =>
+      commitStatusPick(caseObj, apiValue, (obj, status) => {
+        paintCaseStatus(obj, status);
+        paintDetailStatusPill(status);
+      })
+    );
   });
-}
 
 const openWebUrlBtn = document.getElementById("openWebUrl");
 if (openWebUrlBtn) {

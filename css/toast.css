@@ -374,3 +374,72 @@
   transition: background 0.12s ease;
 }
 .tcal-link:hover { background: var(--primary-soft, #d4f0e8); }
+
+/* ===== Shared themed select menu =====
+   Listbox popover that stands in for a native <select>'s dropdown; same surface
+   as the calendar above. JS: src/js/shared/selectMenu.js. */
+.tsel-pop {
+  position: fixed;
+  z-index: 6000;
+  box-sizing: border-box;
+  min-width: 200px;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--panel, #fff);
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+  font-family: inherit;
+  outline: none;
+  animation: tcal-in 0.12s ease-out;
+}
+.tsel-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--ink, #1f2937);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+/* Focus is the keyboard cursor here (roving), so it highlights like hover. */
+.tsel-item:hover,
+.tsel-item:focus {
+  background: var(--line-soft, #f1f5f9);
+  outline: none;
+}
+.tsel-item.is-selected { font-weight: 700; }
+/* The swatch paints in its tone class's `color`, outranking that class's own
+   background (a status pill's, say); the zero-specificity default loses to any
+   tone class whatever the stylesheet order. */
+.tsel-item .tsel-dot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: currentColor;
+}
+:where(.tsel-dot) { color: var(--muted, #6b7280); }
+.tsel-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tsel-check {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--primary-dark, #25735f);
+  visibility: hidden;
+}
+.tsel-item.is-selected .tsel-check { visibility: visible; }

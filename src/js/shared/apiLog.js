@@ -11,8 +11,9 @@ export function logApi(res, label) {
 }
 
 // --- Case-status display titles ------------------------------------------
-// Mirrors the status dropdown in the case detail panel. Imports nothing, so the
-// case list / dashboard / report can all use it without an import cycle.
+// The status list itself, in stage order: the case list's status menus are
+// built from it. Imports nothing, so the case list / dashboard / report can
+// all use it without an import cycle.
 
 export const STATUS_LABELS = {
   na: "N/A",
