@@ -122,29 +122,22 @@ export function computePalatalStrapPolygonPoints(teeth) {
  */
 export const PALATAL_HOLE_MAJOR_COMPONENT_ID = "major-upper-palatal-hole";
 
-/** Palatal Bar: arch-wide {@link PALATAL_BAR_ARCH_OVERLAY} plus per-tooth majors on {@link PALATAL_BAR_CONNECTOR_TOOTH_IDS} only. */
+/** Palatal Bar: arch-wide {@link PALATAL_BAR_ARCH_OVERLAY} plus a per-tooth major on every upper tooth the plating anchors. */
 export const PALATAL_BAR_MAJOR_COMPONENT_ID = "major-upper-palatal-bar";
 
 /** Palatal Plate: arch-wide Plate_{n}.svg chosen from latest major connector endpoints. */
 export const PALATAL_PLATE_MAJOR_COMPONENT_ID = "major-upper-palatal-plate";
 
 /**
- * Per-tooth palatal-bar segments: both posterior runs including distal second molars, excluding anteriors
- * (11–13, 21–23). Derived from {@link TOOTH_ORDER}.upper: indices 0–4 (18→14) and 11–15 (24→28).
+ * The palatal bar's posterior runs including the distal second molars, which pick the `P_Bar`
+ * arch artwork and its run-end caps. Derived from {@link TOOTH_ORDER}.upper: indices 0–4 (18→14)
+ * and 11–15 (24→28). Segments themselves follow the plating, anteriors included.
  */
 export const PALATAL_BAR_CONNECTOR_TOOTH_IDS = Object.freeze(
   new Set([
     ...TOOTH_ORDER.upper.slice(0, 5),
     ...TOOTH_ORDER.upper.slice(11, 16),
   ])
-);
-
-/**
- * Upper teeth where choosing Palatal Bar **clears** any major connector from placements (anteriors only).
- * Posterior bar span uses {@link PALATAL_BAR_CONNECTOR_TOOTH_IDS}.
- */
-export const PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS = Object.freeze(
-  new Set(["13", "12", "11", "21", "22", "23"])
 );
 
 /**
@@ -313,7 +306,7 @@ export function shouldUseMajorConnectorEndAsset(toothId, teeth) {
  * @param {string} toothId
  * @param {string} jaw
  * @param {Record<string, unknown> | null | undefined} [teeth]
- * @param {{ palatalBarDistalEnd?: boolean, palatalBarFirstPremolarMesial?: boolean }} [options] Palatal bar: `palatalBarDistalEnd` caps the tooth ending the run distally with `{n}_distal.svg` (see isPalatalBarDistalRunEnd — the run need not reach the second molar); `palatalBarFirstPremolarMesial` makes `14` / `24` use `{14}_mesial.svg` (the bar's anterior cap — set whenever the palatal bar is rendering, since the posterior bar span always terminates at 14/24).
+ * @param {{ palatalBarDistalEnd?: boolean, palatalBarFirstPremolarMesial?: boolean }} [options] Palatal bar: `palatalBarDistalEnd` caps the tooth ending the run distally with `{n}_distal.svg` (see isPalatalBarDistalRunEnd — the run need not reach the second molar); `palatalBarFirstPremolarMesial` makes `14` / `24` use `{14}_mesial.svg` (the bar's anterior cap — set while the posterior span ends there, i.e. unless 13 / 23 carries a bar segment of its own).
  */
 export function getMajorConnectorAssetReference(toothId, jaw, teeth, options) {
   const id = String(toothId);
@@ -501,12 +494,12 @@ export function getPalatalPlateOverlayIndexFromUpperPlacements(teeth) {
   return Math.max(1, Math.min(8, overlay));
 }
 
-/** Any tooth in {@link PALATAL_BAR_CONNECTOR_TOOTH_IDS} carries a palatal-bar placement — drives overlay + connectors. */
+/** Any upper tooth carries a palatal-bar placement — drives overlay + connectors. */
 export function hasPalatalBarPlacementOnUpperArch(teeth) {
   if (!teeth || typeof teeth !== "object") {
     return false;
   }
-  for (const tid of PALATAL_BAR_CONNECTOR_TOOTH_IDS) {
+  for (const tid of TOOTH_ORDER.upper) {
     const tooth = teeth[tid];
     if (!tooth?.componentPlacements?.length) {
       continue;
@@ -535,7 +528,7 @@ function toothHasPalatalBarPlacementOnTooth(tooth) {
  */
 export function isPalatalBarDistalRunEnd(toothId, teeth) {
   const id = String(toothId);
-  if (!PALATAL_BAR_CONNECTOR_TOOTH_IDS.has(id)) {
+  if (!TOOTH_ORDER.upper.includes(id)) {
     return false;
   }
   if (!teeth || typeof teeth !== "object") {
@@ -893,16 +886,10 @@ function placeMajorConnectorOnce(tooth, majorComponentId) {
   }
 }
 
-/** Whether `toothId` may carry this major at all: it needs connector art, must not be one
- *  of the major's excluded teeth, and the palatal bar only ever sits on its own segments. */
+/** Whether `toothId` may carry this major at all: it needs connector art and must not be
+ *  one of the major's excluded teeth. */
 function canToothCarryMajorConnector(majorComponentId, toothId, jawKey) {
   if (isMajorConnectorToothExcluded(majorComponentId, toothId)) {
-    return false;
-  }
-  if (
-    String(majorComponentId) === PALATAL_BAR_MAJOR_COMPONENT_ID &&
-    !PALATAL_BAR_CONNECTOR_TOOTH_IDS.has(String(toothId))
-  ) {
     return false;
   }
   return Boolean(getMajorConnectorAssetReference(toothId, jawKey));
@@ -1148,15 +1135,16 @@ export function ensureMajorConnectorPlacementsOnSupportedTeethInJaws(
 }
 
 /**
- * Picking Palatal Bar places per-tooth bar segments on PALATAL_BAR_CONNECTOR_TOOTH_IDS
- * wherever mesh/plate exists, replacing any other major there. Sync `tooth.components` after.
+ * Picking Palatal Bar places a per-tooth bar segment on every upper tooth that anchors one
+ * (mesh when missing, plate or clasp when present), anteriors included, replacing any other
+ * major there. The plating decides where the bar shows. Sync `tooth.components` after.
  */
-export function ensurePalatalBarPlacementsOnConnectorTeeth(teeth, componentById) {
+export function ensurePalatalBarPlacementsOnAnchoredUpperTeeth(teeth, componentById) {
   const majorId = PALATAL_BAR_MAJOR_COMPONENT_ID;
   if (!teeth || !componentById?.has?.(majorId)) {
     return;
   }
-  for (const toothId of PALATAL_BAR_CONNECTOR_TOOTH_IDS) {
+  for (const toothId of TOOTH_ORDER.upper) {
     if (!getMajorConnectorAssetReference(toothId, "upper")) {
       continue;
     }
@@ -1194,19 +1182,21 @@ export function ensurePalatalBarPlacementsOnConnectorTeeth(teeth, componentById)
   }
 }
 
-/** Strip all major placements from PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS so those
- *  regions start empty when Palatal Bar is selected. */
-export function removeMajorPlacementsFromPalatalBarExcludedUpperTeeth(teeth) {
+/** Clear the outgoing connector off the upper arch when Palatal Bar is picked: every tooth
+ *  that anchors one is a bar segment by now, so what is left is the old major on the rest. */
+export function removeNonBarMajorPlacementsFromUpperArch(teeth) {
   if (!teeth || typeof teeth !== "object") {
     return;
   }
-  for (const toothId of PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS) {
+  for (const toothId of TOOTH_ORDER.upper) {
     const tooth = teeth[toothId];
     if (!tooth || !Array.isArray(tooth.componentPlacements)) {
       continue;
     }
     tooth.componentPlacements = tooth.componentPlacements.filter(
-      (e) => !isMajorConnectorComponent(e.componentId)
+      (e) =>
+        !isMajorConnectorComponent(e.componentId) ||
+        String(e.componentId) === PALATAL_BAR_MAJOR_COMPONENT_ID
     );
   }
 }

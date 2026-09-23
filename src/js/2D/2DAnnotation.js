@@ -1015,10 +1015,6 @@ export async function openRemoveComponentPicker(toothId, jaw, anchorEvent) {
       }
       teethModel.ensureToothPlacementState(t);
       const placement = await import("./annotationPlacement.js");
-      if (placement.shouldBlockMajorConnectorRemoval(toothId, entry, state.teeth)) {
-        setMessage("Cannot remove this major connector part because it is connected on both sides.", true);
-        return;
-      }
       let removed = null;
       if (Number.isInteger(entry._index) && entry._index >= 0) {
         removed = teethModel.removePlacementAtIndex(t, entry._index);

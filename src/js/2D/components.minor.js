@@ -212,6 +212,24 @@ function hasReciprocatingOrMeshElement(tooth) {
   );
 }
 
+/**
+ * Sides a lingual rest / full cingulum rest seat connects on. The rest sits mid-lingual, so
+ * neither embrasure is its own: it reaches the major through the neighbour that is already
+ * joined to it, i.e. one carrying a proximal plate or a mesh. Needs `neighbors`.
+ */
+function getLingualRestConnectorSides(neighbors) {
+  const sides = { mesial: false, distal: false };
+  if (!neighbors) return sides;
+  for (const side of ["mesial", "distal"]) {
+    const placements = neighbors[side]?.componentPlacements;
+    if (!Array.isArray(placements)) continue;
+    sides[side] = placements.some(
+      ({ componentId }) => isPlateComponentId(componentId) || isMeshComponent(componentId)
+    );
+  }
+  return sides;
+}
+
 /** Sides a meshed saddle must bridge itself, because the neighbour across the embrasure
  *  carries nothing to join it to the major. Needs `neighbors`, else no mesh sides. */
 function getMeshMinorConnectorSides(tooth, neighbors) {
@@ -232,8 +250,8 @@ function getMeshMinorConnectorSides(tooth, neighbors) {
  * a rest/bar sits on its own surface, a retentive clasp anchors at its ORIGIN opposite the
  * tip, and a reciprocating clasp is ignored — it is not a retainer.
  *
- * `neighbors` enables the mesh rule; omit it for pure single-tooth derivation. A wrapped
- * arm REPLACES this derivation with the clasp's own side.
+ * `neighbors` enables the mesh and lingual-rest rules; omit it for pure single-tooth
+ * derivation. A wrapped arm REPLACES this derivation with the clasp's own side.
  */
 export function getMinorConnectorSupportSides(tooth, neighbors = null) {
   const sides = { mesial: false, distal: false };
@@ -263,7 +281,12 @@ export function getMinorConnectorSupportSides(tooth, neighbors = null) {
     if (isRestComponent(id) || isBarComponent(id)) {
       if (surface.includes("mesial")) sides.mesial = true;
       else if (surface.includes("distal")) sides.distal = true;
-      else if (surface === "lingual") { sides.mesial = true; sides.distal = true; } // full cingulum
+      else if (surface === "lingual") {
+        // Lingual rest / full cingulum: the plated or meshed neighbour's side, not both.
+        const lingualSides = getLingualRestConnectorSides(neighbors);
+        if (lingualSides.mesial) sides.mesial = true;
+        if (lingualSides.distal) sides.distal = true;
+      }
     } else if (isRetainerClaspComponent(id) || isRingClaspComponent(id)) {
       // Retentive clasp origin (where the minor connector attaches) is opposite the tip.
       if (surface.includes("mesial")) sides.distal = true;

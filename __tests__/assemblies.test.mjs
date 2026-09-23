@@ -353,6 +353,63 @@ describe("mesh minor-connector sides", () => {
   });
 });
 
+/**
+ * A lingual rest (posterior) / full cingulum rest seat (anterior) sits mid-lingual, so
+ * neither embrasure is its own. It used to claim both; it takes the side of the neighbour
+ * that is already joined to the major — one carrying a proximal plate or a mesh.
+ */
+describe("lingual / full cingulum rest minor-connector side", () => {
+  const plated = {
+    components: ["plate-prox"],
+    componentPlacements: [{ componentId: "plate-prox", surface: null }],
+  };
+  const lingualRest = {
+    components: ["rest-seat"],
+    componentPlacements: [{ componentId: "rest-seat", surface: "lingual" }],
+  };
+
+  it("takes the plated neighbour's side only", () => {
+    setupArches([], { "36": lingualRest, "35": plated });
+    // 35 is mesial of 36.
+    expect(minorConnectorSidesInArch("36", "lower")).toEqual({ mesial: true, distal: false });
+
+    setupArches([], { "36": lingualRest, "37": plated });
+    expect(minorConnectorSidesInArch("36", "lower")).toEqual({ mesial: false, distal: true });
+  });
+
+  it("takes a meshed neighbour's side the same way", () => {
+    setupArches(["37"], { "36": lingualRest, "37": meshed });
+    expect(minorConnectorSidesInArch("36", "lower")).toEqual({ mesial: false, distal: true });
+  });
+
+  it("keeps both sides when both neighbours carry one", () => {
+    setupArches([], { "36": lingualRest, "35": plated, "37": plated });
+    expect(minorConnectorSidesInArch("36", "lower")).toEqual({ mesial: true, distal: true });
+  });
+
+  it("connects nowhere when neither neighbour is plated or meshed", () => {
+    setupArches([], { "36": lingualRest });
+    expect(minorConnectorSidesInArch("36", "lower")).toEqual({ mesial: false, distal: false });
+  });
+
+  it("reads an anterior cingulum rest the same way, across the midline too", () => {
+    setupArches([], { "41": lingualRest, "31": plated });
+    // 31 sits across the midline from 41 — mesial to it.
+    expect(minorConnectorSidesInArch("41", "lower")).toEqual({ mesial: true, distal: false });
+  });
+
+  it("leaves a mesial / distal rest on its own surface", () => {
+    setupArches([], {
+      "36": {
+        components: ["rest-seat"],
+        componentPlacements: [{ componentId: "rest-seat", surface: "mesial" }],
+      },
+      "37": plated,
+    });
+    expect(minorConnectorSidesInArch("36", "lower")).toEqual({ mesial: true, distal: false });
+  });
+});
+
 // ---------------------------------------------------------- Combine Clasps
 /**
  * Combine brackets an EDENTULOUS AREA rather than a shared embrasure: the rest seats sit

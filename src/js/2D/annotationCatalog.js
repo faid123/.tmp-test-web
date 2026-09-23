@@ -15,8 +15,8 @@ import {
   isPalatalBarMajorComponent,
   isPalatalStrapMajorComponent,
   isPlateComponentId,
-  ensurePalatalBarPlacementsOnConnectorTeeth,
-  removeMajorPlacementsFromPalatalBarExcludedUpperTeeth,
+  ensurePalatalBarPlacementsOnAnchoredUpperTeeth,
+  removeNonBarMajorPlacementsFromUpperArch,
   switchMajorConnectorInJaws,
   syncReciprocatingPlatesToMajorConnector,
 } from "./components.js";
@@ -393,8 +393,8 @@ export function handleDesignComponentSelect(componentId) {
         : ["upper", "lower"];
 
     if (isPalatalBarMajorComponent(componentId)) {
-      ensurePalatalBarPlacementsOnConnectorTeeth(state.teeth, COMPONENT_BY_ID);
-      removeMajorPlacementsFromPalatalBarExcludedUpperTeeth(state.teeth);
+      ensurePalatalBarPlacementsOnAnchoredUpperTeeth(state.teeth, COMPONENT_BY_ID);
+      removeNonBarMajorPlacementsFromUpperArch(state.teeth);
     } else {
       switchMajorConnectorInJaws(state.teeth, componentId, COMPONENT_BY_ID, jawKeys);
     }
@@ -415,7 +415,7 @@ export function handleDesignComponentSelect(componentId) {
     renderJaws();
     setMessage(
       isPalatalBarMajorComponent(componentId)
-        ? `${selected.label} selected. Connector parts and P_Bar are shown; click posterior teeth to remove or add back segments.`
+        ? `${selected.label} selected. Connector parts and P_Bar are shown; click any plated tooth to remove or add back a segment.`
         : `${selected.label} selected. Click teeth with mesh or plate to place or remove this major connector.`,
       false
     );

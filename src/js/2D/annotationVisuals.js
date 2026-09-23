@@ -64,8 +64,6 @@ import {
   isRestComponent,
   meshHoleUniformScaleToothId,
   PALATAL_BAR_ARCH_OVERLAY,
-  PALATAL_BAR_CONNECTOR_TOOTH_IDS,
-  PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS,
   getPalatalHoleArchOverlayLayers,
   getPalatalPlateArchOverlayFrame,
   shouldMajorConnectorIgnoreMeshPlateAnchor,
@@ -149,21 +147,13 @@ function appendToothComponentVisuals(group, tooth, toothId, jaw) {
         .filter((x) => x.def)
     : [];
 
-  const showPalatalBarSegment =
-    jaw === "upper" &&
-    shouldShowPalatalBarArchOverlay() &&
-    PALATAL_BAR_CONNECTOR_TOOTH_IDS.has(String(toothId));
+  // While the bar is on the arch it is the only major drawn on the upper teeth, anteriors
+  // included: a leftover segment from the outgoing connector is not part of this design.
+  const showPalatalBarSegment = jaw === "upper" && shouldShowPalatalBarArchOverlay();
 
   const majorIds = [];
   for (const { id, def } of catalogEntries) {
     if (!isMajorConnectorComponent(def)) {
-      continue;
-    }
-    if (
-      jaw === "upper" &&
-      shouldShowPalatalBarArchOverlay() &&
-      PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS.has(String(toothId))
-    ) {
       continue;
     }
     if (showPalatalBarSegment && !isPalatalBarMajorComponent(id)) {
@@ -248,11 +238,12 @@ function appendToothPlateComponentVisuals(group, tooth, toothId, jaw) {
     : [];
 
   // The connector pass fills plate-prox for every major but the lower lingual bar, so only
-  // standalone plates render here — plus a palatal bar's anteriors, which it suppresses.
+  // standalone plates render here — plus the teeth whose major that pass skips: under the
+  // bar, any upper tooth without a bar segment of its own.
   const suppressedFromConnectorFill =
     jaw === "upper" &&
     shouldShowPalatalBarArchOverlay() &&
-    PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS.has(String(toothId));
+    !tooth.components.some((id) => isPalatalBarMajorComponent(id));
   const drawnByConnectorFill =
     !suppressedFromConnectorFill &&
     tooth.components.some(
@@ -1269,7 +1260,7 @@ function appendPalatalHoleArchOverlay(svg) {
   svg.appendChild(g);
 }
 
-// Arch-wide palatal bar (P_Bar.svg); per-tooth segments on 14–18 and 24–28 (see PALATAL_BAR_CONNECTOR_TOOTH_IDS).
+// Arch-wide palatal bar (P_Bar.svg); the per-tooth segments follow the plating.
 function appendPalatalBarArchOverlay(svg) {
   if (!svg || !shouldShowPalatalBarArchOverlay()) {
     return;
@@ -1355,6 +1346,13 @@ function createToothVisual(toothId, jaw) {
 }
 
 
+/** A plated canine carries the bar run on past 14/24, so that end is not capped. */
+function toothCarriesPalatalBarSegment(tooth) {
+  return Boolean(
+    tooth?.componentPlacements?.some((e) => isPalatalBarMajorComponent(e.componentId))
+  );
+}
+
 // Major connector: explicit catalog placement. Scale follows the *tooth* (not mesh/plate render scale).
 function createMajorConnectorVisual(majorComponentId, tooth, toothId, jaw) {
   const def = COMPONENT_BY_ID.get(majorComponentId);
@@ -1369,11 +1367,12 @@ function createMajorConnectorVisual(majorComponentId, tooth, toothId, jaw) {
     palatalBarDistalEnd:
       isPalatalBarMajorComponent(majorComponentId) &&
       isPalatalBarDistalRunEnd(toothId, state.teeth),
-    // The palatal bar's posterior span always terminates at 14/24, so cap those
-    // with the mesial end art even when the load-time auto-placer tagged 13/23.
+    // The palatal bar's posterior span terminates at 14/24, so cap those with the mesial
+    // end art — unless the canine beside it was given a bar segment and carries the run on.
     palatalBarFirstPremolarMesial:
       isPalatalBarMajorComponent(majorComponentId) &&
-      (toothId === "14" || toothId === "24"),
+      (toothId === "14" || toothId === "24") &&
+      !toothCarriesPalatalBarSegment(state.teeth?.[toothId === "14" ? "13" : "23"]),
   });
   if (!connectorHref) return null;
 

@@ -22,8 +22,8 @@ jest.mock("../src/js/2D/2DAnnotation.js", () => ({
 }));
 
 import {
+  applyRemovalSideEffectsForTooth,
   placeSelectedComponentOnTooth,
-  shouldBlockMajorConnectorRemoval,
   toothSupportsMajorConnectorOverlay,
 } from "../src/js/2D/annotationPlacement.js";
 import {
@@ -38,8 +38,10 @@ import {
   COMPONENT_BY_ID,
   computePalatalStrapPolygonPoints,
   ensureMajorConnectorPlacementsOnSupportedTeethInJaws,
+  ensurePalatalBarPlacementsOnAnchoredUpperTeeth,
   isMajorConnectorComponent,
   pruneInvalidMajorConnectorPlacementsInJaw,
+  removeNonBarMajorPlacementsFromUpperArch,
 } from "../src/js/2D/components.js";
 import { TOOTH_ORDER } from "../src/js/2D/constants.js";
 import { switchMajorIn } from "./helpers/jawStructIO.mjs";
@@ -181,6 +183,159 @@ describe("assembly ids never become placements", () => {
 });
 
 /**
+ * The plate and the connector segment on one tooth are two components: erasing the plate
+ * used to take the major connector with it, so there was no way to keep a connector run
+ * whole while unplating a single tooth. The clasp still follows its reciprocation off.
+ */
+describe("plate and major connector are removed independently", () => {
+  /** 15-17 / 25-27 plated, horseshoe switched on: a real run with interior teeth. */
+  function platedUpperArch() {
+    const teeth = {};
+    for (const id of TOOTH_ORDER.upper) teeth[id] = tooth([], { toothId: id });
+    for (const id of ["15", "16", "17", "25", "26", "27"]) {
+      teeth[id] = tooth(["plate-prox"], { toothId: id });
+    }
+    state.teeth = teeth;
+    switchMajorIn(teeth, "major-upper-horseshoe", "upper");
+    return teeth;
+  }
+
+  const MAJOR_BY_TOOTH = [
+    ["15", "major-upper-palatal-strap"],
+    ["12", "major-upper-palatal-strap"],
+    ["16", "major-upper-horseshoe"],
+    ["36", "major-lower-lingual-plate"],
+  ];
+
+  it.each(MAJOR_BY_TOOTH)("tooth %s: toggling plate-prox off keeps %s", (toothId, majorId) => {
+    const t = toothAt(toothId, ["plate-prox", majorId]);
+    place("plate-prox", toothId, null);
+    expect(idsOn(t)).toEqual([majorId]);
+    expect(t.components).toEqual([majorId]);
+  });
+
+  it.each(MAJOR_BY_TOOTH)("tooth %s: the remove list keeps %s too", (toothId, majorId) => {
+    const t = toothAt(toothId, ["plate-prox", majorId]);
+    const removed = { componentId: "plate-prox", surface: null };
+    removePlacement(t, "plate-prox", null);
+    applyRemovalSideEffectsForTooth(t, removed);
+    expect(idsOn(t)).toEqual([majorId]);
+  });
+
+  it("removing the major connector leaves the plate in place", () => {
+    const t = toothAt("15", ["plate-prox", "major-upper-palatal-strap"]);
+    const removed = { componentId: "major-upper-palatal-strap", surface: null };
+    removePlacement(t, "major-upper-palatal-strap", null);
+    applyRemovalSideEffectsForTooth(t, removed);
+    expect(idsOn(t)).toEqual(["plate-prox"]);
+  });
+
+  it("a clasp still goes with the plate that reciprocates it", () => {
+    const t = toothAt("15", ["plate-prox", "retainer-clasp", "major-upper-palatal-strap"]);
+    place("plate-prox", "15", null);
+    expect(idsOn(t)).toEqual(["major-upper-palatal-strap"]);
+  });
+
+  /** The render prune is the other half: a segment kept here must survive the next frame,
+   *  which it does as long as its run still holds an anchor elsewhere. */
+  it("the unplated tooth keeps its segment through the render prune", () => {
+    const teeth = platedUpperArch();
+
+    place("plate-prox", "16");
+    pruneInvalidMajorConnectorPlacementsInJaw(teeth, COMPONENT_BY_ID, "upper");
+
+    expect(idsOn(teeth["16"])).toEqual(["major-upper-horseshoe"]);
+  });
+
+  /** An interior segment comes off on its own, neighbours on both sides or not. */
+  it("an interior segment is removed while its neighbours keep theirs", () => {
+    const teeth = platedUpperArch();
+
+    place("major-upper-horseshoe", "16");
+
+    expect(idsOn(teeth["16"])).toEqual(["plate-prox"]);
+    for (const id of ["15", "17"]) {
+      expect(idsOn(teeth[id])).toContain("major-upper-horseshoe");
+    }
+  });
+});
+
+/**
+ * The anteriors 13-23 used to be walled off under Palatal Bar: no segment could be placed
+ * there and any major was cleared and hidden. The plating decides now, exactly as it does
+ * on the posterior teeth — and an unwanted segment is one click away from gone.
+ */
+describe("Palatal Bar follows the plating onto the anteriors", () => {
+  const BAR = "major-upper-palatal-bar";
+
+  /** 15-17 / 25-27 plated, plus whichever other teeth the case asks for; bar picked. */
+  function barredArch(...plated) {
+    const teeth = {};
+    for (const id of TOOTH_ORDER.upper) teeth[id] = tooth([], { toothId: id });
+    for (const id of ["15", "16", "17", "25", "26", "27", ...plated]) {
+      teeth[id] = tooth(["plate-prox"], { toothId: id });
+    }
+    state.teeth = teeth;
+    pickPalatalBar(teeth);
+    return teeth;
+  }
+
+  /** What the catalog does when Palatal Bar is picked. */
+  function pickPalatalBar(teeth) {
+    ensurePalatalBarPlacementsOnAnchoredUpperTeeth(teeth, COMPONENT_BY_ID);
+    removeNonBarMajorPlacementsFromUpperArch(teeth);
+    for (const id of TOOTH_ORDER.upper) syncToothComponentsFromPlacements(teeth[id]);
+  }
+
+  const hasBarOn = (teeth, id) =>
+    teeth[id].componentPlacements.some((e) => e.componentId === BAR);
+
+  it.each(["13", "12", "11", "21", "22", "23"])("a plated %s gets a bar segment", (toothId) => {
+    const teeth = barredArch(toothId);
+    expect(hasBarOn(teeth, toothId)).toBe(true);
+    expect(idsOn(teeth[toothId])).toContain("plate-prox");
+  });
+
+  it("an unplated anterior gets nothing", () => {
+    const teeth = barredArch("13");
+    for (const id of ["12", "11", "21", "22", "23"]) {
+      expect(hasBarOn(teeth, id)).toBe(false);
+      expect(idsOn(teeth[id])).toEqual([]);
+    }
+  });
+
+  it("the outgoing connector is cleared off the whole arch, plated or not", () => {
+    const teeth = barredArch("13");
+    addPlacement(teeth["11"], "major-upper-horseshoe", null);
+    addPlacement(teeth["13"], "major-upper-horseshoe", null);
+
+    pickPalatalBar(teeth);
+
+    expect(idsOn(teeth["11"])).toEqual([]);
+    expect(idsOn(teeth["13"])).toEqual(["plate-prox", BAR]);
+  });
+
+  it("an anterior segment survives the render prune and comes off on a click", () => {
+    const teeth = barredArch("13");
+    pruneInvalidMajorConnectorPlacementsInJaw(teeth, COMPONENT_BY_ID, "upper");
+    expect(hasBarOn(teeth, "13")).toBe(true);
+
+    place(BAR, "13");
+    expect(hasBarOn(teeth, "13")).toBe(false);
+    expect(idsOn(teeth["13"])).toEqual(["plate-prox"]);
+  });
+
+  it("and is placed back by clicking the plated tooth again", () => {
+    const teeth = barredArch("13");
+    place(BAR, "13");
+
+    place(BAR, "13");
+
+    expect(hasBarOn(teeth, "13")).toBe(true);
+  });
+});
+
+/**
  * toothSupportsMajorConnectorOverlay gates BOTH the ghost the arch draws while a major is
  * selected and the click that places it, so it must not be looser than the placement rules:
  * a tooth it accepts but the design never covers renders a connector stub hanging off the
@@ -291,8 +446,7 @@ describe("a major connector is only offered where its span reaches", () => {
     });
 
     /**
-     * The one behaviour the span gate takes away. Removing the DISTAL END of a run (the only
-     * end removal allows — shouldBlockMajorConnectorRemoval protects interior teeth) leaves a
+     * The one behaviour the span gate takes away. Removing the DISTAL END of a run leaves a
      * tooth that anchors nothing, because the bar already stripped its plate. It is then
      * outside the run and cannot be clicked back: re-anchor it, or switch back to the plate.
      * The alternative — letting a run grow one tooth distally — is exactly what drew the
@@ -490,34 +644,36 @@ describe("the connector follows the changed tooth only", () => {
     }
   );
 
-  it("allows removing an interior Palatal Strap segment after anterior extension", () => {
+  it("removes an interior Palatal Strap segment after anterior extension", () => {
     const teeth = archEndingAtSixes();
     for (const toothId of ["11", "12", "21", "22"]) {
       addPlacement(teeth[toothId], "plate-prox", null);
       syncToothComponentsFromPlacements(teeth[toothId]);
     }
     switchMajorIn(teeth, "major-upper-palatal-strap", "upper");
+    expect(hasMajorIdOn(teeth, "12", "major-upper-palatal-strap")).toBe(true);
 
-    expect(
-      shouldBlockMajorConnectorRemoval(
-        "12",
-        { componentId: "major-upper-palatal-strap", surface: null },
-        teeth
-      )
-    ).toBe(false);
+    place("major-upper-palatal-strap", "12");
+
+    expect(hasMajorIdOn(teeth, "12", "major-upper-palatal-strap")).toBe(false);
+    expect(hasMajorIdOn(teeth, "11", "major-upper-palatal-strap")).toBe(true);
+    expect(idsOn(teeth["12"])).toContain("plate-prox");
   });
 
   it.each(["11", "12", "13", "21", "22", "23"])(
-    "removing an anterior proximal plate removes its Palatal Strap segment too on %s",
+    "removing an anterior proximal plate keeps its Palatal Strap segment, removable on its own, on %s",
     (toothId) => {
-    const teeth = archEndingAtSixes();
+      const teeth = archEndingAtSixes();
       addPlacement(teeth[toothId], "plate-prox", null);
       syncToothComponentsFromPlacements(teeth[toothId]);
-    switchMajorIn(teeth, "major-upper-palatal-strap", "upper");
+      switchMajorIn(teeth, "major-upper-palatal-strap", "upper");
 
       place("plate-prox", toothId);
 
       expect(idsOn(teeth[toothId])).not.toContain("plate-prox");
+      expect(hasMajorIdOn(teeth, toothId, "major-upper-palatal-strap")).toBe(true);
+
+      place("major-upper-palatal-strap", toothId);
       expect(hasMajorIdOn(teeth, toothId, "major-upper-palatal-strap")).toBe(false);
     }
   );

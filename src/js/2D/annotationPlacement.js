@@ -14,16 +14,13 @@ import {
   isRetainerClaspComponent,
   isClaspComponent,
   isMajorConnectorComponent,
-  toothHasMajorConnectorPlacement,
   isMajorConnectorToothExcluded,
   isMeshComponent,
   isPalatalBarMajorComponent,
   isPalatalHoleMajorComponent,
-  isPalatalStrapMajorComponent,
   isPlateComponentId,
   isRestComponent,
   PALATAL_BAR_CONNECTOR_TOOTH_IDS,
-  PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS,
 } from "./components.js";
 import { TOOTH_ORDER } from "./constants.js";
 import { getHistoryStateSignature, recordHistoryIfChanged, state, setMessage } from "./2DAnnotation.js";
@@ -43,10 +40,6 @@ import { assessPlacementCriteria } from "./criteria.js";
 function isAnteriorToothId(toothId) {
   const unit = Number(toothId) % 10;
   return Number.isFinite(unit) && unit >= 1 && unit <= 3;
-}
-
-function isUpperAnteriorToothId(toothId) {
-  return ["11", "12", "13", "21", "22", "23"].includes(String(toothId));
 }
 
 // Default reciprocating element for a retentive placement: the proximal (reciprocating)
@@ -106,10 +99,12 @@ export function applyRemovalSideEffectsForTooth(tooth, removedEntry) {
   if (!removedEntry) return;
   const { componentId } = removedEntry;
   if (isPlateComponentId(componentId)) {
+    // The plate is a clasp's reciprocation, so it takes the clasp with it. The major
+    // connector is its own component and is removed on its own — never cascaded from here.
     const remainingPlate = tooth.componentPlacements.some((e) => isPlateComponentId(e.componentId));
     if (!remainingPlate) {
       tooth.componentPlacements = tooth.componentPlacements.filter(
-        (e) => !isClaspComponent(e.componentId) && !isMajorConnectorComponent(e.componentId)
+        (e) => !isClaspComponent(e.componentId)
       );
       syncToothComponentsFromPlacements(tooth);
     }
@@ -173,28 +168,12 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
       isPalatalHoleMajorComponent(selectedComponent.id) &&
       jaw === "upper" &&
       TOOTH_ORDER.upper.includes(toothId);
+    // The bar's own posterior segments skip the artwork check; an anterior one is placed
+    // by hand like any other major, on the tooth's own 11-13/21-23 segment art.
     const palatalBarUpper =
       isPalatalBarMajorComponent(selectedComponent.id) &&
       jaw === "upper" &&
       PALATAL_BAR_CONNECTOR_TOOTH_IDS.has(String(toothId));
-    if (
-      isPalatalBarMajorComponent(selectedComponent.id) &&
-      jaw === "upper" &&
-      !PALATAL_BAR_CONNECTOR_TOOTH_IDS.has(String(toothId))
-    ) {
-      if (PALATAL_BAR_SUPPRESS_OTHER_MAJOR_TOOTH_IDS.has(String(toothId))) {
-        setMessage(
-          "Palatal Bar: anterior teeth (13-23) are treated as missing for connector parts.",
-          true
-        );
-        return;
-      }
-      setMessage(
-        "Palatal Bar: use posterior segments only (14–18 and 24–28, not anteriors).",
-        true
-      );
-      return;
-    }
     if (
       !palatalHoleUpper &&
       !palatalBarUpper &&
@@ -205,12 +184,6 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
     }
 
     if (hasPlacement(tooth, selectedComponent.id, null)) {
-      if (
-        shouldBlockMajorConnectorRemoval(toothId, { componentId: selectedComponent.id, surface: null }, state.teeth)
-      ) {
-        setMessage("Cannot remove this major connector part because it is connected on both sides.", true);
-        return;
-      }
       removePlacement(tooth, selectedComponent.id, null);
       if (isPalatalHoleMajorComponent(selectedComponent.id)) {
         state.archOverlayPalatalHoleActive = hasPalatalHolePlacementOnUpperArch(state.teeth);
@@ -323,16 +296,12 @@ export function placeSelectedComponentOnTooth(toothId, placementContext = null) 
   if (hasPlacement(tooth, selectedComponent.id, targetSurface)) {
     removePlacement(tooth, selectedComponent.id, targetSurface);
     if (isPlateComponentId(selectedComponent.id)) {
-      if (selectedComponent.id === "plate-prox" && isUpperAnteriorToothId(toothId)) {
-        tooth.componentPlacements = tooth.componentPlacements.filter(
-          (e) => !isPalatalStrapMajorComponent(e.componentId)
-        );
-        syncToothComponentsFromPlacements(tooth);
-      }
+      // Same rule as applyRemovalSideEffectsForTooth: the clasp follows its reciprocation
+      // off the tooth, the major connector segment stays until it is removed itself.
       const remainingPlate = tooth.componentPlacements.some((e) => isPlateComponentId(e.componentId));
       if (!remainingPlate) {
         tooth.componentPlacements = tooth.componentPlacements.filter(
-          (e) => !isClaspComponent(e.componentId) && !isMajorConnectorComponent(e.componentId)
+          (e) => !isClaspComponent(e.componentId)
         );
         syncToothComponentsFromPlacements(tooth);
       }
@@ -893,35 +862,6 @@ export function resolveMajorConnectorAnchorComponentId(tooth) {
   }
   return null;
 }
-
-export function shouldBlockMajorConnectorRemoval(toothId, placementEntry, teeth) {
-  if (!placementEntry || !isMajorConnectorComponent(placementEntry.componentId)) {
-    return false;
-  }
-  if (isPalatalStrapMajorComponent(placementEntry.componentId)) {
-    return false;
-  }
-  const id = String(toothId);
-  const jaw = TOOTH_ORDER.upper.includes(id)
-    ? "upper"
-    : TOOTH_ORDER.lower.includes(id)
-      ? "lower"
-      : null;
-  if (!jaw) {
-    return false;
-  }
-  const order = TOOTH_ORDER[jaw] || [];
-  const idx = order.indexOf(id);
-  if (idx < 0) {
-    return false;
-  }
-  const prevId = idx > 0 ? order[idx - 1] : null;
-  const nextId = idx < order.length - 1 ? order[idx + 1] : null;
-  const prevHasMajor = Boolean(prevId && toothHasMajorConnectorPlacement(teeth?.[prevId]));
-  const nextHasMajor = Boolean(nextId && toothHasMajorConnectorPlacement(teeth?.[nextId]));
-  return prevHasMajor && nextHasMajor;
-}
-
 
 export function toothSupportsMajorConnectorOverlay(tooth, toothId, majorComponentId, teeth = state.teeth) {
   if (resolveMajorConnectorAnchorComponentId(tooth) !== null) return true;
